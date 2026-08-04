@@ -179,7 +179,16 @@ function* iterateFencedBlocks(markdown: string): Generator<FencedBlock> {
  * Linear workflow state types, mapped to how ripe the pin looks on the page. This is the whole
  * status story: the widget never stores a status of its own, it renders Linear's.
  */
-export const LINEAR_STATE_TYPES = ['triage', 'backlog', 'unstarted', 'started', 'completed', 'canceled'] as const;
+export const LINEAR_STATE_TYPES = [
+  'triage',
+  'backlog',
+  'unstarted',
+  'started',
+  'completed',
+  'canceled',
+  // Real state type on the SKG team ("Duplicate"), and absent from Linear's documented list.
+  'duplicate',
+] as const;
 export type LinearStateType = (typeof LINEAR_STATE_TYPES)[number];
 
 export const SEED_STAGES = ['seeded', 'green', 'ripening', 'ripe', 'composted'] as const;
@@ -200,6 +209,7 @@ const STAGE_BY_STATE_TYPE: Record<LinearStateType, SeedStage> = {
   started: 'ripening',
   completed: 'ripe',
   canceled: 'composted',
+  duplicate: 'composted',
 };
 
 /** Unknown state types fall back to `seeded` rather than hiding the pin. */

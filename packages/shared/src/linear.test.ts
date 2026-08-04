@@ -164,6 +164,8 @@ describe('stageForLinearState', () => {
     expect(stageForLinearState('started')).toBe('ripening');
     expect(stageForLinearState('completed')).toBe('ripe');
     expect(stageForLinearState('canceled')).toBe('composted');
+    // The SKG team has a "Duplicate" state; a duplicated pin must not read as freshly seeded.
+    expect(stageForLinearState('duplicate')).toBe('composted');
   });
 
   it('shows an unknown state as seeded rather than hiding the pin', () => {
