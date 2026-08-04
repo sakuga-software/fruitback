@@ -61,7 +61,7 @@ describe('POST /feedback', () => {
     expect(result).toEqual({ ok: true, seed });
   });
 
-  it('titles the issue with the visitor own words', async () => {
+  it("titles the issue with the visitor's own words", async () => {
     const stub = installLinearStub();
 
     await post(seedFixture({ note: 'Le CTA est trop petit' }));
@@ -125,6 +125,33 @@ describe('POST /feedback', () => {
     const response = await post(oversized);
 
     expect(response.status).toBe(413);
+  });
+
+  it('stops reading an oversized body instead of buffering it whole', async () => {
+    installLinearStub();
+    // A forged Content-Length must not buy the caller a free 10 MB of Worker memory.
+    let pulled = 0;
+    const chunk = new TextEncoder().encode('x'.repeat(8 * 1_024));
+    const body = new ReadableStream({
+      pull(controller) {
+        pulled += 1;
+        controller.enqueue(chunk);
+      },
+    });
+
+    const response = await worker.fetch(
+      new Request('https://worker.fruitback.dev/feedback', {
+        method: 'POST',
+        headers: { Origin: ORIGIN, 'Content-Length': '10' },
+        body,
+        duplex: 'half',
+      } as RequestInit),
+      env,
+    );
+
+    expect(response.status).toBe(413);
+    // 64 KB cap over 8 KB chunks: it must give up around the ninth pull, not keep draining.
+    expect(pulled).toBeLessThanOrEqual(10);
   });
 
   it('reports a Linear outage as 502 so the widget can keep the note and retry', async () => {
@@ -205,6 +232,19 @@ describe('guard rails', () => {
     expect(statuses[20]).toBe(429);
   });
 
+  it('keys the same client to one bucket whatever proxy chain it arrives through', async () => {
+    installLinearStub();
+    const client = '203.0.113.9';
+
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await post(seedFixture(), { headers: { 'X-Forwarded-For': `${client}, 70.41.3.18, 150.172.238.178` } });
+    }
+    // Same client, one hop fewer: keying on the raw header would hand it a fresh bucket here.
+    const response = await post(seedFixture(), { headers: { 'X-Forwarded-For': `${client}, 70.41.3.18` } });
+
+    expect(response.status).toBe(429);
+  });
+
   it('prefers the Cloudflare rate limiter when the binding exists', async () => {
     installLinearStub();
     const limit = vi.fn(async () => ({ success: false }));
@@ -225,6 +265,19 @@ describe('guard rails', () => {
       error: 'misconfigured',
       missing: ['LINEAR_API_KEY', 'LINEAR_TEAM_ID'],
     });
+    // Without CORS headers the browser turns this into an opaque failure and the widget never
+    // gets to read which variable is missing.
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe(ORIGIN);
+  });
+
+  it('still answers readably when even the allowlist is missing', async () => {
+    installLinearStub();
+
+    const response = await post(seedFixture(), { env: {} });
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toMatchObject({ missing: expect.arrayContaining(['ALLOWED_ORIGINS']) });
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe(ORIGIN);
   });
 });
 

@@ -24,7 +24,14 @@ export async function checkRateLimit(env: WorkerEnv, request: Request): Promise<
 }
 
 function clientKey(request: Request): string {
-  return request.headers.get('CF-Connecting-IP') ?? request.headers.get('X-Forwarded-For') ?? 'unknown';
+  const direct = request.headers.get('CF-Connecting-IP')?.trim();
+  if (direct) return direct;
+
+  // `X-Forwarded-For` is a comma-separated chain, client first. Keying on the raw header would make
+  // the key change with the proxy path, handing a caller a fresh bucket per route it comes through.
+  const forwarded = request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim();
+
+  return forwarded || 'unknown';
 }
 
 function allowLocally(key: string, now = Date.now()): boolean {

@@ -56,7 +56,8 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   return { ok: false, missing: [...new Set(missing)] };
 }
 
-function splitOrigins(value: string | undefined): string[] {
+/** Exported so the misconfigured-response path can read the allowlist before validation. */
+export function splitOrigins(value: string | undefined): string[] {
   return (value ?? '')
     .split(',')
     .map((origin) => origin.trim())
