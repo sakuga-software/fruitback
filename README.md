@@ -1,0 +1,104 @@
+# 🍓 Fruitback
+
+Visual feedback on a live site, without a backend to host.
+
+A client opens their staging site, clicks the element that bothers them, types a note. It lands in
+Linear as a triaged issue — with the CSS selector, the React component and the source file behind
+the element. When they come back to the page, their pins are still there, coloured by the Linear
+status: 🌱 seeded → 🍏 green → 🍊 ripening → 🍓 ripe.
+
+Pastel-like review, but **Linear is the database** — the dashboard, the triage, the API, the MCP
+server and the integrations all come for free.
+
+## Why this shape
+
+Alternatives we looked at and dropped:
+
+- **SitePing** — closest match, but Prisma.
+- **Quackback** — no visual layer at all (a text form in a panel), AGPL-3.0, and oversized for the
+  need: it brings boards, roadmap and changelog we do not want.
+- **Full in-house** — rebuilding auth, dashboard, API, MCP and integrations to reach parity with
+  something Linear already does.
+
+So: build **only** the missing piece — the capture and restitution layer — on top of
+[react-grab](https://github.com/aidenybai/react-grab) (MIT), and let Linear absorb everything else.
+The one thing Linear cannot do is redraw a pin on the page; that part we reconstruct from the anchor
+we stored.
+
+## Architecture
+
+```
+widget (client site)            worker (proxy)              Linear
+──────────────────              ──────────────              ──────
+react-grab picker      ──POST──▶ create issue      ──────▶  issue + labels
+comment popover                  (server-side token)        description = seed
+pin overlay            ◀──GET─── query by label+URL ◀─────  status, comments
+```
+
+- **widget** — `@fruitback/widget`, an embeddable script (Shadow DOM, so the client's CSS is never
+  touched). Picks the element via `react-grab/primitives`, captures the anchor, and later re-plants
+  the pins it reads back.
+- **worker** — a few dozen lines on Cloudflare Workers. Its only reason to exist: the Linear token
+  cannot live in client-side JS on a public site. It also decides attribution (anonymous vs signed
+  in).
+- **shared** — `@fruitback/shared`, the *seed* contract. Both ends depend on it.
+
+No database, no dashboard, no session store.
+
+## The seed
+
+A **seed** is one piece of feedback planted on an element. It is stored as a JSON block inside the
+Linear issue description, under a human-readable summary.
+
+Two decisions worth knowing:
+
+**Why the description and not a Linear custom field** — it is portable (no workspace admin setup,
+survives an export) and Linear can filter on it server-side with
+`description: { contains: <canonical url> }`, which is how "the seeds of this page" is fetched
+without walking every issue. The cost is that a human can corrupt the block, so the parser is
+deliberately tolerant: it accepts any fenced block, with or without a language tag, backticks or
+tildes, CRLF, even an unterminated fence, and finds ours by its `kind` field.
+
+**Why the anchor is redundant** — a selector breaks the moment the site is redeployed. Every seed
+therefore carries several independent ways to find the element again (`selector`, test id, text
+excerpt, `domPath`, and bounds as a share of the document). When none of them resolve, the pin
+becomes an *orphan* — listed aside rather than dropped on the wrong element. That degradation is
+what separates a demo from a tool people keep using.
+
+See [`packages/shared/src/seed.ts`](packages/shared/src/seed.ts) and
+[`packages/shared/src/linear.ts`](packages/shared/src/linear.ts).
+
+## Layout
+
+```
+packages/shared    the seed contract: schema, Linear mapping, round-trip  ✅
+packages/widget    capture + overlay, on top of react-grab                ⬜
+apps/worker        Cloudflare Worker proxying to Linear                   ⬜
+```
+
+## Commands
+
+```bash
+pnpm install
+pnpm test         # all packages, via Nx
+pnpm typecheck
+pnpm lint         # oxlint
+pnpm format:fix   # oxfmt
+
+pnpm --filter @fruitback/shared test:watch
+```
+
+## Roadmap
+
+Tracked in Linear on the [Fruitback](https://linear.app/sakuga-software/project/fruitback-ed574263d8d6)
+project (team SKG). Critical path: **SKG-491 → SKG-497 → SKG-500** — schema, then write, then
+read-back.
+
+| Milestone            | Scope                                                     |
+| -------------------- | --------------------------------------------------------- |
+| 🌱 M1 Foundation     | monorepo, seed schema + Linear mapping                    |
+| 🍓 M2 Capture        | react-grab in Shadow DOM, popover, anchor, screenshot      |
+| 🍊 M3 Write → Linear | worker, issue creation, anonymous/identified attribution   |
+| 🥝 M4 Read & overlay | query by label + URL, re-anchoring, orphan pins, comments  |
+| 🫐 M5 Config in-app  | settings panel, multi-client mapping                       |
+| 🥥 M6 Packaging      | npm package, install snippet, optional Linear webhook      |

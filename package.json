@@ -1,0 +1,21 @@
+{
+  "name": "fruitback",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Visual feedback widget that plants annotations on a live page and grows them into Linear issues.",
+  "scripts": {
+    "lint": "nx run-many -t lint",
+    "format": "nx run-many -t format",
+    "format:fix": "nx run-many -t format:fix",
+    "typecheck": "nx run-many -t typecheck",
+    "test": "nx run-many -t test"
+  },
+  "packageManager": "pnpm@11.16.0",
+  "devDependencies": {
+    "nx": "^23.1.0",
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

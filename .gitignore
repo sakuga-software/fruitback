@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+
+# Nx
+.nx/
+
+# Build outputs
+dist/
+build/
+tsconfig.tsbuildinfo
+
+# Testing
+coverage/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Cloudflare Workers
+.wrangler/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+
+# Vite
+vite.config.*.timestamp-*
+
+# Misc
+*.local
+.cache/
+.temp/
+.tmp/

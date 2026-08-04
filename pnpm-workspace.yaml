@@ -1,0 +1,14 @@
+packages:
+  - apps/*
+  - packages/*
+
+allowBuilds:
+  nx: true
+
+catalog:
+  '@types/node': 26.1.1
+  oxfmt: ^0.60.0
+  oxlint: ^1.75.0
+  typescript: 7.0.2
+  vitest: ^4.1.10
+  zod: ~4.3.6
