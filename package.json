@@ -10,12 +10,12 @@
     "typecheck": "nx run-many -t typecheck",
     "test": "nx run-many -t test"
   },
-  "packageManager": "pnpm@11.16.0",
   "devDependencies": {
     "nx": "^23.1.0",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
-  }
+  },
+  "packageManager": "pnpm@11.16.0"
 }

@@ -41,7 +41,7 @@ pin overlay            ◀──GET─── query by label+URL ◀────�
 - **worker** — a few dozen lines on Cloudflare Workers. Its only reason to exist: the Linear token
   cannot live in client-side JS on a public site. It also decides attribution (anonymous vs signed
   in).
-- **shared** — `@fruitback/shared`, the *seed* contract. Both ends depend on it.
+- **shared** — `@fruitback/shared`, the _seed_ contract. Both ends depend on it.
 
 No database, no dashboard, no session store.
 
@@ -62,7 +62,7 @@ tildes, CRLF, even an unterminated fence, and finds ours by its `kind` field.
 **Why the anchor is redundant** — a selector breaks the moment the site is redeployed. Every seed
 therefore carries several independent ways to find the element again (`selector`, test id, text
 excerpt, `domPath`, and bounds as a share of the document). When none of them resolve, the pin
-becomes an *orphan* — listed aside rather than dropped on the wrong element. That degradation is
+becomes an _orphan_ — listed aside rather than dropped on the wrong element. That degradation is
 what separates a demo from a tool people keep using.
 
 See [`packages/shared/src/seed.ts`](packages/shared/src/seed.ts) and
@@ -71,9 +71,9 @@ See [`packages/shared/src/seed.ts`](packages/shared/src/seed.ts) and
 ## Layout
 
 ```
-packages/shared    the seed contract: schema, Linear mapping, round-trip  ✅
-packages/widget    capture + overlay, on top of react-grab                ⬜
-apps/worker        Cloudflare Worker proxying to Linear                   ⬜
+packages/shared    the seed contract: schema, Linear mapping, round-trip   ✅
+apps/worker        Cloudflare Worker: write path to Linear                 ✅  read path pending
+packages/widget    capture + overlay, on top of react-grab                 ⬜
 ```
 
 ## Commands
@@ -88,6 +88,34 @@ pnpm format:fix   # oxfmt
 pnpm --filter @fruitback/shared test:watch
 ```
 
+## The worker
+
+```bash
+pnpm --filter @fruitback/worker dev            # wrangler dev
+pnpm --filter @fruitback/worker build          # dry-run bundle, validates wrangler.jsonc
+pnpm --filter @fruitback/worker deploy
+```
+
+Before a first deploy, set the token — it is the one thing that must never reach the client:
+
+```bash
+pnpm --filter @fruitback/worker exec wrangler secret put LINEAR_API_KEY
+```
+
+`ALLOWED_ORIGINS`, `LINEAR_TEAM_ID` and `LINEAR_PROJECT_ID` are plain vars in
+[`wrangler.jsonc`](apps/worker/wrangler.jsonc). A missing var answers `500 misconfigured` naming what
+is absent, rather than failing later against Linear.
+
+| Route               | Status                                                         |
+| ------------------- | -------------------------------------------------------------- |
+| `POST /feedback`    | plants a seed: creates the issue, returns `identifier` + `url` |
+| `GET /feedback`     | `501` until SKG-499                                            |
+| `OPTIONS /feedback` | CORS preflight, never touches Linear                           |
+
+Labels are created on demand, so a new client site needs no manual Linear setup. A label that cannot
+be created is dropped and the feedback still goes through — losing a label is a triage annoyance,
+losing the client's note is a bug.
+
 ## Roadmap
 
 Tracked in Linear on the [Fruitback](https://linear.app/sakuga-software/project/fruitback-ed574263d8d6)
@@ -97,8 +125,8 @@ read-back.
 | Milestone            | Scope                                                     |
 | -------------------- | --------------------------------------------------------- |
 | 🌱 M1 Foundation     | monorepo, seed schema + Linear mapping                    |
-| 🍓 M2 Capture        | react-grab in Shadow DOM, popover, anchor, screenshot      |
-| 🍊 M3 Write → Linear | worker, issue creation, anonymous/identified attribution   |
-| 🥝 M4 Read & overlay | query by label + URL, re-anchoring, orphan pins, comments  |
-| 🫐 M5 Config in-app  | settings panel, multi-client mapping                       |
-| 🥥 M6 Packaging      | npm package, install snippet, optional Linear webhook      |
+| 🍓 M2 Capture        | react-grab in Shadow DOM, popover, anchor, screenshot     |
+| 🍊 M3 Write → Linear | worker, issue creation, anonymous/identified attribution  |
+| 🥝 M4 Read & overlay | query by label + URL, re-anchoring, orphan pins, comments |
+| 🫐 M5 Config in-app  | settings panel, multi-client mapping                      |
+| 🥥 M6 Packaging      | npm package, install snippet, optional Linear webhook     |
