@@ -1,54 +1,64 @@
-import type { WorkerEnv } from './env';
-
-/** Requests per window, per client IP, when falling back to the local limiter. */
-const FALLBACK_LIMIT = 20;
-const FALLBACK_WINDOW_MS = 60_000;
+/** Requests per window, per client IP. */
+const LIMIT = 20;
+const WINDOW_MS = 60_000;
 
 /**
- * Isolate-local fallback. It is not a real distributed limiter — each isolate keeps its own count,
- * so the effective limit is higher than `FALLBACK_LIMIT` under load. Good enough to stop a stuck
- * client from hammering Linear, and it keeps `wrangler dev` and the tests working without the
- * binding. Production gets the real thing through `FEEDBACK_RATE_LIMITER`.
+ * In-process sliding window.
+ *
+ * On a single long-lived Node process this is a real limiter, unlike the edge equivalent. The one
+ * caveat to remember: it is **per replica**. Scale the service to N containers behind Traefik and the
+ * effective ceiling becomes N × LIMIT, because nothing is shared between them. Moving to a shared
+ * store (Redis) is the fix if that ever matters — for one container it does not.
  */
 const hits = new Map<string, number[]>();
 
-export async function checkRateLimit(env: WorkerEnv, request: Request): Promise<boolean> {
-  const key = clientKey(request);
+export function checkRateLimit(clientIp: string, now = Date.now()): boolean {
+  const window = (hits.get(clientIp) ?? []).filter((at) => now - at < WINDOW_MS);
 
-  if (env.FEEDBACK_RATE_LIMITER) {
-    const { success } = await env.FEEDBACK_RATE_LIMITER.limit({ key });
-    return success;
-  }
-
-  return allowLocally(key);
-}
-
-function clientKey(request: Request): string {
-  const direct = request.headers.get('CF-Connecting-IP')?.trim();
-  if (direct) return direct;
-
-  // `X-Forwarded-For` is a comma-separated chain, client first. Keying on the raw header would make
-  // the key change with the proxy path, handing a caller a fresh bucket per route it comes through.
-  const forwarded = request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim();
-
-  return forwarded || 'unknown';
-}
-
-function allowLocally(key: string, now = Date.now()): boolean {
-  const window = (hits.get(key) ?? []).filter((at) => now - at < FALLBACK_WINDOW_MS);
-
-  if (window.length >= FALLBACK_LIMIT) {
-    hits.set(key, window);
+  if (window.length >= LIMIT) {
+    hits.set(clientIp, window);
     return false;
   }
 
   window.push(now);
-  hits.set(key, window);
+  hits.set(clientIp, window);
 
   return true;
 }
 
-/** Test seam: the fallback limiter keeps module-level state. */
+/**
+ * Work out who is calling, from the socket address and the forwarded chain.
+ *
+ * This is the part the platform change makes subtle. `X-Forwarded-For` is *appended* to by each
+ * proxy, so the chain reads `<what the caller sent>, <peer seen by proxy 1>, …, <peer seen by the
+ * last proxy>`. Everything on the **left** is caller-controlled and forgeable; only the rightmost
+ * entries were written by infrastructure we control.
+ *
+ * So the client IP is the entry `trustedHops` from the right. Reading the leftmost entry — the usual
+ * reflex, and the correct one behind Cloudflare where the edge rewrites the header — would let any
+ * caller mint a fresh rate-limit bucket per request just by sending a random header.
+ */
+export function resolveClientIp(
+  forwardedFor: string | null | undefined,
+  socketAddress: string | undefined,
+  trustedHops: number,
+): string {
+  const chain = (forwardedFor ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+
+  // No proxy in front, or a direct hit: the socket peer is the truth.
+  if (trustedHops === 0 || chain.length === 0) return socketAddress || 'unknown';
+
+  // A chain shorter than the trusted hop count means the request did not come through the expected
+  // path. Fall back to the socket peer rather than trusting a caller-supplied entry.
+  if (chain.length < trustedHops) return socketAddress || 'unknown';
+
+  return chain[chain.length - trustedHops] ?? socketAddress ?? 'unknown';
+}
+
+/** Test seam: the limiter keeps module-level state. */
 export function resetRateLimitState(): void {
   hits.clear();
 }

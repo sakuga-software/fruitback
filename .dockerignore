@@ -1,0 +1,18 @@
+# The build context is the repo root, so keep it small — everything the image needs is copied
+# explicitly in apps/worker/Dockerfile.
+node_modules
+**/node_modules
+dist
+**/dist
+.git
+.github
+.nx
+coverage
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+.vscode
+.idea
+.claude

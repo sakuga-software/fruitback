@@ -52,3 +52,41 @@ jobs:
 
       - name: Run ${{ matrix.target }}
         run: pnpm exec nx run-many -t ${{ matrix.target }}
+
+  image:
+    # Dokploy builds this same Dockerfile on push, so a broken one must fail here first.
+    name: docker image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build the worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/worker/Dockerfile
+          push: false
+          load: true
+          tags: fruitback-worker:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Boot it and check readiness
+        run: |
+          docker run -d --name worker -p 8080:8080 \
+            -e ALLOWED_ORIGINS=http://localhost:5173 \
+            -e LINEAR_API_KEY=ci-not-a-real-key \
+            -e LINEAR_TEAM_ID=ci-team \
+            fruitback-worker:ci
+          for attempt in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8080/health; then exit 0; fi
+            sleep 1
+          done
+          echo "the container never became ready:"
+          docker logs worker
+          exit 1

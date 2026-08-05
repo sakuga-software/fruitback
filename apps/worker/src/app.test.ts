@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { canonicalizePageUrl, parseSeedFromDescription } from '@fruitback/shared';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
-import worker from './index';
+import { handleRequest } from './app';
 import type { WorkerEnv } from './env';
 import { installLinearStub } from './linear-stub';
 import { resetRateLimitState } from './rate-limit';
@@ -15,7 +15,15 @@ const env: WorkerEnv = {
   ALLOWED_ORIGINS: `${ORIGIN},http://localhost:5173`,
 };
 
-function post(body: unknown, init: { origin?: string | null; env?: WorkerEnv; headers?: HeadersInit } = {}) {
+type PostInit = {
+  origin?: string | null;
+  env?: WorkerEnv;
+  headers?: Record<string, string>;
+  /** Already resolved by the transport in production — see `resolveClientIp`. */
+  clientIp?: string;
+};
+
+function post(body: unknown, init: PostInit = {}) {
   const headers = new Headers({ 'Content-Type': 'application/json', ...(init.headers ?? {}) });
   if (init.origin !== null) headers.set('Origin', init.origin ?? ORIGIN);
 
@@ -25,7 +33,16 @@ function post(body: unknown, init: { origin?: string | null; env?: WorkerEnv; he
     body: typeof body === 'string' ? body : JSON.stringify(body),
   });
 
-  return worker.fetch(request, init.env ?? env);
+  return handleRequest(request, init.env ?? env, { clientIp: init.clientIp ?? '203.0.113.1' });
+}
+
+function get(path: string, init: PostInit = {}) {
+  const headers = new Headers(init.headers ?? {});
+  if (init.origin !== null) headers.set('Origin', init.origin ?? ORIGIN);
+
+  return handleRequest(new Request(`https://worker.fruitback.dev${path}`, { headers }), init.env ?? env, {
+    clientIp: init.clientIp ?? '203.0.113.1',
+  });
 }
 
 beforeEach(() => {
@@ -139,7 +156,7 @@ describe('POST /feedback', () => {
       },
     });
 
-    const response = await worker.fetch(
+    const response = await handleRequest(
       new Request('https://worker.fruitback.dev/feedback', {
         method: 'POST',
         headers: { Origin: ORIGIN, 'Content-Length': '10' },
@@ -147,6 +164,7 @@ describe('POST /feedback', () => {
         duplex: 'half',
       } as RequestInit),
       env,
+      { clientIp: '203.0.113.1' },
     );
 
     expect(response.status).toBe(413);
@@ -202,7 +220,7 @@ describe('CORS', () => {
       headers: { Origin: ORIGIN },
     });
 
-    const response = await worker.fetch(request, env);
+    const response = await handleRequest(request, env, { clientIp: '203.0.113.1' });
 
     expect(response.status).toBe(204);
     expect(response.headers.get('Access-Control-Allow-Methods')).toContain('POST');
@@ -221,41 +239,28 @@ describe('CORS', () => {
 describe('guard rails', () => {
   it('rate-limits a client hammering the endpoint', async () => {
     installLinearStub();
-    const headers = { 'CF-Connecting-IP': '203.0.113.7' };
 
     const statuses: number[] = [];
     for (let attempt = 0; attempt < 21; attempt += 1) {
-      statuses.push((await post(seedFixture(), { headers })).status);
+      statuses.push((await post(seedFixture(), { clientIp: '203.0.113.7' })).status);
     }
 
     expect(statuses.slice(0, 20).every((status) => status === 201)).toBe(true);
     expect(statuses[20]).toBe(429);
   });
 
-  it('keys the same client to one bucket whatever proxy chain it arrives through', async () => {
+  it('counts each client separately', async () => {
     installLinearStub();
-    const client = '203.0.113.9';
 
     for (let attempt = 0; attempt < 20; attempt += 1) {
-      await post(seedFixture(), { headers: { 'X-Forwarded-For': `${client}, 70.41.3.18, 150.172.238.178` } });
+      await post(seedFixture(), { clientIp: '203.0.113.7' });
     }
-    // Same client, one hop fewer: keying on the raw header would hand it a fresh bucket here.
-    const response = await post(seedFixture(), { headers: { 'X-Forwarded-For': `${client}, 70.41.3.18` } });
+    const other = await post(seedFixture(), { clientIp: '203.0.113.8' });
 
-    expect(response.status).toBe(429);
+    expect(other.status).toBe(201);
   });
 
-  it('prefers the Cloudflare rate limiter when the binding exists', async () => {
-    installLinearStub();
-    const limit = vi.fn(async () => ({ success: false }));
-
-    const response = await post(seedFixture(), { env: { ...env, FEEDBACK_RATE_LIMITER: { limit } } });
-
-    expect(response.status).toBe(429);
-    expect(limit).toHaveBeenCalledWith({ key: 'unknown' });
-  });
-
-  it('says what is missing when the Worker is misconfigured', async () => {
+  it('says what is missing when the service is misconfigured', async () => {
     installLinearStub();
 
     const response = await post(seedFixture(), { env: { ALLOWED_ORIGINS: ORIGIN } });
@@ -283,21 +288,49 @@ describe('guard rails', () => {
 
 describe('routing', () => {
   it('reports the read path as not implemented yet', async () => {
-    const request = new Request('https://worker.fruitback.dev/feedback?url=https://acme.test/', {
-      headers: { Origin: ORIGIN },
-    });
-
-    const response = await worker.fetch(request, env);
+    const response = await get('/feedback?url=https://acme.test/');
 
     expect(response.status).toBe(501);
     await expect(response.json()).resolves.toEqual({ error: 'not-implemented', ticket: 'SKG-499' });
   });
 
   it('404s an unknown path', async () => {
-    const request = new Request('https://worker.fruitback.dev/nope', { headers: { Origin: ORIGIN } });
-
-    const response = await worker.fetch(request, env);
+    const response = await get('/nope');
 
     expect(response.status).toBe(404);
+  });
+});
+
+describe('GET /health', () => {
+  it('is ready when the service can actually serve', async () => {
+    const response = await get('/health');
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ ok: true });
+  });
+
+  it('is not ready when a required variable is missing, and names it', async () => {
+    // Dokploy must not route traffic to a container that cannot reach Linear.
+    const response = await get('/health', { env: { ALLOWED_ORIGINS: ORIGIN } });
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      missing: ['LINEAR_API_KEY', 'LINEAR_TEAM_ID'],
+    });
+  });
+
+  it('answers without an Origin, the way a container healthcheck calls it', async () => {
+    const response = await get('/health', { origin: null });
+
+    expect(response.status).toBe(200);
+  });
+
+  it('refuses to report ready on a malformed TRUSTED_PROXY_HOPS', async () => {
+    // Silently defaulting would make the rate-limit key caller-controlled without anyone noticing.
+    const response = await get('/health', { env: { ...env, TRUSTED_PROXY_HOPS: 'two' } });
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ missing: ['TRUSTED_PROXY_HOPS'] });
   });
 });

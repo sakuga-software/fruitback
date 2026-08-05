@@ -1,0 +1,20 @@
+# Local run and self-host reference. Dokploy builds the same Dockerfile from the GitHub push and
+# injects the environment itself, so it does not read this file — keep the two in sync by hand.
+services:
+  worker:
+    build:
+      # Repo root: the build needs the workspace lockfile and packages/shared.
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    restart: unless-stopped
+    ports:
+      - '${PORT:-8080}:8080'
+    environment:
+      PORT: 8080
+      # Client site origins allowed to post feedback. `*` is fine for a preview, wrong in production.
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?set ALLOWED_ORIGINS}
+      LINEAR_API_KEY: ${LINEAR_API_KEY:?set LINEAR_API_KEY}
+      LINEAR_TEAM_ID: ${LINEAR_TEAM_ID:?set LINEAR_TEAM_ID}
+      LINEAR_PROJECT_ID: ${LINEAR_PROJECT_ID:-}
+      # One hop = Traefik in front. Getting this wrong makes the rate limit forgeable.
+      TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}

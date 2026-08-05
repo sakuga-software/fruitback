@@ -8,55 +8,71 @@ import { checkRateLimit } from './rate-limit';
  * The only server-side piece of Fruitback. Its single reason to exist: the Linear API key cannot
  * live in JavaScript served on a client's public site. Everything else — storage, status, threads —
  * is Linear's job.
+ *
+ * The handler is written against web `Request`/`Response` and knows nothing about the transport;
+ * `server.ts` adapts `node:http` onto it. That keeps every behaviour testable without opening a
+ * socket, and keeps the door open if this ever moves to another runtime.
  */
 
 /** A seed with a long note and a DOM path is a few KB. 64 is generous; unbounded is an invitation. */
 const MAX_BODY_BYTES = 64 * 1_024;
 
-export default {
-  async fetch(request: Request, env: WorkerEnv): Promise<Response> {
-    // Read the allowlist straight from the env, before validation: a misconfigured Worker still has
-    // to answer with CORS headers, or the browser turns the diagnostic into an opaque CORS failure
-    // and the widget never gets to read which var is missing.
-    const origins = splitOrigins(env.ALLOWED_ORIGINS);
-
-    const config = readConfig(env);
-    if (!config.ok) {
-      // Configuration is wrong on the Worker, not in the request: say so once, clearly.
-      const headers = origins.length > 0 ? resolveCors(request, origins).headers : diagnosticCorsHeaders(request);
-
-      return json(500, { error: 'misconfigured', missing: config.missing }, headers);
-    }
-
-    const cors = resolveCors(request, origins);
-    if (!cors.allowed) {
-      return json(403, { error: 'origin-not-allowed' });
-    }
-
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { status: 204, headers: cors.headers });
-    }
-
-    const { pathname } = new URL(request.url);
-    if (pathname !== '/feedback') {
-      return json(404, { error: 'not-found' }, cors.headers);
-    }
-
-    if (request.method === 'GET') {
-      return json(501, { error: 'not-implemented', ticket: 'SKG-499' }, cors.headers);
-    }
-
-    if (request.method !== 'POST') {
-      return json(405, { error: 'method-not-allowed' }, cors.headers);
-    }
-
-    if (!(await checkRateLimit(env, request))) {
-      return json(429, { error: 'rate-limited' }, cors.headers);
-    }
-
-    return postFeedback(request, config.config, cors.headers);
-  },
+/** What the transport knows and the request itself cannot say. */
+export type RequestContext = {
+  /** Already resolved against the trusted proxy chain — see `resolveClientIp`. */
+  clientIp: string;
 };
+
+export async function handleRequest(request: Request, env: WorkerEnv, context: RequestContext): Promise<Response> {
+  const { pathname } = new URL(request.url);
+
+  // Read the allowlist straight from the env, before validation: a misconfigured service still has
+  // to answer with CORS headers, or the browser turns the diagnostic into an opaque CORS failure
+  // and the widget never gets to read which var is missing.
+  const origins = splitOrigins(env.ALLOWED_ORIGINS);
+  const config = readConfig(env);
+
+  // Readiness, before anything else: a container that cannot serve must not be routed to.
+  if (pathname === '/health') {
+    return config.ok
+      ? json(200, { ok: true })
+      : json(503, { ok: false, error: 'misconfigured', missing: config.missing });
+  }
+
+  if (!config.ok) {
+    // Configuration is wrong on the service, not in the request: say so once, clearly.
+    const headers = origins.length > 0 ? resolveCors(request, origins).headers : diagnosticCorsHeaders(request);
+
+    return json(500, { error: 'misconfigured', missing: config.missing }, headers);
+  }
+
+  const cors = resolveCors(request, origins);
+  if (!cors.allowed) {
+    return json(403, { error: 'origin-not-allowed' });
+  }
+
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: cors.headers });
+  }
+
+  if (pathname !== '/feedback') {
+    return json(404, { error: 'not-found' }, cors.headers);
+  }
+
+  if (request.method === 'GET') {
+    return json(501, { error: 'not-implemented', ticket: 'SKG-499' }, cors.headers);
+  }
+
+  if (request.method !== 'POST') {
+    return json(405, { error: 'method-not-allowed' }, cors.headers);
+  }
+
+  if (!checkRateLimit(context.clientIp)) {
+    return json(429, { error: 'rate-limited' }, cors.headers);
+  }
+
+  return postFeedback(request, config.config, cors.headers);
+}
 
 async function postFeedback(
   request: Request,
