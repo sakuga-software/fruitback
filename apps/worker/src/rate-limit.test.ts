@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { resolveClientIp } from './rate-limit';
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { resolveClientIp } from './rate-limit.ts';
 
 /**
  * The rate limit is only as good as this function. Behind Traefik, `X-Forwarded-For` is appended to
@@ -13,7 +14,7 @@ describe('resolveClientIp', () => {
     const forged = '1.2.3.4';
     const real = '203.0.113.9';
 
-    expect(resolveClientIp(`${forged}, ${real}`, SOCKET, 1)).toBe(real);
+    assert.equal(resolveClientIp(`${forged}, ${real}`, SOCKET, 1), real);
   });
 
   it('cannot be moved by adding entries to the chain', () => {
@@ -25,33 +26,33 @@ describe('resolveClientIp', () => {
       resolveClientIp(`1.1.1.1, 2.2.2.2, 3.3.3.3, ${real}`, SOCKET, 1),
     ];
 
-    expect(new Set(keys).size).toBe(1);
+    assert.equal(new Set(keys).size, 1);
   });
 
   it('counts from the right when several proxies are trusted', () => {
-    expect(resolveClientIp('1.2.3.4, 203.0.113.9, 172.16.0.1', SOCKET, 2)).toBe('203.0.113.9');
+    assert.equal(resolveClientIp('1.2.3.4, 203.0.113.9, 172.16.0.1', SOCKET, 2), '203.0.113.9');
   });
 
   it('trims whitespace around entries', () => {
-    expect(resolveClientIp('1.2.3.4 ,   203.0.113.9   ', SOCKET, 1)).toBe('203.0.113.9');
+    assert.equal(resolveClientIp('1.2.3.4 ,   203.0.113.9   ', SOCKET, 1), '203.0.113.9');
   });
 
   it('ignores the header entirely when no proxy is trusted', () => {
-    expect(resolveClientIp('1.2.3.4', SOCKET, 0)).toBe(SOCKET);
+    assert.equal(resolveClientIp('1.2.3.4', SOCKET, 0), SOCKET);
   });
 
   it('falls back to the socket when the header is absent or empty', () => {
-    expect(resolveClientIp(null, SOCKET, 1)).toBe(SOCKET);
-    expect(resolveClientIp('', SOCKET, 1)).toBe(SOCKET);
-    expect(resolveClientIp('  ,  ', SOCKET, 1)).toBe(SOCKET);
+    assert.equal(resolveClientIp(null, SOCKET, 1), SOCKET);
+    assert.equal(resolveClientIp('', SOCKET, 1), SOCKET);
+    assert.equal(resolveClientIp('  ,  ', SOCKET, 1), SOCKET);
   });
 
   it('falls back to the socket when the chain is shorter than the trusted hops', () => {
     // The request did not arrive through the expected path, so no entry in it can be trusted.
-    expect(resolveClientIp('203.0.113.9', SOCKET, 2)).toBe(SOCKET);
+    assert.equal(resolveClientIp('203.0.113.9', SOCKET, 2), SOCKET);
   });
 
   it('degrades to a single shared bucket rather than crashing when nothing identifies the caller', () => {
-    expect(resolveClientIp(null, undefined, 1)).toBe('unknown');
+    assert.equal(resolveClientIp(null, undefined, 1), 'unknown');
   });
 });

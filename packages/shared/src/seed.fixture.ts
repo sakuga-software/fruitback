@@ -1,4 +1,4 @@
-import { type Seed, type SeedInput, createSeed } from './seed';
+import { type Seed, type SeedInput, createSeed } from './seed.ts';
 
 /**
  * Shared through the `@fruitback/shared/seed.fixture` export so the worker and the widget test

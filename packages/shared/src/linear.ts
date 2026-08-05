@@ -5,7 +5,7 @@ import {
   type SeedParseResult,
   parseSeed,
   seedSchema,
-} from './seed';
+} from './seed.ts';
 import { z } from 'zod';
 
 /**

@@ -1,5 +1,5 @@
 import { type Seed, buildIssueDescription, buildIssueLabels, buildIssueTitle } from '@fruitback/shared';
-import type { WorkerConfig } from './env';
+import type { WorkerConfig } from './env.ts';
 
 const LINEAR_GRAPHQL_ENDPOINT = 'https://api.linear.app/graphql';
 

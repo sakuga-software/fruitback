@@ -1,8 +1,11 @@
-import { type Mock, vi } from 'vitest';
+import { mock } from 'node:test';
 
 /**
  * A fake Linear GraphQL endpoint, dispatching on the operation name. It records every call so a test
  * can assert what was actually sent — the description in particular, which has to round-trip.
+ *
+ * `fetch` is replaced through `node:test`'s mock registry, so `mock.restoreAll()` in an `afterEach`
+ * puts the real one back.
  */
 
 export type GraphqlCall = { operation: string; variables: Record<string, unknown> };
@@ -16,7 +19,6 @@ export type IssueInput = {
 };
 
 export type LinearStub = {
-  fetch: Mock;
   calls: GraphqlCall[];
   /** Input of the last `issueCreate`, i.e. what Linear would have stored. */
   issueInput(): IssueInput;
@@ -37,7 +39,7 @@ export function installLinearStub(options: LinearStubOptions = {}): LinearStub {
   const calls: GraphqlCall[] = [];
   const createdLabels: string[] = [];
 
-  const fetchMock = vi.fn(async (_url: string, init: { body: string }) => {
+  mock.method(globalThis, 'fetch', async (_url: unknown, init: { body: string }) => {
     const { query, variables } = JSON.parse(init.body) as { query: string; variables: Record<string, unknown> };
     const operation = /Fruitback\w+/.exec(query)?.[0] ?? 'unknown';
     calls.push({ operation, variables });
@@ -76,10 +78,7 @@ export function installLinearStub(options: LinearStubOptions = {}): LinearStub {
     return jsonResponse({ errors: [{ message: `unexpected operation: ${operation}` }] });
   });
 
-  vi.stubGlobal('fetch', fetchMock);
-
   return {
-    fetch: fetchMock,
     calls,
     issueInput() {
       const call = [...calls].reverse().find((entry) => entry.operation === 'FruitbackCreateIssue');

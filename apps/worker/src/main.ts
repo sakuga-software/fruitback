@@ -1,4 +1,4 @@
-import { startServer } from './server';
+import { startServer } from './server.ts';
 
 /**
  * Container entry point, kept apart from `server.ts` so importing the server in a test does not bind
