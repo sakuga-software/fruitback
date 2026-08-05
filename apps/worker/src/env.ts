@@ -1,28 +1,35 @@
 import { z } from 'zod';
 
 /**
- * Cloudflare's Rate Limiting API binding. Typed here rather than imported so a missing binding is a
- * runtime concern (see `rate-limit.ts`) instead of a compile error.
+ * Configuration comes from the process environment — Dokploy injects it, `docker compose` reads it
+ * from `.env`. It is passed explicitly rather than read from `process.env` inside the handler so the
+ * tests stay hermetic.
  */
-export interface RateLimiterBinding {
-  limit(options: { key: string }): Promise<{ success: boolean }>;
-}
-
-export interface WorkerEnv {
-  /** Linear personal API key. A secret — never a `var`, never sent to the client. */
+export type WorkerEnv = {
+  /** Linear personal API key. A secret — never baked into the image, never sent to the client. */
   LINEAR_API_KEY?: string;
   LINEAR_TEAM_ID?: string;
   LINEAR_PROJECT_ID?: string;
   /** Comma-separated client origins, or `*`. */
   ALLOWED_ORIGINS?: string;
-  FEEDBACK_RATE_LIMITER?: RateLimiterBinding;
-}
+  /** How many reverse proxies sit in front of this process. See `resolveClientIp`. */
+  TRUSTED_PROXY_HOPS?: string;
+  PORT?: string;
+  HOST?: string;
+};
+
+export const DEFAULT_PORT = 8080;
+/** Containers must listen on every interface, or nothing outside the container can reach them. */
+export const DEFAULT_HOST = '0.0.0.0';
+/** One hop: Dokploy's Traefik. Raise it if another proxy (a CDN, a load balancer) is added upstream. */
+export const DEFAULT_TRUSTED_PROXY_HOPS = 1;
 
 const configSchema = z.object({
   linearApiKey: z.string().min(1),
   linearTeamId: z.string().min(1),
   linearProjectId: z.string().min(1).optional(),
   allowedOrigins: z.array(z.string().min(1)).min(1),
+  trustedProxyHops: z.number().int().min(0),
 });
 
 export type WorkerConfig = z.infer<typeof configSchema>;
@@ -30,8 +37,8 @@ export type WorkerConfig = z.infer<typeof configSchema>;
 export type ConfigResult = { ok: true; config: WorkerConfig } | { ok: false; missing: string[] };
 
 /**
- * Validate the environment up front, so a missing secret surfaces as one clear 500 instead of an
- * opaque Linear error on every request.
+ * Validate the environment up front, so a missing secret surfaces once — at boot and on `/health` —
+ * instead of as an opaque Linear error on every request.
  */
 export function readConfig(env: WorkerEnv): ConfigResult {
   const candidate = {
@@ -39,6 +46,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     linearTeamId: env.LINEAR_TEAM_ID,
     linearProjectId: env.LINEAR_PROJECT_ID || undefined,
     allowedOrigins: splitOrigins(env.ALLOWED_ORIGINS),
+    trustedProxyHops: readTrustedProxyHops(env.TRUSTED_PROXY_HOPS),
   };
 
   const result = configSchema.safeParse(candidate);
@@ -48,6 +56,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     linearApiKey: 'LINEAR_API_KEY',
     linearTeamId: 'LINEAR_TEAM_ID',
     allowedOrigins: 'ALLOWED_ORIGINS',
+    trustedProxyHops: 'TRUSTED_PROXY_HOPS',
   };
   const missing = result.error.issues
     .map((issue) => namesByField[String(issue.path[0])])
@@ -62,4 +71,19 @@ export function splitOrigins(value: string | undefined): string[] {
     .split(',')
     .map((origin) => origin.trim())
     .filter((origin) => origin.length > 0);
+}
+
+function readTrustedProxyHops(value: string | undefined): number {
+  if (value === undefined || value.trim() === '') return DEFAULT_TRUSTED_PROXY_HOPS;
+
+  const parsed = Number(value);
+
+  // A typo here would silently make the rate limit forgeable, so refuse rather than fall back.
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : Number.NaN;
+}
+
+export function readPort(env: WorkerEnv): number {
+  const parsed = Number(env.PORT ?? '');
+
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_PORT;
 }

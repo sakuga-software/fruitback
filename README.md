@@ -38,9 +38,9 @@ pin overlay            ◀──GET─── query by label+URL ◀────�
 - **widget** — `@fruitback/widget`, an embeddable script (Shadow DOM, so the client's CSS is never
   touched). Picks the element via `react-grab/primitives`, captures the anchor, and later re-plants
   the pins it reads back.
-- **worker** — a few dozen lines on Cloudflare Workers. Its only reason to exist: the Linear token
-  cannot live in client-side JS on a public site. It also decides attribution (anonymous vs signed
-  in).
+- **worker** — a small Node process in a container (Docker on a VPS, deployed by Dokploy from a
+  GitHub push). Its only reason to exist: the Linear token cannot live in client-side JS on a public
+  site. It also decides attribution (anonymous vs signed in).
 - **shared** — `@fruitback/shared`, the _seed_ contract. Both ends depend on it.
 
 No database, no dashboard, no session store.
@@ -72,7 +72,7 @@ See [`packages/shared/src/seed.ts`](packages/shared/src/seed.ts) and
 
 ```
 packages/shared    the seed contract: schema, Linear mapping, round-trip   ✅
-apps/worker        Cloudflare Worker: write path to Linear                 ✅  read path pending
+apps/worker        Node service in Docker: write path to Linear            ✅  read path pending
 packages/widget    capture + overlay, on top of react-grab                 ⬜
 ```
 
@@ -90,31 +90,51 @@ pnpm --filter @fruitback/shared test:watch
 
 ## The worker
 
-```bash
-pnpm --filter @fruitback/worker dev            # wrangler dev
-pnpm --filter @fruitback/worker build          # dry-run bundle, validates wrangler.jsonc
-pnpm --filter @fruitback/worker deploy
-```
-
-Before a first deploy, set the token — it is the one thing that must never reach the client:
+A plain Node HTTP process — `node:http` adapted onto a web-standard handler, no framework. It runs as
+a container: Dokploy builds the image from a GitHub push and puts Traefik in front of it on the VPS.
 
 ```bash
-pnpm --filter @fruitback/worker exec wrangler secret put LINEAR_API_KEY
+cp .env.example .env                            # then fill LINEAR_API_KEY
+pnpm --filter @fruitback/worker dev             # tsx watch, no container
+pnpm --filter @fruitback/worker build           # esbuild → dist/server.mjs, one file
+docker compose up --build worker                # the real image, locally
 ```
 
-`ALLOWED_ORIGINS`, `LINEAR_TEAM_ID` and `LINEAR_PROJECT_ID` are plain vars in
-[`wrangler.jsonc`](apps/worker/wrangler.jsonc). A missing var answers `500 misconfigured` naming what
-is absent, rather than failing later against Linear.
-
-| Route               | Status                                                         |
-| ------------------- | -------------------------------------------------------------- |
-| `POST /feedback`    | plants a seed: creates the issue, returns `identifier` + `url` |
-| `GET /feedback`     | `501` until SKG-499                                            |
-| `OPTIONS /feedback` | CORS preflight, never touches Linear                           |
+| Route               | Status                                                                    |
+| ------------------- | ------------------------------------------------------------------------- |
+| `POST /feedback`    | plants a seed: creates the issue, returns `identifier` + `url`            |
+| `GET /feedback`     | `501` until SKG-499                                                       |
+| `OPTIONS /feedback` | CORS preflight, never touches Linear                                      |
+| `GET /health`       | `200` when it can serve, `503` naming the missing variables when it can't |
 
 Labels are created on demand, so a new client site needs no manual Linear setup. A label that cannot
 be created is dropped and the feedback still goes through — losing a label is a triage annoyance,
 losing the client's note is a bug.
+
+### Deploying with Dokploy
+
+Create an **Application** on the fruitback repo with:
+
+| Setting         | Value                                                            |
+| --------------- | ---------------------------------------------------------------- |
+| Build type      | Dockerfile                                                       |
+| Dockerfile path | `apps/worker/Dockerfile`                                         |
+| Build context   | `.` — the repo root, it needs the lockfile and `packages/shared` |
+| Port            | `8080`                                                           |
+
+Then set the environment (`.env.example` lists all of it). `LINEAR_API_KEY` is a secret: it belongs
+in Dokploy's environment, never in the image or the repo. The image runs as `node`, not root, and
+carries no `node_modules` — the build stage bundles everything into a single file.
+
+`/health` is a real readiness probe: it answers `503` while a required variable is missing, so a
+misconfigured deploy never gets traffic routed to it, and `curl /health` tells you exactly which
+variable to set. The process also drains in-flight requests on `SIGTERM` before exiting.
+
+**`TRUSTED_PROXY_HOPS` deserves a second of attention.** It is how many reverse proxies sit in front
+of the container — `1` for Traefik alone. `X-Forwarded-For` is appended to by each proxy, so entries
+on the left came from the caller and are forgeable; only the rightmost ones were written by
+infrastructure you control. Set this too low and the rate-limit key becomes caller-controlled, which
+makes the limit trivially bypassable.
 
 ## Roadmap
 
