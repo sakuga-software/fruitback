@@ -4,15 +4,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/main.ts",
+    "dev": "node --watch src/main.ts",
     "start": "node dist/server.mjs",
     "build": "esbuild src/main.ts --bundle --platform=node --format=esm --target=node26 --outfile=dist/server.mjs",
     "format": "oxfmt --check .",
     "format:fix": "oxfmt .",
     "lint": "oxlint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "node --test 'src/**/*.test.ts'",
+    "test:watch": "node --test --watch 'src/**/*.test.ts'"
   },
   "dependencies": {
     "@fruitback/shared": "workspace:*",
@@ -23,8 +23,6 @@
     "esbuild": "^0.28.1",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
-    "tsx": "^4.20.6",
-    "typescript": "catalog:",
-    "vitest": "catalog:"
+    "typescript": "catalog:"
   }
 }

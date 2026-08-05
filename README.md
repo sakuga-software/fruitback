@@ -80,13 +80,17 @@ packages/widget    capture + overlay, on top of react-grab                 ⬜
 
 ```bash
 pnpm install
-pnpm test         # all packages, via Nx
+pnpm test         # node --test, across packages via Nx
 pnpm typecheck
 pnpm lint         # oxlint
 pnpm format:fix   # oxfmt
 
 pnpm --filter @fruitback/shared test:watch
 ```
+
+Tests run on Node's own runner (`node:test` + `node:assert/strict`) against the TypeScript sources —
+no test framework, no transpiler, no loader in the dependency tree. Same reason relative imports carry
+their `.ts` extension: Node's resolver wants it, and it buys `node --test` and `node --watch` for free.
 
 ## The worker
 
@@ -95,7 +99,7 @@ a container: Dokploy builds the image from a GitHub push and puts Traefik in fro
 
 ```bash
 cp .env.example .env                            # then fill LINEAR_API_KEY
-pnpm --filter @fruitback/worker dev             # tsx watch, no container
+pnpm --filter @fruitback/worker dev             # node --watch on the TypeScript, no container
 pnpm --filter @fruitback/worker build           # esbuild → dist/server.mjs, one file
 docker compose up --build worker                # the real image, locally
 ```

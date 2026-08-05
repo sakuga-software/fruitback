@@ -1,9 +1,9 @@
 import { type IncomingMessage, type Server, type ServerResponse, createServer } from 'node:http';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { handleRequest } from './app';
-import { DEFAULT_HOST, DEFAULT_TRUSTED_PROXY_HOPS, type WorkerEnv, readConfig, readPort } from './env';
-import { resolveClientIp } from './rate-limit';
+import { handleRequest } from './app.ts';
+import { DEFAULT_HOST, DEFAULT_TRUSTED_PROXY_HOPS, type WorkerEnv, readConfig, readPort } from './env.ts';
+import { resolveClientIp } from './rate-limit.ts';
 
 /**
  * Node entry point: adapts `node:http` onto the web-standard handler in `app.ts`.

@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, mock } from 'node:test';
+import assert from 'node:assert/strict';
 import { canonicalizePageUrl, parseSeedFromDescription } from '@fruitback/shared';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
-import { handleRequest } from './app';
-import type { WorkerEnv } from './env';
-import { installLinearStub } from './linear-stub';
-import { resetRateLimitState } from './rate-limit';
+import { handleRequest } from './app.ts';
+import type { WorkerEnv } from './env.ts';
+import { installLinearStub } from './linear-stub.ts';
+import { resetRateLimitState } from './rate-limit.ts';
 
 const ORIGIN = 'https://preview.acme.test';
 
@@ -15,7 +16,7 @@ const env: WorkerEnv = {
   ALLOWED_ORIGINS: `${ORIGIN},http://localhost:5173`,
 };
 
-type PostInit = {
+type RequestOverrides = {
   origin?: string | null;
   env?: WorkerEnv;
   headers?: Record<string, string>;
@@ -23,7 +24,7 @@ type PostInit = {
   clientIp?: string;
 };
 
-function post(body: unknown, init: PostInit = {}) {
+function post(body: unknown, init: RequestOverrides = {}) {
   const headers = new Headers({ 'Content-Type': 'application/json', ...(init.headers ?? {}) });
   if (init.origin !== null) headers.set('Origin', init.origin ?? ORIGIN);
 
@@ -36,7 +37,7 @@ function post(body: unknown, init: PostInit = {}) {
   return handleRequest(request, init.env ?? env, { clientIp: init.clientIp ?? '203.0.113.1' });
 }
 
-function get(path: string, init: PostInit = {}) {
+function get(path: string, init: RequestOverrides = {}) {
   const headers = new Headers(init.headers ?? {});
   if (init.origin !== null) headers.set('Origin', init.origin ?? ORIGIN);
 
@@ -50,7 +51,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  vi.unstubAllGlobals();
+  mock.restoreAll();
 });
 
 describe('POST /feedback', () => {
@@ -59,12 +60,12 @@ describe('POST /feedback', () => {
 
     const response = await post(seedFixture());
 
-    expect(response.status).toBe(201);
-    await expect(response.json()).resolves.toEqual({
+    assert.equal(response.status, 201);
+    assert.deepEqual(await response.json(), {
       issue: { id: 'issue_1', identifier: 'SKG-999', url: 'https://linear.app/sakuga-software/issue/SKG-999' },
     });
-    expect(stub.issueInput().teamId).toBe('team_1');
-    expect(stub.issueInput().projectId).toBe('project_1');
+    assert.equal(stub.issueInput().teamId, 'team_1');
+    assert.equal(stub.issueInput().projectId, 'project_1');
   });
 
   it('stores a description the widget can parse back into the exact same seed', async () => {
@@ -74,8 +75,7 @@ describe('POST /feedback', () => {
 
     await post(seed);
 
-    const result = parseSeedFromDescription(stub.issueInput().description);
-    expect(result).toEqual({ ok: true, seed });
+    assert.deepEqual(parseSeedFromDescription(stub.issueInput().description), { ok: true, seed });
   });
 
   it("titles the issue with the visitor's own words", async () => {
@@ -83,7 +83,7 @@ describe('POST /feedback', () => {
 
     await post(seedFixture({ note: 'Le CTA est trop petit' }));
 
-    expect(stub.issueInput().title).toBe('Le CTA est trop petit');
+    assert.equal(stub.issueInput().title, 'Le CTA est trop petit');
   });
 
   it('applies the fruitback label and the client label, creating what is missing', async () => {
@@ -91,8 +91,8 @@ describe('POST /feedback', () => {
 
     await post(seedFixture());
 
-    expect(stub.createdLabels()).toEqual(['fruitback:acme']);
-    expect(stub.issueInput().labelIds).toEqual(['label_existing', 'label_1']);
+    assert.deepEqual(stub.createdLabels(), ['fruitback:acme']);
+    assert.deepEqual(stub.issueInput().labelIds, ['label_existing', 'label_1']);
   });
 
   it('still plants the seed when a label cannot be created', async () => {
@@ -101,8 +101,8 @@ describe('POST /feedback', () => {
 
     const response = await post(seedFixture());
 
-    expect(response.status).toBe(201);
-    expect(stub.issueInput().labelIds).toEqual([]);
+    assert.equal(response.status, 201);
+    assert.deepEqual(stub.issueInput().labelIds, []);
   });
 
   it('normalizes the page URL server-side', async () => {
@@ -113,7 +113,8 @@ describe('POST /feedback', () => {
     await post(seedFixture({ page: { url: raw, path: '/pricing' } }));
 
     const result = parseSeedFromDescription(stub.issueInput().description);
-    expect(result.ok && result.seed.page.url).toBe(canonicalizePageUrl(raw));
+    assert.ok(result.ok);
+    assert.equal(result.seed.page.url, canonicalizePageUrl(raw));
   });
 
   it('rejects a payload that is not a seed', async () => {
@@ -121,8 +122,8 @@ describe('POST /feedback', () => {
 
     const response = await post({ hello: 'world' });
 
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({ error: 'invalid-seed', reason: 'not-found' });
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: 'invalid-seed', reason: 'not-found' });
   });
 
   it('rejects malformed JSON', async () => {
@@ -130,8 +131,8 @@ describe('POST /feedback', () => {
 
     const response = await post('{ not json');
 
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({ error: 'invalid-json' });
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: 'invalid-json' });
   });
 
   it('rejects an oversized body', async () => {
@@ -141,12 +142,12 @@ describe('POST /feedback', () => {
 
     const response = await post(oversized);
 
-    expect(response.status).toBe(413);
+    assert.equal(response.status, 413);
   });
 
   it('stops reading an oversized body instead of buffering it whole', async () => {
     installLinearStub();
-    // A forged Content-Length must not buy the caller a free 10 MB of Worker memory.
+    // A forged Content-Length must not buy the caller a free 10 MB of process memory.
     let pulled = 0;
     const chunk = new TextEncoder().encode('x'.repeat(8 * 1_024));
     const body = new ReadableStream({
@@ -167,9 +168,9 @@ describe('POST /feedback', () => {
       { clientIp: '203.0.113.1' },
     );
 
-    expect(response.status).toBe(413);
+    assert.equal(response.status, 413);
     // 64 KB cap over 8 KB chunks: it must give up around the ninth pull, not keep draining.
-    expect(pulled).toBeLessThanOrEqual(10);
+    assert.ok(pulled <= 10, `read ${pulled} chunks before giving up`);
   });
 
   it('reports a Linear outage as 502 so the widget can keep the note and retry', async () => {
@@ -177,8 +178,8 @@ describe('POST /feedback', () => {
 
     const response = await post(seedFixture());
 
-    expect(response.status).toBe(502);
-    await expect(response.json()).resolves.toMatchObject({ error: 'linear-unavailable' });
+    assert.equal(response.status, 502);
+    assert.partialDeepStrictEqual(await response.json(), { error: 'linear-unavailable' });
   });
 });
 
@@ -188,8 +189,8 @@ describe('CORS', () => {
 
     const response = await post(seedFixture());
 
-    expect(response.headers.get('Access-Control-Allow-Origin')).toBe(ORIGIN);
-    expect(response.headers.get('Vary')).toBe('Origin');
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'), ORIGIN);
+    assert.equal(response.headers.get('Vary'), 'Origin');
   });
 
   it('refuses an origin that is not on the allowlist', async () => {
@@ -197,8 +198,8 @@ describe('CORS', () => {
 
     const response = await post(seedFixture(), { origin: 'https://evil.test' });
 
-    expect(response.status).toBe(403);
-    expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    assert.equal(response.status, 403);
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'), null);
   });
 
   it('allows any origin when configured with a wildcard', async () => {
@@ -209,8 +210,8 @@ describe('CORS', () => {
       env: { ...env, ALLOWED_ORIGINS: '*' },
     });
 
-    expect(response.status).toBe(201);
-    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('https://anything.test');
+    assert.equal(response.status, 201);
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'), 'https://anything.test');
   });
 
   it('answers the preflight without touching Linear', async () => {
@@ -222,9 +223,9 @@ describe('CORS', () => {
 
     const response = await handleRequest(request, env, { clientIp: '203.0.113.1' });
 
-    expect(response.status).toBe(204);
-    expect(response.headers.get('Access-Control-Allow-Methods')).toContain('POST');
-    expect(stub.fetch).not.toHaveBeenCalled();
+    assert.equal(response.status, 204);
+    assert.ok(response.headers.get('Access-Control-Allow-Methods')?.includes('POST'));
+    assert.deepEqual(stub.calls, []);
   });
 
   it('serves a request with no Origin at all (curl, health check)', async () => {
@@ -232,7 +233,7 @@ describe('CORS', () => {
 
     const response = await post(seedFixture(), { origin: null });
 
-    expect(response.status).toBe(201);
+    assert.equal(response.status, 201);
   });
 });
 
@@ -245,8 +246,8 @@ describe('guard rails', () => {
       statuses.push((await post(seedFixture(), { clientIp: '203.0.113.7' })).status);
     }
 
-    expect(statuses.slice(0, 20).every((status) => status === 201)).toBe(true);
-    expect(statuses[20]).toBe(429);
+    assert.ok(statuses.slice(0, 20).every((status) => status === 201));
+    assert.equal(statuses[20], 429);
   });
 
   it('counts each client separately', async () => {
@@ -257,7 +258,7 @@ describe('guard rails', () => {
     }
     const other = await post(seedFixture(), { clientIp: '203.0.113.8' });
 
-    expect(other.status).toBe(201);
+    assert.equal(other.status, 201);
   });
 
   it('says what is missing when the service is misconfigured', async () => {
@@ -265,14 +266,14 @@ describe('guard rails', () => {
 
     const response = await post(seedFixture(), { env: { ALLOWED_ORIGINS: ORIGIN } });
 
-    expect(response.status).toBe(500);
-    await expect(response.json()).resolves.toEqual({
+    assert.equal(response.status, 500);
+    assert.deepEqual(await response.json(), {
       error: 'misconfigured',
       missing: ['LINEAR_API_KEY', 'LINEAR_TEAM_ID'],
     });
     // Without CORS headers the browser turns this into an opaque failure and the widget never
     // gets to read which variable is missing.
-    expect(response.headers.get('Access-Control-Allow-Origin')).toBe(ORIGIN);
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'), ORIGIN);
   });
 
   it('still answers readably when even the allowlist is missing', async () => {
@@ -280,9 +281,9 @@ describe('guard rails', () => {
 
     const response = await post(seedFixture(), { env: {} });
 
-    expect(response.status).toBe(500);
-    await expect(response.json()).resolves.toMatchObject({ missing: expect.arrayContaining(['ALLOWED_ORIGINS']) });
-    expect(response.headers.get('Access-Control-Allow-Origin')).toBe(ORIGIN);
+    assert.equal(response.status, 500);
+    assert.partialDeepStrictEqual(await response.json(), { missing: ['ALLOWED_ORIGINS'] });
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'), ORIGIN);
   });
 });
 
@@ -290,14 +291,14 @@ describe('routing', () => {
   it('reports the read path as not implemented yet', async () => {
     const response = await get('/feedback?url=https://acme.test/');
 
-    expect(response.status).toBe(501);
-    await expect(response.json()).resolves.toEqual({ error: 'not-implemented', ticket: 'SKG-499' });
+    assert.equal(response.status, 501);
+    assert.deepEqual(await response.json(), { error: 'not-implemented', ticket: 'SKG-499' });
   });
 
   it('404s an unknown path', async () => {
     const response = await get('/nope');
 
-    expect(response.status).toBe(404);
+    assert.equal(response.status, 404);
   });
 });
 
@@ -305,16 +306,16 @@ describe('GET /health', () => {
   it('is ready when the service can actually serve', async () => {
     const response = await get('/health');
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ ok: true });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { ok: true });
   });
 
   it('is not ready when a required variable is missing, and names it', async () => {
     // Dokploy must not route traffic to a container that cannot reach Linear.
     const response = await get('/health', { env: { ALLOWED_ORIGINS: ORIGIN } });
 
-    expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toMatchObject({
+    assert.equal(response.status, 503);
+    assert.partialDeepStrictEqual(await response.json(), {
       ok: false,
       missing: ['LINEAR_API_KEY', 'LINEAR_TEAM_ID'],
     });
@@ -323,14 +324,14 @@ describe('GET /health', () => {
   it('answers without an Origin, the way a container healthcheck calls it', async () => {
     const response = await get('/health', { origin: null });
 
-    expect(response.status).toBe(200);
+    assert.equal(response.status, 200);
   });
 
   it('refuses to report ready on a malformed TRUSTED_PROXY_HOPS', async () => {
     // Silently defaulting would make the rate-limit key caller-controlled without anyone noticing.
     const response = await get('/health', { env: { ...env, TRUSTED_PROXY_HOPS: 'two' } });
 
-    expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toMatchObject({ missing: ['TRUSTED_PROXY_HOPS'] });
+    assert.equal(response.status, 503);
+    assert.partialDeepStrictEqual(await response.json(), { missing: ['TRUSTED_PROXY_HOPS'] });
   });
 });

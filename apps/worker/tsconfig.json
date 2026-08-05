@@ -3,6 +3,8 @@
     "target": "ES2023",
     "module": "ES2022",
     "moduleResolution": "bundler",
+    // Relative imports carry `.ts` so Node can run the sources directly, no build step, no loader.
+    "allowImportingTsExtensions": true,
     "lib": ["ES2023"],
     "types": ["node"],
     "strict": true,

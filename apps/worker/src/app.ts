@@ -1,8 +1,8 @@
 import { canonicalizePageUrl, parseSeed } from '@fruitback/shared';
-import { type WorkerConfig, type WorkerEnv, readConfig, splitOrigins } from './env';
-import { LinearError, createSeedIssue } from './linear';
-import { diagnosticCorsHeaders, resolveCors } from './cors';
-import { checkRateLimit } from './rate-limit';
+import { type WorkerConfig, type WorkerEnv, readConfig, splitOrigins } from './env.ts';
+import { LinearError, createSeedIssue } from './linear.ts';
+import { diagnosticCorsHeaders, resolveCors } from './cors.ts';
+import { checkRateLimit } from './rate-limit.ts';
 
 /**
  * The only server-side piece of Fruitback. Its single reason to exist: the Linear API key cannot

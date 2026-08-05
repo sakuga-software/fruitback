@@ -3,12 +3,7 @@
   "namedInputs": {
     "default": ["{projectRoot}/**/*", "sharedGlobals"],
     "sharedGlobals": ["{workspaceRoot}/pnpm-workspace.yaml"],
-    "production": [
-      "default",
-      "!{projectRoot}/**/*.test.ts",
-      "!{projectRoot}/**/*.test.tsx",
-      "!{projectRoot}/vitest.config.*"
-    ]
+    "production": ["default", "!{projectRoot}/**/*.test.ts", "!{projectRoot}/**/*.test.tsx"]
   },
   "targetDefaults": {
     "build": {

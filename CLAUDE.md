@@ -24,13 +24,14 @@ Package manager is `pnpm@11.16.0` (pinned). Nx runs multi-project targets.
 
 ```bash
 pnpm install
-pnpm test                                   # nx run-many -t test
+pnpm test                                   # nx run-many -t test → node --test
 pnpm typecheck
 pnpm lint                                   # oxlint
 pnpm format:fix                             # oxfmt
 
 pnpm --filter @fruitback/shared test         # one package
 pnpm --filter @fruitback/shared test:watch
+node --test src/seed.test.ts                 # one file, from the package directory
 ```
 
 ## Layout
@@ -94,8 +95,21 @@ pnpm --filter @fruitback/shared test:watch
 
 - Formatting and linting are oxfmt / oxlint (config at the root). 120 columns, single quotes,
   trailing commas.
-- Tests are Vitest, colocated as `*.test.ts`, importing `describe/expect/it` explicitly (no
-  globals). Fixtures live in `*.fixture.ts`.
+- **Tests run on `node:test` and `node:assert/strict`** — no test runner, no transpiler, no loader.
+  `pnpm test` is `node --test 'src/**/*.test.ts'`; Node strips the types itself. Colocated as
+  `*.test.ts`, fixtures in `*.fixture.ts`.
+  - `assert.equal` / `assert.deepEqual` from `node:assert/strict` are the strict variants — no need
+    for `strictEqual`.
+  - Partial matching is `assert.partialDeepStrictEqual`. There is no `expect.arrayContaining`; assert
+    the exact array, or narrow first with `assert.ok(result.ok)` and then compare.
+  - Doubles come from `node:test`'s `mock` (`mock.method(globalThis, 'fetch', …)`), restored with
+    `mock.restoreAll()` in an `afterEach`.
+- **Relative imports carry the `.ts` extension.** Node's ESM resolver requires it, and that is what
+  lets `node --test` and `node --watch src/main.ts` run the sources with no build step. `tsc` accepts
+  it through `allowImportingTsExtensions`, which is why both tsconfigs set `noEmit`.
+- `packages/shared` keeps `types: []` on purpose — it is bundled into a browser widget, so touching
+  `process` or `Buffer` must fail to compile. Its tests need Node types, so they typecheck through a
+  separate `tsconfig.test.json`; do not "fix" this by adding `node` to the main config.
 - Comments explain _why_, not _what_ — the tolerant parser and the redundant anchor both exist for
   reasons that are not obvious from the code.
 - Work is tracked in Linear on the

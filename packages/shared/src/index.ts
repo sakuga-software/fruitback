@@ -1,2 +1,2 @@
-export * from './seed';
-export * from './linear';
+export * from './seed.ts';
+export * from './linear.ts';
