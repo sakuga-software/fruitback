@@ -1,16 +1,12 @@
 {
-  "name": "@fruitback/shared",
+  "name": "@fruitback/worker",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "sideEffects": false,
-  "main": "src/index.ts",
-  "types": "./src/index.ts",
-  "exports": {
-    ".": "./src/index.ts",
-    "./seed.fixture": "./src/seed.fixture.ts"
-  },
   "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "build": "wrangler deploy --dry-run --outdir dist",
     "format": "oxfmt --check .",
     "format:fix": "oxfmt .",
     "lint": "oxlint .",
@@ -19,12 +15,15 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@fruitback/shared": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250906.0",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "wrangler": "^4.42.0"
   }
 }

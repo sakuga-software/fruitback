@@ -1,5 +1,10 @@
 import { type Seed, type SeedInput, createSeed } from './seed';
 
+/**
+ * Shared through the `@fruitback/shared/seed.fixture` export so the worker and the widget test
+ * against the same seed instead of each keeping its own drifting copy.
+ */
+
 /** A realistic seed, as the widget would build it on a preview deploy. */
 export function seedFixture(overrides: Partial<SeedInput> = {}): Seed {
   return createSeed({

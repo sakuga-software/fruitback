@@ -32,9 +32,29 @@ pnpm --filter @fruitback/shared test:watch
 ## Layout
 
 - `packages/shared` (`@fruitback/shared`) — the seed contract. Browser- and Worker-safe: no Node
-  API, no DOM API beyond `URL`.
-- `packages/widget` — *not written yet.* Capture + overlay, on top of `react-grab/primitives`.
-- `apps/worker` — *not written yet.* Cloudflare Worker proxying to the Linear API.
+  API, no DOM API beyond `URL`. Also exports `@fruitback/shared/seed.fixture`, so every package
+  tests against the same seed instead of keeping a drifting copy.
+- `apps/worker` (`@fruitback/worker`) — Cloudflare Worker. `POST /feedback` is live; `GET /feedback`
+  answers 501 until SKG-499.
+- `packages/widget` — _not written yet._ Capture + overlay, on top of `react-grab/primitives`.
+
+## The worker
+
+- It exists for exactly one reason: the Linear API key cannot ship in client-side JS. Resist putting
+  logic here that belongs in the widget or in Linear.
+- The env is validated up front (`readConfig`), so a missing secret is one clear `500 misconfigured`
+  instead of an opaque Linear error per request.
+- `POST /feedback` re-canonicalizes `seed.page.url` server-side. The read path finds seeds by
+  matching that URL inside the description, so a client that skipped normalization would plant a pin
+  nobody can find again.
+- Failure codes are deliberate: `400` the caller's fault, `403` origin not allowed, `413` oversized
+  body, `429` rate-limited, `500` Worker misconfigured, `502` Linear unavailable (the widget should
+  keep the note and retry).
+- Tests drive the exported `fetch` handler with plain `Request` objects against a stubbed Linear
+  (`linear-stub.ts`); no `wrangler` runtime needed. The assertion that matters most is that the
+  stored description parses back into the exact seed that was posted.
+- `reporter` in an incoming seed is **client-asserted and unverified** — do not treat it as identity
+  until SKG-498 lands.
 
 ## The seed contract
 
@@ -62,7 +82,7 @@ pnpm --filter @fruitback/shared test:watch
   trailing commas.
 - Tests are Vitest, colocated as `*.test.ts`, importing `describe/expect/it` explicitly (no
   globals). Fixtures live in `*.fixture.ts`.
-- Comments explain *why*, not *what* — the tolerant parser and the redundant anchor both exist for
+- Comments explain _why_, not _what_ — the tolerant parser and the redundant anchor both exist for
   reasons that are not obvious from the code.
 - Work is tracked in Linear on the
   [Fruitback](https://linear.app/sakuga-software/project/fruitback-ed574263d8d6) project (team SKG).

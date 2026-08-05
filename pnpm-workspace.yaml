@@ -3,7 +3,9 @@ packages:
   - packages/*
 
 allowBuilds:
+  esbuild: true
   nx: true
+  workerd: true
 
 catalog:
   '@types/node': 26.1.1
