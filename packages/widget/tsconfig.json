@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    // Relative imports carry `.ts` so Node can run the sources directly, no build step, no loader.
+    "allowImportingTsExtensions": true,
+    "lib": ["ES2022", "DOM"],
+    // Same rule as `packages/shared`: this ships inside a browser bundle, so reaching for `process`
+    // or `Buffer` has to fail here. The tests need Node types, hence `tsconfig.test.json`.
+    "types": [],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.fixture.ts"]
+}

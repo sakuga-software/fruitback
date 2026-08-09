@@ -163,6 +163,7 @@ export type SeedViewport = z.infer<typeof seedViewportSchema>;
 export type SeedSource = z.infer<typeof seedSourceSchema>;
 export type SeedClient = z.infer<typeof seedClientSchema>;
 export type SeedReporter = z.infer<typeof seedReporterSchema>;
+export type SeedEnv = z.infer<typeof seedEnvSchema>;
 export type SeedScreenshot = z.infer<typeof seedScreenshotSchema>;
 
 /** What a caller supplies; `kind` and `v` are stamped by `createSeed`. */

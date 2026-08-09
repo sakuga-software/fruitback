@@ -65,15 +65,21 @@ excerpt, `domPath`, and bounds as a share of the document). When none of them re
 becomes an _orphan_ — listed aside rather than dropped on the wrong element. That degradation is
 what separates a demo from a tool people keep using.
 
-See [`packages/shared/src/seed.ts`](packages/shared/src/seed.ts) and
-[`packages/shared/src/linear.ts`](packages/shared/src/linear.ts).
+Picking the selector is the part that decides whether any of this survives a redeploy: a test id or
+an author-written id is kept, a `useId` `:r7:` and a CSS-modules class are refused, and an element
+that repeats is anchored under the nearest ancestor that *is* identifiable rather than pathed from
+`<html>`.
+
+See [`packages/shared/src/seed.ts`](packages/shared/src/seed.ts),
+[`packages/shared/src/linear.ts`](packages/shared/src/linear.ts) and
+[`packages/widget/src/selector.ts`](packages/widget/src/selector.ts).
 
 ## Layout
 
 ```
 packages/shared    the seed contract: schema, Linear mapping, round-trip   ✅
 apps/worker        Node service in Docker: write + read path to Linear     ✅
-packages/widget    capture + overlay, on top of react-grab                 ⬜
+packages/widget    capture: anchor + seed assembly                        ✅  overlay pending
 ```
 
 ## Commands
