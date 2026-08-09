@@ -1,4 +1,6 @@
-import { Window } from 'happy-dom';
+// Aliased: an unqualified `Window` in this file has to keep meaning the DOM's, which is what the
+// code under test is written against and what `MountedPage` hands back.
+import { Window as HappyDomWindow } from 'happy-dom';
 
 /**
  * A real DOM for the tests.
@@ -28,7 +30,7 @@ export type MountOptions = {
 };
 
 export function mountPage(html: string, options: MountOptions = {}): MountedPage {
-  const window = new Window({
+  const window = new HappyDomWindow({
     url: options.url ?? 'https://preview.acme.test/pricing',
     width: options.width ?? 1_440,
     height: options.height ?? 900,

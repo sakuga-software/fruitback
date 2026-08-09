@@ -79,15 +79,34 @@ function optional<K extends string, T>(key: K, value: T | undefined): Partial<Re
  * on http does not have, hence the fallback.
  */
 function newSeedId(view: Window): string {
+  return `sd_${randomHex(view, SEED_ID_HEX_LENGTH)}`;
+}
+
+/** Twelve hex characters — 48 bits, and the same shape whichever branch below produced it. */
+const SEED_ID_HEX_LENGTH = 12;
+
+function randomHex(view: Window, length: number): string {
   const crypto = view.crypto;
 
-  if (typeof crypto?.randomUUID === 'function') return `sd_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
+  if (typeof crypto?.randomUUID === 'function') return crypto.randomUUID().replace(/-/g, '').slice(0, length);
 
   if (typeof crypto?.getRandomValues === 'function') {
-    const bytes = crypto.getRandomValues(new Uint8Array(6));
+    const bytes = crypto.getRandomValues(new Uint8Array(Math.ceil(length / 2)));
 
-    return `sd_${[...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+    return [...bytes]
+      .map((byte) => byte.toString(16).padStart(2, '0'))
+      .join('')
+      .slice(0, length);
   }
 
-  return `sd_${Math.random().toString(16).slice(2, 14)}`;
+  // `Math.random().toString(16)` is not a fixed-width string — `0.5` prints as `0.8` — so the digits
+  // are padded and accumulated rather than sliced out of one draw.
+  let hex = '';
+  while (hex.length < length) {
+    hex += Math.floor(Math.random() * 0x1_0000)
+      .toString(16)
+      .padStart(4, '0');
+  }
+
+  return hex.slice(0, length);
 }

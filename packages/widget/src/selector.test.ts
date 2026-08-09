@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildDomPath, buildSelector, cssString, isStableClass, isStableId } from './selector.ts';
+import { buildDomPath, buildSelector, cssString, escapeIdentifier, isStableClass, isStableId } from './selector.ts';
 import { mountPage } from './dom.fixture.ts';
 
 describe('buildSelector', () => {
@@ -124,6 +124,24 @@ describe('stability heuristics', () => {
     assert.equal(cssString('Commander'), '"Commander"');
     assert.equal(cssString('Dire "bonjour"'), `'Dire "bonjour"'`);
     assert.equal(cssString(`l'été "chaud"`), `"l'été \\"chaud\\""`);
+  });
+
+  it('hex-escapes an identifier that starts with a digit', () => {
+    // `#1col` is not a selector; the engine rejects it, the candidate is silently dropped, and the
+    // element ends up with a weaker anchor. The trailing space terminates the escape.
+    assert.equal(escapeIdentifier('1col'), '\\31 col');
+    assert.equal(escapeIdentifier('-2col'), '-\\32 col');
+    assert.equal(escapeIdentifier('col-1'), 'col-1');
+    assert.equal(escapeIdentifier('-'), '\\-');
+    assert.equal(escapeIdentifier('checkout cta'), 'checkout\\ cta');
+  });
+
+  it('anchors an element whose class starts with a digit', () => {
+    const page = mountPage('<main><div class="2col">Deux colonnes</div></main>');
+
+    const selector = buildSelector(page.query('div'));
+
+    assert.equal(page.document.querySelectorAll(selector).length, 1);
   });
 
   it('rejects classes a bundler minted', () => {

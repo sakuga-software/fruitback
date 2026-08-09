@@ -130,6 +130,19 @@ describe('captureSeed', () => {
     assert.notEqual(first.id, second.id);
   });
 
+  it('keeps the id the same width on a page with no crypto at all', () => {
+    // http staging sites have no secure context, so `crypto` may be missing entirely. The fallback
+    // must still produce a full-width id — `Math.random().toString(16)` alone does not.
+    const page = mountPricingPage();
+    Object.defineProperty(page.view, 'crypto', { value: undefined, configurable: true });
+
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const seed = captureSeed({ element: page.query('button'), note: '', view: page.view });
+
+      assert.match(seed.id, /^sd_[0-9a-f]{12}$/);
+    }
+  });
+
   it('refuses an element with no window rather than sending half a seed', () => {
     const page = mountPricingPage();
     const orphan = page.document.implementation.createHTMLDocument().createElement('button');

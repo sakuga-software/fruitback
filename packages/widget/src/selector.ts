@@ -159,13 +159,31 @@ function positionalStep(element: Element): string {
 }
 
 /**
- * `CSS.escape` where it exists — every browser we target has it. The fallback is there for the
- * server-side and test environments that do not, and errs on the side of escaping too much.
+ * `CSS.escape` where it exists — every browser we target has it. The fallback covers the test and
+ * server-side environments that do not.
  */
 export function cssIdentifier(value: string): string {
   const escape = globalThis.CSS?.escape;
 
-  return escape ? escape(value) : value.replace(/[^a-zA-Z0-9_-]/g, (character) => `\\${character}`);
+  return escape ? escape(value) : escapeIdentifier(value);
+}
+
+/**
+ * Exported for its own tests: whether it runs at all depends on the environment, and a bug in here
+ * is invisible — an invalid selector is silently rejected by `matchesOnly` and the element quietly
+ * falls back to a less durable anchor.
+ *
+ * The start of an identifier has its own rule: `#1col` is not a selector at all, and CSS spells that
+ * first digit as a hex escape, `#\31 col`. The trailing space terminates the escape and is part of
+ * it — dropping it swallows the next character.
+ */
+export function escapeIdentifier(value: string): string {
+  if (value === '') return '';
+  if (value === '-') return '\\-';
+
+  const escaped = value.replace(/[^a-zA-Z0-9_-]/g, (character) => `\\${character}`);
+
+  return escaped.replace(/^(-?)(\d)/, (_match, dash: string, digit: string) => `${dash}\\3${digit} `);
 }
 
 /**
