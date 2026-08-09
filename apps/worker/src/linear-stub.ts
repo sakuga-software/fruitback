@@ -1,4 +1,5 @@
 import { mock } from 'node:test';
+import { type Seed, buildIssueDescription, buildIssueTitle } from '@fruitback/shared';
 
 /**
  * A fake Linear GraphQL endpoint, dispatching on the operation name. It records every call so a test
@@ -18,11 +19,24 @@ export type IssueInput = {
   labelIds: string[];
 };
 
+/** One issue as `FruitbackIssues` returns it. */
+export type StoredIssue = {
+  id: string;
+  identifier: string;
+  url: string;
+  title: string;
+  updatedAt: string;
+  description: string | null;
+  state: { name: string; type: string } | null;
+};
+
 export type LinearStub = {
   calls: GraphqlCall[];
   /** Input of the last `issueCreate`, i.e. what Linear would have stored. */
   issueInput(): IssueInput;
   createdLabels(): string[];
+  /** Filter of the last `issues` query, i.e. what Linear was asked to narrow on. */
+  issueFilter(): Record<string, unknown>;
 };
 
 export type LinearStubOptions = {
@@ -32,7 +46,31 @@ export type LinearStubOptions = {
   failLabelCreation?: boolean;
   /** Make `issueCreate` fail the way an outage would. */
   failIssueCreation?: boolean;
+  /**
+   * Issues the read path will find. Returned whatever the filter says: Linear's
+   * `description contains` is a substring match, and leaving the narrowing to the worker is what
+   * lets a test prove it drops the issues of a neighbouring page.
+   */
+  storedIssues?: StoredIssue[];
+  /** Serve `storedIssues` this many at a time, to exercise the pagination loop. */
+  issuesPageSize?: number;
+  /** Make the `issues` query fail the way an outage would. */
+  failIssueQuery?: boolean;
 };
+
+/** A stored issue built from a seed, the way `POST /feedback` would have written it. */
+export function storedIssueFromSeed(seed: Seed, overrides: Partial<StoredIssue> = {}): StoredIssue {
+  return {
+    id: `issue_${seed.id}`,
+    identifier: 'SKG-901',
+    url: 'https://linear.app/sakuga-software/issue/SKG-901',
+    title: buildIssueTitle(seed),
+    updatedAt: '2026-08-05T10:00:00.000Z',
+    description: buildIssueDescription(seed),
+    state: { name: 'In Progress', type: 'started' },
+    ...overrides,
+  };
+}
 
 export function installLinearStub(options: LinearStubOptions = {}): LinearStub {
   const existing: Record<string, string> = { ...(options.existingLabels ?? {}) };
@@ -75,6 +113,25 @@ export function installLinearStub(options: LinearStubOptions = {}): LinearStub {
       });
     }
 
+    if (operation === 'FruitbackIssues') {
+      if (options.failIssueQuery) return jsonResponse({ errors: [{ message: 'Linear is down' }] });
+
+      const stored = options.storedIssues ?? [];
+      const pageSize = options.issuesPageSize ?? stored.length;
+      const offset = Number(variables.after ?? 0);
+      const nodes = pageSize > 0 ? stored.slice(offset, offset + pageSize) : stored;
+      const next = offset + nodes.length;
+
+      return jsonResponse({
+        data: {
+          issues: {
+            pageInfo: { hasNextPage: next < stored.length, endCursor: String(next) },
+            nodes,
+          },
+        },
+      });
+    }
+
     return jsonResponse({ errors: [{ message: `unexpected operation: ${operation}` }] });
   });
 
@@ -87,6 +144,12 @@ export function installLinearStub(options: LinearStubOptions = {}): LinearStub {
       return call.variables.input as IssueInput;
     },
     createdLabels: () => createdLabels,
+    issueFilter() {
+      const call = [...calls].reverse().find((entry) => entry.operation === 'FruitbackIssues');
+      if (!call) throw new Error('no issue was queried');
+
+      return call.variables.filter as Record<string, unknown>;
+    },
   };
 }
 

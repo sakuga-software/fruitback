@@ -39,9 +39,9 @@ node --test src/seed.test.ts                 # one file, from the package direct
 - `packages/shared` (`@fruitback/shared`) — the seed contract. Browser- and server-safe: no Node API,
   no DOM API beyond `URL`. Also exports `@fruitback/shared/seed.fixture`, so every package tests
   against the same seed instead of keeping a drifting copy.
-- `apps/worker` (`@fruitback/worker`) — the Node service. `POST /feedback` is live; `GET /feedback`
-  answers 501 until SKG-499. Still called "worker" because that is what everyone calls it, though it
-  is no longer an edge worker.
+- `apps/worker` (`@fruitback/worker`) — the Node service. `POST /feedback` plants a seed,
+  `GET /feedback?url=…` returns the seeds of that page. Still called "worker" because that is what
+  everyone calls it, though it is no longer an edge worker.
 - `packages/widget` — _not written yet._ Capture + overlay, on top of `react-grab/primitives`.
 
 ## The worker
@@ -55,7 +55,13 @@ node --test src/seed.test.ts                 # one file, from the package direct
   `/health`, not as an opaque Linear error per request.
 - `POST /feedback` re-canonicalizes `seed.page.url` server-side. The read path finds seeds by
   matching that URL inside the description, so a client that skipped normalization would plant a pin
-  nobody can find again.
+  nobody can find again. `GET /feedback` canonicalizes its `url` parameter for the same reason.
+- **The `description contains` filter is a substring match**, so `/pricing` also matches the seeds of
+  `/pricing?tab=annual`. `fetchSeedIssues` therefore re-checks `seed.page.url` exactly before
+  returning an issue — dropping that check silently mixes two pages' pins.
+- The read cache (`cache.ts`) holds the in-flight promise, not the value, so a burst of visitors on
+  one page costs one Linear call. Failures are evicted at once: an outage must not be served for the
+  whole TTL. In-process, therefore per replica — same caveat as the rate limiter.
 - Failure codes are deliberate: `400` the caller's fault, `403` origin not allowed, `413` oversized
   body, `429` rate-limited, `500` misconfigured, `502` Linear unavailable (the widget should keep the
   note and retry). `/health` answers `503` when misconfigured so a bad deploy is never routed to.

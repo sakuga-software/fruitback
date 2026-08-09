@@ -1,4 +1,16 @@
-import { type Seed, buildIssueDescription, buildIssueLabels, buildIssueTitle } from '@fruitback/shared';
+import {
+  FRUITBACK_LABEL,
+  type Seed,
+  type SeedIssue,
+  buildIssueDescription,
+  buildIssueLabels,
+  buildIssueTitle,
+  clientLabelName,
+  pageQueryTerm,
+  parseSeedFromDescription,
+  seedIssueSchema,
+  stageForLinearState,
+} from '@fruitback/shared';
 import type { WorkerConfig } from './env.ts';
 
 const LINEAR_GRAPHQL_ENDPOINT = 'https://api.linear.app/graphql';
@@ -136,4 +148,117 @@ export async function createSeedIssue(config: WorkerConfig, seed: Seed): Promise
   }
 
   return created.issueCreate.issue;
+}
+
+const ISSUES_QUERY = `
+  query FruitbackIssues($filter: IssueFilter!, $first: Int!, $after: String) {
+    issues(filter: $filter, first: $first, after: $after) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        id
+        identifier
+        url
+        title
+        updatedAt
+        description
+        state { name type }
+      }
+    }
+  }
+`;
+
+type IssueNode = {
+  id: string;
+  identifier: string;
+  url: string;
+  title: string;
+  updatedAt: string;
+  description: string | null;
+  state: { name: string; type: string } | null;
+};
+
+type IssuesResult = {
+  issues: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: IssueNode[] };
+};
+
+/** Linear caps a page at 250; 50 keeps a single-page answer the common case for one screen. */
+const ISSUES_PAGE_SIZE = 50;
+
+/**
+ * Stop walking after this many pages. A page with 500 pins is not a page the widget can render
+ * anyway, and an unbounded loop turns one bad query into an outage of our own making.
+ */
+const ISSUES_MAX_PAGES = 10;
+
+export type SeedIssueQuery = {
+  /** Already canonical — the caller normalizes before it gets here. */
+  url: string;
+  clientId?: string;
+};
+
+/**
+ * The seeds planted on one page, as the widget needs them to re-plant its pins.
+ *
+ * Everything is filtered server-side by Linear (label + `description contains <canonical url>`), so
+ * the workspace can hold any number of issues without this walking them.
+ */
+export async function fetchSeedIssues(config: WorkerConfig, query: SeedIssueQuery): Promise<SeedIssue[]> {
+  const filter = buildSeedIssueFilter(config, query);
+  const found: SeedIssue[] = [];
+  let after: string | null = null;
+
+  for (let page = 0; page < ISSUES_MAX_PAGES; page += 1) {
+    const result: IssuesResult = await graphql(config, ISSUES_QUERY, { filter, first: ISSUES_PAGE_SIZE, after });
+
+    for (const node of result.issues.nodes) {
+      const issue = toSeedIssue(node, query.url);
+      if (issue !== null) found.push(issue);
+    }
+
+    after = result.issues.pageInfo.hasNextPage ? result.issues.pageInfo.endCursor : null;
+    if (after === null) break;
+  }
+
+  return found;
+}
+
+function buildSeedIssueFilter(config: WorkerConfig, { url, clientId }: SeedIssueQuery): Record<string, unknown> {
+  const labels = clientId ? [FRUITBACK_LABEL, clientLabelName(clientId)] : [FRUITBACK_LABEL];
+
+  return {
+    // The API key can see the whole workspace; a seed only ever lives on the configured team.
+    team: { id: { eq: config.linearTeamId } },
+    // One clause per label: a single `name: { in: [...] }` would match *either* label, and the
+    // client label is what keeps one client's pins off another client's site.
+    and: labels.map((name) => ({ labels: { name: { eq: name } } })),
+    description: { contains: pageQueryTerm(url) },
+  };
+}
+
+function toSeedIssue(node: IssueNode, canonicalUrl: string): SeedIssue | null {
+  const parsed = parseSeedFromDescription(node.description);
+  // Someone edited the block away, or a newer Fruitback wrote it: a pin we cannot place is worse
+  // than one we do not show.
+  if (!parsed.ok) return null;
+
+  // `description contains` is a substring match, so a query for `/pricing` also brings back the
+  // seeds of `/pricing?tab=annual`. The seed itself is the authority on which page it belongs to.
+  if (parsed.seed.page.url !== canonicalUrl) return null;
+
+  const candidate = {
+    id: node.id,
+    identifier: node.identifier,
+    url: node.url,
+    title: node.title,
+    stage: stageForLinearState(node.state?.type ?? ''),
+    stateName: node.state?.name ?? '',
+    updatedAt: node.updatedAt,
+    seed: parsed.seed,
+  };
+
+  // Validated against the shared contract rather than trusted: this is the exact shape the widget
+  // parses on the other side, and a field Linear stopped returning must not reach it as `undefined`.
+  const result = seedIssueSchema.safeParse(candidate);
+
+  return result.success ? result.data : null;
 }
