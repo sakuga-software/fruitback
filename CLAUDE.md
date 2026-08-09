@@ -42,7 +42,31 @@ node --test src/seed.test.ts                 # one file, from the package direct
 - `apps/worker` (`@fruitback/worker`) — the Node service. `POST /feedback` plants a seed,
   `GET /feedback?url=…` returns the seeds of that page. Still called "worker" because that is what
   everyone calls it, though it is no longer an edge worker.
-- `packages/widget` — _not written yet._ Capture + overlay, on top of `react-grab/primitives`.
+- `packages/widget` (`@fruitback/widget`) — the browser half. **Capture is written** (SKG-494):
+  `captureSeed(element, note)` → a `Seed` ready to POST. The Shadow DOM host and the selection UI
+  (SKG-492/493) and the re-anchoring overlay (SKG-500) are not.
+
+## The widget
+
+- **`captureSeed` is the only place a seed is built.** It goes through `createSeed`, so a malformed
+  anchor fails in the reporter's browser instead of as a `400` after the note was typed.
+- The anchor is deliberately redundant — selector, `domPath`, text, attrs, bounds — because the site
+  will be redeployed between writing the note and reading it. `selector.ts` does not answer "what
+  selects this element" (any `:nth-child` chain does) but **"what still selects it next week"**: test
+  ids and author-written ids win, a `useId` `:r7:` and a CSS-modules class are refused. Whatever
+  comes out is verified unique against the document before being returned.
+- When nothing identifies an element that repeats (three identical cards), the selector is **scoped
+  under the nearest identifiable ancestor** rather than pathed from `<html>`.
+- `page.url` is canonicalized here too. The worker re-does it — it cannot trust a client — but doing
+  it on this side is what makes the widget query the read path with the key its seeds were stored
+  under.
+- **react-grab owns `source`.** `captureSeed({ source })` always wins; `readReactSource` is a
+  best-effort fallback over React's `__reactFiber$` internals for pages where react-grab is not
+  mounted, and returns `undefined` at the first surprise rather than guessing a file name.
+- Tests run against **happy-dom** (`dom.fixture.ts`), a devDependency of this package only —
+  uniqueness and sibling questions cannot be answered honestly by a hand-rolled fake. Nothing outside
+  `*.test.ts` and `*.fixture.ts` may import it, and `tsconfig.json` excludes both so the shipped code
+  still compiles with `types: []`.
 
 ## The worker
 

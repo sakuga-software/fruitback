@@ -1,0 +1,10 @@
+{
+  // Tests run on `node:test` against a happy-dom document, so they need Node types — but only they
+  // do. Keeping this apart is what stops the widget itself from depending on a Node API.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["src/**/*"],
+  "exclude": []
+}
