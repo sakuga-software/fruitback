@@ -1,8 +1,9 @@
 import { canonicalizePageUrl, parseSeed } from '@fruitback/shared';
 import { type WorkerConfig, type WorkerEnv, readConfig, splitOrigins } from './env.ts';
-import { LinearError, createSeedIssue } from './linear.ts';
+import { LinearError, createSeedIssue, fetchSeedIssues } from './linear.ts';
 import { diagnosticCorsHeaders, resolveCors } from './cors.ts';
 import { checkRateLimit } from './rate-limit.ts';
+import { CACHE_TTL_MS, cached } from './cache.ts';
 
 /**
  * The only server-side piece of Fruitback. Its single reason to exist: the Linear API key cannot
@@ -59,19 +60,78 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
     return json(404, { error: 'not-found' }, cors.headers);
   }
 
-  if (request.method === 'GET') {
-    return json(501, { error: 'not-implemented', ticket: 'SKG-499' }, cors.headers);
-  }
-
-  if (request.method !== 'POST') {
+  if (request.method !== 'GET' && request.method !== 'POST') {
     return json(405, { error: 'method-not-allowed' }, cors.headers);
   }
 
+  // Both directions are metered: a read hits Linear too, and the quota it burns is the same one the
+  // write path needs.
   if (!checkRateLimit(context.clientIp)) {
     return json(429, { error: 'rate-limited' }, cors.headers);
   }
 
-  return postFeedback(request, config.config, cors.headers);
+  return request.method === 'GET'
+    ? getFeedback(request, config.config, cors.headers)
+    : postFeedback(request, config.config, cors.headers);
+}
+
+/**
+ * The read path: every seed planted on one page, with the Linear state that gives the pin its
+ * colour. This is what lets a client come back to the page and see their own notes again.
+ */
+async function getFeedback(
+  request: Request,
+  config: WorkerConfig,
+  corsHeaders: Record<string, string>,
+): Promise<Response> {
+  const params = new URL(request.url).searchParams;
+  const requested = params.get('url');
+  if (requested === null || requested.trim() === '') {
+    return json(400, { error: 'missing-url' }, corsHeaders);
+  }
+
+  const url = canonicalizeRequestedPage(requested);
+  if (url === null) {
+    return json(400, { error: 'invalid-url' }, corsHeaders);
+  }
+
+  // Optional: narrows to one client's label. Absent means every seed on that URL, which is what a
+  // single-client workspace wants.
+  const clientId = params.get('client')?.trim() || undefined;
+
+  try {
+    const issues = await cached(JSON.stringify([clientId ?? null, url]), () =>
+      fetchSeedIssues(config, { url, clientId }),
+    );
+
+    return json(
+      200,
+      { url, issues },
+      // `private`, because the answer is scoped to a client label and a browser cache is the only
+      // one that may hold it. Same window as the in-process cache, so a reload costs nothing.
+      { ...corsHeaders, 'Cache-Control': `private, max-age=${Math.round(CACHE_TTL_MS / 1_000)}` },
+    );
+  } catch (error) {
+    if (error instanceof LinearError) {
+      return json(502, { error: 'linear-unavailable', message: error.message }, corsHeaders);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Canonicalized server-side for the same reason the write path does it: the filter matches this
+ * exact string inside the description, so a caller that skipped normalization would find nothing.
+ */
+function canonicalizeRequestedPage(requested: string): string | null {
+  try {
+    const url = new URL(requested);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+
+    return canonicalizePageUrl(url);
+  } catch {
+    return null;
+  }
 }
 
 async function postFeedback(

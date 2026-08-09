@@ -72,7 +72,7 @@ See [`packages/shared/src/seed.ts`](packages/shared/src/seed.ts) and
 
 ```
 packages/shared    the seed contract: schema, Linear mapping, round-trip   ✅
-apps/worker        Node service in Docker: write path to Linear            ✅  read path pending
+apps/worker        Node service in Docker: write + read path to Linear     ✅
 packages/widget    capture + overlay, on top of react-grab                 ⬜
 ```
 
@@ -104,16 +104,23 @@ pnpm --filter @fruitback/worker build           # esbuild → dist/server.mjs, o
 docker compose up --build worker                # the real image, locally
 ```
 
-| Route               | Status                                                                    |
-| ------------------- | ------------------------------------------------------------------------- |
-| `POST /feedback`    | plants a seed: creates the issue, returns `identifier` + `url`            |
-| `GET /feedback`     | `501` until SKG-499                                                       |
-| `OPTIONS /feedback` | CORS preflight, never touches Linear                                      |
-| `GET /health`       | `200` when it can serve, `503` naming the missing variables when it can't |
+| Route                            | Status                                                                    |
+| -------------------------------- | ------------------------------------------------------------------------- |
+| `POST /feedback`                 | plants a seed: creates the issue, returns `identifier` + `url`            |
+| `GET /feedback?url=…[&client=…]` | the seeds of that page: anchor, note, Linear state, stage                 |
+| `OPTIONS /feedback`              | CORS preflight, never touches Linear                                      |
+| `GET /health`                    | `200` when it can serve, `503` naming the missing variables when it can't |
 
 Labels are created on demand, so a new client site needs no manual Linear setup. A label that cannot
 be created is dropped and the feedback still goes through — losing a label is a triage annoyance,
 losing the client's note is a bug.
+
+The read path is one Linear query, narrowed server-side by the `fruitback` label, the per-client
+label and `description contains <canonical url>` — the workspace can hold any number of issues
+without the worker walking them. `contains` being a substring match, the seed's own
+`page.url` is re-checked exactly, or `/pricing` would return the pins of `/pricing?tab=annual`.
+Answers are cached in-process for 15 s: the same page opened by a room full of reviewers costs one
+call against the Linear quota, and a failed call is never cached.
 
 ### Deploying with Dokploy
 
