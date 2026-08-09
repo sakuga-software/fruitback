@@ -228,9 +228,11 @@ function buildSeedIssueFilter(config: WorkerConfig, { url, clientId }: SeedIssue
   return {
     // The API key can see the whole workspace; a seed only ever lives on the configured team.
     team: { id: { eq: config.linearTeamId } },
-    // One clause per label: a single `name: { in: [...] }` would match *either* label, and the
-    // client label is what keeps one client's pins off another client's site.
-    and: labels.map((name) => ({ labels: { name: { eq: name } } })),
+    // One clause per label, each spelled `some`: a comparator placed directly on the collection
+    // reads as "some label matches" too, but only implicitly. A single
+    // `name: { in: [fruitback, fruitback:acme] }` would be a different query altogether — it matches
+    // *either* label, and the client label is what keeps one client's pins off another's site.
+    and: labels.map((name) => ({ labels: { some: { name: { eq: name } } } })),
     description: { contains: pageQueryTerm(url) },
   };
 }

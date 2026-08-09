@@ -334,7 +334,10 @@ describe('GET /feedback', () => {
       team: { id: { eq: 'team_1' } },
       // Two clauses, not one `in`: an issue must carry *both* labels, or one client's pins would
       // surface on another client's site.
-      and: [{ labels: { name: { eq: 'fruitback' } } }, { labels: { name: { eq: 'fruitback:acme' } } }],
+      and: [
+        { labels: { some: { name: { eq: 'fruitback' } } } },
+        { labels: { some: { name: { eq: 'fruitback:acme' } } } },
+      ],
       description: { contains: PAGE },
     });
   });
@@ -345,7 +348,7 @@ describe('GET /feedback', () => {
 
     const body = await readBody(seed.page.url);
 
-    assert.partialDeepStrictEqual(stub.issueFilter(), { and: [{ labels: { name: { eq: 'fruitback' } } }] });
+    assert.partialDeepStrictEqual(stub.issueFilter(), { and: [{ labels: { some: { name: { eq: 'fruitback' } } } }] });
     assert.equal(body.issues.length, 1);
   });
 
