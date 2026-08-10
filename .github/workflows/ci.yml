@@ -58,9 +58,18 @@ jobs:
     # six specs and ~6 seconds of browser time — a slow E2E job is one people learn to ignore.
     name: e2e
     runs-on: ubuntu-latest
-    # The suite itself runs in seconds; the only thing here that can take minutes is fetching the
-    # browser. A cap turns a stalled download into a red check in ten minutes instead of a runner
-    # burning twenty — which is exactly how this job first failed.
+    # The browser comes with the image instead of being downloaded. Twice in a row, `playwright
+    # install` reached 100% of the archive and then sat there until it was killed — eighteen minutes,
+    # then ten — with nothing after the progress bar. Whatever that is, it is not something this repo
+    # can fix, and the official image removes the whole step: no cdn.playwright.dev, no apt, no
+    # browser cache to key. The tag is the version, so image and `@playwright/test` cannot drift.
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      # The runner's workspace belongs to uid 1001; as root, the actions trip over their own files.
+      options: --user 1001
+    # Node still comes from `.nvmrc` and not from the image: the sources run untranspiled, which
+    # needs a newer Node than noble ships.
+    # The suite takes six seconds. If this job ever approaches ten minutes, something is wrong again.
     timeout-minutes: 10
 
     steps:
@@ -89,26 +98,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Cache the browser
-        id: playwright-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          # Keyed on the pinned version: a bump downloads once, then hits the cache.
-          key: ${{ runner.os }}-playwright-${{ hashFiles('**/pnpm-lock.yaml') }}
-
-      - name: Install the browser
-        # Only Chromium, and only its headless shell: the suite tests our DOM code, not
-        # cross-browser behaviour, and CI never runs headed. That is half the download.
-        # Skipped entirely on a cache hit — the first run of this job stalled for eighteen minutes
-        # after fetching 167 MB, so the less it fetches, the less there is to stall on.
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: pnpm exec playwright install --only-shell chromium
-
-      - name: Install the system libraries the browser needs
-        # Cheap (apt, ~15s) and needed even when the browser itself came from the cache.
-        run: pnpm exec playwright install-deps chromium
 
       - name: Run the E2E suite
         # No LINEAR_API_KEY anywhere: the worker runs on its in-memory Linear (FRUITBACK_FAKE_LINEAR).
