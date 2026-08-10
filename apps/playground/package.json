@@ -1,24 +1,20 @@
 {
-  "name": "@fruitback/worker",
+  "name": "@fruitback/playground",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "node --watch src/main.ts",
-    "start": "node dist/server.mjs",
-    "build": "esbuild src/main.ts --bundle --platform=node --format=esm --target=node26 --outfile=dist/server.mjs",
     "format": "oxfmt --check .",
     "format:fix": "oxfmt .",
     "lint": "oxlint .",
     "typecheck": "tsc --noEmit",
     "test": "node --test 'src/**/*.test.ts'",
-    "test:watch": "node --test --watch 'src/**/*.test.ts'",
-    "dev:fake": "FRUITBACK_FAKE_LINEAR=1 PORT=8788 ALLOWED_ORIGINS=http://localhost:5177 node --watch src/main.ts",
-    "serve:fake": "FRUITBACK_FAKE_LINEAR=1 PORT=8788 node src/main.ts"
+    "serve": "node src/main.ts"
   },
   "dependencies": {
     "@fruitback/shared": "workspace:*",
-    "zod": "catalog:"
+    "@fruitback/widget": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

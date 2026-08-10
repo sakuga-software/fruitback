@@ -11,14 +11,16 @@ tsconfig.tsbuildinfo
 
 # Testing
 coverage/
+# Playwright: recordings, traces and the HTML report of the last E2E run.
+test-results/
+playwright-report/
+blob-report/
+.playwright/
 
 # Environment variables
 .env
 .env.local
 .env.*.local
-
-# Cloudflare Workers
-.wrangler/
 
 # Logs
 *.log

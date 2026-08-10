@@ -1,5 +1,5 @@
-/** Requests per window, per client IP. */
-const LIMIT = 20;
+/** Requests per window, per client IP. Tunable through `RATE_LIMIT_PER_MINUTE`. */
+export const DEFAULT_LIMIT = 20;
 const WINDOW_MS = 60_000;
 
 /**
@@ -12,10 +12,11 @@ const WINDOW_MS = 60_000;
  */
 const hits = new Map<string, number[]>();
 
-export function checkRateLimit(clientIp: string, now = Date.now()): boolean {
+export function checkRateLimit(clientIp: string, options: { limit?: number; now?: number } = {}): boolean {
+  const { limit = DEFAULT_LIMIT, now = Date.now() } = options;
   const window = (hits.get(clientIp) ?? []).filter((at) => now - at < WINDOW_MS);
 
-  if (window.length >= LIMIT) {
+  if (window.length >= limit) {
     hits.set(clientIp, window);
     return false;
   }

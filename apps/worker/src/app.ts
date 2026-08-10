@@ -1,9 +1,11 @@
 import { canonicalizePageUrl, parseSeed } from '@fruitback/shared';
 import { type WorkerConfig, type WorkerEnv, readConfig, splitOrigins } from './env.ts';
-import { LinearError, createSeedIssue, fetchSeedIssues } from './linear.ts';
+import { LinearError } from './linear.ts';
+import * as realLinear from './linear.ts';
+import * as memoryLinear from './linear-memory.ts';
 import { diagnosticCorsHeaders, resolveCors } from './cors.ts';
 import { checkRateLimit } from './rate-limit.ts';
-import { CACHE_TTL_MS, cached } from './cache.ts';
+import { cached, invalidate } from './cache.ts';
 
 /**
  * The only server-side piece of Fruitback. Its single reason to exist: the Linear API key cannot
@@ -17,6 +19,15 @@ import { CACHE_TTL_MS, cached } from './cache.ts';
 
 /** A seed with a long note and a DOM path is a few KB. 64 is generous; unbounded is an invitation. */
 const MAX_BODY_BYTES = 64 * 1_024;
+
+/**
+ * Which Linear this process talks to. The in-memory one only ever wins in the dev loop — `readConfig`
+ * refuses the flag under `NODE_ENV=production`, so this cannot silently become the deployed
+ * behaviour.
+ */
+function linearFor(config: WorkerConfig): Pick<typeof realLinear, 'createSeedIssue' | 'fetchSeedIssues'> {
+  return config.fakeLinear ? memoryLinear : realLinear;
+}
 
 /** What the transport knows and the request itself cannot say. */
 export type RequestContext = {
@@ -35,9 +46,11 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
 
   // Readiness, before anything else: a container that cannot serve must not be routed to.
   if (pathname === '/health') {
-    return config.ok
-      ? json(200, { ok: true })
-      : json(503, { ok: false, error: 'misconfigured', missing: config.missing });
+    if (!config.ok) return json(503, { ok: false, error: 'misconfigured', missing: config.missing });
+
+    // Announced, not hidden: a `200 ok` that quietly stores feedback in RAM would be the worst kind
+    // of green check.
+    return json(200, config.config.fakeLinear ? { ok: true, fakeLinear: true } : { ok: true });
   }
 
   if (!config.ok) {
@@ -66,7 +79,7 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
 
   // Both directions are metered: a read hits Linear too, and the quota it burns is the same one the
   // write path needs.
-  if (!checkRateLimit(context.clientIp)) {
+  if (!checkRateLimit(context.clientIp, { limit: config.config.rateLimitPerMinute })) {
     return json(429, { error: 'rate-limited' }, cors.headers);
   }
 
@@ -101,15 +114,17 @@ async function getFeedback(
 
   try {
     const issues = await cached(JSON.stringify([clientId ?? null, url]), () =>
-      fetchSeedIssues(config, { url, clientId }),
+      linearFor(config).fetchSeedIssues(config, { url, clientId }),
     );
 
     return json(
       200,
       { url, issues },
-      // `private`, because the answer is scoped to a client label and a browser cache is the only
-      // one that may hold it. Same window as the in-process cache, so a reload costs nothing.
-      { ...corsHeaders, 'Cache-Control': `private, max-age=${Math.round(CACHE_TTL_MS / 1_000)}` },
+      // No browser cache, deliberately. The in-process cache above is what protects the Linear
+      // quota; letting the browser hold a copy too only buys one saved request per page load, and
+      // costs the widget the pin it planted a second ago — it re-reads and gets served its own
+      // stale copy. The E2E suite found exactly that.
+      { ...corsHeaders, 'Cache-Control': 'no-store' },
     );
   } catch (error) {
     if (error instanceof LinearError) {
@@ -164,7 +179,12 @@ async function postFeedback(
   };
 
   try {
-    const issue = await createSeedIssue(config, seed);
+    const issue = await linearFor(config).createSeedIssue(config, seed);
+
+    // The page just changed, so every cached answer for it is wrong. Matching on the URL covers the
+    // per-client keys too, which is what a reviewer reloading right after posting will ask for.
+    invalidate((key) => key.includes(JSON.stringify(seed.page.url)));
+
     return json(201, { issue }, corsHeaders);
   } catch (error) {
     if (error instanceof LinearError) {

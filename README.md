@@ -80,13 +80,16 @@ See [`packages/shared/src/seed.ts`](packages/shared/src/seed.ts),
 packages/shared    the seed contract: schema, Linear mapping, round-trip   ✅
 apps/worker        Node service in Docker: write + read path to Linear     ✅
 packages/widget    capture: anchor + seed assembly                        ✅  overlay pending
+apps/playground    hostile demo page + dev loop, on a fake Linear          ✅  dev only
 ```
 
 ## Commands
 
 ```bash
 pnpm install
+pnpm dev          # playground on :5177 + worker on :8788, no Linear key needed
 pnpm test         # node --test, across packages via Nx
+pnpm e2e          # playwright, starts both servers itself
 pnpm typecheck
 pnpm lint         # oxlint
 pnpm format:fix   # oxfmt
@@ -97,6 +100,12 @@ pnpm --filter @fruitback/shared test:watch
 Tests run on Node's own runner (`node:test` + `node:assert/strict`) against the TypeScript sources —
 no test framework, no transpiler, no loader in the dependency tree. Same reason relative imports carry
 their `.ts` extension: Node's resolver wants it, and it buys `node --test` and `node --watch` for free.
+
+On top of that sits a small Playwright suite, for the two things a DOM emulator cannot vouch for and
+that this product rests on: a real selector engine and real layout. `pnpm dev` opens the same page by
+hand — a deliberately hostile fake client site, with a **Redéployer** button that rehashes classes and
+shuffles the markup so re-anchoring can be watched rather than argued about. Both run against an
+**in-memory Linear**, so neither needs an API key nor touches a workspace.
 
 ## The worker
 

@@ -2,7 +2,14 @@ import { type IncomingMessage, type Server, type ServerResponse, createServer } 
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { handleRequest } from './app.ts';
-import { DEFAULT_HOST, DEFAULT_TRUSTED_PROXY_HOPS, type WorkerEnv, readConfig, readPort } from './env.ts';
+import {
+  DEFAULT_HOST,
+  DEFAULT_TRUSTED_PROXY_HOPS,
+  type WorkerEnv,
+  fakeLinearRefused,
+  readConfig,
+  readPort,
+} from './env.ts';
 import { resolveClientIp } from './rate-limit.ts';
 
 /**
@@ -104,6 +111,12 @@ export function startServer(env: WorkerEnv = process.env): Server {
   const host = env.HOST || DEFAULT_HOST;
   const server = createFruitbackServer(env);
 
+  if (fakeLinearRefused(env)) {
+    // The flag only means something in the dev loop. Saying so beats a deploy wondering why its
+    // in-memory store never appeared.
+    console.error('[fruitback] FRUITBACK_FAKE_LINEAR ignored: this process runs with NODE_ENV=production');
+  }
+
   server.listen(port, host, () => {
     if (config.ok) {
       // Never log the API key. Everything else is worth having in `docker logs` on day one.
@@ -111,6 +124,11 @@ export function startServer(env: WorkerEnv = process.env): Server {
         `[fruitback] listening on ${host}:${port} · team ${config.config.linearTeamId} · ` +
           `origins ${config.config.allowedOrigins.join(', ')} · trusted proxy hops ${config.config.trustedProxyHops}`,
       );
+      if (config.config.fakeLinear) {
+        console.warn(
+          '[fruitback] in-memory Linear: nothing is written to a workspace, and it all dies with this process',
+        );
+      }
     } else {
       // Loud, but still serving: /health reports 503 with the same list, so the platform can see it.
       console.error(`[fruitback] misconfigured, missing: ${config.missing.join(', ')} — /health will report 503`);

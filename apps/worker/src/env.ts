@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DEFAULT_LIMIT } from './rate-limit.ts';
 
 /**
  * Configuration comes from the process environment — Dokploy injects it, `docker compose` reads it
@@ -14,8 +15,17 @@ export type WorkerEnv = {
   ALLOWED_ORIGINS?: string;
   /** How many reverse proxies sit in front of this process. See `resolveClientIp`. */
   TRUSTED_PROXY_HOPS?: string;
+  /** Requests per minute per client IP. Defaults to 20; the E2E suite raises it. */
+  RATE_LIMIT_PER_MINUTE?: string;
   PORT?: string;
   HOST?: string;
+  /**
+   * Dev only: serve the playground off an in-memory Linear instead of the real API, so the whole
+   * capture → issue → pins loop runs with no key and writes to nobody's workspace. Ignored when
+   * `NODE_ENV=production` — which the Dockerfile sets — so it cannot be talked into a deploy.
+   */
+  FRUITBACK_FAKE_LINEAR?: string;
+  NODE_ENV?: string;
 };
 
 export const DEFAULT_PORT = 8080;
@@ -30,6 +40,9 @@ const configSchema = z.object({
   linearProjectId: z.string().min(1).optional(),
   allowedOrigins: z.array(z.string().min(1)).min(1),
   trustedProxyHops: z.number().int().min(0),
+  rateLimitPerMinute: z.number().int().positive(),
+  /** True only in the dev loop — see `FRUITBACK_FAKE_LINEAR`. Surfaced on `/health`. */
+  fakeLinear: z.boolean(),
 });
 
 export type WorkerConfig = z.infer<typeof configSchema>;
@@ -41,12 +54,17 @@ export type ConfigResult = { ok: true; config: WorkerConfig } | { ok: false; mis
  * instead of as an opaque Linear error on every request.
  */
 export function readConfig(env: WorkerEnv): ConfigResult {
+  const fakeLinear = usesFakeLinear(env);
   const candidate = {
-    linearApiKey: env.LINEAR_API_KEY,
-    linearTeamId: env.LINEAR_TEAM_ID,
+    // In fake mode nothing ever reaches Linear, so the credentials are stand-ins rather than
+    // optional: every downstream type stays exactly as it is in production.
+    linearApiKey: fakeLinear ? FAKE_LINEAR_VALUE : env.LINEAR_API_KEY,
+    linearTeamId: fakeLinear ? FAKE_LINEAR_VALUE : env.LINEAR_TEAM_ID,
     linearProjectId: env.LINEAR_PROJECT_ID || undefined,
     allowedOrigins: splitOrigins(env.ALLOWED_ORIGINS),
     trustedProxyHops: readTrustedProxyHops(env.TRUSTED_PROXY_HOPS),
+    rateLimitPerMinute: readRateLimit(env.RATE_LIMIT_PER_MINUTE),
+    fakeLinear,
   };
 
   const result = configSchema.safeParse(candidate);
@@ -57,6 +75,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     linearTeamId: 'LINEAR_TEAM_ID',
     allowedOrigins: 'ALLOWED_ORIGINS',
     trustedProxyHops: 'TRUSTED_PROXY_HOPS',
+    rateLimitPerMinute: 'RATE_LIMIT_PER_MINUTE',
   };
   const missing = result.error.issues
     .map((issue) => namesByField[String(issue.path[0])])
@@ -65,12 +84,46 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   return { ok: false, missing: [...new Set(missing)] };
 }
 
+/** Obvious in a log line, and impossible to mistake for a real key someone forgot to rotate. */
+const FAKE_LINEAR_VALUE = 'fake-linear-dev';
+
+/**
+ * Whether this process runs on the in-memory Linear.
+ *
+ * The production guard is the point: `NODE_ENV=production` is set in the Dockerfile, so a container
+ * that somehow inherits the flag ignores it and reports itself misconfigured — loudly, on `/health`
+ * — instead of quietly accepting feedback into a store that disappears on restart.
+ */
+export function usesFakeLinear(env: WorkerEnv): boolean {
+  const asked = env.FRUITBACK_FAKE_LINEAR === '1' || env.FRUITBACK_FAKE_LINEAR?.toLowerCase() === 'true';
+
+  return asked && env.NODE_ENV !== 'production';
+}
+
+/** True when the flag was set but refused — worth saying out loud at boot. */
+export function fakeLinearRefused(env: WorkerEnv): boolean {
+  return env.FRUITBACK_FAKE_LINEAR !== undefined && env.FRUITBACK_FAKE_LINEAR !== '' && !usesFakeLinear(env);
+}
+
 /** Exported so the misconfigured-response path can read the allowlist before validation. */
 export function splitOrigins(value: string | undefined): string[] {
   return (value ?? '')
     .split(',')
     .map((origin) => origin.trim())
     .filter((origin) => origin.length > 0);
+}
+
+/**
+ * Requests per minute per client IP. Left alone in production; raised for the E2E suite, where every
+ * request comes from the same loopback address and the default ceiling would be reached mid-run.
+ */
+function readRateLimit(value: string | undefined): number {
+  if (value === undefined || value.trim() === '') return DEFAULT_LIMIT;
+
+  const parsed = Number(value);
+
+  // Refused rather than defaulted, like the hop count: a typo must not silently widen the ceiling.
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : Number.NaN;
 }
 
 function readTrustedProxyHops(value: string | undefined): number {

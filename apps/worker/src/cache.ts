@@ -46,6 +46,18 @@ function evictExpired(now: number): void {
   }
 }
 
+/**
+ * Drop every entry whose key matches, because a write just made it stale.
+ *
+ * Without this, a pin planted on a page stays invisible to the next reader for up to a TTL — which
+ * reads as "my feedback was lost" rather than "the cache is warm".
+ */
+export function invalidate(matches: (key: string) => boolean): void {
+  for (const key of [...entries.keys()]) {
+    if (matches(key)) entries.delete(key);
+  }
+}
+
 /** Test seam: the cache keeps module-level state. */
 export function resetCacheState(): void {
   entries.clear();
