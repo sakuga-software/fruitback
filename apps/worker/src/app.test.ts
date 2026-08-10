@@ -7,6 +7,7 @@ import type { WorkerEnv } from './env.ts';
 import { installLinearStub, storedIssueFromSeed } from './linear-stub.ts';
 import { resetRateLimitState } from './rate-limit.ts';
 import { resetCacheState } from './cache.ts';
+import { resetMemoryLinear } from './linear-memory.ts';
 
 const ORIGIN = 'https://preview.acme.test';
 
@@ -408,7 +409,9 @@ describe('GET /feedback', () => {
 
     assert.equal(stub.calls.length, 1);
     assert.deepEqual(await second.json(), await first.json());
-    assert.equal(second.headers.get('Cache-Control'), 'private, max-age=15');
+    // Not a browser cache: the widget must never be served its own stale copy of a page it just
+    // planted a pin on. The in-process cache above is what protects the Linear quota.
+    assert.equal(second.headers.get('Cache-Control'), 'no-store');
   });
 
   it('keys the cache per client, so one client is never served another one’s pins', async () => {
@@ -446,6 +449,74 @@ describe('GET /feedback', () => {
 
     assert.equal(response.status, 502);
     assert.partialDeepStrictEqual(await response.json(), { error: 'linear-unavailable' });
+  });
+});
+
+describe('the in-memory Linear (dev loop)', () => {
+  const fakeEnv: WorkerEnv = { ALLOWED_ORIGINS: ORIGIN, FRUITBACK_FAKE_LINEAR: '1' };
+
+  beforeEach(() => {
+    resetMemoryLinear();
+  });
+
+  it('serves the whole loop with no API key at all', async () => {
+    // The point of the playground: capture → issue → the pin comes back, without a Linear workspace.
+    installLinearStub(); // installed to prove it is never called
+    const seed = seedFixture();
+
+    const created = await post(seed, { env: fakeEnv });
+    const read = await get(`/feedback?url=${encodeURIComponent(seed.page.url)}&client=acme`, { env: fakeEnv });
+
+    assert.equal(created.status, 201);
+    assert.equal(read.status, 200);
+    const body = (await read.json()) as { issues: SeedIssue[] };
+    assert.equal(body.issues.length, 1);
+    // Stored as a description and parsed back, exactly like the real path — so a broken round trip
+    // breaks the dev loop too, instead of being papered over by a mock that returns objects.
+    assert.deepEqual(body.issues[0]?.seed, seed);
+  });
+
+  it('never reaches the network', async () => {
+    const stub = installLinearStub();
+
+    await post(seedFixture(), { env: fakeEnv });
+    await get(`/feedback?url=${encodeURIComponent(seedFixture().page.url)}`, { env: fakeEnv });
+
+    assert.deepEqual(stub.calls, []);
+  });
+
+  it('says so on /health, rather than reporting a plain green check', async () => {
+    const response = await get('/health', { env: fakeEnv });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { ok: true, fakeLinear: true });
+  });
+
+  it('refuses the flag in production and reports itself misconfigured', async () => {
+    // The Dockerfile sets NODE_ENV=production, so this is what a container inheriting the flag does.
+    const response = await get('/health', { env: { ...fakeEnv, NODE_ENV: 'production' } });
+
+    assert.equal(response.status, 503);
+    assert.partialDeepStrictEqual(await response.json(), { missing: ['LINEAR_API_KEY', 'LINEAR_TEAM_ID'] });
+  });
+});
+
+describe('cache invalidation', () => {
+  it('shows a pin planted a moment ago instead of the cached answer', async () => {
+    // Otherwise posting feedback and reloading reads as "my note was lost" for a whole TTL.
+    const seed = seedFixture();
+    const stored = storedIssueFromSeed(seed);
+    installLinearStub({ storedIssues: [] });
+
+    const before = await get(`/feedback?url=${encodeURIComponent(seed.page.url)}`);
+    assert.deepEqual(((await before.json()) as { issues: SeedIssue[] }).issues, []);
+
+    // The stub answers from the same array, so a cached read would still report zero.
+    installLinearStub({ storedIssues: [stored] });
+    await post(seed);
+
+    const after = await get(`/feedback?url=${encodeURIComponent(seed.page.url)}`);
+    assert.equal(((await after.json()) as { issues: SeedIssue[] }).issues.length, 1);
   });
 });
 

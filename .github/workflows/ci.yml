@@ -53,6 +53,66 @@ jobs:
       - name: Run ${{ matrix.target }}
         run: pnpm exec nx run-many -t ${{ matrix.target }}
 
+  e2e:
+    # The two things `node --test` cannot answer for: a real selector engine and real layout. Kept to
+    # six specs and ~6 seconds of browser time — a slow E2E job is one people learn to ignore.
+    name: e2e
+    runs-on: ubuntu-latest
+    # The browser comes with the image instead of being downloaded. Twice in a row, `playwright
+    # install` reached 100% of the archive and then sat there until it was killed — eighteen minutes,
+    # then ten — with nothing after the progress bar. Whatever that is, it is not something this repo
+    # can fix, and the official image removes the whole step: no cdn.playwright.dev, no apt, no
+    # browser cache to key. The tag is the version, so image and `@playwright/test` cannot drift.
+    container:
+      image: mcr.microsoft.com/playwright:v1.58.2-noble
+      # The runner's workspace belongs to uid 1001; as root, the actions trip over their own files.
+      options: --user 1001
+    # Node still comes from `.nvmrc` and not from the image: the sources run untranspiled, which
+    # needs a newer Node than noble ships.
+    # The suite takes six seconds. If this job ever approaches ten minutes, something is wrong again.
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+
+      - name: Cache pnpm dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run the E2E suite
+        # No LINEAR_API_KEY anywhere: the worker runs on its in-memory Linear (FRUITBACK_FAKE_LINEAR).
+        run: pnpm e2e
+
+      - name: Keep the traces of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
   image:
     # Dokploy builds this same Dockerfile on push, so a broken one must fail here first.
     name: docker image

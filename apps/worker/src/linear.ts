@@ -167,7 +167,8 @@ const ISSUES_QUERY = `
   }
 `;
 
-type IssueNode = {
+/** Exported so the in-memory Linear can hand back the same shape and share the mapping below. */
+export type IssueNode = {
   id: string;
   identifier: string;
   url: string;
@@ -237,7 +238,7 @@ function buildSeedIssueFilter(config: WorkerConfig, { url, clientId }: SeedIssue
   };
 }
 
-function toSeedIssue(node: IssueNode, canonicalUrl: string): SeedIssue | null {
+export function toSeedIssue(node: IssueNode, canonicalUrl: string): SeedIssue | null {
   const parsed = parseSeedFromDescription(node.description);
   // Someone edited the block away, or a newer Fruitback wrote it: a pin we cannot place is worse
   // than one we do not show.

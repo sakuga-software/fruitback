@@ -9,6 +9,7 @@ allowBuilds:
 
 catalog:
   '@types/node': 26.1.1
+  esbuild: ^0.28.1
   happy-dom: ^20.11.2
   oxfmt: ^0.60.0
   oxlint: ^1.75.0

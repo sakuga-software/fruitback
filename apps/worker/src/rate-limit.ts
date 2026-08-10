@@ -1,5 +1,5 @@
-/** Requests per window, per client IP. */
-const LIMIT = 20;
+/** Requests per window, per client IP. Tunable through `RATE_LIMIT_PER_MINUTE`. */
+export const DEFAULT_LIMIT = 20;
 const WINDOW_MS = 60_000;
 
 /**
@@ -7,15 +7,20 @@ const WINDOW_MS = 60_000;
  *
  * On a single long-lived Node process this is a real limiter, unlike the edge equivalent. The one
  * caveat to remember: it is **per replica**. Scale the service to N containers behind Traefik and the
- * effective ceiling becomes N × LIMIT, because nothing is shared between them. Moving to a shared
- * store (Redis) is the fix if that ever matters — for one container it does not.
+ * effective ceiling becomes N × the configured limit, because nothing is shared between them. Moving
+ * to a shared store (Redis) is the fix if that ever matters — for one container it does not.
+ *
+ * The limit is passed in per call rather than read here: it comes from the validated config
+ * (`RATE_LIMIT_PER_MINUTE`, defaulting to `DEFAULT_LIMIT`), so the handler decides and this stays a
+ * pure counter.
  */
 const hits = new Map<string, number[]>();
 
-export function checkRateLimit(clientIp: string, now = Date.now()): boolean {
+export function checkRateLimit(clientIp: string, options: { limit?: number; now?: number } = {}): boolean {
+  const { limit = DEFAULT_LIMIT, now = Date.now() } = options;
   const window = (hits.get(clientIp) ?? []).filter((at) => now - at < WINDOW_MS);
 
-  if (window.length >= LIMIT) {
+  if (window.length >= limit) {
     hits.set(clientIp, window);
     return false;
   }

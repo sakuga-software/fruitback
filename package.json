@@ -4,6 +4,9 @@
   "private": true,
   "description": "Visual feedback widget that plants annotations on a live page and grows them into Linear issues.",
   "scripts": {
+    "dev": "bash -c 'trap \"kill 0\" EXIT; pnpm --filter @fruitback/worker dev:fake & pnpm --filter @fruitback/playground dev; wait'",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui",
     "lint": "nx run-many -t lint",
     "format": "nx run-many -t format",
     "format:fix": "nx run-many -t format:fix",
@@ -11,6 +14,7 @@
     "test": "nx run-many -t test"
   },
   "devDependencies": {
+    "@playwright/test": "1.58.2",
     "nx": "^23.1.0",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",

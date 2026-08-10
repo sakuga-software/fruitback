@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    // Relative imports carry `.ts` so Node runs the sources directly, no build step, no loader.
+    "allowImportingTsExtensions": true,
+    // Both halves live here: `server.ts` runs on Node, `client.ts` is bundled for the browser. This
+    // app is never shipped, so unlike `packages/widget` it does not need the two kept apart by a
+    // config that makes `process` a compile error.
+    "lib": ["ES2022", "DOM"],
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src/**/*"]
+}
