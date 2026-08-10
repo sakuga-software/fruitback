@@ -1,7 +1,7 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
-import { createPlaygroundServer } from './server.ts';
+import { DEFAULT_PLAYGROUND_PORT, createPlaygroundServer, readPlaygroundPort } from './server.ts';
 
 /**
  * These run in CI for one reason above the others: bundling `client.ts` is a real esbuild build, so
@@ -52,5 +52,17 @@ describe('the playground server', () => {
 
   it('404s anything else', async () => {
     assert.equal((await fetch(`${origin}/nope`)).status, 404);
+  });
+});
+
+describe('readPlaygroundPort', () => {
+  it('takes a port when given one', () => {
+    assert.equal(readPlaygroundPort('4321'), 4321);
+  });
+
+  it('falls back rather than handing `listen` a NaN and dying on boot', () => {
+    for (const value of [undefined, '', 'eighty-eighty', '0', '-1', '12.5']) {
+      assert.equal(readPlaygroundPort(value), DEFAULT_PLAYGROUND_PORT, `${String(value)} should fall back`);
+    }
   });
 });

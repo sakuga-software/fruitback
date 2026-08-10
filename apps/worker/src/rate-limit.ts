@@ -7,8 +7,12 @@ const WINDOW_MS = 60_000;
  *
  * On a single long-lived Node process this is a real limiter, unlike the edge equivalent. The one
  * caveat to remember: it is **per replica**. Scale the service to N containers behind Traefik and the
- * effective ceiling becomes N × LIMIT, because nothing is shared between them. Moving to a shared
- * store (Redis) is the fix if that ever matters — for one container it does not.
+ * effective ceiling becomes N × the configured limit, because nothing is shared between them. Moving
+ * to a shared store (Redis) is the fix if that ever matters — for one container it does not.
+ *
+ * The limit is passed in per call rather than read here: it comes from the validated config
+ * (`RATE_LIMIT_PER_MINUTE`, defaulting to `DEFAULT_LIMIT`), so the handler decides and this stays a
+ * pure counter.
  */
 const hits = new Map<string, number[]>();
 

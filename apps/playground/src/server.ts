@@ -76,8 +76,19 @@ async function bundleClient(): Promise<string> {
   return result.outputFiles[0]?.text ?? '';
 }
 
+/**
+ * A malformed `PORT` falls back to the default rather than reaching `listen` as `NaN` and killing
+ * the process on boot. Same shape as the worker's `readPort`, and the same reasoning: this is a dev
+ * server, so refusing to start over a typo helps nobody.
+ */
+export function readPlaygroundPort(value: string | undefined = process.env.PORT): number {
+  const parsed = Number(value ?? '');
+
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_PLAYGROUND_PORT;
+}
+
 export function startPlayground(): Server {
-  const port = Number(process.env.PORT ?? DEFAULT_PLAYGROUND_PORT);
+  const port = readPlaygroundPort();
   const server = createPlaygroundServer();
 
   server.listen(port, '127.0.0.1', () => {
