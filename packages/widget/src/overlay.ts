@@ -20,6 +20,10 @@ import { type AnchorResolution, resolveAnchor } from './resolve.ts';
 /** How long a note stays readable on the badge before it turns into a tooltip. */
 const BADGE_MAX_LENGTH = 32;
 
+/** Kept next to the stylesheet's `width`, because `positionThread` has to know it to flip sides. */
+const THREAD_WIDTH = 300;
+const THREAD_GAP = 8;
+
 export type OverlayOptions = {
   document?: Document;
   /**
@@ -81,10 +85,19 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   }
 
   function place(entry: Placed): void {
-    // An orphan keeps the box it was planted on: the element is gone, its last known position is
+    // An orphan keeps the box it was planted on: the element is gone, and its last known position is
     // the only thing left that says anything about where the note was pointing.
-    const box = entry.resolution.element === null ? entry.issue.seed.anchor.bounds : null;
-    const rect = box === null ? documentRect(entry.resolution.element as Element) : boundsToPixels(box, document);
+    //
+    // `isConnected` is the same case arriving late. On an SPA the element we resolved can be torn out
+    // of the document between two renders, and a detached node measures 0×0 — which would slide the
+    // pin to the top-left corner of the page and look like a bug in the positioning rather than a
+    // page that moved on. The next `render` re-resolves it properly; until then it degrades here.
+    const element = entry.resolution.element;
+    const attached = element !== null && element.isConnected;
+    const rect = attached ? documentRect(element) : boundsToPixels(entry.issue.seed.anchor.bounds, document);
+
+    entry.pin.classList.toggle('fb-pin-orphan', !attached);
+    entry.pin.classList.toggle('fb-pin-uncertain', !attached || !entry.resolution.confident);
 
     Object.assign(entry.pin.style, {
       left: `${rect.left}px`,
@@ -133,9 +146,16 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   }
 
   function onDocumentClick(event: Event): void {
-    const target = event.target;
-    // Anywhere outside the overlay closes the thread — including on the client's own page.
-    if (thread !== null && target instanceof Node && !thread.contains(target)) closeThread();
+    if (thread === null) return;
+
+    // `composedPath`, not `event.target`: once the overlay lives in a Shadow root (SKG-492), a click
+    // inside the thread is retargeted to the host element on the way out, and `contains` would say
+    // the click came from outside and close the thread the user just clicked into.
+    const path = event.composedPath();
+    const inside =
+      path.length > 0 ? path.includes(thread) : event.target instanceof Node && thread.contains(event.target);
+
+    if (!inside) closeThread();
   }
 
   function onKeyDown(event: KeyboardEvent): void {
@@ -286,18 +306,25 @@ function element(document: Document, tag: string, className: string, content: st
   return node;
 }
 
-/** Beside the pin when there is room below it, above it when there is not. */
+/** Below the pin when there is room for it on screen, above it when there is not. */
 function positionThread(thread: HTMLElement, pin: HTMLElement | undefined): void {
   if (pin === undefined) return;
 
   const view = thread.ownerDocument.defaultView;
   const left = Number.parseFloat(pin.style.left) || 0;
   const top = Number.parseFloat(pin.style.top) || 0;
-  const height = Number.parseFloat(pin.style.height) || 0;
-  const width = view?.innerWidth ?? 0;
+  const pinHeight = Number.parseFloat(pin.style.height) || 0;
+  const viewportWidth = view?.innerWidth ?? 0;
+  const viewportHeight = view?.innerHeight ?? 0;
+  const scrollY = view?.scrollY ?? 0;
 
-  thread.style.left = `${Math.max(8, Math.min(left, width - 320))}px`;
-  thread.style.top = `${top + height + 28}px`;
+  // Measured after insertion, so this is the height the thread actually took.
+  const threadHeight = thread.offsetHeight;
+  const below = top + pinHeight + THREAD_GAP;
+  const roomBelow = below + threadHeight <= scrollY + viewportHeight;
+
+  thread.style.left = `${Math.max(THREAD_GAP, Math.min(left, viewportWidth - THREAD_WIDTH - THREAD_GAP))}px`;
+  thread.style.top = `${roomBelow ? below : Math.max(0, top - threadHeight - THREAD_GAP)}px`;
 }
 
 function documentRect(element: Element): { left: number; top: number; width: number; height: number } {

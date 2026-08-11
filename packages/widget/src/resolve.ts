@@ -1,4 +1,10 @@
-import { type SeedAnchor, type SeedAnchorStrategy, type SeedBounds, TEXT_EXCERPT_MAX_LENGTH } from '@fruitback/shared';
+import {
+  SEED_ANCHOR_STRATEGIES,
+  type SeedAnchor,
+  type SeedAnchorStrategy,
+  type SeedBounds,
+  TEXT_EXCERPT_MAX_LENGTH,
+} from '@fruitback/shared';
 
 /**
  * Finding the element again, on a page that has been redeployed since the note was written.
@@ -59,7 +65,9 @@ export type ResolveOptions = {
 export function resolveAnchor(anchor: SeedAnchor, options: ResolveOptions = {}): AnchorResolution {
   const root = options.document ?? globalThis.document;
 
-  for (const strategy of ['selector', 'testId', 'text', 'domPath', 'bounds'] as const) {
+  // Iterated from the contract rather than copied out of it: the order is `packages/shared`'s to
+  // decide, and a list repeated here would drift the first time one is added or renamed.
+  for (const strategy of SEED_ANCHOR_STRATEGIES) {
     const element = FINDERS[strategy](anchor, root);
     if (element !== null) return { element, strategy, confident: IDENTITY_STRATEGIES.includes(strategy) };
   }
@@ -97,7 +105,7 @@ const FINDERS: Record<SeedAnchorStrategy, Finder> = {
   text: (anchor, root) => {
     if (!anchor.text) return null;
 
-    const matches = [...root.querySelectorAll(anchor.tag)].filter((element) => excerpt(element) === anchor.text);
+    const matches = queryAll(root, anchor.tag).filter((element) => excerpt(element) === anchor.text);
 
     // Two elements saying the same thing is not an identity: three "Ajouter" buttons must fail here.
     return matches.length === 1 ? (matches[0] ?? null) : null;
@@ -130,7 +138,7 @@ const FINDERS: Record<SeedAnchorStrategy, Finder> = {
   bounds: (anchor, root) => {
     let best: { element: Element; score: number } | null = null;
 
-    for (const element of root.querySelectorAll(anchor.tag)) {
+    for (const element of queryAll(root, anchor.tag)) {
       const score = overlap(boxOf(element), anchor.bounds);
       if (score >= BOUNDS_MIN_OVERLAP && (best === null || score > best.score)) best = { element, score };
     }
@@ -138,6 +146,19 @@ const FINDERS: Record<SeedAnchorStrategy, Finder> = {
     return best?.element ?? null;
   },
 };
+
+/**
+ * `tag` is only `z.string().min(1)` in the contract, and the description it came from is one a human
+ * can edit. So it reaches the selector engine as untrusted input, and a `*` or a stray bracket has to
+ * come back as "no match" rather than take the whole render down with it.
+ */
+function queryAll(root: Document, selector: string): Element[] {
+  try {
+    return [...root.querySelectorAll(selector)];
+  } catch {
+    return [];
+  }
+}
 
 /** A selector is only an answer when it matches exactly one element, of the tag we captured. */
 function onlyMatch(root: Document, selector: string, anchor: SeedAnchor): Element | null {

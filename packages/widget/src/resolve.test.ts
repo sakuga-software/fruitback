@@ -191,6 +191,20 @@ describe('resolveAnchor', () => {
     assert.equal(resolved.element, null);
   });
 
+  it('survives a tag that is not a selector at all', () => {
+    // `tag` is a plain string in the contract and the description it came from is human-editable, so
+    // it reaches the engine as untrusted input. It must come back as "no match", not as a crash that
+    // takes every other pin on the page down with it.
+    const page = mountCards();
+
+    const resolved = resolveAnchor(
+      { selector: '#gone', tag: 'butt on[', text: 'Ajouter', bounds: { xPct: 30, yPct: 10, wPct: 20, hPct: 4 } },
+      { document: page.document },
+    );
+
+    assert.equal(resolved.strategy, 'orphan');
+  });
+
   it('survives a selector the engine will not parse', () => {
     const page = mountCards();
 

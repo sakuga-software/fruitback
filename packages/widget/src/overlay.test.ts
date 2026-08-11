@@ -114,6 +114,33 @@ describe('createOverlay', () => {
     assert.equal((page.document.querySelector('[data-fb-pin]') as HTMLElement).style.top, '460px');
   });
 
+  it('falls back to the remembered box when the element is torn out of the page', () => {
+    // An SPA re-renders and the node we resolved is detached. A detached node measures 0×0, which
+    // would slide the pin into the top-left corner and read as a bug in the overlay.
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta()]);
+
+    page.query('button').remove();
+    overlay.reposition();
+
+    const pin = page.document.querySelector('[data-fb-pin]') as HTMLElement;
+    assert.equal(pin.style.left, '100px');
+    assert.equal(pin.style.top, '200px');
+    assert.ok(pin.className.includes('fb-pin-orphan'), 'the pin should show that it lost its element');
+  });
+
+  it('does not close the thread when the click is inside it', () => {
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta()]);
+    (page.document.querySelector('.fb-pin-badge') as HTMLElement).click();
+
+    (page.document.querySelector('.fb-thread-note') as HTMLElement).click();
+
+    assert.ok(page.document.querySelector('[data-fb-thread]'), 'the thread closed under its own click');
+  });
+
   it('lets clicks through to the page, except on the badge', () => {
     // A widget that swallows the client's own buttons is one they turn off.
     const page = mountWithCta();
