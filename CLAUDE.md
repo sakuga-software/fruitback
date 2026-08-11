@@ -251,6 +251,10 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - `packages/shared` keeps `types: []` on purpose — it is bundled into a browser widget, so touching
   `process` or `Buffer` must fail to compile. Its tests need Node types, so they typecheck through a
   separate `tsconfig.test.json`; do not "fix" this by adding `node` to the main config.
+- **No backticks inside the CSS template literals** (`STYLES` in `host.ts`, `overlay.ts`,
+  `composer.ts`). A comment quoting a symbol closes the literal and the file stops parsing. It has
+  happened twice; the failure is loud — the module will not load — but the cause reads as a mystery
+  until you look at the right line.
 - Comments explain _why_, not _what_ — the tolerant parser and the redundant anchor both exist for
   reasons that are not obvious from the code.
 - Work is tracked in Linear on the

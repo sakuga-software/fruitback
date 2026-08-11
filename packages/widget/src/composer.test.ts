@@ -164,6 +164,51 @@ describe('createComposer', () => {
     assert.equal(composer?.element.hidden, true);
   });
 
+  it('says nothing when the reporter walked away mid-send', async () => {
+    // Cancel while the request is in flight and the response still arrives. Announcing "récolté" on
+    // a closed popover, or focusing a hidden textarea, is the kind of ghost that makes a widget feel
+    // haunted.
+    let release: () => void = () => {};
+    const inFlight = new Promise<void>((resolve) => (release = resolve));
+    mount(async () => {
+      await inFlight;
+      return true;
+    });
+    composer?.open(ANCHOR);
+
+    sendButton().click();
+    await Promise.resolve();
+    composer?.close();
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(composer?.state(), 'idle');
+    assert.equal(composer?.element.hidden, true);
+    assert.equal(statusText(), '');
+  });
+
+  it('does not report a stale failure onto the next note', async () => {
+    // Same race, the other outcome: the first send fails after the reporter has moved on and opened
+    // the popover on a different element.
+    let fail: (reason: Error) => void = () => {};
+    const inFlight = new Promise<void>((_resolve, reject) => (fail = reject));
+    mount(async () => {
+      await inFlight;
+      return true;
+    });
+    composer?.open(ANCHOR);
+    sendButton().click();
+    await Promise.resolve();
+
+    composer?.close();
+    composer?.open(ANCHOR);
+    fail(new Error('offline'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(composer?.state(), 'idle', 'the new note inherited the old note’s failure');
+    assert.equal(statusText(), '');
+  });
+
   it('announces its state to a screen reader', () => {
     mount(async () => true);
 

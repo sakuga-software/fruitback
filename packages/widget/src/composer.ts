@@ -60,6 +60,12 @@ export function createComposer(options: ComposerOptions): Composer {
 
   let state: ComposerState = 'idle';
   let closing = 0;
+  /**
+   * Bumped every time the popover opens or closes. A send is slow and a reporter is not: cancel or
+   * Escape mid-flight and the response still arrives, to a popover that is gone or — worse — already
+   * reopened on another element. Anything after an `await` checks the token it started with.
+   */
+  let session = 0;
 
   function setState(next: ComposerState): void {
     state = next;
@@ -74,16 +80,22 @@ export function createComposer(options: ComposerOptions): Composer {
   async function submit(): Promise<void> {
     if (state === 'sending') return;
 
+    const mine = session;
     setState('sending');
     try {
       const result = await options.onSubmit(field.value);
       if (result === false) throw new Error('refused');
     } catch {
+      // Abandoned mid-flight: say nothing, focus nothing. The note was let go of on purpose.
+      if (mine !== session) return;
+
       // The text stays exactly where it is. Retrying is one more click, not one more typing session.
       setState('failed');
       field.focus();
       return;
     }
+
+    if (mine !== session) return;
 
     setState('harvested');
     closing = view?.setTimeout(close, HARVESTED_MS) ?? 0;
@@ -95,6 +107,7 @@ export function createComposer(options: ComposerOptions): Composer {
       closing = 0;
     }
 
+    session += 1;
     field.value = '';
     setState('idle');
     root.hidden = false;
@@ -122,6 +135,7 @@ export function createComposer(options: ComposerOptions): Composer {
   }
 
   function close(): void {
+    session += 1;
     root.hidden = true;
     setState('idle');
     options.onClose?.();
@@ -180,6 +194,10 @@ const TEMPLATE = `
 const STYLES = `
 .fb-composer {
   position: absolute;
+  /* WIDTH is what place() clamps against, so the rendered box has to be exactly that — with
+     content-box the padding sat outside it and the popover could overhang the viewport. Set here
+     rather than inherited from the host's reset: this file has to hold up wherever it is mounted. */
+  box-sizing: border-box;
   left: var(--fb-composer-left, 0px);
   top: var(--fb-composer-top, 0px);
   z-index: 2147483300;
@@ -246,7 +264,7 @@ const STYLES = `
     animation-name: fb-composer-sheet-in;
   }
   .fb-composer-drop { display: none; }
-  .fb-composer textarea { rows: 5; min-height: 96px; }
+  .fb-composer textarea { min-height: 96px; }
 }
 
 @keyframes fb-composer-sheet-in {

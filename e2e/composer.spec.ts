@@ -74,6 +74,22 @@ test('on a phone it is a sheet at the bottom, not a popover beside the element',
   expect(box.right).toBe(viewport?.width);
 });
 
+test('it stays inside the viewport when the element is against the right edge', async ({ page }) => {
+  // The popover is clamped against its declared width, so the rendered box has to match it — with
+  // content-box the padding sat outside and the popover overhung the edge by that much.
+  await openPlayground(page, 'composer-edge');
+  await page.getByRole('button', { name: /Laisser un feedback/ }).click();
+  await page.locator('header button').click();
+  await expect(page.getByPlaceholder("Qu'est-ce qui ne va pas ici ?")).toBeVisible();
+
+  const viewport = page.viewportSize();
+  await expect
+    .poll(async () =>
+      page.locator('[data-fb-composer]').evaluate((node) => Math.round(node.getBoundingClientRect().right)),
+    )
+    .toBeLessThanOrEqual(viewport?.width ?? 0);
+});
+
 test('it honours a reader who asked for less motion', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await openPlayground(page, 'composer-reduced-motion');
