@@ -83,3 +83,13 @@ export function setScroll(view: Window, scrollX: number, scrollY: number): void 
   Object.defineProperty(view, 'scrollX', { value: scrollX, configurable: true });
   Object.defineProperty(view, 'scrollY', { value: scrollY, configurable: true });
 }
+
+/**
+ * Dispatch a key press. happy-dom's constructors are not on the DOM `Window` type, so the cast lives
+ * here with the others rather than in a test.
+ */
+export function pressKey(page: MountedPage, key: string): void {
+  const KeyboardEventCtor = (page.view as unknown as { KeyboardEvent: typeof KeyboardEvent }).KeyboardEvent;
+
+  page.document.dispatchEvent(new KeyboardEventCtor('keydown', { key, bubbles: true }));
+}

@@ -61,7 +61,10 @@ test('the structural path alone would have landed on the neighbouring card', asy
   expect(verdict.domPathIsRight, 'and that element is the wrong one — this is the trap').toBe(false);
 });
 
-test('an element that is gone leaves an orphan pin where it used to be', async ({ page }) => {
+test('an element that is gone never leaves a pin that claims to be sure', async ({ page }) => {
+  // Deleting the Latte card slides Mocha into the slot it left: same tag, same "Ajouter", same box.
+  // Nothing a seed stores separates them, so the pin does land on Mocha — and says it is a guess.
+  // That is the whole point of `confident`: the degradation is visible instead of silent.
   await openPlayground(page, 'orphan');
   const latteButton = page.locator('[data-testid="card-latte"] .add');
 
@@ -70,9 +73,9 @@ test('an element that is gone leaves an orphan pin where it used to be', async (
   await waitForPins(page, 1);
 
   const pin = pinFor(page, 'Sur une carte qui');
-  // Listed aside rather than dropped on whatever took its place — that degradation is the feature.
-  await expect(pin).toHaveAttribute('data-fb-strategy', 'orphan');
   await expect(pin).toBeVisible();
+  await expect(pin).toHaveAttribute('data-fb-confident', 'false');
+  await expect(pin.getByRole('button')).toContainText('≈');
 });
 
 declare global {

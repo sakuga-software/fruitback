@@ -1,14 +1,14 @@
-import { canonicalizePageUrl, SEED_STAGE_STYLES, type SeedIssue } from '@fruitback/shared';
-import { captureSeed } from '@fruitback/widget';
+import { canonicalizePageUrl, type SeedIssue } from '@fruitback/shared';
+import { type Overlay, captureSeed, createOverlay } from '@fruitback/widget';
 
 /**
  * The dev harness that mounts the widget on the playground page.
  *
- * **This is scaffolding, not the product.** The real capture UI is a Shadow DOM host over
- * `react-grab/primitives` (SKG-492) with a proper popover (SKG-493), and the real re-anchoring engine
- * is SKG-500 — all three will replace what is below. It exists so the pipeline that *is* written —
- * `captureSeed`, `POST /feedback`, `GET /feedback` — can be exercised end to end by a human and by
- * the E2E suite, today, instead of waiting for the host to be finished to discover it was wrong.
+ * **The pins are no longer its business.** Resolution, positioning, scroll and resize re-measuring
+ * and the thread all moved into `createOverlay` (SKG-500) — this file hands it the issues the worker
+ * returned and gets out of the way. What is left here is scaffolding: the capture UI is a Shadow DOM
+ * host over `react-grab/primitives` (SKG-492) with a proper popover (SKG-493), and both replace what
+ * is below.
  *
  * It stays in the light DOM (no Shadow root) and its styles are prefixed rather than isolated, which
  * is precisely the shortcut SKG-492 exists to remove.
@@ -17,10 +17,8 @@ import { captureSeed } from '@fruitback/widget';
 const CLIENT_ID = 'playground';
 const workerOrigin = window.__FRUITBACK_PLAYGROUND__?.workerOrigin ?? 'http://localhost:8788';
 
-/** What actually found the element — read by the E2E suite, and by anyone looking at a pin. */
-type PinStrategy = 'selector' | 'text' | 'orphan';
-
 let capturing = false;
+let overlay: Overlay | null = null;
 let composerFor: Element | null = null;
 
 function main(): void {
@@ -33,7 +31,9 @@ function main(): void {
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') stopCapturing();
   });
-  window.addEventListener('resize', () => void plantPins());
+  // The pins are the widget's own engine now (SKG-500): resolution, positioning, scroll and resize
+  // re-measuring, and the thread behind each pin all live there. The playground only feeds it.
+  overlay = createOverlay({ onSelect: (issue) => status(`${issue.identifier} · ${issue.stateName}`) });
 
   void plantPins();
 }
@@ -69,10 +69,13 @@ function onClick(event: MouseEvent): void {
   openComposer(element);
 }
 
-/** The element under the pointer, or null when the pointer is over the harness's own UI. */
+/** The element under the pointer, or null when the pointer is over the widget's UI or the harness's. */
 function targetOf(event: MouseEvent): Element | null {
   const target = event.target;
-  if (!(target instanceof Element) || target.closest('[data-fb-dev]') !== null) return null;
+  // The overlay counts too: in capture mode a click on a pin's badge must not plant a pin on the pin.
+  if (!(target instanceof Element) || target.closest('[data-fb-dev], [data-fruitback-overlay]') !== null) {
+    return null;
+  }
 
   return target;
 }
@@ -163,96 +166,8 @@ async function plantPins(): Promise<void> {
     return;
   }
 
-  document.querySelectorAll('[data-fb-pin]').forEach((pin) => pin.remove());
-  for (const issue of issues) drawPin(issue);
+  overlay?.render(issues);
   status(`${issues.length} pin${issues.length > 1 ? 's' : ''}`);
-}
-
-function drawPin(issue: SeedIssue): void {
-  const { element, strategy } = resolve(issue);
-  const style = SEED_STAGE_STYLES[issue.stage];
-  const pin = document.createElement('div');
-
-  pin.dataset.fbPin = issue.seed.id;
-  pin.dataset.fbDev = 'pin';
-  pin.dataset.fbStrategy = strategy;
-  pin.dataset.fbStage = issue.stage;
-  pin.className = strategy === 'orphan' ? 'fb-pin fb-pin-orphan' : 'fb-pin';
-  pin.style.borderColor = style.color;
-  pin.style.setProperty('--fb-pin-color', style.color);
-  pin.title = `${issue.identifier} · ${issue.stateName}\n${issue.seed.note}`;
-  pin.dataset.fbLabel = `${style.emoji} ${issue.seed.note.split('\n')[0]?.slice(0, 40) || issue.identifier}`;
-
-  const box = element === null ? boundsBox(issue) : elementBox(element);
-  Object.assign(pin.style, box);
-  document.body.append(pin);
-}
-
-/**
- * Selector, then text, then orphan.
- *
- * **`domPath` is deliberately not used here**, and that is a finding rather than an omission. The
- * E2E suite pins it down: after a card is inserted — or removed — `li:nth-child(2)` still matches
- * exactly one element, and it is the *neighbour* that inherited the position. Both buttons say
- * "Ajouter", so corroborating by text does not catch it either. A path that resolves confidently to
- * the wrong element is worse than no match at all: an orphan pin says "I lost this one", a
- * misplaced pin says "your feedback was about this button" and is believed.
- *
- * The seed still carries `domPath`, and SKG-500 may yet find a way to use it safely — with a
- * corroboration this harness has no business inventing. Until then it stays unused.
- */
-function resolve(issue: SeedIssue): { element: Element | null; strategy: PinStrategy } {
-  const { selector, text } = issue.seed.anchor;
-
-  const bySelector = queryOne(selector);
-  if (bySelector !== null) return { element: bySelector, strategy: 'selector' };
-
-  if (text) {
-    const byText = [...document.querySelectorAll(issue.seed.anchor.tag)].filter(
-      (candidate) => (candidate.textContent ?? '').replace(/\s+/g, ' ').trim() === text,
-    );
-    // Only when it is the one and only match — "an element that says Ajouter" is not an identity.
-    if (byText.length === 1) return { element: byText[0] ?? null, strategy: 'text' };
-  }
-
-  return { element: null, strategy: 'orphan' };
-}
-
-function queryOne(selector: string): Element | null {
-  if (selector === '') return null;
-
-  try {
-    const found = document.querySelectorAll(selector);
-
-    return found.length === 1 ? (found[0] ?? null) : null;
-  } catch {
-    return null;
-  }
-}
-
-function elementBox(element: Element): Record<string, string> {
-  const rect = element.getBoundingClientRect();
-
-  return {
-    left: `${rect.left + window.scrollX}px`,
-    top: `${rect.top + window.scrollY}px`,
-    width: `${rect.width}px`,
-    height: `${rect.height}px`,
-  };
-}
-
-/** The orphan fallback: last known position, as a share of the document. */
-function boundsBox(issue: SeedIssue): Record<string, string> {
-  const width = Math.max(document.documentElement.scrollWidth, window.innerWidth);
-  const height = Math.max(document.documentElement.scrollHeight, window.innerHeight);
-  const { xPct, yPct, wPct, hPct } = issue.seed.anchor.bounds;
-
-  return {
-    left: `${(xPct / 100) * width}px`,
-    top: `${(yPct / 100) * height}px`,
-    width: `${(wPct / 100) * width}px`,
-    height: `${(hPct / 100) * height}px`,
-  };
 }
 
 // ── "Redeploy" ─────────────────────────────────────────────────────────────────────────────────
@@ -369,12 +284,6 @@ function injectStyles(): void {
     .fb-composer-actions button { border: 1px solid #d6d3d1; background: #fff; border-radius: 6px; padding: 6px 10px;
       font: 13px/1 -apple-system, system-ui, sans-serif; cursor: pointer; }
     .fb-composer-actions .fb-primary { background: #e53935; border-color: #e53935; color: #fff; }
-    .fb-pin { position: absolute; z-index: 2147483000; pointer-events: none; border: 2px solid var(--fb-pin-color);
-      border-radius: 6px; background: color-mix(in srgb, var(--fb-pin-color) 14%, transparent); }
-    .fb-pin::after { content: attr(data-fb-label); position: absolute; top: -24px; left: -2px;
-      background: var(--fb-pin-color); color: #fff; font: 600 11px/1 -apple-system, system-ui, sans-serif;
-      padding: 5px 7px; border-radius: 5px; white-space: nowrap; }
-    .fb-pin-orphan { border-style: dashed; }
   `;
   document.head.append(style);
 }
