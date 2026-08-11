@@ -44,9 +44,9 @@ node --test src/seed.test.ts                 # one file, from the package direct
 - `apps/worker` (`@fruitback/worker`) — the Node service. `POST /feedback` plants a seed,
   `GET /feedback?url=…` returns the seeds of that page. Still called "worker" because that is what
   everyone calls it, though it is no longer an edge worker.
-- `packages/widget` (`@fruitback/widget`) — the browser half. **Capture** (`captureSeed`, SKG-494) and
-  **the overlay** (`resolveAnchor` + `createOverlay`, SKG-500) are written. The Shadow DOM host and
-  the selection UI (SKG-492/493) are not.
+- `packages/widget` (`@fruitback/widget`) — the browser half: **capture** (`captureSeed`, SKG-494),
+  **the overlay** (`resolveAnchor` + `createOverlay`, SKG-500) and **the Shadow DOM host**
+  (`createCaptureHost`, SKG-492). The note popover (SKG-493) is still the playground's stand-in.
 
 - `apps/playground` (`@fruitback/playground`) — the dev loop (SKG-511): a deliberately hostile fake
   client site with the widget mounted on it. Not shipped, not deployed.
@@ -105,6 +105,34 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - **react-grab owns `source`.** `captureSeed({ source })` always wins; `readReactSource` is a
   best-effort fallback over React's `__reactFiber$` internals for pages where react-grab is not
   mounted, and returns `undefined` at the first surprise rather than guessing a file name.
+## The host, and why everything lives in one Shadow root
+
+- `createCaptureHost` owns the widget's DOM: the floating button, the hover highlight, and — through
+  `host.root` — the overlay's pins and whatever the note UI turns out to be.
+- **A Shadow root is the only version of "no style conflicts" that survives a real client site.** It
+  stops their `button { width: 100% !important }` from reshaping our toolbar *and* our rules from
+  reaching their page. Neither direction is achievable with prefixed class names.
+- `:host { all: initial }` on top, because a Shadow root blocks the page's *selectors* but not its
+  **inherited** properties — `body { font-family: Papyrus }` reaches in otherwise. The catch: `all:
+  initial` also undoes the browser's `display: none` on `<style>`, which then renders the stylesheet
+  as visible text in the corner of the client's page. Hence `style, script { display: none }`. Both
+  are covered by E2E tests, because neither is visible to a DOM emulator.
+- **The host sits at the document origin, absolutely positioned, with no size.** The overlay places
+  pins in document coordinates, and absolute positions resolve against the nearest positioned
+  ancestor — move or offset the host and every pin moves with it.
+- **`engine.ts` is the whole surface we take from react-grab**: hit testing that crosses shadow roots
+  and iframes, viewport bounds, and the source context. Three functions behind an interface, so the
+  unit tests hand over a fake — happy-dom has neither `elementsFromPoint` nor layout — and a library
+  change lands in one file.
+- **Hit testing has to be told to ignore us**, since react-grab traverses open shadow roots and would
+  otherwise return our own highlight box. `ignore` extends that to chrome the *page* mounts around
+  the widget (the dev toolbar today, SKG-503's config panel next). Note what it does not do:
+  react-grab walks *past* a rejected candidate, so hovering our own chrome highlights whatever is
+  behind it. Harmless; capturing it would not be.
+- **Never `instanceof Element` in this package.** It reads a class off one realm, and an element from
+  a same-origin iframe — which react-grab returns on purpose — belongs to another. Use `isElement`
+  from `dom.ts`.
+
 ## Re-anchoring, and why a pin says how sure it is
 
 - `resolveAnchor` walks the anchor's claims in the order `SEED_ANCHOR_STRATEGIES` declares:
