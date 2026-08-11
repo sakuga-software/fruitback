@@ -44,9 +44,9 @@ node --test src/seed.test.ts                 # one file, from the package direct
 - `apps/worker` (`@fruitback/worker`) — the Node service. `POST /feedback` plants a seed,
   `GET /feedback?url=…` returns the seeds of that page. Still called "worker" because that is what
   everyone calls it, though it is no longer an edge worker.
-- `packages/widget` (`@fruitback/widget`) — the browser half. **Capture is written** (SKG-494):
-  `captureSeed(element, note)` → a `Seed` ready to POST. The Shadow DOM host and the selection UI
-  (SKG-492/493) and the re-anchoring overlay (SKG-500) are not.
+- `packages/widget` (`@fruitback/widget`) — the browser half. **Capture** (`captureSeed`, SKG-494) and
+  **the overlay** (`resolveAnchor` + `createOverlay`, SKG-500) are written. The Shadow DOM host and
+  the selection UI (SKG-492/493) are not.
 
 - `apps/playground` (`@fruitback/playground`) — the dev loop (SKG-511): a deliberately hostile fake
   client site with the widget mounted on it. Not shipped, not deployed.
@@ -105,6 +105,27 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - **react-grab owns `source`.** `captureSeed({ source })` always wins; `readReactSource` is a
   best-effort fallback over React's `__reactFiber$` internals for pages where react-grab is not
   mounted, and returns `undefined` at the first surprise rather than guessing a file name.
+## Re-anchoring, and why a pin says how sure it is
+
+- `resolveAnchor` walks the anchor's claims in the order `SEED_ANCHOR_STRATEGIES` declares:
+  **selector → testId → text → domPath → bounds**. That order is the contract's, and it puts `text`
+  ahead of `domPath` deliberately.
+- **Every match must be unique and of the captured tag**, and `domPath` must additionally still be
+  roughly where the seed said it was — a structural path always resolves to *something*, and after
+  an insertion that something is the neighbour.
+- **`confident` is the field that matters.** `selector`, `testId` and `text` identify an element;
+  `domPath` and `bounds` only locate a spot. Delete a card from a grid and its neighbour slides into
+  the vacated slot with the same tag, the same text and the same box — nothing a seed stores can
+  separate them. So the pin is still placed, drawn dashed with a `≈`, and its thread says it was
+  found by position rather than recognised. Do not "fix" this by making the cascade stricter without
+  reading `resolve.test.ts` first: refusing outright throws away the many cases where position is
+  exactly right.
+- The overlay positions in **document coordinates** and re-measures on scroll and resize — a
+  `position: fixed` header moves relative to the document as the page scrolls.
+- **Pins let clicks through**; only the badge is clickable. A widget that swallows the client's own
+  buttons is one they turn off.
+- `createOverlay({ host })` takes where to render. It defaults to `<body>`; SKG-492's Shadow root
+  passes itself there, which is what finally isolates these styles.
 - Tests run against **happy-dom** (`dom.fixture.ts`), a devDependency of this package only —
   uniqueness and sibling questions cannot be answered honestly by a hand-rolled fake. Nothing outside
   `*.test.ts` and `*.fixture.ts` may import it, and `tsconfig.json` excludes both so the shipped code

@@ -45,8 +45,17 @@ export async function waitForPins(page: Page, count: number): Promise<void> {
   await expect(page.locator('[data-fb-pin]')).toHaveCount(count);
 }
 
+/** Pins are found through their badge, which is the only part of the overlay that carries the note. */
 export function pinFor(page: Page, note: string): Locator {
-  return page.locator(`[data-fb-pin][data-fb-label*=${JSON.stringify(note.slice(0, 20))}]`);
+  return page.locator('[data-fb-pin]').filter({ has: page.getByRole('button', { name: new RegExp(escapeForRegExp(note.slice(0, 20))) }) });
+}
+
+function escapeForRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export function badgeFor(page: Page, note: string): Locator {
+  return pinFor(page, note).getByRole('button');
 }
 
 export function status(page: Page): Locator {
@@ -54,16 +63,27 @@ export function status(page: Page): Locator {
 }
 
 /**
- * The assertion that matters: the pin is drawn over the element, not merely present. Tolerance is a
- * pixel — sub-pixel rounding is expected, being on the neighbouring card is not.
+ * The assertion that matters: the pin is drawn over the element, not merely present.
+ *
+ * Polled, because the overlay re-measures on the next animation frame — a resize or a reflow moves
+ * the element first and the pin a frame later, and a single measurement would catch the gap. One
+ * pixel of tolerance: sub-pixel rounding is expected, being on the neighbouring card is not.
  */
 export async function expectPinOn(pin: Locator, element: Locator): Promise<void> {
-  const [pinBox, elementBox] = await Promise.all([pin.boundingBox(), element.boundingBox()]);
+  await expect
+    .poll(
+      async () => {
+        const [pinBox, elementBox] = await Promise.all([pin.boundingBox(), element.boundingBox()]);
+        if (pinBox === null || elementBox === null) return null;
 
-  expect(pinBox, 'the pin was not drawn').not.toBeNull();
-  expect(elementBox, 'the element it should sit on is gone').not.toBeNull();
-  expect(Math.abs((pinBox?.x ?? 0) - (elementBox?.x ?? 0))).toBeLessThanOrEqual(1);
-  expect(Math.abs((pinBox?.y ?? 0) - (elementBox?.y ?? 0))).toBeLessThanOrEqual(1);
-  expect(Math.abs((pinBox?.width ?? 0) - (elementBox?.width ?? 0))).toBeLessThanOrEqual(1);
-  expect(Math.abs((pinBox?.height ?? 0) - (elementBox?.height ?? 0))).toBeLessThanOrEqual(1);
+        return Math.max(
+          Math.abs(pinBox.x - elementBox.x),
+          Math.abs(pinBox.y - elementBox.y),
+          Math.abs(pinBox.width - elementBox.width),
+          Math.abs(pinBox.height - elementBox.height),
+        );
+      },
+      { message: 'the pin never settled on its element' },
+    )
+    .toBeLessThanOrEqual(1);
 }

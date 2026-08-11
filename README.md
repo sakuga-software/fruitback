@@ -65,6 +65,12 @@ excerpt, `domPath`, and bounds as a share of the document). When none of them re
 becomes an _orphan_ — listed aside rather than dropped on the wrong element. That degradation is
 what separates a demo from a tool people keep using.
 
+Coming back, the pin has to find its element again. The claims are tried in order — selector, test
+id, text, structural path, position — and the answer carries **how it was found**: the first three
+identify an element, the last two only locate a spot. A pin placed by position is drawn dashed and
+says so, because a neighbour that slid into a vacated slot has the same tag, the same text and the
+same box, and a pin that looks certain is believed.
+
 Picking the selector is the part that decides whether any of this survives a redeploy: a test id or
 an author-written id is kept, a `useId` `:r7:` and a CSS-modules class are refused, and an element
 that repeats is anchored under the nearest ancestor that *is* identifiable rather than pathed from
@@ -79,7 +85,7 @@ See [`packages/shared/src/seed.ts`](packages/shared/src/seed.ts),
 ```
 packages/shared    the seed contract: schema, Linear mapping, round-trip   ✅
 apps/worker        Node service in Docker: write + read path to Linear     ✅
-packages/widget    capture: anchor + seed assembly                        ✅  overlay pending
+packages/widget    capture + re-anchoring overlay                         ✅  host pending
 apps/playground    hostile demo page + dev loop, on a fake Linear          ✅  dev only
 ```
 

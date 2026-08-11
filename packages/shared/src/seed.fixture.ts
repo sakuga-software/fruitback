@@ -1,4 +1,5 @@
 import { type Seed, type SeedInput, createSeed } from './seed.ts';
+import { type SeedIssue, seedIssueSchema } from './linear.ts';
 
 /**
  * Shared through the `@fruitback/shared/seed.fixture` export so the worker and the widget test
@@ -45,6 +46,24 @@ export function minimalSeedFixture(overrides: Partial<SeedInput> = {}): Seed {
       tag: 'h1',
       bounds: { xPct: 0, yPct: 0, wPct: 100, hPct: 8 },
     },
+    ...overrides,
+  });
+}
+
+/**
+ * A planted seed as the read path hands it back — the shape the overlay renders. Kept next to the
+ * seed fixtures so the widget and the worker agree on it without either inventing its own.
+ */
+export function seedIssueFixture(overrides: Partial<SeedIssue> = {}): SeedIssue {
+  return seedIssueSchema.parse({
+    id: 'issue_1',
+    identifier: 'SKG-901',
+    url: 'https://linear.app/sakuga-software/issue/SKG-901',
+    title: 'Le bouton est trop petit',
+    stage: 'ripening',
+    stateName: 'In Progress',
+    updatedAt: '2026-08-05T10:00:00.000Z',
+    seed: seedFixture(),
     ...overrides,
   });
 }
