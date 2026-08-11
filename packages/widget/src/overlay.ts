@@ -208,9 +208,19 @@ function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolu
   badge.type = 'button';
   badge.className = 'fb-pin-badge';
   badge.title = `${issue.identifier} · ${issue.stateName}`;
+  // A drop of fruit rather than a rectangle of text. The note moves to the accessible name, which is
+  // also what keeps it reachable by a screen reader and by a test looking for it by role.
+  badge.setAttribute(
+    'aria-label',
+    `${style.label} · ${summarise(issue)}${resolution.confident ? '' : ' (position approximative)'}`,
+  );
   // The `≈` is the whole warning, in one character, where the pin is: this one was placed by
   // coordinates, not recognised.
-  badge.textContent = `${style.emoji} ${resolution.confident ? '' : '≈ '}${summarise(issue)}`;
+  // The drop is rotated, so the glyph rides in its own span and is turned back upright.
+  const glyph = document.createElement('span');
+  glyph.className = 'fb-pin-glyph';
+  glyph.textContent = resolution.confident ? style.emoji : '≈';
+  badge.append(glyph);
   pin.append(badge);
 
   return pin;
@@ -375,18 +385,39 @@ const STYLES = `
 .fb-pin-badge {
   position: absolute;
   bottom: 100%;
-  left: -2px;
-  margin-bottom: 4px;
+  left: -6px;
+  margin-bottom: 6px;
   /* …except this, which is the one thing you can click. */
   pointer-events: auto;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
   border: 0;
-  border-radius: 5px;
-  padding: 4px 7px;
+  padding: 0;
+  /* Three round corners and one sharp: a seed, pointing down at the element it belongs to. */
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
   background: var(--fb-pin-color);
   color: #fff;
-  font: 600 11px/1.2 -apple-system, system-ui, sans-serif;
-  white-space: nowrap;
+  font: 13px/1 -apple-system, system-ui, sans-serif;
   cursor: pointer;
+  box-shadow: 0 3px 10px rgba(28, 25, 23, 0.28);
+  /* Squash and stretch: the drop lands, flattens, and settles. */
+  animation: fb-pin-drop 420ms cubic-bezier(0.2, 1.4, 0.35, 1);
+}
+.fb-pin-glyph { transform: rotate(45deg); font-size: 13px; line-height: 1; }
+.fb-pin-badge:hover { filter: brightness(1.06); }
+.fb-pin-badge:focus-visible { outline: 2px solid #1c1917; outline-offset: 2px; }
+
+@keyframes fb-pin-drop {
+  0% { opacity: 0; transform: rotate(-45deg) translate(0, -10px) scale(0.7, 1.25); }
+  55% { opacity: 1; transform: rotate(-45deg) translate(0, 0) scale(1.18, 0.82); }
+  100% { opacity: 1; transform: rotate(-45deg) scale(1, 1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fb-pin-badge { animation: none; }
 }
 .fb-thread {
   position: absolute;

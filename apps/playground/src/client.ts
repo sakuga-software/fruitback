@@ -2,9 +2,11 @@ import { canonicalizePageUrl, type SeedIssue } from '@fruitback/shared';
 import {
   type CaptureHost,
   type CaptureTarget,
+  type Composer,
   type Overlay,
   captureSeed,
   createCaptureHost,
+  createComposer,
   createOverlay,
 } from '@fruitback/widget';
 
@@ -19,8 +21,10 @@ import {
  * What remains is dev-only and deliberately **outside** the Shadow root, in the light DOM where the
  * page's own CSS can reach it: the toolbar that simulates a deploy, deletes a card, or reloads the
  * pins. It carries `data-fb-dev` and is handed to the host's `ignore`, so pointing at the toolbar
- * never captures the toolbar. The note composer is the one piece still standing in for product code —
- * SKG-493 replaces it.
+ * never captures the toolbar.
+ *
+ * Nothing of the product is left in this file. What it still decides is what belongs to whoever
+ * embeds the widget: where the worker lives, and what a client id is.
  */
 
 const CLIENT_ID = 'playground';
@@ -28,8 +32,8 @@ const workerOrigin = window.__FRUITBACK_PLAYGROUND__?.workerOrigin ?? 'http://lo
 
 let host: CaptureHost | null = null;
 let overlay: Overlay | null = null;
-let composerFor: Element | null = null;
-let composerSource: CaptureTarget['source'];
+let composer: Composer | null = null;
+let target: CaptureTarget | null = null;
 
 function main(): void {
   injectToolbarStyles();
@@ -40,7 +44,10 @@ function main(): void {
     // The dev toolbar is neither part of the page under test nor part of the widget.
     ignore: (element) => element.closest('[data-fb-dev]') !== null,
   });
-  buildComposer(host);
+
+  // The popover is the widget's now (SKG-493). This file only says how to send: the transport, the
+  // client id and the worker's address are the embedder's business, not the widget's.
+  composer = createComposer({ host: host.panel, onSubmit: plant });
 
   // Pins go in the widget's Shadow root too: that is the point of the host, and it is what finally
   // stops the client's CSS from reaching a pin.
@@ -52,47 +59,35 @@ function main(): void {
   void plantPins();
 }
 
-// ── The note, until SKG-493 ────────────────────────────────────────────────────────────────────
+// ── Selection → the widget's popover ──────────────────────────────────────────────────────────
 
-function openComposer(target: CaptureTarget): void {
-  composerFor = target.element;
-  composerSource = target.source;
+function openComposer(selected: CaptureTarget): void {
+  target = selected;
+  const rect = selected.element.getBoundingClientRect();
+  const scrollX = window.scrollX;
+  const scrollY = window.scrollY;
 
-  const composer = queryHost('[data-fb-composer]');
-  const note = queryHost('[data-fb-note]') as HTMLTextAreaElement | null;
-  if (composer === null || note === null) return;
-
-  const rect = target.element.getBoundingClientRect();
-  note.value = '';
-  Object.assign(composer.style, {
-    display: 'block',
-    left: `${Math.min(rect.left + window.scrollX, window.innerWidth - 320)}px`,
-    top: `${rect.bottom + window.scrollY + 8}px`,
+  composer?.open({
+    left: rect.left + scrollX,
+    top: rect.top + scrollY,
+    bottom: rect.bottom + scrollY,
+    right: rect.right + scrollX,
   });
-  note.focus();
-  status(target.source?.component ? `cible : <${target.source.component}>` : 'cible sélectionnée');
+  status(selected.source?.component ? `cible : <${selected.source.component}>` : 'cible sélectionnée');
 }
 
-function closeComposer(): void {
-  composerFor = null;
-  composerSource = undefined;
-  const composer = queryHost('[data-fb-composer]');
-  if (composer !== null) composer.style.display = 'none';
-}
-
-async function send(): Promise<void> {
-  const note = queryHost('[data-fb-note]') as HTMLTextAreaElement | null;
-  if (composerFor === null || note === null) return;
+/** What the composer awaits. Resolving false is how it learns to keep the note and stay open. */
+async function plant(note: string): Promise<boolean> {
+  if (target === null) return false;
 
   const seed = captureSeed({
-    element: composerFor,
-    note: note.value,
+    element: target.element,
+    note,
     client: { id: CLIENT_ID, name: 'Playground' },
     // Straight from react-grab, through the host — no fiber guessing on this path.
-    source: composerSource,
+    source: target.source,
   });
 
-  status('envoi…');
   const response = await fetch(`${workerOrigin}/feedback`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -101,14 +96,15 @@ async function send(): Promise<void> {
 
   if (!response.ok) {
     status(`le worker a répondu ${response.status}`);
-    return;
+    return false;
   }
 
   const { issue } = (await response.json()) as { issue: { identifier: string } };
-  closeComposer();
   // Re-read rather than draw what we just sent: this is what proves the read path answers.
   await plantPins();
   status(`planté · ${issue.identifier}`);
+
+  return true;
 }
 
 // ── Pins ───────────────────────────────────────────────────────────────────────────────────────
@@ -191,31 +187,6 @@ function buildToolbar(): HTMLElement {
   return toolbar;
 }
 
-/** Inside the Shadow root, `all: initial` applies — so the composer ships its own rules with it. */
-function buildComposer(captureHost: CaptureHost): void {
-  const style = document.createElement('style');
-  style.textContent = COMPOSER_STYLES;
-
-  const composer = document.createElement('div');
-  composer.className = 'fb-composer';
-  composer.dataset.fbComposer = '';
-  composer.innerHTML = `
-    <textarea data-fb-note rows="3" placeholder="Qu'est-ce qui ne va pas ici ?"></textarea>
-    <div class="fb-composer-actions">
-      <button type="button" data-fb-cancel>Annuler</button>
-      <button type="button" data-fb-send class="fb-primary">Envoyer</button>
-    </div>
-  `;
-  composer.querySelector('[data-fb-send]')?.addEventListener('click', () => void send());
-  composer.querySelector('[data-fb-cancel]')?.addEventListener('click', () => closeComposer());
-
-  captureHost.panel.append(style, composer);
-}
-
-function queryHost(selector: string): HTMLElement | null {
-  return (host?.root.querySelector(selector) as HTMLElement | null) ?? null;
-}
-
 function status(message: string): void {
   const element = document.getElementById('fb-status');
   if (element !== null) element.textContent = message;
@@ -236,17 +207,6 @@ function injectToolbarStyles(): void {
   `;
   document.head.append(style);
 }
-
-const COMPOSER_STYLES = `
-.fb-composer { position: absolute; display: none; z-index: 2147483300; width: 300px; background: #fff;
-  border: 1px solid #d6d3d1; border-radius: 10px; padding: 12px; box-shadow: 0 8px 30px rgba(0,0,0,.18); }
-.fb-composer textarea { display: block; width: 100%; border: 1px solid #d6d3d1; border-radius: 6px; padding: 8px;
-  font: 14px/1.4 -apple-system, system-ui, sans-serif; resize: vertical; }
-.fb-composer-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
-.fb-composer-actions button { border: 1px solid #d6d3d1; background: #fff; border-radius: 6px; padding: 6px 10px;
-  font: 13px/1 -apple-system, system-ui, sans-serif; cursor: pointer; }
-.fb-composer-actions .fb-primary { background: #e53935; border-color: #e53935; color: #fff; }
-`;
 
 declare global {
   interface Window {

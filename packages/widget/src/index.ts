@@ -1,5 +1,6 @@
 export * from './anchor.ts';
 export * from './capture.ts';
+export * from './composer.ts';
 export * from './dom.ts';
 export * from './engine.ts';
 export * from './host.ts';

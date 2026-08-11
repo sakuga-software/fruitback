@@ -29,7 +29,7 @@ export async function plantPin(page: Page, target: Locator, note: string): Promi
   await page.getByRole('button', { name: /Laisser un feedback/ }).click();
   await target.click();
   await page.getByPlaceholder("Qu'est-ce qui ne va pas ici ?").fill(note);
-  await page.getByRole('button', { name: 'Envoyer' }).click();
+  await page.getByRole('button', { name: 'Planter' }).click();
 
   // The harness only writes this once the re-read has finished drawing, so it is the happens-before
   // the geometry assertions need. Counting pins alone races: the old ones are still on the page

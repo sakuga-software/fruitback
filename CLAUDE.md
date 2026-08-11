@@ -44,9 +44,10 @@ node --test src/seed.test.ts                 # one file, from the package direct
 - `apps/worker` (`@fruitback/worker`) — the Node service. `POST /feedback` plants a seed,
   `GET /feedback?url=…` returns the seeds of that page. Still called "worker" because that is what
   everyone calls it, though it is no longer an edge worker.
-- `packages/widget` (`@fruitback/widget`) — the browser half: **capture** (`captureSeed`, SKG-494),
-  **the overlay** (`resolveAnchor` + `createOverlay`, SKG-500) and **the Shadow DOM host**
-  (`createCaptureHost`, SKG-492). The note popover (SKG-493) is still the playground's stand-in.
+- `packages/widget` (`@fruitback/widget`) — the browser half, and now the whole of it: **capture**
+  (`captureSeed`, SKG-494), **the overlay** (`resolveAnchor` + `createOverlay`, SKG-500), **the
+  Shadow DOM host** (`createCaptureHost`, SKG-492) and **the note popover** (`createComposer`,
+  SKG-493). The playground only says where the worker is.
 
 - `apps/playground` (`@fruitback/playground`) — the dev loop (SKG-511): a deliberately hostile fake
   client site with the widget mounted on it. Not shipped, not deployed.
@@ -132,6 +133,25 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - **Never `instanceof Element` in this package.** It reads a class off one realm, and an element from
   a same-origin iframe — which react-grab returns on purpose — belongs to another. Use `isElement`
   from `dom.ts`.
+
+## The popover
+
+- **`createComposer` owns the states, not the transport.** `onSubmit` is awaited, so an embedder
+  posts through whatever it set up while the widget stays ignorant of the worker's URL and of auth.
+- The states are the point, and they are unit-tested because none of them can be seen by looking:
+  the send button is disabled in flight (**a second click would plant the same note twice**, and the
+  worker cannot tell the difference), a failure keeps the popover open **with the text intact**, and
+  a refusal (`onSubmit` resolving `false`) is treated as a failure rather than a success.
+- **Losing what someone just wrote is the one failure this widget cannot afford.** Anything that
+  would clear the field on an error path is a bug, however tidy it looks.
+- Popover on desktop, **sheet on a phone** — a 320px popover anchored to an element is unusable at
+  that width. The anchored position goes through `--fb-composer-*` custom properties rather than
+  inline `left`/`top`, because an inline style beats the media query and leaves the sheet offset.
+- `prefers-reduced-motion` turns the animations **off**, both here and on the pin. A widget that
+  overlays someone else's site is the last thing that should ignore that setting.
+- The pin is a drop: three round corners and one sharp, rotated to point at its element, with a
+  squash-and-stretch entrance. The note moved to the badge's `aria-label` — that is what keeps it
+  reachable by a screen reader, and by a test looking for it by role.
 
 ## Re-anchoring, and why a pin says how sure it is
 
