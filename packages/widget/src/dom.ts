@@ -12,6 +12,16 @@
 
 const ELEMENT_NODE = 1;
 
+/**
+ * Duck-typed by necessity, and therefore not sound: nothing stops a caller from passing an object
+ * shaped like an element. Two properties rather than one narrows it enough to be useful — a bare
+ * `{ nodeType: 1 }` no longer passes — and the alternative that *would* be sound is the realm-bound
+ * `instanceof` this exists to replace.
+ */
 export function isElement(value: unknown): value is Element {
-  return typeof value === 'object' && value !== null && (value as Node).nodeType === ELEMENT_NODE;
+  if (typeof value !== 'object' || value === null) return false;
+
+  const candidate = value as Element;
+
+  return candidate.nodeType === ELEMENT_NODE && typeof candidate.tagName === 'string';
 }

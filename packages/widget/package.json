@@ -27,10 +27,5 @@
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "typescript": "catalog:"
-  },
-  "peerDependenciesMeta": {
-    "react": {
-      "optional": true
-    }
   }
 }

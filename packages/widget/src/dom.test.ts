@@ -11,7 +11,8 @@ describe('isElement', () => {
     const page = mountPage('<main><button>Commander</button></main>');
 
     assert.equal(isElement(page.query('button')), true);
-    assert.equal(isElement({ nodeType: 1 }), true, 'an element from another realm was refused');
+    // Stands in for an element from another realm, which is exactly what `instanceof` would refuse.
+    assert.equal(isElement({ nodeType: 1, tagName: 'BUTTON' }), true, 'an element from another realm was refused');
   });
 
   it('refuses everything else, including what would have thrown', () => {
@@ -22,5 +23,7 @@ describe('isElement', () => {
     assert.equal(isElement(null), false);
     assert.equal(isElement(undefined), false);
     assert.equal(isElement('button'), false);
+    // Tightened after review: a bare node-shaped object is not enough to claim it is an element.
+    assert.equal(isElement({ nodeType: 1 }), false);
   });
 });

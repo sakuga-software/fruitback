@@ -127,7 +127,13 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     if (element === null) return;
 
     stop();
-    void engine.sourceOf(element).then((source) => options.onSelect({ element, source }));
+    // A seed with no `source` is a perfectly good seed, so a rejecting engine costs the metadata and
+    // nothing else. Without the catch, a swapped-in engine that throws would drop the capture on the
+    // floor and leave an unhandled rejection behind — the reporter's note lost to a missing filename.
+    void engine
+      .sourceOf(element)
+      .catch(() => undefined)
+      .then((source) => options.onSelect({ element, source }));
   }
 
   function onKeyDown(event: KeyboardEvent): void {

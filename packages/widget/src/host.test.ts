@@ -54,6 +54,14 @@ const clickAt = (page: MountedPage, target: Element) =>
 const moveOver = (page: MountedPage) =>
   page.document.dispatchEvent(new (mouseEventCtor(page))('mousemove', { bubbles: true, clientX: 5, clientY: 5 }));
 
+/** The host is non-null in every test that reaches for it; `mount` has just built it. */
+function launchButton(): HTMLElement {
+  const button = host?.root.querySelector('[data-fb-host-launch]');
+  assert.ok(button, 'the launch button is missing');
+
+  return button as HTMLElement;
+}
+
 describe('createCaptureHost', () => {
   it('puts everything it draws inside a Shadow root', () => {
     // The whole point: the client's CSS cannot reach in, and ours cannot leak out.
@@ -87,7 +95,7 @@ describe('createCaptureHost', () => {
     const highlight = host?.root.querySelector('[data-fb-host-highlight]') as HTMLElement;
     assert.equal(highlight.style.display, '');
 
-    (host?.root.querySelector('[data-fb-host-launch]') as HTMLElement).click();
+    launchButton().click();
     assert.equal(host?.capturing(), true);
   });
 
