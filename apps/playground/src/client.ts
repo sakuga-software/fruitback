@@ -1,92 +1,68 @@
 import { canonicalizePageUrl, type SeedIssue } from '@fruitback/shared';
-import { type Overlay, captureSeed, createOverlay } from '@fruitback/widget';
+import {
+  type CaptureHost,
+  type CaptureTarget,
+  type Overlay,
+  captureSeed,
+  createCaptureHost,
+  createOverlay,
+} from '@fruitback/widget';
 
 /**
- * The dev harness that mounts the widget on the playground page.
+ * The playground's own chrome, and the wiring that feeds the widget.
  *
- * **The pins are no longer its business.** Resolution, positioning, scroll and resize re-measuring
- * and the thread all moved into `createOverlay` (SKG-500) — this file hands it the issues the worker
- * returned and gets out of the way. What is left here is scaffolding: the capture UI is a Shadow DOM
- * host over `react-grab/primitives` (SKG-492) with a proper popover (SKG-493), and both replace what
- * is below.
+ * Almost nothing of the product is left in this file. Selection, the floating button, the hover
+ * highlight and the style isolation are `createCaptureHost` (SKG-492); resolution, pins, positioning
+ * and the thread are `createOverlay` (SKG-500). Both live in the widget's Shadow root, which is why
+ * the composer below is mounted into `host.panel` rather than into the page.
  *
- * It stays in the light DOM (no Shadow root) and its styles are prefixed rather than isolated, which
- * is precisely the shortcut SKG-492 exists to remove.
+ * What remains is dev-only and deliberately **outside** the Shadow root, in the light DOM where the
+ * page's own CSS can reach it: the toolbar that simulates a deploy, deletes a card, or reloads the
+ * pins. It carries `data-fb-dev` and is handed to the host's `ignore`, so pointing at the toolbar
+ * never captures the toolbar. The note composer is the one piece still standing in for product code —
+ * SKG-493 replaces it.
  */
 
 const CLIENT_ID = 'playground';
 const workerOrigin = window.__FRUITBACK_PLAYGROUND__?.workerOrigin ?? 'http://localhost:8788';
 
-let capturing = false;
+let host: CaptureHost | null = null;
 let overlay: Overlay | null = null;
 let composerFor: Element | null = null;
+let composerSource: CaptureTarget['source'];
 
 function main(): void {
-  injectStyles();
-  const toolbar = buildToolbar();
-  document.body.append(toolbar);
+  injectToolbarStyles();
+  document.body.append(buildToolbar());
 
-  document.addEventListener('mousemove', onHover, true);
-  document.addEventListener('click', onClick, true);
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') stopCapturing();
+  host = createCaptureHost({
+    onSelect: openComposer,
+    // The dev toolbar is neither part of the page under test nor part of the widget.
+    ignore: (element) => element.closest('[data-fb-dev]') !== null,
   });
-  // The pins are the widget's own engine now (SKG-500): resolution, positioning, scroll and resize
-  // re-measuring, and the thread behind each pin all live there. The playground only feeds it.
-  overlay = createOverlay({ onSelect: (issue) => status(`${issue.identifier} · ${issue.stateName}`) });
+  buildComposer(host);
+
+  // Pins go in the widget's Shadow root too: that is the point of the host, and it is what finally
+  // stops the client's CSS from reaching a pin.
+  overlay = createOverlay({
+    host: host.root,
+    onSelect: (issue) => status(`${issue.identifier} · ${issue.stateName}`),
+  });
 
   void plantPins();
 }
 
-// ── Capture ────────────────────────────────────────────────────────────────────────────────────
+// ── The note, until SKG-493 ────────────────────────────────────────────────────────────────────
 
-function onHover(event: MouseEvent): void {
-  if (!capturing) return;
+function openComposer(target: CaptureTarget): void {
+  composerFor = target.element;
+  composerSource = target.source;
 
-  const element = targetOf(event);
-  const highlight = byId('fb-highlight');
-  if (element === null || highlight === null) return;
-
-  const rect = element.getBoundingClientRect();
-  Object.assign(highlight.style, {
-    display: 'block',
-    left: `${rect.left + window.scrollX}px`,
-    top: `${rect.top + window.scrollY}px`,
-    width: `${rect.width}px`,
-    height: `${rect.height}px`,
-  });
-}
-
-function onClick(event: MouseEvent): void {
-  if (!capturing) return;
-
-  const element = targetOf(event);
-  if (element === null) return;
-
-  // The page's own handlers must not run while the reporter is pointing at things.
-  event.preventDefault();
-  event.stopPropagation();
-  openComposer(element);
-}
-
-/** The element under the pointer, or null when the pointer is over the widget's UI or the harness's. */
-function targetOf(event: MouseEvent): Element | null {
-  const target = event.target;
-  // The overlay counts too: in capture mode a click on a pin's badge must not plant a pin on the pin.
-  if (!(target instanceof Element) || target.closest('[data-fb-dev], [data-fruitback-overlay]') !== null) {
-    return null;
-  }
-
-  return target;
-}
-
-function openComposer(element: Element): void {
-  composerFor = element;
-  const composer = byId('fb-composer');
-  const note = byId('fb-note') as HTMLTextAreaElement | null;
-  const rect = element.getBoundingClientRect();
+  const composer = queryHost('[data-fb-composer]');
+  const note = queryHost('[data-fb-note]') as HTMLTextAreaElement | null;
   if (composer === null || note === null) return;
 
+  const rect = target.element.getBoundingClientRect();
   note.value = '';
   Object.assign(composer.style, {
     display: 'block',
@@ -94,16 +70,26 @@ function openComposer(element: Element): void {
     top: `${rect.bottom + window.scrollY + 8}px`,
   });
   note.focus();
+  status(target.source?.component ? `cible : <${target.source.component}>` : 'cible sélectionnée');
+}
+
+function closeComposer(): void {
+  composerFor = null;
+  composerSource = undefined;
+  const composer = queryHost('[data-fb-composer]');
+  if (composer !== null) composer.style.display = 'none';
 }
 
 async function send(): Promise<void> {
-  const note = byId('fb-note') as HTMLTextAreaElement | null;
+  const note = queryHost('[data-fb-note]') as HTMLTextAreaElement | null;
   if (composerFor === null || note === null) return;
 
   const seed = captureSeed({
     element: composerFor,
     note: note.value,
     client: { id: CLIENT_ID, name: 'Playground' },
+    // Straight from react-grab, through the host — no fiber guessing on this path.
+    source: composerSource,
   });
 
   status('envoi…');
@@ -120,31 +106,9 @@ async function send(): Promise<void> {
 
   const { issue } = (await response.json()) as { issue: { identifier: string } };
   closeComposer();
-  stopCapturing();
   // Re-read rather than draw what we just sent: this is what proves the read path answers.
   await plantPins();
   status(`planté · ${issue.identifier}`);
-}
-
-function closeComposer(): void {
-  composerFor = null;
-  const composer = byId('fb-composer');
-  if (composer !== null) composer.style.display = 'none';
-}
-
-function startCapturing(): void {
-  capturing = true;
-  document.body.style.cursor = 'crosshair';
-  status('cliquez sur un élément · Échap pour sortir');
-}
-
-function stopCapturing(): void {
-  capturing = false;
-  composerFor = null;
-  document.body.style.cursor = '';
-  const highlight = byId('fb-highlight');
-  if (highlight !== null) highlight.style.display = 'none';
-  closeComposer();
 }
 
 // ── Pins ───────────────────────────────────────────────────────────────────────────────────────
@@ -206,7 +170,7 @@ function removeLatteCard(): void {
   void plantPins();
 }
 
-// ── Harness UI ─────────────────────────────────────────────────────────────────────────────────
+// ── Dev chrome (light DOM, on purpose) ─────────────────────────────────────────────────────────
 
 function buildToolbar(): HTMLElement {
   const toolbar = document.createElement('div');
@@ -214,79 +178,75 @@ function buildToolbar(): HTMLElement {
   toolbar.id = 'fb-toolbar';
   toolbar.innerHTML = `
     <strong>🌱 Fruitback <span class="fb-tag">playground</span></strong>
-    <button data-fb-dev="capture-toggle" id="fb-capture">Laisser un feedback</button>
     <button data-fb-dev="reload">Recharger les pins</button>
     <button data-fb-dev="redeploy">Redéployer</button>
     <button data-fb-dev="remove-latte">Supprimer la carte Latte</button>
     <span data-fb-dev="status" id="fb-status">—</span>
   `;
 
-  toolbar.querySelector('[data-fb-dev="capture-toggle"]')?.addEventListener('click', () => {
-    if (capturing) stopCapturing();
-    else startCapturing();
-  });
   toolbar.querySelector('[data-fb-dev="reload"]')?.addEventListener('click', () => void plantPins());
   toolbar.querySelector('[data-fb-dev="redeploy"]')?.addEventListener('click', redeploy);
   toolbar.querySelector('[data-fb-dev="remove-latte"]')?.addEventListener('click', removeLatteCard);
 
-  const highlight = document.createElement('div');
-  highlight.id = 'fb-highlight';
-  highlight.dataset.fbDev = 'highlight';
+  return toolbar;
+}
+
+/** Inside the Shadow root, `all: initial` applies — so the composer ships its own rules with it. */
+function buildComposer(captureHost: CaptureHost): void {
+  const style = document.createElement('style');
+  style.textContent = COMPOSER_STYLES;
 
   const composer = document.createElement('div');
-  composer.id = 'fb-composer';
-  composer.dataset.fbDev = 'composer';
+  composer.className = 'fb-composer';
+  composer.dataset.fbComposer = '';
   composer.innerHTML = `
-    <textarea data-fb-dev="note" id="fb-note" rows="3" placeholder="Qu'est-ce qui ne va pas ici ?"></textarea>
+    <textarea data-fb-note rows="3" placeholder="Qu'est-ce qui ne va pas ici ?"></textarea>
     <div class="fb-composer-actions">
-      <button data-fb-dev="cancel">Annuler</button>
-      <button data-fb-dev="send" class="fb-primary">Envoyer</button>
+      <button type="button" data-fb-cancel>Annuler</button>
+      <button type="button" data-fb-send class="fb-primary">Envoyer</button>
     </div>
   `;
-  composer.querySelector('[data-fb-dev="send"]')?.addEventListener('click', () => void send());
-  composer.querySelector('[data-fb-dev="cancel"]')?.addEventListener('click', () => closeComposer());
+  composer.querySelector('[data-fb-send]')?.addEventListener('click', () => void send());
+  composer.querySelector('[data-fb-cancel]')?.addEventListener('click', () => closeComposer());
 
-  const host = document.createElement('div');
-  host.dataset.fbDev = 'host';
-  host.append(toolbar, highlight, composer);
+  captureHost.panel.append(style, composer);
+}
 
-  return host;
+function queryHost(selector: string): HTMLElement | null {
+  return (host?.root.querySelector(selector) as HTMLElement | null) ?? null;
 }
 
 function status(message: string): void {
-  const element = byId('fb-status');
+  const element = document.getElementById('fb-status');
   if (element !== null) element.textContent = message;
 }
 
-function byId(id: string): HTMLElement | null {
-  return document.getElementById(id);
-}
-
-function injectStyles(): void {
+function injectToolbarStyles(): void {
   const style = document.createElement('style');
   style.dataset.fbDev = 'styles';
   style.textContent = `
-    #fb-toolbar { position: fixed; right: 16px; bottom: 16px; z-index: 2147483001; display: flex; gap: 8px;
+    #fb-toolbar { position: fixed; left: 16px; bottom: 16px; z-index: 2147483001; display: flex; gap: 8px;
       align-items: center; background: #1c1917; color: #fafaf9; padding: 10px 14px; border-radius: 10px;
       font: 13px/1 -apple-system, system-ui, sans-serif; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
     #fb-toolbar button { background: #44403c; color: #fafaf9; border: 0; border-radius: 6px; padding: 7px 10px;
       font: inherit; cursor: pointer; }
     #fb-toolbar button:hover { background: #57534e; }
     #fb-toolbar .fb-tag { background: #e53935; border-radius: 4px; padding: 2px 6px; font-weight: 600; }
-    #fb-status { opacity: .7; min-width: 130px; }
-    #fb-highlight { position: absolute; display: none; z-index: 2147483000; pointer-events: none;
-      outline: 2px solid #e53935; background: rgba(229,57,53,.08); border-radius: 4px; }
-    #fb-composer { position: absolute; display: none; z-index: 2147483002; width: 300px; background: #fff;
-      border: 1px solid #d6d3d1; border-radius: 10px; padding: 12px; box-shadow: 0 8px 30px rgba(0,0,0,.18); }
-    #fb-composer textarea { width: 100%; border: 1px solid #d6d3d1; border-radius: 6px; padding: 8px;
-      font: 14px/1.4 -apple-system, system-ui, sans-serif; resize: vertical; }
-    .fb-composer-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
-    .fb-composer-actions button { border: 1px solid #d6d3d1; background: #fff; border-radius: 6px; padding: 6px 10px;
-      font: 13px/1 -apple-system, system-ui, sans-serif; cursor: pointer; }
-    .fb-composer-actions .fb-primary { background: #e53935; border-color: #e53935; color: #fff; }
+    #fb-status { opacity: .7; min-width: 150px; }
   `;
   document.head.append(style);
 }
+
+const COMPOSER_STYLES = `
+.fb-composer { position: absolute; display: none; z-index: 2147483300; width: 300px; background: #fff;
+  border: 1px solid #d6d3d1; border-radius: 10px; padding: 12px; box-shadow: 0 8px 30px rgba(0,0,0,.18); }
+.fb-composer textarea { display: block; width: 100%; border: 1px solid #d6d3d1; border-radius: 6px; padding: 8px;
+  font: 14px/1.4 -apple-system, system-ui, sans-serif; resize: vertical; }
+.fb-composer-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.fb-composer-actions button { border: 1px solid #d6d3d1; background: #fff; border-radius: 6px; padding: 6px 10px;
+  font: 13px/1 -apple-system, system-ui, sans-serif; cursor: pointer; }
+.fb-composer-actions .fb-primary { background: #e53935; border-color: #e53935; color: #fff; }
+`;
 
 declare global {
   interface Window {

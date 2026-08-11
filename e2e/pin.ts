@@ -24,7 +24,9 @@ export async function openPlayground(page: Page, testCase: string): Promise<void
 export async function plantPin(page: Page, target: Locator, note: string): Promise<void> {
   const before = await page.locator('[data-fb-pin]').count();
 
-  await page.getByRole('button', { name: 'Laisser un feedback' }).click();
+  // The launch button now lives in the widget's Shadow root and carries an emoji; Playwright's
+  // selectors pierce open shadow roots, so only the name had to become a pattern.
+  await page.getByRole('button', { name: /Laisser un feedback/ }).click();
   await target.click();
   await page.getByPlaceholder("Qu'est-ce qui ne va pas ici ?").fill(note);
   await page.getByRole('button', { name: 'Envoyer' }).click();

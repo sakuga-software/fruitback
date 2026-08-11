@@ -1,4 +1,5 @@
 import { SEED_STAGE_STYLES, type SeedBounds, type SeedIssue } from '@fruitback/shared';
+import { isElement } from './dom.ts';
 import { type AnchorResolution, resolveAnchor } from './resolve.ts';
 
 /**
@@ -152,8 +153,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     // inside the thread is retargeted to the host element on the way out, and `contains` would say
     // the click came from outside and close the thread the user just clicked into.
     const path = event.composedPath();
-    const inside =
-      path.length > 0 ? path.includes(thread) : event.target instanceof Node && thread.contains(event.target);
+    const inside = path.length > 0 ? path.includes(thread) : isElement(event.target) && thread.contains(event.target);
 
     if (!inside) closeThread();
   }

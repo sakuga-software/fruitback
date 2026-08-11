@@ -84,6 +84,11 @@ export function setScroll(view: Window, scrollX: number, scrollY: number): void 
   Object.defineProperty(view, 'scrollY', { value: scrollY, configurable: true });
 }
 
+/** happy-dom's `MouseEvent` is not on the DOM `Window` type either — same cast, same place. */
+export function mouseEventCtor(page: MountedPage): typeof MouseEvent {
+  return (page.view as unknown as { MouseEvent: typeof MouseEvent }).MouseEvent;
+}
+
 /**
  * Dispatch a key press. happy-dom's constructors are not on the DOM `Window` type, so the cast lives
  * here with the others rather than in a test.

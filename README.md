@@ -65,6 +65,11 @@ excerpt, `domPath`, and bounds as a share of the document). When none of them re
 becomes an _orphan_ — listed aside rather than dropped on the wrong element. That degradation is
 what separates a demo from a tool people keep using.
 
+Everything the widget draws lives in one Shadow root, mounted at the document origin. That is what
+makes "no style conflicts" true in both directions on a site whose CSS nobody has read — and the
+selection engine underneath it is `react-grab/primitives`, which hit-tests through shadow roots and
+iframes and reads the component and source file straight off the React fiber.
+
 Coming back, the pin has to find its element again. The claims are tried in order — selector, test
 id, text, structural path, position — and the answer carries **how it was found**: the first three
 identify an element, the last two only locate a spot. A pin placed by position is drawn dashed and
@@ -85,7 +90,7 @@ See [`packages/shared/src/seed.ts`](packages/shared/src/seed.ts),
 ```
 packages/shared    the seed contract: schema, Linear mapping, round-trip   ✅
 apps/worker        Node service in Docker: write + read path to Linear     ✅
-packages/widget    capture + re-anchoring overlay                         ✅  host pending
+packages/widget    capture + overlay + Shadow DOM host                    ✅  popover pending
 apps/playground    hostile demo page + dev loop, on a fake Linear          ✅  dev only
 ```
 
