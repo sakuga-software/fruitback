@@ -1,10 +1,5 @@
-import {
-  SEED_ANCHOR_STRATEGIES,
-  type SeedAnchor,
-  type SeedAnchorStrategy,
-  type SeedBounds,
-  TEXT_EXCERPT_MAX_LENGTH,
-} from '@fruitback/shared';
+import { SEED_ANCHOR_STRATEGIES, type SeedAnchor, type SeedAnchorStrategy, type SeedBounds } from '@fruitback/shared';
+import { readTextExcerpt } from './anchor.ts';
 
 /**
  * Finding the element again, on a page that has been redeployed since the note was written.
@@ -105,7 +100,10 @@ const FINDERS: Record<SeedAnchorStrategy, Finder> = {
   text: (anchor, root) => {
     if (!anchor.text) return null;
 
-    const matches = queryAll(root, anchor.tag).filter((element) => excerpt(element) === anchor.text);
+    // `readTextExcerpt` is the capture's own function, imported rather than reimplemented. A second
+    // copy here read `textContent` and so was blind to form controls, whose text is their value,
+    // placeholder or label — every `<input>` anchor lost its only identity-bearing fallback.
+    const matches = queryAll(root, anchor.tag).filter((element) => readTextExcerpt(element) === anchor.text);
 
     // Two elements saying the same thing is not an identity: three "Ajouter" buttons must fail here.
     return matches.length === 1 ? (matches[0] ?? null) : null;
@@ -174,11 +172,6 @@ function onlyMatch(root: Document, selector: string, anchor: SeedAnchor): Elemen
     // A selector the current engine will not parse. Refusing beats throwing during a render.
     return null;
   }
-}
-
-/** Same normalisation as the capture, or a comparison would fail on whitespace alone. */
-function excerpt(element: Element): string {
-  return (element.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, TEXT_EXCERPT_MAX_LENGTH);
 }
 
 /**

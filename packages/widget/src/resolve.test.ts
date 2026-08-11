@@ -96,6 +96,28 @@ describe('resolveAnchor', () => {
     assert.equal(resolved.element?.textContent, 'Commander');
   });
 
+  it('finds a form control by its placeholder, the way the capture read it', () => {
+    // The capture stores a form control's value, placeholder or label as its text — an `<input>` has
+    // no text of its own. Resolution has to read it the same way, or the one identity-bearing
+    // fallback an input has is silently unavailable and every input anchor degrades to a guess.
+    const page = mountPage(
+      '<form><input class="css-1x9f7ab" placeholder="Rechercher"><input placeholder="Votre e-mail"></form>',
+      { width: 1_000, height: 1_000 },
+    );
+    setDocumentSize(page.document, 1_000, 1_000);
+    setRect(page.query('[placeholder="Rechercher"]'), { left: 0, top: 0, width: 200, height: 30 });
+
+    const resolved = resolveAnchor(
+      // The CSS-modules class was rehashed by the deploy, so the selector is gone.
+      { selector: '.css-77aa31', tag: 'input', text: 'Rechercher', bounds: { xPct: 0, yPct: 0, wPct: 20, hPct: 3 } },
+      { document: page.document },
+    );
+
+    assert.equal(resolved.strategy, 'text');
+    assert.equal(resolved.confident, true);
+    assert.equal(resolved.element, page.query('[placeholder="Rechercher"]'));
+  });
+
   it('does not treat a word three elements share as an identity', () => {
     const page = mountCards();
 
