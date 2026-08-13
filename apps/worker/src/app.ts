@@ -1,5 +1,5 @@
 import { canonicalizePageUrl, parseSeed } from '@fruitback/shared';
-import { type ClientResolution, resolveClient } from './clients.ts';
+import { type ClientResolution, normalizeClientId, resolveClient } from './clients.ts';
 import { type WorkerConfig, type WorkerEnv, readConfig, splitOrigins } from './env.ts';
 import { LinearError } from './linear.ts';
 import * as realLinear from './linear.ts';
@@ -137,9 +137,10 @@ async function getFeedback(
     return json(400, { error: 'invalid-url' }, corsHeaders);
   }
 
-  // Optional on a single-client worker, where it only narrows by label. Required as soon as a client
-  // map exists — see `routeFor`, which also normalises it.
-  const clientId = params.get('client') ?? undefined;
+  // Normalised once, here, because this value does three jobs: it picks the route, it builds the
+  // Linear label the filter matches on, and it keys the cache. Normalising for only one of them is
+  // how a note becomes unreadable by the client that wrote it.
+  const clientId = normalizeClientId(params.get('client'));
   const route = routeFor(request, config, clientId);
   if (!route.ok) return routingFailure(route, corsHeaders);
 
@@ -204,12 +205,19 @@ async function postFeedback(
 
   // Re-canonicalize server-side. The read path finds seeds by matching this URL inside the
   // description, so a client that skipped normalization would plant a pin nobody can find again.
+  //
+  // The client id gets the same treatment and for the same reason: it becomes the `fruitback:<id>`
+  // label the read filters on, so a padded id here means an issue nobody can query back.
+  const clientId = normalizeClientId(parsed.seed.client?.id);
   const seed = {
     ...parsed.seed,
     page: { ...parsed.seed.page, url: canonicalizePageUrl(parsed.seed.page.url) },
+    ...(parsed.seed.client !== undefined && clientId !== undefined
+      ? { client: { ...parsed.seed.client, id: clientId } }
+      : {}),
   };
 
-  const route = routeFor(request, config, seed.client?.id);
+  const route = routeFor(request, config, clientId);
   if (!route.ok) return routingFailure(route, corsHeaders);
 
   try {

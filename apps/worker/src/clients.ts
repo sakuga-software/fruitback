@@ -84,15 +84,30 @@ export type ResolveClientOptions = {
   fallback: Routing;
 };
 
+/**
+ * One normalisation, and the normalised value is what flows on.
+ *
+ * Trimming only for the map lookup was not enough, and the way it failed is worth keeping in mind:
+ * routing succeeded on a padded id while the **label** written to Linear kept the spaces, so a seed
+ * posted as `'  acme  '` landed in the right team under `fruitback:  acme  ` and the client's own
+ * clean read — filtering on `fruitback:acme` — found nothing. Authorised at both ends, invisible in
+ * between. The id has to be normalised before it is used for anything: the route, the label, and the
+ * cache key alike.
+ */
+export function normalizeClientId(value: string | null | undefined): string | undefined {
+  const trimmed = value?.trim();
+
+  return trimmed === undefined || trimmed === '' ? undefined : trimmed;
+}
+
 export function resolveClient({ clients, clientId, origin, fallback }: ResolveClientOptions): ClientResolution {
   // Single-tenant: the map is what turns this worker multi-client, and without it nothing changes.
   if (clients === undefined) return { ok: true, routing: fallback };
 
-  // Trimmed here rather than at each call site: the query parameter and the seed's own `client.id`
-  // both land in this function, and a client whose id came back with a stray space resolving on a
-  // read but not on a write is the kind of asymmetry nobody finds by reading.
-  const id = clientId?.trim();
-  if (id === undefined || id === '') return { ok: false, reason: 'client-required' };
+  // Normalised again here rather than trusted: this is the boundary, and a caller that forgets is
+  // how the label and the route drifted apart in the first place.
+  const id = normalizeClientId(clientId);
+  if (id === undefined) return { ok: false, reason: 'client-required' };
 
   const client = clients[id];
   if (client === undefined) return { ok: false, reason: 'unknown-client' };

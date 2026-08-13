@@ -564,12 +564,31 @@ describe('one worker, several clients', () => {
     assert.deepEqual(await response.json(), { error: 'client-required' });
   });
 
-  it('routes a seed whose client id came with stray whitespace', async () => {
+  it('reads back a note whose client id arrived padded', async () => {
+    // The test the previous version of this one should have been. Asserting the *route* passed while
+    // the label kept the spaces: the issue landed in the right team as `fruitback:  acme  `, and the
+    // client's own clean read — filtering `fruitback:acme` — came back empty. Authorised at both
+    // ends, invisible in between. So this asserts the round trip, not the routing.
+    installLinearStub();
+    const url = seedFixture().page.url;
+
+    const created = await post(seedFixture({ id: 'sd_padded', client: { id: '  acme  ' } }), { env: fakeMulti });
+    const read = await get(`/feedback?url=${encodeURIComponent(url)}&client=acme`, { env: fakeMulti });
+
+    assert.equal(created.status, 201);
+    assert.deepEqual(
+      ((await read.json()) as { issues: SeedIssue[] }).issues.map((issue) => issue.seed.id),
+      ['sd_padded'],
+    );
+  });
+
+  it('stores the normalised client id, so the label matches what a read asks for', async () => {
     const stub = installLinearStub();
 
     await post(seedFixture({ client: { id: '  acme  ' } }), { env: multi });
 
     assert.equal(stub.issueInput().teamId, 'team_acme');
+    assert.deepEqual(stub.createdLabels(), ['fruitback', 'fruitback:acme']);
   });
 
   it('refuses to answer a read that names nobody', async () => {

@@ -192,8 +192,12 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   answer with every seed on that URL, which on a shared worker is one client reading another's
   feedback; a write that names nobody would land in the default team, which is the same leak facing
   the other way. The read cache key carries the team for the same reason.
-- `resolveClient` trims the id, because it arrives from a query parameter on one path and from the
-  seed on the other, and only one of them used to be normalised.
+- **`normalizeClientId` runs before the id is used for anything**, and that ordering is the whole
+  point. The id does three jobs — it picks the route, it builds the `fruitback:<id>` label a read
+  filters on, and it keys the cache. Normalising it for the route alone put a note in the right team
+  under `fruitback:  acme  ` while its owner's clean read asked for `fruitback:acme` and found
+  nothing: authorised at both ends, invisible in between. The write path normalises it into the seed
+  the same way it re-canonicalises `page.url`, and for the same reason.
 - **`clientId` is client-asserted**, exactly like `reporter`, until SKG-498. `origins` is what turns
   the claim into something checkable against the browser's own header — the trust level CORS gives,
   and strictly more than nothing. Do not describe it as authentication.
