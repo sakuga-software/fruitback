@@ -7,6 +7,7 @@ import {
   clientLabelName,
   FRUITBACK_LABEL,
 } from '@fruitback/shared';
+import type { Routing } from './clients.ts';
 import type { WorkerConfig } from './env.ts';
 import { type CreatedIssue, type IssueNode, toSeedIssue } from './linear.ts';
 
@@ -26,7 +27,7 @@ import { type CreatedIssue, type IssueNode, toSeedIssue } from './linear.ts';
  * one is a store the running process serves from.
  */
 
-type StoredIssue = IssueNode & { labels: string[] };
+type StoredIssue = IssueNode & { labels: string[]; teamId: string };
 
 const issues: StoredIssue[] = [];
 
@@ -43,7 +44,7 @@ const DEV_STATES = [
   { name: 'Canceled', type: 'canceled' },
 ] as const;
 
-export async function createSeedIssue(_config: WorkerConfig, seed: Seed): Promise<CreatedIssue> {
+export async function createSeedIssue(_config: WorkerConfig, routing: Routing, seed: Seed): Promise<CreatedIssue> {
   const number = issues.length + 1;
   const state = DEV_STATES[number % DEV_STATES.length] ?? DEV_STATES[0];
   const identifier = `DEV-${String(number).padStart(3, '0')}`;
@@ -58,6 +59,7 @@ export async function createSeedIssue(_config: WorkerConfig, seed: Seed): Promis
     description: buildIssueDescription(seed),
     state: { name: state.name, type: state.type },
     labels: buildIssueLabels(seed),
+    teamId: routing.teamId,
   });
 
   return { id: `dev_issue_${number}`, identifier, url: `http://localhost/dev-issue/${identifier}` };
@@ -65,12 +67,15 @@ export async function createSeedIssue(_config: WorkerConfig, seed: Seed): Promis
 
 export async function fetchSeedIssues(
   _config: WorkerConfig,
+  routing: Routing,
   query: { url: string; clientId?: string },
 ): Promise<SeedIssue[]> {
   const required = query.clientId ? [FRUITBACK_LABEL, clientLabelName(query.clientId)] : [FRUITBACK_LABEL];
 
   return (
     issues
+      // Same isolation as the real filter: a read only ever sees the team it routes to.
+      .filter((issue) => issue.teamId === routing.teamId)
       .filter((issue) => required.every((label) => issue.labels.includes(label)))
       // `contains`, like the real filter — the exact URL check is `toSeedIssue`'s job, here as there.
       .filter((issue) => (issue.description ?? '').includes(query.url))

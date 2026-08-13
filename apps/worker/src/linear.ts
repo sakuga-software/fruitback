@@ -11,6 +11,7 @@ import {
   seedIssueSchema,
   stageForLinearState,
 } from '@fruitback/shared';
+import type { Routing } from './clients.ts';
 import type { WorkerConfig } from './env.ts';
 
 const LINEAR_GRAPHQL_ENDPOINT = 'https://api.linear.app/graphql';
@@ -87,9 +88,9 @@ type CreateIssueResult = { issueCreate: { success: boolean; issue: CreatedIssue 
  * A label that cannot be resolved is dropped rather than failing the request: losing a label is a
  * triage annoyance, losing the client's feedback is a bug.
  */
-async function resolveLabelIds(config: WorkerConfig, names: string[]): Promise<string[]> {
+async function resolveLabelIds(config: WorkerConfig, routing: Routing, names: string[]): Promise<string[]> {
   const existing = await graphql<TeamLabelsResult>(config, TEAM_LABELS_QUERY, {
-    teamId: config.linearTeamId,
+    teamId: routing.teamId,
     names,
   });
 
@@ -103,17 +104,17 @@ async function resolveLabelIds(config: WorkerConfig, names: string[]): Promise<s
       continue;
     }
 
-    const created = await createLabel(config, name);
+    const created = await createLabel(config, routing, name);
     if (created !== null) resolved.push(created);
   }
 
   return resolved;
 }
 
-async function createLabel(config: WorkerConfig, name: string): Promise<string | null> {
+async function createLabel(config: WorkerConfig, routing: Routing, name: string): Promise<string | null> {
   try {
     const created = await graphql<CreateLabelResult>(config, CREATE_LABEL_MUTATION, {
-      input: { name, teamId: config.linearTeamId, color: FRUITBACK_LABEL_COLOR },
+      input: { name, teamId: routing.teamId, color: FRUITBACK_LABEL_COLOR },
     });
 
     return created.issueLabelCreate.issueLabel?.id ?? null;
@@ -121,7 +122,7 @@ async function createLabel(config: WorkerConfig, name: string): Promise<string |
     // Two concurrent first-feedbacks race here and one loses on the name uniqueness constraint.
     // The winner's label is what we wanted, so look it up again.
     const retry = await graphql<TeamLabelsResult>(config, TEAM_LABELS_QUERY, {
-      teamId: config.linearTeamId,
+      teamId: routing.teamId,
       names: [name],
     }).catch(() => null);
 
@@ -130,13 +131,13 @@ async function createLabel(config: WorkerConfig, name: string): Promise<string |
 }
 
 /** Plant a seed in Linear: one issue, readable title, round-trip-able description, labels applied. */
-export async function createSeedIssue(config: WorkerConfig, seed: Seed): Promise<CreatedIssue> {
-  const labelIds = await resolveLabelIds(config, buildIssueLabels(seed));
+export async function createSeedIssue(config: WorkerConfig, routing: Routing, seed: Seed): Promise<CreatedIssue> {
+  const labelIds = await resolveLabelIds(config, routing, buildIssueLabels(seed));
 
   const created = await graphql<CreateIssueResult>(config, CREATE_ISSUE_MUTATION, {
     input: {
-      teamId: config.linearTeamId,
-      projectId: config.linearProjectId,
+      teamId: routing.teamId,
+      projectId: routing.projectId,
       title: buildIssueTitle(seed),
       description: buildIssueDescription(seed),
       labelIds,
@@ -203,8 +204,12 @@ export type SeedIssueQuery = {
  * Everything is filtered server-side by Linear (label + `description contains <canonical url>`), so
  * the workspace can hold any number of issues without this walking them.
  */
-export async function fetchSeedIssues(config: WorkerConfig, query: SeedIssueQuery): Promise<SeedIssue[]> {
-  const filter = buildSeedIssueFilter(config, query);
+export async function fetchSeedIssues(
+  config: WorkerConfig,
+  routing: Routing,
+  query: SeedIssueQuery,
+): Promise<SeedIssue[]> {
+  const filter = buildSeedIssueFilter(routing, query);
   const found: SeedIssue[] = [];
   let after: string | null = null;
 
@@ -223,12 +228,13 @@ export async function fetchSeedIssues(config: WorkerConfig, query: SeedIssueQuer
   return found;
 }
 
-function buildSeedIssueFilter(config: WorkerConfig, { url, clientId }: SeedIssueQuery): Record<string, unknown> {
+function buildSeedIssueFilter(routing: Routing, { url, clientId }: SeedIssueQuery): Record<string, unknown> {
   const labels = clientId ? [FRUITBACK_LABEL, clientLabelName(clientId)] : [FRUITBACK_LABEL];
 
   return {
-    // The API key can see the whole workspace; a seed only ever lives on the configured team.
-    team: { id: { eq: config.linearTeamId } },
+    // The API key can see the whole workspace; a seed only ever lives on the team its client routes
+    // to, which on a multi-tenant worker is what keeps one client's read off another's issues.
+    team: { id: { eq: routing.teamId } },
     // One clause per label, each spelled `some`: a comparator placed directly on the collection
     // reads as "some label matches" too, but only implicitly. A single
     // `name: { in: [fruitback, fruitback:acme] }` would be a different query altogether — it matches

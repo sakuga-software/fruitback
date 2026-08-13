@@ -1,4 +1,5 @@
 import { canonicalizePageUrl, parseSeed } from '@fruitback/shared';
+import { type ClientResolution, resolveClient } from './clients.ts';
 import { type WorkerConfig, type WorkerEnv, readConfig, splitOrigins } from './env.ts';
 import { LinearError } from './linear.ts';
 import * as realLinear from './linear.ts';
@@ -60,7 +61,9 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
     return json(500, { error: 'misconfigured', missing: config.missing }, headers);
   }
 
-  const cors = resolveCors(request, origins);
+  // The validated list, not the raw split above: it also carries the origins declared per client in
+  // `FRUITBACK_CLIENTS`, and those sites have to be able to reach the worker they are configured for.
+  const cors = resolveCors(request, config.config.allowedOrigins);
   if (!cors.allowed) {
     return json(403, { error: 'origin-not-allowed' });
   }
@@ -89,6 +92,32 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
 }
 
 /**
+ * Which team and project this request belongs to (SKG-504).
+ *
+ * On a single-client worker this is the configured team and nothing else happens. With a client map,
+ * a request that names nobody — or names a client it cannot be embedded as — is refused rather than
+ * served from the default, because on a multi-tenant worker the default *is* the leak.
+ */
+function routeFor(request: Request, config: WorkerConfig, clientId: string | undefined): ClientResolution {
+  return resolveClient({
+    clients: config.clients,
+    clientId,
+    origin: request.headers.get('Origin'),
+    fallback: { teamId: config.linearTeamId, projectId: config.linearProjectId },
+  });
+}
+
+/** 400 when the caller has to say who they are, 403 when they said something they may not claim. */
+function routingFailure(
+  resolution: Extract<ClientResolution, { ok: false }>,
+  headers: Record<string, string>,
+): Response {
+  const status = resolution.reason === 'origin-not-allowed-for-client' ? 403 : 400;
+
+  return json(status, { error: resolution.reason }, headers);
+}
+
+/**
  * The read path: every seed planted on one page, with the Linear state that gives the pin its
  * colour. This is what lets a client come back to the page and see their own notes again.
  */
@@ -108,14 +137,16 @@ async function getFeedback(
     return json(400, { error: 'invalid-url' }, corsHeaders);
   }
 
-  // Optional: narrows to one client's label. Absent means every seed on that URL, which is what a
-  // single-client workspace wants.
+  // Optional on a single-client worker, where it only narrows by label. Required as soon as a client
+  // map exists — see `routeFor`.
   const clientId = params.get('client')?.trim() || undefined;
+  const route = routeFor(request, config, clientId);
+  if (!route.ok) return routingFailure(route, corsHeaders);
 
   try {
-    const issues = await cached(JSON.stringify([clientId ?? null, url]), () =>
-      linearFor(config).fetchSeedIssues(config, { url, clientId }),
-    );
+    // The team is part of the key: two clients reading the same URL must not share an entry.
+    const key = JSON.stringify([route.routing.teamId, clientId ?? null, url]);
+    const issues = await cached(key, () => linearFor(config).fetchSeedIssues(config, route.routing, { url, clientId }));
 
     return json(
       200,
@@ -178,8 +209,11 @@ async function postFeedback(
     page: { ...parsed.seed.page, url: canonicalizePageUrl(parsed.seed.page.url) },
   };
 
+  const route = routeFor(request, config, seed.client?.id);
+  if (!route.ok) return routingFailure(route, corsHeaders);
+
   try {
-    const issue = await linearFor(config).createSeedIssue(config, seed);
+    const issue = await linearFor(config).createSeedIssue(config, route.routing, seed);
 
     // The page just changed, so every cached answer for it is wrong. Matching on the URL covers the
     // per-client keys too, which is what a reviewer reloading right after posting will ask for.

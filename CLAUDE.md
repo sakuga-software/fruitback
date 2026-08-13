@@ -184,6 +184,17 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   left of the chain is caller-controlled and forgeable; the client IP is the entry
   `TRUSTED_PROXY_HOPS` from the **right**. Reading the leftmost entry — correct behind Cloudflare,
   wrong behind Traefik — makes the rate limit bypassable with one header.
+- **`FRUITBACK_CLIENTS` makes one worker serve several client sites** (SKG-504). It maps a
+  `clientId` to a team, a project and the origins that client may be embedded on. Absent, nothing
+  changes: one team, one project, `client` optional on a read.
+- **Configured, `client` becomes required and an unknown one is refused.** A read that names nobody
+  used to answer with every seed on that URL — on a shared worker that is one client reading
+  another's feedback, and the default is the leak. The cache key carries the team for the same
+  reason.
+- **`clientId` is client-asserted**, exactly like `reporter`, until SKG-498. `origins` is what turns
+  the claim into something checkable against the browser's own header — the trust level CORS gives,
+  and strictly more than nothing. Do not describe it as authentication.
+- A malformed `FRUITBACK_CLIENTS` is refused at boot rather than ignored, and named on `/health`.
 - The rate limiter is in-process, therefore **per replica**. Scaling to N containers multiplies the
   effective ceiling by N; a shared store is the fix if that ever matters.
 - Tests drive `handleRequest` with plain `Request` objects against a stubbed Linear
