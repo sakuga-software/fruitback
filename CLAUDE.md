@@ -187,10 +187,13 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - **`FRUITBACK_CLIENTS` makes one worker serve several client sites** (SKG-504). It maps a
   `clientId` to a team, a project and the origins that client may be embedded on. Absent, nothing
   changes: one team, one project, `client` optional on a read.
-- **Configured, `client` becomes required and an unknown one is refused.** A read that names nobody
-  used to answer with every seed on that URL — on a shared worker that is one client reading
-  another's feedback, and the default is the leak. The cache key carries the team for the same
-  reason.
+- **Configured, a client has to be named on both paths** — the `client` parameter on a read,
+  `seed.client.id` on a write — and an unknown one is refused. A read that named nobody used to
+  answer with every seed on that URL, which on a shared worker is one client reading another's
+  feedback; a write that names nobody would land in the default team, which is the same leak facing
+  the other way. The read cache key carries the team for the same reason.
+- `resolveClient` trims the id, because it arrives from a query parameter on one path and from the
+  seed on the other, and only one of them used to be normalised.
 - **`clientId` is client-asserted**, exactly like `reporter`, until SKG-498. `origins` is what turns
   the claim into something checkable against the browser's own header — the trust level CORS gives,
   and strictly more than nothing. Do not describe it as authentication.

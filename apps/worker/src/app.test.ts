@@ -553,6 +553,25 @@ describe('one worker, several clients', () => {
     assert.partialDeepStrictEqual(stub.issueFilter(), { team: { id: { eq: 'team_acme' } } });
   });
 
+  it('refuses to create an issue for a seed that names nobody', async () => {
+    // The other direction of the same leak: with a map configured, the default team is not a place
+    // to put a note whose owner is unknown.
+    installLinearStub();
+
+    const response = await post(seedFixture({ client: undefined }), { env: multi });
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: 'client-required' });
+  });
+
+  it('routes a seed whose client id came with stray whitespace', async () => {
+    const stub = installLinearStub();
+
+    await post(seedFixture({ client: { id: '  acme  ' } }), { env: multi });
+
+    assert.equal(stub.issueInput().teamId, 'team_acme');
+  });
+
   it('refuses to answer a read that names nobody', async () => {
     // Answering the default was how one client read another's feedback.
     installLinearStub({ storedIssues: [] });

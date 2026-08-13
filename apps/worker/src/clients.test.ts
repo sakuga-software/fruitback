@@ -63,6 +63,14 @@ describe('resolveClient', () => {
     assert.deepEqual(resolved, { ok: false, reason: 'client-required' });
   });
 
+  it('trims the id, because it arrives from two places', () => {
+    // The query parameter was trimmed at its call site and the seed's own id was not, so a client
+    // with a stray space resolved on a read and came back unknown on a write.
+    const resolved = resolveClient({ clients: MAP, clientId: '  acme  ', origin: null, fallback: FALLBACK });
+
+    assert.deepEqual(resolved, { ok: true, routing: { teamId: 'team_acme', projectId: 'project_acme' } });
+  });
+
   it('refuses a client it has never heard of', () => {
     const resolved = resolveClient({ clients: MAP, clientId: 'unknown', origin: null, fallback: FALLBACK });
 

@@ -48,7 +48,11 @@ const configSchema = z.object({
   allowedOrigins: z.array(z.string().min(1)).min(1),
   trustedProxyHops: z.number().int().min(0),
   rateLimitPerMinute: z.number().int().positive(),
-  /** Absent on a single-client worker. Present, it makes `client` required on every read. */
+  /**
+   * Absent on a single-client worker. Present, a client has to be named on **both** paths: on a read
+   * to decide what may be seen, and on a write to decide where the issue is created — the default
+   * team would be the leak in either direction.
+   */
   clients: z.custom<ClientMap | undefined>().optional(),
   /** True only in the dev loop — see `FRUITBACK_FAKE_LINEAR`. Surfaced on `/health`. */
   fakeLinear: z.boolean(),

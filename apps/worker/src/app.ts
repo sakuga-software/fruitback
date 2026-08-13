@@ -138,8 +138,8 @@ async function getFeedback(
   }
 
   // Optional on a single-client worker, where it only narrows by label. Required as soon as a client
-  // map exists — see `routeFor`.
-  const clientId = params.get('client')?.trim() || undefined;
+  // map exists — see `routeFor`, which also normalises it.
+  const clientId = params.get('client') ?? undefined;
   const route = routeFor(request, config, clientId);
   if (!route.ok) return routingFailure(route, corsHeaders);
 

@@ -88,9 +88,13 @@ export function resolveClient({ clients, clientId, origin, fallback }: ResolveCl
   // Single-tenant: the map is what turns this worker multi-client, and without it nothing changes.
   if (clients === undefined) return { ok: true, routing: fallback };
 
-  if (clientId === undefined || clientId === '') return { ok: false, reason: 'client-required' };
+  // Trimmed here rather than at each call site: the query parameter and the seed's own `client.id`
+  // both land in this function, and a client whose id came back with a stray space resolving on a
+  // read but not on a write is the kind of asymmetry nobody finds by reading.
+  const id = clientId?.trim();
+  if (id === undefined || id === '') return { ok: false, reason: 'client-required' };
 
-  const client = clients[clientId];
+  const client = clients[id];
   if (client === undefined) return { ok: false, reason: 'unknown-client' };
 
   // A request with no Origin is not a browser request, so there is nothing to check it against —
