@@ -84,6 +84,11 @@ export function setScroll(view: Window, scrollX: number, scrollY: number): void 
   Object.defineProperty(view, 'scrollY', { value: scrollY, configurable: true });
 }
 
+/** Same cast again, for the tests that dispatch a key press at an element rather than the document. */
+export function keyboardEventCtor(page: MountedPage): typeof KeyboardEvent {
+  return (page.view as unknown as { KeyboardEvent: typeof KeyboardEvent }).KeyboardEvent;
+}
+
 /** happy-dom's `MouseEvent` is not on the DOM `Window` type either — same cast, same place. */
 export function mouseEventCtor(page: MountedPage): typeof MouseEvent {
   return (page.view as unknown as { MouseEvent: typeof MouseEvent }).MouseEvent;

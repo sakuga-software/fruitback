@@ -90,7 +90,7 @@ See [`packages/shared/src/seed.ts`](packages/shared/src/seed.ts),
 ```
 packages/shared    the seed contract: schema, Linear mapping, round-trip   ✅
 apps/worker        Node service in Docker: write + read path to Linear     ✅
-packages/widget    capture + overlay + Shadow DOM host                    ✅  popover pending
+packages/widget    capture + overlay + Shadow DOM host + popover          ✅
 apps/playground    hostile demo page + dev loop, on a fake Linear          ✅  dev only
 ```
 
