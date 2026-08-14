@@ -1,6 +1,6 @@
 import { canonicalizePageUrl, parseSeed } from '@fruitback/shared';
 import { type ClientResolution, normalizeClientId, resolveClient } from './clients.ts';
-import { type WorkerConfig, type WorkerEnv, readConfig, splitOrigins } from './env.ts';
+import { type WorkerConfig, type WorkerEnv, readAllowedOrigins, readConfig } from './env.ts';
 import { LinearError } from './linear.ts';
 import * as realLinear from './linear.ts';
 import * as memoryLinear from './linear-memory.ts';
@@ -39,10 +39,11 @@ export type RequestContext = {
 export async function handleRequest(request: Request, env: WorkerEnv, context: RequestContext): Promise<Response> {
   const { pathname } = new URL(request.url);
 
-  // Read the allowlist straight from the env, before validation: a misconfigured service still has
-  // to answer with CORS headers, or the browser turns the diagnostic into an opaque CORS failure
-  // and the widget never gets to read which var is missing.
-  const origins = splitOrigins(env.ALLOWED_ORIGINS);
+  // Read straight from the env, before validation: a misconfigured service still has to answer with
+  // CORS headers, or the browser turns the diagnostic into an opaque CORS failure and the widget
+  // never gets to read which var is missing. It is the same computation the validated config uses —
+  // a client declared only in `FRUITBACK_CLIENTS` has to be served here too.
+  const origins = readAllowedOrigins(env);
   const config = readConfig(env);
 
   // Readiness, before anything else: a container that cannot serve must not be routed to.
@@ -61,8 +62,6 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
     return json(500, { error: 'misconfigured', missing: config.missing }, headers);
   }
 
-  // The validated list, not the raw split above: it also carries the origins declared per client in
-  // `FRUITBACK_CLIENTS`, and those sites have to be able to reach the worker they are configured for.
   const cors = resolveCors(request, config.config.allowedOrigins);
   if (!cors.allowed) {
     return json(403, { error: 'origin-not-allowed' });

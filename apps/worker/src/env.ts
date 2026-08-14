@@ -140,6 +140,23 @@ export function fakeLinearRefused(env: WorkerEnv): boolean {
   return env.FRUITBACK_FAKE_LINEAR !== undefined && env.FRUITBACK_FAKE_LINEAR !== '' && !usesFakeLinear(env);
 }
 
+/**
+ * Every origin this worker serves: `ALLOWED_ORIGINS` plus the sites declared per client in
+ * `FRUITBACK_CLIENTS`, so a client's origins are written once instead of twice.
+ *
+ * Exported and used **both** by the validated config and by the misconfigured-response path, which
+ * has no validated config to read. Computing it in two places is how a client reachable only through
+ * the map lost its CORS headers on the 500 — turning the diagnostic the browser was meant to read
+ * into an opaque failure, which is the one thing that branch exists to prevent.
+ */
+export function readAllowedOrigins(env: WorkerEnv): string[] {
+  const clients = readClientMap(env.FRUITBACK_CLIENTS);
+
+  return [
+    ...new Set([...splitOrigins(env.ALLOWED_ORIGINS), ...originsFromClients(clients.ok ? clients.clients : undefined)]),
+  ];
+}
+
 /** Exported so the misconfigured-response path can read the allowlist before validation. */
 export function splitOrigins(value: string | undefined): string[] {
   return (value ?? '')

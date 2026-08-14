@@ -665,6 +665,27 @@ describe('one worker, several clients', () => {
     assert.equal(response.headers.get('Access-Control-Allow-Origin'), ORIGIN);
   });
 
+  it('still tells a client-map-only site what is misconfigured', async () => {
+    // The diagnostic exists so the widget can read which variable is missing. Without CORS headers
+    // the browser turns the 500 into an opaque failure and it never gets that far — and the origins
+    // that only exist in the client map are exactly the ones this feature asks operators to stop
+    // repeating in ALLOWED_ORIGINS.
+    installLinearStub();
+    const broken: WorkerEnv = {
+      ALLOWED_ORIGINS: 'https://elsewhere.test',
+      FRUITBACK_CLIENTS: CLIENTS,
+      TRUSTED_PROXY_HOPS: 'not-a-number',
+    };
+
+    const response = await get(`/feedback?url=${encodeURIComponent(seedFixture().page.url)}&client=acme`, {
+      env: broken,
+    });
+
+    assert.equal(response.status, 500);
+    assert.partialDeepStrictEqual(await response.json(), { error: 'misconfigured' });
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'), ORIGIN);
+  });
+
   it('says which variable is wrong when the map is malformed', async () => {
     // Silently ignoring it would pool every client into the default team — the leak, again.
     const response = await get('/health', { env: { ...env, FRUITBACK_CLIENTS: '{ not json' } });
