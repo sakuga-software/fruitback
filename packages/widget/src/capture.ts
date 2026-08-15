@@ -56,7 +56,10 @@ export function captureSeed(options: CaptureSeedOptions): Seed {
     page: capturePage(view),
     viewport: captureViewport(view),
     anchor: captureAnchor(element),
-    ...optional('source', mergeSource(options.source, readReactSource(element))),
+    ...optional(
+      'source',
+      mergeSource(options.source, () => readReactSource(element)),
+    ),
     ...optional('client', options.client),
     ...optional('reporter', options.reporter),
     ...optional('env', includeEnv ? captureEnv(view) : undefined),
@@ -66,18 +69,24 @@ export function captureSeed(options: CaptureSeedOptions): Seed {
   return createSeed(seed);
 }
 
-/**
- * Spread rather than assigned, because the round-trip forbids writing a key the caller did not
- * provide: `{ client: undefined }` survives `JSON.stringify` as an absent key but not as an absent
- * *field* everywhere it is compared.
- */
+const SOURCE_FIELDS = ['component', 'file', 'line', 'column'] as const;
+
 /**
  * The engine's answer, completed by the fiber walk's — never the other way round.
  *
  * Nothing is invented here: a field absent from both stays absent, which is what keeps the seed
  * round-trip free of values the widget cannot rebuild.
+ *
+ * The fallback is passed unevaluated because it is a walk up the fiber tree on every capture, and
+ * there is nothing for it to add once the engine has answered in full.
  */
-function mergeSource(engine: SeedSource | undefined, fallback: SeedSource | undefined): SeedSource | undefined {
+function mergeSource(
+  engine: SeedSource | undefined,
+  readFallback: () => SeedSource | undefined,
+): SeedSource | undefined {
+  if (engine !== undefined && SOURCE_FIELDS.every((field) => engine[field] !== undefined)) return engine;
+
+  const fallback = readFallback();
   if (engine === undefined) return fallback;
   if (fallback === undefined) return engine;
 
@@ -86,6 +95,11 @@ function mergeSource(engine: SeedSource | undefined, fallback: SeedSource | unde
   return Object.keys(merged).length > 0 ? merged : undefined;
 }
 
+/**
+ * Spread rather than assigned, because the round-trip forbids writing a key the caller did not
+ * provide: `{ client: undefined }` survives `JSON.stringify` as an absent key but not as an absent
+ * *field* everywhere it is compared.
+ */
 function optional<K extends string, T>(key: K, value: T | undefined): Partial<Record<K, T>> {
   return value === undefined ? {} : ({ [key]: value } as Record<K, T>);
 }

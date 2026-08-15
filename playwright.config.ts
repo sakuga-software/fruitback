@@ -18,6 +18,8 @@ const WORKER = 'http://localhost:8788';
 
 export default defineConfig({
   testDir: './e2e',
+  // Runs after the servers are up and before the first spec: see `warm-up.ts` for what it absorbs.
+  globalSetup: './e2e/warm-up.ts',
   // The worker's fake Linear is one process-wide store, so the specs share state. They stay apart by
   // capturing on a different page URL each — the seed's page identity — rather than by locking.
   workers: 1,

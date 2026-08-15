@@ -100,8 +100,10 @@ export async function expectPinOn(pin: Locator, element: Locator): Promise<void>
 /**
  * The seeds the worker actually stored for this page, straight from the read path.
  *
- * Read in the browser rather than from Node so the canonical URL is the one the widget computed, not
- * one the test rebuilt and could get subtly different.
+ * The URL is rebuilt from `window.location` rather than canonicalized: every spec captures on a
+ * plain `/?case=…`, which `canonicalizePageUrl` already leaves untouched. A spec that ever needs a
+ * fragment or a tracking parameter has to canonicalize here, or it will look up a key nothing was
+ * stored under.
  */
 export async function storedSeeds(page: Page): Promise<{ note: string; source?: Record<string, unknown> }[]> {
   return page.evaluate(async (origin) => {
