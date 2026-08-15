@@ -314,8 +314,14 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - **`reporter.verified` is the worker's word, never the client's** (SKG-498). Anything arriving with
   that flag has it stripped, whatever else it says: without that, a browser posting
   `reporter: { name: 'CEO', verified: true }` reads in Linear exactly like an identity this worker
-  checked. `identity.ts` sets it only after verifying an HMAC-SHA256 token against the client's
-  `identitySecret` (or `FRUITBACK_IDENTITY_SECRET` on a single-client worker).
+  checked. `identity.ts` sets it only after verifying a **standard compact JWT (HS256)** against the
+  client's `identitySecret` (or `FRUITBACK_IDENTITY_SECRET` on a single-client worker), so a client
+  site mints one with whatever library it already has.
+- **`alg` is asserted against the token, never read from it.** That interoperability is what makes
+  the header an attack surface: a verifier that trusts the token's own algorithm accepts `alg: none`
+  and validates everything. Anything but `HS256` is refused before a byte of the signature is looked
+  at, and the signing input is `header.payload` so swapping the header breaks the signature. Both are
+  tested, and both tests fail if the check is removed.
 - **The identity token arrives in an `Authorization` header, never in the seed.** The seed is stored
   verbatim in an issue description anyone with workspace access can read, so a credential in there
   would outlive its expiry by months.

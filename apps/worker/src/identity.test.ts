@@ -9,6 +9,11 @@ function inSeconds(fromNow: number): number {
   return Math.floor((Date.now() + fromNow) / 1000);
 }
 
+/** Signs claims the typed API would refuse, so the verifier's own checks can be exercised. */
+async function signToken(claims: Record<string, unknown>, secret: string): Promise<string> {
+  return signIdentityToken(claims as unknown as Parameters<typeof signIdentityToken>[0], secret);
+}
+
 describe('verifyIdentityToken', () => {
   it('accepts a token this worker could have minted, and reports what it says', async () => {
     const token = await signIdentityToken(
@@ -36,12 +41,12 @@ describe('verifyIdentityToken', () => {
   it('refuses a payload edited after signing', async () => {
     // The attack this exists for: take a valid token, rewrite the name, keep the signature.
     const token = await signIdentityToken({ sub: 'user_42', name: 'Alice', exp: inSeconds(HOUR) }, SECRET);
-    const [, signature] = token.split('.') as [string, string];
+    const [header, , signature] = token.split('.') as [string, string, string];
     const forged = Buffer.from(JSON.stringify({ sub: 'user_1', name: 'CEO', exp: inSeconds(HOUR) })).toString(
       'base64url',
     );
 
-    assert.deepEqual(await verifyIdentityToken(`${forged}.${signature}`, SECRET), {
+    assert.deepEqual(await verifyIdentityToken(`${header}.${forged}.${signature}`, SECRET), {
       ok: false,
       reason: 'bad-signature',
     });
@@ -54,19 +59,68 @@ describe('verifyIdentityToken', () => {
   });
 
   it('refuses a token with no expiry, because that is a password', async () => {
-    const payload = Buffer.from(JSON.stringify({ sub: 'user_42' })).toString('base64url');
-    const token = `${payload}.${(await signIdentityToken({ sub: 'x', exp: 1 }, SECRET)).split('.')[1]}`;
+    const token = await signToken({ sub: 'user_42' }, SECRET);
 
-    const result = await verifyIdentityToken(token, SECRET);
-
-    assert.equal(result.ok, false);
+    assert.deepEqual(await verifyIdentityToken(token, SECRET), { ok: false, reason: 'invalid-claims' });
   });
 
-  it('refuses anything that is not two parts', async () => {
-    for (const value of ['', 'nope', 'a.b.c', '.', 'a.']) {
+  it('refuses a token dated in the future', async () => {
+    const token = await signIdentityToken({ sub: 'user_42', exp: inSeconds(2 * HOUR), iat: inSeconds(HOUR) }, SECRET);
+
+    assert.deepEqual(await verifyIdentityToken(token, SECRET), { ok: false, reason: 'not-yet-valid' });
+  });
+
+  it('refuses anything that is not three segments', async () => {
+    for (const value of ['', 'nope', 'a.b', 'a.b.c.d', '..', 'a.b.']) {
       const result = await verifyIdentityToken(value, SECRET);
       assert.equal(result.ok, false, `${value} should be refused`);
     }
+  });
+
+  it('refuses `alg: none`, which is the whole reason to check the header', async () => {
+    // The classic JWT forgery: drop the signature, say the token is unsigned, and a verifier that
+    // reads its algorithm out of the token believes it. Refused before the signature is looked at.
+    const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
+    const payload = Buffer.from(JSON.stringify({ sub: 'user_1', name: 'CEO', exp: inSeconds(HOUR) })).toString(
+      'base64url',
+    );
+
+    assert.deepEqual(await verifyIdentityToken(`${header}.${payload}.`, SECRET), {
+      ok: false,
+      reason: 'unsupported-alg',
+    });
+  });
+
+  it('refuses an algorithm it does not verify, rather than trying', async () => {
+    const header = Buffer.from(JSON.stringify({ alg: 'HS512', typ: 'JWT' })).toString('base64url');
+    const payload = Buffer.from(JSON.stringify({ sub: 'user_1', exp: inSeconds(HOUR) })).toString('base64url');
+    const signature = (await signIdentityToken({ sub: 'user_1', exp: inSeconds(HOUR) }, SECRET)).split('.')[2];
+
+    assert.deepEqual(await verifyIdentityToken(`${header}.${payload}.${signature}`, SECRET), {
+      ok: false,
+      reason: 'unsupported-alg',
+    });
+  });
+
+  it('signs the header as well as the payload', async () => {
+    // Swapping the header of a valid token has to break the signature: the signing input is
+    // `header.payload`, not the payload alone.
+    const token = await signIdentityToken({ sub: 'user_42', exp: inSeconds(HOUR) }, SECRET);
+    const [, payload, signature] = token.split('.') as [string, string, string];
+    const rewritten = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT', kid: 'other' })).toString('base64url');
+
+    assert.deepEqual(await verifyIdentityToken(`${rewritten}.${payload}.${signature}`, SECRET), {
+      ok: false,
+      reason: 'bad-signature',
+    });
+  });
+
+  it('is a standard compact JWS any library can read', async () => {
+    const token = await signIdentityToken({ sub: 'user_42', exp: inSeconds(HOUR) }, SECRET);
+    const [header] = token.split('.') as [string];
+
+    assert.equal(token.split('.').length, 3);
+    assert.deepEqual(JSON.parse(Buffer.from(header, 'base64url').toString()), { alg: 'HS256', typ: 'JWT' });
   });
 
   it('ignores a name in the seed and reports only what the token says', async () => {
