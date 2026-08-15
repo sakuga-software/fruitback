@@ -79,7 +79,7 @@ test('it stays inside the viewport when the element is against the right edge', 
   // content-box the padding sat outside and the popover overhung the edge by that much.
   await openPlayground(page, 'composer-edge');
   await page.getByRole('button', { name: /Laisser un feedback/ }).click();
-  await page.locator('header button').click();
+  await page.locator('main header button').click();
   await expect(page.getByPlaceholder("Qu'est-ce qui ne va pas ici ?")).toBeVisible();
 
   const viewport = page.viewportSize();

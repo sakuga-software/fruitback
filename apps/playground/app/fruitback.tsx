@@ -4,10 +4,15 @@ import {
   type CaptureHost,
   type CaptureTarget,
   type Composer,
+  type ConfigPanel,
+  type ConfigStore,
+  type WidgetConfig,
   type Overlay,
   captureSeed,
   createCaptureHost,
   createComposer,
+  createConfigPanel,
+  createConfigStore,
   createOverlay,
 } from '@fruitback/widget';
 import { useEffect, useRef, useState } from 'react';
@@ -35,10 +40,22 @@ const WORKER_ORIGIN = import.meta.env.VITE_FRUITBACK_WORKER ?? 'http://localhost
 export function Fruitback() {
   const location = useLocation();
   const [status, setStatus] = useState('—');
-  const widget = useRef<{ host: CaptureHost; overlay: Overlay; composer: Composer } | null>(null);
+  const widget = useRef<{
+    host: CaptureHost;
+    overlay: Overlay;
+    composer: Composer;
+    panel: ConfigPanel;
+    config: ConfigStore;
+  } | null>(null);
   const target = useRef<CaptureTarget | null>(null);
 
   useEffect(() => {
+    // The reporter's own preferences, kept in this browser (SKG-503). The endpoint and the client id
+    // start from the build's values and can be pointed elsewhere without a rebuild.
+    const config = createConfigStore({
+      defaults: { endpoint: WORKER_ORIGIN, clientId: CLIENT_ID, hiddenStages: [] },
+    });
+
     const host = createCaptureHost({
       onSelect: (selected) => {
         target.current = selected;
@@ -53,10 +70,12 @@ export function Fruitback() {
       },
       // The dev toolbar is the playground's, not the widget's and not the page's.
       ignore: (element) => element.closest('[data-fb-dev]') !== null,
+      onConfigure: () => widget.current?.panel.toggle(),
     });
 
     const overlay = createOverlay({
       host: host.root,
+      shouldShow: (issue) => !config.get().hiddenStages.includes(issue.stage),
       onSelect: (issue) => setStatus(`${issue.identifier} · ${issue.stateName}`),
       // The widget re-resolves by itself when the page changes (SKG-513). This only reports it: the
       // host never has to work out that it re-rendered.
@@ -66,21 +85,35 @@ export function Fruitback() {
     const composer = createComposer({
       host: host.panel,
       onSubmit: async (note) => {
-        const identifier = await plant(note, target.current, setStatus);
+        const identifier = await plant(note, target.current, setStatus, config.get());
         if (identifier === null) return false;
 
         // Re-read first — that is what proves the read path answers — and let the confirmation have
         // the last word, or the status flips back to a pin count nobody asked for.
-        await refresh(overlay, setStatus);
+        await refresh(overlay, setStatus, config.get());
         setStatus(`planté · ${identifier}`);
 
         return true;
       },
     });
 
-    widget.current = { host, overlay, composer };
+    const panel = createConfigPanel({ host: host.root, store: config });
+
+    // A preference change redraws from the issues already held; only a change of endpoint or client
+    // means the pins belong to a different query and have to be fetched again.
+    let previous = config.get();
+    const unsubscribe = config.subscribe((next) => {
+      const requeried = next.endpoint !== previous.endpoint || next.clientId !== previous.clientId;
+      previous = next;
+      if (requeried) void refresh(overlay, setStatus, next);
+      else overlay.refilter();
+    });
+
+    widget.current = { host, overlay, composer, panel, config };
 
     return () => {
+      unsubscribe();
+      panel.destroy();
       composer.destroy();
       overlay.destroy();
       host.destroy();
@@ -91,11 +124,19 @@ export function Fruitback() {
   // A pin belongs to a page: a client-side navigation changes the canonical URL, so it changes which
   // seeds belong on screen.
   useEffect(() => {
-    const overlay = widget.current?.overlay;
-    if (overlay !== undefined) void refresh(overlay, setStatus);
+    const current = widget.current;
+    if (current !== undefined && current !== null) void refresh(current.overlay, setStatus, current.config.get());
   }, [location.pathname, location.search]);
 
-  return <DevToolbar status={status} onReload={() => void refresh(widget.current?.overlay, setStatus)} />;
+  return (
+    <DevToolbar
+      status={status}
+      onReload={() => {
+        const current = widget.current;
+        if (current !== null) void refresh(current.overlay, setStatus, current.config.get());
+      }}
+    />
+  );
 }
 
 /** The issue identifier when it was planted, `null` when the worker refused. */
@@ -103,18 +144,19 @@ async function plant(
   note: string,
   target: CaptureTarget | null,
   setStatus: (message: string) => void,
+  config: WidgetConfig,
 ): Promise<string | null> {
   if (target === null) return null;
 
   const seed = captureSeed({
     element: target.element,
     note,
-    client: { id: CLIENT_ID, name: 'Playground' },
+    client: { id: config.clientId, name: 'Playground' },
     // Straight from react-grab, through the host — and on this app there is a fiber to read.
     source: target.source,
   });
 
-  const response = await fetch(`${WORKER_ORIGIN}/feedback`, {
+  const response = await fetch(`${config.endpoint}/feedback`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(seed),
@@ -131,12 +173,18 @@ async function plant(
   return issue.identifier;
 }
 
-async function refresh(overlay: Overlay | undefined, setStatus: (message: string) => void): Promise<void> {
+async function refresh(
+  overlay: Overlay | undefined,
+  setStatus: (message: string) => void,
+  config: WidgetConfig,
+): Promise<void> {
   if (overlay === undefined) return;
 
   const url = canonicalizePageUrl(window.location.href);
   try {
-    const response = await fetch(`${WORKER_ORIGIN}/feedback?url=${encodeURIComponent(url)}&client=${CLIENT_ID}`);
+    const response = await fetch(
+      `${config.endpoint}/feedback?url=${encodeURIComponent(url)}&client=${config.clientId}`,
+    );
     if (!response.ok) {
       setStatus(`lecture impossible · ${response.status}`);
 
@@ -147,7 +195,7 @@ async function refresh(overlay: Overlay | undefined, setStatus: (message: string
     overlay.render(issues);
     setStatus(`${issues.length} pin${issues.length > 1 ? 's' : ''}`);
   } catch {
-    setStatus(`worker injoignable sur ${WORKER_ORIGIN}`);
+    setStatus(`worker injoignable sur ${config.endpoint}`);
   }
 }
 

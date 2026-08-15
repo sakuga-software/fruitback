@@ -1,0 +1,97 @@
+import { expect, test } from '@playwright/test';
+import { openPlayground, plantPin, status } from './pin.ts';
+
+/**
+ * The config panel (SKG-503), in a browser that has a real Shadow root and a real localStorage.
+ *
+ * What is checked here and not in `node --test`: that the settings survive a reload, and that hiding
+ * a stage actually removes the pin the client can see.
+ */
+
+const panel = '[data-fb-config]';
+
+test('the settings open from the floating button and survive a reload', async ({ page }) => {
+  await openPlayground(page, 'config');
+
+  await expect(page.locator(panel)).toBeHidden();
+  await page.getByLabel('Ouvrir les réglages Fruitback').click();
+  await expect(page.locator(panel)).toBeVisible();
+
+  // The client id is what the worker routes on, so it is the setting worth proving persists.
+  const client = page.locator('[name="client"]');
+  await expect(client).toHaveValue('playground');
+  await client.fill('acme');
+
+  await page.reload();
+  await page.getByLabel('Ouvrir les réglages Fruitback').click();
+
+  await expect(page.locator('[name="client"]')).toHaveValue('acme');
+
+  // Put it back: the worker refuses an unknown client, and the suite shares one process.
+  await page.locator('[name="client"]').fill('playground');
+});
+
+test('hiding a stage takes its pin off the page, and showing it puts it back', async ({ page }) => {
+  await openPlayground(page, 'config-filter');
+  const button = page.locator('[data-testid="card-latte"] .add');
+
+  await plantPin(page, button, 'Un pin qui va être masqué');
+  // Read the stage rather than assume it: it is the Linear workflow state that decides, and this
+  // suite runs against whatever the fake Linear opens an issue in.
+  const stage = await page.locator('[data-fb-pin]').first().getAttribute('data-fb-stage');
+  const box = page.locator(`[name="stage-${stage}"]`);
+
+  await page.getByLabel('Ouvrir les réglages Fruitback').click();
+  await box.uncheck();
+
+  await expect(page.locator('[data-fb-pin]')).toHaveCount(0);
+
+  // And back from the issues already held — no reload, no second request.
+  await box.check();
+  await expect(page.locator('[data-fb-pin]')).toHaveCount(1);
+});
+
+test('the panel belongs to the widget, so the page cannot restyle it', async ({ page }) => {
+  await openPlayground(page, 'config-isolation');
+  await page.addStyleTag({ content: 'input { background: lime !important; border: 8px solid blue !important; }' });
+
+  await page.getByLabel('Ouvrir les réglages Fruitback').click();
+  const background = await page
+    .locator('[name="client"]')
+    .evaluate((node) => getComputedStyle(node).backgroundColor);
+
+  expect(background).not.toBe('rgb(0, 255, 0)');
+});
+
+test('pointing at the settings button never captures it', async ({ page }) => {
+  // The widget already excludes itself from hit testing; the gear is new chrome inside the same
+  // Shadow root, so this is the assertion that it was not forgotten.
+  await openPlayground(page, 'config-ignore');
+
+  await page.getByRole('button', { name: /Laisser un feedback/ }).click();
+  await page.getByLabel('Ouvrir les réglages Fruitback').click();
+
+  await expect(page.locator(panel)).toBeVisible();
+  await expect(page.getByPlaceholder("Qu'est-ce qui ne va pas ici ?")).toBeHidden();
+});
+
+test('a stage hidden before the pins arrive is never drawn', async ({ page }) => {
+  await openPlayground(page, 'config-before');
+  const button = page.locator('[data-testid="card-latte"] .add');
+  await plantPin(page, button, 'Planté puis masqué au chargement');
+  const stage = await page.locator('[data-fb-pin]').first().getAttribute('data-fb-stage');
+
+  await page.getByLabel('Ouvrir les réglages Fruitback').click();
+  await page.locator(`[name="stage-${stage}"]`).uncheck();
+  await expect(page.locator('[data-fb-pin]')).toHaveCount(0);
+
+  // The preference is read before the first render, not applied after it. Waiting on the status
+  // rather than on `waitForPins` is the point of the test: the worker still returns the seed — the
+  // status says so — and the widget draws nothing.
+  await page.reload();
+  await expect(status(page)).toHaveText(/^1 pin$/);
+  await expect(page.locator('[data-fb-pin]')).toHaveCount(0);
+
+  await page.getByLabel('Ouvrir les réglages Fruitback').click();
+  await page.locator(`[name="stage-${stage}"]`).check();
+});

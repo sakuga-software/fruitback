@@ -9,7 +9,7 @@ import { WORKER_ORIGIN, expectPinOn, openPlayground, pinFor, plantPin, waitForPi
 test('pins survive a redeploy that rewrites classes, ids and the order of the page', async ({ page }) => {
   await openPlayground(page, 'reanchor');
   const latteButton = page.locator('[data-testid="card-latte"] .add');
-  const burger = page.locator('header button');
+  const burger = page.locator('main header button');
 
   await plantPin(page, latteButton, 'Le bouton Ajouter est trop discret');
   await plantPin(page, burger, 'Le menu n’est pas assez visible');

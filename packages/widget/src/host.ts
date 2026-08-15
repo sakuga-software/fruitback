@@ -35,6 +35,11 @@ export type CaptureHostOptions = {
   /** Label on the floating button. */
   label?: string;
   /**
+   * Adds a settings button next to the floating one, and calls this when it is pressed (SKG-503).
+   * Left out, there is no button — a widget with a gear that opens nothing is worse than none.
+   */
+  onConfigure?: () => void;
+  /**
    * Anything else the pointer must skip. The widget already excludes itself; a page that mounts its
    * own chrome around the widget — a dev toolbar, the config panel of SKG-503 — says so here, or the
    * reporter ends up leaving feedback about the feedback button.
@@ -75,6 +80,17 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   button.dataset.fbHostLaunch = '';
   button.textContent = options.label ?? '🌱 Laisser un feedback';
 
+  // Beside the launch button rather than inside the settings panel, because the panel is what it
+  // opens. Only built when there is something to open.
+  const configure = document.createElement('button');
+  configure.type = 'button';
+  configure.className = 'fb-configure';
+  configure.dataset.fbHostConfigure = '';
+  // Distinct from the panel's own name: two things sharing one accessible name is ambiguous to a
+  // screen reader, and to anything else that finds elements by their name.
+  configure.setAttribute('aria-label', 'Ouvrir les réglages Fruitback');
+  configure.textContent = '⚙';
+
   const highlight = document.createElement('div');
   highlight.className = 'fb-highlight';
   highlight.dataset.fbHostHighlight = '';
@@ -84,6 +100,13 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   panel.dataset.fbHostPanel = '';
 
   root.append(style, button, highlight, panel);
+  if (options.onConfigure !== undefined) root.append(configure);
+
+  configure.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    options.onConfigure?.();
+  });
 
   let capturing = false;
   let hovered: Element | null = null;
@@ -209,6 +232,22 @@ li { display: list-item; }
   font: 600 13px/1 -apple-system, system-ui, sans-serif;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
   cursor: pointer;
+}
+.fb-configure {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483200;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: #44403c;
+  color: #fff;
+  font: 600 14px/1 -apple-system, system-ui, sans-serif;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  /* Left of the launch button, whose width the widget does not know: the label is the embedder's. */
+  transform: translateX(calc(-100% - 8px));
 }
 .fb-highlight {
   position: absolute;

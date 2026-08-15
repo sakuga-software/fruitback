@@ -49,6 +49,11 @@ export type OverlayOptions = {
    * somewhere else — absolute positions resolve against the nearest positioned ancestor.
    */
   host?: Element | ShadowRoot;
+  /**
+   * Which pins to draw. Re-read on `refilter`, so a preference change does not need the issues to be
+   * fetched again (SKG-503). Defaults to drawing everything.
+   */
+  shouldShow?: (issue: SeedIssue) => boolean;
   /** Called when a pin is clicked, in case the host wants to do more than open the thread. */
   onSelect?: (issue: SeedIssue) => void;
   /**
@@ -68,6 +73,11 @@ export type Overlay = {
    * Called for you when the page mutates. Use `render` for new data.
    */
   resolve(): void;
+  /**
+   * Draw the last rendered set again through `shouldShow`. The issues are kept, so hiding a stage and
+   * showing it again costs no request.
+   */
+  refilter(): void;
   /** What each pin resolved to, in render order — the honest account of what was found. */
   resolutions(): { issue: SeedIssue; strategy: AnchorResolution['strategy'] }[];
   destroy(): void;
@@ -92,6 +102,8 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   const host = options.host ?? document.body;
   host.append(style, container);
 
+  // What `render` was last given, before filtering — `refilter` draws from here.
+  let source: SeedIssue[] = [];
   let placed: Placed[] = [];
   let thread: HTMLElement | null = null;
   let frame = 0;
@@ -221,25 +233,36 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   }
 
   function render(issues: SeedIssue[]): void {
+    source = issues;
+    draw();
+  }
+
+  function refilter(): void {
+    draw();
+  }
+
+  function draw(): void {
     closeThread();
     container.replaceChildren();
 
-    placed = issues.map((issue) => {
-      const resolution = resolveAnchor(issue.seed.anchor, { document });
-      const pin = buildPin(document, issue, resolution);
-      const entry = { issue, resolution, pin };
+    placed = source
+      .filter((issue) => options.shouldShow?.(issue) ?? true)
+      .map((issue) => {
+        const resolution = resolveAnchor(issue.seed.anchor, { document });
+        const pin = buildPin(document, issue, resolution);
+        const entry = { issue, resolution, pin };
 
-      pin.querySelector('.fb-pin-badge')?.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        openThread(entry);
+        pin.querySelector('.fb-pin-badge')?.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          openThread(entry);
+        });
+
+        container.append(pin);
+        place(entry);
+
+        return entry;
       });
-
-      container.append(pin);
-      place(entry);
-
-      return entry;
-    });
 
     observeAnchors();
   }
@@ -308,6 +331,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     render,
     reposition,
     resolve,
+    refilter,
     resolutions,
     destroy() {
       if (frame !== 0) view?.cancelAnimationFrame(frame);
@@ -322,6 +346,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       container.remove();
       style.remove();
       placed = [];
+      source = [];
     },
   };
 }
