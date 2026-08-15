@@ -35,6 +35,8 @@ import { redeploy, removeCard } from './site-state';
  */
 
 const CLIENT_ID = 'playground';
+/** The panel writes on every keystroke, so a typed endpoint must not become a request per character. */
+const REQUERY_DEBOUNCE_MS = 300;
 const WORKER_ORIGIN = import.meta.env.VITE_FRUITBACK_WORKER ?? 'http://localhost:8788';
 
 export function Fruitback() {
@@ -46,6 +48,7 @@ export function Fruitback() {
     composer: Composer;
     panel: ConfigPanel;
     config: ConfigStore;
+    refresh: (config: WidgetConfig) => Promise<void>;
   } | null>(null);
   const target = useRef<CaptureTarget | null>(null);
 
@@ -82,6 +85,8 @@ export function Fruitback() {
       onResolve: (entries) => setStatus(`${entries.length} pin${entries.length > 1 ? 's' : ''}`),
     });
 
+    const refresh = createRefresher(overlay, setStatus);
+
     const composer = createComposer({
       host: host.panel,
       onSubmit: async (note) => {
@@ -90,7 +95,7 @@ export function Fruitback() {
 
         // Re-read first — that is what proves the read path answers — and let the confirmation have
         // the last word, or the status flips back to a pin count nobody asked for.
-        await refresh(overlay, setStatus, config.get());
+        await refresh(config.get());
         setStatus(`planté · ${identifier}`);
 
         return true;
@@ -101,17 +106,30 @@ export function Fruitback() {
 
     // A preference change redraws from the issues already held; only a change of endpoint or client
     // means the pins belong to a different query and have to be fetched again.
+    //
+    // Debounced, because the panel writes on every keystroke rather than behind a Save button: typing
+    // an endpoint would otherwise fire one request per character. The debounce is why this is cheap;
+    // `createRefresher`'s generation check is why it is *correct* — the two are not the same thing.
     let previous = config.get();
+    let requery: ReturnType<typeof setTimeout> | undefined;
     const unsubscribe = config.subscribe((next) => {
       const requeried = next.endpoint !== previous.endpoint || next.clientId !== previous.clientId;
       previous = next;
-      if (requeried) void refresh(overlay, setStatus, next);
-      else overlay.refilter();
+
+      if (!requeried) {
+        overlay.refilter();
+
+        return;
+      }
+
+      if (requery !== undefined) clearTimeout(requery);
+      requery = setTimeout(() => void refresh(next), REQUERY_DEBOUNCE_MS);
     });
 
-    widget.current = { host, overlay, composer, panel, config };
+    widget.current = { host, overlay, composer, panel, config, refresh };
 
     return () => {
+      if (requery !== undefined) clearTimeout(requery);
       unsubscribe();
       panel.destroy();
       composer.destroy();
@@ -125,7 +143,7 @@ export function Fruitback() {
   // seeds belong on screen.
   useEffect(() => {
     const current = widget.current;
-    if (current !== undefined && current !== null) void refresh(current.overlay, setStatus, current.config.get());
+    if (current !== null) void current.refresh(current.config.get());
   }, [location.pathname, location.search]);
 
   return (
@@ -133,7 +151,7 @@ export function Fruitback() {
       status={status}
       onReload={() => {
         const current = widget.current;
-        if (current !== null) void refresh(current.overlay, setStatus, current.config.get());
+        if (current !== null) void current.refresh(current.config.get());
       }}
     />
   );
@@ -173,30 +191,50 @@ async function plant(
   return issue.identifier;
 }
 
-async function refresh(
-  overlay: Overlay | undefined,
+/**
+ * Reads that ignore their own stale answers.
+ *
+ * A debounce is not enough on its own. Two reads can be in flight — a keystroke in the endpoint
+ * field, then a navigation — and nothing makes them settle in the order they were sent: a wrong
+ * host can take longer to fail than a right one takes to answer. The late one would then render pins
+ * fetched from the old endpoint over the correct ones, or overwrite a good pin count with
+ * `worker injoignable`. Each call takes a generation, and only the newest is allowed to touch the
+ * screen.
+ */
+function createRefresher(
+  overlay: Overlay,
   setStatus: (message: string) => void,
-  config: WidgetConfig,
-): Promise<void> {
-  if (overlay === undefined) return;
+): (config: WidgetConfig) => Promise<void> {
+  let generation = 0;
 
-  const url = canonicalizePageUrl(window.location.href);
-  try {
-    const response = await fetch(
-      `${config.endpoint}/feedback?url=${encodeURIComponent(url)}&client=${config.clientId}`,
-    );
-    if (!response.ok) {
-      setStatus(`lecture impossible · ${response.status}`);
+  return async function refresh(config: WidgetConfig): Promise<void> {
+    const mine = ++generation;
+    const current = () => mine === generation;
+    const url = canonicalizePageUrl(window.location.href);
 
-      return;
+    try {
+      const response = await fetch(
+        `${config.endpoint}/feedback?url=${encodeURIComponent(url)}&client=${config.clientId}`,
+      );
+      if (!current()) return;
+
+      if (!response.ok) {
+        setStatus(`lecture impossible · ${response.status}`);
+
+        return;
+      }
+
+      const { issues } = (await response.json()) as { issues: SeedIssue[] };
+      if (!current()) return;
+
+      overlay.render(issues);
+      setStatus(`${issues.length} pin${issues.length > 1 ? 's' : ''}`);
+    } catch {
+      if (!current()) return;
+
+      setStatus(`worker injoignable sur ${config.endpoint}`);
     }
-
-    const { issues } = (await response.json()) as { issues: SeedIssue[] };
-    overlay.render(issues);
-    setStatus(`${issues.length} pin${issues.length > 1 ? 's' : ''}`);
-  } catch {
-    setStatus(`worker injoignable sur ${config.endpoint}`);
-  }
+  };
 }
 
 /** Dev-only chrome. Marked `data-fb-dev` so pointing at it never captures it. */

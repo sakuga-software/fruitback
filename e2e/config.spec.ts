@@ -116,3 +116,39 @@ test('the checkboxes are actually drawn, and the gear does not sit on the launch
   expect(launch).not.toBeNull();
   expect(gear!.x + gear!.width, 'the gear ends before the launch button starts').toBeLessThanOrEqual(launch!.x);
 });
+
+test('a slow read from an old endpoint never overwrites a newer one', async ({ page }) => {
+  // The panel writes on every keystroke, so correcting a client id fires several reads. Nothing
+  // makes them settle in the order they were sent — a wrong host can take longer to fail than a
+  // right one takes to answer — and the late one would then have the last word.
+  await openPlayground(page, 'config-race');
+  await plantPin(page, page.locator('[data-testid="card-latte"] .add'), 'Le pin qui doit rester');
+
+  // The stale read is made deliberately slow, which is what turns a race into a test.
+  await page.route('**/feedback?*', async (route) => {
+    if (route.request().url().includes('client=stale')) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await route.abort('failed');
+
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.getByLabel('Ouvrir les réglages Fruitback').click();
+  const client = page.locator('[name="client"]');
+
+  // Far enough apart to be two reads rather than one debounced read.
+  await client.fill('stale');
+  await page.waitForTimeout(600);
+  await client.fill('playground');
+
+  // The correct read lands first and says so.
+  await expect(status(page)).toHaveText(/^1 pin$/);
+
+  // And the stale one, failing a second later, is ignored rather than allowed to report an
+  // unreachable worker over a page that is perfectly fine.
+  await page.waitForTimeout(2000);
+  await expect(status(page)).toHaveText(/^1 pin$/);
+  await expect(page.locator('[data-fb-pin]')).toHaveCount(1);
+});
