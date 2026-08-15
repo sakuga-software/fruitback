@@ -1,5 +1,6 @@
 import { canonicalizePageUrl, parseSeed } from '@fruitback/shared';
-import { type WorkerConfig, type WorkerEnv, readConfig, splitOrigins } from './env.ts';
+import { type ClientResolution, normalizeClientId, resolveClient } from './clients.ts';
+import { type WorkerConfig, type WorkerEnv, readAllowedOrigins, readConfig } from './env.ts';
 import { LinearError } from './linear.ts';
 import * as realLinear from './linear.ts';
 import * as memoryLinear from './linear-memory.ts';
@@ -38,10 +39,11 @@ export type RequestContext = {
 export async function handleRequest(request: Request, env: WorkerEnv, context: RequestContext): Promise<Response> {
   const { pathname } = new URL(request.url);
 
-  // Read the allowlist straight from the env, before validation: a misconfigured service still has
-  // to answer with CORS headers, or the browser turns the diagnostic into an opaque CORS failure
-  // and the widget never gets to read which var is missing.
-  const origins = splitOrigins(env.ALLOWED_ORIGINS);
+  // Read straight from the env, before validation: a misconfigured service still has to answer with
+  // CORS headers, or the browser turns the diagnostic into an opaque CORS failure and the widget
+  // never gets to read which var is missing. It is the same computation the validated config uses —
+  // a client declared only in `FRUITBACK_CLIENTS` has to be served here too.
+  const origins = readAllowedOrigins(env);
   const config = readConfig(env);
 
   // Readiness, before anything else: a container that cannot serve must not be routed to.
@@ -60,7 +62,7 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
     return json(500, { error: 'misconfigured', missing: config.missing }, headers);
   }
 
-  const cors = resolveCors(request, origins);
+  const cors = resolveCors(request, config.config.allowedOrigins);
   if (!cors.allowed) {
     return json(403, { error: 'origin-not-allowed' });
   }
@@ -89,6 +91,32 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
 }
 
 /**
+ * Which team and project this request belongs to (SKG-504).
+ *
+ * On a single-client worker this is the configured team and nothing else happens. With a client map,
+ * a request that names nobody — or names a client it cannot be embedded as — is refused rather than
+ * served from the default, because on a multi-tenant worker the default *is* the leak.
+ */
+function routeFor(request: Request, config: WorkerConfig, clientId: string | undefined): ClientResolution {
+  return resolveClient({
+    clients: config.clients,
+    clientId,
+    origin: request.headers.get('Origin'),
+    fallback: { teamId: config.linearTeamId, projectId: config.linearProjectId },
+  });
+}
+
+/** 400 when the caller has to say who they are, 403 when they said something they may not claim. */
+function routingFailure(
+  resolution: Extract<ClientResolution, { ok: false }>,
+  headers: Record<string, string>,
+): Response {
+  const status = resolution.reason === 'origin-not-allowed-for-client' ? 403 : 400;
+
+  return json(status, { error: resolution.reason }, headers);
+}
+
+/**
  * The read path: every seed planted on one page, with the Linear state that gives the pin its
  * colour. This is what lets a client come back to the page and see their own notes again.
  */
@@ -108,14 +136,17 @@ async function getFeedback(
     return json(400, { error: 'invalid-url' }, corsHeaders);
   }
 
-  // Optional: narrows to one client's label. Absent means every seed on that URL, which is what a
-  // single-client workspace wants.
-  const clientId = params.get('client')?.trim() || undefined;
+  // Normalised once, here, because this value does three jobs: it picks the route, it builds the
+  // Linear label the filter matches on, and it keys the cache. Normalising for only one of them is
+  // how a note becomes unreadable by the client that wrote it.
+  const clientId = normalizeClientId(params.get('client'));
+  const route = routeFor(request, config, clientId);
+  if (!route.ok) return routingFailure(route, corsHeaders);
 
   try {
-    const issues = await cached(JSON.stringify([clientId ?? null, url]), () =>
-      linearFor(config).fetchSeedIssues(config, { url, clientId }),
-    );
+    // The team is part of the key: two clients reading the same URL must not share an entry.
+    const key = JSON.stringify([route.routing.teamId, clientId ?? null, url]);
+    const issues = await cached(key, () => linearFor(config).fetchSeedIssues(config, route.routing, { url, clientId }));
 
     return json(
       200,
@@ -173,13 +204,23 @@ async function postFeedback(
 
   // Re-canonicalize server-side. The read path finds seeds by matching this URL inside the
   // description, so a client that skipped normalization would plant a pin nobody can find again.
+  //
+  // The client id gets the same treatment and for the same reason: it becomes the `fruitback:<id>`
+  // label the read filters on, so a padded id here means an issue nobody can query back.
+  const clientId = normalizeClientId(parsed.seed.client?.id);
   const seed = {
     ...parsed.seed,
     page: { ...parsed.seed.page, url: canonicalizePageUrl(parsed.seed.page.url) },
+    ...(parsed.seed.client !== undefined && clientId !== undefined
+      ? { client: { ...parsed.seed.client, id: clientId } }
+      : {}),
   };
 
+  const route = routeFor(request, config, clientId);
+  if (!route.ok) return routingFailure(route, corsHeaders);
+
   try {
-    const issue = await linearFor(config).createSeedIssue(config, seed);
+    const issue = await linearFor(config).createSeedIssue(config, route.routing, seed);
 
     // The page just changed, so every cached answer for it is wrong. Matching on the URL covers the
     // per-client keys too, which is what a reviewer reloading right after posting will ask for.

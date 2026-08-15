@@ -520,6 +520,185 @@ describe('cache invalidation', () => {
   });
 });
 
+describe('one worker, several clients', () => {
+  const CLIENTS = JSON.stringify({
+    acme: { teamId: 'team_acme', projectId: 'project_acme', origins: [ORIGIN] },
+    globex: { teamId: 'team_globex' },
+  });
+  const multi: WorkerEnv = { ...env, FRUITBACK_CLIENTS: CLIENTS };
+  const fakeMulti: WorkerEnv = {
+    ALLOWED_ORIGINS: `${ORIGIN},https://globex.test`,
+    FRUITBACK_FAKE_LINEAR: '1',
+    FRUITBACK_CLIENTS: CLIENTS,
+  };
+
+  beforeEach(() => {
+    resetMemoryLinear();
+  });
+
+  it('creates a client’s issue on that client’s team and project', async () => {
+    const stub = installLinearStub();
+
+    await post(seedFixture({ client: { id: 'acme', name: 'Acme' } }), { env: multi });
+
+    assert.equal(stub.issueInput().teamId, 'team_acme');
+    assert.equal(stub.issueInput().projectId, 'project_acme');
+  });
+
+  it('narrows a read to the team its client routes to', async () => {
+    const stub = installLinearStub({ storedIssues: [] });
+
+    await get(`/feedback?url=${encodeURIComponent(seedFixture().page.url)}&client=acme`, { env: multi });
+
+    assert.partialDeepStrictEqual(stub.issueFilter(), { team: { id: { eq: 'team_acme' } } });
+  });
+
+  it('refuses to create an issue for a seed that names nobody', async () => {
+    // The other direction of the same leak: with a map configured, the default team is not a place
+    // to put a note whose owner is unknown.
+    installLinearStub();
+
+    const response = await post(seedFixture({ client: undefined }), { env: multi });
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: 'client-required' });
+  });
+
+  it('reads back a note whose client id arrived padded', async () => {
+    // The test the previous version of this one should have been. Asserting the *route* passed while
+    // the label kept the spaces: the issue landed in the right team as `fruitback:  acme  `, and the
+    // client's own clean read — filtering `fruitback:acme` — came back empty. Authorised at both
+    // ends, invisible in between. So this asserts the round trip, not the routing.
+    installLinearStub();
+    const url = seedFixture().page.url;
+
+    const created = await post(seedFixture({ id: 'sd_padded', client: { id: '  acme  ' } }), { env: fakeMulti });
+    const read = await get(`/feedback?url=${encodeURIComponent(url)}&client=acme`, { env: fakeMulti });
+
+    assert.equal(created.status, 201);
+    assert.deepEqual(
+      ((await read.json()) as { issues: SeedIssue[] }).issues.map((issue) => issue.seed.id),
+      ['sd_padded'],
+    );
+  });
+
+  it('stores the normalised client id, so the label matches what a read asks for', async () => {
+    const stub = installLinearStub();
+
+    await post(seedFixture({ client: { id: '  acme  ' } }), { env: multi });
+
+    assert.equal(stub.issueInput().teamId, 'team_acme');
+    assert.deepEqual(stub.createdLabels(), ['fruitback', 'fruitback:acme']);
+  });
+
+  it('refuses to answer a read that names nobody', async () => {
+    // Answering the default was how one client read another's feedback.
+    installLinearStub({ storedIssues: [] });
+
+    const response = await get(`/feedback?url=${encodeURIComponent(seedFixture().page.url)}`, { env: multi });
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: 'client-required' });
+  });
+
+  it('refuses a client it has never heard of', async () => {
+    installLinearStub({ storedIssues: [] });
+
+    const response = await get(`/feedback?url=${encodeURIComponent(seedFixture().page.url)}&client=nobody`, {
+      env: multi,
+    });
+
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: 'unknown-client' });
+  });
+
+  it('refuses a client claimed from a site it is not embedded on', async () => {
+    installLinearStub({ storedIssues: [] });
+
+    const response = await get(`/feedback?url=${encodeURIComponent(seedFixture().page.url)}&client=acme`, {
+      env: { ...multi, ALLOWED_ORIGINS: '*' },
+      origin: 'https://evil.test',
+    });
+
+    assert.equal(response.status, 403);
+    assert.deepEqual(await response.json(), { error: 'origin-not-allowed-for-client' });
+  });
+
+  it('keeps two clients on the same page from seeing each other', async () => {
+    // The test this ticket exists for. Both plant a note on the same URL; each read returns one pin.
+    installLinearStub();
+    const url = seedFixture().page.url;
+    await post(seedFixture({ id: 'sd_acme', client: { id: 'acme' } }), { env: fakeMulti });
+    await post(seedFixture({ id: 'sd_globex', client: { id: 'globex' } }), {
+      env: fakeMulti,
+      origin: 'https://globex.test',
+    });
+
+    const acme = await (await get(`/feedback?url=${encodeURIComponent(url)}&client=acme`, { env: fakeMulti })).json();
+    const globex = await (
+      await get(`/feedback?url=${encodeURIComponent(url)}&client=globex`, {
+        env: fakeMulti,
+        origin: 'https://globex.test',
+      })
+    ).json();
+
+    assert.deepEqual(
+      (acme as { issues: SeedIssue[] }).issues.map((issue) => issue.seed.id),
+      ['sd_acme'],
+    );
+    assert.deepEqual(
+      (globex as { issues: SeedIssue[] }).issues.map((issue) => issue.seed.id),
+      ['sd_globex'],
+    );
+  });
+
+  it('serves a client from its own site without repeating it in ALLOWED_ORIGINS', async () => {
+    // Two lists to keep in step is one list that drifts, so a client's `origins` join the allowlist.
+    installLinearStub({ storedIssues: [] });
+    const onlyTheMap: WorkerEnv = { ...env, ALLOWED_ORIGINS: 'https://elsewhere.test', FRUITBACK_CLIENTS: CLIENTS };
+
+    const response = await get(`/feedback?url=${encodeURIComponent(seedFixture().page.url)}&client=acme`, {
+      env: onlyTheMap,
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'), ORIGIN);
+  });
+
+  it('still tells a client-map-only site what is misconfigured', async () => {
+    // The diagnostic exists so the widget can read which variable is missing. Without CORS headers
+    // the browser turns the 500 into an opaque failure and it never gets that far — and the origins
+    // that only exist in the client map are exactly the ones this feature asks operators to stop
+    // repeating in ALLOWED_ORIGINS.
+    installLinearStub();
+    const broken: WorkerEnv = {
+      ALLOWED_ORIGINS: 'https://elsewhere.test',
+      FRUITBACK_CLIENTS: CLIENTS,
+      TRUSTED_PROXY_HOPS: 'not-a-number',
+    };
+
+    const response = await get(`/feedback?url=${encodeURIComponent(seedFixture().page.url)}&client=acme`, {
+      env: broken,
+    });
+
+    assert.equal(response.status, 500);
+    assert.partialDeepStrictEqual(await response.json(), { error: 'misconfigured' });
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'), ORIGIN);
+  });
+
+  it('says which variable is wrong when the map is malformed', async () => {
+    // Silently ignoring it would pool every client into the default team — the leak, again.
+    const response = await get('/health', { env: { ...env, FRUITBACK_CLIENTS: '{ not json' } });
+
+    assert.equal(response.status, 503);
+    const body = (await response.json()) as { missing: string[] };
+    assert.ok(
+      body.missing.some((name) => name.startsWith('FRUITBACK_CLIENTS')),
+      `expected FRUITBACK_CLIENTS in ${body.missing.join(', ')}`,
+    );
+  });
+});
+
 describe('routing', () => {
   it('404s an unknown path', async () => {
     const response = await get('/nope');

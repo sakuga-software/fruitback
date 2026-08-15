@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { type ClientMap, originsFromClients, readClientMap } from './clients.ts';
 import { DEFAULT_LIMIT } from './rate-limit.ts';
 
 /**
@@ -26,6 +27,12 @@ export type WorkerEnv = {
    */
   FRUITBACK_FAKE_LINEAR?: string;
   NODE_ENV?: string;
+  /**
+   * Multi-tenant routing as JSON, e.g.
+   * `{"acme":{"teamId":"team_1","projectId":"proj_1","origins":["https://acme.test"]}}`.
+   * Absent means one client, which is how this worker has always behaved. See `clients.ts`.
+   */
+  FRUITBACK_CLIENTS?: string;
 };
 
 export const DEFAULT_PORT = 8080;
@@ -41,6 +48,12 @@ const configSchema = z.object({
   allowedOrigins: z.array(z.string().min(1)).min(1),
   trustedProxyHops: z.number().int().min(0),
   rateLimitPerMinute: z.number().int().positive(),
+  /**
+   * Absent on a single-client worker. Present, a client has to be named on **both** paths: on a read
+   * to decide what may be seen, and on a write to decide where the issue is created — the default
+   * team would be the leak in either direction.
+   */
+  clients: z.custom<ClientMap | undefined>().optional(),
   /** True only in the dev loop — see `FRUITBACK_FAKE_LINEAR`. Surfaced on `/health`. */
   fakeLinear: z.boolean(),
 });
@@ -55,33 +68,55 @@ export type ConfigResult = { ok: true; config: WorkerConfig } | { ok: false; mis
  */
 export function readConfig(env: WorkerEnv): ConfigResult {
   const fakeLinear = usesFakeLinear(env);
+  const clients = readClientMap(env.FRUITBACK_CLIENTS);
   const candidate = {
     // In fake mode nothing ever reaches Linear, so the credentials are stand-ins rather than
     // optional: every downstream type stays exactly as it is in production.
     linearApiKey: fakeLinear ? FAKE_LINEAR_VALUE : env.LINEAR_API_KEY,
     linearTeamId: fakeLinear ? FAKE_LINEAR_VALUE : env.LINEAR_TEAM_ID,
     linearProjectId: env.LINEAR_PROJECT_ID || undefined,
-    allowedOrigins: splitOrigins(env.ALLOWED_ORIGINS),
+    // A client's own `origins` are sites that must be able to reach this worker, so they join the
+    // allowlist rather than having to be repeated in `ALLOWED_ORIGINS` — two lists to keep in step
+    // is one list that drifts.
+    allowedOrigins: [
+      ...new Set([
+        ...splitOrigins(env.ALLOWED_ORIGINS),
+        ...originsFromClients(clients.ok ? clients.clients : undefined),
+      ]),
+    ],
     trustedProxyHops: readTrustedProxyHops(env.TRUSTED_PROXY_HOPS),
     rateLimitPerMinute: readRateLimit(env.RATE_LIMIT_PER_MINUTE),
+    // A malformed map is a misconfiguration, not a reason to quietly pool every client into one
+    // team — which is precisely the leak the map exists to prevent.
+    clients: clients.ok ? clients.clients : Number.NaN,
     fakeLinear,
   };
 
   const result = configSchema.safeParse(candidate);
-  if (result.success) return { ok: true, config: result.data };
+  if (result.success && clients.ok) return { ok: true, config: result.data };
+  if (!clients.ok) {
+    return { ok: false, missing: [...missingFrom(result), `FRUITBACK_CLIENTS (${clients.reason})`] };
+  }
 
-  const namesByField: Record<string, string> = {
-    linearApiKey: 'LINEAR_API_KEY',
-    linearTeamId: 'LINEAR_TEAM_ID',
-    allowedOrigins: 'ALLOWED_ORIGINS',
-    trustedProxyHops: 'TRUSTED_PROXY_HOPS',
-    rateLimitPerMinute: 'RATE_LIMIT_PER_MINUTE',
-  };
+  return { ok: false, missing: missingFrom(result) };
+}
+
+const NAMES_BY_FIELD: Record<string, string> = {
+  linearApiKey: 'LINEAR_API_KEY',
+  linearTeamId: 'LINEAR_TEAM_ID',
+  allowedOrigins: 'ALLOWED_ORIGINS',
+  trustedProxyHops: 'TRUSTED_PROXY_HOPS',
+  rateLimitPerMinute: 'RATE_LIMIT_PER_MINUTE',
+};
+
+function missingFrom(result: z.ZodSafeParseResult<unknown>): string[] {
+  if (result.success) return [];
+
   const missing = result.error.issues
-    .map((issue) => namesByField[String(issue.path[0])])
+    .map((issue) => NAMES_BY_FIELD[String(issue.path[0])])
     .filter((name): name is string => name !== undefined);
 
-  return { ok: false, missing: [...new Set(missing)] };
+  return [...new Set(missing)];
 }
 
 /** Obvious in a log line, and impossible to mistake for a real key someone forgot to rotate. */
@@ -103,6 +138,23 @@ export function usesFakeLinear(env: WorkerEnv): boolean {
 /** True when the flag was set but refused — worth saying out loud at boot. */
 export function fakeLinearRefused(env: WorkerEnv): boolean {
   return env.FRUITBACK_FAKE_LINEAR !== undefined && env.FRUITBACK_FAKE_LINEAR !== '' && !usesFakeLinear(env);
+}
+
+/**
+ * Every origin this worker serves: `ALLOWED_ORIGINS` plus the sites declared per client in
+ * `FRUITBACK_CLIENTS`, so a client's origins are written once instead of twice.
+ *
+ * Exported and used **both** by the validated config and by the misconfigured-response path, which
+ * has no validated config to read. Computing it in two places is how a client reachable only through
+ * the map lost its CORS headers on the 500 — turning the diagnostic the browser was meant to read
+ * into an opaque failure, which is the one thing that branch exists to prevent.
+ */
+export function readAllowedOrigins(env: WorkerEnv): string[] {
+  const clients = readClientMap(env.FRUITBACK_CLIENTS);
+
+  return [
+    ...new Set([...splitOrigins(env.ALLOWED_ORIGINS), ...originsFromClients(clients.ok ? clients.clients : undefined)]),
+  ];
 }
 
 /** Exported so the misconfigured-response path can read the allowlist before validation. */

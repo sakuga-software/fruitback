@@ -204,6 +204,24 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   left of the chain is caller-controlled and forgeable; the client IP is the entry
   `TRUSTED_PROXY_HOPS` from the **right**. Reading the leftmost entry — correct behind Cloudflare,
   wrong behind Traefik — makes the rate limit bypassable with one header.
+- **`FRUITBACK_CLIENTS` makes one worker serve several client sites** (SKG-504). It maps a
+  `clientId` to a team, a project and the origins that client may be embedded on. Absent, nothing
+  changes: one team, one project, `client` optional on a read.
+- **Configured, a client has to be named on both paths** — the `client` parameter on a read,
+  `seed.client.id` on a write — and an unknown one is refused. A read that named nobody used to
+  answer with every seed on that URL, which on a shared worker is one client reading another's
+  feedback; a write that names nobody would land in the default team, which is the same leak facing
+  the other way. The read cache key carries the team for the same reason.
+- **`normalizeClientId` runs before the id is used for anything**, and that ordering is the whole
+  point. The id does three jobs — it picks the route, it builds the `fruitback:<id>` label a read
+  filters on, and it keys the cache. Normalising it for the route alone put a note in the right team
+  under `fruitback:  acme  ` while its owner's clean read asked for `fruitback:acme` and found
+  nothing: authorised at both ends, invisible in between. The write path normalises it into the seed
+  the same way it re-canonicalises `page.url`, and for the same reason.
+- **`clientId` is client-asserted**, exactly like `reporter`, until SKG-498. `origins` is what turns
+  the claim into something checkable against the browser's own header — the trust level CORS gives,
+  and strictly more than nothing. Do not describe it as authentication.
+- A malformed `FRUITBACK_CLIENTS` is refused at boot rather than ignored, and named on `/health`.
 - The rate limiter is in-process, therefore **per replica**. Scaling to N containers multiplies the
   effective ceiling by N; a shared store is the fix if that ever matters.
 - Tests drive `handleRequest` with plain `Request` objects against a stubbed Linear
