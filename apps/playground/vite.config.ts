@@ -19,9 +19,16 @@ export default defineConfig({
    * one. It only bites here because a React app with a design system pulls a far heavier graph than
    * the static page this replaced.
    *
-   * Naming them is what makes "the server answered" mean "the server is ready". The E2E suite
-   * deliberately runs against `dev` and not a production build: `source` carries the component name
-   * and the file, and both come from React's dev-only fiber metadata.
+   * It is not the guarantee — `e2e/warm-up.ts` is — but it does most of the work up front.
+   *
+   * The last two use Vite's `dependency > subdependency` form on purpose. `react-grab` and `zod` are
+   * not dependencies of this app; they arrive through `@fruitback/widget` and `@fruitback/shared`,
+   * and under pnpm's non-hoisted linking a bare specifier for them does not resolve from here — Vite
+   * dropped both entries and warned about it on every boot. Naming the parent is what lets it
+   * resolve them, and it beats declaring a direct dependency this app does not import.
+   *
+   * The suite deliberately runs against `dev` and not a production build: `source` carries the
+   * component name and the file, and both come from React's dev-only fiber metadata.
    */
   optimizeDeps: {
     include: [
@@ -33,8 +40,8 @@ export default defineConfig({
       'react-router',
       'react-router/dom',
       '@heroui/react',
-      'react-grab/primitives',
-      'zod',
+      '@fruitback/widget > react-grab/primitives',
+      '@fruitback/shared > zod',
     ],
   },
   plugins: [tailwindcss(), reactRouter()],
