@@ -13,6 +13,11 @@ import { type AnchorResolution, resolveAnchor } from './resolve.ts';
  * re-measured on scroll and resize anyway — a `position: fixed` header moves relative to the
  * document as you scroll, and lazily loaded content reflows what is below it.
  *
+ * **The page moves under it, and nothing announces that.** It re-measures on scroll and resize, but
+ * neither fires when a framework swaps a subtree — the elements the pins were resolved against are
+ * simply gone. So it watches the document itself and re-resolves, because the host cannot be asked
+ * to notice: on a client's site there is nobody to call `render` again (SKG-513).
+ *
  * **The overlay must not take the page hostage.** The client's site still has to be usable while
  * pins are on it, so the pin outlines let clicks through and only the badge is clickable. That is
  * also the difference between a widget people leave on and one they turn off.
@@ -25,6 +30,14 @@ const BADGE_MAX_LENGTH = 32;
 const THREAD_WIDTH = 300;
 const THREAD_GAP = 8;
 
+/**
+ * Long enough to swallow a framework's commit, short enough that nobody watches a stale pin.
+ *
+ * A React render arrives as several mutation bursts in quick succession; re-resolving on each one
+ * would run the cascade three or four times for a single visual change.
+ */
+const RESOLVE_DEBOUNCE_MS = 100;
+
 export type OverlayOptions = {
   document?: Document;
   /**
@@ -36,6 +49,12 @@ export type OverlayOptions = {
   host?: Element | ShadowRoot;
   /** Called when a pin is clicked, in case the host wants to do more than open the thread. */
   onSelect?: (issue: SeedIssue) => void;
+  /**
+   * Called after the overlay has re-resolved its pins by itself, because the page changed under
+   * them. The host is *told*, not asked — it never has to detect the change, which is the whole
+   * point: a client's app cannot.
+   */
+  onResolve?: (resolutions: { issue: SeedIssue; strategy: AnchorResolution['strategy'] }[]) => void;
 };
 
 export type Overlay = {
@@ -43,6 +62,12 @@ export type Overlay = {
   render(issues: SeedIssue[]): void;
   /** Re-measure every pin. Called for you on scroll and resize. */
   reposition(): void;
+  /**
+   * Resolve every pin against the document as it is now, keeping the pins that are already drawn and
+   * the thread that is open. Called for you when the page mutates; `render` is for new data, this is
+   * for the same data on a page that moved.
+   */
+  resolve(): void;
   /** What each pin resolved to, in render order — the honest account of what was found. */
   resolutions(): { issue: SeedIssue; strategy: AnchorResolution['strategy'] }[];
   destroy(): void;
@@ -70,6 +95,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   let placed: Placed[] = [];
   let thread: HTMLElement | null = null;
   let frame = 0;
+  let resolveTimer: ReturnType<typeof setTimeout> | undefined;
 
   function schedule(): void {
     if (view === null || frame !== 0) return;
@@ -78,6 +104,10 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       frame = 0;
       reposition();
     });
+  }
+
+  function resolutions(): { issue: SeedIssue; strategy: AnchorResolution['strategy'] }[] {
+    return placed.map((entry) => ({ issue: entry.issue, strategy: entry.resolution.strategy }));
   }
 
   function reposition(): void {
@@ -108,6 +138,81 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     });
   }
 
+  /**
+   * Re-run the cascade for every pin already on screen, in place.
+   *
+   * Not `render`: that rebuilds the DOM and closes the thread, which would make a page that mutates
+   * while someone is reading a note slam it shut. The pin elements and the open thread survive; only
+   * what was *found* changes — and it really can change, from `selector` to `bounds` and back, which
+   * is why the marks are re-applied rather than left as they were built.
+   */
+  function resolve(): void {
+    if (placed.length === 0) return;
+
+    const open = placed.find((entry) => entry.pin.dataset.fbOpen === '');
+
+    for (const entry of placed) {
+      entry.resolution = resolveAnchor(entry.issue.seed.anchor, { document });
+      applyResolution(entry.pin, entry.issue, entry.resolution);
+      place(entry);
+    }
+
+    observeAnchors();
+
+    // The thread quotes the resolution — "found by its position" — so it is rebuilt for the entry it
+    // was already showing rather than left contradicting the pin above it.
+    if (open !== undefined && thread !== null) reopenThread(open);
+
+    options.onResolve?.(resolutions());
+  }
+
+  /**
+   * Mutations arrive in bursts — a framework commits in several passes — so the work is coalesced
+   * rather than done per record. `resolveAnchor` runs a query per pin, which is cheap but not free.
+   */
+  function scheduleResolve(): void {
+    if (resolveTimer !== undefined) return;
+
+    resolveTimer = setTimeout(() => {
+      resolveTimer = undefined;
+      resolve();
+    }, RESOLVE_DEBOUNCE_MS);
+  }
+
+  /**
+   * What the widget itself draws must never be what wakes it up.
+   *
+   * With a Shadow root host this is moot — mutations inside it never reach a document observer. With
+   * the default `<body>` host they do, and re-resolving would mutate the container again: an
+   * observer feeding itself for ever.
+   */
+  function isOurs(node: Node): boolean {
+    return container.contains(node) || node === container || node === style;
+  }
+
+  function onMutations(records: MutationRecord[]): void {
+    const fromThePage = records.some(
+      (record) =>
+        !isOurs(record.target) && ![...record.addedNodes, ...record.removedNodes].every((node) => isOurs(node)),
+    );
+
+    if (fromThePage) scheduleResolve();
+  }
+
+  /**
+   * An element can move without the document's structure changing at all — a sibling loads an image,
+   * a font swaps, a flex container reflows. `ResizeObserver` on what each pin resolved to is what
+   * catches those; the mutation observer would not see them.
+   */
+  function observeAnchors(): void {
+    if (anchors === undefined) return;
+
+    anchors.disconnect();
+    for (const entry of placed) {
+      if (entry.resolution.element !== null) anchors.observe(entry.resolution.element);
+    }
+  }
+
   function render(issues: SeedIssue[]): void {
     closeThread();
     container.replaceChildren();
@@ -128,6 +233,17 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 
       return entry;
     });
+
+    observeAnchors();
+  }
+
+  /** Re-render the open thread against a resolution that has just changed under it. */
+  function reopenThread(entry: Placed): void {
+    thread?.remove();
+    thread = buildThread(document, entry.issue, entry.resolution);
+    thread.querySelector('.fb-thread-close')?.addEventListener('click', () => closeThread());
+    container.append(thread);
+    positionThread(thread, entry.pin);
   }
 
   function openThread(entry: Placed): void {
@@ -167,12 +283,31 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   document.addEventListener('click', onDocumentClick, true);
   document.addEventListener('keydown', onKeyDown);
 
+  // Structure only — deliberately no `attributes`. A design system toggles classes on every hover,
+  // and watching those would run the cascade continuously to learn nothing: an element whose class
+  // changed but which is still in place needs no re-resolution, since the pin is drawn on its box.
+  // What has to be caught is the element being *replaced*, and that is always a childList change.
+  //
+  // Taken off the document's own window, never off `globalThis` — the same realm rule as `isElement`
+  // in `dom.ts`. A document from an iframe, or the happy-dom one the unit tests mount, carries its
+  // own constructors; reading the global gets Node's (which has none) and the widget then watches
+  // nothing at all, silently.
+  const mutations = view?.MutationObserver === undefined ? undefined : new view.MutationObserver(onMutations);
+  mutations?.observe(document, { childList: true, subtree: true });
+
+  // Guarded rather than assumed: happy-dom has no ResizeObserver, and neither does an old browser.
+  const anchors = view?.ResizeObserver === undefined ? undefined : new view.ResizeObserver(() => schedule());
+
   return {
     render,
     reposition,
-    resolutions: () => placed.map((entry) => ({ issue: entry.issue, strategy: entry.resolution.strategy })),
+    resolve,
+    resolutions,
     destroy() {
       if (frame !== 0) view?.cancelAnimationFrame(frame);
+      if (resolveTimer !== undefined) clearTimeout(resolveTimer);
+      mutations?.disconnect();
+      anchors?.disconnect();
       view?.removeEventListener('scroll', schedule, true);
       view?.removeEventListener('resize', schedule);
       document.removeEventListener('click', onDocumentClick, true);
@@ -189,41 +324,55 @@ function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolu
   const style = SEED_STAGE_STYLES[issue.stage];
   const pin = document.createElement('div');
 
-  // Three looks, because they mean three different things: found by identity, placed by position,
-  // and not found at all.
-  pin.className = [
-    'fb-pin',
-    resolution.confident ? '' : 'fb-pin-uncertain',
-    resolution.element === null ? 'fb-pin-orphan' : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
+  pin.className = 'fb-pin';
   pin.style.setProperty('--fb-pin-color', style.color);
   pin.dataset.fbPin = issue.seed.id;
   pin.dataset.fbStage = issue.stage;
-  pin.dataset.fbStrategy = resolution.strategy;
-  pin.dataset.fbConfident = String(resolution.confident);
 
   const badge = document.createElement('button');
   badge.type = 'button';
   badge.className = 'fb-pin-badge';
   badge.title = `${issue.identifier} · ${issue.stateName}`;
-  // A drop of fruit rather than a rectangle of text. The note moves to the accessible name, which is
-  // also what keeps it reachable by a screen reader and by a test looking for it by role.
-  badge.setAttribute(
-    'aria-label',
-    `${style.label} · ${summarise(issue)}${resolution.confident ? '' : ' (position approximative)'}`,
-  );
-  // The `≈` is the whole warning, in one character, where the pin is: this one was placed by
-  // coordinates, not recognised.
   // The drop is rotated, so the glyph rides in its own span and is turned back upright.
   const glyph = document.createElement('span');
   glyph.className = 'fb-pin-glyph';
-  glyph.textContent = resolution.confident ? style.emoji : '≈';
   badge.append(glyph);
   pin.append(badge);
 
+  applyResolution(pin, issue, resolution);
+
   return pin;
+}
+
+/**
+ * Everything about a pin that depends on *what was found* rather than on which issue it is.
+ *
+ * Split out because a pin outlives its resolution: when the page changes underneath, the same pin is
+ * re-resolved in place, and the marks that say how sure it is have to follow. They used to be
+ * written once at build time, which meant a pin re-resolved from `selector` to `bounds` kept
+ * claiming it had been recognised.
+ */
+function applyResolution(pin: HTMLElement, issue: SeedIssue, resolution: AnchorResolution): void {
+  const style = SEED_STAGE_STYLES[issue.stage];
+
+  // Three looks, because they mean three different things: found by identity, placed by position,
+  // and not found at all.
+  pin.classList.toggle('fb-pin-uncertain', !resolution.confident);
+  pin.classList.toggle('fb-pin-orphan', resolution.element === null);
+  pin.dataset.fbStrategy = resolution.strategy;
+  pin.dataset.fbConfident = String(resolution.confident);
+
+  const badge = pin.querySelector('.fb-pin-badge');
+  // A drop of fruit rather than a rectangle of text. The note moves to the accessible name, which is
+  // also what keeps it reachable by a screen reader and by a test looking for it by role.
+  badge?.setAttribute(
+    'aria-label',
+    `${style.label} · ${summarise(issue)}${resolution.confident ? '' : ' (position approximative)'}`,
+  );
+  const glyph = pin.querySelector('.fb-pin-glyph');
+  // The `≈` is the whole warning, in one character, where the pin is: this one was placed by
+  // coordinates, not recognised.
+  if (glyph !== null) glyph.textContent = resolution.confident ? style.emoji : '≈';
 }
 
 function summarise(issue: SeedIssue): string {
