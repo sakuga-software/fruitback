@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import type { SeedStage } from '@fruitback/shared';
 import { CONFIG_STORAGE_KEY, createConfigStore, type WidgetConfig } from './config.ts';
 
 const DEFAULTS: WidgetConfig = { endpoint: 'http://localhost:8788', clientId: 'playground', hiddenStages: [] };
@@ -95,5 +96,32 @@ describe('createConfigStore', () => {
     store.set({ clientId: 'acme' });
 
     assert.equal(store.get().clientId, 'acme');
+  });
+});
+
+describe('the config is nobody else’s to mutate', () => {
+  it('does not alias the array it was given', () => {
+    // The caller keeps their array and pushes to it later. Without a copy, the store's state would
+    // change with nothing persisted and nobody told.
+    const store = createConfigStore({ defaults: DEFAULTS, storage: fakeStorage() });
+    const stages: SeedStage[] = ['ripe'];
+
+    store.set({ hiddenStages: stages });
+    stages.push('composted');
+
+    assert.deepEqual(store.get().hiddenStages, ['ripe']);
+  });
+
+  it('refuses a write to what `get` handed out, loudly', () => {
+    // Frozen rather than copied on the way out: `get` runs once per pin, and a silent no-op would be
+    // worse than a `TypeError` at the line that made the mistake.
+    const store = createConfigStore({ defaults: DEFAULTS, storage: fakeStorage() });
+    const config = store.get();
+
+    assert.throws(() => {
+      (config as { endpoint: string }).endpoint = 'https://elsewhere.test';
+    }, TypeError);
+    assert.throws(() => (config.hiddenStages as SeedStage[]).push('ripe'), TypeError);
+    assert.equal(store.get().endpoint, DEFAULTS.endpoint);
   });
 });

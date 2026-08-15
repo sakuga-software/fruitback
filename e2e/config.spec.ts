@@ -95,3 +95,24 @@ test('a stage hidden before the pins arrive is never drawn', async ({ page }) =>
   await page.getByLabel('Ouvrir les réglages Fruitback').click();
   await page.locator(`[name="stage-${stage}"]`).check();
 });
+
+test('the checkboxes are actually drawn, and the gear does not sit on the launch button', async ({ page }) => {
+  // Both of these were found by looking at a recording, and neither is visible to a DOM emulator.
+  await openPlayground(page, 'config-visuals');
+  await page.getByLabel('Ouvrir les réglages Fruitback').click();
+
+  // `all: initial` resets `appearance` to its initial value, which is `none` — a native checkbox
+  // then draws nothing while staying perfectly checkable.
+  const box = page.locator('[name="stage-ripe"]');
+  await expect(box).toBeVisible();
+  expect(await box.evaluate((node) => getComputedStyle(node).appearance)).not.toBe('none');
+
+  // The gear sits beside the launch button, whose width is the embedder's label. An offset computed
+  // from the gear's own size cannot know that, and it covered the label.
+  const gear = await page.getByLabel('Ouvrir les réglages Fruitback').boundingBox();
+  const launch = await page.getByRole('button', { name: /Laisser un feedback/ }).boundingBox();
+
+  expect(gear, 'the gear should be on screen').not.toBeNull();
+  expect(launch).not.toBeNull();
+  expect(gear!.x + gear!.width, 'the gear ends before the launch button starts').toBeLessThanOrEqual(launch!.x);
+});

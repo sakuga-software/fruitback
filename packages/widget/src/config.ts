@@ -50,12 +50,12 @@ export function createConfigStore(options: ConfigStoreOptions): ConfigStore {
   const storage = options.storage === undefined ? defaultStorage() : options.storage;
   const listeners = new Set<(config: WidgetConfig) => void>();
 
-  let config: WidgetConfig = { ...options.defaults, ...readStored(storage, key) };
+  let config = seal({ ...options.defaults, ...readStored(storage, key) });
 
   return {
     get: () => config,
     set(patch) {
-      config = { ...config, ...patch };
+      config = seal({ ...config, ...patch });
       write(storage, key, config);
       for (const listener of listeners) listener(config);
     },
@@ -65,6 +65,18 @@ export function createConfigStore(options: ConfigStoreOptions): ConfigStore {
       return () => listeners.delete(listener);
     },
   };
+}
+
+/**
+ * Copied, then frozen.
+ *
+ * `get` hands the same object to everyone and is called once per pin, so copying on the way out
+ * would be both wasteful and easy to forget. Freezing on the way in costs nothing per read and turns
+ * a caller who mutates the config — or the array they passed to `set` — into a `TypeError` here
+ * rather than into state that changed without being persisted or announced.
+ */
+function seal(config: WidgetConfig): WidgetConfig {
+  return Object.freeze({ ...config, hiddenStages: Object.freeze([...config.hiddenStages]) }) as WidgetConfig;
 }
 
 /**

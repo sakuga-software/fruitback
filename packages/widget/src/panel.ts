@@ -226,7 +226,18 @@ const STYLES = `
 .fb-config-legend { margin: 12px 0 4px; font-size: 12px; color: #78716c; }
 .fb-config-stages { display: flex; flex-direction: column; gap: 2px; }
 .fb-config-check { display: flex; align-items: center; gap: 6px; cursor: pointer; }
-.fb-config-check input { width: 14px; height: 14px; accent-color: #e53935; }
+.fb-config-check input {
+  /*
+    all:initial in the host reset sets appearance to none, which is its initial value — so a native
+    checkbox draws nothing at all. The boxes were invisible while still being checkable, which no
+    unit test could see. Restored here, next to the size that depends on it.
+  */
+  appearance: auto;
+  -webkit-appearance: checkbox;
+  width: 14px;
+  height: 14px;
+  accent-color: #e53935;
+}
 .fb-panel-config > .fb-config-check { margin-top: 10px; padding-top: 10px; border-top: 1px solid #e7e5e4; }
 @media (max-width: 480px) {
   .fb-panel-config { right: 8px; left: 8px; width: auto; }

@@ -233,7 +233,9 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   }
 
   function render(issues: SeedIssue[]): void {
-    source = issues;
+    // A copy: `refilter` draws from this later, and a caller who keeps mutating the array they
+    // passed would otherwise change what is on screen with no render of their own.
+    source = [...issues];
     draw();
   }
 

@@ -99,8 +99,15 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   panel.className = 'fb-panel';
   panel.dataset.fbHostPanel = '';
 
-  root.append(style, button, highlight, panel);
-  if (options.onConfigure !== undefined) root.append(configure);
+  // A dock rather than two fixed corners: the gear has to sit beside a button whose width is the
+  // embedder's label, and no offset computed from the gear's own size can know that. It overlapped
+  // the launch button until a recording showed it.
+  const dock = document.createElement('div');
+  dock.className = 'fb-dock';
+  if (options.onConfigure !== undefined) dock.append(configure);
+  dock.append(button);
+
+  root.append(style, dock, highlight, panel);
 
   configure.addEventListener('click', (event) => {
     event.preventDefault();
@@ -220,11 +227,16 @@ style, script { display: none; }
 */
 div, p, header, footer, section, form { display: block; }
 li { display: list-item; }
-.fb-launch {
+.fb-dock {
   position: fixed;
   right: 16px;
   bottom: 16px;
   z-index: 2147483200;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fb-launch {
   padding: 10px 14px;
   border-radius: 999px;
   background: #e53935;
@@ -234,10 +246,6 @@ li { display: list-item; }
   cursor: pointer;
 }
 .fb-configure {
-  position: fixed;
-  right: 16px;
-  bottom: 16px;
-  z-index: 2147483200;
   width: 30px;
   height: 30px;
   border-radius: 999px;
@@ -246,8 +254,6 @@ li { display: list-item; }
   font: 600 14px/1 -apple-system, system-ui, sans-serif;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
   cursor: pointer;
-  /* Left of the launch button, whose width the widget does not know: the label is the embedder's. */
-  transform: translateX(calc(-100% - 8px));
 }
 .fb-highlight {
   position: absolute;

@@ -380,3 +380,17 @@ describe('showing only some pins', () => {
     assert.equal(page.document.querySelectorAll('[data-fb-pin]').length, 2);
   });
 });
+
+describe('the issues it was handed', () => {
+  it('keeps a copy, so a caller mutating their array does not change the screen', () => {
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    const issues = [issueOnCta()];
+
+    overlay.render(issues);
+    issues.push(issueOnCta());
+    overlay.refilter();
+
+    assert.equal(page.document.querySelectorAll('[data-fb-pin]').length, 1);
+  });
+});
