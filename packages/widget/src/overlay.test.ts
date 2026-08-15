@@ -316,3 +316,39 @@ describe('the page changing underneath', () => {
     assert.equal(resolves, 0);
   });
 });
+
+describe('coalescing the work', () => {
+  it('resolves once for a burst of mutations, not once per mutation', async () => {
+    const page = mountWithCta();
+    let resolves = 0;
+    overlay = createOverlay({ document: page.document, onResolve: () => (resolves += 1) });
+    overlay.render([issueOnCta()]);
+
+    // What a framework commit looks like from out here: several passes, close together.
+    const main = page.document.querySelector('main');
+    for (let pass = 0; pass < 5; pass += 1) {
+      main?.append(page.document.createElement('div'));
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    assert.equal(resolves, 1);
+  });
+
+  it('still resolves on a page that never stops mutating', async () => {
+    // The trap in restarting the timer on every mutation: a live feed, a spinner or a marquee would
+    // restart it for ever and the pins would never be resolved again. Starving is worse than
+    // resolving slightly early, so the coalescing has a ceiling.
+    const page = mountWithCta();
+    let resolves = 0;
+    overlay = createOverlay({ document: page.document, onResolve: () => (resolves += 1) });
+    overlay.render([issueOnCta()]);
+
+    const main = page.document.querySelector('main');
+    const noisy = setInterval(() => main?.append(page.document.createElement('div')), 20);
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    clearInterval(noisy);
+
+    assert.ok(resolves >= 1, `never resolved under continuous mutation (${resolves})`);
+  });
+});

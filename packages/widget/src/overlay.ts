@@ -38,6 +38,16 @@ const THREAD_GAP = 8;
  */
 const RESOLVE_DEBOUNCE_MS = 100;
 
+/**
+ * The ceiling on that coalescing, and the reason it is a debounce *with* one.
+ *
+ * Restarting the timer on every mutation coalesces a burst properly, but a page that never stops
+ * mutating — a live feed, a spinner, a marquee — would then restart it for ever and the pins would
+ * never be resolved again. Starving is worse than resolving slightly early, so past this much
+ * waiting the pending timer is left to fire.
+ */
+const RESOLVE_MAX_WAIT_MS = 500;
+
 export type OverlayOptions = {
   document?: Document;
   /**
@@ -96,6 +106,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   let thread: HTMLElement | null = null;
   let frame = 0;
   let resolveTimer: ReturnType<typeof setTimeout> | undefined;
+  let burstStartedAt = 0;
 
   function schedule(): void {
     if (view === null || frame !== 0) return;
@@ -169,9 +180,21 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   /**
    * Mutations arrive in bursts — a framework commits in several passes — so the work is coalesced
    * rather than done per record. `resolveAnchor` runs a query per pin, which is cheap but not free.
+   *
+   * The timer restarts on each mutation, so a commit that takes longer than the debounce is still
+   * handled once rather than half-way through and then again. `RESOLVE_MAX_WAIT_MS` is what stops
+   * that from becoming a page that mutates continuously and is therefore never resolved at all.
    */
   function scheduleResolve(): void {
-    if (resolveTimer !== undefined) return;
+    const now = Date.now();
+
+    if (resolveTimer === undefined) {
+      burstStartedAt = now;
+    } else if (now - burstStartedAt >= RESOLVE_MAX_WAIT_MS) {
+      return;
+    } else {
+      clearTimeout(resolveTimer);
+    }
 
     resolveTimer = setTimeout(() => {
       resolveTimer = undefined;
