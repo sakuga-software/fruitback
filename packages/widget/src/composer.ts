@@ -1,3 +1,5 @@
+import type { SeedReporter } from '@fruitback/shared';
+
 /**
  * The note popover: what the reporter actually writes in.
  *
@@ -24,8 +26,12 @@ export type ComposerOptions = {
    * Send the note. Resolving means it was planted; throwing or resolving `false` keeps the popover
    * open with the text intact, because a note lost to a network blip is the one failure this widget
    * cannot afford.
+   *
+   * `reporter` is what the visitor optionally typed about themselves (SKG-498). It is a **claim**:
+   * the worker stores it as self-declared unless the embedder also sends a signed identity token,
+   * and it strips any `verified` flag that arrives from a browser.
    */
-  onSubmit: (note: string) => Promise<boolean | void>;
+  onSubmit: (note: string, reporter?: SeedReporter) => Promise<boolean | void>;
   onClose?: () => void;
 };
 
@@ -57,6 +63,10 @@ export function createComposer(options: ComposerOptions): Composer {
   const send = root.querySelector('[data-fb-send]') as HTMLButtonElement;
   const cancel = root.querySelector('[data-fb-cancel]') as HTMLButtonElement;
   const status = root.querySelector('[data-fb-status]') as HTMLElement;
+  const identify = root.querySelector('[data-fb-identify]') as HTMLButtonElement;
+  const who = root.querySelector('[data-fb-who]') as HTMLElement;
+  const name = root.querySelector('[data-fb-name]') as HTMLInputElement;
+  const email = root.querySelector('[data-fb-email]') as HTMLInputElement;
 
   let state: ComposerState = 'idle';
   let closing = 0;
@@ -83,7 +93,7 @@ export function createComposer(options: ComposerOptions): Composer {
     const mine = session;
     setState('sending');
     try {
-      const result = await options.onSubmit(field.value);
+      const result = await options.onSubmit(field.value, reporterFromFields());
       if (result === false) throw new Error('refused');
     } catch {
       // Abandoned mid-flight: say nothing, focus nothing. The note was let go of on purpose.
@@ -134,12 +144,35 @@ export function createComposer(options: ComposerOptions): Composer {
     root.style.setProperty('--fb-composer-top', `${fitsBelow ? below : Math.max(0, anchor.top - own.height - GAP)}px`);
   }
 
+  /**
+   * What the visitor said about themselves, or nothing at all.
+   *
+   * Anonymous is the default and stays one click away: these fields are behind a disclosure, empty,
+   * and an empty one is absent rather than an empty string — the seed round-trip forbids a field
+   * nobody provided.
+   */
+  function reporterFromFields(): SeedReporter | undefined {
+    const reporter = {
+      ...(name.value.trim().length > 0 ? { name: name.value.trim() } : {}),
+      ...(email.value.trim().length > 0 ? { email: email.value.trim() } : {}),
+    };
+
+    return Object.keys(reporter).length > 0 ? reporter : undefined;
+  }
+
   function close(): void {
     session += 1;
     root.hidden = true;
     setState('idle');
     options.onClose?.();
   }
+
+  identify.addEventListener('click', () => {
+    const shown = who.hidden;
+    who.hidden = !shown;
+    identify.setAttribute('aria-expanded', String(shown));
+    if (shown) name.focus();
+  });
 
   send.addEventListener('click', () => void submit());
   cancel.addEventListener('click', close);
@@ -178,6 +211,15 @@ const MESSAGES: Record<ComposerState, string> = {
 const TEMPLATE = `
   <div class="fb-composer-drop" aria-hidden="true"></div>
   <textarea data-fb-note rows="3" placeholder="Qu'est-ce qui ne va pas ici ?" aria-label="Votre commentaire"></textarea>
+  <button type="button" data-fb-identify class="fb-composer-identify" aria-expanded="false">
+    Ajouter mon nom (facultatif)
+  </button>
+  <div data-fb-who class="fb-composer-who" hidden>
+    <input data-fb-name type="text" name="fb-name" placeholder="Votre nom" aria-label="Votre nom (facultatif)"
+           autocomplete="name" />
+    <input data-fb-email type="email" name="fb-email" placeholder="vous@exemple.fr"
+           aria-label="Votre e-mail (facultatif)" autocomplete="email" />
+  </div>
   <div class="fb-composer-foot">
     <span data-fb-status class="fb-composer-status" role="status" aria-live="polite"></span>
     <button type="button" data-fb-cancel class="fb-composer-ghost">Annuler</button>
@@ -234,6 +276,32 @@ const STYLES = `
   color: inherit;
 }
 .fb-composer textarea:focus-visible { outline: 2px solid #e53935; outline-offset: 1px; }
+.fb-composer-identify {
+  display: block;
+  margin-top: 8px;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: #78716c;
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.fb-composer-who { display: flex; gap: 6px; margin-top: 8px; }
+.fb-composer-who[hidden] { display: none; }
+.fb-composer-who input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid #d6d3d1;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12px;
+  color: inherit;
+  background: #fff;
+}
+.fb-composer-who input:focus-visible { outline: 2px solid #e53935; outline-offset: 1px; }
 .fb-composer-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .fb-composer-status { flex: 1; font-size: 12px; color: #78716c; }
 .fb-composer-ghost, .fb-composer-send {

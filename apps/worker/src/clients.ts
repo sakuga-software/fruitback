@@ -27,9 +27,14 @@ const clientSchema = z.object({
   projectId: z.string().min(1).optional(),
   /**
    * Sites this client may be embedded on. When present, a request claiming this client from another
-   * origin is refused — the cheapest check available before SKG-498 lands.
+   * origin is refused. Cheap, and independent of whether the visitor is identified.
    */
   origins: z.array(z.string().min(1)).min(1).optional(),
+  /**
+   * Shared with the client site so it can mint identity tokens (SKG-498). Without one, this client's
+   * reporters are always self-declared — which is a perfectly good mode, and the default.
+   */
+  identitySecret: z.string().min(32).optional(),
 });
 
 export const clientMapSchema = z.record(z.string().min(1), clientSchema);
@@ -66,6 +71,8 @@ export function readClientMap(value: string | undefined): ClientMapResult {
 export type Routing = {
   teamId: string;
   projectId: string | undefined;
+  /** Set when this client can mint identity tokens (SKG-498). Absent means self-declared only. */
+  identitySecret: string | undefined;
 };
 
 export type ClientResolution =
@@ -121,7 +128,11 @@ export function resolveClient({ clients, clientId, origin, fallback }: ResolveCl
 
   return {
     ok: true,
-    routing: { teamId: client.teamId ?? fallback.teamId, projectId: client.projectId ?? fallback.projectId },
+    routing: {
+      teamId: client.teamId ?? fallback.teamId,
+      projectId: client.projectId ?? fallback.projectId,
+      identitySecret: client.identitySecret,
+    },
   };
 }
 

@@ -13,7 +13,11 @@ import { z } from 'zod';
  */
 
 /** Bump only when the payload shape changes. Readers accept older versions, refuse newer ones. */
-export const SEED_VERSION = 1;
+/**
+ * 2 since SKG-498 added `reporter.verified`. Readers accept older versions and refuse newer ones,
+ * so a v1 seed still parses: it simply carries no verified identity, which is exactly what it meant.
+ */
+export const SEED_VERSION = 2;
 
 /** Discriminator that lets us recognise our own JSON among anything else in a description. */
 export const SEED_KIND = 'fruitback.seed';
@@ -117,11 +121,22 @@ export const seedClientSchema = z.object({
   name: z.string().optional(),
 });
 
-/** Absent means anonymous. The worker decides what it trusts; the widget only reports. */
+/**
+ * Absent means anonymous. The worker decides what it trusts; the widget only reports.
+ *
+ * **`verified` is the worker's word, never the client's** (SKG-498). A browser can put any name and
+ * any address in here — that is what the popover's optional fields are — so a reader has to be able
+ * to tell a claim from an identity the worker checked against a signed token. The worker strips this
+ * flag from anything that arrives with it, and sets it only after verifying.
+ *
+ * It is a `true` literal rather than a boolean so that "not verified" stays *absent* rather than
+ * `false`: the round-trip forbids a field the caller did not provide.
+ */
 export const seedReporterSchema = z.object({
   id: z.string().optional(),
   name: z.string().optional(),
   email: z.string().optional(),
+  verified: z.literal(true).optional(),
 });
 
 export const seedEnvSchema = z.object({

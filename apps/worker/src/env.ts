@@ -33,6 +33,8 @@ export type WorkerEnv = {
    * Absent means one client, which is how this worker has always behaved. See `clients.ts`.
    */
   FRUITBACK_CLIENTS?: string;
+  /** Shared with the client site so it can mint identity tokens (SKG-498). */
+  FRUITBACK_IDENTITY_SECRET?: string;
 };
 
 export const DEFAULT_PORT = 8080;
@@ -45,6 +47,14 @@ const configSchema = z.object({
   linearApiKey: z.string().min(1),
   linearTeamId: z.string().min(1),
   linearProjectId: z.string().min(1).optional(),
+  /**
+   * Shared with the client site so it can mint identity tokens (SKG-498). Absent — the default —
+   * means every reporter is self-declared, which is a perfectly good way to run this. A mapped
+   * client's own `identitySecret` takes precedence over it.
+   *
+   * 32 characters minimum, because a short HMAC secret is a guessable one.
+   */
+  identitySecret: z.string().min(32).optional(),
   allowedOrigins: z.array(z.string().min(1)).min(1),
   trustedProxyHops: z.number().int().min(0),
   rateLimitPerMinute: z.number().int().positive(),
@@ -75,6 +85,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     linearApiKey: fakeLinear ? FAKE_LINEAR_VALUE : env.LINEAR_API_KEY,
     linearTeamId: fakeLinear ? FAKE_LINEAR_VALUE : env.LINEAR_TEAM_ID,
     linearProjectId: env.LINEAR_PROJECT_ID || undefined,
+    identitySecret: env.FRUITBACK_IDENTITY_SECRET || undefined,
     // A client's own `origins` are sites that must be able to reach this worker, so they join the
     // allowlist rather than having to be repeated in `ALLOWED_ORIGINS` — two lists to keep in step
     // is one list that drifts.

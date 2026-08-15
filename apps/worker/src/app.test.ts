@@ -5,6 +5,7 @@ import { minimalSeedFixture, seedFixture } from '@fruitback/shared/seed.fixture'
 import { handleRequest } from './app.ts';
 import type { WorkerEnv } from './env.ts';
 import { installLinearStub, storedIssueFromSeed } from './linear-stub.ts';
+import { signIdentityToken } from './identity.ts';
 import { resetRateLimitState } from './rate-limit.ts';
 import { resetCacheState } from './cache.ts';
 import { resetMemoryLinear } from './linear-memory.ts';
@@ -738,5 +739,125 @@ describe('GET /health', () => {
 
     assert.equal(response.status, 503);
     assert.partialDeepStrictEqual(await response.json(), { missing: ['TRUSTED_PROXY_HOPS'] });
+  });
+});
+
+describe('attribution', () => {
+  const SECRET = 'a-secret-long-enough-to-not-be-guessed';
+  const identityEnv: WorkerEnv = { ...env, FRUITBACK_IDENTITY_SECRET: SECRET };
+  const inAnHour = () => Math.floor((Date.now() + 3_600_000) / 1000);
+
+  it('keeps an anonymous submission anonymous', async () => {
+    const stub = installLinearStub();
+
+    const response = await post(seedFixture({ reporter: undefined }));
+
+    assert.equal(response.status, 201);
+    const stored = parseSeedFromDescription(stub.issueInput().description);
+    assert.ok(stored.ok);
+    assert.equal(stored.seed.reporter, undefined);
+  });
+
+  it('stores a typed name as the claim it is', async () => {
+    const stub = installLinearStub();
+
+    await post(seedFixture({ reporter: { name: 'Alice', email: 'alice@acme.test' } }));
+
+    const stored = parseSeedFromDescription(stub.issueInput().description);
+    assert.ok(stored.ok);
+    assert.deepEqual(stored.seed.reporter, { name: 'Alice', email: 'alice@acme.test' });
+    assert.match(stub.issueInput().description, /Reported by.*unverified — self-declared/);
+  });
+
+  it('refuses to let a client call itself verified', async () => {
+    // The one that matters. Without the strip, this reads in Linear exactly like an identity the
+    // worker checked — which is a way to put a colleague's name on a complaint.
+    const stub = installLinearStub();
+
+    await post(seedFixture({ reporter: { name: 'CEO', verified: true } }));
+
+    const stored = parseSeedFromDescription(stub.issueInput().description);
+    assert.ok(stored.ok);
+    assert.deepEqual(stored.seed.reporter, { name: 'CEO' });
+    assert.doesNotMatch(stub.issueInput().description, /\(verified\)/);
+  });
+
+  it('vouches for a reporter behind a valid token', async () => {
+    const stub = installLinearStub();
+    const token = await signIdentityToken({ sub: 'user_42', name: 'Alice', exp: inAnHour() }, SECRET);
+
+    const response = await post(seedFixture({ reporter: undefined }), {
+      env: identityEnv,
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    assert.equal(response.status, 201);
+    const stored = parseSeedFromDescription(stub.issueInput().description);
+    assert.ok(stored.ok);
+    assert.deepEqual(stored.seed.reporter, { id: 'user_42', name: 'Alice', verified: true });
+    assert.match(stub.issueInput().description, /Reported by\*\* · Alice \(verified\)/);
+  });
+
+  it('lets the token overrule a name claimed alongside it', async () => {
+    const stub = installLinearStub();
+    const token = await signIdentityToken({ sub: 'user_42', name: 'Alice', exp: inAnHour() }, SECRET);
+
+    await post(seedFixture({ reporter: { name: 'Someone Else', verified: true } }), {
+      env: identityEnv,
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    const stored = parseSeedFromDescription(stub.issueInput().description);
+    assert.ok(stored.ok);
+    assert.deepEqual(stored.seed.reporter, { id: 'user_42', name: 'Alice', verified: true });
+  });
+
+  it('refuses a token that does not verify rather than downgrading it', async () => {
+    // A site that meant to identify someone and got it wrong should hear about it. Silently storing
+    // the note as anonymous is how a broken integration goes unnoticed for a month.
+    const token = await signIdentityToken({ sub: 'user_42', exp: inAnHour() }, 'a-different-secret-of-good-length');
+
+    const response = await post(seedFixture(), { env: identityEnv, headers: { Authorization: `Bearer ${token}` } });
+
+    assert.equal(response.status, 401);
+    assert.partialDeepStrictEqual(await response.json(), { error: 'invalid-identity', reason: 'bad-signature' });
+  });
+
+  it('refuses an expired token', async () => {
+    const token = await signIdentityToken({ sub: 'user_42', exp: Math.floor(Date.now() / 1000) - 60 }, SECRET);
+
+    const response = await post(seedFixture(), { env: identityEnv, headers: { Authorization: `Bearer ${token}` } });
+
+    assert.equal(response.status, 401);
+    assert.partialDeepStrictEqual(await response.json(), { reason: 'expired' });
+  });
+
+  it('refuses a token when no secret is configured, rather than ignoring it', async () => {
+    const token = await signIdentityToken({ sub: 'user_42', exp: inAnHour() }, SECRET);
+
+    const response = await post(seedFixture(), { headers: { Authorization: `Bearer ${token}` } });
+
+    assert.equal(response.status, 401);
+    assert.partialDeepStrictEqual(await response.json(), { reason: 'identity-not-configured' });
+  });
+
+  it('uses the client’s own secret ahead of the worker’s', async () => {
+    const clientSecret = 'the-acme-secret-which-is-long-enough';
+    const mapped: WorkerEnv = {
+      ...identityEnv,
+      FRUITBACK_CLIENTS: JSON.stringify({ acme: { teamId: 'team_acme', identitySecret: clientSecret } }),
+    };
+    const stub = installLinearStub();
+    const token = await signIdentityToken({ sub: 'user_7', exp: inAnHour() }, clientSecret);
+
+    const response = await post(seedFixture({ client: { id: 'acme' } }), {
+      env: mapped,
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    assert.equal(response.status, 201);
+    const stored = parseSeedFromDescription(stub.issueInput().description);
+    assert.ok(stored.ok);
+    assert.partialDeepStrictEqual(stored.seed.reporter, { id: 'user_7', verified: true });
   });
 });

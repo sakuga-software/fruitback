@@ -180,6 +180,9 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   the send button is disabled in flight (**a second click would plant the same note twice**, and the
   worker cannot tell the difference), a failure keeps the popover open **with the text intact**, and
   a refusal (`onSubmit` resolving `false`) is treated as a failure rather than a success.
+- **Name and e-mail are optional, behind a disclosure, and never `verified`** (SKG-498). Anonymous
+  is what happens if the reporter does nothing, and the widget states a claim rather than an
+  identity — the flag that would make it one is the worker's to set.
 - **Losing what someone just wrote is the one failure this widget cannot afford.** Anything that
   would clear the field on an error path is a bug, however tidy it looks.
 - Popover on desktop, **sheet on a phone** — a 320px popover anchored to an element is unusable at
@@ -298,17 +301,29 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   under `fruitback:  acme  ` while its owner's clean read asked for `fruitback:acme` and found
   nothing: authorised at both ends, invisible in between. The write path normalises it into the seed
   the same way it re-canonicalises `page.url`, and for the same reason.
-- **`clientId` is client-asserted**, exactly like `reporter`, until SKG-498. `origins` is what turns
-  the claim into something checkable against the browser's own header — the trust level CORS gives,
-  and strictly more than nothing. Do not describe it as authentication.
+- **`clientId` is client-asserted**, and SKG-498 did not change that: identity tokens say who the
+  *reporter* is, not which client the page is. `origins` is what turns the claim into something
+  checkable against the browser's own header — the trust level CORS gives, and strictly more than
+  nothing. Do not describe it as authentication.
 - A malformed `FRUITBACK_CLIENTS` is refused at boot rather than ignored, and named on `/health`.
 - The rate limiter is in-process, therefore **per replica**. Scaling to N containers multiplies the
   effective ceiling by N; a shared store is the fix if that ever matters.
 - Tests drive `handleRequest` with plain `Request` objects against a stubbed Linear
   (`linear-stub.ts`); no container needed. The assertion that matters most is that the stored
   description parses back into the exact seed that was posted.
-- `reporter` in an incoming seed is **client-asserted and unverified** — do not treat it as identity
-  until SKG-498 lands.
+- **`reporter.verified` is the worker's word, never the client's** (SKG-498). Anything arriving with
+  that flag has it stripped, whatever else it says: without that, a browser posting
+  `reporter: { name: 'CEO', verified: true }` reads in Linear exactly like an identity this worker
+  checked. `identity.ts` sets it only after verifying an HMAC-SHA256 token against the client's
+  `identitySecret` (or `FRUITBACK_IDENTITY_SECRET` on a single-client worker).
+- **The identity token arrives in an `Authorization` header, never in the seed.** The seed is stored
+  verbatim in an issue description anyone with workspace access can read, so a credential in there
+  would outlive its expiry by months.
+- A token that fails to verify is a **401**, not a downgrade to anonymous: a site that meant to
+  identify someone and got it wrong should hear about it, rather than have a broken integration go
+  unnoticed for a month. No token at all is fine and stays the default.
+- `exp` is **required** in the claims — a token that never expires is a password. Signatures are
+  compared in constant time, because a `===` on the base64 leaks how much of it was right.
 
 ## The seed contract
 
@@ -320,7 +335,8 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   return exactly `seed`. Two rules protect it — **no schema default values**, and no field the
   widget cannot rebuild from what is stored. Adding a default is the easy way to break this
   silently; the test `adds no field the caller did not provide` is there to catch it.
-- **Bump `SEED_VERSION`** when the payload shape changes. Readers accept older versions and refuse
+- **Bump `SEED_VERSION`** when the payload shape changes — it is `2` since SKG-498 added
+  `reporter.verified`. Readers accept older versions and refuse
   newer ones (`unsupported-version`) rather than silently dropping fields.
 - **`parseSeed*` never throws.** It returns `{ ok: false, reason }` — the input is a Linear
   description a human may have edited.
