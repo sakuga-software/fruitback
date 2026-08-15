@@ -29,8 +29,10 @@ export type CaptureSeedOptions = {
   reporter?: SeedReporter;
   screenshot?: SeedScreenshot;
   /**
-   * What react-grab resolved for this element. Always wins over the fiber fallback in `source.ts`,
-   * which only exists for pages where react-grab is not mounted.
+   * What react-grab resolved for this element. Wins over the fiber fallback in `source.ts`
+   * **field by field**, rather than wholesale: on a design system react-grab gets the file and the
+   * line right while dropping the component name (see `engine.ts`), and the fallback is exactly what
+   * knows the name. Taking either one entire would throw away the half the other got right.
    */
   source?: SeedSource;
   /** Off when the reporter has not agreed to send their user agent along. */
@@ -54,7 +56,7 @@ export function captureSeed(options: CaptureSeedOptions): Seed {
     page: capturePage(view),
     viewport: captureViewport(view),
     anchor: captureAnchor(element),
-    ...optional('source', options.source ?? readReactSource(element)),
+    ...optional('source', mergeSource(options.source, readReactSource(element))),
     ...optional('client', options.client),
     ...optional('reporter', options.reporter),
     ...optional('env', includeEnv ? captureEnv(view) : undefined),
@@ -69,6 +71,21 @@ export function captureSeed(options: CaptureSeedOptions): Seed {
  * provide: `{ client: undefined }` survives `JSON.stringify` as an absent key but not as an absent
  * *field* everywhere it is compared.
  */
+/**
+ * The engine's answer, completed by the fiber walk's — never the other way round.
+ *
+ * Nothing is invented here: a field absent from both stays absent, which is what keeps the seed
+ * round-trip free of values the widget cannot rebuild.
+ */
+function mergeSource(engine: SeedSource | undefined, fallback: SeedSource | undefined): SeedSource | undefined {
+  if (engine === undefined) return fallback;
+  if (fallback === undefined) return engine;
+
+  const merged = { ...fallback, ...engine };
+
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
 function optional<K extends string, T>(key: K, value: T | undefined): Partial<Record<K, T>> {
   return value === undefined ? {} : ({ [key]: value } as Record<K, T>);
 }

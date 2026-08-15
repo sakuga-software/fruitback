@@ -1,0 +1,15 @@
+@import 'tailwindcss';
+/* HeroUI 3 has no provider: its theme is this stylesheet. */
+@import '@heroui/react/styles';
+
+/*
+  The hostile half of the page, kept from the static playground and now sitting next to a design
+  system. These class names are what a bundler emits — CSS modules, emotion — and the widget's
+  selector heuristics have to refuse them, so they have to exist for real.
+*/
+.button_3f2a1b,
+.button_9d7e4c,
+.css-1x9f7ab,
+.css-77aa31 {
+  cursor: pointer;
+}

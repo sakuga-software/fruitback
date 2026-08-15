@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { expectPinOn, openPlayground, pinFor, plantPin, waitForPins } from './pin.ts';
+import { WORKER_ORIGIN, expectPinOn, openPlayground, pinFor, plantPin, waitForPins } from './pin.ts';
 
 /**
  * What happens to a pin when the site is deployed again — the question the whole anchor exists to
@@ -36,10 +36,10 @@ test('the structural path alone would have landed on the neighbouring card', asy
   await page.getByRole('button', { name: 'Redéployer' }).click();
   await waitForPins(page, 1);
 
-  const verdict = await page.evaluate(async () => {
+  const verdict = await page.evaluate(async (worker) => {
     const url = new URL(window.location.href);
     const response = await fetch(
-      `${window.__FRUITBACK_PLAYGROUND__?.workerOrigin}/feedback?url=${encodeURIComponent(url.toString())}&client=playground`,
+      `${worker}/feedback?url=${encodeURIComponent(url.toString())}&client=playground`,
     );
     const { issues } = (await response.json()) as {
       issues: { seed: { anchor: { selector: string; domPath?: string } } }[];
@@ -54,7 +54,7 @@ test('the structural path alone would have landed on the neighbouring card', asy
       domPathResolves: byPath.length === 1,
       domPathIsRight: byPath.length === 1 && byPath[0] === truth,
     };
-  });
+  }, WORKER_ORIGIN);
 
   expect(verdict.selectorIsRight, 'the selector should still find the right button').toBe(true);
   expect(verdict.domPathResolves, 'the path still matches exactly one element').toBe(true);
@@ -78,8 +78,3 @@ test('an element that is gone never leaves a pin that claims to be sure', async 
   await expect(pin.getByRole('button')).toContainText('≈');
 });
 
-declare global {
-  interface Window {
-    __FRUITBACK_PLAYGROUND__?: { workerOrigin: string };
-  }
-}

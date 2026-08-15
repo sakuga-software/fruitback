@@ -65,7 +65,16 @@ test('the widget cannot restyle the page either', async ({ page }) => {
   // Plant a pin, so every stylesheet the widget owns is mounted and the overlay is live.
   await plantPin(page, cta, 'Le CTA devrait être plus large');
 
-  expect(await cta.evaluate((node) => getComputedStyle(node).backgroundColor)).toBe(before);
+  // Both readings have to be taken in the same interaction state, and planting left the pointer on
+  // the button. Moving off starts HeroUI's colour transition back to rest, and a computed style read
+  // mid-transition is the interpolated value — serialized as `oklab(…)` where the resting
+  // declaration serializes as `oklch(…)`. So this polls for the return instead of reading once: the
+  // claim is that the colour comes back to exactly what it was, not that it never moved while the
+  // design system was animating its own button.
+  await page.mouse.move(0, 0);
+  await expect
+    .poll(async () => cta.evaluate((node) => getComputedStyle(node).backgroundColor))
+    .toBe(before);
   // Nothing the widget draws is in the page's own tree — the dev toolbar is the playground's, and
   // deliberately outside the Shadow root, so it is excluded from the count rather than from the rule.
   const strays = await page.evaluate(() =>

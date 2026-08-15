@@ -49,8 +49,10 @@ node --test src/seed.test.ts                 # one file, from the package direct
   Shadow DOM host** (`createCaptureHost`, SKG-492) and **the note popover** (`createComposer`,
   SKG-493). The playground only says where the worker is.
 
-- `apps/playground` (`@fruitback/playground`) — the dev loop (SKG-511): a deliberately hostile fake
-  client site with the widget mounted on it. Not shipped, not deployed.
+- `apps/playground` (`@fruitback/playground`) — the dev loop (SKG-511, SKG-512): a deliberately
+  hostile fake client site with the widget mounted on it. **A React Router 8 + Vite app with HeroUI**
+  since SKG-512, because the widget's clients are React apps and a static page could not exercise
+  half of what the widget does. Not shipped, not deployed.
 
 ## The dev loop
 
@@ -70,14 +72,24 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   `{ ok: true, fakeLinear: true }`, and the boot log says so. It is **not** a mock: an issue is
   stored as the description `buildIssueDescription` produces and read back through the same
   `toSeedIssue` as production, so a broken round trip breaks the playground too.
-- The harness in `client.ts` is **scaffolding, not the product** — SKG-492/493 replace the capture
-  UI, SKG-500 replaces the re-anchoring. Do not grow features there; grow them in `packages/widget`.
-- The playground's own unit test bundles `client.ts` through esbuild, so a broken import fails in CI
-  instead of as a blank page.
+- **The playground is a React app on purpose, and it is the only place three things are true.** The
+  widget mounts in an effect, so it arrives *after* hydration. A client-side navigation changes the
+  page identity with no page load to notice it. And `source` finally has a fiber to read, which is
+  the half of a seed that says *which component* a note is about. Each of those found a real defect
+  the moment it first ran — see below.
+- **A re-render is invisible to the widget.** It re-measures on scroll and resize; neither fires when
+  React swaps a subtree, so the pins have to be resolved again. `fruitback.tsx` does that because the
+  host *caused* the re-render and therefore knows. **A real client site does not** — closing that gap
+  is still open work, and this playground exists to have made it visible.
+- The toolbar and `fruitback.tsx` are **scaffolding, not the product** — SKG-492/493 replace the
+  capture UI, SKG-500 replaces the re-anchoring. Do not grow features there; grow them in
+  `packages/widget`.
+- `apps/playground/.react-router/` is typegen, regenerated on dev and build. It is ignored, not
+  committed.
 
 ## The E2E suite
 
-`pnpm e2e` (Playwright, `e2e/`) starts both servers itself and runs six specs against Chromium.
+`pnpm e2e` (Playwright, `e2e/`) starts both servers itself and runs its specs against Chromium.
 
 - It exists for the two things happy-dom cannot vouch for: a **real selector engine** and **real
   layout**. Everything else stays in `node --test`, which is where it is faster and clearer.
@@ -85,9 +97,14 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   page identity is what keeps them apart. There is no reset between specs.
 - Synchronise on the harness's status line, not on a pin count: the old pins are still in the DOM
   while the new set is being fetched, so counting races.
-- It has already earned its keep twice: it caught the browser caching `GET /feedback` and serving the
-  widget its own stale answer right after planting a pin, and it caught `domPath` resolving cleanly
-  onto the neighbouring card.
+- **Assert on colours by polling, not by reading once.** A design system animates its own colours,
+  and a computed style read mid-transition is the interpolated value — which Chromium serializes in a
+  different colour space (`oklab(…)` where the resting declaration says `oklch(…)`). The same colour,
+  a different string.
+- It has already earned its keep four times: the browser caching `GET /feedback` and serving the
+  widget its own stale answer right after planting a pin; `domPath` resolving cleanly onto the
+  neighbouring card; React 19's `useId` format accepted as a stable id; and the fiber walk throwing on
+  the `null` owner React ends every tree with, which stopped a click from planting anything at all.
 
 ## The widget
 
@@ -103,9 +120,21 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - `page.url` is canonicalized here too. The worker re-does it — it cannot trust a client — but doing
   it on this side is what makes the widget query the read path with the key its seeds were stored
   under.
-- **react-grab owns `source`.** `captureSeed({ source })` always wins; `readReactSource` is a
-  best-effort fallback over React's `__reactFiber$` internals for pages where react-grab is not
-  mounted, and returns `undefined` at the first surprise rather than guessing a file name.
+- **react-grab owns `source`, but only field by field.** `captureSeed({ source })` wins per field
+  and `readReactSource` fills the gaps — a best-effort walk over React's `__reactFiber$` internals
+  that returns `undefined` at the first surprise rather than guessing a file name. Merging rather
+  than choosing is not tidiness: on a design system react-grab gets `file`/`line` right and the
+  component name wrong, and the fiber walk is exactly what knows the name.
+- **A component name a bundler minted is worse than none.** Pointing at a HeroUI button reports
+  `bound $7230ffa83bc0c2cf$var$DOMElement` — the react-aria internal that rendered the host node,
+  scope-hoisted by Parcel. Nobody can search for it. `isMangledComponentName` drops those and the
+  walk continues to the first name a human wrote, which for a HeroUI button is `Button` — the
+  component that really rendered the node. It deliberately does **not** climb to the app's own
+  component: that would report `PlanCard` for anything nested, which is less true and no more useful
+  now that `file`/`line` point at the JSX.
+- **The owner chain ends in `null`, not `undefined`.** Both walks stop on either. Checking only for
+  `undefined` dereferences the root, throws out of `captureSeed`, and a click silently stops planting
+  anything — which is what happened the first time the widget met a real React tree.
 ## The host, and why everything lives in one Shadow root
 
 - `createCaptureHost` owns the widget's DOM: the floating button, the hover highlight, and — through

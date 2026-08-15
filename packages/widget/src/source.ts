@@ -19,7 +19,10 @@ type DebugSource = { fileName?: unknown; lineNumber?: unknown; columnNumber?: un
 
 type Fiber = {
   _debugSource?: DebugSource;
-  _debugOwner?: Fiber;
+  // React terminates the owner chain with `null`, not by omitting the property — so every walk below
+  // has to stop on both. A loop that only checks `undefined` dereferences the root and throws, which
+  // is the one thing this module promises never to do.
+  _debugOwner?: Fiber | null;
   type?: unknown;
   elementType?: unknown;
   return?: Fiber;
@@ -59,12 +62,31 @@ function findFiber(element: Element): Fiber | undefined {
  */
 const MAX_OWNER_HOPS = 20;
 
-function findComponentName(fiber: Fiber): string | undefined {
-  let current: Fiber | undefined = fiber;
+/**
+ * Names no human wrote, which a bundler minted while scope-hoisting a dependency.
+ *
+ * Found by putting the widget on a real design system: pointing at a HeroUI button reported
+ * `$7230ffa83bc0c2cf$var$DOMElement`, because the nearest owner of the `<button>` is a react-aria
+ * internal that Parcel renamed. That is worse than no component at all — it is a name the reader
+ * will go looking for and never find. Skipping it lets the walk continue to the component whose
+ * name is in someone's editor.
+ */
+export const MANGLED_COMPONENT_PATTERNS = [
+  /\$/, // Parcel's scope hoisting: `$hash$var$Name`, `$hash$export$Name`
+  /^[_$]+[0-9]*$/, // a minifier that ran out of letters
+  /^[a-z]{1,2}[0-9]*$/, // and one that had not yet: `t`, `e2`
+];
 
-  for (let hop = 0; hop < MAX_OWNER_HOPS && current !== undefined; hop += 1) {
+export function isMangledComponentName(name: string): boolean {
+  return MANGLED_COMPONENT_PATTERNS.some((pattern) => pattern.test(name));
+}
+
+function findComponentName(fiber: Fiber): string | undefined {
+  let current: Fiber | undefined | null = fiber;
+
+  for (let hop = 0; hop < MAX_OWNER_HOPS && current != null; hop += 1) {
     const name = componentNameOf(current.type) ?? componentNameOf(current.elementType);
-    if (name !== undefined) return name;
+    if (name !== undefined && !isMangledComponentName(name)) return name;
 
     current = current._debugOwner;
   }
@@ -91,9 +113,9 @@ function componentNameOf(type: unknown): string | undefined {
 }
 
 function findDebugSource(fiber: Fiber): DebugSource | undefined {
-  let current: Fiber | undefined = fiber;
+  let current: Fiber | undefined | null = fiber;
 
-  for (let hop = 0; hop < MAX_OWNER_HOPS && current !== undefined; hop += 1) {
+  for (let hop = 0; hop < MAX_OWNER_HOPS && current != null; hop += 1) {
     if (isObject(current._debugSource)) return current._debugSource;
 
     current = current._debugOwner;

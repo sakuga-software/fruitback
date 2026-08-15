@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { expectPinOn, openPlayground, pinFor, plantPin, waitForPins } from './pin.ts';
+import { WORKER_ORIGIN, expectPinOn, openPlayground, pinFor, plantPin, storedSeeds, waitForPins } from './pin.ts';
 
 /** Capture → worker → back again, in a browser that does its own layout and its own CSS parsing. */
 
@@ -35,11 +35,11 @@ test('the selector it picked is unique in a real engine, and skips what a redepl
   await plantPin(page, page.locator('#checkout-cta'), 'Le CTA devrait être plus large');
   await plantPin(page, page.locator('header button'), 'Le menu n’est pas assez visible');
 
-  const anchors = await page.evaluate(async () => {
+  const anchors = await page.evaluate(async (worker) => {
     const url = new URL(window.location.href);
     url.hash = '';
     const response = await fetch(
-      `${window.__FRUITBACK_PLAYGROUND__?.workerOrigin}/feedback?url=${encodeURIComponent(url.toString())}&client=playground`,
+      `${worker}/feedback?url=${encodeURIComponent(url.toString())}&client=playground`,
     );
     const { issues } = (await response.json()) as { issues: { seed: { anchor: { selector: string } } }[] };
 
@@ -47,7 +47,7 @@ test('the selector it picked is unique in a real engine, and skips what a redepl
       selector: issue.seed.anchor.selector,
       matches: document.querySelectorAll(issue.seed.anchor.selector).length,
     }));
-  });
+  }, WORKER_ORIGIN);
 
   expect(anchors).toHaveLength(2);
   for (const anchor of anchors) expect(anchor.matches, `${anchor.selector} is not unique`).toBe(1);
@@ -73,8 +73,27 @@ test('a pin below the fold is placed in the document, not in the viewport', asyn
   await expectPinOn(pinFor(page, 'Trop bas dans la page'), cta);
 });
 
-declare global {
-  interface Window {
-    __FRUITBACK_PLAYGROUND__?: { workerOrigin: string };
-  }
-}
+
+test('a note carries the component and the file it came from', async ({ page }) => {
+  // The reason the playground is a React app at all: `source` is half of what makes a seed useful in
+  // Linear, and a static page had no fiber for it to read. Both assertions below failed on the first
+  // run against real components — see `engine.ts` and `source.ts`.
+  await openPlayground(page, 'source');
+
+  await plantPin(page, page.locator('[data-testid="card-latte"] .add'), 'Le bouton Ajouter est trop discret');
+  await plantPin(page, page.getByRole('heading', { name: 'Nos formules' }), 'Ce titre pourrait être plus clair');
+
+  const seeds = await storedSeeds(page);
+  const button = seeds.find((seed) => seed.note.startsWith('Le bouton'));
+  const heading = seeds.find((seed) => seed.note.startsWith('Ce titre'));
+
+  // A HeroUI button: react-grab reports the react-aria internal that rendered the host node, so the
+  // name has to come from the fiber walk while the location still comes from react-grab. `Button`,
+  // not `AddToCartButton` — the walk stops at the first component a human named, and that is the one
+  // that really rendered this node. Climbing further to reach the app's own component would report
+  // `PlanCard` for anything nested, which is less true, not more useful; the file and line already
+  // point at `AddToCartButton`'s JSX.
+  expect(button?.source).toMatchObject({ component: 'Button', file: expect.stringContaining('site.tsx') });
+  // And a plain element of the page's own, where react-grab is right on its own.
+  expect(heading?.source).toMatchObject({ component: 'Pricing', file: expect.stringContaining('pricing.tsx') });
+});

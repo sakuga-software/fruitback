@@ -115,7 +115,18 @@ describe('stability heuristics', () => {
   });
 
   it('rejects ids a framework minted', () => {
-    for (const id of [':r7:', 'radix-42', 'headlessui-menu-1', 'a3f9c2e81b4d', 'item-20260809']) {
+    for (const id of [
+      ':r7:',
+      // React 19 changed the shape, and the heuristics had never seen it: these anchored fine and
+      // then pointed at nothing after the next remount.
+      '_R_1b5_',
+      '_r_2a_',
+      'react-aria-_R_2j5_',
+      'radix-42',
+      'headlessui-menu-1',
+      'a3f9c2e81b4d',
+      'item-20260809',
+    ]) {
       assert.equal(isStableId(id), false, `${id} should not be trusted`);
     }
   });

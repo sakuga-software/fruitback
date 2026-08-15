@@ -22,7 +22,12 @@ const MAX_CLASSES = 3;
  * tempting — and they change on every render, which makes them the worst possible anchor.
  */
 const GENERATED_ID_PATTERNS = [
-  /:/, // React's `useId`: `:r7:`
+  /:/, // React 18's `useId`: `:r7:`
+  // React 19's `useId`: `_R_1b5_`, and the same shape wherever a library embeds it, as react-aria
+  // does with `react-aria-_R_2j5_`. Found by putting the widget on an actual React app — the static
+  // playground had no `useId` to be wrong about, so this reached production-shaped code unnoticed.
+  /_[Rr]_[0-9a-z]*_/,
+  /^react-aria-/i,
   /^radix-/i,
   /^headlessui-/i,
   /^mui-/i,
