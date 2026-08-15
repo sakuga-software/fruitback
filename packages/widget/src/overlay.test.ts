@@ -231,7 +231,7 @@ describe('the page changing underneath', () => {
 
   it('re-resolves its pins when the page swaps a subtree, with nobody asking it to', async () => {
     // The defect this closes: a framework replaces the element a pin was resolved against, and
-    // neither scroll nor resize fires. Nothing tells the widget — so it has to notice.
+    // neither scroll nor resize fires.
     const page = mountWithCta();
     const resolved: string[] = [];
     overlay = createOverlay({
@@ -242,8 +242,8 @@ describe('the page changing underneath', () => {
     const before = page.document.querySelector('[data-fb-pin]') as HTMLElement;
     assert.equal(before.dataset.fbStrategy, 'selector');
 
-    // What React does on a re-render: the old node is thrown away and an equivalent one takes its
-    // place, somewhere else on the page.
+    // What React does on a re-render: the old node goes, an equivalent one takes its place
+    // elsewhere on the page.
     page.query('button').remove();
     const replacement = page.document.createElement('button');
     replacement.dataset.testid = 'checkout-cta';
@@ -270,15 +270,15 @@ describe('the page changing underneath', () => {
     page.query('button').remove();
     await settle();
 
-    // Re-resolved in place: the same pin element, telling a different and now honest story.
+    // Re-resolved in place: the same pin element, carrying different marks.
     assert.equal(pin.dataset.fbConfident, 'false');
     assert.equal(pin.querySelector('.fb-pin-glyph')?.textContent, '≈');
     assert.ok(pin.classList.contains('fb-pin-uncertain'));
   });
 
   it('does not close a thread someone is reading', async () => {
-    // `render` rebuilds and would slam it shut. A page that mutates while a note is open is the
-    // normal case on an SPA, not an edge one.
+    // `render` rebuilds and would close it. A page mutating while a note is open is normal on an
+    // SPA.
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });
     overlay.render([issueOnCta()]);
@@ -292,8 +292,8 @@ describe('the page changing underneath', () => {
   });
 
   it('does not wake itself up on the pins it draws', async () => {
-    // The default host is `<body>`, so the overlay's own DOM is inside what it observes. Without the
-    // guard, drawing a pin schedules a re-resolution that draws a pin.
+    // The default host is `<body>`, so the overlay's own DOM is inside what it observes. Without
+    // the guard, drawing a pin schedules a resolution that draws a pin.
     const page = mountWithCta();
     let resolves = 0;
     overlay = createOverlay({ document: page.document, onResolve: () => (resolves += 1) });
@@ -336,9 +336,8 @@ describe('coalescing the work', () => {
   });
 
   it('still resolves on a page that never stops mutating', async () => {
-    // The trap in restarting the timer on every mutation: a live feed, a spinner or a marquee would
-    // restart it for ever and the pins would never be resolved again. Starving is worse than
-    // resolving slightly early, so the coalescing has a ceiling.
+    // The trap in restarting the timer on every mutation: a live feed or a spinner restarts it
+    // indefinitely and the pins are never resolved. Hence the ceiling.
     const page = mountWithCta();
     let resolves = 0;
     overlay = createOverlay({ document: page.document, onResolve: () => (resolves += 1) });

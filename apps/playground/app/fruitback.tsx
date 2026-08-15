@@ -58,9 +58,8 @@ export function Fruitback() {
     const overlay = createOverlay({
       host: host.root,
       onSelect: (issue) => setStatus(`${issue.identifier} · ${issue.stateName}`),
-      // The widget re-resolves by itself when the page changes (SKG-513); this only reports it. The
-      // host is told, and never has to work out that it re-rendered — which is what a client's app
-      // could not do.
+      // The widget re-resolves by itself when the page changes (SKG-513). This only reports it: the
+      // host never has to work out that it re-rendered.
       onResolve: (entries) => setStatus(`${entries.length} pin${entries.length > 1 ? 's' : ''}`),
     });
 

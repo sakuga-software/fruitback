@@ -13,10 +13,9 @@ import { type AnchorResolution, resolveAnchor } from './resolve.ts';
  * re-measured on scroll and resize anyway — a `position: fixed` header moves relative to the
  * document as you scroll, and lazily loaded content reflows what is below it.
  *
- * **The page moves under it, and nothing announces that.** It re-measures on scroll and resize, but
- * neither fires when a framework swaps a subtree — the elements the pins were resolved against are
- * simply gone. So it watches the document itself and re-resolves, because the host cannot be asked
- * to notice: on a client's site there is nobody to call `render` again (SKG-513).
+ * **The page moves under it, and nothing announces that.** Scroll and resize do not fire when a
+ * framework swaps a subtree, so the overlay watches the document and re-resolves. A client's app
+ * cannot do that for it (SKG-513).
  *
  * **The overlay must not take the page hostage.** The client's site still has to be usable while
  * pins are on it, so the pin outlines let clicks through and only the badge is clickable. That is
@@ -30,21 +29,14 @@ const BADGE_MAX_LENGTH = 32;
 const THREAD_WIDTH = 300;
 const THREAD_GAP = 8;
 
-/**
- * Long enough to swallow a framework's commit, short enough that nobody watches a stale pin.
- *
- * A React render arrives as several mutation bursts in quick succession; re-resolving on each one
- * would run the cascade three or four times for a single visual change.
- */
+/** A framework commit arrives as several mutation bursts. Resolving on each one repeats the cascade. */
 const RESOLVE_DEBOUNCE_MS = 100;
 
 /**
- * The ceiling on that coalescing, and the reason it is a debounce *with* one.
+ * The ceiling on that coalescing.
  *
- * Restarting the timer on every mutation coalesces a burst properly, but a page that never stops
- * mutating — a live feed, a spinner, a marquee — would then restart it for ever and the pins would
- * never be resolved again. Starving is worse than resolving slightly early, so past this much
- * waiting the pending timer is left to fire.
+ * The timer restarts on every mutation. Without this cap, a page that mutates continuously restarts
+ * it indefinitely and the pins are never resolved at all.
  */
 const RESOLVE_MAX_WAIT_MS = 500;
 
@@ -60,9 +52,8 @@ export type OverlayOptions = {
   /** Called when a pin is clicked, in case the host wants to do more than open the thread. */
   onSelect?: (issue: SeedIssue) => void;
   /**
-   * Called after the overlay has re-resolved its pins by itself, because the page changed under
-   * them. The host is *told*, not asked — it never has to detect the change, which is the whole
-   * point: a client's app cannot.
+   * Called after the overlay re-resolves its pins on its own. The host is told, so it never has to
+   * detect the change itself — which a client's app cannot do.
    */
   onResolve?: (resolutions: { issue: SeedIssue; strategy: AnchorResolution['strategy'] }[]) => void;
 };
@@ -73,9 +64,8 @@ export type Overlay = {
   /** Re-measure every pin. Called for you on scroll and resize. */
   reposition(): void;
   /**
-   * Resolve every pin against the document as it is now, keeping the pins that are already drawn and
-   * the thread that is open. Called for you when the page mutates; `render` is for new data, this is
-   * for the same data on a page that moved.
+   * Resolve every pin against the document as it is now, keeping the drawn pins and the open thread.
+   * Called for you when the page mutates. Use `render` for new data.
    */
   resolve(): void;
   /** What each pin resolved to, in render order — the honest account of what was found. */
@@ -150,12 +140,11 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   }
 
   /**
-   * Re-run the cascade for every pin already on screen, in place.
+   * Re-run the cascade for every pin on screen, in place.
    *
-   * Not `render`: that rebuilds the DOM and closes the thread, which would make a page that mutates
-   * while someone is reading a note slam it shut. The pin elements and the open thread survive; only
-   * what was *found* changes — and it really can change, from `selector` to `bounds` and back, which
-   * is why the marks are re-applied rather than left as they were built.
+   * Not `render`: that rebuilds the DOM and closes the thread, and a page can mutate while someone
+   * reads a note. A resolution can change from `selector` to `bounds` and back, so the confidence
+   * marks are re-applied.
    */
   function resolve(): void {
     if (placed.length === 0) return;
@@ -170,20 +159,17 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 
     observeAnchors();
 
-    // The thread quotes the resolution — "found by its position" — so it is rebuilt for the entry it
-    // was already showing rather than left contradicting the pin above it.
+    // The thread quotes the resolution, so it is rebuilt rather than left contradicting its pin.
     if (open !== undefined && thread !== null) reopenThread(open);
 
     options.onResolve?.(resolutions());
   }
 
   /**
-   * Mutations arrive in bursts — a framework commits in several passes — so the work is coalesced
-   * rather than done per record. `resolveAnchor` runs a query per pin, which is cheap but not free.
+   * Coalesce a burst of mutations into one resolution: `resolveAnchor` runs a query per pin.
    *
-   * The timer restarts on each mutation, so a commit that takes longer than the debounce is still
-   * handled once rather than half-way through and then again. `RESOLVE_MAX_WAIT_MS` is what stops
-   * that from becoming a page that mutates continuously and is therefore never resolved at all.
+   * The timer restarts on each mutation, so a commit longer than the debounce is handled once
+   * instead of twice. `RESOLVE_MAX_WAIT_MS` caps that restarting.
    */
   function scheduleResolve(): void {
     const now = Date.now();
@@ -203,11 +189,10 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   }
 
   /**
-   * What the widget itself draws must never be what wakes it up.
+   * The widget's own DOM must not wake the observer.
    *
-   * With a Shadow root host this is moot — mutations inside it never reach a document observer. With
-   * the default `<body>` host they do, and re-resolving would mutate the container again: an
-   * observer feeding itself for ever.
+   * A Shadow root host hides it: mutations inside one never reach a document observer. The default
+   * `<body>` host does not, and re-resolving mutates the container again.
    */
   function isOurs(node: Node): boolean {
     return container.contains(node) || node === container || node === style;
@@ -223,9 +208,8 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   }
 
   /**
-   * An element can move without the document's structure changing at all — a sibling loads an image,
-   * a font swaps, a flex container reflows. `ResizeObserver` on what each pin resolved to is what
-   * catches those; the mutation observer would not see them.
+   * An element can move with no change to the document structure: a sibling loads an image, a font
+   * swaps, a flex container reflows. The mutation observer does not see those.
    */
   function observeAnchors(): void {
     if (anchors === undefined) return;
@@ -306,19 +290,18 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   document.addEventListener('click', onDocumentClick, true);
   document.addEventListener('keydown', onKeyDown);
 
-  // Structure only — deliberately no `attributes`. A design system toggles classes on every hover,
-  // and watching those would run the cascade continuously to learn nothing: an element whose class
-  // changed but which is still in place needs no re-resolution, since the pin is drawn on its box.
-  // What has to be caught is the element being *replaced*, and that is always a childList change.
+  // Structure only, no `attributes`. A design system toggles classes on every hover, and an element
+  // that changed class but stayed in place needs no re-resolution. A replaced element always shows
+  // up as a childList change.
   //
-  // Taken off the document's own window, never off `globalThis` — the same realm rule as `isElement`
-  // in `dom.ts`. A document from an iframe, or the happy-dom one the unit tests mount, carries its
-  // own constructors; reading the global gets Node's (which has none) and the widget then watches
-  // nothing at all, silently.
+  // Taken off the document's own window, never `globalThis` — the same realm rule as `isElement` in
+  // `dom.ts`. An iframe document, and the happy-dom one the tests mount, carry their own
+  // constructors. Reading the global gets Node's, which has none, so the widget watches nothing and
+  // does not fail.
   const mutations = view?.MutationObserver === undefined ? undefined : new view.MutationObserver(onMutations);
   mutations?.observe(document, { childList: true, subtree: true });
 
-  // Guarded rather than assumed: happy-dom has no ResizeObserver, and neither does an old browser.
+  // happy-dom has no ResizeObserver, and neither does an old browser.
   const anchors = view?.ResizeObserver === undefined ? undefined : new view.ResizeObserver(() => schedule());
 
   return {
@@ -368,12 +351,11 @@ function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolu
 }
 
 /**
- * Everything about a pin that depends on *what was found* rather than on which issue it is.
+ * Everything on a pin that depends on what was found, rather than on which issue it is.
  *
- * Split out because a pin outlives its resolution: when the page changes underneath, the same pin is
- * re-resolved in place, and the marks that say how sure it is have to follow. They used to be
- * written once at build time, which meant a pin re-resolved from `selector` to `bounds` kept
- * claiming it had been recognised.
+ * A pin outlives its resolution: `resolve` re-resolves it in place, so the confidence marks have to
+ * follow. Written once at build time, a pin that fell from `selector` to `bounds` kept claiming it
+ * had been recognised.
  */
 function applyResolution(pin: HTMLElement, issue: SeedIssue, resolution: AnchorResolution): void {
   const style = SEED_STAGE_STYLES[issue.stage];
