@@ -97,6 +97,14 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   page identity is what keeps them apart. There is no reset between specs.
 - Synchronise on the harness's status line, not on a pin count: the old pins are still in the DOM
   while the new set is being fetched, so counting races.
+- **A cold Vite cache is the difference between your machine and CI.** Vite binds its port — so it
+  answers Playwright's readiness probe — before it has optimized dependencies, and it discovers most
+  of them only when a browser asks for the module graph. The first navigation then triggers a
+  re-optimization, in-flight requests return `504 (Outdated Optimize Dep)`, and the page reloads
+  underneath the running spec. `optimizeDeps.include` is **not** enough on its own (React Router
+  optimizes its SSR environment separately); the guarantee is `e2e/warm-up.ts`, a `globalSetup` that
+  loads the app once before anything is measured. Reproduce the CI condition with
+  `rm -rf apps/playground/node_modules/.vite`.
 - **Assert on colours by polling, not by reading once.** A design system animates its own colours,
   and a computed style read mid-transition is the interpolated value — which Chromium serializes in a
   different colour space (`oklab(…)` where the resting declaration says `oklch(…)`). The same colour,
@@ -176,6 +184,11 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - Popover on desktop, **sheet on a phone** — a 320px popover anchored to an element is unusable at
   that width. The anchored position goes through `--fb-composer-*` custom properties rather than
   inline `left`/`top`, because an inline style beats the media query and leaves the sheet offset.
+- **`all: initial` resets `display` too.** Every block element in the Shadow root is inline until the
+  stylesheet says otherwise, and vertical margins on it silently do nothing — the note thread ran its
+  note, byline and warning together into one line. `display` is restored at the reset in `host.ts`,
+  next to the `style, script { display: none }` rule that is there for the same reason, so the next
+  element added to the widget does not meet the surprise again.
 - `prefers-reduced-motion` turns the animations **off**, both here and on the pin. A widget that
   overlays someone else's site is the last thing that should ignore that setting.
 - The pin is a drop: three round corners and one sharp, rotated to point at its element, with a
@@ -282,8 +295,9 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   separate `tsconfig.test.json`; do not "fix" this by adding `node` to the main config.
 - **No backticks inside the CSS template literals** (`STYLES` in `host.ts`, `overlay.ts`,
   `composer.ts`). A comment quoting a symbol closes the literal and the file stops parsing. It has
-  happened twice; the failure is loud — the module will not load — but the cause reads as a mystery
-  until you look at the right line.
+  now happened **three** times, the third while writing a comment about a different bug; the failure
+  is loud — the module will not load — but the cause reads as a mystery until you look at the right
+  line. Write `display:block`, not the same thing in backticks.
 - Comments explain _why_, not _what_ — the tolerant parser and the redundant anchor both exist for
   reasons that are not obvious from the code.
 - Work is tracked in Linear on the
