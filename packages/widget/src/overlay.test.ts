@@ -224,3 +224,130 @@ describe('createOverlay', () => {
     assert.equal(page.document.querySelector('[data-fruitback-overlay]'), null);
   });
 });
+
+describe('the page changing underneath', () => {
+  /** The observer coalesces bursts, so a test has to wait past the debounce. */
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 200));
+
+  it('re-resolves its pins when the page swaps a subtree, with nobody asking it to', async () => {
+    // The defect this closes: a framework replaces the element a pin was resolved against, and
+    // neither scroll nor resize fires.
+    const page = mountWithCta();
+    const resolved: string[] = [];
+    overlay = createOverlay({
+      document: page.document,
+      onResolve: (entries) => resolved.push(...entries.map((entry) => entry.strategy)),
+    });
+    overlay.render([issueOnCta()]);
+    const before = page.document.querySelector('[data-fb-pin]') as HTMLElement;
+    assert.equal(before.dataset.fbStrategy, 'selector');
+
+    // What React does on a re-render: the old node goes, an equivalent one takes its place
+    // elsewhere on the page.
+    page.query('button').remove();
+    const replacement = page.document.createElement('button');
+    replacement.dataset.testid = 'checkout-cta';
+    replacement.textContent = 'Commander';
+    page.document.querySelector('main')?.append(replacement);
+    setRect(replacement, { left: 400, top: 600, width: 200, height: 40 });
+
+    await settle();
+
+    const pin = page.document.querySelector('[data-fb-pin]') as HTMLElement;
+    assert.equal(pin.style.left, '400px', 'the pin followed its element');
+    assert.equal(pin.style.top, '600px');
+    assert.deepEqual(resolved, ['selector'], 'and the host was told, rather than asked to notice');
+  });
+
+  it('stops claiming to be sure when the element it recognised is gone', async () => {
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta()]);
+
+    const pin = page.document.querySelector('[data-fb-pin]') as HTMLElement;
+    assert.equal(pin.dataset.fbConfident, 'true');
+
+    page.query('button').remove();
+    await settle();
+
+    // Re-resolved in place: the same pin element, carrying different marks.
+    assert.equal(pin.dataset.fbConfident, 'false');
+    assert.equal(pin.querySelector('.fb-pin-glyph')?.textContent, '≈');
+    assert.ok(pin.classList.contains('fb-pin-uncertain'));
+  });
+
+  it('does not close a thread someone is reading', async () => {
+    // `render` rebuilds and would close it. A page mutating while a note is open is normal on an
+    // SPA.
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta()]);
+    (page.document.querySelector('.fb-pin-badge') as HTMLElement).click();
+    assert.equal(page.document.querySelectorAll('[data-fb-thread]').length, 1);
+
+    page.document.querySelector('main')?.append(page.document.createElement('div'));
+    await settle();
+
+    assert.equal(page.document.querySelectorAll('[data-fb-thread]').length, 1, 'still open');
+  });
+
+  it('does not wake itself up on the pins it draws', async () => {
+    // The default host is `<body>`, so the overlay's own DOM is inside what it observes. Without
+    // the guard, drawing a pin schedules a resolution that draws a pin.
+    const page = mountWithCta();
+    let resolves = 0;
+    overlay = createOverlay({ document: page.document, onResolve: () => (resolves += 1) });
+    overlay.render([issueOnCta()]);
+
+    await settle();
+
+    assert.equal(resolves, 0);
+  });
+
+  it('costs nothing on a page with no pins', async () => {
+    const page = mountWithCta();
+    let resolves = 0;
+    overlay = createOverlay({ document: page.document, onResolve: () => (resolves += 1) });
+    overlay.render([]);
+
+    page.document.querySelector('main')?.append(page.document.createElement('div'));
+    await settle();
+
+    assert.equal(resolves, 0);
+  });
+});
+
+describe('coalescing the work', () => {
+  it('resolves once for a burst of mutations, not once per mutation', async () => {
+    const page = mountWithCta();
+    let resolves = 0;
+    overlay = createOverlay({ document: page.document, onResolve: () => (resolves += 1) });
+    overlay.render([issueOnCta()]);
+
+    // What a framework commit looks like from out here: several passes, close together.
+    const main = page.document.querySelector('main');
+    for (let pass = 0; pass < 5; pass += 1) {
+      main?.append(page.document.createElement('div'));
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+
+    assert.equal(resolves, 1);
+  });
+
+  it('still resolves on a page that never stops mutating', async () => {
+    // The trap in restarting the timer on every mutation: a live feed or a spinner restarts it
+    // indefinitely and the pins are never resolved. Hence the ceiling.
+    const page = mountWithCta();
+    let resolves = 0;
+    overlay = createOverlay({ document: page.document, onResolve: () => (resolves += 1) });
+    overlay.render([issueOnCta()]);
+
+    const main = page.document.querySelector('main');
+    const noisy = setInterval(() => main?.append(page.document.createElement('div')), 20);
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    clearInterval(noisy);
+
+    assert.ok(resolves >= 1, `never resolved under continuous mutation (${resolves})`);
+  });
+});

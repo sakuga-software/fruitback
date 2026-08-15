@@ -12,7 +12,7 @@ import {
 } from '@fruitback/widget';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
-import { redeploy, removeCard, useSiteState } from './site-state';
+import { redeploy, removeCard } from './site-state';
 
 /**
  * The widget, mounted the way a client site would mount it — and the dev toolbar, which is not part
@@ -34,7 +34,6 @@ const WORKER_ORIGIN = import.meta.env.VITE_FRUITBACK_WORKER ?? 'http://localhost
 
 export function Fruitback() {
   const location = useLocation();
-  const site = useSiteState();
   const [status, setStatus] = useState('—');
   const widget = useRef<{ host: CaptureHost; overlay: Overlay; composer: Composer } | null>(null);
   const target = useRef<CaptureTarget | null>(null);
@@ -59,6 +58,9 @@ export function Fruitback() {
     const overlay = createOverlay({
       host: host.root,
       onSelect: (issue) => setStatus(`${issue.identifier} · ${issue.stateName}`),
+      // The widget re-resolves by itself when the page changes (SKG-513). This only reports it: the
+      // host never has to work out that it re-rendered.
+      onResolve: (entries) => setStatus(`${entries.length} pin${entries.length > 1 ? 's' : ''}`),
     });
 
     const composer = createComposer({
@@ -92,15 +94,6 @@ export function Fruitback() {
     const overlay = widget.current?.overlay;
     if (overlay !== undefined) void refresh(overlay, setStatus);
   }, [location.pathname, location.search]);
-
-  // And a re-render moves or replaces the elements the pins were resolved against, so they have to
-  // be resolved again. **The widget cannot see this by itself**: it re-measures on scroll and resize,
-  // and neither fires when React swaps a subtree. Here the host knows, because the host caused it —
-  // a real client site does not, which is a gap this playground exists to have made visible.
-  useEffect(() => {
-    const overlay = widget.current?.overlay;
-    if (overlay !== undefined) void refresh(overlay, setStatus);
-  }, [site.deployment, site.removed]);
 
   return <DevToolbar status={status} onReload={() => void refresh(widget.current?.overlay, setStatus)} />;
 }

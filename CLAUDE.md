@@ -77,10 +77,11 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   page identity with no page load to notice it. And `source` finally has a fiber to read, which is
   the half of a seed that says *which component* a note is about. Each of those found a real defect
   the moment it first ran — see below.
-- **A re-render is invisible to the widget.** It re-measures on scroll and resize; neither fires when
-  React swaps a subtree, so the pins have to be resolved again. `fruitback.tsx` does that because the
-  host *caused* the re-render and therefore knows. **A real client site does not** — closing that gap
-  is still open work, and this playground exists to have made it visible.
+- **A re-render used to be invisible to the widget**, and the playground re-resolved by hand because
+  the host had caused it and therefore knew. A client's app cannot know, so SKG-513 moved that into
+  the overlay: `fruitback.tsx` now only *reports* what the widget decided, through `onResolve`. The
+  proof that the gap is really closed is that deleting the manual call left `reanchor.spec.ts` green
+  — and that restoring the old overlay makes all three of its specs fail.
 - The toolbar and `fruitback.tsx` are **scaffolding, not the product** — SKG-492/493 replace the
   capture UI, SKG-500 replaces the re-anchoring. Do not grow features there; grow them in
   `packages/widget`.
@@ -212,6 +213,21 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   exactly right.
 - The overlay positions in **document coordinates** and re-measures on scroll and resize — a
   `position: fixed` header moves relative to the document as the page scrolls.
+- **It also watches the page, because nothing announces a re-render** (SKG-513). A `MutationObserver`
+  on `childList`/`subtree` re-resolves every pin, debounced, and a `ResizeObserver` on each anchored
+  element catches what moves without the structure changing. Deliberately **not** `attributes`: a
+  design system toggles classes on every hover, and an element that merely changed class is still
+  where it was — what must be caught is the element being *replaced*, which is always a childList
+  change.
+- **`resolve()` is not `render()`.** `render` takes new data and rebuilds, which closes the thread;
+  `resolve` keeps the pins and the open thread and only updates what was *found*. A page that mutates
+  while someone is reading a note is the normal case on an SPA, so slamming the thread shut is not an
+  option. It re-applies the confidence marks too: a pin that fell from `selector` to `bounds` used to
+  keep claiming it had been recognised, because those were written once at build time.
+- **Take `MutationObserver` and `ResizeObserver` off the document's own window**, never off
+  `globalThis` — the same realm rule as `isElement`. Reading the global gets Node's (which has
+  neither), and the widget then watches nothing at all, silently. A unit test caught this; nothing
+  else would have.
 - **Pins let clicks through**; only the badge is clickable. A widget that swallows the client's own
   buttons is one they turn off.
 - `createOverlay({ host })` takes where to render. It defaults to `<body>`; SKG-492's Shadow root
