@@ -202,3 +202,17 @@ describe('whose word the attribution is', () => {
     assert.deepEqual(parsed.seed, seed);
   });
 });
+
+describe('a verified reporter with no name', () => {
+  it('is identified by its id rather than read as anonymous', () => {
+    // A token carrying only `sub` identifies someone; it just does not name them. Calling that
+    // "Anonymous" throws away the distinction the line exists to make.
+    const description = buildIssueDescription(seedFixture({ reporter: { id: 'user_42', verified: true } }));
+
+    assert.match(description, /\*\*Reported by\*\* · user_42 \(verified\)/);
+  });
+
+  it('is still anonymous when the reporter said nothing at all', () => {
+    assert.match(buildIssueDescription(seedFixture({ reporter: undefined })), /\*\*Reported by\*\* · Anonymous/);
+  });
+});

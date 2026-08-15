@@ -31,8 +31,14 @@ const clientSchema = z.object({
    */
   origins: z.array(z.string().min(1)).min(1).optional(),
   /**
-   * Shared with the client site so it can mint identity tokens (SKG-498). Without one, this client's
-   * reporters are always self-declared — which is a perfectly good mode, and the default.
+   * Shared with this client's site so it can mint identity tokens (SKG-498). Without one, this
+   * client's reporters are always self-declared — a perfectly good mode, and the default.
+   *
+   * **Deliberately not inherited from `FRUITBACK_IDENTITY_SECRET`**, unlike `teamId` and
+   * `projectId`. Those are routing; this is a signing key. One secret shared across tenants means a
+   * compromised tenant can mint a *verified* identity on any other tenant's issues — the same
+   * reasoning as the fallback team above, and the same answer: on a multi-tenant worker the default
+   * is the leak.
    */
   identitySecret: z.string().min(32).optional(),
 });
@@ -131,6 +137,8 @@ export function resolveClient({ clients, clientId, origin, fallback }: ResolveCl
     routing: {
       teamId: client.teamId ?? fallback.teamId,
       projectId: client.projectId ?? fallback.projectId,
+      // No `?? fallback.identitySecret` — see the field's own note. A mapped client that wants
+      // verified identities declares its own key.
       identitySecret: client.identitySecret,
     },
   };

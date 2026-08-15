@@ -99,8 +99,10 @@ export function buildIssueMetadata(seed: Seed): string[] {
  * colleague's name on a complaint and have it read as theirs.
  */
 function formatReporter(reporter: Seed['reporter']): string {
-  const who = [reporter?.name, reporter?.email].filter(Boolean).join(' · ');
-  if (who.length === 0) return 'Anonymous';
+  // A token carrying only `sub` identifies someone perfectly well; it just does not name them.
+  // Reading that as "Anonymous" would throw away the one distinction this line exists to make.
+  const who = [reporter?.name, reporter?.email].filter(Boolean).join(' · ') || reporter?.id;
+  if (who === undefined || who.length === 0) return 'Anonymous';
 
   return reporter?.verified === true ? `${who} (verified)` : `${who} (unverified — self-declared)`;
 }

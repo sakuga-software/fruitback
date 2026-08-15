@@ -49,8 +49,11 @@ const configSchema = z.object({
   linearProjectId: z.string().min(1).optional(),
   /**
    * Shared with the client site so it can mint identity tokens (SKG-498). Absent — the default —
-   * means every reporter is self-declared, which is a perfectly good way to run this. A mapped
-   * client's own `identitySecret` takes precedence over it.
+   * means every reporter is self-declared, which is a perfectly good way to run this.
+   *
+   * **This is the single-client key.** A worker with a client map ignores it: each client declares
+   * its own `identitySecret` or has none, because one signing key shared across tenants lets a
+   * compromised tenant mint verified identities on anyone else's issues.
    *
    * 32 characters minimum, because a short HMAC secret is a guessable one.
    */

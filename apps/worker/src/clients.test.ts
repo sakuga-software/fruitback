@@ -129,3 +129,42 @@ describe('originsFromClients', () => {
     assert.deepEqual(originsFromClients(undefined), []);
   });
 });
+
+describe('the identity secret is not routing', () => {
+  it('does not lend the worker’s secret to a mapped client', () => {
+    // `teamId` and `projectId` fall back per field; a signing key must not. One secret shared across
+    // tenants lets a compromised tenant mint a verified identity on anyone else's issues — the same
+    // reasoning as the fallback team, and the same answer.
+    const resolved = resolveClient({
+      clients: { acme: { teamId: 'team_acme' } },
+      clientId: 'acme',
+      origin: null,
+      fallback: { ...FALLBACK, identitySecret: 'the-worker-wide-secret-long-enough' },
+    });
+
+    assert.ok(resolved.ok);
+    assert.equal(resolved.routing.identitySecret, undefined);
+    // Routing still falls back, which is the difference being drawn.
+    assert.equal(resolved.routing.projectId, 'project_default');
+  });
+
+  it('uses a client’s own secret when it has one', () => {
+    const resolved = resolveClient({
+      clients: { acme: { teamId: 'team_acme', identitySecret: 'the-acme-secret-which-is-long-enough' } },
+      clientId: 'acme',
+      origin: null,
+      fallback: { ...FALLBACK, identitySecret: 'the-worker-wide-secret-long-enough' },
+    });
+
+    assert.ok(resolved.ok);
+    assert.equal(resolved.routing.identitySecret, 'the-acme-secret-which-is-long-enough');
+  });
+
+  it('still uses the worker’s secret when there is no map at all', () => {
+    const fallback = { ...FALLBACK, identitySecret: 'the-worker-wide-secret-long-enough' };
+    const resolved = resolveClient({ clients: undefined, clientId: undefined, origin: null, fallback });
+
+    assert.ok(resolved.ok);
+    assert.equal(resolved.routing.identitySecret, 'the-worker-wide-secret-long-enough');
+  });
+});
