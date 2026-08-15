@@ -351,3 +351,46 @@ describe('coalescing the work', () => {
     assert.ok(resolves >= 1, `never resolved under continuous mutation (${resolves})`);
   });
 });
+
+describe('showing only some pins', () => {
+  it('draws only what the filter accepts, and can change its mind without new data', () => {
+    // The filter belongs here rather than in the embedder for the same reason SKG-513's observer
+    // does: on a client's site nobody is going to fetch the issues again to hide a stage.
+    const page = mountWithCta();
+    let hidden: string[] = [];
+    overlay = createOverlay({
+      document: page.document,
+      shouldShow: (issue) => !hidden.includes(issue.stage),
+    });
+
+    overlay.render([issueOnCta({ stage: 'ripe' }), issueOnCta({ stage: 'seeded' })]);
+    assert.equal(page.document.querySelectorAll('[data-fb-pin]').length, 2);
+
+    hidden = ['ripe'];
+    overlay.refilter();
+
+    const stages = [...page.document.querySelectorAll('[data-fb-pin]')].map(
+      (pin) => (pin as HTMLElement).dataset.fbStage,
+    );
+    assert.deepEqual(stages, ['seeded']);
+
+    // And back again, from the issues it kept rather than from a request.
+    hidden = [];
+    overlay.refilter();
+    assert.equal(page.document.querySelectorAll('[data-fb-pin]').length, 2);
+  });
+});
+
+describe('the issues it was handed', () => {
+  it('keeps a copy, so a caller mutating their array does not change the screen', () => {
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    const issues = [issueOnCta()];
+
+    overlay.render(issues);
+    issues.push(issueOnCta());
+    overlay.refilter();
+
+    assert.equal(page.document.querySelectorAll('[data-fb-pin]').length, 1);
+  });
+});

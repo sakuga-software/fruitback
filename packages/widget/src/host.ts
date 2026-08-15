@@ -35,6 +35,11 @@ export type CaptureHostOptions = {
   /** Label on the floating button. */
   label?: string;
   /**
+   * Adds a settings button next to the floating one, and calls this when it is pressed (SKG-503).
+   * Left out, there is no button — a widget with a gear that opens nothing is worse than none.
+   */
+  onConfigure?: () => void;
+  /**
    * Anything else the pointer must skip. The widget already excludes itself; a page that mounts its
    * own chrome around the widget — a dev toolbar, the config panel of SKG-503 — says so here, or the
    * reporter ends up leaving feedback about the feedback button.
@@ -75,6 +80,17 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   button.dataset.fbHostLaunch = '';
   button.textContent = options.label ?? '🌱 Laisser un feedback';
 
+  // Beside the launch button rather than inside the settings panel, because the panel is what it
+  // opens. Only built when there is something to open.
+  const configure = document.createElement('button');
+  configure.type = 'button';
+  configure.className = 'fb-configure';
+  configure.dataset.fbHostConfigure = '';
+  // Distinct from the panel's own name: two things sharing one accessible name is ambiguous to a
+  // screen reader, and to anything else that finds elements by their name.
+  configure.setAttribute('aria-label', 'Ouvrir les réglages Fruitback');
+  configure.textContent = '⚙';
+
   const highlight = document.createElement('div');
   highlight.className = 'fb-highlight';
   highlight.dataset.fbHostHighlight = '';
@@ -83,7 +99,21 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   panel.className = 'fb-panel';
   panel.dataset.fbHostPanel = '';
 
-  root.append(style, button, highlight, panel);
+  // A dock rather than two fixed corners: the gear has to sit beside a button whose width is the
+  // embedder's label, and no offset computed from the gear's own size can know that. It overlapped
+  // the launch button until a recording showed it.
+  const dock = document.createElement('div');
+  dock.className = 'fb-dock';
+  if (options.onConfigure !== undefined) dock.append(configure);
+  dock.append(button);
+
+  root.append(style, dock, highlight, panel);
+
+  configure.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    options.onConfigure?.();
+  });
 
   let capturing = false;
   let hovered: Element | null = null;
@@ -197,16 +227,31 @@ style, script { display: none; }
 */
 div, p, header, footer, section, form { display: block; }
 li { display: list-item; }
-.fb-launch {
+.fb-dock {
   position: fixed;
   right: 16px;
   bottom: 16px;
   z-index: 2147483200;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fb-launch {
   padding: 10px 14px;
   border-radius: 999px;
   background: #e53935;
   color: #fff;
   font: 600 13px/1 -apple-system, system-ui, sans-serif;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+.fb-configure {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: #44403c;
+  color: #fff;
+  font: 600 14px/1 -apple-system, system-ui, sans-serif;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
   cursor: pointer;
 }

@@ -33,7 +33,7 @@ test('the selector it picked is unique in a real engine, and skips what a redepl
 }) => {
   await openPlayground(page, 'selector');
   await plantPin(page, page.locator('#checkout-cta'), 'Le CTA devrait être plus large');
-  await plantPin(page, page.locator('header button'), 'Le menu n’est pas assez visible');
+  await plantPin(page, page.locator('main header button'), 'Le menu n’est pas assez visible');
 
   const anchors = await page.evaluate(async (worker) => {
     const url = new URL(window.location.href);

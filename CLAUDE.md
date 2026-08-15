@@ -196,6 +196,28 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   squash-and-stretch entrance. The note moved to the badge's `aria-label` — that is what keeps it
   reachable by a screen reader, and by a test looking for it by role.
 
+## The settings panel
+
+- **What is not configurable is the design** (SKG-503). The ticket asked for the Linear team, project
+  and labels; they are absent. Since SKG-504 the worker resolves those from the client id and refuses
+  an id it does not know, so a browser naming its own team would either be ignored — a setting that
+  does nothing is worse than none — or obeyed, which lets any page write into any workspace. The
+  client id is what the reporter can say; what it routes to stays server-side.
+- `config.ts` is the store, `panel.ts` the UI. It writes on every change rather than behind a Save
+  button, and **reading `localStorage` can throw** rather than return `null` — Safari in private
+  browsing raises on the property itself, so the widget must still start with storage refused.
+- **The stored config is parsed like a seed**: tolerant, field by field. It is a string a human can
+  edit in devtools, and a malformed one costs the reporter their preferences, never the widget.
+- **Filtering lives in the overlay, not in the embedder.** `shouldShow` plus `refilter` redraw from
+  the issues already held, so hiding a stage costs no request — and, as with SKG-513, a client's app
+  is not going to re-fetch on the widget's behalf.
+- **Do not use generic tags in the widget's chrome.** Playwright's selectors pierce open shadow
+  roots, so a `<header>` in the panel made the page's own `header button` ambiguous for anything
+  reading the composed tree. The panel uses a `div`, and the E2E specs scope to `main header button`.
+- **Two elements must not share one accessible name.** The gear says `Ouvrir les réglages Fruitback`
+  and the dialog `Réglages Fruitback`; giving both the same name is ambiguous to a screen reader and
+  to any test that finds elements by name.
+
 ## Re-anchoring, and why a pin says how sure it is
 
 - `resolveAnchor` walks the anchor's claims in the order `SEED_ANCHOR_STRATEGIES` declares:
