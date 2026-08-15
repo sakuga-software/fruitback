@@ -188,6 +188,15 @@ const STYLES = `
   by looking at it; no unit test would have, since happy-dom draws nothing.
 */
 style, script { display: none; }
+/*
+  And it undoes the browser's display:block on every block element, so a paragraph is inline until
+  something says otherwise: in the note thread the note, its byline and the "found by position"
+  warning all ran together into one line, vertical margins silently doing nothing. Restoring it here
+  rather than on each class is what keeps the next element added to the widget from inheriting the
+  same surprise. Found by looking at a recording — every unit test passed.
+*/
+div, p, header, footer, section, form { display: block; }
+li { display: list-item; }
 .fb-launch {
   position: fixed;
   right: 16px;

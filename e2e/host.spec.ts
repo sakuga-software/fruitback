@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openPlayground, plantPin } from './pin.ts';
+import { badgeFor, openPlayground, plantPin } from './pin.ts';
 
 /**
  * The Shadow DOM host (SKG-492), in a browser that has a real selector engine, a real cascade and
@@ -65,7 +65,16 @@ test('the widget cannot restyle the page either', async ({ page }) => {
   // Plant a pin, so every stylesheet the widget owns is mounted and the overlay is live.
   await plantPin(page, cta, 'Le CTA devrait être plus large');
 
-  expect(await cta.evaluate((node) => getComputedStyle(node).backgroundColor)).toBe(before);
+  // Both readings have to be taken in the same interaction state, and planting left the pointer on
+  // the button. Moving off starts HeroUI's colour transition back to rest, and a computed style read
+  // mid-transition is the interpolated value — serialized as `oklab(…)` where the resting
+  // declaration serializes as `oklch(…)`. So this polls for the return instead of reading once: the
+  // claim is that the colour comes back to exactly what it was, not that it never moved while the
+  // design system was animating its own button.
+  await page.mouse.move(0, 0);
+  await expect
+    .poll(async () => cta.evaluate((node) => getComputedStyle(node).backgroundColor))
+    .toBe(before);
   // Nothing the widget draws is in the page's own tree — the dev toolbar is the playground's, and
   // deliberately outside the Shadow root, so it is excluded from the count rather than from the rule.
   const strays = await page.evaluate(() =>
@@ -144,4 +153,27 @@ test('the pins live in the Shadow root now, and still land on their elements', a
       () => document.querySelector('[data-fruitback-host]')?.shadowRoot?.querySelectorAll('[data-fb-pin]').length,
     ),
   ).toBe(1);
+});
+
+test('a note, its byline and its warning are three lines, not one paragraph', async ({ page }) => {
+  // `all: initial` resets `display` too, so every block element in the Shadow root is inline until
+  // the stylesheet says otherwise — and the note ran into its own byline. The margins were there and
+  // did nothing. Asserted on layout rather than on the rule, because the rule is not the promise.
+  await openPlayground(page, 'thread-layout');
+  const button = page.locator('[data-testid="card-latte"] .add');
+
+  await plantPin(page, button, 'Une note assez longue pour se voir');
+  await badgeFor(page, 'Une note assez').click();
+
+  const lines = await page.evaluate(() => {
+    const root = document.querySelector('[data-fruitback-host]')?.shadowRoot;
+    const rect = (selector: string) => root?.querySelector(selector)?.getBoundingClientRect();
+    const note = rect('.fb-thread-note');
+    const meta = rect('.fb-thread-meta');
+
+    return note === undefined || meta === undefined ? null : { noteBottom: note.bottom, metaTop: meta.top };
+  });
+
+  expect(lines, 'the thread should show a note and a byline').not.toBeNull();
+  expect(lines!.metaTop, 'the byline starts below the note, not beside it').toBeGreaterThanOrEqual(lines!.noteBottom);
 });

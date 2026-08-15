@@ -1,6 +1,13 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
 /**
+ * The worker's dev port, mirrored from `playwright.config.ts` — this suite starts both servers, so
+ * it knows the topology. The app itself takes the origin from `VITE_FRUITBACK_WORKER` and has no
+ * business exposing a global just so a test can find it.
+ */
+export const WORKER_ORIGIN = 'http://localhost:8788';
+
+/**
  * The three moves every spec makes: open a page of one's own, plant a pin, and check a pin sits on
  * an element.
  *
@@ -88,4 +95,22 @@ export async function expectPinOn(pin: Locator, element: Locator): Promise<void>
       { message: 'the pin never settled on its element' },
     )
     .toBeLessThanOrEqual(1);
+}
+
+/**
+ * The seeds the worker actually stored for this page, straight from the read path.
+ *
+ * The URL is rebuilt from `window.location` rather than canonicalized: every spec captures on a
+ * plain `/?case=…`, which `canonicalizePageUrl` already leaves untouched. A spec that ever needs a
+ * fragment or a tracking parameter has to canonicalize here, or it will look up a key nothing was
+ * stored under.
+ */
+export async function storedSeeds(page: Page): Promise<{ note: string; source?: Record<string, unknown> }[]> {
+  return page.evaluate(async (origin) => {
+    const canonical = `${window.location.origin}${window.location.pathname}${window.location.search}`;
+    const response = await fetch(`${origin}/feedback?url=${encodeURIComponent(canonical)}&client=playground`);
+    const { issues } = (await response.json()) as { issues: { seed: { note: string; source?: Record<string, unknown> } }[] };
+
+    return issues.map((issue) => issue.seed);
+  }, WORKER_ORIGIN);
 }

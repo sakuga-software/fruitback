@@ -65,9 +65,42 @@ describe('readReactSource', () => {
     assert.deepEqual(readReactSource(button), { component: 'CheckoutCta' });
   });
 
+  it('walks past a design system internal the bundler renamed', () => {
+    // The shape a real HeroUI button has: react-aria renders the host node, Parcel scope-hoisted its
+    // component into `$hash$var$DOMElement`, and the name worth putting in a Linear issue is two
+    // owners further up. Found on the playground once it became a React app.
+    const button = mountButton();
+    const internal = Object.assign(function DOMElement() {}, { displayName: '$7230ffa83bc0c2cf$var$DOMElement' });
+    function AddToCartButton() {}
+    attachFiber(button, {
+      type: 'button',
+      _debugOwner: { type: internal, _debugOwner: { type: AddToCartButton } },
+    });
+
+    assert.deepEqual(readReactSource(button), { component: 'AddToCartButton' });
+  });
+
+  it('walks past a minified name rather than reporting a single letter', () => {
+    const button = mountButton();
+    const minified = Object.assign(function t() {}, { displayName: '' });
+    function PlanCard() {}
+    attachFiber(button, { type: 'button', _debugOwner: { type: minified, _debugOwner: { type: PlanCard } } });
+
+    assert.deepEqual(readReactSource(button), { component: 'PlanCard' });
+  });
+
   it('gives up rather than guessing when the internals are not what it expected', () => {
     const button = mountButton();
     attachFiber(button, { type: 'button', _debugSource: { fileName: 42 }, _debugOwner: { type: 'div' } });
+
+    assert.equal(readReactSource(button), undefined);
+  });
+
+  it('stops at the root, which React marks with a null owner rather than by omission', () => {
+    // The shape a real React tree ends in. A walk that only stops on `undefined` dereferences this
+    // and throws out of `captureSeed` — which is how a click stopped planting anything at all.
+    const button = mountButton();
+    attachFiber(button, { type: 'button', _debugOwner: { type: 'div', _debugOwner: null } });
 
     assert.equal(readReactSource(button), undefined);
   });
