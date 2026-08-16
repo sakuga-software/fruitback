@@ -113,12 +113,20 @@ describe('a consumer installing this from npm', () => {
    *
    * So this one does what a consumer does: pack both packages, install them into a scratch project,
    * and type-check an import with ordinary settings. Slow, and the only honest guard.
+   *
+   * **Both `dist` directories are deleted first**, on purpose. Packing a tree this file had already
+   * built is not the path a release takes: a bare `pnpm publish` on a fresh checkout has no `dist`
+   * at all, and only each package's `prepack` hook puts one there. Building before packing is what
+   * hid a tarball that shipped nothing but sources.
    */
   it('type-checks an import with no special tsconfig', async () => {
     const scratch = await mkdtemp(join(tmpdir(), 'fruitback-consumer-'));
     const workspace = join(root, '..', '..');
 
     try {
+      await rm(join(root, 'dist'), { recursive: true, force: true });
+      await rm(join(root, '..', 'shared', 'dist'), { recursive: true, force: true });
+
       for (const pkg of ['@sakuga/fruitback-shared', '@sakuga/fruitback-widget']) {
         await run('pnpm', ['--filter', pkg, 'pack', '--pack-destination', scratch], { cwd: workspace, shell: true });
       }
@@ -147,8 +155,23 @@ describe('a consumer installing this from npm', () => {
         }),
       );
 
+      // Asserted before installing, because "the tarball contains a build" is the exact thing that
+      // was wrong twice: once with `main` pointing at sources, once with no `dist` packed at all.
+      // A type-check alone reports it as a missing module, three layers from the cause.
       const tarballs = (await import('node:fs')).readdirSync(scratch).filter((name) => name.endsWith('.tgz'));
-      await run('npm', ['install', '--no-audit', '--no-fund', ...tarballs], { cwd: scratch, shell: true });
+
+      for (const tarball of tarballs) {
+        const { stdout } = await run('tar', ['-tzf', join(scratch, tarball)]);
+        assert.ok(
+          stdout.includes('package/dist/'),
+          `${tarball} ships no dist — its prepack did not run, and publishConfig points at one`,
+        );
+      }
+      // `./` matters: npm reads a bare name as a registry package, not a local file.
+      await run('npm', ['install', '--no-audit', '--no-fund', ...tarballs.map((name) => `./${name}`)], {
+        cwd: scratch,
+        shell: true,
+      });
 
       await run(process.execPath, [join(workspace, 'node_modules/typescript/bin/tsc'), '-p', 'tsconfig.json'], {
         cwd: scratch,

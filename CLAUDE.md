@@ -137,9 +137,15 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   failed with `TS5097` while every check here stayed green.
 - **`rewriteRelativeImportExtensions` rewrites the JavaScript and not the declarations.** Both builds
   therefore post-process their `.d.ts` and then assert no `.ts` extension survived.
-- **The guard that matters is `type-checks an import with no special tsconfig`**: it packs both
-  packages, installs them into a scratch project and runs an ordinary `tsc`. Structural assertions on
-  our own output are what let the broken contract package ship — they were all green.
+- **Both packages need `prepack`.** `pnpm pack` and `pnpm publish` build through it; without one the
+  tarball ships `src` and nothing else, while `publishConfig` points at a `dist` that is not there.
+  That is the same defect as the paragraph above, arriving a different way — first as `TS5097`, then
+  as an unresolvable module.
+- **The guard that matters is `type-checks an import with no special tsconfig`**: it deletes both
+  `dist` directories, packs, asserts each tarball actually contains one, installs them into a scratch
+  project and runs an ordinary `tsc` with `skipLibCheck` **off**. Every part of that sentence is
+  there because something without it shipped green — building before packing hid the missing hook,
+  and `skipLibCheck` hid the very declarations the contract package exists to make resolvable.
 - `react-grab` and `zod` are **bundled, and are devDependencies**: a client site must not have to
   install — or resolve a version conflict over — a library it never asked for.
 - The ESM build is left readable (the consumer's bundler minifies it); the IIFE is minified because it

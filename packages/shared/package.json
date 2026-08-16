@@ -35,6 +35,7 @@
     "format": "oxfmt --check .",
     "format:fix": "oxfmt .",
     "lint": "oxlint .",
+    "prepack": "pnpm build",
     "test": "node --test 'src/**/*.test.ts'",
     "test:watch": "node --test --watch 'src/**/*.test.ts'",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json"
