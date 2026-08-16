@@ -1,5 +1,6 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import type { SeedReporter } from '@fruitback/shared';
 import { type Composer, createComposer } from './composer.ts';
 import { type MountedPage, keyboardEventCtor, mountPage } from './dom.fixture.ts';
 
@@ -20,7 +21,7 @@ afterEach(() => {
 
 let mounted: MountedPage | null = null;
 
-function mount(onSubmit: (note: string) => Promise<boolean | void>) {
+function mount(onSubmit: (note: string, reporter?: SeedReporter) => Promise<boolean | void>) {
   const page = mountPage('<main><button id="cta">Commander</button></main>', { width: 1_000, height: 1_000 });
   const host = page.document.createElement('div');
   page.document.body.append(host);
@@ -226,5 +227,64 @@ describe('createComposer', () => {
 
     assert.equal(host.querySelector('[data-fb-composer]'), null);
     assert.equal(host.querySelector('style'), null);
+  });
+});
+
+describe('saying who you are, or not', () => {
+  const query = (page: MountedPage, selector: string) => page.document.querySelector(selector) as HTMLElement;
+
+  it('is anonymous by default: the fields are hidden and nothing is claimed', async () => {
+    // Anonymous has to stay the path of least resistance. It is the default in the contract too —
+    // an absent reporter, not an empty one.
+    const seen: (SeedReporter | undefined)[] = [];
+    const { page } = mount(async (_note, reporter) => void seen.push(reporter));
+    composer?.open(ANCHOR);
+
+    assert.equal((query(page, '[data-fb-who]') as HTMLElement).hidden, true);
+    (query(page, '[data-fb-note]') as HTMLTextAreaElement).value = 'Une note';
+    query(page, '[data-fb-send]').click();
+    await Promise.resolve();
+
+    assert.deepEqual(seen, [undefined]);
+  });
+
+  it('reveals the fields when asked, and says so to a screen reader', () => {
+    const { page } = mount(async () => true);
+    composer?.open(ANCHOR);
+    const toggle = query(page, '[data-fb-identify]');
+
+    toggle.click();
+
+    assert.equal((query(page, '[data-fb-who]') as HTMLElement).hidden, false);
+    assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  });
+
+  it('passes what was typed, trimmed, and leaves an empty field out', async () => {
+    const seen: (SeedReporter | undefined)[] = [];
+    const { page } = mount(async (_note, reporter) => void seen.push(reporter));
+    composer?.open(ANCHOR);
+
+    (query(page, '[data-fb-name]') as HTMLInputElement).value = '  Alice  ';
+    (query(page, '[data-fb-note]') as HTMLTextAreaElement).value = 'Une note';
+    query(page, '[data-fb-send]').click();
+    await Promise.resolve();
+
+    // No `email` key at all: the round-trip forbids a field the caller did not provide.
+    assert.deepEqual(seen, [{ name: 'Alice' }]);
+  });
+
+  it('never claims to be verified, because that is the worker word', async () => {
+    const seen: (SeedReporter | undefined)[] = [];
+    const { page } = mount(async (_note, reporter) => void seen.push(reporter));
+    composer?.open(ANCHOR);
+
+    (query(page, '[data-fb-name]') as HTMLInputElement).value = 'Alice';
+    (query(page, '[data-fb-email]') as HTMLInputElement).value = 'alice@acme.test';
+    (query(page, '[data-fb-note]') as HTMLTextAreaElement).value = 'Une note';
+    query(page, '[data-fb-send]').click();
+    await Promise.resolve();
+
+    assert.deepEqual(seen, [{ name: 'Alice', email: 'alice@acme.test' }]);
+    assert.equal(seen[0] && 'verified' in seen[0], false);
   });
 });

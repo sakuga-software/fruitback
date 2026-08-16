@@ -173,3 +173,46 @@ describe('stageForLinearState', () => {
     assert.equal(stageForLinearState('someCustomType'), 'seeded');
   });
 });
+
+describe('whose word the attribution is', () => {
+  it('marks a self-declared name as the claim it is', () => {
+    const description = buildIssueDescription(seedFixture({ reporter: { name: 'Alice', email: 'alice@acme.test' } }));
+
+    assert.match(description, /\*\*Reported by\*\* · Alice · alice@acme\.test \(unverified — self-declared\)/);
+  });
+
+  it('marks a verified identity as verified', () => {
+    const description = buildIssueDescription(
+      seedFixture({ reporter: { name: 'Alice', email: 'alice@acme.test', verified: true } }),
+    );
+
+    assert.match(description, /\*\*Reported by\*\* · Alice · alice@acme\.test \(verified\)/);
+  });
+
+  it('says Anonymous when nobody said who they were', () => {
+    assert.match(buildIssueDescription(seedFixture({ reporter: undefined })), /\*\*Reported by\*\* · Anonymous/);
+  });
+
+  it('round-trips a verified reporter', () => {
+    // The invariant the whole contract rests on, applied to the new field.
+    const seed = seedFixture({ reporter: { name: 'Alice', verified: true } });
+    const parsed = parseSeedFromDescription(buildIssueDescription(seed));
+
+    assert.ok(parsed.ok);
+    assert.deepEqual(parsed.seed, seed);
+  });
+});
+
+describe('a verified reporter with no name', () => {
+  it('is identified by its id rather than read as anonymous', () => {
+    // A token carrying only `sub` identifies someone; it just does not name them. Calling that
+    // "Anonymous" throws away the distinction the line exists to make.
+    const description = buildIssueDescription(seedFixture({ reporter: { id: 'user_42', verified: true } }));
+
+    assert.match(description, /\*\*Reported by\*\* · user_42 \(verified\)/);
+  });
+
+  it('is still anonymous when the reporter said nothing at all', () => {
+    assert.match(buildIssueDescription(seedFixture({ reporter: undefined })), /\*\*Reported by\*\* · Anonymous/);
+  });
+});

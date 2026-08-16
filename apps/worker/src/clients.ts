@@ -27,9 +27,20 @@ const clientSchema = z.object({
   projectId: z.string().min(1).optional(),
   /**
    * Sites this client may be embedded on. When present, a request claiming this client from another
-   * origin is refused — the cheapest check available before SKG-498 lands.
+   * origin is refused. Cheap, and independent of whether the visitor is identified.
    */
   origins: z.array(z.string().min(1)).min(1).optional(),
+  /**
+   * Shared with this client's site so it can mint identity tokens (SKG-498). Without one, this
+   * client's reporters are always self-declared — a perfectly good mode, and the default.
+   *
+   * **Deliberately not inherited from `FRUITBACK_IDENTITY_SECRET`**, unlike `teamId` and
+   * `projectId`. Those are routing; this is a signing key. One secret shared across tenants means a
+   * compromised tenant can mint a *verified* identity on any other tenant's issues — the same
+   * reasoning as the fallback team above, and the same answer: on a multi-tenant worker the default
+   * is the leak.
+   */
+  identitySecret: z.string().min(32).optional(),
 });
 
 export const clientMapSchema = z.record(z.string().min(1), clientSchema);
@@ -66,6 +77,8 @@ export function readClientMap(value: string | undefined): ClientMapResult {
 export type Routing = {
   teamId: string;
   projectId: string | undefined;
+  /** Set when this client can mint identity tokens (SKG-498). Absent means self-declared only. */
+  identitySecret: string | undefined;
 };
 
 export type ClientResolution =
@@ -121,7 +134,13 @@ export function resolveClient({ clients, clientId, origin, fallback }: ResolveCl
 
   return {
     ok: true,
-    routing: { teamId: client.teamId ?? fallback.teamId, projectId: client.projectId ?? fallback.projectId },
+    routing: {
+      teamId: client.teamId ?? fallback.teamId,
+      projectId: client.projectId ?? fallback.projectId,
+      // No `?? fallback.identitySecret` — see the field's own note. A mapped client that wants
+      // verified identities declares its own key.
+      identitySecret: client.identitySecret,
+    },
   };
 }
 

@@ -105,11 +105,15 @@ export async function expectPinOn(pin: Locator, element: Locator): Promise<void>
  * fragment or a tracking parameter has to canonicalize here, or it will look up a key nothing was
  * stored under.
  */
-export async function storedSeeds(page: Page): Promise<{ note: string; source?: Record<string, unknown> }[]> {
+export async function storedSeeds(
+  page: Page,
+): Promise<{ note: string; source?: Record<string, unknown>; reporter?: Record<string, unknown> }[]> {
   return page.evaluate(async (origin) => {
     const canonical = `${window.location.origin}${window.location.pathname}${window.location.search}`;
     const response = await fetch(`${origin}/feedback?url=${encodeURIComponent(canonical)}&client=playground`);
-    const { issues } = (await response.json()) as { issues: { seed: { note: string; source?: Record<string, unknown> } }[] };
+    const { issues } = (await response.json()) as {
+      issues: { seed: { note: string; source?: Record<string, unknown>; reporter?: Record<string, unknown> } }[];
+    };
 
     return issues.map((issue) => issue.seed);
   }, WORKER_ORIGIN);

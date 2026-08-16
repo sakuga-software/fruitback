@@ -82,13 +82,29 @@ export function buildIssueMetadata(seed: Seed): string[] {
   }
 
   lines.push(`**Viewport** · ${seed.viewport.width}×${seed.viewport.height}${formatDpr(seed.viewport.dpr)}`);
-  lines.push(`**Reported by** · ${seed.reporter?.name ?? seed.reporter?.email ?? 'Anonymous'}`);
+  lines.push(`**Reported by** · ${formatReporter(seed.reporter)}`);
 
   if (seed.client) {
     lines.push(`**Client** · ${seed.client.name ?? seed.client.id}`);
   }
 
   return lines;
+}
+
+/**
+ * Says whose word it is, because the difference is the point (SKG-498).
+ *
+ * A name typed into the popover is a claim by whoever was on the page. Only a name the worker
+ * checked against a signed token is an identity. Rendering them the same way would let anyone put a
+ * colleague's name on a complaint and have it read as theirs.
+ */
+function formatReporter(reporter: Seed['reporter']): string {
+  // A token carrying only `sub` identifies someone perfectly well; it just does not name them.
+  // Reading that as "Anonymous" would throw away the one distinction this line exists to make.
+  const who = [reporter?.name, reporter?.email].filter(Boolean).join(' · ') || reporter?.id;
+  if (who === undefined || who.length === 0) return 'Anonymous';
+
+  return reporter?.verified === true ? `${who} (verified)` : `${who} (unverified — self-declared)`;
 }
 
 function formatDpr(dpr: number | undefined): string {

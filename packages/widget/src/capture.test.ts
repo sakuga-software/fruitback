@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildIssueDescription, canonicalizePageUrl, parseSeedFromDescription } from '@fruitback/shared';
+import { SEED_VERSION, buildIssueDescription, canonicalizePageUrl, parseSeedFromDescription } from '@fruitback/shared';
 import { captureSeed } from './capture.ts';
 import { mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
 
@@ -33,7 +33,7 @@ describe('captureSeed', () => {
 
     assert.deepEqual(seed, {
       kind: 'fruitback.seed',
-      v: 1,
+      v: SEED_VERSION,
       id: 'sd_2f8c1a90',
       createdAt: CREATED_AT,
       note: 'Le bouton “Commander” est trop petit sur mobile.',

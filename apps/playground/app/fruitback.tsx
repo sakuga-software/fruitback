@@ -1,5 +1,5 @@
 import { Button } from '@heroui/react';
-import { canonicalizePageUrl, type SeedIssue } from '@fruitback/shared';
+import { canonicalizePageUrl, type SeedIssue, type SeedReporter } from '@fruitback/shared';
 import {
   type CaptureHost,
   type CaptureTarget,
@@ -89,8 +89,8 @@ export function Fruitback() {
 
     const composer = createComposer({
       host: host.panel,
-      onSubmit: async (note) => {
-        const identifier = await plant(note, target.current, setStatus, config.get());
+      onSubmit: async (note, reporter) => {
+        const identifier = await plant(note, target.current, setStatus, config.get(), reporter);
         if (identifier === null) return false;
 
         // Re-read first — that is what proves the read path answers — and let the confirmation have
@@ -163,6 +163,7 @@ async function plant(
   target: CaptureTarget | null,
   setStatus: (message: string) => void,
   config: WidgetConfig,
+  reporter: SeedReporter | undefined,
 ): Promise<string | null> {
   if (target === null) return null;
 
@@ -170,6 +171,10 @@ async function plant(
     element: target.element,
     note,
     client: { id: config.clientId, name: 'Playground' },
+    // What the visitor typed about themselves, and no more. The worker stores it as self-declared
+    // and strips any `verified` flag — an identity would need a signed token this playground has no
+    // reason to mint (SKG-498).
+    reporter,
     // Straight from react-grab, through the host — and on this app there is a fiber to read.
     source: target.source,
   });

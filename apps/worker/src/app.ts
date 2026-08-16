@@ -1,4 +1,5 @@
-import { canonicalizePageUrl, parseSeed } from '@fruitback/shared';
+import { canonicalizePageUrl, parseSeed, type SeedReporter } from '@fruitback/shared';
+import { readBearerToken, stripClaimedVerification, verifyIdentityToken } from './identity.ts';
 import { type ClientResolution, normalizeClientId, resolveClient } from './clients.ts';
 import { type WorkerConfig, type WorkerEnv, readAllowedOrigins, readConfig } from './env.ts';
 import { LinearError } from './linear.ts';
@@ -102,8 +103,41 @@ function routeFor(request: Request, config: WorkerConfig, clientId: string | und
     clients: config.clients,
     clientId,
     origin: request.headers.get('Origin'),
-    fallback: { teamId: config.linearTeamId, projectId: config.linearProjectId },
+    fallback: {
+      teamId: config.linearTeamId,
+      projectId: config.linearProjectId,
+      // A single-client worker takes its secret from the env; a mapped client brings its own.
+      identitySecret: config.identitySecret,
+    },
   });
+}
+
+/**
+ * The reporter to store, and whether the worker vouches for it.
+ *
+ * No token means the claim stands as a claim — anonymous submission is the default and stays
+ * possible. A token that fails to verify is refused outright rather than downgraded to a claim: a
+ * site that meant to identify someone and got it wrong should hear about it, and silently accepting
+ * an expired token as "self-declared" is how a broken integration goes unnoticed for a month.
+ */
+async function attributionFor(
+  request: Request,
+  secret: string | undefined,
+  claimed: SeedReporter | undefined,
+): Promise<{ ok: true; reporter: SeedReporter | undefined } | { ok: false; reason: string }> {
+  const token = readBearerToken(request.headers.get('Authorization'));
+  if (token === undefined) return { ok: true, reporter: stripClaimedVerification(claimed) };
+  if (secret === undefined) return { ok: false, reason: 'identity-not-configured' };
+
+  const verified = await verifyIdentityToken(token, secret);
+  if (!verified.ok) return { ok: false, reason: verified.reason };
+
+  return { ok: true, reporter: verified.reporter };
+}
+
+/** Spread, so an absent reporter stays absent — the round-trip forbids a key nobody provided. */
+function optionalReporter(reporter: SeedReporter | undefined): { reporter?: SeedReporter } {
+  return reporter === undefined ? {} : { reporter };
 }
 
 /** 400 when the caller has to say who they are, 403 when they said something they may not claim. */
@@ -219,12 +253,21 @@ async function postFeedback(
   const route = routeFor(request, config, clientId);
   if (!route.ok) return routingFailure(route, corsHeaders);
 
+  // Whose word the attribution is (SKG-498). The claimed reporter loses `verified` whatever it said,
+  // and only a token this worker checked can put it back.
+  const identity = await attributionFor(request, route.routing.identitySecret, seed.reporter);
+  if (!identity.ok) {
+    return json(401, { error: 'invalid-identity', reason: identity.reason }, corsHeaders);
+  }
+
+  const attributed = { ...seed, ...optionalReporter(identity.reporter) };
+
   try {
-    const issue = await linearFor(config).createSeedIssue(config, route.routing, seed);
+    const issue = await linearFor(config).createSeedIssue(config, route.routing, attributed);
 
     // The page just changed, so every cached answer for it is wrong. Matching on the URL covers the
     // per-client keys too, which is what a reviewer reloading right after posting will ask for.
-    invalidate((key) => key.includes(JSON.stringify(seed.page.url)));
+    invalidate((key) => key.includes(JSON.stringify(attributed.page.url)));
 
     return json(201, { issue }, corsHeaders);
   } catch (error) {
