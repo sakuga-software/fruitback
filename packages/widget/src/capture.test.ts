@@ -1,6 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { SEED_VERSION, buildIssueDescription, canonicalizePageUrl, parseSeedFromDescription } from '@fruitback/shared';
+import {
+  SEED_VERSION,
+  buildIssueDescription,
+  canonicalizePageUrl,
+  parseSeedFromDescription,
+} from '@sakuga/fruitback-shared';
 import { captureSeed } from './capture.ts';
 import { mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
 

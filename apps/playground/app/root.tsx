@@ -1,4 +1,4 @@
-import { Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router';
+import { Links, Meta, Outlet, Scripts, ScrollRestoration, useLocation } from 'react-router';
 import { Fruitback } from './fruitback';
 import './app.css';
 
@@ -28,8 +28,16 @@ export default function Root() {
         Mounted last and only in the browser. A widget that runs on a stranger's site has to arrive
         after their app does — and here that is literal: it mounts in an effect, once React has
         hydrated the markup it is about to point at.
+
+        `?widget=off` leaves the page bare, which is what `package.spec.ts` needs: it loads the
+        *published* bundle and lets it mount itself, and two widgets on one page overlap.
       */}
-      <Fruitback />
+      {useHostedWidget() ? <Fruitback /> : null}
     </>
   );
+}
+
+/** The playground's own widget, unless a spec asked for a page with none. */
+function useHostedWidget(): boolean {
+  return new URLSearchParams(useLocation().search).get('widget') !== 'off';
 }

@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { SeedStage } from '@fruitback/shared';
+import type { SeedStage } from '@sakuga/fruitback-shared';
 import { CONFIG_STORAGE_KEY, createConfigStore, type WidgetConfig } from './config.ts';
 
 const DEFAULTS: WidgetConfig = { endpoint: 'http://localhost:8788', clientId: 'playground', hiddenStages: [] };

@@ -1,7 +1,12 @@
 {
-  "name": "@fruitback/widget",
+  "name": "@sakuga/fruitback-widget",
   "version": "0.1.0",
-  "private": true,
+  "description": "Visual feedback widget: click an element, write a note, get a Linear issue.",
+  "license": "UNLICENSED",
+  "files": [
+    "dist",
+    "src"
+  ],
   "type": "module",
   "sideEffects": false,
   "main": "src/index.ts",
@@ -9,23 +14,38 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "publishConfig": {
+    "main": "./dist/fruitback.mjs",
+    "types": "./dist/public.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/public.d.ts",
+        "import": "./dist/fruitback.mjs"
+      },
+      "./global": "./dist/fruitback.iife.js"
+    },
+    "access": "public"
+  },
   "scripts": {
+    "build": "node build.ts",
     "format": "oxfmt --check .",
     "format:fix": "oxfmt .",
     "lint": "oxlint .",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "prepack": "pnpm build",
     "test": "node --test 'src/**/*.test.ts'",
-    "test:watch": "node --test --watch 'src/**/*.test.ts'"
+    "test:watch": "node --test --watch 'src/**/*.test.ts'",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
-    "@fruitback/shared": "workspace:*",
-    "react-grab": "catalog:"
+    "@sakuga/fruitback-shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "esbuild": "catalog:",
     "happy-dom": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
+    "react-grab": "catalog:",
     "typescript": "catalog:"
   }
 }

@@ -1,4 +1,4 @@
-import type { SeedSource } from '@fruitback/shared';
+import type { SeedSource } from '@sakuga/fruitback-shared';
 
 /**
  * The react-grab payoff: the component and the source file behind the clicked element.

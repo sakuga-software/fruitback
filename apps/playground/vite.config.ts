@@ -22,7 +22,7 @@ export default defineConfig({
    * It is not the guarantee — `e2e/warm-up.ts` is — but it does most of the work up front.
    *
    * The last two use Vite's `dependency > subdependency` form on purpose. `react-grab` and `zod` are
-   * not dependencies of this app; they arrive through `@fruitback/widget` and `@fruitback/shared`,
+   * not dependencies of this app; they arrive through `@sakuga/fruitback-widget` and `@sakuga/fruitback-shared`,
    * and under pnpm's non-hoisted linking a bare specifier for them does not resolve from here — Vite
    * dropped both entries and warned about it on every boot. Naming the parent is what lets it
    * resolve them, and it beats declaring a direct dependency this app does not import.
@@ -40,8 +40,8 @@ export default defineConfig({
       'react-router',
       'react-router/dom',
       '@heroui/react',
-      '@fruitback/widget > react-grab/primitives',
-      '@fruitback/shared > zod',
+      '@sakuga/fruitback-widget > react-grab/primitives',
+      '@sakuga/fruitback-shared > zod',
     ],
   },
   plugins: [tailwindcss(), reactRouter()],

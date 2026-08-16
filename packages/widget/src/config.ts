@@ -1,4 +1,4 @@
-import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
+import { SEED_STAGES, type SeedStage } from '@sakuga/fruitback-shared';
 
 /**
  * What the reporter can change about the widget, and where it is kept (SKG-503).

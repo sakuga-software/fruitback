@@ -2,7 +2,7 @@ import { type Seed, type SeedInput, createSeed } from './seed.ts';
 import { type SeedIssue, seedIssueSchema } from './linear.ts';
 
 /**
- * Shared through the `@fruitback/shared/seed.fixture` export so the worker and the widget test
+ * Shared through the `@sakuga/fruitback-shared/seed.fixture` export so the worker and the widget test
  * against the same seed instead of each keeping its own drifting copy.
  */
 

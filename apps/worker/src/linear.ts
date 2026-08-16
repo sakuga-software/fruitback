@@ -10,7 +10,7 @@ import {
   parseSeedFromDescription,
   seedIssueSchema,
   stageForLinearState,
-} from '@fruitback/shared';
+} from '@sakuga/fruitback-shared';
 import type { Routing } from './clients.ts';
 import type { WorkerConfig } from './env.ts';
 

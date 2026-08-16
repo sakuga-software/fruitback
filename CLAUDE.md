@@ -31,15 +31,15 @@ pnpm typecheck
 pnpm lint                                   # oxlint
 pnpm format:fix                             # oxfmt
 
-pnpm --filter @fruitback/shared test         # one package
-pnpm --filter @fruitback/shared test:watch
+pnpm --filter @sakuga/fruitback-shared test         # one package
+pnpm --filter @sakuga/fruitback-shared test:watch
 node --test src/seed.test.ts                 # one file, from the package directory
 ```
 
 ## Layout
 
-- `packages/shared` (`@fruitback/shared`) — the seed contract. Browser- and server-safe: no Node API,
-  no DOM API beyond `URL`. Also exports `@fruitback/shared/seed.fixture`, so every package tests
+- `packages/shared` (`@sakuga/fruitback-shared`) — the seed contract. Browser- and server-safe: no Node API,
+  no DOM API beyond `URL`. Also exports `@sakuga/fruitback-shared/seed.fixture`, so every package tests
   against the same seed instead of keeping a drifting copy.
 - `apps/worker` (`@fruitback/worker`) — the Node service. `POST /feedback` plants a seed,
   `GET /feedback?url=…` returns the seeds of that page. Still called "worker" because that is what
@@ -114,6 +114,31 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   widget its own stale answer right after planting a pin; `domPath` resolving cleanly onto the
   neighbouring card; React 19's `useId` format accepted as a stable id; and the fiber walk throwing on
   the `null` owner React ends every tree with, which stopped a click from planting anything at all.
+
+## The published package
+
+- **Two packages, both under `@sakuga/`** (SKG-505): `fruitback-widget` and `fruitback-shared`. The
+  seed contract had to be published too — the widget's emitted `.d.ts` name its types, and types that
+  point at something nobody can install are worse than none.
+- **`public.ts` is the contract, `index.ts` is the workspace.** Everything is exported somewhere
+  because the playground and the tests reach into the parts; only what `public.ts` names cannot
+  change without a major version. `init` and what it hands back is all of it — deliberately **not**
+  the config store, which would be a preference we could never change under a host.
+- **`embed.ts` is the only file that knows the worker exists.** `composer.ts` is still handed an
+  `onSubmit`; the transport lives in the assembly layer because that is the layer that was always
+  going to have to know.
+- **`init` patches `history.pushState`/`replaceState`** and restores them on `destroy`. A pin belongs
+  to a URL, `popstate` does not fire for a `pushState`, and there is no framework to ask on a client's
+  site. The alternative was polling `location.href` for ever.
+- The `workspace` fields point at **source**; `publishConfig` swaps in `dist` when pnpm packs. That is
+  what lets a developer edit the file they are looking at while a consumer gets the build.
+- `react-grab` and `zod` are **bundled, and are devDependencies**: a client site must not have to
+  install — or resolve a version conflict over — a library it never asked for.
+- The ESM build is left readable (the consumer's bundler minifies it); the IIFE is minified because it
+  lands on a page exactly as built. **93 kB gzipped**, guarded by a test that trips at 150 kB — a
+  tripwire for a dependency that should have been bundled out, not a budget.
+- **`pnpm e2e` builds `dist` first.** `package.spec.ts` loads the real file, and a fresh checkout has
+  no build.
 
 ## The widget
 

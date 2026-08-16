@@ -1,4 +1,4 @@
-import type { SeedSource } from '@fruitback/shared';
+import type { SeedSource } from '@sakuga/fruitback-shared';
 import { isElement } from './dom.ts';
 import { type CaptureEngine, reactGrabEngine } from './engine.ts';
 

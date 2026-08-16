@@ -53,12 +53,6 @@ importers:
 
   apps/playground:
     dependencies:
-      '@fruitback/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
-      '@fruitback/widget':
-        specifier: workspace:*
-        version: link:../../packages/widget
       '@heroui/react':
         specifier: ^3.2.4
         version: 3.2.4(@react-aria/i18n@3.13.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@react-aria/ssr@3.10.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@react-aria/utils@3.34.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@react-spectrum/provider@3.11.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-aria-components@1.20.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-aria@3.51.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(tailwindcss@4.3.3)
@@ -71,6 +65,12 @@ importers:
       '@react-aria/utils':
         specifier: ^3.34.1
         version: 3.34.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@sakuga/fruitback-shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@sakuga/fruitback-widget':
+        specifier: workspace:*
+        version: link:../../packages/widget
       isbot:
         specifier: ^5.2.1
         version: 5.2.1
@@ -129,7 +129,7 @@ importers:
 
   apps/worker:
     dependencies:
-      '@fruitback/shared':
+      '@sakuga/fruitback-shared':
         specifier: workspace:*
         version: link:../../packages/shared
       zod:
@@ -173,16 +173,16 @@ importers:
 
   packages/widget:
     dependencies:
-      '@fruitback/shared':
+      '@sakuga/fruitback-shared':
         specifier: workspace:*
         version: link:../shared
-      react-grab:
-        specifier: 'catalog:'
-        version: 0.1.50(react@19.2.8)
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
         version: 26.1.1
+      esbuild:
+        specifier: 'catalog:'
+        version: 0.28.1
       happy-dom:
         specifier: 'catalog:'
         version: 20.11.2
@@ -192,6 +192,9 @@ importers:
       oxlint:
         specifier: 'catalog:'
         version: 1.77.0
+      react-grab:
+        specifier: 'catalog:'
+        version: 0.1.50(react@19.2.8)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2

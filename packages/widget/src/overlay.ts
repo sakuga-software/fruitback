@@ -1,4 +1,4 @@
-import { SEED_STAGE_STYLES, type SeedBounds, type SeedIssue } from '@fruitback/shared';
+import { SEED_STAGE_STYLES, type SeedBounds, type SeedIssue } from '@sakuga/fruitback-shared';
 import { isElement } from './dom.ts';
 import { type AnchorResolution, resolveAnchor } from './resolve.ts';
 

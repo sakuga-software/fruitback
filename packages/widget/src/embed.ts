@@ -1,0 +1,262 @@
+import { canonicalizePageUrl, type SeedIssue, type SeedReporter } from '@sakuga/fruitback-shared';
+import { captureSeed } from './capture.ts';
+import { type WidgetConfig, createConfigStore } from './config.ts';
+import { type CaptureHost, type CaptureTarget, createCaptureHost } from './host.ts';
+import { type Composer, createComposer } from './composer.ts';
+import { type Overlay, createOverlay } from './overlay.ts';
+import { type ConfigPanel, createConfigPanel } from './panel.ts';
+
+/**
+ * One call that mounts the whole widget on a page (SKG-505).
+ *
+ * Everything below this line already existed; what did not was anything that put the pieces
+ * together. The playground assembled them by hand — host, overlay, popover, settings, and the two
+ * fetches — which meant the product was a set of parts and the integration guide was two hundred
+ * lines of someone else's React. This is that assembly, owned here, so a client site writes one
+ * call and a `<script>` tag gets an `init` for free.
+ *
+ * **This is the only file in the widget that knows the worker exists.** `composer.ts` is still handed
+ * an `onSubmit` and stays ignorant of URLs and of auth; the transport lives here because this is the
+ * layer that was always going to have to know.
+ */
+
+export type FruitbackOptions = {
+  /** Where the worker answers, e.g. `https://feedback.acme.dev`. */
+  endpoint: string;
+  /** Which client this site is, as the worker's map knows it. */
+  clientId: string;
+  /** Shown on the floating button. */
+  label?: string;
+  /**
+   * A short-lived JWT identifying the visitor (SKG-498). Called before every write, so a token that
+   * expires mid-session is refreshed rather than rejected. Without it every reporter is
+   * self-declared, which is the default and a perfectly good way to run this.
+   */
+  identityToken?: () => string | undefined | Promise<string | undefined>;
+  /** Chrome the page mounts around the widget, which the pointer must skip. */
+  ignore?: (element: Element) => boolean;
+  /** Off when the reporter has not agreed to send their user agent along. */
+  includeEnv?: boolean;
+  document?: Document;
+};
+
+export type Fruitback = {
+  /** Re-read the pins for the current URL. Called for you on navigation. */
+  refresh(): Promise<void>;
+  /**
+   * The settings panel, in case the host wants its own way in — a menu item rather than the gear.
+   *
+   * The store behind it is deliberately not exposed: a host that could write preferences directly is
+   * a host we could never change them under.
+   */
+  settings: ConfigPanel;
+  destroy(): void;
+};
+
+/** The panel writes on every keystroke, so a typed endpoint must not become a request per character. */
+const REQUERY_DEBOUNCE_MS = 300;
+
+export function init(options: FruitbackOptions): Fruitback {
+  const document = options.document ?? globalThis.document;
+  const view = document.defaultView ?? globalThis.window;
+
+  const config = createConfigStore({
+    defaults: { endpoint: options.endpoint, clientId: options.clientId, hiddenStages: [] },
+  });
+
+  let target: CaptureTarget | null = null;
+  let composer: Composer;
+  let panel: ConfigPanel;
+
+  const host: CaptureHost = createCaptureHost({
+    document,
+    label: options.label,
+    ignore: options.ignore,
+    onConfigure: () => panel.toggle(),
+    onSelect: (selected) => {
+      target = selected;
+      const rect = selected.element.getBoundingClientRect();
+      composer.open({
+        left: rect.left + view.scrollX,
+        top: rect.top + view.scrollY,
+        bottom: rect.bottom + view.scrollY,
+        right: rect.right + view.scrollX,
+      });
+    },
+  });
+
+  const overlay: Overlay = createOverlay({
+    document,
+    host: host.root,
+    shouldShow: (issue) => !config.get().hiddenStages.includes(issue.stage),
+  });
+
+  const read = createReader(overlay, view);
+
+  composer = createComposer({
+    document,
+    host: host.panel,
+    onSubmit: async (note, reporter) => {
+      const planted = await plant({ note, target, reporter, config: config.get(), options });
+      if (!planted) return false;
+
+      // Re-read rather than assume: the pin the reporter is about to see is the one the worker gave
+      // back, which is also what proves the write landed somewhere the read path can find.
+      await read(config.get());
+
+      return true;
+    },
+  });
+
+  panel = createConfigPanel({ document, host: host.root, store: config });
+
+  // A preference change redraws from the issues already held; only a change of endpoint or client
+  // means the pins belong to a different query. Debounced because the panel writes per keystroke —
+  // and `createReader`'s generation check is what makes it correct rather than merely cheap.
+  let previous = config.get();
+  let requery: ReturnType<typeof setTimeout> | undefined;
+  const unsubscribe = config.subscribe((next) => {
+    const requeried = next.endpoint !== previous.endpoint || next.clientId !== previous.clientId;
+    previous = next;
+
+    if (!requeried) {
+      overlay.refilter();
+
+      return;
+    }
+
+    if (requery !== undefined) clearTimeout(requery);
+    requery = setTimeout(() => void read(next), REQUERY_DEBOUNCE_MS);
+  });
+
+  const stopWatchingUrl = watchUrl(view, () => void read(config.get()));
+
+  void read(config.get());
+
+  return {
+    refresh: () => read(config.get()),
+    settings: panel,
+    destroy() {
+      if (requery !== undefined) clearTimeout(requery);
+      stopWatchingUrl();
+      unsubscribe();
+      panel.destroy();
+      composer.destroy();
+      overlay.destroy();
+      host.destroy();
+    },
+  };
+}
+
+/**
+ * Reads that ignore their own stale answers.
+ *
+ * Two can be in flight — a keystroke in the settings, then a navigation — and nothing makes them
+ * settle in the order they were sent: a wrong host can take longer to fail than a right one takes to
+ * answer. The late one would then draw pins fetched from the old endpoint over the correct ones.
+ * Each call takes a generation, and only the newest may touch the screen.
+ */
+function createReader(overlay: Overlay, view: Window & typeof globalThis): (config: WidgetConfig) => Promise<void> {
+  let generation = 0;
+
+  return async function read(config: WidgetConfig): Promise<void> {
+    const mine = ++generation;
+    const url = canonicalizePageUrl(view.location.href);
+
+    try {
+      const response = await fetch(
+        `${config.endpoint}/feedback?url=${encodeURIComponent(url)}&client=${encodeURIComponent(config.clientId)}`,
+      );
+      if (mine !== generation || !response.ok) return;
+
+      const { issues } = (await response.json()) as { issues: SeedIssue[] };
+      if (mine !== generation) return;
+
+      overlay.render(issues);
+    } catch {
+      // A worker that cannot be reached leaves the pins alone. Blanking the page because a read
+      // failed would lose what is already correctly on screen.
+    }
+  };
+}
+
+async function plant({
+  note,
+  target,
+  reporter,
+  config,
+  options,
+}: {
+  note: string;
+  target: CaptureTarget | null;
+  reporter: SeedReporter | undefined;
+  config: WidgetConfig;
+  options: FruitbackOptions;
+}): Promise<boolean> {
+  if (target === null) return false;
+
+  const seed = captureSeed({
+    element: target.element,
+    note,
+    client: { id: config.clientId },
+    source: target.source,
+    reporter,
+    includeEnv: options.includeEnv,
+  });
+
+  // Asked for per write rather than once at init: a short-lived token that expired mid-session would
+  // otherwise turn every later note into a 401.
+  const token = await options.identityToken?.();
+
+  const response = await fetch(`${config.endpoint}/feedback`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      // Never in the body: the seed is stored verbatim in a Linear description (SKG-498).
+      ...(token !== undefined ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(seed),
+  });
+
+  return response.ok;
+}
+
+/**
+ * Notice that the page changed, on a site with no framework to ask.
+ *
+ * `popstate` covers back and forward and nothing else: a single-page app navigating with
+ * `pushState` fires no event at all, and a pin belongs to a URL. So the two history methods are
+ * wrapped — restored on `destroy`, because a widget that permanently rewrites the host's `history`
+ * is one they turn off.
+ *
+ * The alternative was polling `location.href`, which trades a patched method for a timer that never
+ * stops. This costs nothing while the page is idle.
+ */
+function watchUrl(view: Window & typeof globalThis, onChange: () => void): () => void {
+  const history = view.history;
+  const original = { pushState: history.pushState, replaceState: history.replaceState };
+  let last = view.location.href;
+
+  const check = (): void => {
+    if (view.location.href === last) return;
+
+    last = view.location.href;
+    onChange();
+  };
+
+  history.pushState = function patched(...args: Parameters<History['pushState']>) {
+    original.pushState.apply(this, args);
+    check();
+  };
+  history.replaceState = function patched(...args: Parameters<History['replaceState']>) {
+    original.replaceState.apply(this, args);
+    check();
+  };
+  view.addEventListener('popstate', check);
+
+  return () => {
+    history.pushState = original.pushState;
+    history.replaceState = original.replaceState;
+    view.removeEventListener('popstate', check);
+  };
+}

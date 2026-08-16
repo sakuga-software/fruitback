@@ -1,4 +1,4 @@
-import { type SeedAnchor, type SeedBounds, TEXT_EXCERPT_MAX_LENGTH } from '@fruitback/shared';
+import { type SeedAnchor, type SeedBounds, TEXT_EXCERPT_MAX_LENGTH } from '@sakuga/fruitback-shared';
 import { buildDomPath, buildSelector } from './selector.ts';
 
 /**

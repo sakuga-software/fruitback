@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { TEXT_EXCERPT_MAX_LENGTH } from '@fruitback/shared';
+import { TEXT_EXCERPT_MAX_LENGTH } from '@sakuga/fruitback-shared';
 import { captureAnchor, captureBounds, readTextExcerpt } from './anchor.ts';
 import { mountPage, setDocumentSize, setRect, setScroll } from './dom.fixture.ts';
 

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { type SeedIssue, canonicalizePageUrl, parseSeedFromDescription } from '@fruitback/shared';
-import { minimalSeedFixture, seedFixture } from '@fruitback/shared/seed.fixture';
+import { type SeedIssue, canonicalizePageUrl, parseSeedFromDescription } from '@sakuga/fruitback-shared';
+import { minimalSeedFixture, seedFixture } from '@sakuga/fruitback-shared/seed.fixture';
 import { handleRequest } from './app.ts';
 import type { WorkerEnv } from './env.ts';
 import { installLinearStub, storedIssueFromSeed } from './linear-stub.ts';

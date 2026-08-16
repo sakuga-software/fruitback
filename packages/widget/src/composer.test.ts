@@ -1,6 +1,6 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { SeedReporter } from '@fruitback/shared';
+import type { SeedReporter } from '@sakuga/fruitback-shared';
 import { type Composer, createComposer } from './composer.ts';
 import { type MountedPage, keyboardEventCtor, mountPage } from './dom.fixture.ts';
 
