@@ -1,5 +1,5 @@
 import { Button } from '@heroui/react';
-import { canonicalizePageUrl, type SeedIssue, type SeedReporter } from '@sakuga/fruitback-shared';
+import { canonicalizePageUrl, type SeedIssue, type SeedReporter } from '@fruitback/shared';
 import {
   type CaptureHost,
   type CaptureTarget,
@@ -14,7 +14,7 @@ import {
   createConfigPanel,
   createConfigStore,
   createOverlay,
-} from '@sakuga/fruitback-widget';
+} from '@fruitback/widget';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
 import { redeploy, removeCard } from './site-state';

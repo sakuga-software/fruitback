@@ -1,4 +1,4 @@
-import { canonicalizePageUrl, type SeedIssue, type SeedReporter } from '@sakuga/fruitback-shared';
+import { canonicalizePageUrl, type SeedIssue, type SeedReporter } from '@fruitback/shared';
 import { captureSeed } from './capture.ts';
 import { type WidgetConfig, createConfigStore } from './config.ts';
 import { type CaptureHost, type CaptureTarget, createCaptureHost } from './host.ts';

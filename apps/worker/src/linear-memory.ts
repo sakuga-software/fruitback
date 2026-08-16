@@ -6,7 +6,7 @@ import {
   buildIssueTitle,
   clientLabelName,
   FRUITBACK_LABEL,
-} from '@sakuga/fruitback-shared';
+} from '@fruitback/shared';
 import type { Routing } from './clients.ts';
 import type { WorkerConfig } from './env.ts';
 import { type CreatedIssue, type IssueNode, toSeedIssue } from './linear.ts';

@@ -1,4 +1,4 @@
-import { canonicalizePageUrl, type SeedEnv, type SeedPage, type SeedViewport } from '@sakuga/fruitback-shared';
+import { canonicalizePageUrl, type SeedEnv, type SeedPage, type SeedViewport } from '@fruitback/shared';
 
 /**
  * The context around the pin: which page, seen how.

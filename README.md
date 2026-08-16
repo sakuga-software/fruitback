@@ -35,13 +35,13 @@ comment popover                  (server-side token)        description = seed
 pin overlay            ◀──GET─── query by label+URL ◀─────  status, comments
 ```
 
-- **widget** — `@sakuga/fruitback-widget`, an embeddable script (Shadow DOM, so the client's CSS is never
+- **widget** — `@fruitback/widget`, an embeddable script (Shadow DOM, so the client's CSS is never
   touched). Picks the element via `react-grab/primitives`, captures the anchor, and later re-plants
   the pins it reads back.
 - **worker** — a small Node process in a container (Docker on a VPS, deployed by Dokploy from a
   GitHub push). Its only reason to exist: the Linear token cannot live in client-side JS on a public
   site. It also decides attribution (anonymous vs signed in).
-- **shared** — `@sakuga/fruitback-shared`, the _seed_ contract. Both ends depend on it.
+- **shared** — `@fruitback/shared`, the _seed_ contract. Both ends depend on it.
 
 No database, no dashboard, no session store.
 
@@ -105,7 +105,7 @@ pnpm typecheck
 pnpm lint         # oxlint
 pnpm format:fix   # oxfmt
 
-pnpm --filter @sakuga/fruitback-shared test:watch
+pnpm --filter @fruitback/shared test:watch
 ```
 
 Tests run on Node's own runner (`node:test` + `node:assert/strict`) against the TypeScript sources —

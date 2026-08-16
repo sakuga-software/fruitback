@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { SeedAnchor } from '@sakuga/fruitback-shared';
+import type { SeedAnchor } from '@fruitback/shared';
 import { overlap, resolveAnchor } from './resolve.ts';
 import { type MountedPage, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
 

@@ -5,7 +5,7 @@ import {
   type SeedReporter,
   type SeedScreenshot,
   type SeedSource,
-} from '@sakuga/fruitback-shared';
+} from '@fruitback/shared';
 import { captureAnchor } from './anchor.ts';
 import { captureEnv, capturePage, captureViewport } from './page.ts';
 import { readReactSource } from './source.ts';

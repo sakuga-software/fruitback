@@ -1,4 +1,4 @@
-import type { SeedSource } from '@sakuga/fruitback-shared';
+import type { SeedSource } from '@fruitback/shared';
 import { isMangledComponentName } from './source.ts';
 import { getElementBounds, getElementContext, getElementAtPoint, isElementGrabbable } from 'react-grab/primitives';
 

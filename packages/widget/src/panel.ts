@@ -1,4 +1,4 @@
-import { SEED_STAGES, SEED_STAGE_STYLES, type SeedStage } from '@sakuga/fruitback-shared';
+import { SEED_STAGES, SEED_STAGE_STYLES, type SeedStage } from '@fruitback/shared';
 import { RESOLVED_STAGES, type ConfigStore } from './config.ts';
 
 /**

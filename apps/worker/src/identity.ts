@@ -1,4 +1,4 @@
-import type { SeedReporter } from '@sakuga/fruitback-shared';
+import type { SeedReporter } from '@fruitback/shared';
 
 /**
  * Turning a claim into an identity (SKG-498).

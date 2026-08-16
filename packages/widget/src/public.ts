@@ -1,5 +1,5 @@
 /**
- * What `@sakuga/fruitback-widget` promises (SKG-505).
+ * What `@fruitback/widget` promises (SKG-505).
  *
  * Deliberately narrower than `index.ts`. Everything in this package is exported *somewhere* because
  * the playground and the tests reach into the parts, but a published surface is a contract: every
@@ -10,7 +10,7 @@
  * reach in and write preferences would be a host we could never change them under, and the settings
  * panel already owns that job.
  *
- * The emitted declarations still name types from `@sakuga/fruitback-shared`, which is why that
+ * The emitted declarations still name types from `@fruitback/shared`, which is why that
  * package is published alongside this one: types pointing at something nobody can install are worse
  * than none. Narrowing this entry was tried first and is not sufficient — `panel.d.ts` reaches
  * `config.d.ts`, which reaches the seed contract.

@@ -93,7 +93,7 @@ describe('the published declarations', () => {
 
       for (const specifier of bare) {
         assert.ok(
-          specifier.startsWith('@sakuga/'),
+          specifier.startsWith('@fruitback/'),
           `${name} imports ${specifier}, which is not published alongside this package`,
         );
       }
@@ -106,7 +106,7 @@ describe('a consumer installing this from npm', () => {
    * The test that was missing, and the reason a broken package shipped green.
    *
    * The assertions above check *our* declarations for stray `.ts` imports and for specifiers a
-   * consumer could install. Neither notices that `@sakuga/fruitback-shared` itself pointed at raw
+   * consumer could install. Neither notices that `@fruitback/shared` itself pointed at raw
    * sources: `main` and `types` went straight to `src/index.ts`, whose own imports carry the `.ts`
    * extension this repo allows and nobody else does. A downstream `tsc` failed with TS5097 while
    * every check here stayed green.
@@ -127,7 +127,7 @@ describe('a consumer installing this from npm', () => {
       await rm(join(root, 'dist'), { recursive: true, force: true });
       await rm(join(root, '..', 'shared', 'dist'), { recursive: true, force: true });
 
-      for (const pkg of ['@sakuga/fruitback-shared', '@sakuga/fruitback-widget']) {
+      for (const pkg of ['@fruitback/shared', '@fruitback/widget']) {
         await run('pnpm', ['--filter', pkg, 'pack', '--pack-destination', scratch], { cwd: workspace, shell: true });
       }
 
@@ -137,7 +137,7 @@ describe('a consumer installing this from npm', () => {
       );
       await writeFile(
         join(scratch, 'index.ts'),
-        'import { init } from "@sakuga/fruitback-widget";\nexport const mount = () => init({ endpoint: "https://w.test", clientId: "acme" });\n',
+        'import { init } from "@fruitback/widget";\nexport const mount = () => init({ endpoint: "https://w.test", clientId: "acme" });\n',
       );
       // The defaults a project gets from `tsc --init`, and nothing this repo relies on.
       await writeFile(

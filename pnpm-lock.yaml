@@ -65,10 +65,10 @@ importers:
       '@react-aria/utils':
         specifier: ^3.34.1
         version: 3.34.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@sakuga/fruitback-shared':
+      '@fruitback/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      '@sakuga/fruitback-widget':
+      '@fruitback/widget':
         specifier: workspace:*
         version: link:../../packages/widget
       isbot:
@@ -129,7 +129,7 @@ importers:
 
   apps/worker:
     dependencies:
-      '@sakuga/fruitback-shared':
+      '@fruitback/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       zod:
@@ -173,7 +173,7 @@ importers:
 
   packages/widget:
     dependencies:
-      '@sakuga/fruitback-shared':
+      '@fruitback/shared':
         specifier: workspace:*
         version: link:../shared
     devDependencies:

@@ -1,4 +1,4 @@
-import type { SeedReporter } from '@sakuga/fruitback-shared';
+import type { SeedReporter } from '@fruitback/shared';
 
 /**
  * The note popover: what the reporter actually writes in.

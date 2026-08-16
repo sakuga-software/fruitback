@@ -1,5 +1,5 @@
 {
-  "name": "@sakuga/fruitback-widget",
+  "name": "@fruitback/widget",
   "version": "0.1.0",
   "description": "Visual feedback widget: click an element, write a note, get a Linear issue.",
   "license": "UNLICENSED",
@@ -37,7 +37,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
-    "@sakuga/fruitback-shared": "workspace:*"
+    "@fruitback/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

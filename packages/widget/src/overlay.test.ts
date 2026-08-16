@@ -1,7 +1,7 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { SEED_STAGE_STYLES } from '@sakuga/fruitback-shared';
-import { seedFixture, seedIssueFixture } from '@sakuga/fruitback-shared/seed.fixture';
+import { SEED_STAGE_STYLES } from '@fruitback/shared';
+import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
 import { type Overlay, createOverlay } from './overlay.ts';
 import { type MountedPage, mountPage, pressKey, setDocumentSize, setRect } from './dom.fixture.ts';
 

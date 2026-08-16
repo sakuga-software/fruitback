@@ -17,7 +17,7 @@
     "serve:fake": "FRUITBACK_FAKE_LINEAR=1 PORT=8788 node src/main.ts"
   },
   "dependencies": {
-    "@sakuga/fruitback-shared": "workspace:*",
+    "@fruitback/shared": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {

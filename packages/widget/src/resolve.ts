@@ -1,9 +1,4 @@
-import {
-  SEED_ANCHOR_STRATEGIES,
-  type SeedAnchor,
-  type SeedAnchorStrategy,
-  type SeedBounds,
-} from '@sakuga/fruitback-shared';
+import { SEED_ANCHOR_STRATEGIES, type SeedAnchor, type SeedAnchorStrategy, type SeedBounds } from '@fruitback/shared';
 import { readTextExcerpt } from './anchor.ts';
 
 /**

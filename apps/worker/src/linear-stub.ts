@@ -1,5 +1,5 @@
 import { mock } from 'node:test';
-import { type Seed, buildIssueDescription, buildIssueTitle } from '@sakuga/fruitback-shared';
+import { type Seed, buildIssueDescription, buildIssueTitle } from '@fruitback/shared';
 
 /**
  * A fake Linear GraphQL endpoint, dispatching on the operation name. It records every call so a test

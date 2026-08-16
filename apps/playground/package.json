@@ -13,12 +13,12 @@
     "typecheck": "react-router typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@fruitback/shared": "workspace:*",
+    "@fruitback/widget": "workspace:*",
     "@heroui/react": "^3.2.4",
     "@react-aria/i18n": "^3.13.1",
     "@react-aria/ssr": "^3.10.1",
     "@react-aria/utils": "^3.34.1",
-    "@sakuga/fruitback-shared": "workspace:*",
-    "@sakuga/fruitback-widget": "workspace:*",
     "isbot": "^5.2.1",
     "react": "^19.2.8",
     "react-aria": "^3.51.0",

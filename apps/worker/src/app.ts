@@ -1,4 +1,4 @@
-import { canonicalizePageUrl, parseSeed, type SeedReporter } from '@sakuga/fruitback-shared';
+import { canonicalizePageUrl, parseSeed, type SeedReporter } from '@fruitback/shared';
 import { readBearerToken, stripClaimedVerification, verifyIdentityToken } from './identity.ts';
 import { type ClientResolution, normalizeClientId, resolveClient } from './clients.ts';
 import { type WorkerConfig, type WorkerEnv, readAllowedOrigins, readConfig } from './env.ts';

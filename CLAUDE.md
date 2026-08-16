@@ -31,20 +31,20 @@ pnpm typecheck
 pnpm lint                                   # oxlint
 pnpm format:fix                             # oxfmt
 
-pnpm --filter @sakuga/fruitback-shared test         # one package
-pnpm --filter @sakuga/fruitback-shared test:watch
+pnpm --filter @fruitback/shared test         # one package
+pnpm --filter @fruitback/shared test:watch
 node --test src/seed.test.ts                 # one file, from the package directory
 ```
 
 ## Layout
 
-- `packages/shared` (`@sakuga/fruitback-shared`) — the seed contract. Browser- and server-safe: no Node API,
-  no DOM API beyond `URL`. Also exports `@sakuga/fruitback-shared/seed.fixture`, so every package tests
+- `packages/shared` (`@fruitback/shared`) — the seed contract. Browser- and server-safe: no Node API,
+  no DOM API beyond `URL`. Also exports `@fruitback/shared/seed.fixture`, so every package tests
   against the same seed instead of keeping a drifting copy.
 - `apps/worker` (`@fruitback/worker`) — the Node service. `POST /feedback` plants a seed,
   `GET /feedback?url=…` returns the seeds of that page. Still called "worker" because that is what
   everyone calls it, though it is no longer an edge worker.
-- `packages/widget` (`@sakuga/fruitback-widget`) — the browser half, and now the whole of it: **capture**
+- `packages/widget` (`@fruitback/widget`) — the browser half, and now the whole of it: **capture**
   (`captureSeed`, SKG-494), **the overlay** (`resolveAnchor` + `createOverlay`, SKG-500), **the
   Shadow DOM host** (`createCaptureHost`, SKG-492) and **the note popover** (`createComposer`,
   SKG-493). The playground only says where the worker is.
@@ -117,7 +117,8 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 
 ## The published package
 
-- **Two packages, both under `@sakuga/`** (SKG-505): `fruitback-widget` and `fruitback-shared`. The
+- **Two packages, both under `@fruitback/`** (SKG-505): `widget` and `shared` — the same names they
+  carry in the workspace, so nothing is renamed on the way out. The
   seed contract had to be published too — the widget's emitted `.d.ts` name its types, and types that
   point at something nobody can install are worse than none.
 - **`public.ts` is the contract, `index.ts` is the workspace.** Everything is exported somewhere
