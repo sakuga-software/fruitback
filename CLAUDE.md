@@ -147,11 +147,16 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   tarball ships `src` and nothing else, while `publishConfig` points at a `dist` that is not there.
   That is the same defect as the paragraph above, arriving a different way — first as `TS5097`, then
   as an unresolvable module.
-- **The guard that matters is `type-checks an import with no special tsconfig`**: it deletes both
-  `dist` directories, packs, asserts each tarball actually contains one, installs them into a scratch
-  project and runs an ordinary `tsc` with `skipLibCheck` **off**. Every part of that sentence is
-  there because something without it shipped green — building before packing hid the missing hook,
-  and `skipLibCheck` hid the very declarations the contract package exists to make resolvable.
+- **The guard that matters is `type-checks an import with no special tsconfig`**: it deletes every
+  `dist`, packs all three, asserts each tarball actually contains one, installs them into a scratch
+  project and type-checks an import **from `fruitback` and from both scoped packages**, with
+  `skipLibCheck` **off**. Every clause is there because something without it shipped green — building
+  before packing hid a missing `prepack`, importing only the widget would have missed a broken
+  `exports` on the front door, and `skipLibCheck` skips the declarations the contract package exists
+  to make resolvable.
+- **Read the file after editing this guard.** Two of those clauses were described here, and in a PR
+  reply, while the edit that would have added them had silently not applied. A guard is worth what it
+  runs, not what its docstring says.
 - `react-grab` and `zod` are **bundled, and are devDependencies**: a client site must not have to
   install — or resolve a version conflict over — a library it never asked for.
 - The ESM build is left readable (the consumer's bundler minifies it); the IIFE is minified because it

@@ -138,9 +138,23 @@ describe('a consumer installing this from npm', () => {
       );
       await writeFile(
         join(scratch, 'index.ts'),
-        'import { init } from "@fruitback/widget";\nexport const mount = () => init({ endpoint: "https://w.test", clientId: "acme" });\n',
+        [
+          // The front door first, because it is the one a reader of the docs installs. Nothing else
+          // here would notice a broken `exports` in `packages/fruitback`, and an `export *` collision
+          // between the two packages it forwards is dropped silently by the module spec rather than
+          // reported.
+          'import { init, type Seed } from "fruitback";',
+          // And the scoped packages directly, because they stay published and someone will.
+          'import { init as initScoped } from "@fruitback/widget";',
+          'import type { SeedIssue } from "@fruitback/shared";',
+          'export const mount = () => init({ endpoint: "https://w.test", clientId: "acme" });',
+          'export const mountScoped = () => initScoped({ endpoint: "https://w.test", clientId: "acme" });',
+          'export type Payload = Seed;',
+          'export type Pin = SeedIssue;',
+          '',
+        ].join('\n'),
       );
-      // The defaults a project gets from `tsc --init`, and nothing this repo relies on.
+      // The defaults a project gets from `tsc --init`, with one exception.
       await writeFile(
         join(scratch, 'tsconfig.json'),
         JSON.stringify({
@@ -150,7 +164,10 @@ describe('a consumer installing this from npm', () => {
             target: 'es2022',
             noEmit: true,
             strict: true,
-            skipLibCheck: true,
+            // Deliberately **off**, unlike the default. The declarations are the reason the contract
+            // package is published at all, and skipping them would leave this guard checking nothing
+            // about its own premise.
+            skipLibCheck: false,
           },
           include: ['index.ts'],
         }),

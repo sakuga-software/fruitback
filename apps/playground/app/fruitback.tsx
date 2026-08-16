@@ -42,6 +42,14 @@ const WORKER_ORIGIN = import.meta.env.VITE_FRUITBACK_WORKER ?? 'http://localhost
 export function Fruitback() {
   const location = useLocation();
   const [status, setStatus] = useState('—');
+  /**
+   * The last identifier planted, kept apart from `status` on purpose.
+   *
+   * `status` has two writers: this component, and the widget reporting a re-resolution it decided on
+   * by itself (SKG-513). They race — a confirmation would be overwritten by a pin count arriving a
+   * hundred milliseconds later — so the one fact a test needs to synchronise on lives on its own.
+   */
+  const [planted, setPlanted] = useState('');
   const widget = useRef<{
     host: CaptureHost;
     overlay: Overlay;
@@ -96,6 +104,7 @@ export function Fruitback() {
         // Re-read first — that is what proves the read path answers — and let the confirmation have
         // the last word, or the status flips back to a pin count nobody asked for.
         await refresh(config.get());
+        setPlanted(identifier);
         setStatus(`planté · ${identifier}`);
 
         return true;
@@ -149,6 +158,7 @@ export function Fruitback() {
   return (
     <DevToolbar
       status={status}
+      planted={planted}
       onReload={() => {
         const current = widget.current;
         if (current !== null) void current.refresh(current.config.get());
@@ -243,7 +253,7 @@ function createRefresher(
 }
 
 /** Dev-only chrome. Marked `data-fb-dev` so pointing at it never captures it. */
-function DevToolbar({ status, onReload }: { status: string; onReload: () => void }) {
+function DevToolbar({ status, planted, onReload }: { status: string; planted: string; onReload: () => void }) {
   return (
     <div
       data-fb-dev="toolbar"
@@ -261,6 +271,10 @@ function DevToolbar({ status, onReload }: { status: string; onReload: () => void
       <Button data-fb-dev="remove-latte" size="sm" variant="secondary" onPress={() => removeCard('latte')}>
         Supprimer la carte Latte
       </Button>
+      {/* Written once per successful plant and never overwritten — see `planted` above. */}
+      <span data-fb-dev="planted" hidden>
+        {planted}
+      </span>
       <span data-fb-dev="status" className="min-w-[150px] opacity-70">
         {status}
       </span>

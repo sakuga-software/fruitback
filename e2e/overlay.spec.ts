@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { badgeFor, expectPinOn, openPlayground, pinFor, plantPin, waitForPins } from './pin.ts';
+import { badgeFor, expectPinOn, openPlayground, pinFor, plantPin, planted, status, waitForPins } from './pin.ts';
 
 /**
  * The overlay in a browser that actually lays out and scrolls (SKG-500). The unit tests state every
@@ -85,3 +85,22 @@ function assertDistinct(stages: (string | undefined)[]): void {
   expect(stages).toHaveLength(3);
   expect(new Set(stages).size, `expected three different stages, got ${stages.join(', ')}`).toBe(3);
 }
+
+test('the planted identifier survives the widget announcing its own re-resolution', async ({ page }) => {
+  // The CI failure this closes: `status` has two writers — this harness, and the widget reporting a
+  // re-resolution it decided on by itself (SKG-513). The confirmation was overwritten by a pin count
+  // arriving a moment later, so `plantPin` timed out waiting for a message that had already been and
+  // gone. Locally the count won the race; on CI it lost.
+  await openPlayground(page, 'planted-signal');
+  await plantPin(page, page.locator('[data-testid="card-latte"] .add'), 'Le pin dont on garde l’identifiant');
+
+  const identifier = await planted(page).textContent();
+  expect(identifier).toMatch(/^DEV-/);
+
+  // A re-render the widget notices on its own, which is what writes over the status line.
+  await page.getByRole('button', { name: 'Redéployer' }).click();
+  await expect(status(page)).toHaveText(/^1 pin$/);
+
+  // The status moved on; the identifier did not.
+  await expect(planted(page)).toHaveText(identifier ?? '');
+});
