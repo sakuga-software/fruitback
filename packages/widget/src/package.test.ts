@@ -124,10 +124,11 @@ describe('a consumer installing this from npm', () => {
     const workspace = join(root, '..', '..');
 
     try {
-      await rm(join(root, 'dist'), { recursive: true, force: true });
-      await rm(join(root, '..', 'shared', 'dist'), { recursive: true, force: true });
+      for (const name of ['widget', 'shared', 'fruitback']) {
+        await rm(join(root, '..', name, 'dist'), { recursive: true, force: true });
+      }
 
-      for (const pkg of ['@fruitback/shared', '@fruitback/widget']) {
+      for (const pkg of ['@fruitback/shared', '@fruitback/widget', 'fruitback']) {
         await run('pnpm', ['--filter', pkg, 'pack', '--pack-destination', scratch], { cwd: workspace, shell: true });
       }
 

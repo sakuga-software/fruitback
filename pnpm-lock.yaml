@@ -53,6 +53,12 @@ importers:
 
   apps/playground:
     dependencies:
+      '@fruitback/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@fruitback/widget':
+        specifier: workspace:*
+        version: link:../../packages/widget
       '@heroui/react':
         specifier: ^3.2.4
         version: 3.2.4(@react-aria/i18n@3.13.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@react-aria/ssr@3.10.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@react-aria/utils@3.34.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@react-spectrum/provider@3.11.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-aria-components@1.20.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-aria@3.51.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(tailwindcss@4.3.3)
@@ -65,12 +71,6 @@ importers:
       '@react-aria/utils':
         specifier: ^3.34.1
         version: 3.34.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@fruitback/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
-      '@fruitback/widget':
-        specifier: workspace:*
-        version: link:../../packages/widget
       isbot:
         specifier: ^5.2.1
         version: 5.2.1
@@ -142,6 +142,28 @@ importers:
       esbuild:
         specifier: 'catalog:'
         version: 0.28.1
+      oxfmt:
+        specifier: 'catalog:'
+        version: 0.60.0
+      oxlint:
+        specifier: 'catalog:'
+        version: 1.77.0
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+
+  packages/fruitback:
+    dependencies:
+      '@fruitback/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@fruitback/widget':
+        specifier: workspace:*
+        version: link:../widget
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.1.1
       oxfmt:
         specifier: 'catalog:'
         version: 0.60.0

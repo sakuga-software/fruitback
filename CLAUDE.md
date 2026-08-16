@@ -117,10 +117,15 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 
 ## The published package
 
-- **Two packages, both under `@fruitback/`** (SKG-505): `widget` and `shared` — the same names they
-  carry in the workspace, so nothing is renamed on the way out. The
-  seed contract had to be published too — the widget's emitted `.d.ts` name its types, and types that
-  point at something nobody can install are worse than none.
+- **Three packages, and only one of them is the front door.** `fruitback` is what a client installs:
+  it depends on `@fruitback/widget` and `@fruitback/shared` and re-exports both, so mounting the
+  widget and naming what it stores is one install and one import.
+- The two scoped packages stay published because the front door depends on them, not because anyone
+  is expected to reach for them. The contract had to be published at all because the widget's emitted
+  `.d.ts` name its types, and types that point at something nobody can install are worse than none.
+- **`packages/fruitback` re-exports and defines nothing.** Anything declared there rather than
+  forwarded would be a third place for the contract to drift. It is not bundled either: the two
+  packages it forwards are real dependencies, so there is one copy of the widget on disk.
 - **`public.ts` is the contract, `index.ts` is the workspace.** Everything is exported somewhere
   because the playground and the tests reach into the parts; only what `public.ts` names cannot
   change without a major version. `init` and what it hands back is all of it — deliberately **not**
@@ -138,7 +143,7 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   failed with `TS5097` while every check here stayed green.
 - **`rewriteRelativeImportExtensions` rewrites the JavaScript and not the declarations.** Both builds
   therefore post-process their `.d.ts` and then assert no `.ts` extension survived.
-- **Both packages need `prepack`.** `pnpm pack` and `pnpm publish` build through it; without one the
+- **All three packages need `prepack`.** `pnpm pack` and `pnpm publish` build through it; without one the
   tarball ships `src` and nothing else, while `publishConfig` points at a `dist` that is not there.
   That is the same defect as the paragraph above, arriving a different way — first as `TS5097`, then
   as an unresolvable module.
