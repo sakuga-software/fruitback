@@ -4,6 +4,7 @@
   "description": "The Fruitback seed contract — the payload the widget writes and the worker stores.",
   "license": "UNLICENSED",
   "files": [
+    "dist",
     "src"
   ],
   "type": "module",
@@ -15,15 +16,28 @@
     "./seed.fixture": "./src/seed.fixture.ts"
   },
   "publishConfig": {
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./seed.fixture": {
+        "types": "./dist/seed.fixture.d.ts",
+        "import": "./dist/seed.fixture.js"
+      }
+    },
     "access": "public"
   },
   "scripts": {
+    "build": "node build.ts",
     "format": "oxfmt --check .",
     "format:fix": "oxfmt .",
     "lint": "oxlint .",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "test": "node --test 'src/**/*.test.ts'",
-    "test:watch": "node --test --watch 'src/**/*.test.ts'"
+    "test:watch": "node --test --watch 'src/**/*.test.ts'",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
     "zod": "catalog:"

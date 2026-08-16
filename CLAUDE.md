@@ -131,7 +131,15 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   to a URL, `popstate` does not fire for a `pushState`, and there is no framework to ask on a client's
   site. The alternative was polling `location.href` for ever.
 - The `workspace` fields point at **source**; `publishConfig` swaps in `dist` when pnpm packs. That is
-  what lets a developer edit the file they are looking at while a consumer gets the build.
+  what lets a developer edit the file they are looking at while a consumer gets the build. **Both
+  packages need it** — publishing the contract while `main` still pointed at `src/index.ts` shipped a
+  package whose own imports carry the `.ts` extension only this repo allows, and a downstream `tsc`
+  failed with `TS5097` while every check here stayed green.
+- **`rewriteRelativeImportExtensions` rewrites the JavaScript and not the declarations.** Both builds
+  therefore post-process their `.d.ts` and then assert no `.ts` extension survived.
+- **The guard that matters is `type-checks an import with no special tsconfig`**: it packs both
+  packages, installs them into a scratch project and runs an ordinary `tsc`. Structural assertions on
+  our own output are what let the broken contract package ship — they were all green.
 - `react-grab` and `zod` are **bundled, and are devDependencies**: a client site must not have to
   install — or resolve a version conflict over — a library it never asked for.
 - The ESM build is left readable (the consumer's bundler minifies it); the IIFE is minified because it

@@ -1,7 +1,7 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,6 +24,7 @@ let dist: string;
 
 before(async () => {
   await run(process.execPath, ['build.ts'], { cwd: root });
+  await run(process.execPath, ['build.ts'], { cwd: join(root, '..', 'shared') });
   dist = join(root, 'dist');
 });
 
@@ -100,12 +101,66 @@ describe('the published declarations', () => {
   });
 });
 
+describe('a consumer installing this from npm', () => {
+  /**
+   * The test that was missing, and the reason a broken package shipped green.
+   *
+   * The assertions above check *our* declarations for stray `.ts` imports and for specifiers a
+   * consumer could install. Neither notices that `@sakuga/fruitback-shared` itself pointed at raw
+   * sources: `main` and `types` went straight to `src/index.ts`, whose own imports carry the `.ts`
+   * extension this repo allows and nobody else does. A downstream `tsc` failed with TS5097 while
+   * every check here stayed green.
+   *
+   * So this one does what a consumer does: pack both packages, install them into a scratch project,
+   * and type-check an import with ordinary settings. Slow, and the only honest guard.
+   */
+  it('type-checks an import with no special tsconfig', async () => {
+    const scratch = await mkdtemp(join(tmpdir(), 'fruitback-consumer-'));
+    const workspace = join(root, '..', '..');
+
+    try {
+      for (const pkg of ['@sakuga/fruitback-shared', '@sakuga/fruitback-widget']) {
+        await run('pnpm', ['--filter', pkg, 'pack', '--pack-destination', scratch], { cwd: workspace, shell: true });
+      }
+
+      await writeFile(
+        join(scratch, 'package.json'),
+        JSON.stringify({ name: 'consumer', private: true, type: 'module' }),
+      );
+      await writeFile(
+        join(scratch, 'index.ts'),
+        'import { init } from "@sakuga/fruitback-widget";\nexport const mount = () => init({ endpoint: "https://w.test", clientId: "acme" });\n',
+      );
+      // The defaults a project gets from `tsc --init`, and nothing this repo relies on.
+      await writeFile(
+        join(scratch, 'tsconfig.json'),
+        JSON.stringify({
+          compilerOptions: {
+            module: 'preserve',
+            moduleResolution: 'bundler',
+            target: 'es2022',
+            noEmit: true,
+            strict: true,
+            skipLibCheck: true,
+          },
+          include: ['index.ts'],
+        }),
+      );
+
+      const tarballs = (await import('node:fs')).readdirSync(scratch).filter((name) => name.endsWith('.tgz'));
+      await run('npm', ['install', '--no-audit', '--no-fund', ...tarballs], { cwd: scratch, shell: true });
+
+      await run(process.execPath, [join(workspace, 'node_modules/typescript/bin/tsc'), '-p', 'tsconfig.json'], {
+        cwd: scratch,
+      });
+    } finally {
+      await rm(scratch, { recursive: true, force: true });
+    }
+  });
+});
+
 async function gzipSize(path: string): Promise<number> {
   const { gzipSync } = await import('node:zlib');
 
   return gzipSync(await readFile(path)).byteLength;
 }
-
-after(async () => {
-  await rm(await mkdtemp(join(tmpdir(), 'fruitback-')), { recursive: true, force: true });
-});
