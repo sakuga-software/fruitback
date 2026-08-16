@@ -44,7 +44,7 @@ node --test src/seed.test.ts                 # one file, from the package direct
 - `apps/worker` (`@fruitback/worker`) — the Node service. `POST /feedback` plants a seed,
   `GET /feedback?url=…` returns the seeds of that page. Still called "worker" because that is what
   everyone calls it, though it is no longer an edge worker.
-- `packages/widget` (`@fruitback/widget`) — the browser half, and now the whole of it: **capture**
+- `packages/widget` (`@sakuga/fruitback-widget`) — the browser half, and now the whole of it: **capture**
   (`captureSeed`, SKG-494), **the overlay** (`resolveAnchor` + `createOverlay`, SKG-500), **the
   Shadow DOM host** (`createCaptureHost`, SKG-492) and **the note popover** (`createComposer`,
   SKG-493). The playground only says where the worker is.

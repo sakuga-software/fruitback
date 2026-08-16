@@ -58,6 +58,15 @@ const REQUERY_DEBOUNCE_MS = 300;
 
 export function init(options: FruitbackOptions): Fruitback {
   const document = options.document ?? globalThis.document;
+  // Named rather than left to fail. This is the published entry point, so the first thing anyone
+  // does wrong with it is call it while server-rendering — and `Cannot read properties of undefined`
+  // is a stack trace through a bundle, in someone else's app, with no clue what to do about it.
+  if (document === undefined) {
+    throw new Error(
+      'Fruitback.init: no document. The widget is browser-only — mount it in an effect, or after the page loads.',
+    );
+  }
+
   const view = document.defaultView ?? globalThis.window;
 
   const config = createConfigStore({

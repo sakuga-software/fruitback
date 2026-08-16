@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 /**
@@ -15,7 +16,9 @@ import { promisify } from 'node:util';
  */
 
 const run = promisify(execFile);
-const root = new URL('..', import.meta.url).pathname;
+// `fileURLToPath`, not `.pathname`: a repo checked out under a path with a space arrives
+// percent-escaped, and a Windows drive letter arrives with a leading slash. Both make `cwd` wrong.
+const root = fileURLToPath(new URL('..', import.meta.url));
 
 let dist: string;
 
