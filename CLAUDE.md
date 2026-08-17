@@ -271,6 +271,28 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   and the dialog `Réglages Fruitback`; giving both the same name is ambiguous to a screen reader and
   to any test that finds elements by name.
 
+## The team's replies
+
+- **Comments come from Linear on every read** (SKG-502), and close the loop: someone leaves a note,
+  the team answers in the issue, and the answer appears where the note was left rather than in an
+  inbox the reporter does not have.
+- **Absent and empty mean different things.** No `comments` field at all means the worker was not
+  asked for them, and the widget says nothing; `[]` means it asked and there were none, and the
+  widget says so. A client with replies switched off must not read as a team that never answered.
+- **`showComments` is on by default and is a real switch**, per client or worker-wide
+  (`FRUITBACK_HIDE_COMMENTS=1`). The read path needs no authentication, so anything surfaced there is
+  readable by anyone who can load the client's page — a team that treats its issue comments as
+  internal turns it off.
+- The switch is applied in **`toSeedIssue`**, which both the real Linear and the in-memory one go
+  through, rather than only through the query's `first:` argument. `first: 0` is an assumption about
+  what Linear accepts, and this promise should not rest on a backend behaving a particular way.
+- **A comment body is `textContent`, never markup.** It is Linear markdown written by anyone who can
+  comment on the issue, rendered inside someone else's page; treating it as HTML would make the
+  feedback widget the way into their site.
+- Sorted oldest-first in the worker, because Linear answers newest-first and a conversation reads the
+  other way. Capped at `COMMENTS_PER_ISSUE` — a longer thread belongs in Linear, which the pin links
+  to.
+
 ## Re-anchoring, and why a pin says how sure it is
 
 - `resolveAnchor` walks the anchor's claims in the order `SEED_ANCHOR_STRATEGIES` declares:

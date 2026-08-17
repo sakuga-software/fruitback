@@ -36,6 +36,18 @@ const issues: StoredIssue[] = [];
  * shows every pin colour without anyone having to triage a fake ticket. `stageForLinearState` maps
  * these to seeded / green / ripening / ripe / composted.
  */
+/**
+ * Canned replies, so the dev loop shows a pin that has been answered (SKG-502).
+ *
+ * Every third issue gets a thread. A playground where nothing ever has comments makes the feature
+ * invisible, and one where everything does hides the empty case — which is the one the widget has to
+ * render without looking broken.
+ */
+const DEV_COMMENTS = [
+  { body: 'Bien vu, on regarde ça cette semaine.', author: 'Alice' },
+  { body: 'Corrigé sur la préprod — tu peux revérifier ?', author: 'Bruno' },
+];
+
 const DEV_STATES = [
   { name: 'Backlog', type: 'backlog' },
   { name: 'Todo', type: 'unstarted' },
@@ -58,6 +70,19 @@ export async function createSeedIssue(_config: WorkerConfig, routing: Routing, s
     updatedAt: new Date().toISOString(),
     description: buildIssueDescription(seed),
     state: { name: state.name, type: state.type },
+    // Deliberately newest-first, like Linear's own default: the ordering is `toSeedComments`'s job,
+    // and a fake that hands back an already-sorted list would never exercise it.
+    comments: {
+      nodes:
+        number % 3 === 0
+          ? [...DEV_COMMENTS].reverse().map((comment, index) => ({
+              id: `dev_comment_${number}_${index}`,
+              body: comment.body,
+              createdAt: new Date(Date.now() - index * 60_000).toISOString(),
+              user: { name: comment.author },
+            }))
+          : [],
+    },
     labels: buildIssueLabels(seed),
     teamId: routing.teamId,
   });
@@ -79,7 +104,9 @@ export async function fetchSeedIssues(
       .filter((issue) => required.every((label) => issue.labels.includes(label)))
       // `contains`, like the real filter — the exact URL check is `toSeedIssue`'s job, here as there.
       .filter((issue) => (issue.description ?? '').includes(query.url))
-      .map((issue) => toSeedIssue(issue, query.url))
+      // Same `toSeedIssue` as production, `routing` included — which is what makes the dev loop show
+      // exactly what a client with replies switched off would see.
+      .map((issue) => toSeedIssue(issue, query.url, routing))
       .filter((issue): issue is SeedIssue => issue !== null)
   );
 }

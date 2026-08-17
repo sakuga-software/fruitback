@@ -237,6 +237,22 @@ export function stageForLinearState(stateType: string): SeedStage {
  * What the worker sends back to the widget for one planted seed (M4 / SKG-499). Kept here because
  * both ends validate against it.
  */
+/**
+ * A reply from the team, as the widget shows it (SKG-502).
+ *
+ * Part of the **read envelope**, not of the seed: comments live in Linear and are fetched, never
+ * stored in the description. Nothing here affects the round trip, so `SEED_VERSION` does not move.
+ */
+export const seedCommentSchema = z.object({
+  id: z.string().min(1),
+  body: z.string(),
+  createdAt: z.string(),
+  /** Absent when Linear returns a comment with no user — an integration, or a deleted account. */
+  author: z.string().optional(),
+});
+
+export type SeedComment = z.infer<typeof seedCommentSchema>;
+
 export const seedIssueSchema = z.object({
   id: z.string().min(1),
   /** Human handle, e.g. `SKG-491`. */
@@ -246,7 +262,11 @@ export const seedIssueSchema = z.object({
   stage: z.enum(SEED_STAGES),
   stateName: z.string(),
   updatedAt: z.string(),
-  commentCount: z.number().int().nonnegative().optional(),
+  /**
+   * Oldest first, so the thread reads as a conversation. Absent means the worker did not ask for
+   * them; empty means it did and there were none — the widget says something different for each.
+   */
+  comments: z.array(seedCommentSchema).optional(),
   seed: seedSchema,
 });
 
