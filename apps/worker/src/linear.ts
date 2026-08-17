@@ -244,9 +244,11 @@ export async function fetchSeedIssues(
       filter,
       first: ISSUES_PAGE_SIZE,
       after,
-      // Zero when this client has replies turned off: the field is still selected, so one query
-      // serves both cases and Linear returns an empty list rather than us dropping data afterwards.
-      comments: routing.showComments ? COMMENTS_PER_ISSUE : 0,
+      // One, not zero, when this client has replies turned off. `toSeedIssue` is what keeps the
+      // promise — it drops them whatever comes back — so this number only decides how much is
+      // fetched. `first: 0` may or may not be accepted by Linear, and a read that fails outright for
+      // those clients would be a far worse bug than one wasted comment on the wire.
+      comments: routing.showComments ? COMMENTS_PER_ISSUE : 1,
     });
 
     for (const node of result.issues.nodes) {

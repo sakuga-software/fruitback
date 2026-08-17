@@ -234,10 +234,6 @@ export function stageForLinearState(stateType: string): SeedStage {
 }
 
 /**
- * What the worker sends back to the widget for one planted seed (M4 / SKG-499). Kept here because
- * both ends validate against it.
- */
-/**
  * A reply from the team, as the widget shows it (SKG-502).
  *
  * Part of the **read envelope**, not of the seed: comments live in Linear and are fetched, never
@@ -253,6 +249,10 @@ export const seedCommentSchema = z.object({
 
 export type SeedComment = z.infer<typeof seedCommentSchema>;
 
+/**
+ * What the worker sends back to the widget for one planted seed (M4 / SKG-499). Kept here because
+ * both ends validate against it.
+ */
 export const seedIssueSchema = z.object({
   id: z.string().min(1),
   /** Human handle, e.g. `SKG-491`. */

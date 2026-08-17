@@ -445,7 +445,7 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   separate `tsconfig.test.json`; do not "fix" this by adding `node` to the main config.
 - **No backticks inside the CSS template literals** (`STYLES` in `host.ts`, `overlay.ts`,
   `composer.ts`). A comment quoting a symbol closes the literal and the file stops parsing. It has
-  now happened **three** times, the third while writing a comment about a different bug; the failure
+  now happened **four** times, twice while writing a comment about a different bug; the failure
   is loud — the module will not load — but the cause reads as a mystery until you look at the right
   line. Write `display:block`, not the same thing in backticks.
 - Comments explain _why_, not _what_ — the tolerant parser and the redundant anchor both exist for

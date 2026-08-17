@@ -133,3 +133,26 @@ test('the team’s replies show up inside the pin', async ({ page }) => {
 
   throw new Error('no issue came back with replies in three attempts');
 });
+
+test('a reply is not drawn as a bullet point', async ({ page }) => {
+  // `all: initial` in the host reset gives each item its own `list-style-type: disc`, which beats
+  // what it would have inherited from the list. Asserted on the computed style rather than on the
+  // rule, because the rule is not the promise — and no unit test can see a marker.
+  await openPlayground(page, 'reply-markers');
+  const button = page.locator('[data-testid="card-latte"] .add');
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await plantPin(page, button, `Puces ${attempt} à vérifier`);
+    await badgeFor(page, `Puces ${attempt} à vérifier`).click();
+
+    const reply = page.locator('.fb-thread-reply').first();
+    if ((await reply.count()) > 0) {
+      expect(await reply.evaluate((node) => getComputedStyle(node).listStyleType)).toBe('none');
+
+      return;
+    }
+    await page.keyboard.press('Escape');
+  }
+
+  throw new Error('no issue came back with replies in three attempts');
+});

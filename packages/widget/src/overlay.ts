@@ -672,6 +672,12 @@ const STYLES = `
   max-height: 180px;
   overflow-y: auto;
 }
+/*
+  On the item, not only on the list. The host reset gives every element all:initial, which resets each
+  item's own list-style-type to its initial value of disc — and a reset value beats what it would have
+  inherited from the list. The bullets came back, and only a recording showed it.
+*/
+.fb-thread-reply { list-style: none; }
 .fb-thread-reply + .fb-thread-reply { margin-top: 8px; }
 .fb-thread-reply-who { display: block; font-size: 11px; color: #78716c; }
 .fb-thread-reply-body { margin: 2px 0 0; font-size: 12px; white-space: pre-wrap; }
