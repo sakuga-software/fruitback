@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    // TypeScript's own answer to this repo's `.ts` import convention: it rewrites the extension to
+    // `.js` on the way out, in the JavaScript and the declarations alike.
+    "rewriteRelativeImportExtensions": true
+  },
+  "include": ["src/index.ts", "src/seed.fixture.ts"]
+}
