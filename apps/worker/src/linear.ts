@@ -1,6 +1,7 @@
 import {
   FRUITBACK_LABEL,
   type Seed,
+  type SeedComment,
   type SeedIssue,
   buildIssueDescription,
   buildIssueLabels,
@@ -152,7 +153,7 @@ export async function createSeedIssue(config: WorkerConfig, routing: Routing, se
 }
 
 const ISSUES_QUERY = `
-  query FruitbackIssues($filter: IssueFilter!, $first: Int!, $after: String) {
+  query FruitbackIssues($filter: IssueFilter!, $first: Int!, $after: String, $comments: Int!) {
     issues(filter: $filter, first: $first, after: $after) {
       pageInfo { hasNextPage endCursor }
       nodes {
@@ -163,6 +164,9 @@ const ISSUES_QUERY = `
         updatedAt
         description
         state { name type }
+        comments(first: $comments) {
+          nodes { id body createdAt user { name } }
+        }
       }
     }
   }
@@ -177,6 +181,14 @@ export type IssueNode = {
   updatedAt: string;
   description: string | null;
   state: { name: string; type: string } | null;
+  comments?: { nodes: CommentNode[] } | null;
+};
+
+export type CommentNode = {
+  id: string;
+  body: string;
+  createdAt: string;
+  user: { name: string } | null;
 };
 
 type IssuesResult = {
@@ -185,6 +197,20 @@ type IssuesResult = {
 
 /** Linear caps a page at 250; 50 keeps a single-page answer the common case for one screen. */
 const ISSUES_PAGE_SIZE = 50;
+
+/** Spread, so "not asked for" stays absent rather than becoming an empty list that means "none". */
+function optionalComments(comments: SeedComment[] | undefined): { comments?: SeedComment[] } {
+  return comments === undefined ? {} : { comments };
+}
+
+/**
+ * Comments fetched per issue (SKG-502).
+ *
+ * Bounded because this rides along with every read of every pin on a page: fifty issues with an
+ * unbounded comment list is a payload nobody asked for and a Linear bill somebody pays. A thread
+ * longer than this belongs in Linear, which the pin links to.
+ */
+const COMMENTS_PER_ISSUE = 20;
 
 /**
  * Stop walking after this many pages. A page with 500 pins is not a page the widget can render
@@ -214,10 +240,19 @@ export async function fetchSeedIssues(
   let after: string | null = null;
 
   for (let page = 0; page < ISSUES_MAX_PAGES; page += 1) {
-    const result: IssuesResult = await graphql(config, ISSUES_QUERY, { filter, first: ISSUES_PAGE_SIZE, after });
+    const result: IssuesResult = await graphql(config, ISSUES_QUERY, {
+      filter,
+      first: ISSUES_PAGE_SIZE,
+      after,
+      // One, not zero, when this client has replies turned off. `toSeedIssue` is what keeps the
+      // promise — it drops them whatever comes back — so this number only decides how much is
+      // fetched. `first: 0` may or may not be accepted by Linear, and a read that fails outright for
+      // those clients would be a far worse bug than one wasted comment on the wire.
+      comments: routing.showComments ? COMMENTS_PER_ISSUE : 1,
+    });
 
     for (const node of result.issues.nodes) {
-      const issue = toSeedIssue(node, query.url);
+      const issue = toSeedIssue(node, query.url, routing);
       if (issue !== null) found.push(issue);
     }
 
@@ -244,7 +279,39 @@ function buildSeedIssueFilter(routing: Routing, { url, clientId }: SeedIssueQuer
   };
 }
 
-export function toSeedIssue(node: IssueNode, canonicalUrl: string): SeedIssue | null {
+/**
+ * Oldest first, which is how a conversation reads.
+ *
+ * Linear returns comments newest-first by default and the widget renders what it is given, so the
+ * order is settled here rather than in two places later.
+ */
+function toSeedComments(node: IssueNode): SeedComment[] | undefined {
+  if (node.comments == null) return undefined;
+
+  return node.comments.nodes
+    .map((comment) => ({
+      id: comment.id,
+      body: comment.body,
+      createdAt: comment.createdAt,
+      ...(comment.user?.name ? { author: comment.user.name } : {}),
+    }))
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+}
+
+/**
+ * `routing` decides whether replies come back, and it decides here — the one function both the real
+ * Linear and the in-memory one go through.
+ *
+ * Applied on this side rather than only through the query's `first:` argument, because `first: 0` is
+ * an assumption about what Linear accepts, and the promise — a client that turned replies off never
+ * has them returned — should not rest on a backend behaving a particular way. The query still asks
+ * for none, so nothing is fetched only to be discarded.
+ */
+export function toSeedIssue(
+  node: IssueNode,
+  canonicalUrl: string,
+  routing?: Pick<Routing, 'showComments'>,
+): SeedIssue | null {
   const parsed = parseSeedFromDescription(node.description);
   // Someone edited the block away, or a newer Fruitback wrote it: a pin we cannot place is worse
   // than one we do not show.
@@ -262,6 +329,7 @@ export function toSeedIssue(node: IssueNode, canonicalUrl: string): SeedIssue | 
     stage: stageForLinearState(node.state?.type ?? ''),
     stateName: node.state?.name ?? '',
     updatedAt: node.updatedAt,
+    ...optionalComments(routing?.showComments === false ? undefined : toSeedComments(node)),
     seed: parsed.seed,
   };
 

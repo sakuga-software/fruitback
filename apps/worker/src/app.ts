@@ -108,6 +108,7 @@ function routeFor(request: Request, config: WorkerConfig, clientId: string | und
       projectId: config.linearProjectId,
       // A single-client worker takes its secret from the env; a mapped client brings its own.
       identitySecret: config.identitySecret,
+      showComments: config.showComments,
     },
   });
 }

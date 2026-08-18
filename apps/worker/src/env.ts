@@ -35,6 +35,8 @@ export type WorkerEnv = {
   FRUITBACK_CLIENTS?: string;
   /** Shared with the client site so it can mint identity tokens (SKG-498). */
   FRUITBACK_IDENTITY_SECRET?: string;
+  /** `1` keeps Linear comments out of the read path (SKG-502). */
+  FRUITBACK_HIDE_COMMENTS?: string;
 };
 
 export const DEFAULT_PORT = 8080;
@@ -58,6 +60,12 @@ const configSchema = z.object({
    * 32 characters minimum, because a short HMAC secret is a guessable one.
    */
   identitySecret: z.string().min(32).optional(),
+  /**
+   * Show the team's Linear replies inside the pin (SKG-502). On unless `FRUITBACK_HIDE_COMMENTS` is
+   * set: the read path needs no authentication, so anything surfaced there is readable by anyone who
+   * can load the client's page. A mapped client's own `showComments` overrides this.
+   */
+  showComments: z.boolean(),
   allowedOrigins: z.array(z.string().min(1)).min(1),
   trustedProxyHops: z.number().int().min(0),
   rateLimitPerMinute: z.number().int().positive(),
@@ -89,6 +97,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     linearTeamId: fakeLinear ? FAKE_LINEAR_VALUE : env.LINEAR_TEAM_ID,
     linearProjectId: env.LINEAR_PROJECT_ID || undefined,
     identitySecret: env.FRUITBACK_IDENTITY_SECRET || undefined,
+    showComments: env.FRUITBACK_HIDE_COMMENTS !== '1',
     // A client's own `origins` are sites that must be able to reach this worker, so they join the
     // allowlist rather than having to be repeated in `ALLOWED_ORIGINS` — two lists to keep in step
     // is one list that drifts.

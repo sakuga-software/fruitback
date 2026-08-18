@@ -417,6 +417,47 @@ function summarise(issue: SeedIssue): string {
   return firstLine.length > BADGE_MAX_LENGTH ? `${firstLine.slice(0, BADGE_MAX_LENGTH - 1)}…` : firstLine;
 }
 
+/**
+ * The team's answers, oldest first (SKG-502).
+ *
+ * This is what closes the loop: someone leaves a note, the team replies in Linear, and the reply
+ * shows up where the note was left rather than in an inbox the reporter does not have.
+ *
+ * Three states, and they are not the same. Comments absent means the worker was not asked for them —
+ * the widget says nothing at all, because "no replies yet" would be a claim it cannot make. An empty
+ * list means it asked and there were none, which is worth saying. Anything else is the thread.
+ */
+function replies(document: Document, issue: SeedIssue): HTMLElement[] {
+  if (issue.comments === undefined) return [];
+
+  if (issue.comments.length === 0) {
+    return [element(document, 'p', 'fb-thread-empty', 'Pas encore de réponse.')];
+  }
+
+  const list = document.createElement('ul');
+  list.className = 'fb-thread-replies';
+
+  for (const comment of issue.comments) {
+    const written = new Date(comment.createdAt);
+    const item = document.createElement('li');
+    item.className = 'fb-thread-reply';
+    item.append(
+      element(
+        document,
+        'span',
+        'fb-thread-reply-who',
+        `${comment.author ?? 'Équipe'} · ${Number.isNaN(written.getTime()) ? comment.createdAt : written.toLocaleDateString()}`,
+      ),
+      // `textContent`, never markup: this is Linear's markdown, written by whoever can comment on the
+      // issue, rendered inside someone else's page. It is text here and nothing more.
+      element(document, 'p', 'fb-thread-reply-body', comment.body),
+    );
+    list.append(item);
+  }
+
+  return [list];
+}
+
 /** Note, status, who said it, and the way through to Linear, which owns everything else. */
 function buildThread(document: Document, issue: SeedIssue, resolution: AnchorResolution): HTMLElement {
   const style = SEED_STAGE_STYLES[issue.stage];
@@ -443,6 +484,7 @@ function buildThread(document: Document, issue: SeedIssue, resolution: AnchorRes
     // Said out loud rather than hidden. A reader who is told the pin might be on the wrong element
     // checks; a reader who is told nothing believes it.
     ...uncertaintyNote(document, resolution),
+    ...replies(document, issue),
     link(document, issue),
   );
 
@@ -620,5 +662,24 @@ const STYLES = `
 .fb-thread-note { margin: 8px 0 0; white-space: pre-wrap; }
 .fb-thread-meta { margin: 8px 0 0; font-size: 12px; color: #78716c; }
 .fb-thread-orphan { margin: 8px 0 0; font-size: 12px; color: #8d6e63; }
+.fb-thread-empty { margin: 8px 0 0; font-size: 12px; color: #a8a29e; font-style: italic; }
+.fb-thread-replies {
+  margin: 10px 0 0;
+  padding: 0 0 0 10px;
+  border-left: 2px solid #e7e5e4;
+  list-style: none;
+  /* A long conversation belongs in Linear, which the link below goes to. */
+  max-height: 180px;
+  overflow-y: auto;
+}
+/*
+  On the item, not only on the list. The host reset gives every element all:initial, which resets each
+  item's own list-style-type to its initial value of disc — and a reset value beats what it would have
+  inherited from the list. The bullets came back, and only a recording showed it.
+*/
+.fb-thread-reply { list-style: none; }
+.fb-thread-reply + .fb-thread-reply { margin-top: 8px; }
+.fb-thread-reply-who { display: block; font-size: 11px; color: #78716c; }
+.fb-thread-reply-body { margin: 2px 0 0; font-size: 12px; white-space: pre-wrap; }
 .fb-thread-link { display: inline-block; margin-top: 10px; font-size: 13px; color: #e53935; }
 `;

@@ -2,7 +2,12 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { originsFromClients, readClientMap, resolveClient } from './clients.ts';
 
-const FALLBACK = { teamId: 'team_default', projectId: 'project_default', identitySecret: undefined };
+const FALLBACK = {
+  teamId: 'team_default',
+  projectId: 'project_default',
+  identitySecret: undefined,
+  showComments: true,
+};
 
 const MAP = {
   acme: { teamId: 'team_acme', projectId: 'project_acme', origins: ['https://acme.test'] },
@@ -49,7 +54,7 @@ describe('resolveClient', () => {
 
     assert.deepEqual(resolved, {
       ok: true,
-      routing: { teamId: 'team_acme', projectId: 'project_acme', identitySecret: undefined },
+      routing: { teamId: 'team_acme', projectId: 'project_acme', identitySecret: undefined, showComments: true },
     });
   });
 
@@ -58,7 +63,7 @@ describe('resolveClient', () => {
 
     assert.deepEqual(resolved, {
       ok: true,
-      routing: { teamId: 'team_globex', projectId: 'project_default', identitySecret: undefined },
+      routing: { teamId: 'team_globex', projectId: 'project_default', identitySecret: undefined, showComments: true },
     });
   });
 
@@ -76,7 +81,7 @@ describe('resolveClient', () => {
 
     assert.deepEqual(resolved, {
       ok: true,
-      routing: { teamId: 'team_acme', projectId: 'project_acme', identitySecret: undefined },
+      routing: { teamId: 'team_acme', projectId: 'project_acme', identitySecret: undefined, showComments: true },
     });
   });
 

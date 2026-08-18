@@ -394,3 +394,61 @@ describe('the issues it was handed', () => {
     assert.equal(page.document.querySelectorAll('[data-fb-pin]').length, 1);
   });
 });
+
+describe('the team’s replies', () => {
+  it('shows them oldest first, with who wrote each', () => {
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([
+      issueOnCta({
+        comments: [
+          { id: 'c1', body: 'On regarde ça.', createdAt: '2026-08-01T10:00:00.000Z', author: 'Alice' },
+          { id: 'c2', body: 'Corrigé sur la préprod.', createdAt: '2026-08-02T10:00:00.000Z', author: 'Bruno' },
+        ],
+      }),
+    ]);
+    (page.document.querySelector('.fb-pin-badge') as HTMLElement).click();
+
+    const bodies = [...page.document.querySelectorAll('.fb-thread-reply-body')].map((node) => node.textContent);
+    assert.deepEqual(bodies, ['On regarde ça.', 'Corrigé sur la préprod.']);
+    assert.match(page.document.querySelector('.fb-thread-reply-who')?.textContent ?? '', /Alice/);
+  });
+
+  it('renders a reply as text, never as markup', () => {
+    // Linear markdown, written by anyone who can comment on the issue, rendered inside a client's
+    // page. Treating it as HTML would make the feedback widget the way into their site.
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([
+      issueOnCta({
+        comments: [{ id: 'c1', body: '<img src=x onerror="alert(1)">', createdAt: '2026-08-01T10:00:00.000Z' }],
+      }),
+    ]);
+    (page.document.querySelector('.fb-pin-badge') as HTMLElement).click();
+
+    const body = page.document.querySelector('.fb-thread-reply-body');
+    assert.equal(body?.textContent, '<img src=x onerror="alert(1)">');
+    assert.equal(body?.querySelector('img'), null);
+  });
+
+  it('says nothing at all when the worker did not fetch replies', () => {
+    // Absent is not empty. "Pas encore de réponse" would be a claim the widget cannot make when it
+    // was never told — a client with comments switched off would be told its team never answered.
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta({ comments: undefined })]);
+    (page.document.querySelector('.fb-pin-badge') as HTMLElement).click();
+
+    assert.equal(page.document.querySelector('.fb-thread-empty'), null);
+    assert.equal(page.document.querySelector('.fb-thread-replies'), null);
+  });
+
+  it('says so when it asked and there were none', () => {
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta({ comments: [] })]);
+    (page.document.querySelector('.fb-pin-badge') as HTMLElement).click();
+
+    assert.match(page.document.querySelector('.fb-thread-empty')?.textContent ?? '', /Pas encore/);
+  });
+});

@@ -41,6 +41,13 @@ const clientSchema = z.object({
    * is the leak.
    */
   identitySecret: z.string().min(32).optional(),
+  /**
+   * Show the team's Linear replies inside the pin (SKG-502). **On by default**, because closing that
+   * loop is the point of the feature — but it is a switch, because the read path needs no
+   * authentication: anything surfaced here is readable by anyone who can load the client's page.
+   * A team that treats its issue comments as internal turns this off.
+   */
+  showComments: z.boolean().optional(),
 });
 
 export const clientMapSchema = z.record(z.string().min(1), clientSchema);
@@ -77,6 +84,8 @@ export function readClientMap(value: string | undefined): ClientMapResult {
 export type Routing = {
   teamId: string;
   projectId: string | undefined;
+  /** Whether the read path returns Linear comments — see `showComments` on the client. */
+  showComments: boolean;
   /** Set when this client can mint identity tokens (SKG-498). Absent means self-declared only. */
   identitySecret: string | undefined;
 };
@@ -140,6 +149,7 @@ export function resolveClient({ clients, clientId, origin, fallback }: ResolveCl
       // No `?? fallback.identitySecret` — see the field's own note. A mapped client that wants
       // verified identities declares its own key.
       identitySecret: client.identitySecret,
+      showComments: client.showComments ?? fallback.showComments,
     },
   };
 }

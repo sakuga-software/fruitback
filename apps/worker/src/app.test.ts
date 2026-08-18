@@ -861,3 +861,74 @@ describe('attribution', () => {
     assert.partialDeepStrictEqual(stored.seed.reporter, { id: 'user_7', verified: true });
   });
 });
+
+describe('the team’s replies on the read path', () => {
+  it('returns them oldest first, whatever order Linear gave', async () => {
+    // Linear answers newest-first by default. The order is settled once, in the worker, so the
+    // widget renders what it is handed rather than sorting it again on the other side.
+    const seed = seedFixture();
+    installLinearStub({
+      storedIssues: [
+        storedIssueFromSeed(seed, {
+          comments: {
+            nodes: [
+              { id: 'c2', body: 'Puis celui-ci.', createdAt: '2026-08-02T10:00:00.000Z', user: { name: 'Bruno' } },
+              { id: 'c1', body: 'Celui-ci d’abord.', createdAt: '2026-08-01T10:00:00.000Z', user: { name: 'Alice' } },
+            ],
+          },
+        }),
+      ],
+    });
+
+    const response = await get(`/feedback?url=${encodeURIComponent(seed.page.url)}`);
+    const { issues } = (await response.json()) as { issues: SeedIssue[] };
+
+    assert.deepEqual(
+      issues[0]?.comments?.map((comment) => comment.body),
+      ['Celui-ci d’abord.', 'Puis celui-ci.'],
+    );
+    assert.equal(issues[0]?.comments?.[0]?.author, 'Alice');
+  });
+
+  it('keeps a comment whose author Linear no longer knows', async () => {
+    // An integration, or a deleted account. Dropping the comment would lose the reply; inventing a
+    // name would be worse.
+    const seed = seedFixture();
+    installLinearStub({
+      storedIssues: [
+        storedIssueFromSeed(seed, {
+          comments: { nodes: [{ id: 'c1', body: 'Sans auteur.', createdAt: '2026-08-01T10:00:00.000Z', user: null }] },
+        }),
+      ],
+    });
+
+    const response = await get(`/feedback?url=${encodeURIComponent(seed.page.url)}`);
+    const { issues } = (await response.json()) as { issues: SeedIssue[] };
+
+    assert.equal(issues[0]?.comments?.length, 1);
+    assert.equal(issues[0]?.comments?.[0]?.author, undefined);
+  });
+
+  it('says nothing rather than empty when a client turned replies off', async () => {
+    // Absent and empty mean different things to the widget: one is "not asked", the other is "asked,
+    // none". A client with comments off must not read as a team that never answered.
+    const seed = seedFixture({ client: { id: 'acme' } });
+    const hidden: WorkerEnv = {
+      ...env,
+      FRUITBACK_CLIENTS: JSON.stringify({ acme: { teamId: 'team_1', showComments: false } }),
+    };
+    installLinearStub({
+      storedIssues: [
+        storedIssueFromSeed(seed, {
+          comments: { nodes: [{ id: 'c1', body: 'Interne.', createdAt: '2026-08-01T10:00:00.000Z', user: null }] },
+        }),
+      ],
+    });
+
+    const response = await get(`/feedback?url=${encodeURIComponent(seed.page.url)}&client=acme`, { env: hidden });
+    const { issues } = (await response.json()) as { issues: SeedIssue[] };
+
+    assert.equal(issues.length, 1);
+    assert.equal(issues[0]?.comments, undefined);
+  });
+});
