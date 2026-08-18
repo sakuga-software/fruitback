@@ -1,5 +1,6 @@
 import { SEED_STAGE_STYLES, type SeedBounds, type SeedIssue } from '@fruitback/shared';
 import { isElement } from './dom.ts';
+import { createOrphanList, type OrphanList } from './orphans.ts';
 import { type AnchorResolution, resolveAnchor } from './resolve.ts';
 
 /**
@@ -102,6 +103,22 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   const host = options.host ?? document.body;
   host.append(style, container);
 
+  /**
+   * The notes whose element the cascade could not find at all (SKG-501).
+   *
+   * Owned here rather than by the embedder for the same reason the mutation observer is: on a
+   * client's site there is nobody to notice that a redeploy detached three pins and no one to build
+   * a list of them.
+   */
+  const orphans: OrphanList = createOrphanList({
+    document,
+    host,
+    onSelect: (issue) => {
+      const entry = placed.find((candidate) => candidate.issue.seed.id === issue.seed.id);
+      if (entry !== undefined) openThread(entry);
+    },
+  });
+
   // What `render` was last given, before filtering — `refilter` draws from here.
   let source: SeedIssue[] = [];
   let placed: Placed[] = [];
@@ -170,6 +187,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     }
 
     observeAnchors();
+    listOrphans();
 
     // The thread quotes the resolution, so it is rebuilt rather than left contradicting its pin.
     if (open !== undefined && thread !== null) reopenThread(open);
@@ -207,7 +225,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
    * `<body>` host does not, and re-resolving mutates the container again.
    */
   function isOurs(node: Node): boolean {
-    return container.contains(node) || node === container || node === style;
+    return container.contains(node) || node === container || node === style || orphans.owns(node);
   }
 
   function onMutations(records: MutationRecord[]): void {
@@ -267,6 +285,12 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       });
 
     observeAnchors();
+    listOrphans();
+  }
+
+  /** A note is detached when nothing identified *or located* its element — resolveAnchor's last word. */
+  function listOrphans(): void {
+    orphans.update(placed.filter((entry) => entry.resolution.element === null).map((entry) => entry.issue));
   }
 
   /** Re-render the open thread against a resolution that has just changed under it. */
@@ -345,6 +369,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       document.removeEventListener('click', onDocumentClick, true);
       document.removeEventListener('keydown', onKeyDown);
       closeThread();
+      orphans.destroy();
       container.remove();
       style.remove();
       placed = [];

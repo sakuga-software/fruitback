@@ -78,3 +78,32 @@ test('an element that is gone never leaves a pin that claims to be sure', async 
   await expect(pin.getByRole('button')).toContainText('≈');
 });
 
+
+test('a note whose element is gone lands in the detached list, and one merely moved does not', async ({ page }) => {
+  // The distinction this ticket was re-scoped around. Deleting the Latte card slides Mocha into its
+  // slot: same tag, same text, same box — the pin is still placed, marked unsure, and is *not*
+  // detached. A note on an element with no equivalent left has nowhere to go, and that one is.
+  await openPlayground(page, 'detached');
+
+  await plantPin(page, page.locator('[data-testid="card-latte"] .add'), 'Sur un bouton qui a un jumeau');
+  await plantPin(page, page.locator('#email-field'), 'Sur un champ qui va disparaître');
+
+  await expect(page.locator('[data-fb-orphans]')).toBeHidden();
+
+  // The redeploy removes the Latte card; the checkout form is rebuilt without its input.
+  await page.getByRole('button', { name: 'Supprimer la carte Latte' }).click();
+  await page.evaluate(() => document.querySelector('#email-field')?.remove());
+
+  const drawer = page.locator('[data-fb-orphans]');
+  await expect(drawer).toBeVisible();
+  await expect(drawer.locator('.fb-orphans-toggle')).toHaveText(/1 note détachée/);
+
+  await drawer.locator('.fb-orphans-toggle').click();
+  await expect(drawer.locator('.fb-orphans-item')).toHaveCount(1);
+  await expect(drawer.locator('.fb-orphans-note')).toContainText('Sur un champ qui va disparaître');
+
+  // And clicking it opens that note, which is the only way left to read it on this page.
+  await drawer.locator('.fb-orphans-note').click();
+  await expect(page.locator('[data-fb-thread]')).toHaveCount(1);
+  await expect(page.locator('.fb-thread-note')).toHaveText('Sur un champ qui va disparaître');
+});

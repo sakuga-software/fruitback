@@ -452,3 +452,132 @@ describe('the team’s replies', () => {
     assert.match(page.document.querySelector('.fb-thread-empty')?.textContent ?? '', /Pas encore/);
   });
 });
+
+describe('the detached notes', () => {
+  const orphanIssue = (note: string) =>
+    seedIssueFixture({
+      seed: seedFixture({
+        note,
+        anchor: {
+          selector: '#gone-for-good',
+          // A tag this page does not have, so even `bounds` — which scores overlap against every
+          // element of the same tag — has nothing to score. That is what "detached" means.
+          tag: 'textarea',
+          text: 'Disparu',
+          bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 },
+        },
+      }),
+    });
+
+  it('stays out of the way when every pin found its element', () => {
+    // A widget that puts an empty drawer on someone else's site is one they turn off.
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta()]);
+
+    assert.equal((page.document.querySelector('[data-fb-orphans]') as HTMLElement).hidden, true);
+  });
+
+  it('lists a note whose element the cascade could not find at all', () => {
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([orphanIssue('La carte que le redesign a supprimée')]);
+
+    const drawer = page.document.querySelector('[data-fb-orphans]') as HTMLElement;
+    assert.equal(drawer.hidden, false);
+    assert.match(drawer.querySelector('.fb-orphans-toggle')?.textContent ?? '', /1 note détachée/);
+    assert.match(drawer.querySelector('.fb-orphans-note')?.textContent ?? '', /La carte que le redesign a supprimée/);
+  });
+
+  it('does not list a pin that was placed by position', () => {
+    // The line this whole ticket had to be re-scoped around: a pin found only by `bounds` is still
+    // on the page, dashed and marked unsure (SKG-500). It is not detached, and listing it here would
+    // be telling the reporter their note is lost when it is sitting on the right element.
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([
+      seedIssueFixture({
+        seed: seedFixture({
+          anchor: {
+            selector: '#not-here',
+            tag: 'button',
+            // Text that is on no element here either, so `bounds` really is the last strategy left —
+            // and it resolves, by overlapping the button's box.
+            text: 'Un libellé que la page n’a plus',
+            bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 },
+          },
+        }),
+      }),
+    ]);
+
+    const listed = page.document.querySelectorAll('.fb-orphans-item').length;
+    const pin = page.document.querySelector('[data-fb-pin]') as HTMLElement;
+
+    // The fixture has to land on `bounds` for this test to mean anything: on `selector` or `text` it
+    // would be confident, and the hardened version this guards against would not have listed it.
+    assert.equal(pin.dataset.fbStrategy, 'bounds');
+    assert.equal(pin.dataset.fbConfident, 'false');
+    assert.equal(listed, 0);
+  });
+
+  it('empties and hides itself once the element is back', () => {
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([orphanIssue('Temporairement introuvable')]);
+    assert.equal((page.document.querySelector('[data-fb-orphans]') as HTMLElement).hidden, false);
+
+    overlay.render([issueOnCta()]);
+
+    const drawer = page.document.querySelector('[data-fb-orphans]') as HTMLElement;
+    assert.equal(drawer.hidden, true);
+    assert.equal(drawer.querySelectorAll('.fb-orphans-item').length, 0);
+  });
+
+  it('opens the note when its entry is clicked', () => {
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([orphanIssue('Ouvre-moi')]);
+
+    (page.document.querySelector('.fb-orphans-note') as HTMLElement).click();
+
+    assert.equal(page.document.querySelectorAll('[data-fb-thread]').length, 1);
+  });
+
+  it('takes its DOM with it when the overlay is destroyed', () => {
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([orphanIssue('Adieu')]);
+
+    overlay.destroy();
+    overlay = null;
+
+    assert.equal(page.document.querySelector('[data-fb-orphans]'), null);
+  });
+});
+
+describe('the detached list is the widget’s own DOM', () => {
+  it('does not wake the observer by drawing itself', async () => {
+    // The list is a sibling of the overlay's container, not a child, so the `isOurs` guard did not
+    // cover it: rebuilding it on every resolve mutated the document, which scheduled another
+    // resolve, which rebuilt it again.
+    const page = mountWithCta();
+    let resolves = 0;
+    overlay = createOverlay({ document: page.document, onResolve: () => (resolves += 1) });
+    overlay.render([
+      seedIssueFixture({
+        seed: seedFixture({
+          anchor: {
+            selector: '#gone-for-good',
+            tag: 'textarea',
+            text: 'Disparu',
+            bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 },
+          },
+        }),
+      }),
+    ]);
+
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
+    assert.equal(resolves, 0);
+  });
+});
