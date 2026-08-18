@@ -10,6 +10,37 @@ status: 🌱 seeded → 🍏 green → 🍊 ripening → 🍓 ripe.
 Pastel-like review, but **Linear is the database** — the dashboard, the triage, the API, the MCP
 server and the integrations all come for free.
 
+## Install
+
+The short version. The long one, with Linear setup, per-client routing and identified reporters, is
+in [docs/install.md](docs/install.md).
+
+**The packages are not on npm yet** — the `npm i` line below is the shape of the install, not
+something that resolves today.
+
+On a site with no build step, two attributes are the whole configuration:
+
+```html
+<script
+  src="https://cdn.acme.dev/fruitback.iife.js"
+  data-fruitback-endpoint="https://feedback.acme.dev"
+  data-fruitback-client="acme"
+  defer
+></script>
+```
+
+Or as an import, mounted after your app has rendered the elements it points at:
+
+```ts
+import { init } from 'fruitback';
+
+const widget = init({ endpoint: 'https://feedback.acme.dev', clientId: 'acme' });
+```
+
+The endpoint is your own worker — the piece that holds the Linear key, because that key cannot ship
+in client-side JavaScript. Deploying it is [one container](#deploying-with-dokploy) and three
+variables.
+
 ## Why this shape
 
 Alternatives we looked at and dropped:

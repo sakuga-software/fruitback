@@ -162,6 +162,10 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - The ESM build is left readable (the consumer's bundler minifies it); the IIFE is minified because it
   lands on a page exactly as built. **93 kB gzipped**, guarded by a test that trips at 150 kB — a
   tripwire for a dependency that should have been bundled out, not a budget.
+- **The README snippet is executed by the suite**, not merely quoted: `package.spec.ts` serves the
+  built IIFE through `page.route` and appends the documented tag with its `data-` attributes, which
+  is the only way to exercise the auto-mount — `addScriptTag` cannot set attributes. A snippet in a
+  doc that nobody runs is a snippet that stops working quietly.
 - **`pnpm e2e` builds `dist` first.** `package.spec.ts` loads the real file, and a fresh checkout has
   no build.
 
