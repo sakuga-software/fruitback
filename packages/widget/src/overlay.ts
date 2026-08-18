@@ -225,7 +225,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
    * `<body>` host does not, and re-resolving mutates the container again.
    */
   function isOurs(node: Node): boolean {
-    return container.contains(node) || node === container || node === style;
+    return container.contains(node) || node === container || node === style || orphans.owns(node);
   }
 
   function onMutations(records: MutationRecord[]): void {

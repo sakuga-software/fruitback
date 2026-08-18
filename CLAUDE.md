@@ -305,6 +305,10 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   dashed, and marked unconfident — that is SKG-500's answer and the orphan list does not touch it.
   `orphans.ts` lists only the notes where the cascade found **nothing**: `resolution.element === null`.
   Listing the unsure ones would tell a reporter their note is lost while it sits on the right element.
+- **The list is a sibling of the overlay's container, so `isOurs` has to be told about it.** It was
+  not, and rebuilding it on every resolve mutated the document, which scheduled another resolve,
+  which rebuilt it: a loop the observer's own guard exists to prevent. `orphans.owns` is what closes
+  it, and `update` is short-circuited on an unchanged set so the common case writes nothing at all.
 - The list **shows itself only when it holds something**, and lives in the widget's own corner,
   stacked above the dock. Claiming a second corner of someone else's page is how a widget lands on
   top of their cookie banner — it went under the playground's toolbar the first time.

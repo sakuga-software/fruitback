@@ -20,7 +20,14 @@ import { SEED_STAGE_STYLES, type SeedIssue } from '@fruitback/shared';
 export type OrphanList = {
   /** Replace the contents. Hides itself when the list is empty. */
   update(issues: SeedIssue[]): void;
-  /** Called with the issue whose entry was clicked, so the overlay can open its thread. */
+  /**
+   * Whether this node is part of the list's own DOM.
+   *
+   * The overlay observes the document for changes, and this list is a *sibling* of its container
+   * rather than a child — so without being asked, the overlay treats the list redrawing itself as
+   * the page changing, re-resolves, redraws the list, and goes round again.
+   */
+  owns(node: Node): boolean;
   destroy(): void;
 };
 
@@ -64,8 +71,17 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
   root.append(toggle, list);
   options.host.append(style, root);
 
+  /** What is on screen, so an unchanged set costs no DOM writes at all. */
+  let drawn = '';
+
   return {
     update(issues) {
+      // Short-circuited on identity *and* stage: a pin whose Linear state moved needs its emoji
+      // redrawn, and nothing else here changes without one of the two changing.
+      const next = issues.map((issue) => `${issue.seed.id}:${issue.stage}`).join('|');
+      if (next === drawn) return;
+      drawn = next;
+
       root.hidden = issues.length === 0;
       if (issues.length === 0) {
         // Collapsed on the way out, so it does not reappear open on the next redeploy.
@@ -82,6 +98,7 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
 
       list.replaceChildren(...issues.map((issue) => entry(document, issue, options.onSelect)));
     },
+    owns: (node) => node === root || node === style || root.contains(node),
     destroy() {
       root.remove();
       style.remove();

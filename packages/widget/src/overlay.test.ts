@@ -554,3 +554,30 @@ describe('the detached notes', () => {
     assert.equal(page.document.querySelector('[data-fb-orphans]'), null);
   });
 });
+
+describe('the detached list is the widget’s own DOM', () => {
+  it('does not wake the observer by drawing itself', async () => {
+    // The list is a sibling of the overlay's container, not a child, so the `isOurs` guard did not
+    // cover it: rebuilding it on every resolve mutated the document, which scheduled another
+    // resolve, which rebuilt it again.
+    const page = mountWithCta();
+    let resolves = 0;
+    overlay = createOverlay({ document: page.document, onResolve: () => (resolves += 1) });
+    overlay.render([
+      seedIssueFixture({
+        seed: seedFixture({
+          anchor: {
+            selector: '#gone-for-good',
+            tag: 'textarea',
+            text: 'Disparu',
+            bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 },
+          },
+        }),
+      }),
+    ]);
+
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
+    assert.equal(resolves, 0);
+  });
+});
