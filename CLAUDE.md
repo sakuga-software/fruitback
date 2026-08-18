@@ -301,6 +301,13 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - **Every match must be unique and of the captured tag**, and `domPath` must additionally still be
   roughly where the seed said it was — a structural path always resolves to *something*, and after
   an insertion that something is the neighbour.
+- **Detached is not the same as unsure** (SKG-501). A pin found only by `bounds` is still placed,
+  dashed, and marked unconfident — that is SKG-500's answer and the orphan list does not touch it.
+  `orphans.ts` lists only the notes where the cascade found **nothing**: `resolution.element === null`.
+  Listing the unsure ones would tell a reporter their note is lost while it sits on the right element.
+- The list **shows itself only when it holds something**, and lives in the widget's own corner,
+  stacked above the dock. Claiming a second corner of someone else's page is how a widget lands on
+  top of their cookie banner — it went under the playground's toolbar the first time.
 - **`confident` is the field that matters.** `selector`, `testId` and `text` identify an element;
   `domPath` and `bounds` only locate a spot. Delete a card from a grid and its neighbour slides into
   the vacated slot with the same tag, the same text and the same box — nothing a seed stores can
