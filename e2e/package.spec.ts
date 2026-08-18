@@ -87,7 +87,7 @@ test('a client-side navigation changes which pins are on screen', async ({ page 
   await expect(page.locator('[data-fb-pin]')).toHaveCount(0);
 });
 
-test('the snippet from the README mounts on its own, from its data attributes', async ({ page }) => {
+test('the documented snippet mounts on its own, from its data attributes', async ({ page }) => {
   // The one path SKG-505 shipped unverified in a browser: `addScriptTag` cannot set attributes, so
   // the auto-mount was only ever asserted against the built source. Playwright can serve the real
   // file from disk, which lets the documented tag be the documented tag.
@@ -120,9 +120,10 @@ test('the snippet from the README mounts on its own, from its data attributes', 
   await expect(page.locator('[data-fb-pin]')).toHaveCount(1);
 });
 
-test('a tag with no endpoint leaves the page alone', async ({ page }) => {
-  // Documented behaviour: without the endpoint attribute it does not auto-mount, and `init` is the
-  // caller's to make. A widget that mounted half-configured would post nowhere and look broken.
+test('a half-configured tag leaves the page alone', async ({ page }) => {
+  // Documented behaviour: it auto-mounts only when **both** `endpoint` and `client` are on the tag.
+  // A widget that mounted with one of them missing would post nowhere and look broken, so the tag
+  // here carries an endpoint and no client — the near miss, not the empty case.
   await page.route('**/fruitback.iife.js', (route) =>
     route.fulfill({ path: IIFE, contentType: 'application/javascript' }),
   );
@@ -130,11 +131,12 @@ test('a tag with no endpoint leaves the page alone', async ({ page }) => {
   await page.goto('/?widget=off&case=snippet-bare');
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
 
-  await page.evaluate(() => {
+  await page.evaluate((endpoint) => {
     const script = document.createElement('script');
     script.src = 'https://cdn.acme.dev/fruitback.iife.js';
+    script.dataset.fruitbackEndpoint = endpoint;
     document.head.append(script);
-  });
+  }, WORKER_ORIGIN);
 
   // Waited for rather than assumed: the tag loads asynchronously, and asserting before it ran would
   // pass for the wrong reason — nothing mounted because nothing had executed yet.

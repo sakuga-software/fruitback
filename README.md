@@ -18,13 +18,15 @@ in [docs/install.md](docs/install.md).
 **The packages are not on npm yet** — the `npm i` line below is the shape of the install, not
 something that resolves today.
 
-On a site with no build step, two attributes are the whole configuration:
+On a site with no build step, `endpoint` and `client` are the whole configuration — `label` is
+optional:
 
 ```html
 <script
   src="https://cdn.acme.dev/fruitback.iife.js"
   data-fruitback-endpoint="https://feedback.acme.dev"
   data-fruitback-client="acme"
+  data-fruitback-label="🌱 Leave feedback"
   defer
 ></script>
 ```

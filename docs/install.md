@@ -87,7 +87,8 @@ curl https://feedback.acme.dev/health
 
 ### A script tag
 
-For a site with no build step. The two `data-` attributes are the whole configuration.
+For a site with no build step. `endpoint` and `client` are required and are the whole configuration;
+`label` is optional.
 
 ```html
 <script
@@ -99,9 +100,9 @@ For a site with no build step. The two `data-` attributes are the whole configur
 ></script>
 ```
 
-`defer` matters: the widget mounts into `<body>`. Without the endpoint attribute it does not
-auto-mount, and `Fruitback.init(…)` is yours to call — which is what a site with its own bootstrap
-wants.
+`defer` matters: the widget mounts into `<body>`. It auto-mounts only when **both** `endpoint` and
+`client` are on the tag; with either missing it does nothing and `Fruitback.init(…)` is yours to call
+— which is what a site with its own bootstrap wants.
 
 ### An import
 
