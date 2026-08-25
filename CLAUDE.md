@@ -249,6 +249,21 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   squash-and-stretch entrance. The note moved to the badge's `aria-label` — that is what keeps it
   reachable by a screen reader, and by a test looking for it by role.
 
+## The optional picture
+
+- **The widget does not bundle a rasteriser** (SKG-495). `captureScreenshot` is a seam the embedder
+  fills, for two reasons that each stand alone: the seed contract stores a **URL**, so the image has
+  to live in someone's storage, and html2canvas weighs more than this entire widget — bundling it
+  would break `package.test.ts`'s 150 kB tripwire and the promise that tripwire guards.
+- **Off by default, and the toggle is absent unless `captureScreenshot` was given.** A switch that
+  controls nothing is what kept this setting out of SKG-503.
+- **A capture that throws costs the picture and never the note.** A canvas tainted by a cross-origin
+  image is the ordinary outcome, not the exotic one; the E2E test for this fails by losing the note
+  entirely when the guard is removed.
+- The flow past the setting is **E2E-only**: `init` resolves what was clicked through react-grab's
+  hit testing, which happy-dom has no `elementsFromPoint` for. The unit tests stop at the toggle and
+  say so rather than asserting negatives that would hold even if nothing ran.
+
 ## The settings panel
 
 - **What is not configurable is the design** (SKG-503). The ticket asked for the Linear team, project

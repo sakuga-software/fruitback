@@ -3,7 +3,12 @@ import assert from 'node:assert/strict';
 import type { SeedStage } from '@fruitback/shared';
 import { CONFIG_STORAGE_KEY, createConfigStore, type WidgetConfig } from './config.ts';
 
-const DEFAULTS: WidgetConfig = { endpoint: 'http://localhost:8788', clientId: 'playground', hiddenStages: [] };
+const DEFAULTS: WidgetConfig = {
+  endpoint: 'http://localhost:8788',
+  clientId: 'playground',
+  hiddenStages: [],
+  screenshot: false,
+};
 
 /** Enough of `Storage` for the store, plus a way to make it misbehave. */
 function fakeStorage(seed: Record<string, string> = {}): Storage & { throwOnWrite?: boolean } {
@@ -33,7 +38,11 @@ describe('createConfigStore', () => {
 
   it('persists a change and reads it back into the next store', () => {
     const storage = fakeStorage();
-    createConfigStore({ defaults: DEFAULTS, storage }).set({ clientId: 'acme', hiddenStages: ['composted'] });
+    createConfigStore({ defaults: DEFAULTS, storage }).set({
+      clientId: 'acme',
+      hiddenStages: ['composted'],
+      screenshot: false,
+    });
 
     const next = createConfigStore({ defaults: DEFAULTS, storage });
 
