@@ -46,13 +46,22 @@ export type FruitbackOptions = {
    *
    * Failures are swallowed: the note is worth more than the picture.
    */
-  captureScreenshot?: (element: Element) => Promise<SeedScreenshot | undefined>;
+  captureScreenshot?: (element: Element) => Promise<CapturedScreenshot | undefined>;
   /** Chrome the page mounts around the widget, which the pointer must skip. */
   ignore?: (element: Element) => boolean;
   /** Off when the reporter has not agreed to send their user agent along. */
   includeEnv?: boolean;
   document?: Document;
 };
+
+/**
+ * What a capture has to hand back: somewhere the image now lives.
+ *
+ * `SeedScreenshot` makes `url` optional — the field was speculative when the contract was written,
+ * before anything filled it — so an embedder could return `{ width, height }`, type-check, and store
+ * a screenshot nobody can open. Required here, where the promise is actually made.
+ */
+export type CapturedScreenshot = SeedScreenshot & { url: string };
 
 export type Fruitback = {
   /** Re-read the pins for the current URL. Called for you on navigation. */
@@ -268,7 +277,11 @@ async function screenshotFor(
   if (!config.screenshot || options.captureScreenshot === undefined) return undefined;
 
   try {
-    return await options.captureScreenshot(element);
+    const captured = await options.captureScreenshot(element);
+
+    // Checked, not just typed: this package ships to JavaScript too, and a screenshot with no URL is
+    // a row in a Linear issue that opens nothing.
+    return captured?.url ? captured : undefined;
   } catch {
     return undefined;
   }

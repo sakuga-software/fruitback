@@ -64,7 +64,10 @@ export function Fruitback() {
     // The reporter's own preferences, kept in this browser (SKG-503). The endpoint and the client id
     // start from the build's values and can be pointed elsewhere without a rebuild.
     const config = createConfigStore({
-      defaults: { endpoint: WORKER_ORIGIN, clientId: CLIENT_ID, hiddenStages: [] },
+      // `screenshot` off: this harness gives the widget no way to capture one, so the toggle is not
+      // even offered here — `e2e/screenshot.spec.ts` mounts the built bundle with a capture function
+      // instead, which is what an embedder does.
+      defaults: { endpoint: WORKER_ORIGIN, clientId: CLIENT_ID, hiddenStages: [], screenshot: false },
     });
 
     const host = createCaptureHost({

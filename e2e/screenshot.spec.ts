@@ -15,7 +15,10 @@ import { WORKER_ORIGIN, openPlayground } from './pin.ts';
 const IIFE = 'packages/widget/dist/fruitback.iife.js';
 
 /** Mount the published bundle with a capture function whose behaviour the test chooses. */
-async function mountWith(page: import('@playwright/test').Page, capture: 'ok' | 'throws' | 'nothing') {
+async function mountWith(
+  page: import('@playwright/test').Page,
+  capture: 'ok' | 'throws' | 'nothing' | 'urlless',
+) {
   await page.addScriptTag({ path: IIFE });
   await page.evaluate(
     ([endpoint, mode]) => {
@@ -25,13 +28,16 @@ async function mountWith(page: import('@playwright/test').Page, capture: 'ok' | 
           throw new Error('SecurityError: tainted canvas');
         },
         nothing: async () => undefined,
+        // Type-invalid on purpose: a JavaScript embedder can do this, and the widget has to refuse
+        // rather than store a screenshot nobody can open.
+        urlless: async () => ({ width: 120, height: 40 }),
       } as const;
 
       (globalThis as { Fruitback: { init(options: unknown): unknown } }).Fruitback.init({
         endpoint,
         clientId: 'playground',
         label: '🌱 Feedback',
-        captureScreenshot: capturers[mode as 'ok' | 'throws' | 'nothing'],
+        captureScreenshot: capturers[mode as keyof typeof capturers],
       });
     },
     [WORKER_ORIGIN, capture] as const,
@@ -112,4 +118,17 @@ test('the setting is not offered when the host cannot take a picture', async ({ 
   await page.getByLabel('Ouvrir les réglages Fruitback').click();
 
   await expect(page.locator('[name="screenshot"]')).toHaveCount(0);
+});
+
+test('a capture with no URL is refused rather than stored', async ({ page }) => {
+  // `SeedScreenshot` leaves `url` optional — the field was speculative before anything filled it —
+  // so the seam requires it in TypeScript and checks it at runtime, because this package ships to
+  // JavaScript too. A screenshot with no URL is a row in a Linear issue that opens nothing.
+  await page.goto('/?widget=off&case=shot-urlless');
+  await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
+  await mountWith(page, 'urlless');
+
+  await plant(page, 'Une image sans adresse');
+
+  expect(await storedScreenshot(page)).toBeUndefined();
 });
