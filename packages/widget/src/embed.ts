@@ -1,4 +1,4 @@
-import { canonicalizePageUrl, type SeedIssue, type SeedReporter } from '@fruitback/shared';
+import { canonicalizePageUrl, type SeedIssue, type SeedReporter, type SeedScreenshot } from '@fruitback/shared';
 import { captureSeed } from './capture.ts';
 import { type WidgetConfig, createConfigStore } from './config.ts';
 import { type CaptureHost, type CaptureTarget, createCaptureHost } from './host.ts';
@@ -33,12 +33,35 @@ export type FruitbackOptions = {
    * self-declared, which is the default and a perfectly good way to run this.
    */
   identityToken?: () => string | undefined | Promise<string | undefined>;
+  /**
+   * Take a picture of the element the note is about, and return where it now lives (SKG-495).
+   *
+   * A seam rather than a bundled library, for two reasons. The seed contract stores a **URL**, so
+   * something has to host the image, and that is the embedder's storage — they already have some and
+   * we would otherwise have to broker an upload with no authentication in front of it. And the only
+   * serious way to rasterise a DOM node weighs more than this whole widget: bundling it would undo
+   * the promise that a client installs one small thing.
+   *
+   * `docs/install.md` carries the html2canvas recipe. Absent, the setting is not even offered.
+   *
+   * Failures are swallowed: the note is worth more than the picture.
+   */
+  captureScreenshot?: (element: Element) => Promise<CapturedScreenshot | undefined>;
   /** Chrome the page mounts around the widget, which the pointer must skip. */
   ignore?: (element: Element) => boolean;
   /** Off when the reporter has not agreed to send their user agent along. */
   includeEnv?: boolean;
   document?: Document;
 };
+
+/**
+ * What a capture has to hand back: somewhere the image now lives.
+ *
+ * `SeedScreenshot` makes `url` optional — the field was speculative when the contract was written,
+ * before anything filled it — so an embedder could return `{ width, height }`, type-check, and store
+ * a screenshot nobody can open. Required here, where the promise is actually made.
+ */
+export type CapturedScreenshot = SeedScreenshot & { url: string };
 
 export type Fruitback = {
   /** Re-read the pins for the current URL. Called for you on navigation. */
@@ -70,7 +93,9 @@ export function init(options: FruitbackOptions): Fruitback {
   const view = document.defaultView ?? globalThis.window;
 
   const config = createConfigStore({
-    defaults: { endpoint: options.endpoint, clientId: options.clientId, hiddenStages: [] },
+    // `screenshot` off at the start: it is the reporter's to turn on, and an image of the page they
+    // are looking at is not something to start sending because a default said so.
+    defaults: { endpoint: options.endpoint, clientId: options.clientId, hiddenStages: [], screenshot: false },
   });
 
   let target: CaptureTarget | null = null;
@@ -117,7 +142,12 @@ export function init(options: FruitbackOptions): Fruitback {
     },
   });
 
-  panel = createConfigPanel({ document, host: host.root, store: config });
+  panel = createConfigPanel({
+    document,
+    host: host.root,
+    store: config,
+    screenshotSupported: options.captureScreenshot !== undefined,
+  });
 
   // A preference change redraws from the issues already held; only a change of endpoint or client
   // means the pins belong to a different query. Debounced because the panel writes per keystroke —
@@ -211,6 +241,7 @@ async function plant({
     source: target.source,
     reporter,
     includeEnv: options.includeEnv,
+    ...optionalScreenshot(await screenshotFor(target.element, config, options)),
   });
 
   // Asked for per write rather than once at init: a short-lived token that expired mid-session would
@@ -228,6 +259,37 @@ async function plant({
   });
 
   return response.ok;
+}
+
+/**
+ * The picture, or nothing, and never an error.
+ *
+ * Every way this fails is ordinary: a canvas tainted by a cross-origin image, a font that will not
+ * load, storage refusing the upload, a browser that ran out of memory on a long page. None of them
+ * is a reason to lose what someone just wrote — the note is the feedback and the image is a
+ * convenience — so this returns `undefined` and the seed goes without one.
+ */
+async function screenshotFor(
+  element: Element,
+  config: WidgetConfig,
+  options: FruitbackOptions,
+): Promise<SeedScreenshot | undefined> {
+  if (!config.screenshot || options.captureScreenshot === undefined) return undefined;
+
+  try {
+    const captured = await options.captureScreenshot(element);
+
+    // Checked, not just typed: this package ships to JavaScript too, and a screenshot with no URL is
+    // a row in a Linear issue that opens nothing.
+    return captured?.url ? captured : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Spread, so an absent screenshot stays absent rather than becoming an empty object. */
+function optionalScreenshot(screenshot: SeedScreenshot | undefined): { screenshot?: SeedScreenshot } {
+  return screenshot === undefined ? {} : { screenshot };
 }
 
 /**

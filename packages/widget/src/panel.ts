@@ -15,6 +15,12 @@ export type ConfigPanelOptions = {
   /** Where to render. The Shadow root, in practice — see `host.ts`. */
   host: Element | ShadowRoot;
   store: ConfigStore;
+  /**
+   * Whether the embedder gave `init` a way to capture an image (SKG-495). Without one the toggle is
+   * not rendered at all: a switch that controls nothing is worse than no switch, which is why this
+   * setting was left out of SKG-503 in the first place.
+   */
+  screenshotSupported?: boolean;
   document?: Document;
 };
 
@@ -62,6 +68,12 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
     'Masquer les feedbacks résolus',
   );
 
+  const { input: screenshot, label: screenshotLabel } = checkbox(
+    document,
+    'screenshot',
+    'Joindre une image de l’élément',
+  );
+
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'fb-config-close';
@@ -83,6 +95,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   stagesTitle.textContent = 'Pins affichés';
 
   root.append(head, endpoint.label, clientId.label, stagesTitle, stages, hideResolvedLabel);
+  if (options.screenshotSupported === true) root.append(screenshotLabel);
   options.host.append(style, root);
 
   /** The store is the truth; the inputs only ever mirror it. */
@@ -93,6 +106,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
 
     for (const [stage, input] of stageInputs) input.checked = !config.hiddenStages.includes(stage);
     hideResolved.checked = RESOLVED_STAGES.every((stage) => config.hiddenStages.includes(stage));
+    screenshot.checked = config.screenshot;
   }
 
   function hiddenFromInputs(): SeedStage[] {
@@ -116,6 +130,8 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
     }
     store.set({ hiddenStages: SEED_STAGES.filter((stage) => hidden.has(stage)) });
   });
+
+  screenshot.addEventListener('change', () => store.set({ screenshot: screenshot.checked }));
 
   close.addEventListener('click', () => panel.close());
 
@@ -239,6 +255,7 @@ const STYLES = `
   accent-color: #e53935;
 }
 .fb-panel-config > .fb-config-check { margin-top: 10px; padding-top: 10px; border-top: 1px solid #e7e5e4; }
+.fb-panel-config > .fb-config-check + .fb-config-check { margin-top: 6px; padding-top: 0; border-top: 0; }
 @media (max-width: 480px) {
   .fb-panel-config { right: 8px; left: 8px; width: auto; }
 }

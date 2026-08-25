@@ -4,7 +4,12 @@ import { type ConfigPanel, createConfigPanel } from './panel.ts';
 import { createConfigStore, type WidgetConfig } from './config.ts';
 import { type MountedPage, mountPage } from './dom.fixture.ts';
 
-const DEFAULTS: WidgetConfig = { endpoint: 'http://localhost:8788', clientId: 'playground', hiddenStages: [] };
+const DEFAULTS: WidgetConfig = {
+  endpoint: 'http://localhost:8788',
+  clientId: 'playground',
+  hiddenStages: [],
+  screenshot: false,
+};
 
 let panel: ConfigPanel | null = null;
 
@@ -43,7 +48,12 @@ describe('createConfigPanel', () => {
   });
 
   it('shows what the store holds when it opens', () => {
-    const { input } = mount({ endpoint: 'https://fb.acme.test', clientId: 'acme', hiddenStages: ['composted'] });
+    const { input } = mount({
+      endpoint: 'https://fb.acme.test',
+      clientId: 'acme',
+      hiddenStages: ['composted'],
+      screenshot: false,
+    });
 
     panel?.open();
 

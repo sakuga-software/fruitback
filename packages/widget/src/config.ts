@@ -20,6 +20,12 @@ export type WidgetConfig = {
   clientId: string;
   /** Stages whose pins are not drawn. `ripe` and `composted` are what "resolved" means. */
   hiddenStages: SeedStage[];
+  /**
+   * Attach an image of the element to the note (SKG-495). **Off by default**, and only offered when
+   * the embedder gave `init` something to capture with — a switch that controls nothing is worse
+   * than no switch.
+   */
+  screenshot: boolean;
 };
 
 export type ConfigStore = {
@@ -113,6 +119,7 @@ function readStored(storage: Storage | null, key: string): Partial<WidgetConfig>
 
     if (typeof stored.endpoint === 'string') config.endpoint = stored.endpoint;
     if (typeof stored.clientId === 'string') config.clientId = stored.clientId;
+    if (typeof stored.screenshot === 'boolean') config.screenshot = stored.screenshot;
     if (Array.isArray(stored.hiddenStages)) config.hiddenStages = stored.hiddenStages.filter(isStage);
 
     return config;

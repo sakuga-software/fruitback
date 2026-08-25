@@ -19,5 +19,5 @@
  * the internals were stable.
  */
 
-export { init, type Fruitback, type FruitbackOptions } from './embed.ts';
+export { init, type CapturedScreenshot, type Fruitback, type FruitbackOptions } from './embed.ts';
 export type { ConfigPanel } from './panel.ts';
