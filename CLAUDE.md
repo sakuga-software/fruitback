@@ -451,8 +451,16 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - `canonicalizePageUrl` is the page identity: fragment and tracking params dropped, remaining params
   sorted. It must stay idempotent, and its output must appear verbatim in the description — that is
   what makes the Linear `description: { contains: … }` filter work.
-- Pin colour comes from `stageForLinearState` (Linear workflow state type → fruit stage). The widget
-  never stores a status of its own.
+- Pin colour comes from a `SeedStage`, and the widget never stores a status of its own — it renders
+  the one the store reports.
+- **The stage vocabulary is the contract's; the projection onto it is the connector's** (SKG-516).
+  `SEED_STAGES` and `DEFAULT_SEED_STAGE` live in `shared`; `stageForLinearState` and
+  `LINEAR_STATE_TYPES` moved to `apps/worker/src/linear.ts`, where Linear's vocabulary belongs.
+  Naming one provider's states in the contract made every consumer of the published package depend
+  on that provider, and GitHub's projection — two states plus labels — will not resemble Linear's.
+- The fallback for an unrecognised state stays in `shared` on purpose. A connector spelling
+  `'seeded'` itself is how the next one comes to disagree, and an unknown state must colour the pin
+  rather than hide someone's note.
 
 ## Conventions
 
