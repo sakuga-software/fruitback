@@ -192,23 +192,25 @@ function* iterateFencedBlocks(markdown: string): Generator<FencedBlock> {
 }
 
 /**
- * Linear workflow state types, mapped to how ripe the pin looks on the page. This is the whole
- * status story: the widget never stores a status of its own, it renders Linear's.
+ * How ripe a pin looks on the page. This is the whole status story: the widget never stores a status
+ * of its own, it renders the one the store reports.
+ *
+ * The vocabulary belongs here. The **projection** onto it does not: Linear has workflow state types,
+ * GitHub has open/closed and some labels, a SQL store has whatever it chose. Each connector owns its
+ * own, so naming one provider's states in the contract made every consumer of this package depend on
+ * that provider (SKG-516).
  */
-export const LINEAR_STATE_TYPES = [
-  'triage',
-  'backlog',
-  'unstarted',
-  'started',
-  'completed',
-  'canceled',
-  // Real state type on the SKG team ("Duplicate"), and absent from Linear's documented list.
-  'duplicate',
-] as const;
-export type LinearStateType = (typeof LINEAR_STATE_TYPES)[number];
-
 export const SEED_STAGES = ['seeded', 'green', 'ripening', 'ripe', 'composted'] as const;
 export type SeedStage = (typeof SEED_STAGES)[number];
+
+/**
+ * What a connector reports for a state it does not recognise.
+ *
+ * The tolerance is the contract's, not the connector's. A provider gains a state, or a team renames
+ * one, and the pin still has to be drawn — dropping it would make someone's note vanish from the page
+ * because a workflow column was added.
+ */
+export const DEFAULT_SEED_STAGE: SeedStage = 'seeded';
 
 export const SEED_STAGE_STYLES: Record<SeedStage, { emoji: string; label: string; color: string }> = {
   seeded: { emoji: '🌱', label: 'Seeded', color: '#A3B18A' },
@@ -217,21 +219,6 @@ export const SEED_STAGE_STYLES: Record<SeedStage, { emoji: string; label: string
   ripe: { emoji: '🍓', label: 'Ripe', color: '#E53935' },
   composted: { emoji: '🍂', label: 'Composted', color: '#8D6E63' },
 };
-
-const STAGE_BY_STATE_TYPE: Record<LinearStateType, SeedStage> = {
-  triage: 'seeded',
-  backlog: 'seeded',
-  unstarted: 'green',
-  started: 'ripening',
-  completed: 'ripe',
-  canceled: 'composted',
-  duplicate: 'composted',
-};
-
-/** Unknown state types fall back to `seeded` rather than hiding the pin. */
-export function stageForLinearState(stateType: string): SeedStage {
-  return STAGE_BY_STATE_TYPE[stateType as LinearStateType] ?? 'seeded';
-}
 
 /**
  * A reply from the team, as the widget shows it (SKG-502).

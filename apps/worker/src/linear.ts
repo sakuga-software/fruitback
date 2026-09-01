@@ -1,8 +1,10 @@
 import {
+  DEFAULT_SEED_STAGE,
   FRUITBACK_LABEL,
   type Seed,
   type SeedComment,
   type SeedIssue,
+  type SeedStage,
   buildIssueDescription,
   buildIssueLabels,
   buildIssueTitle,
@@ -10,7 +12,6 @@ import {
   pageQueryTerm,
   parseSeedFromDescription,
   seedIssueSchema,
-  stageForLinearState,
 } from '@fruitback/shared';
 import type { Routing } from './clients.ts';
 import type { WorkerConfig } from './env.ts';
@@ -296,6 +297,41 @@ function toSeedComments(node: IssueNode): SeedComment[] | undefined {
       ...(comment.user?.name ? { author: comment.user.name } : {}),
     }))
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+}
+
+/**
+ * Linear's workflow state types, projected onto the pin's ripeness.
+ *
+ * This is the connector's half of the status story, and it lives here rather than in
+ * `@fruitback/shared` because it is Linear's vocabulary (SKG-516). The contract owns `SeedStage`;
+ * every connector owns the projection onto it, and GitHub's — two states plus labels — will not
+ * look like this one.
+ */
+export const LINEAR_STATE_TYPES = [
+  'triage',
+  'backlog',
+  'unstarted',
+  'started',
+  'completed',
+  'canceled',
+  // Real state type on the SKG team ("Duplicate"), and absent from Linear's documented list.
+  'duplicate',
+] as const;
+export type LinearStateType = (typeof LINEAR_STATE_TYPES)[number];
+
+const STAGE_BY_STATE_TYPE: Record<LinearStateType, SeedStage> = {
+  triage: 'seeded',
+  backlog: 'seeded',
+  unstarted: 'green',
+  started: 'ripening',
+  completed: 'ripe',
+  canceled: 'composted',
+  duplicate: 'composted',
+};
+
+/** An unrecognised state colours the pin rather than hiding it — see `DEFAULT_SEED_STAGE`. */
+export function stageForLinearState(stateType: string): SeedStage {
+  return STAGE_BY_STATE_TYPE[stateType as LinearStateType] ?? DEFAULT_SEED_STAGE;
 }
 
 /**
