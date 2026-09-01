@@ -299,9 +299,38 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   asked for them, and the widget says nothing; `[]` means it asked and there were none, and the
   widget says so. A client with replies switched off must not read as a team that never answered.
 - **`showComments` is on by default and is a real switch**, per client or worker-wide
-  (`FRUITBACK_HIDE_COMMENTS=1`). The read path needs no authentication, so anything surfaced there is
-  readable by anyone who can load the client's page — a team that treats its issue comments as
-  internal turns it off.
+  (`FRUITBACK_HIDE_COMMENTS=1`). Under `read: 'public'` it is the only thing between an issue thread
+  and anyone who can load the client's page; under `read: 'authenticated'` (SKG-533) it is back to
+  being the editorial choice it should always have been, because the reader is someone the worker
+  checked.
+
+## Who may read a pin
+
+- **`GET /feedback` used to answer anyone who could build the URL.** Every note, its author and the
+  team's replies were readable by any visitor of the client's site, and by `curl` — which is why
+  hiding pins in the browser was never the fix. `read: 'public' | 'authenticated'` is (SKG-533), per
+  client in `FRUITBACK_CLIENTS` or worker-wide via `FRUITBACK_READ`.
+- **The extension is a different problem.** It settles *visibility* — the pins leave the visitor's
+  DOM. It settles nothing about *authorisation*: the endpoint stays open and `curl` still works.
+  Building SKG-534 without this ticket hides the comments in the UI and leaves them in the API.
+- **`authorizeRead` runs before `cached`, and the guard is `stub.calls`, not the status code.** A
+  gate moved below the cache still returns `401`, so asserting the status cannot tell the two apart
+  — it was measured passing against exactly that mutation. What it costs is a Linear call per
+  unauthorised request, so the test that pins the position asserts **no call reached Linear**. The
+  warm-cache test is a narrower guard: it catches a cache-hit fast path that answers before the gate.
+- **`public` stays the default, and that is compatibility rather than security.** Defaulting to
+  `authenticated` would blank the pins on every upgraded worker with no error anywhere, and the
+  operator would hear about it from users. The exposure is made *sayable* instead: the boot log names
+  every client whose pins anyone can read, `/health` counts them. Loud beats silent both ways.
+- **`/health` carries a count, never the ids.** It needs no authentication either, so listing client
+  ids would hand over the map the worker serves. The boot log names them, where only an operator looks.
+- **A client that requires a token and has no key to check one is refused at boot.** The trap is
+  inheritance: `read` is inherited from the worker-wide default, `identitySecret` deliberately never
+  is, so flipping `FRUITBACK_READ` can make a client unreadable without its own entry changing.
+  `unreadableClients` names them; the alternative is a permanent `401` that looks like a broken widget.
+- **A `401` on a read leaves the pins where they are.** Same rule as an unreachable worker: losing
+  what is correctly on screen reads as "my notes are gone". Mutation-tested — blanking on a failed
+  read fails `embed.test.ts`.
 - The switch is applied in **`toSeedIssue`**, which both the real Linear and the in-memory one go
   through, rather than only through the query's `first:` argument. `first: 0` is an assumption about
   what Linear accepts, and this promise should not rest on a backend behaving a particular way.

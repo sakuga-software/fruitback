@@ -1,6 +1,6 @@
 import { canonicalizePageUrl, parseSeed, type SeedReporter } from '@fruitback/shared';
 import { readBearerToken, stripClaimedVerification, verifyIdentityToken } from './identity.ts';
-import { type ClientResolution, normalizeClientId, resolveClient } from './clients.ts';
+import { type ClientResolution, type Routing, normalizeClientId, openReadClients, resolveClient } from './clients.ts';
 import { type WorkerConfig, type WorkerEnv, readAllowedOrigins, readConfig } from './env.ts';
 import { LinearError } from './linear.ts';
 import * as realLinear from './linear.ts';
@@ -52,8 +52,18 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
     if (!config.ok) return json(503, { ok: false, error: 'misconfigured', missing: config.missing });
 
     // Announced, not hidden: a `200 ok` that quietly stores feedback in RAM would be the worst kind
-    // of green check.
-    return json(200, config.config.fakeLinear ? { ok: true, fakeLinear: true } : { ok: true });
+    // of green check. The open-read count is here for the same reason (SKG-533) — a deployment
+    // whose pins anyone can read should be able to say so without an operator reading the config.
+    //
+    // A count and not the ids: `/health` needs no authentication either, and listing client ids
+    // would hand over the map this worker serves.
+    const openRead = openReadClients({ read: config.config.read, clients: config.config.clients }).length;
+
+    return json(200, {
+      ok: true,
+      ...(config.config.fakeLinear ? { fakeLinear: true } : {}),
+      ...(openRead > 0 ? { openRead } : {}),
+    });
   }
 
   if (!config.ok) {
@@ -109,8 +119,38 @@ function routeFor(request: Request, config: WorkerConfig, clientId: string | und
       // A single-client worker takes its secret from the env; a mapped client brings its own.
       identitySecret: config.identitySecret,
       showComments: config.showComments,
+      read: config.read,
     },
   });
+}
+
+/**
+ * Whether this caller may read this client's pins (SKG-533).
+ *
+ * Until now `GET /feedback` answered anyone who could build the URL, so every note, its author and
+ * the team's replies were readable by any visitor of the client's site — and by `curl`, which is why
+ * hiding the pins in the browser was never the fix. `read: 'authenticated'` closes that; `public`
+ * keeps it, for the anonymous-feedback case where it is the right answer.
+ *
+ * Same token as the write path, verified the same way. What differs is what is done with it: the
+ * write path needs *who* the reporter is, this one only needs that somebody vouched-for asked.
+ *
+ * A client asking for `authenticated` with no `identitySecret` cannot reach here — `readConfig`
+ * refuses that at boot, rather than letting it become a permanent 401 nobody can diagnose.
+ */
+async function authorizeRead(
+  request: Request,
+  routing: Routing,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  if (routing.read === 'public') return { ok: true };
+
+  const token = readBearerToken(request.headers.get('Authorization'));
+  if (token === undefined) return { ok: false, reason: 'identity-required' };
+  if (routing.identitySecret === undefined) return { ok: false, reason: 'identity-not-configured' };
+
+  const verified = await verifyIdentityToken(token, routing.identitySecret);
+
+  return verified.ok ? { ok: true } : { ok: false, reason: verified.reason };
 }
 
 /**
@@ -177,6 +217,16 @@ async function getFeedback(
   const clientId = normalizeClientId(params.get('client'));
   const route = routeFor(request, config, clientId);
   if (!route.ok) return routingFailure(route, corsHeaders);
+
+  // **Before the cache, and that ordering is the guarantee.** The cached entry is per
+  // (team, client, page) and holds the same answer for every entitled reader, so it is safe to
+  // share — but only because an unauthorised caller is turned away here and never reaches the
+  // lookup. Moving this below `cached` would serve a warm authenticated answer to an anonymous
+  // request, which is the exact leak this ticket exists to close.
+  const allowed = await authorizeRead(request, route.routing);
+  if (!allowed.ok) {
+    return json(401, { error: 'identity-required', reason: allowed.reason }, corsHeaders);
+  }
 
   try {
     // The team is part of the key: two clients reading the same URL must not share an entry.

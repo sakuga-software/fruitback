@@ -43,17 +43,79 @@ const clientSchema = z.object({
   identitySecret: z.string().min(32).optional(),
   /**
    * Show the team's Linear replies inside the pin (SKG-502). **On by default**, because closing that
-   * loop is the point of the feature — but it is a switch, because the read path needs no
-   * authentication: anything surfaced here is readable by anyone who can load the client's page.
-   * A team that treats its issue comments as internal turns this off.
+   * loop is the point of the feature.
+   *
+   * Since SKG-533 this is an editorial switch again rather than an access control: under
+   * `read: 'authenticated'` the reader is someone this worker checked, so the comments are already
+   * only reaching people entitled to them. Under `read: 'public'` it is still the only thing standing
+   * between an issue thread and anyone who can load the page.
    */
   showComments: z.boolean().optional(),
+  /**
+   * Who may read this client's pins (SKG-533).
+   *
+   * `public` is what this worker has always done: `GET /feedback?url=…&client=…` answers anyone who
+   * can build the URL, so the notes, their authors and the team's replies are readable by every
+   * visitor of the client's site — and by `curl`, which no amount of hiding in the widget changes.
+   * Right for anonymous feedback on a public site, wrong for internal review.
+   *
+   * `authenticated` requires a valid identity token, the same HS256 JWT the write path takes, and
+   * answers `401` without one. It needs this client's `identitySecret`; a client asking for it
+   * without one is refused at boot rather than left permanently unreadable.
+   */
+  read: z.enum(['public', 'authenticated']).optional(),
 });
 
 export const clientMapSchema = z.record(z.string().min(1), clientSchema);
 
 export type ClientConfig = z.infer<typeof clientSchema>;
 export type ClientMap = z.infer<typeof clientMapSchema>;
+
+/** Who may read a client's pins. See `read` on the client, and `FRUITBACK_READ` for the fallback. */
+export type ReadAccess = 'public' | 'authenticated';
+
+/**
+ * Clients that could never be read, because they ask for a verified reader and have no key to
+ * verify one with.
+ *
+ * Computed here rather than checked per client, because the trap is **inheritance**: a client with
+ * no `read` of its own takes the worker's `FRUITBACK_READ`, while `identitySecret` is deliberately
+ * never inherited (one signing key across tenants lets a compromised tenant mint identities on
+ * another's issues). So flipping the worker-wide default to `authenticated` can render a client
+ * unreadable without that client's own entry changing at all — a permanent `401` that looks like a
+ * bug in the widget. Named at boot instead.
+ */
+export function unreadableClients(options: {
+  read: ReadAccess;
+  clients: ClientMap | undefined;
+  identitySecret: string | undefined;
+}): string[] {
+  const { read, clients, identitySecret } = options;
+
+  if (clients === undefined) {
+    return read === 'authenticated' && identitySecret === undefined ? ['<single client>'] : [];
+  }
+
+  return Object.entries(clients)
+    .filter(([, client]) => (client.read ?? read) === 'authenticated' && client.identitySecret === undefined)
+    .map(([id]) => id);
+}
+
+/**
+ * Clients whose pins anyone can read, for the boot log.
+ *
+ * `public` stays the default, so an upgrade never silently blanks a working deployment — but an
+ * operator should not have to infer their own exposure from the absence of a field.
+ */
+export function openReadClients(options: { read: ReadAccess; clients: ClientMap | undefined }): string[] {
+  const { read, clients } = options;
+
+  if (clients === undefined) return read === 'public' ? ['<single client>'] : [];
+
+  return Object.entries(clients)
+    .filter(([, client]) => (client.read ?? read) === 'public')
+    .map(([id]) => id);
+}
 
 export type ClientMapResult = { ok: true; clients: ClientMap | undefined } | { ok: false; reason: string };
 
@@ -88,6 +150,8 @@ export type Routing = {
   showComments: boolean;
   /** Set when this client can mint identity tokens (SKG-498). Absent means self-declared only. */
   identitySecret: string | undefined;
+  /** Who may read this client's pins (SKG-533). `authenticated` answers 401 without a valid token. */
+  read: ReadAccess;
 };
 
 export type ClientResolution =
@@ -150,6 +214,9 @@ export function resolveClient({ clients, clientId, origin, fallback }: ResolveCl
       // verified identities declares its own key.
       identitySecret: client.identitySecret,
       showComments: client.showComments ?? fallback.showComments,
+      // Inherited, unlike `identitySecret`: this is a posture, not a key. `unreadableClients`
+      // is what stops the inheritance from producing a client nobody can ever read.
+      read: client.read ?? fallback.read,
     },
   };
 }

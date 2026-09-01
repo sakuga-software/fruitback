@@ -7,7 +7,8 @@ const FALLBACK = {
   projectId: 'project_default',
   identitySecret: undefined,
   showComments: true,
-};
+  read: 'public',
+} as const;
 
 const MAP = {
   acme: { teamId: 'team_acme', projectId: 'project_acme', origins: ['https://acme.test'] },
@@ -54,7 +55,13 @@ describe('resolveClient', () => {
 
     assert.deepEqual(resolved, {
       ok: true,
-      routing: { teamId: 'team_acme', projectId: 'project_acme', identitySecret: undefined, showComments: true },
+      routing: {
+        teamId: 'team_acme',
+        projectId: 'project_acme',
+        identitySecret: undefined,
+        showComments: true,
+        read: 'public',
+      },
     });
   });
 
@@ -63,7 +70,13 @@ describe('resolveClient', () => {
 
     assert.deepEqual(resolved, {
       ok: true,
-      routing: { teamId: 'team_globex', projectId: 'project_default', identitySecret: undefined, showComments: true },
+      routing: {
+        teamId: 'team_globex',
+        projectId: 'project_default',
+        identitySecret: undefined,
+        showComments: true,
+        read: 'public',
+      },
     });
   });
 
@@ -81,7 +94,13 @@ describe('resolveClient', () => {
 
     assert.deepEqual(resolved, {
       ok: true,
-      routing: { teamId: 'team_acme', projectId: 'project_acme', identitySecret: undefined, showComments: true },
+      routing: {
+        teamId: 'team_acme',
+        projectId: 'project_acme',
+        identitySecret: undefined,
+        showComments: true,
+        read: 'public',
+      },
     });
   });
 

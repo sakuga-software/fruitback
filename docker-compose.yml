@@ -18,3 +18,8 @@ services:
       LINEAR_PROJECT_ID: ${LINEAR_PROJECT_ID:-}
       # One hop = Traefik in front. Getting this wrong makes the rate limit forgeable.
       TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
+      # `public` (default) or `authenticated`. Public reads answer anyone who can build the URL —
+      # right for anonymous feedback, wrong for internal review. `authenticated` needs
+      # FRUITBACK_IDENTITY_SECRET and is refused at boot without one.
+      FRUITBACK_READ: ${FRUITBACK_READ:-public}
+      FRUITBACK_IDENTITY_SECRET: ${FRUITBACK_IDENTITY_SECRET:-}

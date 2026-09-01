@@ -125,7 +125,7 @@ export function init(options: FruitbackOptions): Fruitback {
     shouldShow: (issue) => !config.get().hiddenStages.includes(issue.stage),
   });
 
-  const read = createReader(overlay, view);
+  const read = createReader(overlay, view, options);
 
   composer = createComposer({
     document,
@@ -195,7 +195,11 @@ export function init(options: FruitbackOptions): Fruitback {
  * answer. The late one would then draw pins fetched from the old endpoint over the correct ones.
  * Each call takes a generation, and only the newest may touch the screen.
  */
-function createReader(overlay: Overlay, view: Window & typeof globalThis): (config: WidgetConfig) => Promise<void> {
+function createReader(
+  overlay: Overlay,
+  view: Window & typeof globalThis,
+  options: FruitbackOptions,
+): (config: WidgetConfig) => Promise<void> {
   let generation = 0;
 
   return async function read(config: WidgetConfig): Promise<void> {
@@ -203,9 +207,20 @@ function createReader(overlay: Overlay, view: Window & typeof globalThis): (conf
     const url = canonicalizePageUrl(view.location.href);
 
     try {
+      // Sent on reads too since SKG-533: a client configured `read: 'authenticated'` answers 401
+      // without one. Asked for per read rather than once, for the same reason the write path does —
+      // a short-lived token that expired mid-session would otherwise turn every later read into a
+      // 401 until the page is reloaded.
+      const token = await options.identityToken?.();
+      if (mine !== generation) return;
+
       const response = await fetch(
         `${config.endpoint}/feedback?url=${encodeURIComponent(url)}&client=${encodeURIComponent(config.clientId)}`,
+        token === undefined ? undefined : { headers: { Authorization: `Bearer ${token}` } },
       );
+      // A 401 lands here like any other failure, and that is deliberate: the pins already on screen
+      // are correct, and blanking the page because a token expired would read as "my notes are
+      // gone". Same rule as an unreachable worker below.
       if (mine !== generation || !response.ok) return;
 
       const { issues } = (await response.json()) as { issues: SeedIssue[] };

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { type ClientMap, originsFromClients, readClientMap } from './clients.ts';
+import { type ClientMap, originsFromClients, readClientMap, unreadableClients } from './clients.ts';
 import { DEFAULT_LIMIT } from './rate-limit.ts';
 
 /**
@@ -37,6 +37,11 @@ export type WorkerEnv = {
   FRUITBACK_IDENTITY_SECRET?: string;
   /** `1` keeps Linear comments out of the read path (SKG-502). */
   FRUITBACK_HIDE_COMMENTS?: string;
+  /**
+   * Who may read pins: `public` (the default, and what this worker has always done) or
+   * `authenticated` (SKG-533). A mapped client's own `read` overrides this.
+   */
+  FRUITBACK_READ?: string;
 };
 
 export const DEFAULT_PORT = 8080;
@@ -62,10 +67,22 @@ const configSchema = z.object({
   identitySecret: z.string().min(32).optional(),
   /**
    * Show the team's Linear replies inside the pin (SKG-502). On unless `FRUITBACK_HIDE_COMMENTS` is
-   * set: the read path needs no authentication, so anything surfaced there is readable by anyone who
-   * can load the client's page. A mapped client's own `showComments` overrides this.
+   * set. A mapped client's own `showComments` overrides this.
    */
   showComments: z.boolean(),
+  /**
+   * Who may read pins when a client does not say for itself (SKG-533).
+   *
+   * **`public` by default, and that is a compatibility decision rather than a security one.** Every
+   * deployment before this change served reads to anyone, so defaulting to `authenticated` would
+   * make pins vanish from every upgraded worker with no error anywhere — the operator would learn
+   * about it from users. The exposure is instead made *sayable*: the boot log names every client
+   * whose pins anyone can read, and `/health` counts them. Loud beats silent, in both directions.
+   *
+   * An unrecognised value is refused rather than defaulted, like `TRUSTED_PROXY_HOPS`: a typo here
+   * would quietly leave the read path open.
+   */
+  read: z.enum(['public', 'authenticated']),
   allowedOrigins: z.array(z.string().min(1)).min(1),
   trustedProxyHops: z.number().int().min(0),
   rateLimitPerMinute: z.number().int().positive(),
@@ -98,6 +115,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     linearProjectId: env.LINEAR_PROJECT_ID || undefined,
     identitySecret: env.FRUITBACK_IDENTITY_SECRET || undefined,
     showComments: env.FRUITBACK_HIDE_COMMENTS !== '1',
+    read: readAccess(env.FRUITBACK_READ),
     // A client's own `origins` are sites that must be able to reach this worker, so they join the
     // allowlist rather than having to be repeated in `ALLOWED_ORIGINS` — two lists to keep in step
     // is one list that drifts.
@@ -116,12 +134,41 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   };
 
   const result = configSchema.safeParse(candidate);
-  if (result.success && clients.ok) return { ok: true, config: result.data };
+
+  if (result.success && clients.ok) {
+    // Refused at boot rather than served as a permanent 401 (SKG-533). A client that requires a
+    // verified reader and has no key to verify one with answers nobody, for ever, and the symptom —
+    // a widget showing no pins — points at the browser rather than at this line of configuration.
+    const unreadable = unreadableClients({
+      read: result.data.read,
+      clients: result.data.clients,
+      identitySecret: result.data.identitySecret,
+    });
+
+    if (unreadable.length > 0) {
+      return {
+        ok: false,
+        missing: [`FRUITBACK_IDENTITY_SECRET (read is "authenticated" but ${unreadable.join(', ')} has no key)`],
+      };
+    }
+
+    return { ok: true, config: result.data };
+  }
+
   if (!clients.ok) {
     return { ok: false, missing: [...missingFrom(result), `FRUITBACK_CLIENTS (${clients.reason})`] };
   }
 
   return { ok: false, missing: missingFrom(result) };
+}
+
+/**
+ * Absent means `public`, which is what every worker did before SKG-533. Anything else is passed
+ * through verbatim so the enum refuses it — a misspelt `FRUITBACK_READ=authenticaed` must not fall
+ * back to the open setting it was written to close.
+ */
+function readAccess(value: string | undefined): string {
+  return value === undefined || value.trim() === '' ? 'public' : value.trim();
 }
 
 const NAMES_BY_FIELD: Record<string, string> = {
@@ -130,6 +177,7 @@ const NAMES_BY_FIELD: Record<string, string> = {
   allowedOrigins: 'ALLOWED_ORIGINS',
   trustedProxyHops: 'TRUSTED_PROXY_HOPS',
   rateLimitPerMinute: 'RATE_LIMIT_PER_MINUTE',
+  read: 'FRUITBACK_READ',
 };
 
 function missingFrom(result: z.ZodSafeParseResult<unknown>): string[] {

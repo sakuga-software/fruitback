@@ -490,7 +490,9 @@ describe('the in-memory Linear (dev loop)', () => {
     const response = await get('/health', { env: fakeEnv });
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { ok: true, fakeLinear: true });
+    // `openRead: 1` because this dev worker serves one client and its reads are public — the
+    // default, and what every worker did before SKG-533.
+    assert.deepEqual(await response.json(), { ok: true, fakeLinear: true, openRead: 1 });
   });
 
   it('refuses the flag in production and reports itself misconfigured', async () => {
@@ -713,6 +715,22 @@ describe('GET /health', () => {
     const response = await get('/health');
 
     assert.equal(response.status, 200);
+    // Compared exactly rather than partially, on purpose: this endpoint is public, so a field
+    // appearing here should have to be written down. `openRead` is one such field (SKG-533).
+    assert.deepEqual(await response.json(), { ok: true, openRead: 1 });
+  });
+
+  it('stops counting open reads once they need an identity', async () => {
+    const response = await get('/health', {
+      env: {
+        ...env,
+        FRUITBACK_READ: 'authenticated',
+        // 32 characters minimum — a short HMAC secret is a guessable one, and the config refuses it.
+        FRUITBACK_IDENTITY_SECRET: 'a-secret-that-is-long-enough-to-be-one',
+      },
+    });
+
+    assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { ok: true });
   });
 
@@ -930,5 +948,167 @@ describe('the team’s replies on the read path', () => {
 
     assert.equal(issues.length, 1);
     assert.equal(issues[0]?.comments, undefined);
+  });
+});
+
+describe('who may read a pin (SKG-533)', () => {
+  const SECRET = 'a-read-secret-long-enough-to-not-be-guessed';
+  const inAnHour = () => Math.floor((Date.now() + 3_600_000) / 1000);
+  const closed: WorkerEnv = { ...env, FRUITBACK_READ: 'authenticated', FRUITBACK_IDENTITY_SECRET: SECRET };
+
+  function planted() {
+    const seed = seedFixture();
+    installLinearStub({ storedIssues: [storedIssueFromSeed(seed)] });
+
+    return `/feedback?url=${encodeURIComponent(seed.page.url)}`;
+  }
+
+  it('answers an anonymous read where reads are public, which stays the default', async () => {
+    const response = await get(planted());
+
+    assert.equal(response.status, 200);
+    const { issues } = (await response.json()) as { issues: SeedIssue[] };
+    assert.equal(issues.length, 1);
+  });
+
+  it('refuses an anonymous read where reads need an identity', async () => {
+    // The leak this ticket closes: before it, this request answered with every note on the page,
+    // its author and the team's replies, to anyone who could build the URL.
+    const response = await get(planted(), { env: closed });
+
+    assert.equal(response.status, 401);
+    assert.partialDeepStrictEqual(await response.json(), { error: 'identity-required' });
+  });
+
+  it('answers the same read behind a valid token', async () => {
+    const token = await signIdentityToken({ sub: 'user_42', exp: inAnHour() }, SECRET);
+
+    const response = await get(planted(), { env: closed, headers: { Authorization: `Bearer ${token}` } });
+
+    assert.equal(response.status, 200);
+    const { issues } = (await response.json()) as { issues: SeedIssue[] };
+    assert.equal(issues.length, 1);
+  });
+
+  it('refuses a token signed with someone else’s secret', async () => {
+    const token = await signIdentityToken({ sub: 'user_42', exp: inAnHour() }, 'a-different-secret-of-good-length');
+
+    const response = await get(planted(), { env: closed, headers: { Authorization: `Bearer ${token}` } });
+
+    assert.equal(response.status, 401);
+  });
+
+  it('refuses an expired token', async () => {
+    const token = await signIdentityToken({ sub: 'user_42', exp: Math.floor(Date.now() / 1000) - 60 }, SECRET);
+
+    const response = await get(planted(), { env: closed, headers: { Authorization: `Bearer ${token}` } });
+
+    assert.equal(response.status, 401);
+  });
+
+  it('never serves a warm authenticated answer to an anonymous caller', async () => {
+    // The cache entry is per (team, client, page) and holds the same answer for every entitled
+    // reader, so it is shared — safe only because an unauthorised caller never gets one.
+    //
+    // What this catches is a **cache-hit fast path**: an early return that answers from a warm entry
+    // before reaching the gate. It does **not** catch the gate merely moving below `cached` — that
+    // still returns 401, and this test was measured passing against exactly that mutation. The test
+    // above, asserting no Linear call, is what pins the position.
+    const path = planted();
+    const token = await signIdentityToken({ sub: 'user_42', exp: inAnHour() }, SECRET);
+
+    const warmed = await get(path, { env: closed, headers: { Authorization: `Bearer ${token}` } });
+    assert.equal(warmed.status, 200, 'the authenticated read should have filled the cache');
+
+    const anonymous = await get(path, { env: closed });
+
+    assert.equal(anonymous.status, 401);
+    const body = await anonymous.text();
+    assert.doesNotMatch(body, /issues/, 'a cached answer reached a caller who was never authorised');
+  });
+
+  it('turns an unauthorised read away before it costs a Linear call', async () => {
+    // This is what actually pins the gate's *position*. A 401 returned after the fetch looks
+    // identical from outside, so asserting the status cannot tell the two apart — but it lets an
+    // anonymous caller spend the worker's Linear quota by hammering a closed endpoint.
+    const seed = seedFixture();
+    const stub = installLinearStub({ storedIssues: [storedIssueFromSeed(seed)] });
+
+    const response = await get(`/feedback?url=${encodeURIComponent(seed.page.url)}`, { env: closed });
+
+    assert.equal(response.status, 401);
+    assert.deepEqual(stub.calls, [], 'an unauthorised read reached Linear');
+  });
+
+  it('lets one client keep its reads open while another closes them', async () => {
+    const seed = seedFixture({ client: { id: 'acme' } });
+    installLinearStub({ storedIssues: [storedIssueFromSeed(seed)] });
+    const mixed: WorkerEnv = {
+      ...env,
+      FRUITBACK_CLIENTS: JSON.stringify({
+        acme: { teamId: 'team_1', read: 'public' },
+        globex: { teamId: 'team_2', read: 'authenticated', identitySecret: SECRET },
+      }),
+    };
+    const url = encodeURIComponent(seed.page.url);
+
+    assert.equal((await get(`/feedback?url=${url}&client=acme`, { env: mixed })).status, 200);
+    assert.equal((await get(`/feedback?url=${url}&client=globex`, { env: mixed })).status, 401);
+  });
+});
+
+describe('a read nobody could ever satisfy', () => {
+  it('refuses at boot when reads need a token and no key can verify one', async () => {
+    // A permanent 401 is indistinguishable from a broken widget. Said once, at boot, instead.
+    const response = await get('/health', { env: { ...env, FRUITBACK_READ: 'authenticated' } });
+
+    assert.equal(response.status, 503);
+    const body = (await response.json()) as { missing: string[] };
+    assert.ok(
+      body.missing.some((name) => name.startsWith('FRUITBACK_IDENTITY_SECRET')),
+      `expected the missing key to be named, got ${body.missing.join(', ')}`,
+    );
+  });
+
+  it('names the client that inherited the requirement with no key of its own', async () => {
+    // The subtle one. `identitySecret` is deliberately never inherited — one signing key across
+    // tenants lets a compromised tenant mint identities on another's issues — so flipping the
+    // worker-wide default to `authenticated` can render a client unreadable without that client's
+    // own entry changing at all.
+    const response = await get('/health', {
+      env: {
+        ...env,
+        FRUITBACK_READ: 'authenticated',
+        FRUITBACK_IDENTITY_SECRET: 'a-worker-wide-secret-long-enough-here',
+        FRUITBACK_CLIENTS: JSON.stringify({ acme: { teamId: 'team_1' } }),
+      },
+    });
+
+    assert.equal(response.status, 503);
+    const body = (await response.json()) as { missing: string[] };
+    assert.ok(
+      body.missing.some((name) => name.includes('acme')),
+      `expected acme to be named, got ${body.missing}`,
+    );
+  });
+
+  it('refuses a misspelt FRUITBACK_READ rather than leaving reads open', async () => {
+    // Defaulting on a typo would silently keep the setting someone wrote it to close.
+    const response = await get('/health', { env: { ...env, FRUITBACK_READ: 'authenticaed' } });
+
+    assert.equal(response.status, 503);
+    const body = (await response.json()) as { missing: string[] };
+    assert.ok(body.missing.includes('FRUITBACK_READ'), `expected FRUITBACK_READ, got ${body.missing.join(', ')}`);
+  });
+
+  it('counts open reads on /health, without naming the clients', async () => {
+    // `/health` needs no authentication either, so the count is the useful half and the ids are the
+    // half that would hand over the map. The boot log names them, where only an operator looks.
+    const response = await get('/health', {
+      env: { ...env, FRUITBACK_CLIENTS: JSON.stringify({ acme: { teamId: 'team_1' }, globex: { teamId: 'team_2' } }) },
+    });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { ok: true, openRead: 2 });
   });
 });
