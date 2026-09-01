@@ -2,6 +2,7 @@ import { type IncomingMessage, type Server, type ServerResponse, createServer } 
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { handleRequest } from './app.ts';
+import { openReadClients } from './clients.ts';
 import {
   DEFAULT_HOST,
   DEFAULT_TRUSTED_PROXY_HOPS,
@@ -127,6 +128,18 @@ export function startServer(env: WorkerEnv = process.env): Server {
       if (config.config.fakeLinear) {
         console.warn(
           '[fruitback] in-memory Linear: nothing is written to a workspace, and it all dies with this process',
+        );
+      }
+
+      // `public` stays the default so an upgrade never blanks a working deployment — but an operator
+      // should not have to infer their exposure from a field they did not write (SKG-533). Named
+      // here, where only they can see it; `/health` carries a count and no ids.
+      const openRead = openReadClients({ read: config.config.read, clients: config.config.clients });
+      if (openRead.length > 0) {
+        console.warn(
+          `[fruitback] read is public for ${openRead.join(', ')}: their pins, authors and replies ` +
+            'are readable by anyone who can reach this worker. Set FRUITBACK_READ=authenticated, ' +
+            'or "read": "authenticated" per client, to require a token.',
         );
       }
     } else {

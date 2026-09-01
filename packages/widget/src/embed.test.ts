@@ -1,7 +1,8 @@
-import { describe, it } from 'node:test';
+import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { init } from './embed.ts';
-import { mountPage } from './dom.fixture.ts';
+import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
+import { type MountedPage, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
 
 /**
  * `init` is the published entry point, so the way it fails is part of the contract.
@@ -64,4 +65,106 @@ describe('the optional picture', () => {
 
   // What happens once it is on — the capture throwing, returning a picture, returning nothing — needs
   // a real hit test to reach the popover, which happy-dom cannot do. It lives in `e2e/screenshot.spec.ts`.
+});
+
+describe('reading pins', () => {
+  const PAGE = '<main><section><button data-testid="checkout-cta">Commander</button></section></main>';
+  const ENDPOINT = 'https://worker.test';
+
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
+  function mountWithCta(): MountedPage {
+    const page = mountPage(PAGE, { width: 1_000, height: 1_000 });
+    setDocumentSize(page.document, 1_000, 1_000);
+    setRect(page.query('button'), { left: 100, top: 200, width: 200, height: 40 });
+
+    return page;
+  }
+
+  function onCta() {
+    return seedIssueFixture({
+      seed: seedFixture({
+        anchor: {
+          selector: '[data-testid="checkout-cta"]',
+          tag: 'button',
+          text: 'Commander',
+          bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 },
+        },
+      }),
+    });
+  }
+
+  function shadowOf(page: MountedPage): ShadowRoot {
+    return page.document.querySelector('[data-fruitback-host]')?.shadowRoot as ShadowRoot;
+  }
+
+  /** Answers each read in turn, so a test can make the second one fail. */
+  function stubReads(...responses: (() => Response)[]) {
+    const seen: (RequestInit | undefined)[] = [];
+    let call = 0;
+    mock.method(globalThis, 'fetch', async (_url: string, init?: RequestInit) => {
+      seen.push(init);
+
+      return (responses[Math.min(call++, responses.length - 1)] ?? (() => ok([])))();
+    });
+
+    return seen;
+  }
+
+  const ok = (issues: unknown[]) => new Response(JSON.stringify({ issues }), { status: 200 });
+
+  it('sends the identity token on a read, not only on a write', async () => {
+    // A client configured `read: "authenticated"` (SKG-533) answers 401 without one, so the reader
+    // has to carry the same token the write path already did.
+    const page = mountWithCta();
+    const seen = stubReads(() => ok([]));
+
+    const widget = init({
+      document: page.document,
+      endpoint: ENDPOINT,
+      clientId: 'acme',
+      identityToken: () => 'a-token',
+    });
+    await widget.refresh();
+
+    const headers = seen.at(-1)?.headers as Record<string, string> | undefined;
+    assert.equal(headers?.Authorization, 'Bearer a-token');
+
+    widget.destroy();
+  });
+
+  it('sends no Authorization header when the host mints no token', async () => {
+    // The anonymous case stays the default, and an empty header is not the same as none.
+    const page = mountWithCta();
+    const seen = stubReads(() => ok([]));
+
+    const widget = init({ document: page.document, endpoint: ENDPOINT, clientId: 'acme' });
+    await widget.refresh();
+
+    assert.equal(seen.at(-1), undefined);
+
+    widget.destroy();
+  });
+
+  it('keeps the pins already on screen when a read comes back 401', async () => {
+    // Losing what is correctly displayed is the failure this widget cannot afford. A token that
+    // expired mid-session must not read as "my notes are gone" — same rule as an unreachable worker.
+    const page = mountWithCta();
+    stubReads(
+      () => ok([onCta()]),
+      () => new Response(JSON.stringify({ error: 'identity-required' }), { status: 401 }),
+    );
+
+    const widget = init({ document: page.document, endpoint: ENDPOINT, clientId: 'acme' });
+    await widget.refresh();
+    assert.equal(shadowOf(page).querySelectorAll('[data-fb-pin]').length, 1, 'the first read should have drawn a pin');
+
+    await widget.refresh();
+
+    assert.equal(shadowOf(page).querySelectorAll('[data-fb-pin]').length, 1, 'the 401 blanked the page');
+
+    widget.destroy();
+  });
 });
