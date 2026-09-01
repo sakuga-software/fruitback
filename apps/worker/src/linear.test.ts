@@ -20,13 +20,15 @@ describe('stageForLinearState', () => {
     assert.equal(stageForLinearState('duplicate'), 'composted');
   });
 
-  it('shows an unknown state as seeded rather than hiding the pin', () => {
-    assert.equal(stageForLinearState('someCustomType'), 'seeded');
-  });
-
-  it('takes that fallback from the contract, not from a literal of its own', () => {
-    // Every connector answers the same way for a state it does not recognise, so the rule is the
-    // contract's. A connector spelling `'seeded'` itself is how the next one comes to disagree.
+  it('draws an unrecognised state instead of hiding it, at the contract’s default', () => {
+    // Both inputs happen: Linear can answer with a state type this connector has never seen, and
+    // `toSeedIssue` passes '' for an issue that came back with no state at all.
+    assert.equal(stageForLinearState('someCustomType'), DEFAULT_SEED_STAGE);
     assert.equal(stageForLinearState(''), DEFAULT_SEED_STAGE);
+
+    // Asserted against the constant, not against `'seeded'`: every connector answers the same way
+    // for a state it does not know, so the rule is the contract's and a connector spelling the
+    // literal itself is how the next one comes to disagree. Which stage that is stays pinned in
+    // `packages/shared/src/linear.test.ts`, where the constant is declared.
   });
 });

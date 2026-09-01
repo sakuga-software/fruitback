@@ -167,8 +167,12 @@ describe('the stage vocabulary', () => {
     assert.deepEqual([...SEED_STAGES], ['seeded', 'green', 'ripening', 'ripe', 'composted']);
   });
 
-  it('falls back to a stage that exists', () => {
+  it('falls back to a stage that exists, and to that one', () => {
     assert.ok(SEED_STAGES.includes(DEFAULT_SEED_STAGE));
+    // The value is pinned here rather than in a connector's tests, because every connector reads
+    // this constant: this is the one place a change to it should be heard. Moving it silently
+    // repaints every pin whose state a provider renamed.
+    assert.equal(DEFAULT_SEED_STAGE, 'seeded');
   });
 });
 
