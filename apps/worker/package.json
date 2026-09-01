@@ -2,6 +2,7 @@
   "name": "@fruitback/worker",
   "version": "0.1.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
     "dev": "node --watch src/main.ts",

@@ -2,10 +2,12 @@
   "name": "@fruitback/widget",
   "version": "0.1.0",
   "description": "Visual feedback widget: click an element, write a note, get a Linear issue.",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "files": [
     "dist",
-    "src"
+    "src",
+    "LICENSE",
+    "THIRD-PARTY-NOTICES.md"
   ],
   "type": "module",
   "sideEffects": false,

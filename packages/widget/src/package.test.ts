@@ -184,7 +184,37 @@ describe('a consumer installing this from npm', () => {
           stdout.includes('package/dist/'),
           `${tarball} ships no dist — its prepack did not run, and publishConfig points at one`,
         );
+        // A package nobody may legally use is worse than an unpublished one (SKG-515), and all three
+        // shipped as `UNLICENSED` until this ticket. So the field is what gets asserted, read back
+        // out of the tarball rather than off disk.
+        //
+        // Two things this deliberately does *not* rely on, both measured rather than assumed:
+        // npm force-includes a `LICENSE` whatever `files` says, and pnpm copies the workspace root's
+        // LICENSE into any package that has none of its own. Between them, "the tarball contains a
+        // file called LICENSE" is true even for a package that never declared one — which is why the
+        // text is checked too, and why that check would catch AGPL leaking into a published package.
+        const [{ stdout: manifest }, { stdout: licence }] = await Promise.all([
+          run('tar', ['-xzOf', join(scratch, tarball), 'package/package.json']),
+          run('tar', ['-xzOf', join(scratch, tarball), 'package/LICENSE']),
+        ]);
+
+        assert.equal((JSON.parse(manifest) as { license?: string }).license, 'MIT', `${tarball} declares no MIT`);
+        assert.match(licence, /^MIT License/, `${tarball} ships a LICENSE that is not the MIT text`);
       }
+
+      // MIT asks for the notice to travel with the code, and the widget compiles `react-grab` and
+      // `zod` **into** its bundle. `react-grab` carries `@license` banners esbuild keeps; `zod`
+      // carries none, so its notice reaches a consumer through this file or not at all.
+      //
+      // Unlike `LICENSE` above, this one really does depend on `files`: npm force-includes nothing
+      // by that name. Dropping the entry was measured failing exactly here.
+      const widgetTarball = tarballs.find((name) => name.startsWith('fruitback-widget-'));
+      assert.ok(widgetTarball, `no widget tarball among ${tarballs.join(', ')}`);
+      const { stdout: widgetFiles } = await run('tar', ['-tzf', join(scratch, widgetTarball)]);
+      assert.ok(
+        widgetFiles.includes('package/THIRD-PARTY-NOTICES.md'),
+        'the widget bundles other people’s MIT code and ships none of their notices',
+      );
       // `./` matters: npm reads a bare name as a registry package, not a local file.
       await run('npm', ['install', '--no-audit', '--no-fund', ...tarballs.map((name) => `./${name}`)], {
         cwd: scratch,
