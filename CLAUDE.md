@@ -247,6 +247,36 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   a same-origin iframe — which react-grab returns on purpose — belongs to another. Use `isElement`
   from `dom.ts`.
 
+## The look, and the one thing a host may change
+
+- **`theme.ts` owns every colour, shadow, font family and duration** (SKG-528). They were
+  hexadecimals spread across five `STYLES` literals — `host.ts`, `overlay.ts`, `composer.ts`,
+  `panel.ts`, `orphans.ts` — plus the stage colours, which travelled in the *published contract*.
+- **Custom properties, because inheritance is what crosses the modules.** Each module injects its own
+  `<style>` into the one Shadow root, so a token on `:host` reaches all of them with nobody importing
+  anything. `THEME_STYLES` is concatenated ahead of `host.ts`'s reset for that reason.
+- **The names are deliberately long.** A custom property inherits *into* the Shadow root from the
+  client's page, so `--fb-color-text` is not `--color-text` — a design system on the host would
+  plausibly define the short one and repaint our widget by accident.
+- **`init({ theme })` takes tokens, never CSS.** A host that could write a stylesheet into the Shadow
+  root would turn our class names into a contract by accident, which is what the Shadow root exists
+  to prevent. `applyTheme` writes only names `THEME_TOKENS` declares and silently drops the rest, so
+  a token renamed in a later version costs that override and never the mount.
+- **`public.ts` exports the theme *types* and not `THEME_TOKENS`.** The runtime array would widen the
+  published surface; `package.test.ts`'s `promises only what public.ts declares` caught that on the
+  first attempt, which is what it is for.
+- **The base `:host` block must declare every settable token**, and the test that checks it is scoped
+  to that block. Searching the whole stylesheet passed a mutation that deleted a declaration, because
+  the dark block redeclares it — a token declared only under `prefers-color-scheme: dark` is undefined
+  in light mode.
+- **Radii are not tokenised, on purpose.** Eight distinct values are in use and each would map to
+  exactly one token: indirection wearing the costume of a scale, and more for SKG-529 to undo when it
+  shortens the scale deliberately. Spacing likewise — nobody overrides it, and substituting sixty
+  literals is where a silent visual regression hides.
+- SKG-528 changed **no colour**: every token holds the hexadecimal that was already there, and
+  `e2e/overlay.spec.ts`'s computed-colour read is the proof. One shadow moved 4px, because the thread
+  and the panel spelled the same intention two ways.
+
 ## The popover
 
 - **`createComposer` owns the states, not the transport.** `onSubmit` is awaited, so an embedder

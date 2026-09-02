@@ -20,4 +20,9 @@
  */
 
 export { init, type CapturedScreenshot, type Fruitback, type FruitbackOptions } from './embed.ts';
+// Types only. `FruitbackOptions.theme` names them, so a consumer cannot describe the object they
+// pass without them — a published option whose type is unreachable is one nobody can type-check.
+// `THEME_TOKENS` itself stays internal: it is a runtime value, and exporting it would widen the
+// published surface to something nobody asked for. `package.test.ts` caught that on the first try.
+export type { FruitbackTheme, ThemeToken } from './theme.ts';
 export type { ConfigPanel } from './panel.ts';

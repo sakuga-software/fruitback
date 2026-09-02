@@ -168,3 +168,37 @@ describe('reading pins', () => {
     widget.destroy();
   });
 });
+
+describe('the theme a host passes in', () => {
+  it('reaches the host element, where an inline property beats the :host declaration', () => {
+    // Written on the element rather than into the stylesheet on purpose: an inline custom property
+    // wins without anyone needing a more specific selector (SKG-528).
+    const page = mountPage('<main><button id="cta">Commander</button></main>');
+    const widget = init({
+      document: page.document,
+      endpoint: 'https://worker.test',
+      clientId: 'acme',
+      theme: { 'color-accent': '#0055ff' },
+    });
+
+    const container = page.document.querySelector('[data-fruitback-host]') as HTMLElement;
+    assert.equal(container.style.getPropertyValue('--fb-color-accent'), '#0055ff');
+
+    widget.destroy();
+  });
+
+  it('mounts with no theme at all, following the viewer’s own scheme', () => {
+    const page = mountPage('<main><button id="cta">Commander</button></main>');
+    const widget = init({ document: page.document, endpoint: 'https://worker.test', clientId: 'acme' });
+
+    const container = page.document.querySelector('[data-fruitback-host]') as HTMLElement;
+    // The container carries its own positioning, so what is asserted is that no token was written.
+    assert.equal(container.style.getPropertyValue('--fb-color-accent'), '');
+    assert.match(
+      page.document.querySelector('[data-fruitback-host]')?.shadowRoot?.textContent ?? '',
+      /prefers-color-scheme: dark/,
+    );
+
+    widget.destroy();
+  });
+});
