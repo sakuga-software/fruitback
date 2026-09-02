@@ -7,16 +7,19 @@ import {
   clientLabelName,
   FRUITBACK_LABEL,
 } from '@fruitback/shared';
+import { z } from 'zod';
 import type { ClientPolicy } from './clients.ts';
 import { type IssueNode, toSeedIssue } from './linear.ts';
 import type { CreatedIssue, SeedIssueQuery, SeedStore } from './store.ts';
+import { type StoreSpec, defineStore } from './store-config.ts';
 
 /**
  * Linear, in memory, for the dev loop (SKG-511).
  *
  * The playground needs the whole round — capture, issue, pins coloured by state — and the real thing
  * needs an API key and writes into a workspace people actually triage. This stands in for it, behind
- * `FRUITBACK_FAKE_LINEAR` and never in production (see `usesFakeLinear`).
+ * `FRUITBACK_STORE=memory` and never in production — see `createMemoryStoreSpec` below, whose
+ * `devOnly` flag is the whole of that guard since SKG-526.
  *
  * It is deliberately not a mock: an issue is stored as the **description string**
  * `buildIssueDescription` produces, and read back through the same `toSeedIssue` the real path uses.
@@ -137,4 +140,22 @@ export function createMemoryStore(): SeedStore {
     create: (seed) => createSeedIssue(seed),
     findForPage: (query, _client, policy) => fetchSeedIssues(query, policy),
   };
+}
+
+/**
+ * The dev-loop store as a selectable provider (SKG-526): `FRUITBACK_STORE=memory`.
+ *
+ * `devOnly`, and that flag is the whole of the guard SKG-511 wrote by hand. It reads no environment
+ * of its own — there is nothing to configure about a list in a variable — so its `envNames` map is
+ * empty and it can never be the reason a boot diagnostic names a variable.
+ */
+export function createMemoryStoreSpec(): StoreSpec {
+  return defineStore({
+    provider: 'memory',
+    devOnly: true,
+    envNames: {},
+    read: () => ({}),
+    schema: z.object({}),
+    create: () => createMemoryStore(),
+  });
 }

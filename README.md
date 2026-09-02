@@ -196,6 +196,11 @@ Then set the environment (`.env.example` lists all of it). `LINEAR_API_KEY` is a
 in Dokploy's environment, never in the image or the repo. The image runs as `node`, not root, and
 carries no `node_modules` — the build stage bundles everything into a single file.
 
+`FRUITBACK_STORE` chooses where the seeds live, and `linear` is the default — so a deployment that
+sets nothing keeps the behaviour it has. Each store reads only its own variables, which is why a
+worker on another store is never asked for a Linear key; an unknown name is refused at boot rather
+than quietly defaulted.
+
 `/health` is a real readiness probe: it answers `503` while a required variable is missing, so a
 misconfigured deploy never gets traffic routed to it, and `curl /health` tells you exactly which
 variable to set. The process also drains in-flight requests on `SIGTERM` before exiting.

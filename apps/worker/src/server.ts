@@ -4,14 +4,9 @@ import { pipeline } from 'node:stream/promises';
 import { handleRequest, storeFor } from './app.ts';
 import type { SeedStore } from './store.ts';
 import { openReadClients } from './clients.ts';
-import {
-  DEFAULT_HOST,
-  DEFAULT_TRUSTED_PROXY_HOPS,
-  type WorkerEnv,
-  fakeLinearRefused,
-  readConfig,
-  readPort,
-} from './env.ts';
+import { DEFAULT_HOST, DEFAULT_TRUSTED_PROXY_HOPS, type WorkerEnv, readConfig, readPort } from './env.ts';
+import { fakeLinearIgnoredReason } from './store-config.ts';
+import { isDevOnlyProvider } from './stores.ts';
 import { resolveClientIp } from './rate-limit.ts';
 
 /**
@@ -125,10 +120,12 @@ export function startServer(env: WorkerEnv = process.env): Server {
   const store = config.ok ? storeFor(config.config) : undefined;
   const server = createFruitbackServer(env, store);
 
-  if (fakeLinearRefused(env)) {
-    // The flag only means something in the dev loop. Saying so beats a deploy wondering why its
-    // in-memory store never appeared.
-    console.error('[fruitback] FRUITBACK_FAKE_LINEAR ignored: this process runs with NODE_ENV=production');
+  // The reason comes from the env rather than being spelled here, because the flag can lose two
+  // ways and this line used to claim it was always production. An explicit FRUITBACK_STORE=memory is
+  // refused at boot instead of ignored — see `readStoreConfig`.
+  const flagIgnored = fakeLinearIgnoredReason(env);
+  if (flagIgnored !== undefined) {
+    console.error(`[fruitback] FRUITBACK_FAKE_LINEAR ignored: ${flagIgnored}`);
   }
 
   server.listen(port, host, () => {
@@ -141,9 +138,12 @@ export function startServer(env: WorkerEnv = process.env): Server {
         `[fruitback] listening on ${host}:${port} · store ${store?.name ?? 'none'} · ` +
           `origins ${config.config.allowedOrigins.join(', ')} · trusted proxy hops ${config.config.trustedProxyHops}`,
       );
-      if (config.config.fakeLinear) {
+      // Asked of the registry rather than of a provider name spelled here, so a second dev-only
+      // store (a fixture, a demo) warns without this line having to hear about it.
+      if (isDevOnlyProvider(config.config.store.provider)) {
         console.warn(
-          '[fruitback] in-memory Linear: nothing is written to a workspace, and it all dies with this process',
+          `[fruitback] store ${config.config.store.provider} is dev-only: nothing is written to a ` +
+            'workspace, and it all dies with this process',
         );
       }
 

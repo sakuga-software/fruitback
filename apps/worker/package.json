@@ -14,8 +14,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test 'src/**/*.test.ts'",
     "test:watch": "node --test --watch 'src/**/*.test.ts'",
-    "dev:fake": "FRUITBACK_FAKE_LINEAR=1 PORT=8788 ALLOWED_ORIGINS=http://localhost:5177 node --watch src/main.ts",
-    "serve:fake": "FRUITBACK_FAKE_LINEAR=1 PORT=8788 node src/main.ts"
+    "dev:fake": "FRUITBACK_STORE=memory PORT=8788 ALLOWED_ORIGINS=http://localhost:5177 node --watch src/main.ts",
+    "serve:fake": "FRUITBACK_STORE=memory PORT=8788 node src/main.ts"
   },
   "dependencies": {
     "@fruitback/shared": "workspace:*",
