@@ -2,10 +2,11 @@
   "name": "@fruitback/shared",
   "version": "0.1.0",
   "description": "The Fruitback seed contract — the payload the widget writes and the worker stores.",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "files": [
     "dist",
-    "src"
+    "src",
+    "LICENSE"
   ],
   "type": "module",
   "sideEffects": false,

@@ -159,6 +159,27 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   runs, not what its docstring says.
 - `react-grab` and `zod` are **bundled, and are devDependencies**: a client site must not have to
   install — or resolve a version conflict over — a library it never asked for.
+- **Bundling them makes their MIT notices our obligation** (SKG-515). MIT asks the notice to travel
+  with the code, and both are compiled into `dist`. Measured: `react-grab` carries `@license` banners
+  esbuild preserves — four survive into the bundle — and **`zod` carries none**, so its notice
+  reaches a consumer through `packages/widget/THIRD-PARTY-NOTICES.md` or not at all. `packages/shared`
+  is compiled by `tsc` rather than bundled, keeps `zod` as an ordinary dependency, and owes nothing.
+
+## Licences
+
+- **MIT on the three published packages, AGPL-3.0-only on the worker** (SKG-515). The split follows
+  the client/server boundary: the widget is compiled into someone else's site, and copyleft on code
+  that ships inside a client's bundle is a licence nobody adopts. The worker is the server, which is
+  the only place copyleft bites.
+- All three shipped as `UNLICENSED` until this ticket, which is worse than unpublished: a package with
+  no licence is one nobody may legally use.
+- **The guard asserts the `license` field and the LICENSE text, not the presence of a file** — and
+  that is not fussiness, it is what two measurements forced. npm **force-includes** a `LICENSE`
+  whatever `files` says, and pnpm **copies the workspace root's LICENSE** into any package that has
+  none of its own. So "the tarball contains a file called LICENSE" is true even for a package that
+  never declared one. `"LICENSE"` in `files` is documentation, not the mechanism.
+- `THIRD-PARTY-NOTICES.md` is the opposite case: npm force-includes nothing by that name, so its
+  `files` entry **is** load-bearing. Dropping it was measured failing the guard.
 - The ESM build is left readable (the consumer's bundler minifies it); the IIFE is minified because it
   lands on a page exactly as built. **93 kB gzipped**, guarded by a test that trips at 150 kB — a
   tripwire for a dependency that should have been bundled out, not a budget.

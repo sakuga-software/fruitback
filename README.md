@@ -220,3 +220,32 @@ read-back.
 | 🥝 M4 Read & overlay | query by label + URL, re-anchoring, orphan pins, comments |
 | 🫐 M5 Config in-app  | settings panel, multi-client mapping                      |
 | 🥥 M6 Packaging      | npm package, install snippet, optional Linear webhook     |
+
+## Licence
+
+Two licences, split where the client/server boundary is (SKG-515).
+
+| | |
+| --- | --- |
+| `packages/widget`, `packages/shared`, `packages/fruitback` | **MIT** |
+| `apps/worker` | **AGPL-3.0-only** |
+
+The three published packages are **MIT** because they are compiled into someone else's site. A
+copyleft licence on code that ships inside a client's own bundle is one nobody can adopt, and the
+widget is worth nothing unadopted.
+
+The worker is **AGPL-3.0-only**. It is the server — the only place copyleft actually bites — so
+anyone who hosts a modified version publishes their modifications. Copyright (C) 2026 Sakuga
+Software; the full text is in [`apps/worker/LICENSE`](apps/worker/LICENSE).
+
+`apps/playground` is not published and not deployed; it inherits the repository's MIT licence.
+
+### Bundled dependencies
+
+`@fruitback/widget` compiles `react-grab` and `zod` **into** its `dist` rather than asking a client
+site to install them. Both are MIT, and MIT requires their notices to travel with the code, so the
+tarball ships [`THIRD-PARTY-NOTICES.md`](packages/widget/THIRD-PARTY-NOTICES.md) — checked by the
+suite, not by hand.
+
+`@fruitback/shared` is compiled rather than bundled and keeps `zod` as an ordinary dependency, so its
+consumers get that notice from npm.
