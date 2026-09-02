@@ -78,8 +78,8 @@ test('the widget cannot restyle the page either', async ({ page }) => {
   // Nothing the widget draws is in the page's own tree — the dev toolbar is the playground's, and
   // deliberately outside the Shadow root, so it is excluded from the count rather than from the rule.
   const strays = await page.evaluate(() =>
-    [...document.querySelectorAll('.fb-launch, .fb-highlight, .fb-pin, .fb-thread, [data-fb-pin]')]
-      .filter((node) => node.closest('[data-fb-dev]') === null)
+    [...document.querySelectorAll('.fruit-launch, .fruit-highlight, .fruit-pin, .fruit-thread, [data-fruit-pin]')]
+      .filter((node) => node.closest('[data-fruit-dev]') === null)
       .map((node) => node.className),
   );
   expect(strays).toEqual([]);
@@ -90,7 +90,7 @@ test('hovering highlights the element the pointer is really over', async ({ page
   // react-grab's hit testing, for real: it has to see past our own highlight box and the overlay.
   await openPlayground(page, 'hover');
   const button = page.locator('[data-testid="card-latte"] .add');
-  const highlight = page.locator('[data-fb-host-highlight]');
+  const highlight = page.locator('[data-fruit-host-highlight]');
 
   await page.getByRole('button', { name: /Laisser un feedback/ }).click();
   await button.hover();
@@ -134,10 +134,10 @@ test('the dev chrome keeps working while capturing, and is never itself captured
   await openPlayground(page, 'ignore-chrome');
   await page.getByRole('button', { name: /Laisser un feedback/ }).click();
 
-  await page.locator('[data-fb-dev="redeploy"]').click();
+  await page.locator('[data-fruit-dev="redeploy"]').click();
 
   // The button did its job — the redeploy ran — and no composer opened on it.
-  await expect(page.locator('[data-fb-inserted]')).toHaveCount(1);
+  await expect(page.locator('[data-fruit-inserted]')).toHaveCount(1);
   await expect(page.getByPlaceholder("Qu'est-ce qui ne va pas ici ?")).toBeHidden();
 });
 
@@ -147,10 +147,10 @@ test('the pins live in the Shadow root now, and still land on their elements', a
   await plantPin(page, button, 'Toujours au bon endroit');
 
   // Not reachable from the page's own DOM — only through the Shadow root.
-  expect(await page.evaluate(() => document.querySelectorAll('[data-fb-pin]').length)).toBe(0);
+  expect(await page.evaluate(() => document.querySelectorAll('[data-fruit-pin]').length)).toBe(0);
   expect(
     await page.evaluate(
-      () => document.querySelector('[data-fruitback-host]')?.shadowRoot?.querySelectorAll('[data-fb-pin]').length,
+      () => document.querySelector('[data-fruitback-host]')?.shadowRoot?.querySelectorAll('[data-fruit-pin]').length,
     ),
   ).toBe(1);
 });
@@ -168,8 +168,8 @@ test('a note, its byline and its warning are three lines, not one paragraph', as
   const lines = await page.evaluate(() => {
     const root = document.querySelector('[data-fruitback-host]')?.shadowRoot;
     const rect = (selector: string) => root?.querySelector(selector)?.getBoundingClientRect();
-    const note = rect('.fb-thread-note');
-    const meta = rect('.fb-thread-meta');
+    const note = rect('.fruit-thread-note');
+    const meta = rect('.fruit-thread-meta');
 
     return note === undefined || meta === undefined ? null : { noteBottom: note.bottom, metaTop: meta.top };
   });

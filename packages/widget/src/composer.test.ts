@@ -38,9 +38,9 @@ function press(key: string, modifiers: { metaKey?: boolean; ctrlKey?: boolean } 
   field().dispatchEvent(new KeyboardEventCtor('keydown', { key, bubbles: true, ...modifiers }));
 }
 
-const field = () => composer?.element.querySelector('[data-fb-note]') as HTMLTextAreaElement;
-const sendButton = () => composer?.element.querySelector('[data-fb-send]') as HTMLButtonElement;
-const statusText = () => composer?.element.querySelector('[data-fb-status]')?.textContent ?? '';
+const field = () => composer?.element.querySelector('[data-fruit-note]') as HTMLTextAreaElement;
+const sendButton = () => composer?.element.querySelector('[data-fruit-send]') as HTMLButtonElement;
+const statusText = () => composer?.element.querySelector('[data-fruit-status]')?.textContent ?? '';
 
 describe('createComposer', () => {
   it('stays out of the way until it is opened', () => {
@@ -213,7 +213,7 @@ describe('createComposer', () => {
   it('announces its state to a screen reader', () => {
     mount(async () => true);
 
-    const status = composer?.element.querySelector('[data-fb-status]');
+    const status = composer?.element.querySelector('[data-fruit-status]');
     assert.equal(status?.getAttribute('role'), 'status');
     assert.equal(status?.getAttribute('aria-live'), 'polite');
     assert.equal(field().getAttribute('aria-label'), 'Votre commentaire');
@@ -225,7 +225,7 @@ describe('createComposer', () => {
     composer?.destroy();
     composer = null;
 
-    assert.equal(host.querySelector('[data-fb-composer]'), null);
+    assert.equal(host.querySelector('[data-fruit-composer]'), null);
     assert.equal(host.querySelector('style'), null);
   });
 });
@@ -240,9 +240,9 @@ describe('saying who you are, or not', () => {
     const { page } = mount(async (_note, reporter) => void seen.push(reporter));
     composer?.open(ANCHOR);
 
-    assert.equal((query(page, '[data-fb-who]') as HTMLElement).hidden, true);
-    (query(page, '[data-fb-note]') as HTMLTextAreaElement).value = 'Une note';
-    query(page, '[data-fb-send]').click();
+    assert.equal((query(page, '[data-fruit-who]') as HTMLElement).hidden, true);
+    (query(page, '[data-fruit-note]') as HTMLTextAreaElement).value = 'Une note';
+    query(page, '[data-fruit-send]').click();
     await Promise.resolve();
 
     assert.deepEqual(seen, [undefined]);
@@ -251,11 +251,11 @@ describe('saying who you are, or not', () => {
   it('reveals the fields when asked, and says so to a screen reader', () => {
     const { page } = mount(async () => true);
     composer?.open(ANCHOR);
-    const toggle = query(page, '[data-fb-identify]');
+    const toggle = query(page, '[data-fruit-identify]');
 
     toggle.click();
 
-    assert.equal((query(page, '[data-fb-who]') as HTMLElement).hidden, false);
+    assert.equal((query(page, '[data-fruit-who]') as HTMLElement).hidden, false);
     assert.equal(toggle.getAttribute('aria-expanded'), 'true');
   });
 
@@ -264,9 +264,9 @@ describe('saying who you are, or not', () => {
     const { page } = mount(async (_note, reporter) => void seen.push(reporter));
     composer?.open(ANCHOR);
 
-    (query(page, '[data-fb-name]') as HTMLInputElement).value = '  Alice  ';
-    (query(page, '[data-fb-note]') as HTMLTextAreaElement).value = 'Une note';
-    query(page, '[data-fb-send]').click();
+    (query(page, '[data-fruit-name]') as HTMLInputElement).value = '  Alice  ';
+    (query(page, '[data-fruit-note]') as HTMLTextAreaElement).value = 'Une note';
+    query(page, '[data-fruit-send]').click();
     await Promise.resolve();
 
     // No `email` key at all: the round-trip forbids a field the caller did not provide.
@@ -278,10 +278,10 @@ describe('saying who you are, or not', () => {
     const { page } = mount(async (_note, reporter) => void seen.push(reporter));
     composer?.open(ANCHOR);
 
-    (query(page, '[data-fb-name]') as HTMLInputElement).value = 'Alice';
-    (query(page, '[data-fb-email]') as HTMLInputElement).value = 'alice@acme.test';
-    (query(page, '[data-fb-note]') as HTMLTextAreaElement).value = 'Une note';
-    query(page, '[data-fb-send]').click();
+    (query(page, '[data-fruit-name]') as HTMLInputElement).value = 'Alice';
+    (query(page, '[data-fruit-email]') as HTMLInputElement).value = 'alice@acme.test';
+    (query(page, '[data-fruit-note]') as HTMLTextAreaElement).value = 'Une note';
+    query(page, '[data-fruit-send]').click();
     await Promise.resolve();
 
     assert.deepEqual(seen, [{ name: 'Alice', email: 'alice@acme.test' }]);

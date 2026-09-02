@@ -95,7 +95,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   const document = options.document ?? globalThis.document;
   const view = document.defaultView;
   const container = document.createElement('div');
-  container.className = 'fb-overlay';
+  container.className = 'fruit-overlay';
   container.dataset.fruitbackOverlay = '';
 
   const style = document.createElement('style');
@@ -143,7 +143,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 
   function reposition(): void {
     for (const entry of placed) place(entry);
-    if (thread !== null) positionThread(thread, placed.find((entry) => entry.pin.dataset.fbOpen === '')?.pin);
+    if (thread !== null) positionThread(thread, placed.find((entry) => entry.pin.dataset.fruitOpen === '')?.pin);
   }
 
   function place(entry: Placed): void {
@@ -158,8 +158,8 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     const attached = element !== null && element.isConnected;
     const rect = attached ? documentRect(element) : boundsToPixels(entry.issue.seed.anchor.bounds, document);
 
-    entry.pin.classList.toggle('fb-pin-orphan', !attached);
-    entry.pin.classList.toggle('fb-pin-uncertain', !attached || !entry.resolution.confident);
+    entry.pin.classList.toggle('fruit-pin-orphan', !attached);
+    entry.pin.classList.toggle('fruit-pin-uncertain', !attached || !entry.resolution.confident);
 
     Object.assign(entry.pin.style, {
       left: `${rect.left}px`,
@@ -179,7 +179,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   function resolve(): void {
     if (placed.length === 0) return;
 
-    const open = placed.find((entry) => entry.pin.dataset.fbOpen === '');
+    const open = placed.find((entry) => entry.pin.dataset.fruitOpen === '');
 
     for (const entry of placed) {
       entry.resolution = resolveAnchor(entry.issue.seed.anchor, { document });
@@ -273,7 +273,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
         const pin = buildPin(document, issue, resolution);
         const entry = { issue, resolution, pin };
 
-        pin.querySelector('.fb-pin-badge')?.addEventListener('click', (event) => {
+        pin.querySelector('.fruit-pin-badge')?.addEventListener('click', (event) => {
           event.preventDefault();
           event.stopPropagation();
           openThread(entry);
@@ -298,16 +298,16 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   function reopenThread(entry: Placed): void {
     thread?.remove();
     thread = buildThread(document, entry.issue, entry.resolution);
-    thread.querySelector('.fb-thread-close')?.addEventListener('click', () => closeThread());
+    thread.querySelector('.fruit-thread-close')?.addEventListener('click', () => closeThread());
     container.append(thread);
     positionThread(thread, entry.pin);
   }
 
   function openThread(entry: Placed): void {
     closeThread();
-    entry.pin.dataset.fbOpen = '';
+    entry.pin.dataset.fruitOpen = '';
     thread = buildThread(document, entry.issue, entry.resolution);
-    thread.querySelector('.fb-thread-close')?.addEventListener('click', () => closeThread());
+    thread.querySelector('.fruit-thread-close')?.addEventListener('click', () => closeThread());
     container.append(thread);
     positionThread(thread, entry.pin);
     options.onSelect?.(entry.issue);
@@ -316,7 +316,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   function closeThread(): void {
     thread?.remove();
     thread = null;
-    for (const entry of placed) delete entry.pin.dataset.fbOpen;
+    for (const entry of placed) delete entry.pin.dataset.fruitOpen;
   }
 
   function onDocumentClick(event: Event): void {
@@ -382,21 +382,21 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolution): HTMLElement {
   const pin = document.createElement('div');
 
-  pin.className = 'fb-pin';
+  pin.className = 'fruit-pin';
   // The token rather than the hexadecimal the contract carries (SKG-528). One indirection buys the
   // dark theme, the host override and, once SKG-517 lands, a contract that stops shipping colours at
   // all — a widget's palette has no business travelling in the payload both ends must agree on.
   pin.style.setProperty('--fruit-pin-color', stageToken(issue.stage));
-  pin.dataset.fbPin = issue.seed.id;
-  pin.dataset.fbStage = issue.stage;
+  pin.dataset.fruitPin = issue.seed.id;
+  pin.dataset.fruitStage = issue.stage;
 
   const badge = document.createElement('button');
   badge.type = 'button';
-  badge.className = 'fb-pin-badge';
+  badge.className = 'fruit-pin-badge';
   badge.title = `${issue.identifier} · ${issue.stateName}`;
   // The drop is rotated, so the glyph rides in its own span and is turned back upright.
   const glyph = document.createElement('span');
-  glyph.className = 'fb-pin-glyph';
+  glyph.className = 'fruit-pin-glyph';
   badge.append(glyph);
   pin.append(badge);
 
@@ -417,19 +417,19 @@ function applyResolution(pin: HTMLElement, issue: SeedIssue, resolution: AnchorR
 
   // Three looks, because they mean three different things: found by identity, placed by position,
   // and not found at all.
-  pin.classList.toggle('fb-pin-uncertain', !resolution.confident);
-  pin.classList.toggle('fb-pin-orphan', resolution.element === null);
-  pin.dataset.fbStrategy = resolution.strategy;
-  pin.dataset.fbConfident = String(resolution.confident);
+  pin.classList.toggle('fruit-pin-uncertain', !resolution.confident);
+  pin.classList.toggle('fruit-pin-orphan', resolution.element === null);
+  pin.dataset.fruitStrategy = resolution.strategy;
+  pin.dataset.fruitConfident = String(resolution.confident);
 
-  const badge = pin.querySelector('.fb-pin-badge');
+  const badge = pin.querySelector('.fruit-pin-badge');
   // A drop of fruit rather than a rectangle of text. The note moves to the accessible name, which is
   // also what keeps it reachable by a screen reader and by a test looking for it by role.
   badge?.setAttribute(
     'aria-label',
     `${style.label} · ${summarise(issue)}${resolution.confident ? '' : ' (position approximative)'}`,
   );
-  const glyph = pin.querySelector('.fb-pin-glyph');
+  const glyph = pin.querySelector('.fruit-pin-glyph');
   // The `≈` is the whole warning, in one character, where the pin is: this one was placed by
   // coordinates, not recognised.
   if (glyph !== null) glyph.textContent = resolution.confident ? style.emoji : '≈';
@@ -459,26 +459,26 @@ function replies(document: Document, issue: SeedIssue): HTMLElement[] {
   if (issue.comments === undefined) return [];
 
   if (issue.comments.length === 0) {
-    return [element(document, 'p', 'fb-thread-empty', 'Pas encore de réponse.')];
+    return [element(document, 'p', 'fruit-thread-empty', 'Pas encore de réponse.')];
   }
 
   const list = document.createElement('ul');
-  list.className = 'fb-thread-replies';
+  list.className = 'fruit-thread-replies';
 
   for (const comment of issue.comments) {
     const written = new Date(comment.createdAt);
     const item = document.createElement('li');
-    item.className = 'fb-thread-reply';
+    item.className = 'fruit-thread-reply';
     item.append(
       element(
         document,
         'span',
-        'fb-thread-reply-who',
+        'fruit-thread-reply-who',
         `${comment.author ?? 'Équipe'} · ${Number.isNaN(written.getTime()) ? comment.createdAt : written.toLocaleDateString()}`,
       ),
       // `textContent`, never markup: this is Linear's markdown, written by whoever can comment on the
       // issue, rendered inside someone else's page. It is text here and nothing more.
-      element(document, 'p', 'fb-thread-reply-body', comment.body),
+      element(document, 'p', 'fruit-thread-reply-body', comment.body),
     );
     list.append(item);
   }
@@ -490,23 +490,23 @@ function replies(document: Document, issue: SeedIssue): HTMLElement[] {
 function buildThread(document: Document, issue: SeedIssue, resolution: AnchorResolution): HTMLElement {
   const style = SEED_STAGE_STYLES[issue.stage];
   const thread = document.createElement('div');
-  thread.className = 'fb-thread';
-  thread.dataset.fbThread = issue.seed.id;
+  thread.className = 'fruit-thread';
+  thread.dataset.fruitThread = issue.seed.id;
   thread.style.setProperty('--fruit-pin-color', stageToken(issue.stage));
 
   const reporter = issue.seed.reporter?.name ?? issue.seed.reporter?.email ?? 'Anonyme';
   const planted = new Date(issue.seed.createdAt);
 
   thread.append(
-    element(document, 'header', 'fb-thread-head', [
-      element(document, 'span', 'fb-thread-stage', `${style.emoji} ${issue.stateName}`),
+    element(document, 'header', 'fruit-thread-head', [
+      element(document, 'span', 'fruit-thread-stage', `${style.emoji} ${issue.stateName}`),
       closeButton(document),
     ]),
-    element(document, 'p', 'fb-thread-note', issue.seed.note || 'Aucune note.'),
+    element(document, 'p', 'fruit-thread-note', issue.seed.note || 'Aucune note.'),
     element(
       document,
       'p',
-      'fb-thread-meta',
+      'fruit-thread-meta',
       `${reporter} · ${Number.isNaN(planted.getTime()) ? issue.seed.createdAt : planted.toLocaleDateString()}`,
     ),
     // Said out loud rather than hidden. A reader who is told the pin might be on the wrong element
@@ -521,14 +521,14 @@ function buildThread(document: Document, issue: SeedIssue, resolution: AnchorRes
 
 function uncertaintyNote(document: Document, resolution: AnchorResolution): HTMLElement[] {
   if (resolution.element === null) {
-    return [element(document, 'p', 'fb-thread-orphan', 'Élément introuvable — position approximative.')];
+    return [element(document, 'p', 'fruit-thread-orphan', 'Élément introuvable — position approximative.')];
   }
   if (!resolution.confident) {
     return [
       element(
         document,
         'p',
-        'fb-thread-orphan',
+        'fruit-thread-orphan',
         'Élément retrouvé par sa position, pas par son identité — la page a peut-être changé sous le pin.',
       ),
     ];
@@ -540,7 +540,7 @@ function uncertaintyNote(document: Document, resolution: AnchorResolution): HTML
 function closeButton(document: Document): HTMLElement {
   const button = document.createElement('button');
   button.type = 'button';
-  button.className = 'fb-thread-close';
+  button.className = 'fruit-thread-close';
   button.setAttribute('aria-label', 'Fermer');
   button.textContent = '×';
 
@@ -549,7 +549,7 @@ function closeButton(document: Document): HTMLElement {
 
 function link(document: Document, issue: SeedIssue): HTMLElement {
   const anchor = document.createElement('a');
-  anchor.className = 'fb-thread-link';
+  anchor.className = 'fruit-thread-link';
   anchor.href = issue.url;
   anchor.target = '_blank';
   anchor.rel = 'noreferrer noopener';
@@ -621,8 +621,8 @@ function boundsToPixels(
  * whole sheet moves inside it untouched, and the class names stop mattering.
  */
 const STYLES = `
-.fb-overlay { position: absolute; top: 0; left: 0; }
-.fb-pin {
+.fruit-overlay { position: absolute; top: 0; left: 0; }
+.fruit-pin {
   position: absolute;
   z-index: 2147483000;
   /* Clicks go through to the client's page: the pin is an annotation, not a lid. */
@@ -631,9 +631,9 @@ const STYLES = `
   border-radius: 6px;
   background: color-mix(in srgb, var(--fruit-pin-color) 12%, transparent);
 }
-.fb-pin-uncertain { border-style: dashed; opacity: 0.85; }
-.fb-pin-orphan { border-style: dotted; }
-.fb-pin-badge {
+.fruit-pin-uncertain { border-style: dashed; opacity: 0.85; }
+.fruit-pin-orphan { border-style: dotted; }
+.fruit-pin-badge {
   position: absolute;
   bottom: 100%;
   left: -6px;
@@ -655,22 +655,22 @@ const STYLES = `
   cursor: pointer;
   box-shadow: var(--fruit-shadow-sm);
   /* Squash and stretch: the drop lands, flattens, and settles. */
-  animation: fb-pin-drop var(--fruit-duration-slow) cubic-bezier(0.2, 1.4, 0.35, 1);
+  animation: fruit-pin-drop var(--fruit-duration-slow) cubic-bezier(0.2, 1.4, 0.35, 1);
 }
-.fb-pin-glyph { transform: rotate(45deg); font-size: 13px; line-height: 1; }
-.fb-pin-badge:hover { filter: brightness(1.06); }
-.fb-pin-badge:focus-visible { outline: 2px solid var(--fruit-color-text); outline-offset: 2px; }
+.fruit-pin-glyph { transform: rotate(45deg); font-size: 13px; line-height: 1; }
+.fruit-pin-badge:hover { filter: brightness(1.06); }
+.fruit-pin-badge:focus-visible { outline: 2px solid var(--fruit-color-text); outline-offset: 2px; }
 
-@keyframes fb-pin-drop {
+@keyframes fruit-pin-drop {
   0% { opacity: 0; transform: rotate(-45deg) translate(0, -10px) scale(0.7, 1.25); }
   55% { opacity: 1; transform: rotate(-45deg) translate(0, 0) scale(1.18, 0.82); }
   100% { opacity: 1; transform: rotate(-45deg) scale(1, 1); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fb-pin-badge { animation: none; }
+  .fruit-pin-badge { animation: none; }
 }
-.fb-thread {
+.fruit-thread {
   position: absolute;
   z-index: 2147483100;
   width: 300px;
@@ -684,14 +684,14 @@ const STYLES = `
   font: 14px/1.5 var(--fruit-font-sans);
   box-shadow: var(--fruit-shadow-lg);
 }
-.fb-thread-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.fb-thread-stage { font-weight: 600; font-size: 13px; }
-.fb-thread-close { border: 0; background: none; font-size: 18px; line-height: 1; cursor: pointer; color: var(--fruit-color-text-muted); }
-.fb-thread-note { margin: 8px 0 0; white-space: pre-wrap; }
-.fb-thread-meta { margin: 8px 0 0; font-size: 12px; color: var(--fruit-color-text-muted); }
-.fb-thread-orphan { margin: 8px 0 0; font-size: 12px; color: var(--fruit-color-warning); }
-.fb-thread-empty { margin: 8px 0 0; font-size: 12px; color: var(--fruit-color-text-subtle); font-style: italic; }
-.fb-thread-replies {
+.fruit-thread-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.fruit-thread-stage { font-weight: 600; font-size: 13px; }
+.fruit-thread-close { border: 0; background: none; font-size: 18px; line-height: 1; cursor: pointer; color: var(--fruit-color-text-muted); }
+.fruit-thread-note { margin: 8px 0 0; white-space: pre-wrap; }
+.fruit-thread-meta { margin: 8px 0 0; font-size: 12px; color: var(--fruit-color-text-muted); }
+.fruit-thread-orphan { margin: 8px 0 0; font-size: 12px; color: var(--fruit-color-warning); }
+.fruit-thread-empty { margin: 8px 0 0; font-size: 12px; color: var(--fruit-color-text-subtle); font-style: italic; }
+.fruit-thread-replies {
   margin: 10px 0 0;
   padding: 0 0 0 10px;
   border-left: 2px solid var(--fruit-color-border);
@@ -705,9 +705,9 @@ const STYLES = `
   item's own list-style-type to its initial value of disc — and a reset value beats what it would have
   inherited from the list. The bullets came back, and only a recording showed it.
 */
-.fb-thread-reply { list-style: none; }
-.fb-thread-reply + .fb-thread-reply { margin-top: 8px; }
-.fb-thread-reply-who { display: block; font-size: 11px; color: var(--fruit-color-text-muted); }
-.fb-thread-reply-body { margin: 2px 0 0; font-size: 12px; white-space: pre-wrap; }
-.fb-thread-link { display: inline-block; margin-top: 10px; font-size: 13px; color: var(--fruit-color-accent); }
+.fruit-thread-reply { list-style: none; }
+.fruit-thread-reply + .fruit-thread-reply { margin-top: 8px; }
+.fruit-thread-reply-who { display: block; font-size: 11px; color: var(--fruit-color-text-muted); }
+.fruit-thread-reply-body { margin: 2px 0 0; font-size: 12px; white-space: pre-wrap; }
+.fruit-thread-link { display: inline-block; margin-top: 10px; font-size: 13px; color: var(--fruit-color-accent); }
 `;

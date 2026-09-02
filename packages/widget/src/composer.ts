@@ -52,21 +52,21 @@ export function createComposer(options: ComposerOptions): Composer {
   style.textContent = STYLES;
 
   const root = document.createElement('div');
-  root.className = 'fb-composer';
-  root.dataset.fbComposer = '';
+  root.className = 'fruit-composer';
+  root.dataset.fruitComposer = '';
   root.hidden = true;
   root.innerHTML = TEMPLATE;
 
   options.host.append(style, root);
 
-  const field = root.querySelector('[data-fb-note]') as HTMLTextAreaElement;
-  const send = root.querySelector('[data-fb-send]') as HTMLButtonElement;
-  const cancel = root.querySelector('[data-fb-cancel]') as HTMLButtonElement;
-  const status = root.querySelector('[data-fb-status]') as HTMLElement;
-  const identify = root.querySelector('[data-fb-identify]') as HTMLButtonElement;
-  const who = root.querySelector('[data-fb-who]') as HTMLElement;
-  const name = root.querySelector('[data-fb-name]') as HTMLInputElement;
-  const email = root.querySelector('[data-fb-email]') as HTMLInputElement;
+  const field = root.querySelector('[data-fruit-note]') as HTMLTextAreaElement;
+  const send = root.querySelector('[data-fruit-send]') as HTMLButtonElement;
+  const cancel = root.querySelector('[data-fruit-cancel]') as HTMLButtonElement;
+  const status = root.querySelector('[data-fruit-status]') as HTMLElement;
+  const identify = root.querySelector('[data-fruit-identify]') as HTMLButtonElement;
+  const who = root.querySelector('[data-fruit-who]') as HTMLElement;
+  const name = root.querySelector('[data-fruit-name]') as HTMLInputElement;
+  const email = root.querySelector('[data-fruit-email]') as HTMLInputElement;
 
   let state: ComposerState = 'idle';
   let closing = 0;
@@ -79,7 +79,7 @@ export function createComposer(options: ComposerOptions): Composer {
 
   function setState(next: ComposerState): void {
     state = next;
-    root.dataset.fbState = next;
+    root.dataset.fruitState = next;
     // Disabled while in flight: a second click would plant the same note twice, and the worker has
     // no way to tell the difference.
     send.disabled = next === 'sending' || next === 'harvested';
@@ -212,21 +212,21 @@ const MESSAGES: Record<ComposerState, string> = {
 };
 
 const TEMPLATE = `
-  <div class="fb-composer-drop" aria-hidden="true"></div>
-  <textarea data-fb-note rows="3" placeholder="Qu'est-ce qui ne va pas ici ?" aria-label="Votre commentaire"></textarea>
-  <button type="button" data-fb-identify class="fb-composer-identify" aria-expanded="false">
+  <div class="fruit-composer-drop" aria-hidden="true"></div>
+  <textarea data-fruit-note rows="3" placeholder="Qu'est-ce qui ne va pas ici ?" aria-label="Votre commentaire"></textarea>
+  <button type="button" data-fruit-identify class="fruit-composer-identify" aria-expanded="false">
     Ajouter mon nom (facultatif)
   </button>
-  <div data-fb-who class="fb-composer-who" hidden>
-    <input data-fb-name type="text" name="fb-name" placeholder="Votre nom" aria-label="Votre nom (facultatif)"
+  <div data-fruit-who class="fruit-composer-who" hidden>
+    <input data-fruit-name type="text" name="fruit-name" placeholder="Votre nom" aria-label="Votre nom (facultatif)"
            autocomplete="name" />
-    <input data-fb-email type="email" name="fb-email" placeholder="vous@exemple.fr"
+    <input data-fruit-email type="email" name="fruit-email" placeholder="vous@exemple.fr"
            aria-label="Votre e-mail (facultatif)" autocomplete="email" />
   </div>
-  <div class="fb-composer-foot">
-    <span data-fb-status class="fb-composer-status" role="status" aria-live="polite"></span>
-    <button type="button" data-fb-cancel class="fb-composer-ghost">Annuler</button>
-    <button type="button" data-fb-send class="fb-composer-send">Planter</button>
+  <div class="fruit-composer-foot">
+    <span data-fruit-status class="fruit-composer-status" role="status" aria-live="polite"></span>
+    <button type="button" data-fruit-cancel class="fruit-composer-ghost">Annuler</button>
+    <button type="button" data-fruit-send class="fruit-composer-send">Planter</button>
   </div>
 `;
 
@@ -237,7 +237,7 @@ const TEMPLATE = `
  * last thing that should ignore that setting.
  */
 const STYLES = `
-.fb-composer {
+.fruit-composer {
   position: absolute;
   /* WIDTH is what place() clamps against, so the rendered box has to be exactly that — with
      content-box the padding sat outside it and the popover could overhang the viewport. Set here
@@ -253,10 +253,10 @@ const STYLES = `
   color: var(--fruit-color-text);
   font: 14px/1.5 var(--fruit-font-sans);
   box-shadow: var(--fruit-shadow-xl);
-  animation: fb-composer-in var(--fruit-duration-fast) cubic-bezier(0.22, 1.2, 0.36, 1);
+  animation: fruit-composer-in var(--fruit-duration-fast) cubic-bezier(0.22, 1.2, 0.36, 1);
 }
-.fb-composer[hidden] { display: none; }
-.fb-composer-drop {
+.fruit-composer[hidden] { display: none; }
+.fruit-composer-drop {
   position: absolute;
   top: -7px;
   left: 22px;
@@ -267,7 +267,7 @@ const STYLES = `
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
 }
-.fb-composer textarea {
+.fruit-composer textarea {
   display: block;
   width: 100%;
   border: 1px solid var(--fruit-color-border);
@@ -278,8 +278,8 @@ const STYLES = `
   background: var(--fruit-color-surface);
   color: inherit;
 }
-.fb-composer textarea:focus-visible { outline: 2px solid var(--fruit-color-accent); outline-offset: 1px; }
-.fb-composer-identify {
+.fruit-composer textarea:focus-visible { outline: 2px solid var(--fruit-color-accent); outline-offset: 1px; }
+.fruit-composer-identify {
   display: block;
   margin-top: 8px;
   border: 0;
@@ -291,9 +291,9 @@ const STYLES = `
   text-decoration: underline;
   cursor: pointer;
 }
-.fb-composer-who { display: flex; gap: 6px; margin-top: 8px; }
-.fb-composer-who[hidden] { display: none; }
-.fb-composer-who input {
+.fruit-composer-who { display: flex; gap: 6px; margin-top: 8px; }
+.fruit-composer-who[hidden] { display: none; }
+.fruit-composer-who input {
   flex: 1;
   min-width: 0;
   padding: 6px 8px;
@@ -304,26 +304,26 @@ const STYLES = `
   color: inherit;
   background: var(--fruit-color-surface);
 }
-.fb-composer-who input:focus-visible { outline: 2px solid var(--fruit-color-accent); outline-offset: 1px; }
-.fb-composer-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
-.fb-composer-status { flex: 1; font-size: 12px; color: var(--fruit-color-text-muted); }
-.fb-composer-ghost, .fb-composer-send {
+.fruit-composer-who input:focus-visible { outline: 2px solid var(--fruit-color-accent); outline-offset: 1px; }
+.fruit-composer-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.fruit-composer-status { flex: 1; font-size: 12px; color: var(--fruit-color-text-muted); }
+.fruit-composer-ghost, .fruit-composer-send {
   border: 0; border-radius: 999px; padding: 8px 14px; font: 600 13px/1 inherit; cursor: pointer;
 }
-.fb-composer-ghost { background: transparent; color: var(--fruit-color-text-muted); }
-.fb-composer-send { background: var(--fruit-color-accent); color: var(--fruit-color-on-accent); }
-.fb-composer-send[disabled] { opacity: 0.55; cursor: default; }
-.fb-composer[data-fb-state="harvested"] .fb-composer-status { color: var(--fruit-color-success); font-weight: 600; }
-.fb-composer[data-fb-state="failed"] .fb-composer-status { color: var(--fruit-color-accent); }
+.fruit-composer-ghost { background: transparent; color: var(--fruit-color-text-muted); }
+.fruit-composer-send { background: var(--fruit-color-accent); color: var(--fruit-color-on-accent); }
+.fruit-composer-send[disabled] { opacity: 0.55; cursor: default; }
+.fruit-composer[data-fruit-state="harvested"] .fruit-composer-status { color: var(--fruit-color-success); font-weight: 600; }
+.fruit-composer[data-fruit-state="failed"] .fruit-composer-status { color: var(--fruit-color-accent); }
 
-@keyframes fb-composer-in {
+@keyframes fruit-composer-in {
   from { opacity: 0; transform: translateY(-6px) scale(0.96); }
   to { opacity: 1; transform: none; }
 }
 
 /* Full screen on a phone: a 320px popover anchored to an element is unusable at that width. */
 @media (max-width: 640px) {
-  .fb-composer {
+  .fruit-composer {
     position: fixed;
     /* Beats the custom properties above, which are only meaningful for the anchored popover. */
     inset: auto 0 0 0;
@@ -332,18 +332,18 @@ const STYLES = `
     width: auto;
     border-radius: 18px 18px 0 0;
     padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
-    animation-name: fb-composer-sheet-in;
+    animation-name: fruit-composer-sheet-in;
   }
-  .fb-composer-drop { display: none; }
-  .fb-composer textarea { min-height: 96px; }
+  .fruit-composer-drop { display: none; }
+  .fruit-composer textarea { min-height: 96px; }
 }
 
-@keyframes fb-composer-sheet-in {
+@keyframes fruit-composer-sheet-in {
   from { transform: translateY(100%); }
   to { transform: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fb-composer { animation: none; }
+  .fruit-composer { animation: none; }
 }
 `;

@@ -31,28 +31,28 @@ describe('createOrphanList', () => {
     // changes nothing is a mutation that schedules another resolve.
     const page = mount();
     list?.update([issue('sd_1', 'Une note')]);
-    const first = page.document.querySelector('.fb-orphans-item');
+    const first = page.document.querySelector('.fruit-orphans-item');
 
     list?.update([issue('sd_1', 'Une note')]);
 
-    assert.equal(page.document.querySelector('.fb-orphans-item'), first, 'the same node, not a new one');
+    assert.equal(page.document.querySelector('.fruit-orphans-item'), first, 'the same node, not a new one');
   });
 
   it('redraws when a note changed stage, because its emoji did', () => {
     const page = mount();
     list?.update([seedIssueFixture({ seed: seedFixture({ id: 'sd_1' }), stage: 'seeded' })]);
-    const before = page.document.querySelector('.fb-orphans-note')?.textContent;
+    const before = page.document.querySelector('.fruit-orphans-note')?.textContent;
 
     list?.update([seedIssueFixture({ seed: seedFixture({ id: 'sd_1' }), stage: 'composted' })]);
 
-    assert.notEqual(page.document.querySelector('.fb-orphans-note')?.textContent, before);
+    assert.notEqual(page.document.querySelector('.fruit-orphans-note')?.textContent, before);
   });
 
   it('owns its own DOM and nothing else', () => {
     const page = mount();
     list?.update([issue('sd_1', 'Une note')]);
 
-    assert.equal(list?.owns(page.document.querySelector('.fb-orphans-note') as Node), true);
+    assert.equal(list?.owns(page.document.querySelector('.fruit-orphans-note') as Node), true);
     assert.equal(list?.owns(page.document.querySelector('main') as Node), false);
   });
 
@@ -61,6 +61,6 @@ describe('createOrphanList', () => {
     const page = mount();
     list?.update([issue('sd_1', '   ')]);
 
-    assert.match(page.document.querySelector('.fb-orphans-note')?.textContent ?? '', /</);
+    assert.match(page.document.querySelector('.fruit-orphans-note')?.textContent ?? '', /</);
   });
 });

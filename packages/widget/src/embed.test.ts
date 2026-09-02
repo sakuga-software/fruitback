@@ -159,11 +159,15 @@ describe('reading pins', () => {
 
     const widget = init({ document: page.document, endpoint: ENDPOINT, clientId: 'acme' });
     await widget.refresh();
-    assert.equal(shadowOf(page).querySelectorAll('[data-fb-pin]').length, 1, 'the first read should have drawn a pin');
+    assert.equal(
+      shadowOf(page).querySelectorAll('[data-fruit-pin]').length,
+      1,
+      'the first read should have drawn a pin',
+    );
 
     await widget.refresh();
 
-    assert.equal(shadowOf(page).querySelectorAll('[data-fb-pin]').length, 1, 'the 401 blanked the page');
+    assert.equal(shadowOf(page).querySelectorAll('[data-fruit-pin]').length, 1, 'the 401 blanked the page');
 
     widget.destroy();
   });

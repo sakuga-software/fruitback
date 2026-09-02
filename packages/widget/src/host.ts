@@ -88,34 +88,34 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
 
   const button = document.createElement('button');
   button.type = 'button';
-  button.className = 'fb-launch';
-  button.dataset.fbHostLaunch = '';
+  button.className = 'fruit-launch';
+  button.dataset.fruitHostLaunch = '';
   button.textContent = options.label ?? '🌱 Laisser un feedback';
 
   // Beside the launch button rather than inside the settings panel, because the panel is what it
   // opens. Only built when there is something to open.
   const configure = document.createElement('button');
   configure.type = 'button';
-  configure.className = 'fb-configure';
-  configure.dataset.fbHostConfigure = '';
+  configure.className = 'fruit-configure';
+  configure.dataset.fruitHostConfigure = '';
   // Distinct from the panel's own name: two things sharing one accessible name is ambiguous to a
   // screen reader, and to anything else that finds elements by their name.
   configure.setAttribute('aria-label', 'Ouvrir les réglages Fruitback');
   configure.textContent = '⚙';
 
   const highlight = document.createElement('div');
-  highlight.className = 'fb-highlight';
-  highlight.dataset.fbHostHighlight = '';
+  highlight.className = 'fruit-highlight';
+  highlight.dataset.fruitHostHighlight = '';
 
   const panel = document.createElement('div');
-  panel.className = 'fb-panel';
-  panel.dataset.fbHostPanel = '';
+  panel.className = 'fruit-panel';
+  panel.dataset.fruitHostPanel = '';
 
   // A dock rather than two fixed corners: the gear has to sit beside a button whose width is the
   // embedder's label, and no offset computed from the gear's own size can know that. It overlapped
   // the launch button until a recording showed it.
   const dock = document.createElement('div');
-  dock.className = 'fb-dock';
+  dock.className = 'fruit-dock';
   if (options.onConfigure !== undefined) dock.append(configure);
   dock.append(button);
 
@@ -184,14 +184,14 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
 
   function start(): void {
     capturing = true;
-    container.dataset.fbCapturing = '';
+    container.dataset.fruitCapturing = '';
     button.textContent = 'Échap pour annuler';
   }
 
   function stop(): void {
     capturing = false;
     hovered = null;
-    delete container.dataset.fbCapturing;
+    delete container.dataset.fruitCapturing;
     button.textContent = options.label ?? '🌱 Laisser un feedback';
     highlight.style.display = 'none';
   }
@@ -239,7 +239,7 @@ style, script { display: none; }
 */
 div, p, header, footer, section, form { display: block; }
 li { display: list-item; }
-.fb-dock {
+.fruit-dock {
   position: fixed;
   right: 16px;
   bottom: 16px;
@@ -248,7 +248,7 @@ li { display: list-item; }
   align-items: center;
   gap: 8px;
 }
-.fb-launch {
+.fruit-launch {
   padding: 10px 14px;
   border-radius: 999px;
   background: var(--fruit-color-accent);
@@ -257,7 +257,7 @@ li { display: list-item; }
   box-shadow: var(--fruit-shadow-md);
   cursor: pointer;
 }
-.fb-configure {
+.fruit-configure {
   width: 30px;
   height: 30px;
   border-radius: 999px;
@@ -267,7 +267,7 @@ li { display: list-item; }
   box-shadow: var(--fruit-shadow-md);
   cursor: pointer;
 }
-.fb-highlight {
+.fruit-highlight {
   position: absolute;
   display: none;
   z-index: 2147483100;
@@ -277,6 +277,6 @@ li { display: list-item; }
   background: color-mix(in srgb, var(--fruit-color-accent) 8%, transparent);
   border-radius: 4px;
 }
-.fb-panel { position: absolute; top: 0; left: 0; }
-:host([data-fb-capturing]) .fb-launch { background: var(--fruit-color-chip); }
+.fruit-panel { position: absolute; top: 0; left: 0; }
+:host([data-fruit-capturing]) .fruit-launch { background: var(--fruit-color-chip); }
 `;

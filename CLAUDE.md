@@ -260,9 +260,27 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   Shadow root from the client's page — the root blocks their selectors, never their inherited
   properties — so a name the host also uses repaints our widget silently. `--color-text` would be
   reckless. `--fb-` was the first attempt and barely better: it is what a Facebook SDK or somebody's
-  flexbox utilities would plausibly pick. Renamed wholesale, 151 occurrences, `.fb-` class names and
-  `data-fb-*` attributes deliberately untouched — those live inside the Shadow root and collide with
-  nothing.
+  flexbox utilities would plausibly pick. Renamed wholesale, 151 occurrences. The class names and
+  attributes were left alone at the time and followed in SKG-580, for a different reason — see below.
+
+## Three families of names, and which is which
+
+- **`--fruit-*` are the theme tokens**, the one thing a host may set (SKG-528). Collision is the
+  reason for that prefix: a custom property inherits *into* a Shadow root.
+- **`data-fruitback-*` are the outward-facing names** — `data-fruitback-endpoint` and
+  `data-fruitback-client` on the `<script>` tag the README documents, plus `data-fruitback-host` and
+  `data-fruitback-overlay`. The full word, because they land in someone else's DOM and have to be
+  unmistakably ours. **They did not change in SKG-580, and should not.**
+- **`fruit-*` classes and `data-fruit-*` attributes are internal** to the Shadow root. They were
+  `fb-*`, and renaming them was **not** about collision — nothing inside a Shadow root collides with
+  the page. It was that the repo carried three families of names and wrote down which was which
+  nowhere, so `data-fb-pin` and `data-fruitback-host` looked like an inconsistency rather than two
+  tiers. Now the short prefix means internal and the long one means public.
+- **The failure mode of that rename is silent**, which is why `pnpm e2e` is the proof and not the
+  unit tests: the JavaScript writes one name, the stylesheet reads another, and a pin renders with no
+  colour and no error anywhere. 340 occurrences across 25 files, with the two `--fb-` mentions in the
+  prose above deliberately spared — a naive substitution rewrites the paragraph that explains why the
+  prefix changed and leaves it incomprehensible.
 - **`init({ theme })` takes tokens, never CSS.** A host that could write a stylesheet into the Shadow
   root would turn our class names into a contract by accident, which is what the Shadow root exists
   to prevent. `applyTheme` writes only names `THEME_TOKENS` declares and silently drops the rest, so

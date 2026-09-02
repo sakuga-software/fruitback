@@ -34,7 +34,7 @@ export async function openPlayground(page: Page, testCase: string): Promise<void
 
 /** Capture mode, a click on `target`, a note, send — and wait for the pin to come back. */
 export async function plantPin(page: Page, target: Locator, note: string): Promise<void> {
-  const before = await page.locator('[data-fb-pin]').count();
+  const before = await page.locator('[data-fruit-pin]').count();
   const plantedBefore = await planted(page).textContent();
 
   // The launch button now lives in the widget's Shadow root and carries an emoji; Playwright's
@@ -50,7 +50,7 @@ export async function plantPin(page: Page, target: Locator, note: string): Promi
   // timing differs. Counting pins alone races too: the old ones are still on the page while the new
   // set is being fetched.
   await expect(planted(page)).not.toHaveText(plantedBefore ?? '');
-  await expect(page.locator('[data-fb-pin]')).toHaveCount(before + 1);
+  await expect(page.locator('[data-fruit-pin]')).toHaveCount(before + 1);
 }
 
 /**
@@ -59,12 +59,12 @@ export async function plantPin(page: Page, target: Locator, note: string): Promi
  */
 export async function waitForPins(page: Page, count: number): Promise<void> {
   await expect(status(page)).toHaveText(new RegExp(`^${count} pins?$`));
-  await expect(page.locator('[data-fb-pin]')).toHaveCount(count);
+  await expect(page.locator('[data-fruit-pin]')).toHaveCount(count);
 }
 
 /** Pins are found through their badge, which is the only part of the overlay that carries the note. */
 export function pinFor(page: Page, note: string): Locator {
-  return page.locator('[data-fb-pin]').filter({ has: page.getByRole('button', { name: new RegExp(escapeForRegExp(note.slice(0, 20))) }) });
+  return page.locator('[data-fruit-pin]').filter({ has: page.getByRole('button', { name: new RegExp(escapeForRegExp(note.slice(0, 20))) }) });
 }
 
 function escapeForRegExp(value: string): string {
@@ -77,11 +77,11 @@ export function badgeFor(page: Page, note: string): Locator {
 
 /** The last identifier planted. Written once per plant, never overwritten. */
 export function planted(page: Page): Locator {
-  return page.locator('[data-fb-dev="planted"]');
+  return page.locator('[data-fruit-dev="planted"]');
 }
 
 export function status(page: Page): Locator {
-  return page.locator('[data-fb-dev="status"]');
+  return page.locator('[data-fruit-dev="status"]');
 }
 
 /**
