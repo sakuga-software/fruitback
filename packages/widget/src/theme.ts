@@ -31,6 +31,9 @@ import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
 export const THEME_TOKENS = [
   'color-accent',
   'color-on-accent',
+  'color-on-chip',
+  'color-on-stage',
+  'color-on-warning',
   'color-surface',
   'color-surface-raised',
   'color-border',
@@ -106,7 +109,18 @@ export function missingStageTokens(): SeedStage[] {
 export const THEME_STYLES = `
 :host {
   --fb-color-accent: #e53935;
+  /*
+    One foreground per filled background, and not one shared by all of them.
+    All four hold #fff today, which is why a single on-accent looked harmless: the original CSS said
+    color:#fff in five places, and naming it after the accent coupled three elements whose background
+    is something else — the gear on the chip, every pin badge on its stage, the orphan chip on the
+    warning. A host pairing a pale accent with a dark foreground would have turned those three into
+    dark text on unchanged dark fills. Caught in review on SKG-528.
+  */
   --fb-color-on-accent: #fff;
+  --fb-color-on-chip: #fff;
+  --fb-color-on-stage: #fff;
+  --fb-color-on-warning: #fff;
   --fb-color-surface: #fff;
   --fb-color-surface-raised: #fffdf9;
   --fb-color-border: #e7e5e4;

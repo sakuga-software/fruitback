@@ -601,10 +601,14 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   `process` or `Buffer` must fail to compile. Its tests need Node types, so they typecheck through a
   separate `tsconfig.test.json`; do not "fix" this by adding `node` to the main config.
 - **No backticks inside the CSS template literals** (`STYLES` in `host.ts`, `overlay.ts`,
-  `composer.ts`). A comment quoting a symbol closes the literal and the file stops parsing. It has
-  now happened **four** times, twice while writing a comment about a different bug; the failure
-  is loud — the module will not load — but the cause reads as a mystery until you look at the right
-  line. Write `display:block`, not the same thing in backticks.
+  `composer.ts`, `panel.ts`, `orphans.ts`, and `THEME_STYLES` in `theme.ts`). A comment quoting a
+  symbol closes the literal and the file stops parsing. It has now happened **five** times — twice
+  while writing a comment about a different bug, and the fifth inside the paragraph of `theme.ts`
+  that forbids it, three lines below the warning. Write `display:block`, not the same thing in
+  backticks.
+- **The test that greps for a backtick guards the quiet half only.** An odd number stops the module
+  parsing, so no test in that file can run — loud, but the cause reads as a mystery. What the
+  assertion catches is an even number: it parses, and silently truncates the stylesheet.
 - Comments explain _why_, not _what_ — the tolerant parser and the redundant anchor both exist for
   reasons that are not obvious from the code.
 - Work is tracked in Linear on the

@@ -48,8 +48,13 @@ describe('the token declarations', () => {
   });
 
   it('carries no backtick, because one would close the literal it lives in', () => {
-    // Four incidents in this repo, twice while writing a comment about a different bug. The module
-    // stops parsing and the cause reads as a mystery until you look at the right line.
+    // Five incidents in this repo now, and the fifth was in this very file: a CSS comment written
+    // three lines below the paragraph forbidding it.
+    //
+    // Be clear about what this catches, because it did *not* catch that one. An odd number of
+    // backticks stops the module parsing, so the test cannot run at all — loud, but the cause reads
+    // as a mystery until you look at the right line. What this guards is the quiet case: an even
+    // number, which parses fine and silently truncates the stylesheet.
     assert.ok(!THEME_STYLES.includes('`'));
   });
 });
@@ -85,5 +90,74 @@ describe('applyTheme', () => {
     applyTheme(element, {});
 
     assert.equal(element.getAttribute('style'), null);
+  });
+});
+
+describe('a foreground token is only ever used on the background it is named for', () => {
+  /**
+   * The defect this exists for was mine, and review caught it (SKG-528).
+   *
+   * The original CSS said `color: #fff` in five places, and mapping that to a single
+   * `--fb-color-on-accent` coupled three elements whose background is not the accent: the gear
+   * (`--fb-color-chip`), every pin badge (`--fb-pin-color`) and the orphan chip
+   * (`--fb-color-warning`). Nothing looked wrong, because all four tokens hold `#fff` — a host
+   * pairing a pale `color-accent` with a dark `color-on-accent` is what would have turned those
+   * three into dark text on their unchanged dark fills.
+   *
+   * Read out of the source rather than off an export, because what is being checked *is* the
+   * stylesheet text and there is no value to import — the five `STYLES` are module-local, and
+   * `index.ts` re-exports with `export *`, so five identically named exports would collide and be
+   * dropped in silence.
+   */
+  const PAIRS: Record<string, string> = {
+    'on-accent': '--fb-color-accent',
+    'on-chip': '--fb-color-chip',
+    'on-stage': '--fb-pin-color',
+    'on-warning': '--fb-color-warning',
+  };
+
+  const MODULES = ['host', 'overlay', 'composer', 'panel', 'orphans'];
+
+  async function declarationBlocks(): Promise<{ where: string; body: string }[]> {
+    const { readFile } = await import('node:fs/promises');
+    const { fileURLToPath } = await import('node:url');
+    const blocks: { where: string; body: string }[] = [];
+
+    for (const name of MODULES) {
+      const path = fileURLToPath(new URL(`./${name}.ts`, import.meta.url));
+      const source = await readFile(path, 'utf8');
+
+      // Rule bodies, crudely but sufficiently: these stylesheets are hand-written and flat.
+      for (const [, body] of source.matchAll(/\{([^{}]*)\}/g)) {
+        if (body !== undefined) blocks.push({ where: `${name}.ts`, body });
+      }
+    }
+
+    return blocks;
+  }
+
+  it('finds every foreground token beside its paired background', async () => {
+    const blocks = await declarationBlocks();
+    const wrong: string[] = [];
+    let checked = 0;
+
+    for (const { where, body } of blocks) {
+      for (const [token, background] of Object.entries(PAIRS)) {
+        if (!body.includes(`var(--fb-color-${token})`)) continue;
+
+        checked += 1;
+        if (!body.includes(`var(${background})`)) wrong.push(`${where}: ${token} without ${background}`);
+      }
+    }
+
+    // Asserted, because a regex that silently matches nothing is a test that passes for free.
+    assert.ok(checked >= 5, `only ${checked} foreground uses found — the block regex stopped matching`);
+    assert.deepEqual(wrong, []);
+  });
+
+  it('declares a foreground for each background that gets filled', async () => {
+    for (const token of Object.keys(PAIRS)) {
+      assert.ok(THEME_TOKENS.includes(`color-${token}` as never), `color-${token} is used but not settable`);
+    }
   });
 });

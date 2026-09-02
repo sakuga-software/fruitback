@@ -262,7 +262,7 @@ li { display: list-item; }
   height: 30px;
   border-radius: 999px;
   background: var(--fb-color-chip);
-  color: var(--fb-color-on-accent);
+  color: var(--fb-color-on-chip);
   font: 600 14px/1 var(--fb-font-sans);
   box-shadow: var(--fb-shadow-md);
   cursor: pointer;

@@ -650,7 +650,7 @@ const STYLES = `
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
   background: var(--fb-pin-color);
-  color: var(--fb-color-on-accent);
+  color: var(--fb-color-on-stage);
   font: 13px/1 var(--fb-font-sans);
   cursor: pointer;
   box-shadow: var(--fb-shadow-sm);

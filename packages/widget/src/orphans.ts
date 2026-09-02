@@ -166,7 +166,7 @@ const STYLES = `
   border: 0;
   border-radius: 999px;
   background: var(--fb-color-warning);
-  color: var(--fb-color-on-accent);
+  color: var(--fb-color-on-warning);
   font: 600 12px/1 var(--fb-font-sans);
   box-shadow: var(--fb-shadow-md);
   cursor: pointer;
