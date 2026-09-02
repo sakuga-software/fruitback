@@ -13,40 +13,58 @@ import {
   parseSeedFromDescription,
   seedIssueSchema,
 } from '@fruitback/shared';
-import type { Routing } from './clients.ts';
-import type { WorkerConfig } from './env.ts';
+import type { ClientConfig, ClientPolicy } from './clients.ts';
+import { type CreatedIssue, type SeedIssueQuery, type SeedStore, StoreError } from './store.ts';
 
 const LINEAR_GRAPHQL_ENDPOINT = 'https://api.linear.app/graphql';
 
 /** Strawberry, so a Fruitback issue is recognisable at a glance in the Linear inbox. */
 const FRUITBACK_LABEL_COLOR = '#E53935';
 
-export class LinearError extends Error {}
+/**
+ * This connector's own configuration, read once at boot and held by the store (SKG-522).
+ *
+ * It used to take the whole `WorkerConfig` per call, which is how `linearApiKey`, `linearTeamId` and
+ * `linearProjectId` came to sit in the worker's validated config where every other module could see
+ * them. A store's credentials are its own business.
+ */
+export type LinearConfig = { apiKey: string; teamId: string; projectId: string | undefined };
 
-export type CreatedIssue = { id: string; identifier: string; url: string };
+/** Where this connector puts a client's issues. Meaningless to a store that is not an issue tracker. */
+export type LinearRouting = { teamId: string; projectId: string | undefined };
 
-async function graphql<T>(config: WorkerConfig, query: string, variables: Record<string, unknown>): Promise<T> {
+/**
+ * A client's Linear routing, or the worker-wide default.
+ *
+ * The `?? config` fallback lives here rather than in `resolveClient` because falling back to *the
+ * worker's team* is a rule about teams, and only this file knows what a team is.
+ */
+export function linearRoutingFor(config: LinearConfig, client: ClientConfig | undefined): LinearRouting {
+  return { teamId: client?.teamId ?? config.teamId, projectId: client?.projectId ?? config.projectId };
+}
+
+async function graphql<T>(config: LinearConfig, query: string, variables: Record<string, unknown>): Promise<T> {
   const response = await fetch(LINEAR_GRAPHQL_ENDPOINT, {
     method: 'POST',
     headers: {
       // Personal API keys go in `Authorization` raw — no `Bearer` prefix (that is for OAuth tokens).
-      Authorization: config.linearApiKey,
+      Authorization: config.apiKey,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ query, variables }),
   });
 
   if (!response.ok) {
-    throw new LinearError(`Linear responded ${response.status}`);
+    throw new StoreError(`Linear responded ${response.status}`);
   }
 
   const payload = (await response.json()) as { data?: T; errors?: { message: string }[] };
 
   if (payload.errors?.length) {
-    throw new LinearError(payload.errors.map((error) => error.message).join('; '));
+    throw new StoreError(payload.errors.map((error) => error.message).join('; '));
   }
   if (!payload.data) {
-    throw new LinearError('Linear returned no data');
+    throw new StoreError('Linear returned no data');
   }
 
   return payload.data;
@@ -90,7 +108,7 @@ type CreateIssueResult = { issueCreate: { success: boolean; issue: CreatedIssue 
  * A label that cannot be resolved is dropped rather than failing the request: losing a label is a
  * triage annoyance, losing the client's feedback is a bug.
  */
-async function resolveLabelIds(config: WorkerConfig, routing: Routing, names: string[]): Promise<string[]> {
+async function resolveLabelIds(config: LinearConfig, routing: LinearRouting, names: string[]): Promise<string[]> {
   const existing = await graphql<TeamLabelsResult>(config, TEAM_LABELS_QUERY, {
     teamId: routing.teamId,
     names,
@@ -113,7 +131,7 @@ async function resolveLabelIds(config: WorkerConfig, routing: Routing, names: st
   return resolved;
 }
 
-async function createLabel(config: WorkerConfig, routing: Routing, name: string): Promise<string | null> {
+async function createLabel(config: LinearConfig, routing: LinearRouting, name: string): Promise<string | null> {
   try {
     const created = await graphql<CreateLabelResult>(config, CREATE_LABEL_MUTATION, {
       input: { name, teamId: routing.teamId, color: FRUITBACK_LABEL_COLOR },
@@ -133,7 +151,7 @@ async function createLabel(config: WorkerConfig, routing: Routing, name: string)
 }
 
 /** Plant a seed in Linear: one issue, readable title, round-trip-able description, labels applied. */
-export async function createSeedIssue(config: WorkerConfig, routing: Routing, seed: Seed): Promise<CreatedIssue> {
+export async function createSeedIssue(config: LinearConfig, routing: LinearRouting, seed: Seed): Promise<CreatedIssue> {
   const labelIds = await resolveLabelIds(config, routing, buildIssueLabels(seed));
 
   const created = await graphql<CreateIssueResult>(config, CREATE_ISSUE_MUTATION, {
@@ -147,7 +165,7 @@ export async function createSeedIssue(config: WorkerConfig, routing: Routing, se
   });
 
   if (!created.issueCreate.success || created.issueCreate.issue === null) {
-    throw new LinearError('Linear refused to create the issue');
+    throw new StoreError('Linear refused to create the issue');
   }
 
   return created.issueCreate.issue;
@@ -219,12 +237,6 @@ const COMMENTS_PER_ISSUE = 20;
  */
 const ISSUES_MAX_PAGES = 10;
 
-export type SeedIssueQuery = {
-  /** Already canonical — the caller normalizes before it gets here. */
-  url: string;
-  clientId?: string;
-};
-
 /**
  * The seeds planted on one page, as the widget needs them to re-plant its pins.
  *
@@ -232,9 +244,10 @@ export type SeedIssueQuery = {
  * the workspace can hold any number of issues without this walking them.
  */
 export async function fetchSeedIssues(
-  config: WorkerConfig,
-  routing: Routing,
+  config: LinearConfig,
+  routing: LinearRouting,
   query: SeedIssueQuery,
+  policy: ClientPolicy,
 ): Promise<SeedIssue[]> {
   const filter = buildSeedIssueFilter(routing, query);
   const found: SeedIssue[] = [];
@@ -249,11 +262,11 @@ export async function fetchSeedIssues(
       // promise — it drops them whatever comes back — so this number only decides how much is
       // fetched. `first: 0` may or may not be accepted by Linear, and a read that fails outright for
       // those clients would be a far worse bug than one wasted comment on the wire.
-      comments: routing.showComments ? COMMENTS_PER_ISSUE : 1,
+      comments: policy.showComments ? COMMENTS_PER_ISSUE : 1,
     });
 
     for (const node of result.issues.nodes) {
-      const issue = toSeedIssue(node, query.url, routing);
+      const issue = toSeedIssue(node, query.url, policy);
       if (issue !== null) found.push(issue);
     }
 
@@ -264,7 +277,7 @@ export async function fetchSeedIssues(
   return found;
 }
 
-function buildSeedIssueFilter(routing: Routing, { url, clientId }: SeedIssueQuery): Record<string, unknown> {
+function buildSeedIssueFilter(routing: LinearRouting, { url, clientId }: SeedIssueQuery): Record<string, unknown> {
   const labels = clientId ? [FRUITBACK_LABEL, clientLabelName(clientId)] : [FRUITBACK_LABEL];
 
   return {
@@ -346,7 +359,7 @@ export function stageForLinearState(stateType: string): SeedStage {
 export function toSeedIssue(
   node: IssueNode,
   canonicalUrl: string,
-  routing?: Pick<Routing, 'showComments'>,
+  policy?: Pick<ClientPolicy, 'showComments'>,
 ): SeedIssue | null {
   const parsed = parseSeedFromDescription(node.description);
   // Someone edited the block away, or a newer Fruitback wrote it: a pin we cannot place is worse
@@ -365,7 +378,7 @@ export function toSeedIssue(
     stage: stageForLinearState(node.state?.type ?? ''),
     stateName: node.state?.name ?? '',
     updatedAt: node.updatedAt,
-    ...optionalComments(routing?.showComments === false ? undefined : toSeedComments(node)),
+    ...optionalComments(policy?.showComments === false ? undefined : toSeedComments(node)),
     seed: parsed.seed,
   };
 
@@ -374,4 +387,22 @@ export function toSeedIssue(
   const result = seedIssueSchema.safeParse(candidate);
 
   return result.success ? result.data : null;
+}
+
+/**
+ * Linear, as a `SeedStore` (SKG-522).
+ *
+ * Everything above already existed; this is the adapter that lets `app.ts` stop importing it by
+ * name. Bound to its configuration at construction rather than handed the worker's config per call,
+ * which is what a store holding a connection — SQLite (SKG-524) — is going to need.
+ */
+export function createLinearStore(config: LinearConfig): SeedStore {
+  return {
+    name: 'linear',
+    // The team, because that is what separates one tenant's issues from another's here. The worker
+    // used to reach for `routing.teamId` itself, which meant the read cache knew how Linear routes.
+    scope: (client) => linearRoutingFor(config, client).teamId,
+    create: (seed, client) => createSeedIssue(config, linearRoutingFor(config, client), seed),
+    findForPage: (query, client, policy) => fetchSeedIssues(config, linearRoutingFor(config, client), query, policy),
+  };
 }

@@ -433,8 +433,47 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   one page costs one Linear call. Failures are evicted at once: an outage must not be served for the
   whole TTL. In-process, therefore per replica — same caveat as the rate limiter.
 - Failure codes are deliberate: `400` the caller's fault, `403` origin not allowed, `413` oversized
-  body, `429` rate-limited, `500` misconfigured, `502` Linear unavailable (the widget should keep the
-  note and retry). `/health` answers `503` when misconfigured so a bad deploy is never routed to.
+  body, `429` rate-limited, `500` misconfigured, `502` `store-unavailable` (the widget should keep the
+  note and retry), `401` the read needs an identity. `/health` answers `503` when misconfigured so a
+  bad deploy is never routed to. **A code the widget reads is a promise**, so it names a role and
+  never a vendor — `linear-unavailable` became `store-unavailable` with SKG-522 for that reason.
+
+## Where a seed is stored
+
+- **`store.ts` is the interface, and it existed before it was named** (SKG-522). `app.ts` used to
+  select between the real and the in-memory module through
+  `Pick<typeof realLinear, 'createSeedIssue' | 'fetchSeedIssues'>` — two methods, two
+  implementations, an interface discovered by accident. `SeedStore` writes it down so SQLite
+  (SKG-524) and GitHub (SKG-525) are implementations rather than new branches.
+- **`findForPage` states the intention, not the method.** Linear filters server-side with
+  `description: { contains: … }`, GitHub searches bodies, SQL does a `WHERE`, and a store with no
+  search would walk everything. Exposing a `contains` filter on the interface would have made
+  Linear's trick the contract.
+- **The old `Routing` mixed two things, and the split is the point.** `ClientPolicy` — `showComments`,
+  `identitySecret`, `read` — is what the *worker* decided, whatever store is behind it. `teamId` and
+  `projectId` went to `linear.ts`, where a team means something. `resolveClient` hands the client
+  entry on whole, and **each store reads its own fields from it**.
+- **`store.scope(client)` is what took `teamId` out of the read cache key.** The worker was building
+  its key from `routing.teamId`, so the read path knew that stores route by team. Only the store
+  knows what identifies a tenant — a team for Linear, an `owner/repo` for GitHub, nothing for a
+  single-file SQLite. The client id stays in the key regardless, which is what keeps two clients
+  sharing one team from sharing an entry.
+- **`linear-memory.ts` is a `SeedStore` now but keeps importing `toSeedIssue` from the real
+  connector, on purpose.** That coupling is the feature: an issue is stored as the description
+  `buildIssueDescription` produces and read back through production's own mapping, so a broken round
+  trip breaks the playground too. Renaming the file to something provider-agnostic would advertise an
+  independence it should not have.
+- **The store is built once per process, by the transport.** `createFruitbackServer` constructs it
+  and every request gets it through `RequestContext`. It began as `storeFor(config)` inside the two
+  handlers, which is invisible for Linear and the in-memory one — both stateless closures — and
+  would have opened a SQLite connection per request the moment SKG-524 landed. Caught in review, not
+  by a test, because nothing observable was wrong yet. The tests that hold it now assert the handler
+  used the store it was **given**: a Linear stub left untouched is the proof it built none of its own.
+- **Still Linear-shaped, and deliberately left to SKG-526**: `WorkerConfig` carries `linearApiKey`,
+  `linearTeamId` and `linearProjectId`, and `/health` answers `fakeLinear: true`. Making the provider
+  config opaque needs `FRUITBACK_STORE` to know which shape to validate, which is that ticket's job —
+  doing half of it here would be churn. What did change is that **only `storeFor` reads those
+  fields**; nothing else in the worker touches them.
 - **`resolveClientIp` is security-relevant.** `X-Forwarded-For` is appended to by each proxy, so the
   left of the chain is caller-controlled and forgeable; the client IP is the entry
   `TRUSTED_PROXY_HOPS` from the **right**. Reading the leftmost entry — correct behind Cloudflare,

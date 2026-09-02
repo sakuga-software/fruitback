@@ -1,10 +1,16 @@
 import { canonicalizePageUrl, parseSeed, type SeedReporter } from '@fruitback/shared';
 import { readBearerToken, stripClaimedVerification, verifyIdentityToken } from './identity.ts';
-import { type ClientResolution, type Routing, normalizeClientId, openReadClients, resolveClient } from './clients.ts';
+import {
+  type ClientPolicy,
+  type ClientResolution,
+  normalizeClientId,
+  openReadClients,
+  resolveClient,
+} from './clients.ts';
 import { type WorkerConfig, type WorkerEnv, readAllowedOrigins, readConfig } from './env.ts';
-import { LinearError } from './linear.ts';
-import * as realLinear from './linear.ts';
-import * as memoryLinear from './linear-memory.ts';
+import { createLinearStore } from './linear.ts';
+import { createMemoryStore } from './linear-memory.ts';
+import { type SeedStore, StoreError } from './store.ts';
 import { diagnosticCorsHeaders, resolveCors } from './cors.ts';
 import { checkRateLimit } from './rate-limit.ts';
 import { cached, invalidate } from './cache.ts';
@@ -23,18 +29,43 @@ import { cached, invalidate } from './cache.ts';
 const MAX_BODY_BYTES = 64 * 1_024;
 
 /**
- * Which Linear this process talks to. The in-memory one only ever wins in the dev loop — `readConfig`
- * refuses the flag under `NODE_ENV=production`, so this cannot silently become the deployed
- * behaviour.
+ * Which store this process writes to (SKG-522).
+ *
+ * This used to be `Pick<typeof realLinear, 'createSeedIssue' | 'fetchSeedIssues'>` — an interface
+ * discovered by accident. Now it returns a `SeedStore`, so SQLite (SKG-524) and GitHub (SKG-525) are
+ * implementations rather than new branches here.
+ *
+ * The in-memory one only ever wins in the dev loop: `readConfig` refuses the flag under
+ * `NODE_ENV=production`, so it cannot silently become the deployed behaviour.
  */
-function linearFor(config: WorkerConfig): Pick<typeof realLinear, 'createSeedIssue' | 'fetchSeedIssues'> {
-  return config.fakeLinear ? memoryLinear : realLinear;
+export function storeFor(config: WorkerConfig): SeedStore {
+  return config.fakeLinear
+    ? createMemoryStore()
+    : createLinearStore({
+        apiKey: config.linearApiKey,
+        teamId: config.linearTeamId,
+        projectId: config.linearProjectId,
+      });
 }
 
 /** What the transport knows and the request itself cannot say. */
 export type RequestContext = {
   /** Already resolved against the trusted proxy chain — see `resolveClientIp`. */
   clientIp: string;
+  /**
+   * The store, built **once by the transport** rather than per request.
+   *
+   * This began as `storeFor(config)` inside the two handlers, which was invisible for Linear and the
+   * in-memory one — both are stateless closures — and would have opened a SQLite connection per
+   * request the moment SKG-524 landed. A refactor that exists to let a store hold a resource must
+   * not reconstruct it on every call.
+   *
+   * Optional because `handleRequest` answers `/health` and the misconfigured diagnostic *before*
+   * there is a validated config to build a store from, so the transport cannot always have one. When
+   * it is absent the fallback builds one, which is also what a test driving this directly wants: a
+   * fresh store per case.
+   */
+  store?: SeedStore;
 };
 
 export async function handleRequest(request: Request, env: WorkerEnv, context: RequestContext): Promise<Response> {
@@ -96,17 +127,24 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
     return json(429, { error: 'rate-limited' }, cors.headers);
   }
 
+  // Resolved once here, not inside each handler: see `RequestContext.store`.
+  const store = context.store ?? storeFor(config.config);
+
   return request.method === 'GET'
-    ? getFeedback(request, config.config, cors.headers)
-    : postFeedback(request, config.config, cors.headers);
+    ? getFeedback(request, config.config, store, cors.headers)
+    : postFeedback(request, config.config, store, cors.headers);
 }
 
 /**
- * Which team and project this request belongs to (SKG-504).
+ * Which client this request belongs to, and what was decided for it (SKG-504).
  *
- * On a single-client worker this is the configured team and nothing else happens. With a client map,
- * a request that names nobody — or names a client it cannot be embedded as — is refused rather than
- * served from the default, because on a multi-tenant worker the default *is* the leak.
+ * On a single-client worker this is the worker's own defaults and nothing else happens. With a client
+ * map, a request that names nobody — or names a client it cannot be embedded as — is refused rather
+ * than served from the default, because on a multi-tenant worker the default *is* the leak.
+ *
+ * `teamId` and `projectId` used to be resolved here too. They went to the Linear connector with
+ * SKG-522: falling back to *the worker's team* is a rule about teams, and this function has no
+ * business knowing that a store has any.
  */
 function routeFor(request: Request, config: WorkerConfig, clientId: string | undefined): ClientResolution {
   return resolveClient({
@@ -114,8 +152,6 @@ function routeFor(request: Request, config: WorkerConfig, clientId: string | und
     clientId,
     origin: request.headers.get('Origin'),
     fallback: {
-      teamId: config.linearTeamId,
-      projectId: config.linearProjectId,
       // A single-client worker takes its secret from the env; a mapped client brings its own.
       identitySecret: config.identitySecret,
       showComments: config.showComments,
@@ -140,15 +176,15 @@ function routeFor(request: Request, config: WorkerConfig, clientId: string | und
  */
 async function authorizeRead(
   request: Request,
-  routing: Routing,
+  policy: ClientPolicy,
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
-  if (routing.read === 'public') return { ok: true };
+  if (policy.read === 'public') return { ok: true };
 
   const token = readBearerToken(request.headers.get('Authorization'));
   if (token === undefined) return { ok: false, reason: 'identity-required' };
-  if (routing.identitySecret === undefined) return { ok: false, reason: 'identity-not-configured' };
+  if (policy.identitySecret === undefined) return { ok: false, reason: 'identity-not-configured' };
 
-  const verified = await verifyIdentityToken(token, routing.identitySecret);
+  const verified = await verifyIdentityToken(token, policy.identitySecret);
 
   return verified.ok ? { ok: true } : { ok: false, reason: verified.reason };
 }
@@ -198,6 +234,7 @@ function routingFailure(
 async function getFeedback(
   request: Request,
   config: WorkerConfig,
+  store: SeedStore,
   corsHeaders: Record<string, string>,
 ): Promise<Response> {
   const params = new URL(request.url).searchParams;
@@ -223,15 +260,17 @@ async function getFeedback(
   // share — but only because an unauthorised caller is turned away here and never reaches the
   // lookup. Moving this below `cached` would serve a warm authenticated answer to an anonymous
   // request, which is the exact leak this ticket exists to close.
-  const allowed = await authorizeRead(request, route.routing);
+  const allowed = await authorizeRead(request, route.policy);
   if (!allowed.ok) {
     return json(401, { error: 'identity-required', reason: allowed.reason }, corsHeaders);
   }
 
   try {
-    // The team is part of the key: two clients reading the same URL must not share an entry.
-    const key = JSON.stringify([route.routing.teamId, clientId ?? null, url]);
-    const issues = await cached(key, () => linearFor(config).fetchSeedIssues(config, route.routing, { url, clientId }));
+    // The store says what separates one tenant from another — a team for Linear, nothing extra for
+    // the in-memory one. The client id is in the key regardless, so two clients reading the same URL
+    // never share an entry even when they share a team.
+    const key = JSON.stringify([store.name, store.scope(route.client), clientId ?? null, url]);
+    const issues = await cached(key, () => store.findForPage({ url, clientId }, route.client, route.policy));
 
     return json(
       200,
@@ -243,8 +282,8 @@ async function getFeedback(
       { ...corsHeaders, 'Cache-Control': 'no-store' },
     );
   } catch (error) {
-    if (error instanceof LinearError) {
-      return json(502, { error: 'linear-unavailable', message: error.message }, corsHeaders);
+    if (error instanceof StoreError) {
+      return json(502, { error: 'store-unavailable', message: error.message }, corsHeaders);
     }
     throw error;
   }
@@ -268,6 +307,7 @@ function canonicalizeRequestedPage(requested: string): string | null {
 async function postFeedback(
   request: Request,
   config: WorkerConfig,
+  store: SeedStore,
   corsHeaders: Record<string, string>,
 ): Promise<Response> {
   const body = await readBoundedText(request);
@@ -306,7 +346,7 @@ async function postFeedback(
 
   // Whose word the attribution is (SKG-498). The claimed reporter loses `verified` whatever it said,
   // and only a token this worker checked can put it back.
-  const identity = await attributionFor(request, route.routing.identitySecret, seed.reporter);
+  const identity = await attributionFor(request, route.policy.identitySecret, seed.reporter);
   if (!identity.ok) {
     return json(401, { error: 'invalid-identity', reason: identity.reason }, corsHeaders);
   }
@@ -314,7 +354,7 @@ async function postFeedback(
   const attributed = { ...seed, ...optionalReporter(identity.reporter) };
 
   try {
-    const issue = await linearFor(config).createSeedIssue(config, route.routing, attributed);
+    const issue = await store.create(attributed, route.client, route.policy);
 
     // The page just changed, so every cached answer for it is wrong. Matching on the URL covers the
     // per-client keys too, which is what a reviewer reloading right after posting will ask for.
@@ -322,9 +362,9 @@ async function postFeedback(
 
     return json(201, { issue }, corsHeaders);
   } catch (error) {
-    if (error instanceof LinearError) {
+    if (error instanceof StoreError) {
       // Upstream failed, not the caller: 502 tells the widget to keep the note and retry.
-      return json(502, { error: 'linear-unavailable', message: error.message }, corsHeaders);
+      return json(502, { error: 'store-unavailable', message: error.message }, corsHeaders);
     }
     throw error;
   }

@@ -143,10 +143,17 @@ export function readClientMap(value: string | undefined): ClientMapResult {
   return { ok: true, clients: result.data };
 }
 
-export type Routing = {
-  teamId: string;
-  projectId: string | undefined;
-  /** Whether the read path returns Linear comments — see `showComments` on the client. */
+/**
+ * Per-client decisions the **worker** makes, whatever store is behind it (SKG-522).
+ *
+ * This is the half of the old `Routing` that was never about Linear: whether replies come back
+ * (SKG-502), whose word an identity is (SKG-498), and who may read at all (SKG-533). The other half
+ * — `teamId` and `projectId` — went to the Linear connector, where a team and a project mean
+ * something. They meant nothing to SQLite, and the worker was reading `teamId` to build its cache
+ * key, which is how the read path came to know that stores route by team.
+ */
+export type ClientPolicy = {
+  /** Whether the read path returns the team's replies — see `showComments` on the client. */
   showComments: boolean;
   /** Set when this client can mint identity tokens (SKG-498). Absent means self-declared only. */
   identitySecret: string | undefined;
@@ -154,8 +161,15 @@ export type Routing = {
   read: ReadAccess;
 };
 
+/**
+ * What a request resolved to: the worker's decisions, and the client entry itself.
+ *
+ * The entry is handed on rather than picked apart because **each store reads its own fields from
+ * it** — `teamId` and `projectId` for Linear, an `owner/repo` for GitHub, nothing for SQLite. That
+ * keeps the worker from having to name any of them.
+ */
 export type ClientResolution =
-  | { ok: true; routing: Routing }
+  | { ok: true; policy: ClientPolicy; client: ClientConfig | undefined }
   /** The caller named nobody on a worker that serves several clients. */
   | { ok: false; reason: 'client-required' }
   | { ok: false; reason: 'unknown-client' }
@@ -167,7 +181,7 @@ export type ResolveClientOptions = {
   clientId: string | undefined;
   /** The browser's `Origin`, or null for a request that is not one (curl, server-to-server). */
   origin: string | null;
-  fallback: Routing;
+  fallback: ClientPolicy;
 };
 
 /**
@@ -188,7 +202,8 @@ export function normalizeClientId(value: string | null | undefined): string | un
 
 export function resolveClient({ clients, clientId, origin, fallback }: ResolveClientOptions): ClientResolution {
   // Single-tenant: the map is what turns this worker multi-client, and without it nothing changes.
-  if (clients === undefined) return { ok: true, routing: fallback };
+  // `client: undefined` is what the store reads as "no per-client entry, use your own defaults".
+  if (clients === undefined) return { ok: true, policy: fallback, client: undefined };
 
   // Normalised again here rather than trusted: this is the boundary, and a caller that forgets is
   // how the label and the route drifted apart in the first place.
@@ -207,9 +222,7 @@ export function resolveClient({ clients, clientId, origin, fallback }: ResolveCl
 
   return {
     ok: true,
-    routing: {
-      teamId: client.teamId ?? fallback.teamId,
-      projectId: client.projectId ?? fallback.projectId,
+    policy: {
       // No `?? fallback.identitySecret` — see the field's own note. A mapped client that wants
       // verified identities declares its own key.
       identitySecret: client.identitySecret,
@@ -218,6 +231,9 @@ export function resolveClient({ clients, clientId, origin, fallback }: ResolveCl
       // is what stops the inheritance from producing a client nobody can ever read.
       read: client.read ?? fallback.read,
     },
+    // `teamId` and `projectId` are not resolved here any more: falling back to the worker's team is
+    // the Linear connector's rule, and it is the one that owns those fields now.
+    client,
   };
 }
 
