@@ -52,6 +52,20 @@ export function storeFor(config: WorkerConfig): SeedStore {
 export type RequestContext = {
   /** Already resolved against the trusted proxy chain — see `resolveClientIp`. */
   clientIp: string;
+  /**
+   * The store, built **once by the transport** rather than per request.
+   *
+   * This began as `storeFor(config)` inside the two handlers, which was invisible for Linear and the
+   * in-memory one — both are stateless closures — and would have opened a SQLite connection per
+   * request the moment SKG-524 landed. A refactor that exists to let a store hold a resource must
+   * not reconstruct it on every call.
+   *
+   * Optional because `handleRequest` answers `/health` and the misconfigured diagnostic *before*
+   * there is a validated config to build a store from, so the transport cannot always have one. When
+   * it is absent the fallback builds one, which is also what a test driving this directly wants: a
+   * fresh store per case.
+   */
+  store?: SeedStore;
 };
 
 export async function handleRequest(request: Request, env: WorkerEnv, context: RequestContext): Promise<Response> {
@@ -113,9 +127,12 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
     return json(429, { error: 'rate-limited' }, cors.headers);
   }
 
+  // Resolved once here, not inside each handler: see `RequestContext.store`.
+  const store = context.store ?? storeFor(config.config);
+
   return request.method === 'GET'
-    ? getFeedback(request, config.config, cors.headers)
-    : postFeedback(request, config.config, cors.headers);
+    ? getFeedback(request, config.config, store, cors.headers)
+    : postFeedback(request, config.config, store, cors.headers);
 }
 
 /**
@@ -217,6 +234,7 @@ function routingFailure(
 async function getFeedback(
   request: Request,
   config: WorkerConfig,
+  store: SeedStore,
   corsHeaders: Record<string, string>,
 ): Promise<Response> {
   const params = new URL(request.url).searchParams;
@@ -251,7 +269,6 @@ async function getFeedback(
     // The store says what separates one tenant from another — a team for Linear, nothing extra for
     // the in-memory one. The client id is in the key regardless, so two clients reading the same URL
     // never share an entry even when they share a team.
-    const store = storeFor(config);
     const key = JSON.stringify([store.name, store.scope(route.client), clientId ?? null, url]);
     const issues = await cached(key, () => store.findForPage({ url, clientId }, route.client, route.policy));
 
@@ -290,6 +307,7 @@ function canonicalizeRequestedPage(requested: string): string | null {
 async function postFeedback(
   request: Request,
   config: WorkerConfig,
+  store: SeedStore,
   corsHeaders: Record<string, string>,
 ): Promise<Response> {
   const body = await readBoundedText(request);
@@ -336,7 +354,7 @@ async function postFeedback(
   const attributed = { ...seed, ...optionalReporter(identity.reporter) };
 
   try {
-    const issue = await storeFor(config).create(attributed, route.client, route.policy);
+    const issue = await store.create(attributed, route.client, route.policy);
 
     // The page just changed, so every cached answer for it is wrong. Matching on the URL covers the
     // per-client keys too, which is what a reviewer reloading right after posting will ask for.

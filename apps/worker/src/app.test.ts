@@ -7,6 +7,7 @@ import type { WorkerEnv } from './env.ts';
 import { installLinearStub, storedIssueFromSeed } from './linear-stub.ts';
 import { signIdentityToken } from './identity.ts';
 import { resetRateLimitState } from './rate-limit.ts';
+import type { SeedStore } from './store.ts';
 import { resetCacheState } from './cache.ts';
 import { resetMemoryLinear } from './linear-memory.ts';
 
@@ -25,6 +26,8 @@ type RequestOverrides = {
   headers?: Record<string, string>;
   /** Already resolved by the transport in production — see `resolveClientIp`. */
   clientIp?: string;
+  /** Built once by the transport in production — see `RequestContext.store` (SKG-522). */
+  store?: SeedStore;
 };
 
 function post(body: unknown, init: RequestOverrides = {}) {
@@ -37,7 +40,10 @@ function post(body: unknown, init: RequestOverrides = {}) {
     body: typeof body === 'string' ? body : JSON.stringify(body),
   });
 
-  return handleRequest(request, init.env ?? env, { clientIp: init.clientIp ?? '203.0.113.1' });
+  return handleRequest(request, init.env ?? env, {
+    clientIp: init.clientIp ?? '203.0.113.1',
+    ...(init.store ? { store: init.store } : {}),
+  });
 }
 
 function get(path: string, init: RequestOverrides = {}) {
@@ -46,6 +52,7 @@ function get(path: string, init: RequestOverrides = {}) {
 
   return handleRequest(new Request(`https://worker.fruitback.dev${path}`, { headers }), init.env ?? env, {
     clientIp: init.clientIp ?? '203.0.113.1',
+    ...(init.store ? { store: init.store } : {}),
   });
 }
 
@@ -1110,5 +1117,69 @@ describe('a read nobody could ever satisfy', () => {
 
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { ok: true, openRead: 2 });
+  });
+});
+
+describe('one store per process, not one per request (SKG-522)', () => {
+  /** Records what it was asked, so a test can tell it apart from a store the handler built itself. */
+  function countingStore() {
+    const seen = { reads: 0, writes: 0 };
+
+    return {
+      seen,
+      store: {
+        name: 'counting',
+        scope: () => 'counting',
+        create: async () => {
+          seen.writes += 1;
+
+          return { id: 'issue_x', identifier: 'X-1', url: 'https://example.test/x' };
+        },
+        findForPage: async () => {
+          seen.reads += 1;
+
+          return [];
+        },
+      },
+    };
+  }
+
+  it('reads through the store the transport handed it, and builds none of its own', async () => {
+    // The stub is what a Linear store would reach for. It staying untouched is the assertion: the
+    // handler used what it was given rather than constructing a second store from the config.
+    const stub = installLinearStub();
+    const { seen, store } = countingStore();
+
+    const response = await get(`/feedback?url=${encodeURIComponent('https://preview.acme.test/pricing')}`, { store });
+
+    assert.equal(response.status, 200);
+    assert.equal(seen.reads, 1);
+    assert.deepEqual(stub.calls, [], 'the handler built its own store instead of using the transport’s');
+  });
+
+  it('writes through it too', async () => {
+    const stub = installLinearStub();
+    const { seen, store } = countingStore();
+
+    const response = await post(seedFixture(), { store });
+
+    assert.equal(response.status, 201);
+    assert.equal(seen.writes, 1);
+    assert.deepEqual(stub.calls, []);
+  });
+
+  it('serves several requests from the same instance', async () => {
+    // The property that matters, and the one a per-call `storeFor` broke: a store holding a
+    // resource — a SQLite connection, once SKG-524 lands — is opened once and reused.
+    //
+    // Two *different* pages on purpose. The first version of this asked for the same URL twice and
+    // counted one read, which is the read cache doing exactly its job (`cache.ts`) rather than a
+    // defect — a reminder that a store call and a request are not the same thing.
+    const { seen, store } = countingStore();
+
+    await get(`/feedback?url=${encodeURIComponent('https://preview.acme.test/pricing')}`, { store });
+    await get(`/feedback?url=${encodeURIComponent('https://preview.acme.test/features')}`, { store });
+
+    assert.equal(seen.reads, 2);
   });
 });

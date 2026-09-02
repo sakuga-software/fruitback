@@ -2,6 +2,7 @@ import { type IncomingMessage, type Server, type ServerResponse, createServer } 
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { handleRequest, storeFor } from './app.ts';
+import type { SeedStore } from './store.ts';
 import { openReadClients } from './clients.ts';
 import {
   DEFAULT_HOST,
@@ -24,14 +25,22 @@ import { resolveClientIp } from './rate-limit.ts';
 /** How long to let in-flight requests finish before giving up on a graceful stop. */
 const SHUTDOWN_GRACE_MS = 10_000;
 
-export function createFruitbackServer(env: WorkerEnv): Server {
+export function createFruitbackServer(env: WorkerEnv, provided?: SeedStore): Server {
   const config = readConfig(env);
   // A misconfigured service still answers /health and the 500 diagnostic, so it still needs a hop
   // count to key the limiter with.
   const trustedProxyHops = config.ok ? config.config.trustedProxyHops : DEFAULT_TRUSTED_PROXY_HOPS;
+  /**
+   * Built here, once, and handed to every request (SKG-522).
+   *
+   * `app.ts` would build one per call otherwise. That is free for Linear and the in-memory store —
+   * both are stateless closures — and would open a SQLite connection per request as soon as SKG-524
+   * lands. A misconfigured process has no store: it only ever answers `/health` and the diagnostic.
+   */
+  const store = provided ?? (config.ok ? storeFor(config.config) : undefined);
 
   return createServer((incoming, response) => {
-    void respond(incoming, response, env, trustedProxyHops);
+    void respond(incoming, response, env, trustedProxyHops, store);
   });
 }
 
@@ -40,6 +49,7 @@ async function respond(
   response: ServerResponse,
   env: WorkerEnv,
   trustedProxyHops: number,
+  store: SeedStore | undefined,
 ): Promise<void> {
   try {
     const request = toWebRequest(incoming);
@@ -49,7 +59,7 @@ async function respond(
       trustedProxyHops,
     );
 
-    const result = await handleRequest(request, env, { clientIp });
+    const result = await handleRequest(request, env, { clientIp, store });
     await writeWebResponse(result, response);
   } catch (error) {
     // Never leak an internal message to a client site; the details belong in the container logs.
@@ -110,7 +120,10 @@ export function startServer(env: WorkerEnv = process.env): Server {
   const config = readConfig(env);
   const port = readPort(env);
   const host = env.HOST || DEFAULT_HOST;
-  const server = createFruitbackServer(env);
+  // Constructed here and handed to the server, so the boot log names the very object serving
+  // requests rather than a second one built to be described. One store per process, once.
+  const store = config.ok ? storeFor(config.config) : undefined;
+  const server = createFruitbackServer(env, store);
 
   if (fakeLinearRefused(env)) {
     // The flag only means something in the dev loop. Saying so beats a deploy wondering why its
@@ -125,7 +138,7 @@ export function startServer(env: WorkerEnv = process.env): Server {
         // The store's name rather than a team id (SKG-522): "which store is this process on" is the
         // thing an operator cannot tell from their own env, and naming a team here was the last
         // place the worker's own logging assumed one.
-        `[fruitback] listening on ${host}:${port} · store ${storeFor(config.config).name} · ` +
+        `[fruitback] listening on ${host}:${port} · store ${store?.name ?? 'none'} · ` +
           `origins ${config.config.allowedOrigins.join(', ')} · trusted proxy hops ${config.config.trustedProxyHops}`,
       );
       if (config.config.fakeLinear) {

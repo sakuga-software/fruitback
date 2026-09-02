@@ -463,6 +463,12 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   `buildIssueDescription` produces and read back through production's own mapping, so a broken round
   trip breaks the playground too. Renaming the file to something provider-agnostic would advertise an
   independence it should not have.
+- **The store is built once per process, by the transport.** `createFruitbackServer` constructs it
+  and every request gets it through `RequestContext`. It began as `storeFor(config)` inside the two
+  handlers, which is invisible for Linear and the in-memory one — both stateless closures — and
+  would have opened a SQLite connection per request the moment SKG-524 landed. Caught in review, not
+  by a test, because nothing observable was wrong yet. The tests that hold it now assert the handler
+  used the store it was **given**: a Linear stub left untouched is the proof it built none of its own.
 - **Still Linear-shaped, and deliberately left to SKG-526**: `WorkerConfig` carries `linearApiKey`,
   `linearTeamId` and `linearProjectId`, and `/health` answers `fakeLinear: true`. Making the provider
   config opaque needs `FRUITBACK_STORE` to know which shape to validate, which is that ticket's job —
