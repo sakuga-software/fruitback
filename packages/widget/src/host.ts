@@ -48,7 +48,7 @@ export type CaptureHostOptions = {
   ignore?: (element: Element) => boolean;
   /**
    * Design tokens the host overrides (SKG-528). Colours, shadows, the font family, the animation
-   * durations — and nothing else: `applyTheme` writes only names `THEME_TOKENS` declares.
+   * durations — and nothing else: `applyTheme` writes only the names `ThemeToken` enumerates.
    */
   theme?: FruitbackTheme;
 };
