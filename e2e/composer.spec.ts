@@ -32,7 +32,7 @@ test('a failed send keeps the note and stays open', async ({ page }) => {
   await openPlayground(page, 'composer-failure');
   await page.route('**/feedback', (route) =>
     route.request().method() === 'POST'
-      ? route.fulfill({ status: 502, contentType: 'application/json', body: '{"error":"linear-unavailable"}' })
+      ? route.fulfill({ status: 502, contentType: 'application/json', body: '{"error":"store-unavailable"}' })
       : route.fallback(),
   );
   await selectTheCta(page);

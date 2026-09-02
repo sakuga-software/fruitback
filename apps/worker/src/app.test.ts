@@ -183,7 +183,7 @@ describe('POST /feedback', () => {
     const response = await post(seedFixture());
 
     assert.equal(response.status, 502);
-    assert.partialDeepStrictEqual(await response.json(), { error: 'linear-unavailable' });
+    assert.partialDeepStrictEqual(await response.json(), { error: 'store-unavailable' });
   });
 });
 
@@ -449,7 +449,7 @@ describe('GET /feedback', () => {
     const response = await read(PAGE);
 
     assert.equal(response.status, 502);
-    assert.partialDeepStrictEqual(await response.json(), { error: 'linear-unavailable' });
+    assert.partialDeepStrictEqual(await response.json(), { error: 'store-unavailable' });
   });
 });
 

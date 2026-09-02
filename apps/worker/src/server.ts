@@ -1,7 +1,7 @@
 import { type IncomingMessage, type Server, type ServerResponse, createServer } from 'node:http';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { handleRequest } from './app.ts';
+import { handleRequest, storeFor } from './app.ts';
 import { openReadClients } from './clients.ts';
 import {
   DEFAULT_HOST,
@@ -122,7 +122,10 @@ export function startServer(env: WorkerEnv = process.env): Server {
     if (config.ok) {
       // Never log the API key. Everything else is worth having in `docker logs` on day one.
       console.log(
-        `[fruitback] listening on ${host}:${port} · team ${config.config.linearTeamId} · ` +
+        // The store's name rather than a team id (SKG-522): "which store is this process on" is the
+        // thing an operator cannot tell from their own env, and naming a team here was the last
+        // place the worker's own logging assumed one.
+        `[fruitback] listening on ${host}:${port} · store ${storeFor(config.config).name} · ` +
           `origins ${config.config.allowedOrigins.join(', ')} · trusted proxy hops ${config.config.trustedProxyHops}`,
       );
       if (config.config.fakeLinear) {

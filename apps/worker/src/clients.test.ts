@@ -2,9 +2,9 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { originsFromClients, readClientMap, resolveClient } from './clients.ts';
 
+// A `ClientPolicy` since SKG-522: `teamId` and `projectId` moved to the Linear connector, which is
+// where a team means something. `linear.test.ts` covers their fallback now.
 const FALLBACK = {
-  teamId: 'team_default',
-  projectId: 'project_default',
   identitySecret: undefined,
   showComments: true,
   read: 'public',
@@ -42,10 +42,13 @@ describe('resolveClient', () => {
   it('changes nothing when no map is configured', () => {
     const resolved = resolveClient({ clients: undefined, clientId: undefined, origin: null, fallback: FALLBACK });
 
-    assert.deepEqual(resolved, { ok: true, routing: FALLBACK });
+    assert.deepEqual(resolved, { ok: true, policy: FALLBACK, client: undefined });
   });
 
-  it('routes a client to its own team and project', () => {
+  it('hands the client entry on, for the store to read its own fields from', () => {
+    // Not picked apart here on purpose (SKG-522): `teamId` is Linear's, an `owner/repo` would be
+    // GitHub's, and SQLite wants neither. Naming any of them in this function is what made the
+    // read cache know that stores route by team.
     const resolved = resolveClient({
       clients: MAP,
       clientId: 'acme',
@@ -55,28 +58,8 @@ describe('resolveClient', () => {
 
     assert.deepEqual(resolved, {
       ok: true,
-      routing: {
-        teamId: 'team_acme',
-        projectId: 'project_acme',
-        identitySecret: undefined,
-        showComments: true,
-        read: 'public',
-      },
-    });
-  });
-
-  it('falls back per field, so a client can share the default project', () => {
-    const resolved = resolveClient({ clients: MAP, clientId: 'globex', origin: null, fallback: FALLBACK });
-
-    assert.deepEqual(resolved, {
-      ok: true,
-      routing: {
-        teamId: 'team_globex',
-        projectId: 'project_default',
-        identitySecret: undefined,
-        showComments: true,
-        read: 'public',
-      },
+      policy: { identitySecret: undefined, showComments: true, read: 'public' },
+      client: MAP.acme,
     });
   });
 
@@ -94,13 +77,8 @@ describe('resolveClient', () => {
 
     assert.deepEqual(resolved, {
       ok: true,
-      routing: {
-        teamId: 'team_acme',
-        projectId: 'project_acme',
-        identitySecret: undefined,
-        showComments: true,
-        read: 'public',
-      },
+      policy: { identitySecret: undefined, showComments: true, read: 'public' },
+      client: MAP.acme,
     });
   });
 
@@ -154,7 +132,7 @@ describe('originsFromClients', () => {
   });
 });
 
-describe('the identity secret is not routing', () => {
+describe('the identity secret is never inherited', () => {
   it('does not lend the worker’s secret to a mapped client', () => {
     // `teamId` and `projectId` fall back per field; a signing key must not. One secret shared across
     // tenants lets a compromised tenant mint a verified identity on anyone else's issues — the same
@@ -167,9 +145,11 @@ describe('the identity secret is not routing', () => {
     });
 
     assert.ok(resolved.ok);
-    assert.equal(resolved.routing.identitySecret, undefined);
-    // Routing still falls back, which is the difference being drawn.
-    assert.equal(resolved.routing.projectId, 'project_default');
+    assert.equal(resolved.policy.identitySecret, undefined);
+    // The other fields still fall back, which is the difference being drawn. `showComments` and
+    // `read` stand in for what `projectId` used to show here, now that it belongs to the connector.
+    assert.equal(resolved.policy.showComments, true);
+    assert.equal(resolved.policy.read, 'public');
   });
 
   it('uses a client’s own secret when it has one', () => {
@@ -181,7 +161,7 @@ describe('the identity secret is not routing', () => {
     });
 
     assert.ok(resolved.ok);
-    assert.equal(resolved.routing.identitySecret, 'the-acme-secret-which-is-long-enough');
+    assert.equal(resolved.policy.identitySecret, 'the-acme-secret-which-is-long-enough');
   });
 
   it('still uses the worker’s secret when there is no map at all', () => {
@@ -189,6 +169,6 @@ describe('the identity secret is not routing', () => {
     const resolved = resolveClient({ clients: undefined, clientId: undefined, origin: null, fallback });
 
     assert.ok(resolved.ok);
-    assert.equal(resolved.routing.identitySecret, 'the-worker-wide-secret-long-enough');
+    assert.equal(resolved.policy.identitySecret, 'the-worker-wide-secret-long-enough');
   });
 });
