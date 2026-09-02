@@ -255,9 +255,13 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - **Custom properties, because inheritance is what crosses the modules.** Each module injects its own
   `<style>` into the one Shadow root, so a token on `:host` reaches all of them with nobody importing
   anything. `THEME_STYLES` is concatenated ahead of `host.ts`'s reset for that reason.
-- **The names are deliberately long.** A custom property inherits *into* the Shadow root from the
-  client's page, so `--fb-color-text` is not `--color-text` — a design system on the host would
-  plausibly define the short one and repaint our widget by accident.
+- **The prefix is `--fruit-`, and it is the whole defence.** A custom property inherits *into* the
+  Shadow root from the client's page — the root blocks their selectors, never their inherited
+  properties — so a name the host also uses repaints our widget silently. `--color-text` would be
+  reckless. `--fb-` was the first attempt and barely better: it is what a Facebook SDK or somebody's
+  flexbox utilities would plausibly pick. Renamed wholesale, 151 occurrences, `.fb-` class names and
+  `data-fb-*` attributes deliberately untouched — those live inside the Shadow root and collide with
+  nothing.
 - **`init({ theme })` takes tokens, never CSS.** A host that could write a stylesheet into the Shadow
   root would turn our class names into a contract by accident, which is what the Shadow root exists
   to prevent. `applyTheme` writes only names `THEME_TOKENS` declares and silently drops the rest, so
@@ -291,7 +295,7 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - **Losing what someone just wrote is the one failure this widget cannot afford.** Anything that
   would clear the field on an error path is a bug, however tidy it looks.
 - Popover on desktop, **sheet on a phone** — a 320px popover anchored to an element is unusable at
-  that width. The anchored position goes through `--fb-composer-*` custom properties rather than
+  that width. The anchored position goes through `--fruit-composer-*` custom properties rather than
   inline `left`/`top`, because an inline style beats the media query and leaves the sheet offset.
 - **`all: initial` resets `display` too.** Every block element in the Shadow root is inline until the
   stylesheet says otherwise, and vertical margins on it silently do nothing — the note thread ran its

@@ -22,7 +22,7 @@ describe('the token declarations', () => {
   const baseBlock = THEME_STYLES.slice(0, THEME_STYLES.indexOf('@media'));
 
   it('declares every settable token in the base block, not only under a media query', () => {
-    const undeclared = THEME_TOKENS.filter((token) => !baseBlock.includes(`--fb-${token}:`));
+    const undeclared = THEME_TOKENS.filter((token) => !baseBlock.includes(`--fruit-${token}:`));
 
     assert.deepEqual(undeclared, [], 'these tokens are settable but never declared unconditionally');
   });
@@ -32,8 +32,8 @@ describe('the token declarations', () => {
     assert.deepEqual(missingStageTokens(), []);
 
     for (const stage of SEED_STAGES) {
-      assert.ok(baseBlock.includes(`--fb-stage-${stage}:`), `${stage} has no unconditional declaration`);
-      assert.equal(stageToken(stage), `var(--fb-stage-${stage})`);
+      assert.ok(baseBlock.includes(`--fruit-stage-${stage}:`), `${stage} has no unconditional declaration`);
+      assert.equal(stageToken(stage), `var(--fruit-stage-${stage})`);
     }
   });
 
@@ -43,8 +43,8 @@ describe('the token declarations', () => {
     assert.match(THEME_STYLES, /@media \(prefers-contrast: more\)/);
 
     const dark = THEME_STYLES.slice(THEME_STYLES.indexOf('prefers-color-scheme: dark'));
-    assert.ok(dark.includes('--fb-color-surface:'), 'dark does not restate the surface colour');
-    assert.ok(!dark.includes('--fb-duration-'), 'a duration has no business changing with the scheme');
+    assert.ok(dark.includes('--fruit-color-surface:'), 'dark does not restate the surface colour');
+    assert.ok(!dark.includes('--fruit-duration-'), 'a duration has no business changing with the scheme');
   });
 
   it('carries no backtick, because one would close the literal it lives in', () => {
@@ -67,8 +67,8 @@ describe('applyTheme', () => {
 
     applyTheme(element, { 'color-accent': '#0055ff', 'stage-ripe': 'rebeccapurple' });
 
-    assert.equal(element.style.getPropertyValue('--fb-color-accent'), '#0055ff');
-    assert.equal(element.style.getPropertyValue('--fb-stage-ripe'), 'rebeccapurple');
+    assert.equal(element.style.getPropertyValue('--fruit-color-accent'), '#0055ff');
+    assert.equal(element.style.getPropertyValue('--fruit-stage-ripe'), 'rebeccapurple');
   });
 
   it('ignores a name it does not know, rather than writing it', () => {
@@ -78,8 +78,8 @@ describe('applyTheme', () => {
 
     applyTheme(element, { 'colour-accent': 'red', position: 'fixed' } as never);
 
-    assert.equal(element.style.getPropertyValue('--fb-colour-accent'), '');
-    assert.equal(element.style.getPropertyValue('--fb-position'), '');
+    assert.equal(element.style.getPropertyValue('--fruit-colour-accent'), '');
+    assert.equal(element.style.getPropertyValue('--fruit-position'), '');
     assert.equal(element.style.position, '');
   });
 
@@ -98,9 +98,9 @@ describe('a foreground token is only ever used on the background it is named for
    * The defect this exists for was mine, and review caught it (SKG-528).
    *
    * The original CSS said `color: #fff` in five places, and mapping that to a single
-   * `--fb-color-on-accent` coupled three elements whose background is not the accent: the gear
-   * (`--fb-color-chip`), every pin badge (`--fb-pin-color`) and the orphan chip
-   * (`--fb-color-warning`). Nothing looked wrong, because all four tokens hold `#fff` — a host
+   * `--fruit-color-on-accent` coupled three elements whose background is not the accent: the gear
+   * (`--fruit-color-chip`), every pin badge (`--fruit-pin-color`) and the orphan chip
+   * (`--fruit-color-warning`). Nothing looked wrong, because all four tokens hold `#fff` — a host
    * pairing a pale `color-accent` with a dark `color-on-accent` is what would have turned those
    * three into dark text on their unchanged dark fills.
    *
@@ -110,10 +110,10 @@ describe('a foreground token is only ever used on the background it is named for
    * dropped in silence.
    */
   const PAIRS: Record<string, string> = {
-    'on-accent': '--fb-color-accent',
-    'on-chip': '--fb-color-chip',
-    'on-stage': '--fb-pin-color',
-    'on-warning': '--fb-color-warning',
+    'on-accent': '--fruit-color-accent',
+    'on-chip': '--fruit-color-chip',
+    'on-stage': '--fruit-pin-color',
+    'on-warning': '--fruit-color-warning',
   };
 
   const MODULES = ['host', 'overlay', 'composer', 'panel', 'orphans'];
@@ -143,7 +143,7 @@ describe('a foreground token is only ever used on the background it is named for
 
     for (const { where, body } of blocks) {
       for (const [token, background] of Object.entries(PAIRS)) {
-        if (!body.includes(`var(--fb-color-${token})`)) continue;
+        if (!body.includes(`var(--fruit-color-${token})`)) continue;
 
         checked += 1;
         if (!body.includes(`var(${background})`)) wrong.push(`${where}: ${token} without ${background}`);

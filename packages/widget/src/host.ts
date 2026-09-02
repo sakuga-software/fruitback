@@ -83,7 +83,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   const root = container.attachShadow({ mode: 'open' });
   const style = document.createElement('style');
   // Tokens first: every other stylesheet in this root — the overlay's, the composer's, the panel's —
-  // resolves `var(--fb-…)` against them by inheritance, without importing anything.
+  // resolves `var(--fruit-…)` against them by inheritance, without importing anything.
   style.textContent = THEME_STYLES + STYLES;
 
   const button = document.createElement('button');
@@ -223,7 +223,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
  */
 const STYLES = `
 :host { all: initial; }
-* { all: initial; box-sizing: border-box; font-family: var(--fb-font-sans); }
+* { all: initial; box-sizing: border-box; font-family: var(--fruit-font-sans); }
 /*
   all:initial is thorough enough to undo the browser's own display:none on a style element, which
   then renders the stylesheet as a column of visible text in the corner of the client's page. Found
@@ -251,20 +251,20 @@ li { display: list-item; }
 .fb-launch {
   padding: 10px 14px;
   border-radius: 999px;
-  background: var(--fb-color-accent);
-  color: var(--fb-color-on-accent);
-  font: 600 13px/1 var(--fb-font-sans);
-  box-shadow: var(--fb-shadow-md);
+  background: var(--fruit-color-accent);
+  color: var(--fruit-color-on-accent);
+  font: 600 13px/1 var(--fruit-font-sans);
+  box-shadow: var(--fruit-shadow-md);
   cursor: pointer;
 }
 .fb-configure {
   width: 30px;
   height: 30px;
   border-radius: 999px;
-  background: var(--fb-color-chip);
-  color: var(--fb-color-on-chip);
-  font: 600 14px/1 var(--fb-font-sans);
-  box-shadow: var(--fb-shadow-md);
+  background: var(--fruit-color-chip);
+  color: var(--fruit-color-on-chip);
+  font: 600 14px/1 var(--fruit-font-sans);
+  box-shadow: var(--fruit-shadow-md);
   cursor: pointer;
 }
 .fb-highlight {
@@ -273,10 +273,10 @@ li { display: list-item; }
   z-index: 2147483100;
   /* The reporter is aiming at the page, not at this box. */
   pointer-events: none;
-  outline: 2px solid var(--fb-color-accent);
-  background: color-mix(in srgb, var(--fb-color-accent) 8%, transparent);
+  outline: 2px solid var(--fruit-color-accent);
+  background: color-mix(in srgb, var(--fruit-color-accent) 8%, transparent);
   border-radius: 4px;
 }
 .fb-panel { position: absolute; top: 0; left: 0; }
-:host([data-fb-capturing]) .fb-launch { background: var(--fb-color-chip); }
+:host([data-fb-capturing]) .fb-launch { background: var(--fruit-color-chip); }
 `;

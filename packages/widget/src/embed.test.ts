@@ -182,7 +182,7 @@ describe('the theme a host passes in', () => {
     });
 
     const container = page.document.querySelector('[data-fruitback-host]') as HTMLElement;
-    assert.equal(container.style.getPropertyValue('--fb-color-accent'), '#0055ff');
+    assert.equal(container.style.getPropertyValue('--fruit-color-accent'), '#0055ff');
 
     widget.destroy();
   });
@@ -193,7 +193,7 @@ describe('the theme a host passes in', () => {
 
     const container = page.document.querySelector('[data-fruitback-host]') as HTMLElement;
     // The container carries its own positioning, so what is asserted is that no token was written.
-    assert.equal(container.style.getPropertyValue('--fb-color-accent'), '');
+    assert.equal(container.style.getPropertyValue('--fruit-color-accent'), '');
     assert.match(
       page.document.querySelector('[data-fruitback-host]')?.shadowRoot?.textContent ?? '',
       /prefers-color-scheme: dark/,

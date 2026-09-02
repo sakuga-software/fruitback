@@ -154,8 +154,8 @@ const STYLES = `
   bottom: 60px;
   z-index: 2147483000;
   max-width: 300px;
-  font: 13px/1.45 var(--fb-font-sans);
-  color: var(--fb-color-text);
+  font: 13px/1.45 var(--fruit-font-sans);
+  color: var(--fruit-color-text);
 }
 .fb-orphans[hidden] { display: none; }
 /* Chip last in the DOM order it reads in, list above it on screen. */
@@ -165,10 +165,10 @@ const STYLES = `
   padding: 8px 12px;
   border: 0;
   border-radius: 999px;
-  background: var(--fb-color-warning);
-  color: var(--fb-color-on-warning);
-  font: 600 12px/1 var(--fb-font-sans);
-  box-shadow: var(--fb-shadow-md);
+  background: var(--fruit-color-warning);
+  color: var(--fruit-color-on-warning);
+  font: 600 12px/1 var(--fruit-font-sans);
+  box-shadow: var(--fruit-shadow-md);
   cursor: pointer;
 }
 .fb-orphans-list {
@@ -177,8 +177,8 @@ const STYLES = `
   margin: 0 0 8px;
   padding: 8px;
   border-radius: 12px;
-  background: var(--fb-color-surface);
-  box-shadow: var(--fb-shadow-lg);
+  background: var(--fruit-color-surface);
+  box-shadow: var(--fruit-shadow-lg);
   list-style: none;
   max-height: 220px;
   overflow-y: auto;
@@ -196,5 +196,5 @@ const STYLES = `
   text-align: left;
   cursor: pointer;
 }
-.fb-orphans-link { font-size: 11px; color: var(--fb-color-accent); text-decoration: none; white-space: nowrap; }
+.fb-orphans-link { font-size: 11px; color: var(--fruit-color-accent); text-decoration: none; white-space: nowrap; }
 `;

@@ -10,9 +10,13 @@ import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
  *
  * **Custom properties rather than classes, because inheritance is what crosses the modules.** Each
  * module injects its own `<style>` into the one Shadow root, so a token declared on `:host` reaches
- * all of them without any of them importing anything. That is also why the names are this specific:
- * a custom property inherits *into* the Shadow root from the client's page too, so `--fb-color-text`
- * is deliberately not `--color-text`, which a design system on the host would plausibly define.
+ * all of them without any of them importing anything.
+ *
+ * **`--fruit-`, and the prefix is the whole defence.** A custom property inherits *into* a Shadow
+ * root from the client's page, so a name the host also uses silently repaints us — the Shadow root
+ * blocks their selectors, never their inherited properties. `--color-text` would be reckless; `--fb-`
+ * was the first attempt and is not much better, since it is exactly what a Facebook SDK or somebody's
+ * flexbox utilities would pick. `--fruit-` is ours in a way two letters never were.
  *
  * **No rendered colour changes here.** Every colour below is the hexadecimal that was already in the
  * stylesheets, so the E2E specs that read a pin's computed colour are the proof. Choosing different
@@ -72,7 +76,7 @@ export type FruitbackTheme = Partial<Record<ThemeToken, string>>;
 
 /** The stage a pin is at, as the token that colours it. Used by the overlay and the panel. */
 export function stageToken(stage: SeedStage): string {
-  return `var(--fb-stage-${stage})`;
+  return `var(--fruit-stage-${stage})`;
 }
 
 const KNOWN = new Set<string>(THEME_TOKENS);
@@ -90,7 +94,7 @@ export function applyTheme(element: HTMLElement, theme: FruitbackTheme | undefin
   for (const [name, value] of Object.entries(theme)) {
     if (!KNOWN.has(name) || typeof value !== 'string' || value === '') continue;
 
-    element.style.setProperty(`--fb-${name}`, value);
+    element.style.setProperty(`--fruit-${name}`, value);
   }
 }
 
@@ -108,7 +112,7 @@ export function missingStageTokens(): SeedStage[] {
  */
 export const THEME_STYLES = `
 :host {
-  --fb-color-accent: #e53935;
+  --fruit-color-accent: #e53935;
   /*
     One foreground per filled background, and not one shared by all of them.
     All four hold #fff today, which is why a single on-accent looked harmless: the original CSS said
@@ -117,38 +121,38 @@ export const THEME_STYLES = `
     warning. A host pairing a pale accent with a dark foreground would have turned those three into
     dark text on unchanged dark fills. Caught in review on SKG-528.
   */
-  --fb-color-on-accent: #fff;
-  --fb-color-on-chip: #fff;
-  --fb-color-on-stage: #fff;
-  --fb-color-on-warning: #fff;
-  --fb-color-surface: #fff;
-  --fb-color-surface-raised: #fffdf9;
-  --fb-color-border: #e7e5e4;
-  --fb-color-border-strong: #d6d3d1;
-  --fb-color-text: #1c1917;
-  --fb-color-text-muted: #78716c;
-  --fb-color-text-subtle: #a8a29e;
-  --fb-color-chip: #44403c;
-  --fb-color-success: #7cb342;
-  --fb-color-warning: #8d6e63;
+  --fruit-color-on-accent: #fff;
+  --fruit-color-on-chip: #fff;
+  --fruit-color-on-stage: #fff;
+  --fruit-color-on-warning: #fff;
+  --fruit-color-surface: #fff;
+  --fruit-color-surface-raised: #fffdf9;
+  --fruit-color-border: #e7e5e4;
+  --fruit-color-border-strong: #d6d3d1;
+  --fruit-color-text: #1c1917;
+  --fruit-color-text-muted: #78716c;
+  --fruit-color-text-subtle: #a8a29e;
+  --fruit-color-chip: #44403c;
+  --fruit-color-success: #7cb342;
+  --fruit-color-warning: #8d6e63;
 
   /* Ripening, not a rainbow. Same five values the contract used to carry. */
-  --fb-stage-seeded: #a3b18a;
-  --fb-stage-green: #7cb342;
-  --fb-stage-ripening: #fb8c00;
-  --fb-stage-ripe: #e53935;
-  --fb-stage-composted: #8d6e63;
+  --fruit-stage-seeded: #a3b18a;
+  --fruit-stage-green: #7cb342;
+  --fruit-stage-ripening: #fb8c00;
+  --fruit-stage-ripe: #e53935;
+  --fruit-stage-composted: #8d6e63;
 
   /* Named for the elevation they belong to, not for a size, so a fifth one has to justify itself. */
-  --fb-shadow-sm: 0 3px 10px rgba(28, 25, 23, 0.28);
-  --fb-shadow-md: 0 4px 18px rgba(0, 0, 0, 0.25);
-  --fb-shadow-lg: 0 10px 30px rgb(0 0 0 / 18%);
-  --fb-shadow-xl: 0 14px 40px rgba(28, 25, 23, 0.22);
+  --fruit-shadow-sm: 0 3px 10px rgba(28, 25, 23, 0.28);
+  --fruit-shadow-md: 0 4px 18px rgba(0, 0, 0, 0.25);
+  --fruit-shadow-lg: 0 10px 30px rgb(0 0 0 / 18%);
+  --fruit-shadow-xl: 0 14px 40px rgba(28, 25, 23, 0.22);
 
-  --fb-font-sans: -apple-system, system-ui, sans-serif;
+  --fruit-font-sans: -apple-system, system-ui, sans-serif;
 
-  --fb-duration-fast: 220ms;
-  --fb-duration-slow: 420ms;
+  --fruit-duration-fast: 220ms;
+  --fruit-duration-slow: 420ms;
 }
 
 /*
@@ -158,18 +162,18 @@ export const THEME_STYLES = `
 */
 @media (prefers-color-scheme: dark) {
   :host {
-    --fb-color-surface: #1c1917;
-    --fb-color-surface-raised: #262220;
-    --fb-color-border: #3a3532;
-    --fb-color-border-strong: #4a4441;
-    --fb-color-text: #f5f5f4;
-    --fb-color-text-muted: #a8a29e;
-    --fb-color-text-subtle: #78716c;
-    --fb-color-chip: #57534e;
-    --fb-shadow-sm: 0 3px 10px rgba(0, 0, 0, 0.55);
-    --fb-shadow-md: 0 4px 18px rgba(0, 0, 0, 0.6);
-    --fb-shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.5);
-    --fb-shadow-xl: 0 14px 40px rgba(0, 0, 0, 0.55);
+    --fruit-color-surface: #1c1917;
+    --fruit-color-surface-raised: #262220;
+    --fruit-color-border: #3a3532;
+    --fruit-color-border-strong: #4a4441;
+    --fruit-color-text: #f5f5f4;
+    --fruit-color-text-muted: #a8a29e;
+    --fruit-color-text-subtle: #78716c;
+    --fruit-color-chip: #57534e;
+    --fruit-shadow-sm: 0 3px 10px rgba(0, 0, 0, 0.55);
+    --fruit-shadow-md: 0 4px 18px rgba(0, 0, 0, 0.6);
+    --fruit-shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.5);
+    --fruit-shadow-xl: 0 14px 40px rgba(0, 0, 0, 0.55);
   }
 }
 
@@ -179,10 +183,10 @@ export const THEME_STYLES = `
 */
 @media (prefers-contrast: more) {
   :host {
-    --fb-color-border: var(--fb-color-text);
-    --fb-color-border-strong: var(--fb-color-text);
-    --fb-color-text-muted: var(--fb-color-text);
-    --fb-color-text-subtle: var(--fb-color-text);
+    --fruit-color-border: var(--fruit-color-text);
+    --fruit-color-border-strong: var(--fruit-color-text);
+    --fruit-color-text-muted: var(--fruit-color-text);
+    --fruit-color-text-subtle: var(--fruit-color-text);
   }
 }
 `;

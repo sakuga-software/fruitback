@@ -62,7 +62,7 @@ describe('createOverlay', () => {
     // The token, not the hexadecimal (SKG-528). What the pin actually renders is asserted end to
     // end in `e2e/overlay.spec.ts`, which reads the computed colour in a real browser — the only
     // place a `var()` can be resolved at all.
-    assert.equal(pin.style.getPropertyValue('--fb-pin-color'), 'var(--fb-stage-ripe)');
+    assert.equal(pin.style.getPropertyValue('--fruit-pin-color'), 'var(--fruit-stage-ripe)');
   });
 
   it('places a pin whose element is gone at its remembered position, and says so', () => {
