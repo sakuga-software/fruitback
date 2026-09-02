@@ -2,6 +2,7 @@ import { canonicalizePageUrl, type SeedIssue, type SeedReporter, type SeedScreen
 import { captureSeed } from './capture.ts';
 import { type WidgetConfig, createConfigStore } from './config.ts';
 import { type CaptureHost, type CaptureTarget, createCaptureHost } from './host.ts';
+import type { FruitbackTheme } from './theme.ts';
 import { type Composer, createComposer } from './composer.ts';
 import { type Overlay, createOverlay } from './overlay.ts';
 import { type ConfigPanel, createConfigPanel } from './panel.ts';
@@ -51,6 +52,21 @@ export type FruitbackOptions = {
   ignore?: (element: Element) => boolean;
   /** Off when the reporter has not agreed to send their user agent along. */
   includeEnv?: boolean;
+  /**
+   * Design tokens, so the widget can be made to look like it belongs (SKG-528).
+   *
+   * Tokens and not a stylesheet: colours, shadows, the font family and the two animation durations.
+   * A host that could write arbitrary CSS into the Shadow root would turn our class names into a
+   * contract by accident, which is the one thing the Shadow root exists to prevent.
+   *
+   * `ThemeToken` is the exhaustive list, and it is exported for exactly this reason — a name outside
+   * it is ignored rather than refused, so an override renamed in a later version costs that override
+   * and never the mount. Named here rather than pointing at the internal array it comes from: a
+   * published doc comment that references a symbol the reader cannot import is a dead end.
+   *
+   * Left out, the widget follows `prefers-color-scheme` on its own.
+   */
+  theme?: FruitbackTheme;
   document?: Document;
 };
 
@@ -106,6 +122,7 @@ export function init(options: FruitbackOptions): Fruitback {
     document,
     label: options.label,
     ignore: options.ignore,
+    ...(options.theme !== undefined ? { theme: options.theme } : {}),
     onConfigure: () => panel.toggle(),
     onSelect: (selected) => {
       target = selected;

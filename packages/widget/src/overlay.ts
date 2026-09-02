@@ -1,4 +1,5 @@
 import { SEED_STAGE_STYLES, type SeedBounds, type SeedIssue } from '@fruitback/shared';
+import { stageToken } from './theme.ts';
 import { isElement } from './dom.ts';
 import { createOrphanList, type OrphanList } from './orphans.ts';
 import { type AnchorResolution, resolveAnchor } from './resolve.ts';
@@ -379,11 +380,13 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 }
 
 function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolution): HTMLElement {
-  const style = SEED_STAGE_STYLES[issue.stage];
   const pin = document.createElement('div');
 
   pin.className = 'fb-pin';
-  pin.style.setProperty('--fb-pin-color', style.color);
+  // The token rather than the hexadecimal the contract carries (SKG-528). One indirection buys the
+  // dark theme, the host override and, once SKG-517 lands, a contract that stops shipping colours at
+  // all — a widget's palette has no business travelling in the payload both ends must agree on.
+  pin.style.setProperty('--fruit-pin-color', stageToken(issue.stage));
   pin.dataset.fbPin = issue.seed.id;
   pin.dataset.fbStage = issue.stage;
 
@@ -489,7 +492,7 @@ function buildThread(document: Document, issue: SeedIssue, resolution: AnchorRes
   const thread = document.createElement('div');
   thread.className = 'fb-thread';
   thread.dataset.fbThread = issue.seed.id;
-  thread.style.setProperty('--fb-pin-color', style.color);
+  thread.style.setProperty('--fruit-pin-color', stageToken(issue.stage));
 
   const reporter = issue.seed.reporter?.name ?? issue.seed.reporter?.email ?? 'Anonyme';
   const planted = new Date(issue.seed.createdAt);
@@ -624,9 +627,9 @@ const STYLES = `
   z-index: 2147483000;
   /* Clicks go through to the client's page: the pin is an annotation, not a lid. */
   pointer-events: none;
-  border: 2px solid var(--fb-pin-color);
+  border: 2px solid var(--fruit-pin-color);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--fb-pin-color) 12%, transparent);
+  background: color-mix(in srgb, var(--fruit-pin-color) 12%, transparent);
 }
 .fb-pin-uncertain { border-style: dashed; opacity: 0.85; }
 .fb-pin-orphan { border-style: dotted; }
@@ -646,17 +649,17 @@ const STYLES = `
   /* Three round corners and one sharp: a seed, pointing down at the element it belongs to. */
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
-  background: var(--fb-pin-color);
-  color: #fff;
-  font: 13px/1 -apple-system, system-ui, sans-serif;
+  background: var(--fruit-pin-color);
+  color: var(--fruit-color-on-stage);
+  font: 13px/1 var(--fruit-font-sans);
   cursor: pointer;
-  box-shadow: 0 3px 10px rgba(28, 25, 23, 0.28);
+  box-shadow: var(--fruit-shadow-sm);
   /* Squash and stretch: the drop lands, flattens, and settles. */
-  animation: fb-pin-drop 420ms cubic-bezier(0.2, 1.4, 0.35, 1);
+  animation: fb-pin-drop var(--fruit-duration-slow) cubic-bezier(0.2, 1.4, 0.35, 1);
 }
 .fb-pin-glyph { transform: rotate(45deg); font-size: 13px; line-height: 1; }
 .fb-pin-badge:hover { filter: brightness(1.06); }
-.fb-pin-badge:focus-visible { outline: 2px solid #1c1917; outline-offset: 2px; }
+.fb-pin-badge:focus-visible { outline: 2px solid var(--fruit-color-text); outline-offset: 2px; }
 
 @keyframes fb-pin-drop {
   0% { opacity: 0; transform: rotate(-45deg) translate(0, -10px) scale(0.7, 1.25); }
@@ -672,26 +675,26 @@ const STYLES = `
   z-index: 2147483100;
   width: 300px;
   pointer-events: auto;
-  border: 1px solid #d6d3d1;
-  border-top: 3px solid var(--fb-pin-color);
+  border: 1px solid var(--fruit-color-border-strong);
+  border-top: 3px solid var(--fruit-pin-color);
   border-radius: 10px;
   padding: 12px 14px;
-  background: #fff;
-  color: #1c1917;
-  font: 14px/1.5 -apple-system, system-ui, sans-serif;
-  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.18);
+  background: var(--fruit-color-surface);
+  color: var(--fruit-color-text);
+  font: 14px/1.5 var(--fruit-font-sans);
+  box-shadow: var(--fruit-shadow-lg);
 }
 .fb-thread-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .fb-thread-stage { font-weight: 600; font-size: 13px; }
-.fb-thread-close { border: 0; background: none; font-size: 18px; line-height: 1; cursor: pointer; color: #78716c; }
+.fb-thread-close { border: 0; background: none; font-size: 18px; line-height: 1; cursor: pointer; color: var(--fruit-color-text-muted); }
 .fb-thread-note { margin: 8px 0 0; white-space: pre-wrap; }
-.fb-thread-meta { margin: 8px 0 0; font-size: 12px; color: #78716c; }
-.fb-thread-orphan { margin: 8px 0 0; font-size: 12px; color: #8d6e63; }
-.fb-thread-empty { margin: 8px 0 0; font-size: 12px; color: #a8a29e; font-style: italic; }
+.fb-thread-meta { margin: 8px 0 0; font-size: 12px; color: var(--fruit-color-text-muted); }
+.fb-thread-orphan { margin: 8px 0 0; font-size: 12px; color: var(--fruit-color-warning); }
+.fb-thread-empty { margin: 8px 0 0; font-size: 12px; color: var(--fruit-color-text-subtle); font-style: italic; }
 .fb-thread-replies {
   margin: 10px 0 0;
   padding: 0 0 0 10px;
-  border-left: 2px solid #e7e5e4;
+  border-left: 2px solid var(--fruit-color-border);
   list-style: none;
   /* A long conversation belongs in Linear, which the link below goes to. */
   max-height: 180px;
@@ -704,7 +707,7 @@ const STYLES = `
 */
 .fb-thread-reply { list-style: none; }
 .fb-thread-reply + .fb-thread-reply { margin-top: 8px; }
-.fb-thread-reply-who { display: block; font-size: 11px; color: #78716c; }
+.fb-thread-reply-who { display: block; font-size: 11px; color: var(--fruit-color-text-muted); }
 .fb-thread-reply-body { margin: 2px 0 0; font-size: 12px; white-space: pre-wrap; }
-.fb-thread-link { display: inline-block; margin-top: 10px; font-size: 13px; color: #e53935; }
+.fb-thread-link { display: inline-block; margin-top: 10px; font-size: 13px; color: var(--fruit-color-accent); }
 `;

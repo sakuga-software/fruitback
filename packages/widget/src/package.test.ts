@@ -147,7 +147,14 @@ describe('a consumer installing this from npm', () => {
           // And the scoped packages directly, because they stay published and someone will.
           'import { init as initScoped } from "@fruitback/widget";',
           'import type { SeedIssue } from "@fruitback/shared";',
-          'export const mount = () => init({ endpoint: "https://w.test", clientId: "acme" });',
+          // The theme type, because `FruitbackOptions.theme` names it (SKG-528). It resolves through
+          // `theme.d.ts`, which ships but is not reachable through the package's `exports` — so
+          // "the option is documented" and "the consumer can describe what they pass" are two
+          // different claims, and this is the one that checks the second.
+          'import type { FruitbackTheme, ThemeToken } from "fruitback";',
+          'const palette: FruitbackTheme = { "color-accent": "#0055ff" };',
+          'export const accent: ThemeToken = "color-accent";',
+          'export const mount = () => init({ endpoint: "https://w.test", clientId: "acme", theme: palette });',
           'export const mountScoped = () => initScoped({ endpoint: "https://w.test", clientId: "acme" });',
           'export type Payload = Seed;',
           'export type Pin = SeedIssue;',

@@ -1,6 +1,5 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { SEED_STAGE_STYLES } from '@fruitback/shared';
 import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
 import { type Overlay, createOverlay } from './overlay.ts';
 import { type MountedPage, mountPage, pressKey, setDocumentSize, setRect } from './dom.fixture.ts';
@@ -60,7 +59,10 @@ describe('createOverlay', () => {
 
     const pin = page.document.querySelector('[data-fb-pin]') as HTMLElement;
     assert.equal(pin.dataset.fbStage, 'ripe');
-    assert.equal(pin.style.getPropertyValue('--fb-pin-color'), SEED_STAGE_STYLES.ripe.color);
+    // The token, not the hexadecimal (SKG-528). What the pin actually renders is asserted end to
+    // end in `e2e/overlay.spec.ts`, which reads the computed colour in a real browser — the only
+    // place a `var()` can be resolved at all.
+    assert.equal(pin.style.getPropertyValue('--fruit-pin-color'), 'var(--fruit-stage-ripe)');
   });
 
   it('places a pin whose element is gone at its remembered position, and says so', () => {

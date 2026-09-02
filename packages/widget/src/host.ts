@@ -1,5 +1,6 @@
 import type { SeedSource } from '@fruitback/shared';
 import { isElement } from './dom.ts';
+import { type FruitbackTheme, THEME_STYLES, applyTheme } from './theme.ts';
 import { type CaptureEngine, reactGrabEngine } from './engine.ts';
 
 /**
@@ -45,6 +46,11 @@ export type CaptureHostOptions = {
    * reporter ends up leaving feedback about the feedback button.
    */
   ignore?: (element: Element) => boolean;
+  /**
+   * Design tokens the host overrides (SKG-528). Colours, shadows, the font family, the animation
+   * durations — and nothing else: `applyTheme` writes only the names `ThemeToken` enumerates.
+   */
+  theme?: FruitbackTheme;
 };
 
 export type CaptureHost = {
@@ -70,9 +76,15 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   container.style.cssText = 'position:absolute;top:0;left:0;width:0;height:0;';
   document.body.append(container);
 
+  // Written on the host element rather than into the stylesheet, so an inline custom property wins
+  // over the `:host` declaration without needing a more specific selector.
+  applyTheme(container, options.theme);
+
   const root = container.attachShadow({ mode: 'open' });
   const style = document.createElement('style');
-  style.textContent = STYLES;
+  // Tokens first: every other stylesheet in this root — the overlay's, the composer's, the panel's —
+  // resolves `var(--fruit-…)` against them by inheritance, without importing anything.
+  style.textContent = THEME_STYLES + STYLES;
 
   const button = document.createElement('button');
   button.type = 'button';
@@ -211,7 +223,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
  */
 const STYLES = `
 :host { all: initial; }
-* { all: initial; box-sizing: border-box; font-family: -apple-system, system-ui, sans-serif; }
+* { all: initial; box-sizing: border-box; font-family: var(--fruit-font-sans); }
 /*
   all:initial is thorough enough to undo the browser's own display:none on a style element, which
   then renders the stylesheet as a column of visible text in the corner of the client's page. Found
@@ -239,20 +251,20 @@ li { display: list-item; }
 .fb-launch {
   padding: 10px 14px;
   border-radius: 999px;
-  background: #e53935;
-  color: #fff;
-  font: 600 13px/1 -apple-system, system-ui, sans-serif;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
+  background: var(--fruit-color-accent);
+  color: var(--fruit-color-on-accent);
+  font: 600 13px/1 var(--fruit-font-sans);
+  box-shadow: var(--fruit-shadow-md);
   cursor: pointer;
 }
 .fb-configure {
   width: 30px;
   height: 30px;
   border-radius: 999px;
-  background: #44403c;
-  color: #fff;
-  font: 600 14px/1 -apple-system, system-ui, sans-serif;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
+  background: var(--fruit-color-chip);
+  color: var(--fruit-color-on-chip);
+  font: 600 14px/1 var(--fruit-font-sans);
+  box-shadow: var(--fruit-shadow-md);
   cursor: pointer;
 }
 .fb-highlight {
@@ -261,10 +273,10 @@ li { display: list-item; }
   z-index: 2147483100;
   /* The reporter is aiming at the page, not at this box. */
   pointer-events: none;
-  outline: 2px solid #e53935;
-  background: rgba(229, 57, 53, 0.08);
+  outline: 2px solid var(--fruit-color-accent);
+  background: color-mix(in srgb, var(--fruit-color-accent) 8%, transparent);
   border-radius: 4px;
 }
 .fb-panel { position: absolute; top: 0; left: 0; }
-:host([data-fb-capturing]) .fb-launch { background: #44403c; }
+:host([data-fb-capturing]) .fb-launch { background: var(--fruit-color-chip); }
 `;

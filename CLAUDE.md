@@ -247,6 +247,40 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   a same-origin iframe — which react-grab returns on purpose — belongs to another. Use `isElement`
   from `dom.ts`.
 
+## The look, and the one thing a host may change
+
+- **`theme.ts` owns every colour, shadow, font family and duration** (SKG-528). They were
+  hexadecimals spread across five `STYLES` literals — `host.ts`, `overlay.ts`, `composer.ts`,
+  `panel.ts`, `orphans.ts` — plus the stage colours, which travelled in the *published contract*.
+- **Custom properties, because inheritance is what crosses the modules.** Each module injects its own
+  `<style>` into the one Shadow root, so a token on `:host` reaches all of them with nobody importing
+  anything. `THEME_STYLES` is concatenated ahead of `host.ts`'s reset for that reason.
+- **The prefix is `--fruit-`, and it is the whole defence.** A custom property inherits *into* the
+  Shadow root from the client's page — the root blocks their selectors, never their inherited
+  properties — so a name the host also uses repaints our widget silently. `--color-text` would be
+  reckless. `--fb-` was the first attempt and barely better: it is what a Facebook SDK or somebody's
+  flexbox utilities would plausibly pick. Renamed wholesale, 151 occurrences, `.fb-` class names and
+  `data-fb-*` attributes deliberately untouched — those live inside the Shadow root and collide with
+  nothing.
+- **`init({ theme })` takes tokens, never CSS.** A host that could write a stylesheet into the Shadow
+  root would turn our class names into a contract by accident, which is what the Shadow root exists
+  to prevent. `applyTheme` writes only names `THEME_TOKENS` declares and silently drops the rest, so
+  a token renamed in a later version costs that override and never the mount.
+- **`public.ts` exports the theme *types* and not `THEME_TOKENS`.** The runtime array would widen the
+  published surface; `package.test.ts`'s `promises only what public.ts declares` caught that on the
+  first attempt, which is what it is for.
+- **The base `:host` block must declare every settable token**, and the test that checks it is scoped
+  to that block. Searching the whole stylesheet passed a mutation that deleted a declaration, because
+  the dark block redeclares it — a token declared only under `prefers-color-scheme: dark` is undefined
+  in light mode.
+- **Radii are not tokenised, on purpose.** Eight distinct values are in use and each would map to
+  exactly one token: indirection wearing the costume of a scale, and more for SKG-529 to undo when it
+  shortens the scale deliberately. Spacing likewise — nobody overrides it, and substituting sixty
+  literals is where a silent visual regression hides.
+- SKG-528 changed **no colour**: every token holds the hexadecimal that was already there, and
+  `e2e/overlay.spec.ts`'s computed-colour read is the proof. One shadow moved 4px, because the thread
+  and the panel spelled the same intention two ways.
+
 ## The popover
 
 - **`createComposer` owns the states, not the transport.** `onSubmit` is awaited, so an embedder
@@ -261,7 +295,7 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - **Losing what someone just wrote is the one failure this widget cannot afford.** Anything that
   would clear the field on an error path is a bug, however tidy it looks.
 - Popover on desktop, **sheet on a phone** — a 320px popover anchored to an element is unusable at
-  that width. The anchored position goes through `--fb-composer-*` custom properties rather than
+  that width. The anchored position goes through `--fruit-composer-*` custom properties rather than
   inline `left`/`top`, because an inline style beats the media query and leaves the sheet offset.
 - **`all: initial` resets `display` too.** Every block element in the Shadow root is inline until the
   stylesheet says otherwise, and vertical margins on it silently do nothing — the note thread ran its
@@ -571,10 +605,14 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   `process` or `Buffer` must fail to compile. Its tests need Node types, so they typecheck through a
   separate `tsconfig.test.json`; do not "fix" this by adding `node` to the main config.
 - **No backticks inside the CSS template literals** (`STYLES` in `host.ts`, `overlay.ts`,
-  `composer.ts`). A comment quoting a symbol closes the literal and the file stops parsing. It has
-  now happened **four** times, twice while writing a comment about a different bug; the failure
-  is loud — the module will not load — but the cause reads as a mystery until you look at the right
-  line. Write `display:block`, not the same thing in backticks.
+  `composer.ts`, `panel.ts`, `orphans.ts`, and `THEME_STYLES` in `theme.ts`). A comment quoting a
+  symbol closes the literal and the file stops parsing. It has now happened **five** times — twice
+  while writing a comment about a different bug, and the fifth inside the paragraph of `theme.ts`
+  that forbids it, three lines below the warning. Write `display:block`, not the same thing in
+  backticks.
+- **The test that greps for a backtick guards the quiet half only.** An odd number stops the module
+  parsing, so no test in that file can run — loud, but the cause reads as a mystery. What the
+  assertion catches is an even number: it parses, and silently truncates the stylesheet.
 - Comments explain _why_, not _what_ — the tolerant parser and the redundant anchor both exist for
   reasons that are not obvious from the code.
 - Work is tracked in Linear on the

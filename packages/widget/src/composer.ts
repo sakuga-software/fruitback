@@ -140,8 +140,11 @@ export function createComposer(options: ComposerOptions): Composer {
 
     // Custom properties rather than inline `left`/`top`: an inline style would beat the media query
     // below and leave the mobile sheet offset by whatever the element's position happened to be.
-    root.style.setProperty('--fb-composer-left', `${Math.max(GAP, Math.min(anchor.left, width - WIDTH - GAP))}px`);
-    root.style.setProperty('--fb-composer-top', `${fitsBelow ? below : Math.max(0, anchor.top - own.height - GAP)}px`);
+    root.style.setProperty('--fruit-composer-left', `${Math.max(GAP, Math.min(anchor.left, width - WIDTH - GAP))}px`);
+    root.style.setProperty(
+      '--fruit-composer-top',
+      `${fitsBelow ? below : Math.max(0, anchor.top - own.height - GAP)}px`,
+    );
   }
 
   /**
@@ -240,17 +243,17 @@ const STYLES = `
      content-box the padding sat outside it and the popover could overhang the viewport. Set here
      rather than inherited from the host's reset: this file has to hold up wherever it is mounted. */
   box-sizing: border-box;
-  left: var(--fb-composer-left, 0px);
-  top: var(--fb-composer-top, 0px);
+  left: var(--fruit-composer-left, 0px);
+  top: var(--fruit-composer-top, 0px);
   z-index: 2147483300;
   width: ${WIDTH}px;
   padding: 14px;
   border-radius: 18px;
-  background: #fffdf9;
-  color: #1c1917;
-  font: 14px/1.5 -apple-system, system-ui, sans-serif;
-  box-shadow: 0 14px 40px rgba(28, 25, 23, 0.22);
-  animation: fb-composer-in 220ms cubic-bezier(0.22, 1.2, 0.36, 1);
+  background: var(--fruit-color-surface-raised);
+  color: var(--fruit-color-text);
+  font: 14px/1.5 var(--fruit-font-sans);
+  box-shadow: var(--fruit-shadow-xl);
+  animation: fb-composer-in var(--fruit-duration-fast) cubic-bezier(0.22, 1.2, 0.36, 1);
 }
 .fb-composer[hidden] { display: none; }
 .fb-composer-drop {
@@ -259,7 +262,7 @@ const STYLES = `
   left: 22px;
   width: 14px;
   height: 14px;
-  background: #fffdf9;
+  background: var(--fruit-color-surface-raised);
   /* A seed rather than a triangle: three round corners and one sharp, turned to point at the pin. */
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
@@ -267,22 +270,22 @@ const STYLES = `
 .fb-composer textarea {
   display: block;
   width: 100%;
-  border: 1px solid #e7e5e4;
+  border: 1px solid var(--fruit-color-border);
   border-radius: 12px;
   padding: 10px 12px;
   font: inherit;
   resize: vertical;
-  background: #fff;
+  background: var(--fruit-color-surface);
   color: inherit;
 }
-.fb-composer textarea:focus-visible { outline: 2px solid #e53935; outline-offset: 1px; }
+.fb-composer textarea:focus-visible { outline: 2px solid var(--fruit-color-accent); outline-offset: 1px; }
 .fb-composer-identify {
   display: block;
   margin-top: 8px;
   border: 0;
   background: none;
   padding: 0;
-  color: #78716c;
+  color: var(--fruit-color-text-muted);
   font: inherit;
   font-size: 12px;
   text-decoration: underline;
@@ -294,24 +297,24 @@ const STYLES = `
   flex: 1;
   min-width: 0;
   padding: 6px 8px;
-  border: 1px solid #d6d3d1;
+  border: 1px solid var(--fruit-color-border-strong);
   border-radius: 8px;
   font: inherit;
   font-size: 12px;
   color: inherit;
-  background: #fff;
+  background: var(--fruit-color-surface);
 }
-.fb-composer-who input:focus-visible { outline: 2px solid #e53935; outline-offset: 1px; }
+.fb-composer-who input:focus-visible { outline: 2px solid var(--fruit-color-accent); outline-offset: 1px; }
 .fb-composer-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
-.fb-composer-status { flex: 1; font-size: 12px; color: #78716c; }
+.fb-composer-status { flex: 1; font-size: 12px; color: var(--fruit-color-text-muted); }
 .fb-composer-ghost, .fb-composer-send {
   border: 0; border-radius: 999px; padding: 8px 14px; font: 600 13px/1 inherit; cursor: pointer;
 }
-.fb-composer-ghost { background: transparent; color: #78716c; }
-.fb-composer-send { background: #e53935; color: #fff; }
+.fb-composer-ghost { background: transparent; color: var(--fruit-color-text-muted); }
+.fb-composer-send { background: var(--fruit-color-accent); color: var(--fruit-color-on-accent); }
 .fb-composer-send[disabled] { opacity: 0.55; cursor: default; }
-.fb-composer[data-fb-state="harvested"] .fb-composer-status { color: #7cb342; font-weight: 600; }
-.fb-composer[data-fb-state="failed"] .fb-composer-status { color: #e53935; }
+.fb-composer[data-fb-state="harvested"] .fb-composer-status { color: var(--fruit-color-success); font-weight: 600; }
+.fb-composer[data-fb-state="failed"] .fb-composer-status { color: var(--fruit-color-accent); }
 
 @keyframes fb-composer-in {
   from { opacity: 0; transform: translateY(-6px) scale(0.96); }
