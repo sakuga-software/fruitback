@@ -8,8 +8,6 @@ import {
   resolveClient,
 } from './clients.ts';
 import { type WorkerConfig, type WorkerEnv, readAllowedOrigins, readConfig } from './env.ts';
-import { createLinearStore } from './linear.ts';
-import { createMemoryStore } from './linear-memory.ts';
 import { type SeedStore, StoreError } from './store.ts';
 import { diagnosticCorsHeaders, resolveCors } from './cors.ts';
 import { checkRateLimit } from './rate-limit.ts';
@@ -29,23 +27,19 @@ import { cached, invalidate } from './cache.ts';
 const MAX_BODY_BYTES = 64 * 1_024;
 
 /**
- * Which store this process writes to (SKG-522).
+ * Which store this process writes to (SKG-522, SKG-526).
  *
- * This used to be `Pick<typeof realLinear, 'createSeedIssue' | 'fetchSeedIssues'>` — an interface
- * discovered by accident. Now it returns a `SeedStore`, so SQLite (SKG-524) and GitHub (SKG-525) are
- * implementations rather than new branches here.
+ * It was a `Pick<typeof realLinear, 'createSeedIssue' | 'fetchSeedIssues'>` — an interface
+ * discovered by accident — then a branch on a `fakeLinear` boolean with Linear's three credentials
+ * read straight off the config. Both are gone: the provider was selected and validated at boot
+ * (`stores.ts`), and this is only where it is built. SQLite (SKG-524) and GitHub (SKG-525) add an
+ * entry to the registry and nothing here.
  *
- * The in-memory one only ever wins in the dev loop: `readConfig` refuses the flag under
- * `NODE_ENV=production`, so it cannot silently become the deployed behaviour.
+ * A dev-only store cannot win in production: `readStoreConfig` refuses it at boot rather than
+ * letting the process start.
  */
 export function storeFor(config: WorkerConfig): SeedStore {
-  return config.fakeLinear
-    ? createMemoryStore()
-    : createLinearStore({
-        apiKey: config.linearApiKey,
-        teamId: config.linearTeamId,
-        projectId: config.linearProjectId,
-      });
+  return config.store.create();
 }
 
 /** What the transport knows and the request itself cannot say. */
@@ -92,7 +86,10 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
 
     return json(200, {
       ok: true,
-      ...(config.config.fakeLinear ? { fakeLinear: true } : {}),
+      // The store's name, always, rather than the old `fakeLinear: true` (SKG-526). Which store a
+      // process runs on is the thing an operator cannot tell from a green check, and naming one
+      // provider in the answer was the last place `/health` assumed there was only ever one.
+      store: config.config.store.provider,
       ...(openRead > 0 ? { openRead } : {}),
     });
   }

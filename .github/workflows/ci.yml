@@ -100,7 +100,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run the E2E suite
-        # No LINEAR_API_KEY anywhere: the worker runs on its in-memory Linear (FRUITBACK_FAKE_LINEAR).
+        # No LINEAR_API_KEY anywhere: the worker runs on its in-memory store (FRUITBACK_STORE=memory).
         run: pnpm e2e
 
       - name: Keep the traces of a failed run

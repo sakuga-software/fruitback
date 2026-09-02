@@ -499,11 +499,14 @@ describe('the in-memory Linear (dev loop)', () => {
     assert.equal(response.status, 200);
     // `openRead: 1` because this dev worker serves one client and its reads are public — the
     // default, and what every worker did before SKG-533.
-    assert.deepEqual(await response.json(), { ok: true, fakeLinear: true, openRead: 1 });
+    assert.deepEqual(await response.json(), { ok: true, store: 'memory', openRead: 1 });
   });
 
   it('refuses the flag in production and reports itself misconfigured', async () => {
     // The Dockerfile sets NODE_ENV=production, so this is what a container inheriting the flag does.
+    // The flag *degrades* to the real store, which then has no credentials — so the diagnostic names
+    // Linear's variables rather than the flag. An explicit FRUITBACK_STORE=memory is refused outright
+    // instead; see the SKG-526 suite.
     const response = await get('/health', { env: { ...fakeEnv, NODE_ENV: 'production' } });
 
     assert.equal(response.status, 503);
@@ -723,8 +726,10 @@ describe('GET /health', () => {
 
     assert.equal(response.status, 200);
     // Compared exactly rather than partially, on purpose: this endpoint is public, so a field
-    // appearing here should have to be written down. `openRead` is one such field (SKG-533).
-    assert.deepEqual(await response.json(), { ok: true, openRead: 1 });
+    // appearing here should have to be written down. `openRead` is one such field (SKG-533), and
+    // `store` is the other (SKG-526) — it replaced `fakeLinear: true`, which only one provider could
+    // ever say.
+    assert.deepEqual(await response.json(), { ok: true, store: 'linear', openRead: 1 });
   });
 
   it('stops counting open reads once they need an identity', async () => {
@@ -738,7 +743,7 @@ describe('GET /health', () => {
     });
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { ok: true });
+    assert.deepEqual(await response.json(), { ok: true, store: 'linear' });
   });
 
   it('is not ready when a required variable is missing, and names it', async () => {
@@ -1116,7 +1121,7 @@ describe('a read nobody could ever satisfy', () => {
     });
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { ok: true, openRead: 2 });
+    assert.deepEqual(await response.json(), { ok: true, store: 'linear', openRead: 2 });
   });
 });
 

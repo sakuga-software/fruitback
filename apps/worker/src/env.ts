@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { type ClientMap, originsFromClients, readClientMap, unreadableClients } from './clients.ts';
 import { DEFAULT_LIMIT } from './rate-limit.ts';
+import type { StoreConfig } from './store-config.ts';
+import { readStoreConfig } from './stores.ts';
 
 /**
  * Configuration comes from the process environment — Dokploy injects it, `docker compose` reads it
@@ -8,6 +10,14 @@ import { DEFAULT_LIMIT } from './rate-limit.ts';
  * tests stay hermetic.
  */
 export type WorkerEnv = {
+  /**
+   * Which store this process runs on: `linear` (the default) or `memory`. See `stores.ts`.
+   *
+   * An unknown name is refused at boot rather than defaulted, and the variables each store reads
+   * are declared by that store — the three below belong to `linear.ts`, and are listed here only so
+   * the type keeps documenting the whole environment.
+   */
+  FRUITBACK_STORE?: string;
   /** Linear personal API key. A secret — never baked into the image, never sent to the client. */
   LINEAR_API_KEY?: string;
   LINEAR_TEAM_ID?: string;
@@ -21,6 +31,8 @@ export type WorkerEnv = {
   PORT?: string;
   HOST?: string;
   /**
+   * The older spelling of `FRUITBACK_STORE=memory`, kept working (SKG-526).
+   *
    * Dev only: serve the playground off an in-memory Linear instead of the real API, so the whole
    * capture → issue → pins loop runs with no key and writes to nobody's workspace. Ignored when
    * `NODE_ENV=production` — which the Dockerfile sets — so it cannot be talked into a deploy.
@@ -51,9 +63,15 @@ export const DEFAULT_HOST = '0.0.0.0';
 export const DEFAULT_TRUSTED_PROXY_HOPS = 1;
 
 const configSchema = z.object({
-  linearApiKey: z.string().min(1),
-  linearTeamId: z.string().min(1),
-  linearProjectId: z.string().min(1).optional(),
+  /**
+   * Which store, and how to build one (SKG-526).
+   *
+   * Opaque on purpose: the provider's own fields were `linearApiKey`, `linearTeamId` and
+   * `linearProjectId` right here, where every module reading the config could see one connector's
+   * credentials — and where `readConfig` validated them for deployments that will never have them.
+   * Validated by the provider, in `stores.ts`.
+   */
+  store: z.custom<StoreConfig>(),
   /**
    * Shared with the client site so it can mint identity tokens (SKG-498). Absent — the default —
    * means every reporter is self-declared, which is a perfectly good way to run this.
@@ -92,8 +110,6 @@ const configSchema = z.object({
    * team would be the leak in either direction.
    */
   clients: z.custom<ClientMap | undefined>().optional(),
-  /** True only in the dev loop — see `FRUITBACK_FAKE_LINEAR`. Surfaced on `/health`. */
-  fakeLinear: z.boolean(),
 });
 
 export type WorkerConfig = z.infer<typeof configSchema>;
@@ -105,14 +121,12 @@ export type ConfigResult = { ok: true; config: WorkerConfig } | { ok: false; mis
  * instead of as an opaque Linear error on every request.
  */
 export function readConfig(env: WorkerEnv): ConfigResult {
-  const fakeLinear = usesFakeLinear(env);
   const clients = readClientMap(env.FRUITBACK_CLIENTS);
+  // The selected provider validates its own environment (SKG-526). The in-memory store needs none,
+  // which is what removed the stand-in Linear credentials the dev loop used to be handed.
+  const store = readStoreConfig(env);
   const candidate = {
-    // In fake mode nothing ever reaches Linear, so the credentials are stand-ins rather than
-    // optional: every downstream type stays exactly as it is in production.
-    linearApiKey: fakeLinear ? FAKE_LINEAR_VALUE : env.LINEAR_API_KEY,
-    linearTeamId: fakeLinear ? FAKE_LINEAR_VALUE : env.LINEAR_TEAM_ID,
-    linearProjectId: env.LINEAR_PROJECT_ID || undefined,
+    store: store.ok ? store.config : undefined,
     identitySecret: env.FRUITBACK_IDENTITY_SECRET || undefined,
     showComments: env.FRUITBACK_HIDE_COMMENTS !== '1',
     read: readAccess(env.FRUITBACK_READ),
@@ -130,36 +144,43 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     // A malformed map is a misconfiguration, not a reason to quietly pool every client into one
     // team — which is precisely the leak the map exists to prevent.
     clients: clients.ok ? clients.clients : Number.NaN,
-    fakeLinear,
   };
 
   const result = configSchema.safeParse(candidate);
+  // Each source names its own variables, and they are reported together: an operator fixing a boot
+  // failure should see everything that is wrong, not the first thing to be checked.
+  const missing = [
+    ...missingFrom(result),
+    ...(store.ok ? [] : store.missing),
+    ...(clients.ok ? [] : [`FRUITBACK_CLIENTS (${clients.reason})`]),
+  ];
 
-  if (result.success && clients.ok) {
-    // Refused at boot rather than served as a permanent 401 (SKG-533). A client that requires a
-    // verified reader and has no key to verify one with answers nobody, for ever, and the symptom —
-    // a widget showing no pins — points at the browser rather than at this line of configuration.
-    const unreadable = unreadableClients({
-      read: result.data.read,
-      clients: result.data.clients,
-      identitySecret: result.data.identitySecret,
-    });
-
-    if (unreadable.length > 0) {
-      return {
-        ok: false,
-        missing: [`FRUITBACK_IDENTITY_SECRET (read is "authenticated" but ${unreadable.join(', ')} has no key)`],
-      };
-    }
-
-    return { ok: true, config: result.data };
+  // The `!result.success` half is a backstop, not decoration: a field that fails validation and has
+  // no entry in `NAMES_BY_FIELD` would otherwise leave `missing` empty and be returned as `ok` with
+  // no config at all. Every such field is named today — `answers no empty diagnostic` is what keeps
+  // that true — so what this clause really guarantees is that the next one is loud rather than a
+  // `config: undefined` handed to the request path.
+  if (!result.success || missing.length > 0) {
+    return { ok: false, missing: missing.length > 0 ? [...new Set(missing)] : ['(invalid configuration)'] };
   }
 
-  if (!clients.ok) {
-    return { ok: false, missing: [...missingFrom(result), `FRUITBACK_CLIENTS (${clients.reason})`] };
+  // Refused at boot rather than served as a permanent 401 (SKG-533). A client that requires a
+  // verified reader and has no key to verify one with answers nobody, for ever, and the symptom — a
+  // widget showing no pins — points at the browser rather than at this line of configuration.
+  const unreadable = unreadableClients({
+    read: result.data.read,
+    clients: result.data.clients,
+    identitySecret: result.data.identitySecret,
+  });
+
+  if (unreadable.length > 0) {
+    return {
+      ok: false,
+      missing: [`FRUITBACK_IDENTITY_SECRET (read is "authenticated" but ${unreadable.join(', ')} has no key)`],
+    };
   }
 
-  return { ok: false, missing: missingFrom(result) };
+  return { ok: true, config: result.data };
 }
 
 /**
@@ -171,13 +192,19 @@ function readAccess(value: string | undefined): string {
   return value === undefined || value.trim() === '' ? 'public' : value.trim();
 }
 
+/**
+ * The worker's own variables. A store's are declared by that store — see `createLinearStoreSpec` —
+ * which is why `LINEAR_API_KEY` no longer appears here.
+ */
 const NAMES_BY_FIELD: Record<string, string> = {
-  linearApiKey: 'LINEAR_API_KEY',
-  linearTeamId: 'LINEAR_TEAM_ID',
   allowedOrigins: 'ALLOWED_ORIGINS',
   trustedProxyHops: 'TRUSTED_PROXY_HOPS',
   rateLimitPerMinute: 'RATE_LIMIT_PER_MINUTE',
   read: 'FRUITBACK_READ',
+  // Absent until SKG-526, and it showed: a secret under 32 characters failed the schema, matched no
+  // name, and answered `503 misconfigured, missing:` with nothing after the colon. Every field that
+  // can fail validation needs an entry here — asserted by `answers no empty diagnostic`.
+  identitySecret: 'FRUITBACK_IDENTITY_SECRET',
 };
 
 function missingFrom(result: z.ZodSafeParseResult<unknown>): string[] {
@@ -188,27 +215,6 @@ function missingFrom(result: z.ZodSafeParseResult<unknown>): string[] {
     .filter((name): name is string => name !== undefined);
 
   return [...new Set(missing)];
-}
-
-/** Obvious in a log line, and impossible to mistake for a real key someone forgot to rotate. */
-const FAKE_LINEAR_VALUE = 'fake-linear-dev';
-
-/**
- * Whether this process runs on the in-memory Linear.
- *
- * The production guard is the point: `NODE_ENV=production` is set in the Dockerfile, so a container
- * that somehow inherits the flag ignores it and reports itself misconfigured — loudly, on `/health`
- * — instead of quietly accepting feedback into a store that disappears on restart.
- */
-export function usesFakeLinear(env: WorkerEnv): boolean {
-  const asked = env.FRUITBACK_FAKE_LINEAR === '1' || env.FRUITBACK_FAKE_LINEAR?.toLowerCase() === 'true';
-
-  return asked && env.NODE_ENV !== 'production';
-}
-
-/** True when the flag was set but refused — worth saying out loud at boot. */
-export function fakeLinearRefused(env: WorkerEnv): boolean {
-  return env.FRUITBACK_FAKE_LINEAR !== undefined && env.FRUITBACK_FAKE_LINEAR !== '' && !usesFakeLinear(env);
 }
 
 /**

@@ -13,8 +13,10 @@ import {
   parseSeedFromDescription,
   seedIssueSchema,
 } from '@fruitback/shared';
+import { z } from 'zod';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
 import { type CreatedIssue, type SeedIssueQuery, type SeedStore, StoreError } from './store.ts';
+import { type StoreSpec, defineStore } from './store-config.ts';
 
 const LINEAR_GRAPHQL_ENDPOINT = 'https://api.linear.app/graphql';
 
@@ -28,7 +30,13 @@ const FRUITBACK_LABEL_COLOR = '#E53935';
  * `linearProjectId` came to sit in the worker's validated config where every other module could see
  * them. A store's credentials are its own business.
  */
-export type LinearConfig = { apiKey: string; teamId: string; projectId: string | undefined };
+const linearConfigSchema = z.object({
+  apiKey: z.string().min(1),
+  teamId: z.string().min(1),
+  projectId: z.string().min(1).optional(),
+});
+
+export type LinearConfig = z.infer<typeof linearConfigSchema>;
 
 /** Where this connector puts a client's issues. Meaningless to a store that is not an issue tracker. */
 export type LinearRouting = { teamId: string; projectId: string | undefined };
@@ -405,4 +413,27 @@ export function createLinearStore(config: LinearConfig): SeedStore {
     create: (seed, client) => createSeedIssue(config, linearRoutingFor(config, client), seed),
     findForPage: (query, client, policy) => fetchSeedIssues(config, linearRoutingFor(config, client), query, policy),
   };
+}
+
+/**
+ * Linear as a selectable store (SKG-526): `FRUITBACK_STORE=linear`, which is also the default.
+ *
+ * The three variables are named **here** rather than in `env.ts`. They were in the worker's own
+ * validated config, which meant every deployment was checked for a Linear key — including the ones
+ * that will not have one. A store's credentials are its own business, and so is saying which
+ * variable an operator forgot.
+ */
+export function createLinearStoreSpec(): StoreSpec {
+  return defineStore({
+    provider: 'linear',
+    envNames: { apiKey: 'LINEAR_API_KEY', teamId: 'LINEAR_TEAM_ID', projectId: 'LINEAR_PROJECT_ID' },
+    read: (env) => ({
+      apiKey: env.LINEAR_API_KEY,
+      teamId: env.LINEAR_TEAM_ID,
+      // An empty string is an operator who left the line in their .env, not a project id.
+      projectId: env.LINEAR_PROJECT_ID || undefined,
+    }),
+    schema: linearConfigSchema,
+    create: createLinearStore,
+  });
 }

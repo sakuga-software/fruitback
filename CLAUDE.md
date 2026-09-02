@@ -66,10 +66,11 @@ node --test src/seed.test.ts                 # one file, from the package direct
 `8788` and not `8080`: 8080 is the container's port, and something is usually already sitting on it
 on a developer's machine. `/tf` and `/tfp` read these numbers from here rather than probing.
 
-- **`FRUITBACK_FAKE_LINEAR=1` swaps the real Linear for `linear-memory.ts`**, so the whole loop —
+- **`FRUITBACK_STORE=memory` swaps the real Linear for `linear-memory.ts`**, so the whole loop —
   capture, issue, pins coloured by state — runs with no API key and writes to nobody's workspace. It
   is refused under `NODE_ENV=production` (which the Dockerfile sets), `/health` answers
-  `{ ok: true, fakeLinear: true }`, and the boot log says so. It is **not** a mock: an issue is
+  `{ ok: true, store: 'memory' }`, and the boot log says so. `FRUITBACK_FAKE_LINEAR=1` is the older
+  spelling and still works — see *Which store, and who validates it*. It is **not** a mock: an issue is
   stored as the description `buildIssueDescription` produces and read back through the same
   `toSeedIssue` as production, so a broken round trip breaks the playground too.
 - **The playground is a React app on purpose, and it is the only place three things are true.** The
@@ -503,11 +504,45 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   would have opened a SQLite connection per request the moment SKG-524 landed. Caught in review, not
   by a test, because nothing observable was wrong yet. The tests that hold it now assert the handler
   used the store it was **given**: a Linear stub left untouched is the proof it built none of its own.
-- **Still Linear-shaped, and deliberately left to SKG-526**: `WorkerConfig` carries `linearApiKey`,
-  `linearTeamId` and `linearProjectId`, and `/health` answers `fakeLinear: true`. Making the provider
-  config opaque needs `FRUITBACK_STORE` to know which shape to validate, which is that ticket's job —
-  doing half of it here would be churn. What did change is that **only `storeFor` reads those
-  fields**; nothing else in the worker touches them.
+## Which store, and who validates it
+
+- **`FRUITBACK_STORE` selects the connector, and each connector validates its own environment**
+  (SKG-526). SKG-522 named the interface but left the worker Linear-shaped anyway: `WorkerConfig`
+  carried `linearApiKey`, `linearTeamId` and `linearProjectId`, so every module that could read the
+  config could read one provider's credentials — and `readConfig` checked those three for **every**
+  deployment, so a SQLite worker (SKG-524) would have been refused at boot for a missing Linear key.
+- **What the worker keeps of a store is a name and a way to build one.** `StoreConfig` is
+  `{ provider, create() }` and nothing else; a test asserts exactly those two keys, so the next
+  provider's fields cannot arrive here either. `storeFor` is now one line.
+- **`store-config.ts` is the mechanism, `stores.ts` is the registry**, and they are two files because
+  the connectors import `defineStore` — holding the list in the same file would make it and
+  `linear.ts` import each other. A new store is one entry in `STORE_SPECS`.
+- **A store names its own environment variables.** `envNames` is required per field, so a boot
+  diagnostic says `LINEAR_API_KEY` and never `apiKey` — mutation-tested, and the mutation also trips
+  three older tests, which is how load-bearing that diagnostic is. `never reports a field name from
+  any store` asks it of every spec rather than of Linear.
+- **An unknown provider and a dev-only one in production are both refused, never defaulted.** A typo
+  falling back to Linear would send a worker configured for SQLite to an API it has no key for; and
+  feedback accepted into RAM behind a green health check is worse than a worker that will not start.
+  That second guard is the one thing this ticket had to generalise without loosening.
+- **`FRUITBACK_FAKE_LINEAR=1` still works, and it *degrades* where `FRUITBACK_STORE=memory` is
+  refused.** The asymmetry is deliberate: a flag a container inherited must not stop it serving
+  production, while a provider somebody deliberately named must not be silently swapped for another.
+  So the sugar falls back to the real store and says so in the log; the explicit selection is refused
+  at boot. `pnpm dev` and the E2E suite use the new spelling, which is what keeps the selection path
+  exercised outside the unit tests.
+- **`/health` answers `store: '<provider>'` instead of `fakeLinear: true`**, always. Which store a
+  process runs on is exactly what an operator cannot tell from a green check, and naming one provider
+  in the answer was the last place the endpoint assumed there was only ever one. Compared exactly in
+  `app.test.ts`, on purpose: this endpoint is public, so a field appearing on it has to be written
+  down.
+- **A short `FRUITBACK_IDENTITY_SECRET` used to answer `missing:` and then nothing.** The field failed
+  the schema, matched no entry in `NAMES_BY_FIELD`, and the list came back empty. Fixed in passing
+  here, and `answers no empty diagnostic` walks every way of making the config invalid rather than the
+  one that was noticed.
+- **Still Linear-shaped in one place, and left there on purpose**: `apps/worker/src/linear-memory.ts`
+  keeps its name and its import of `toSeedIssue`. See *Where a seed is stored* — that coupling is the
+  feature.
 - **`resolveClientIp` is security-relevant.** `X-Forwarded-For` is appended to by each proxy, so the
   left of the chain is caller-controlled and forgeable; the client IP is the entry
   `TRUSTED_PROXY_HOPS` from the **right**. Reading the leftmost entry — correct behind Cloudflare,
