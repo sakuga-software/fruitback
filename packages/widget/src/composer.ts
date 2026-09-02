@@ -313,7 +313,10 @@ const STYLES = `
 .fruit-composer-ghost { background: transparent; color: var(--fruit-color-text-muted); }
 .fruit-composer-send { background: var(--fruit-color-accent); color: var(--fruit-color-on-accent); }
 .fruit-composer-send[disabled] { opacity: 0.55; cursor: default; }
-.fruit-composer[data-fruit-state="harvested"] .fruit-composer-status { color: var(--fruit-color-success); font-weight: 600; }
+.fruit-composer[data-fruit-state="harvested"] .fruit-composer-status {
+  color: var(--fruit-color-success);
+  font-weight: 600;
+}
 .fruit-composer[data-fruit-state="failed"] .fruit-composer-status { color: var(--fruit-color-accent); }
 
 @keyframes fruit-composer-in {

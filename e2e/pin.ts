@@ -64,7 +64,9 @@ export async function waitForPins(page: Page, count: number): Promise<void> {
 
 /** Pins are found through their badge, which is the only part of the overlay that carries the note. */
 export function pinFor(page: Page, note: string): Locator {
-  return page.locator('[data-fruit-pin]').filter({ has: page.getByRole('button', { name: new RegExp(escapeForRegExp(note.slice(0, 20))) }) });
+  const badge = page.getByRole('button', { name: new RegExp(escapeForRegExp(note.slice(0, 20))) });
+
+  return page.locator('[data-fruit-pin]').filter({ has: badge });
 }
 
 function escapeForRegExp(value: string): string {

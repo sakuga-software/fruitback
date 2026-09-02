@@ -254,7 +254,11 @@ const STYLES = `
   height: 14px;
   accent-color: var(--fruit-color-accent);
 }
-.fruit-panel-config > .fruit-config-check { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--fruit-color-border); }
+.fruit-panel-config > .fruit-config-check {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--fruit-color-border);
+}
 .fruit-panel-config > .fruit-config-check + .fruit-config-check { margin-top: 6px; padding-top: 0; border-top: 0; }
 @media (max-width: 480px) {
   .fruit-panel-config { right: 8px; left: 8px; width: auto; }

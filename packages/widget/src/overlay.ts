@@ -686,7 +686,14 @@ const STYLES = `
 }
 .fruit-thread-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .fruit-thread-stage { font-weight: 600; font-size: 13px; }
-.fruit-thread-close { border: 0; background: none; font-size: 18px; line-height: 1; cursor: pointer; color: var(--fruit-color-text-muted); }
+.fruit-thread-close {
+  border: 0;
+  background: none;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--fruit-color-text-muted);
+}
 .fruit-thread-note { margin: 8px 0 0; white-space: pre-wrap; }
 .fruit-thread-meta { margin: 8px 0 0; font-size: 12px; color: var(--fruit-color-text-muted); }
 .fruit-thread-orphan { margin: 8px 0 0; font-size: 12px; color: var(--fruit-color-warning); }
