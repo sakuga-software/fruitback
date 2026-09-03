@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -165,6 +165,29 @@ describe('the file survives the process', () => {
     // removing the reuse leaves this at 3.
     assert.equal(sqliteConnectionsOpened(), 1);
     assert.equal(issues.length, 2);
+  });
+
+  it('closes the handle when the file turns out not to be a database', async () => {
+    // The constructor succeeds on any file; the first PRAGMA is what discovers it is not a database —
+    // a bad restore, a truncated volume. The handle is open by then, and `handleRequest` still falls
+    // back to building a store per request, so an unclosed one leaks a descriptor on every request
+    // until the process runs out. Raised in review on SKG-524.
+    const path = freshPath();
+    writeFileSync(path, 'ceci n’est pas une base de donnees');
+    const store = createSqliteStore({ path });
+    const descriptors = () => readdirSync('/dev/fd').length;
+
+    const before = descriptors();
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await assert.rejects(() => store.create(seedFixture(), undefined, POLICY), StoreError);
+    }
+
+    // **Open file descriptors**, not `connections.size`. The broken handle is never added to the map,
+    // so the map is empty whether it was closed or not — the first version of this test asserted
+    // exactly that and passed against the leak it was written to catch. Measured: five unclosed
+    // handles hold five descriptors, and closing them gives every one back.
+    assert.equal(sqliteConnectionsOpened(), 5);
+    assert.equal(descriptors(), before, 'a failed initialisation must not keep the file open');
   });
 
   it('reports a path it cannot open as the store being unavailable', async () => {
@@ -354,6 +377,36 @@ describe('a row the code did not write', () => {
 
     assert.equal(issues.length, 1);
     assert.equal(issues[0]?.seed.id, seed.id);
+  });
+
+  it('drops a row whose column and seed disagree about which page it is on', async () => {
+    // Written together, so they can only drift through an edit or a restore. If they do, this seed
+    // belongs to another page, and returning it puts one page's note on top of another's element.
+    // The Linear connector keeps the same invariant for a different reason — its filter is a
+    // substring match. Raised in review on SKG-524.
+    const path = freshPath();
+    const seed = seedFixture();
+    await createSqliteStore({ path }).create(seed, undefined, POLICY);
+    closeSqliteConnections();
+
+    const elsewhere = seedFixture({ id: 'ailleurs', page: { ...seed.page, url: 'https://acme.test/autre' } });
+    const database = new DatabaseSync(path);
+    database
+      .prepare('INSERT INTO seeds (client_id, page_url, stage, seed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+      // The column says this page; the seed inside says another.
+      .run(null, seed.page.url, 'seeded', JSON.stringify(elsewhere), '2026-01-01', '2026-01-01');
+    database.close();
+
+    const issues = await createSqliteStore({ path }).findForPage(
+      { url: seed.page.url, clientId: undefined },
+      undefined,
+      POLICY,
+    );
+
+    assert.deepEqual(
+      issues.map((issue) => issue.seed.id),
+      [seed.id],
+    );
   });
 
   it('colours a pin whose stage it does not recognise rather than hiding the note', async () => {

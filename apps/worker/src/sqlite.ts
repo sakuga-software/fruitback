@@ -121,9 +121,21 @@ function connect(path: string): DatabaseSync {
   // WAL so a read is not blocked by a write. `foreign_keys` is off by default in SQLite, and the
   // cascade that deletes a seed's comments depends on it being on.
   opened += 1;
-  database.exec('PRAGMA journal_mode = WAL');
-  database.exec('PRAGMA foreign_keys = ON');
-  migrate(database);
+
+  // Closed on failure, and that is not defensive tidiness. The constructor succeeds on a file that
+  // is not a database at all — a bad restore, a truncated volume — and the first PRAGMA is what
+  // throws. The handle is open by then, and since `handleRequest` falls back to building a store per
+  // request, an unclosed one here leaks a file descriptor **per request** until the process runs out.
+  // Reproduced: `new DatabaseSync` returns, `PRAGMA journal_mode` throws `file is not a database`.
+  try {
+    database.exec('PRAGMA journal_mode = WAL');
+    database.exec('PRAGMA foreign_keys = ON');
+    migrate(database);
+  } catch (error) {
+    database.close();
+    throw new StoreError(`SQLite could not initialise ${path}: ${String(error)}`);
+  }
+
   connections.set(path, database);
 
   return database;
@@ -193,6 +205,13 @@ function toSeedIssue(row: SeedRow, comments: SeedComment[] | undefined): SeedIss
 
   const seed = seedSchema.safeParse(parsed);
   if (!seed.success) return null;
+
+  // The row was selected on `page_url`, and the seed carries its own `page.url`. They are written
+  // together and can only drift through an edit or a restore — but if they do, this seed belongs to
+  // another page, and returning it puts one page's note on top of another's element. The Linear
+  // connector keeps the same invariant, there because its filter is a substring match and here
+  // because a file is something a human can open. Same promise, different reason.
+  if (seed.data.page.url !== row.page_url) return null;
 
   const stage = stageOf(row.stage);
   const candidate = {
