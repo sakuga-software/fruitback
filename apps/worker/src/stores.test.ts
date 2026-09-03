@@ -13,6 +13,8 @@ import { fakeLinearIgnoredReason } from './store-config.ts';
  * rest of that endpoint's contract lives.
  */
 
+const origins = { ALLOWED_ORIGINS: 'https://acme.test' };
+
 /** A Linear worker with everything it needs — the shape every deployment had before this ticket. */
 const linearEnv: WorkerEnv = {
   ALLOWED_ORIGINS: 'https://acme.test',
@@ -48,13 +50,15 @@ describe('selecting the store', () => {
     // A typo must not send a worker configured for SQLite to an API it has no key for. That would be
     // an opaque failure on every request instead of one line at boot — the same reasoning as
     // FRUITBACK_READ and TRUSTED_PROXY_HOPS.
-    const missing = missingOf({ ...linearEnv, FRUITBACK_STORE: 'sqlite' });
+    // `postgres` and not `sqlite`: this test named a store that has since been built (SKG-524), and
+    // an example that can stop being an example is how a guard quietly starts testing nothing.
+    const missing = missingOf({ ...linearEnv, FRUITBACK_STORE: 'postgres' });
 
     assert.equal(missing.length, 1);
-    assert.match(missing[0] ?? '', /^FRUITBACK_STORE \(unknown store "sqlite"/);
-    // Named, so an operator can see what they could have written instead of guessing.
-    assert.match(missing[0] ?? '', /linear/);
-    assert.match(missing[0] ?? '', /memory/);
+    assert.match(missing[0] ?? '', /^FRUITBACK_STORE \(unknown store "postgres"/);
+    // Named, so an operator can see what they could have written instead of guessing. Asked of the
+    // registry rather than spelled out, so adding a provider does not have to be remembered here.
+    for (const provider of storeProviders()) assert.match(missing[0] ?? '', new RegExp(provider));
   });
 
   it('asks only the selected store for its configuration', () => {
@@ -94,7 +98,7 @@ describe('selecting the store', () => {
   });
 
   it('lists the providers it can build', () => {
-    assert.deepEqual(storeProviders(), ['linear', 'memory']);
+    assert.deepEqual(storeProviders(), ['linear', 'sqlite', 'memory']);
   });
 });
 
@@ -174,7 +178,8 @@ describe('the boot diagnostic', () => {
   const BROKEN: ReadonlyArray<{ label: string; env: WorkerEnv; names: string }> = [
     { label: 'no origins', env: {}, names: 'ALLOWED_ORIGINS' },
     { label: 'no Linear key', env: { ALLOWED_ORIGINS: 'https://acme.test' }, names: 'LINEAR_API_KEY' },
-    { label: 'unknown store', env: { ...linearEnv, FRUITBACK_STORE: 'sqlite' }, names: 'FRUITBACK_STORE' },
+    { label: 'unknown store', env: { ...linearEnv, FRUITBACK_STORE: 'postgres' }, names: 'FRUITBACK_STORE' },
+    { label: 'sqlite with no path', env: { FRUITBACK_STORE: 'sqlite', ...origins }, names: 'FRUITBACK_SQLITE_PATH' },
     {
       label: 'dev-only store in production',
       env: { ...linearEnv, FRUITBACK_STORE: 'memory', NODE_ENV: 'production' },

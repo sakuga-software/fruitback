@@ -1,5 +1,6 @@
 import { createMemoryStoreSpec } from './linear-memory.ts';
 import { createLinearStoreSpec } from './linear.ts';
+import { createSqliteStoreSpec } from './sqlite.ts';
 import { type StoreConfigResult, type StoreEnv, type StoreSpec, storeProviderFor } from './store-config.ts';
 
 /**
@@ -9,7 +10,11 @@ import { type StoreConfigResult, type StoreEnv, type StoreSpec, storeProviderFor
  * holding the registry in the same file would make `store-config.ts` and `linear.ts` import each
  * other. SQLite (SKG-524) and GitHub (SKG-525) are one entry each.
  */
-export const STORE_SPECS: readonly StoreSpec[] = [createLinearStoreSpec(), createMemoryStoreSpec()];
+export const STORE_SPECS: readonly StoreSpec[] = [
+  createLinearStoreSpec(),
+  createSqliteStoreSpec(),
+  createMemoryStoreSpec(),
+];
 
 function specFor(provider: string): StoreSpec | undefined {
   return STORE_SPECS.find((spec) => spec.provider === provider);

@@ -6,13 +6,20 @@ repository.
 ## Project
 
 Fruitback is a visual feedback widget: a client clicks an element on their staging site, writes a
-note, and it becomes a Linear issue carrying the CSS selector, the React component and the source
-file. Coming back to the page, they see their pins again, coloured by Linear status.
+note, and it becomes an issue carrying the CSS selector, the React component and the source file.
+Coming back to the page, they see their pins again, coloured by that issue's status.
 
-**There is no Fruitback backend. Linear is the database.** The only server-side piece is a proxy
-service that holds the Linear token. Anything that looks like it needs storage — status, threads,
-assignees, history — belongs in Linear, not here. See [README.md](README.md) for the reasoning and
-the alternatives that were dropped.
+**Fruitback does not reinvent issue tracking — but it no longer requires somebody else's account.**
+That is a change, and SKG-524 made it deliberately. This file used to say *there is no Fruitback
+backend, Linear is the database*, and until the SQLite connector that was exactly true. It is not any
+more: `FRUITBACK_STORE=sqlite` puts the seeds in a file on a volume, and a self-hoster who wants no
+third party has a door.
+
+What has **not** changed is the instinct behind that sentence. Status, threads, assignees and history
+still belong to the store, never to a second model kept in step with it — and every store the worker
+speaks to is one somebody already runs. Linear stays the default and the richest of them: the
+dashboard, the triage, the API, the MCP server and the integrations all come for free. See
+[README.md](README.md) for the reasoning and the alternatives that were dropped.
 
 Deployment is **Docker on a VPS, driven by Dokploy from GitHub** — no Cloudflare, no serverless, no
 managed platform primitives. When something needs infrastructure, reach for what a single container
@@ -566,6 +573,41 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - **Still Linear-shaped in one place, and left there on purpose**: `apps/worker/src/linear-memory.ts`
   keeps its name and its import of `toSeedIssue`. See *Where a seed is stored* — that coupling is the
   feature.
+
+## SQLite, and what a second connector actually proved
+
+- **`sqlite.ts` is the connector that had to be uncomfortable** (SKG-524). One implementation of
+  `SeedStore` proved nothing; GitHub Issues would have proved almost as little, since markdown bodies,
+  labels and full-text search are Linear's shape under another name. SQLite shares none of it — no
+  description, no `contains` filter, no labels, no workflow states.
+- **It found exactly two places the interface leaked, and both were ours.** `SeedIssue.url` was
+  required, and the only way to satisfy it was to invent a URL for a store with no web page; it is
+  optional now. And the widget's thread said **"sur Linear"** — a vendor name in a widget that is not
+  supposed to know which store answers, the same defect `store-unavailable` fixed in the error codes.
+  Everything else fitted, which is the result the ticket was for.
+- **`findForPage` gets to be a plain equality here**, where Linear can only filter by substring and
+  re-checks afterwards. That is the payoff of naming the intention rather than the method.
+- **The connection is shared per path, and the store object is not.** `handleRequest` still falls back
+  to building a store when the transport did not hand it one, so without the shared handle that path
+  opens a database per request — the hazard SKG-522 was written to prevent. The test asserts **how
+  many handles were opened**, not `connections.size`: the map is keyed by path, so a `connect` that
+  stopped reusing overwrites the entry and leaves the size at one. Both weaker spellings were measured
+  passing against the mutation before this one was written.
+- **There is nothing to project onto `SeedStage`.** The column *is* a stage, so `stageOf` only applies
+  the contract's own tolerance — an unrecognised value colours the pin rather than hiding the note.
+- **A row is parsed, never trusted.** The file sits on a volume an operator can edit and a restore can
+  be older than the code. A malformed row costs that one pin; the page keeps its other notes.
+- **`insert` and `select` are `async` so a failure to open the file rejects rather than throwing
+  synchronously.** `connect` throws before any `await`, and `app.ts` happens to catch it either way —
+  but a caller reaching for `.catch()` would have been bypassed on the one path that matters, a volume
+  nobody mounted.
+- **`sqlite3` is in the runtime image for one reason: the backup line in the README.** The store needs
+  nothing installed; `.backup` needs a binary, and it is the only safe way to copy a live database.
+  Measured in a container: `fruitback.db` was 4 KB while `fruitback.db-wal` held 53 KB, so a `cp`
+  of the `.db` alone would have lost the note that had just been planted.
+- **Verified in the container, not only in `node --test`**: boot on `FRUITBACK_STORE=sqlite`, `/health`
+  answering `store: sqlite`, a seed posted and read back, the pin surviving `docker restart`, and the
+  documented backup command producing a file that holds the seed.
 - **`resolveClientIp` is security-relevant.** `X-Forwarded-For` is appended to by each proxy, so the
   left of the chain is caller-controlled and forgeable; the client IP is the entry
   `TRUSTED_PROXY_HOPS` from the **right**. Reading the leftmost entry — correct behind Cloudflare,

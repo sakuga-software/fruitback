@@ -513,7 +513,7 @@ function buildThread(document: Document, issue: SeedIssue, resolution: AnchorRes
     // checks; a reader who is told nothing believes it.
     ...uncertaintyNote(document, resolution),
     ...replies(document, issue),
-    link(document, issue),
+    ...link(document, issue),
   );
 
   return thread;
@@ -547,15 +547,29 @@ function closeButton(document: Document): HTMLElement {
   return button;
 }
 
-function link(document: Document, issue: SeedIssue): HTMLElement {
+/**
+ * The way out to the store's own interface, when it has one (SKG-524).
+ *
+ * Two things changed here, and both were the contract leaking. The label said **Linear** in a widget
+ * that is not supposed to know which store is behind the worker — the same reason `502` reports
+ * `store-unavailable` and not `linear-unavailable` (SKG-522). And `url` is now optional, because
+ * SQLite has no page to open: rendering an anchor anyway would put a link on every pin that leads
+ * back to the page the reader is already on, which reads as the store having lost the note.
+ *
+ * Returns an array so the caller spreads nothing when there is nowhere to go.
+ */
+function link(document: Document, issue: SeedIssue): HTMLElement[] {
+  if (issue.url === undefined) return [];
+
   const anchor = document.createElement('a');
   anchor.className = 'fruitback-thread-link';
   anchor.href = issue.url;
   anchor.target = '_blank';
   anchor.rel = 'noreferrer noopener';
-  anchor.textContent = `${issue.identifier} sur Linear →`;
+  // The identifier is the handle a human searches for; where it opens is the link's own business.
+  anchor.textContent = `${issue.identifier} →`;
 
-  return anchor;
+  return [anchor];
 }
 
 function element(document: Document, tag: string, className: string, content: string | HTMLElement[]): HTMLElement {

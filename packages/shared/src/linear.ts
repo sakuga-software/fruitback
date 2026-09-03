@@ -242,9 +242,21 @@ export type SeedComment = z.infer<typeof seedCommentSchema>;
  */
 export const seedIssueSchema = z.object({
   id: z.string().min(1),
-  /** Human handle, e.g. `SKG-491`. */
+  /** Human handle, e.g. `SKG-491` from Linear, `FB-12` from a store that numbers its own. */
   identifier: z.string().min(1),
-  url: z.string().min(1),
+  /**
+   * Where a human can open this note in the store's own interface — **when the store has one**
+   * (SKG-524).
+   *
+   * Optional because SQLite has no web interface at all, and the only way to keep this required was
+   * to invent a URL that goes nowhere. A pin whose link leads back to the page it is already on is
+   * worse than a pin with no link: it looks like the store lost the note. The widget renders the
+   * link only when this is present.
+   *
+   * Read-envelope field, like `comments`: nothing here is stored in a seed, so `SEED_VERSION` does
+   * not move.
+   */
+  url: z.string().min(1).optional(),
   title: z.string(),
   stage: z.enum(SEED_STAGES),
   stateName: z.string(),
