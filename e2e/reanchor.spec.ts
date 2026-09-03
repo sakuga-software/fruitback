@@ -21,7 +21,7 @@ test('pins survive a redeploy that rewrites classes, ids and the order of the pa
 
   await expectPinOn(pinFor(page, 'Le bouton Ajouter'), latteButton);
   await expectPinOn(pinFor(page, 'Le menu'), burger);
-  await expect(pinFor(page, 'Le bouton Ajouter')).toHaveAttribute('data-fb-strategy', 'selector');
+  await expect(pinFor(page, 'Le bouton Ajouter')).toHaveAttribute('data-fruitback-strategy', 'selector');
 });
 
 test('the structural path alone would have landed on the neighbouring card', async ({ page }) => {
@@ -74,7 +74,7 @@ test('an element that is gone never leaves a pin that claims to be sure', async 
 
   const pin = pinFor(page, 'Sur une carte qui');
   await expect(pin).toBeVisible();
-  await expect(pin).toHaveAttribute('data-fb-confident', 'false');
+  await expect(pin).toHaveAttribute('data-fruitback-confident', 'false');
   await expect(pin.getByRole('button')).toContainText('≈');
 });
 
@@ -88,22 +88,22 @@ test('a note whose element is gone lands in the detached list, and one merely mo
   await plantPin(page, page.locator('[data-testid="card-latte"] .add'), 'Sur un bouton qui a un jumeau');
   await plantPin(page, page.locator('#email-field'), 'Sur un champ qui va disparaître');
 
-  await expect(page.locator('[data-fb-orphans]')).toBeHidden();
+  await expect(page.locator('[data-fruitback-orphans]')).toBeHidden();
 
   // The redeploy removes the Latte card; the checkout form is rebuilt without its input.
   await page.getByRole('button', { name: 'Supprimer la carte Latte' }).click();
   await page.evaluate(() => document.querySelector('#email-field')?.remove());
 
-  const drawer = page.locator('[data-fb-orphans]');
+  const drawer = page.locator('[data-fruitback-orphans]');
   await expect(drawer).toBeVisible();
-  await expect(drawer.locator('.fb-orphans-toggle')).toHaveText(/1 note détachée/);
+  await expect(drawer.locator('.fruitback-orphans-toggle')).toHaveText(/1 note détachée/);
 
-  await drawer.locator('.fb-orphans-toggle').click();
-  await expect(drawer.locator('.fb-orphans-item')).toHaveCount(1);
-  await expect(drawer.locator('.fb-orphans-note')).toContainText('Sur un champ qui va disparaître');
+  await drawer.locator('.fruitback-orphans-toggle').click();
+  await expect(drawer.locator('.fruitback-orphans-item')).toHaveCount(1);
+  await expect(drawer.locator('.fruitback-orphans-note')).toContainText('Sur un champ qui va disparaître');
 
   // And clicking it opens that note, which is the only way left to read it on this page.
-  await drawer.locator('.fb-orphans-note').click();
-  await expect(page.locator('[data-fb-thread]')).toHaveCount(1);
-  await expect(page.locator('.fb-thread-note')).toHaveText('Sur un champ qui va disparaître');
+  await drawer.locator('.fruitback-orphans-note').click();
+  await expect(page.locator('[data-fruitback-thread]')).toHaveCount(1);
+  await expect(page.locator('.fruitback-thread-note')).toHaveText('Sur un champ qui va disparaître');
 });

@@ -21,10 +21,10 @@ test('a note goes from planting to harvested, and the pin lands', async ({ page 
   await page.getByRole('button', { name: 'Planter' }).click();
 
   // The product's own word for it, in the status the composer announces.
-  await expect(page.locator('[data-fb-composer]')).toContainText(/récolté/);
-  await expect(page.locator('[data-fb-pin]')).toHaveCount(1);
+  await expect(page.locator('[data-fruitback-composer]')).toContainText(/récolté/);
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
   // And it closes itself once the confirmation has been read.
-  await expect(page.locator('[data-fb-composer]')).toBeHidden({ timeout: 5_000 });
+  await expect(page.locator('[data-fruitback-composer]')).toBeHidden({ timeout: 5_000 });
 });
 
 test('a failed send keeps the note and stays open', async ({ page }) => {
@@ -41,8 +41,8 @@ test('a failed send keeps the note and stays open', async ({ page }) => {
   await page.getByPlaceholder("Qu'est-ce qui ne va pas ici ?").fill(note);
   await page.getByRole('button', { name: 'Planter' }).click();
 
-  await expect(page.locator('[data-fb-composer]')).toContainText(/pas passé/);
-  await expect(page.locator('[data-fb-composer]')).toBeVisible();
+  await expect(page.locator('[data-fruitback-composer]')).toContainText(/pas passé/);
+  await expect(page.locator('[data-fruitback-composer]')).toBeVisible();
   await expect(page.getByPlaceholder("Qu'est-ce qui ne va pas ici ?")).toHaveValue(note);
   // Retrying is one click, not one more typing session.
   await expect(page.getByRole('button', { name: 'Planter' })).toBeEnabled();
@@ -56,7 +56,7 @@ test('on a phone it is a sheet at the bottom, not a popover beside the element',
 
   const viewport = page.viewportSize();
   const measure = () =>
-    page.locator('[data-fb-composer]').evaluate((node) => {
+    page.locator('[data-fruitback-composer]').evaluate((node) => {
       // Viewport coordinates, not `boundingBox()`: the sheet is `position: fixed` and the page has
       // been scrolled to reach the element, so a document-relative measurement would carry the
       // scroll offset with it.
@@ -85,7 +85,7 @@ test('it stays inside the viewport when the element is against the right edge', 
   const viewport = page.viewportSize();
   await expect
     .poll(async () =>
-      page.locator('[data-fb-composer]').evaluate((node) => Math.round(node.getBoundingClientRect().right)),
+      page.locator('[data-fruitback-composer]').evaluate((node) => Math.round(node.getBoundingClientRect().right)),
     )
     .toBeLessThanOrEqual(viewport?.width ?? 0);
 });
@@ -96,7 +96,7 @@ test('it honours a reader who asked for less motion', async ({ page }) => {
   await selectTheCta(page);
 
   const animation = await page
-    .locator('[data-fb-composer]')
+    .locator('[data-fruitback-composer]')
     .evaluate((node) => getComputedStyle(node).animationName);
 
   expect(animation).toBe('none');
@@ -107,9 +107,9 @@ test('the pin is a drop, and it says what it is to a screen reader', async ({ pa
   await selectTheCta(page);
   await page.getByPlaceholder("Qu'est-ce qui ne va pas ici ?").fill('Un pin en goutte');
   await page.getByRole('button', { name: 'Planter' }).click();
-  await expect(page.locator('[data-fb-pin]')).toHaveCount(1);
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 
-  const badge = page.locator('.fb-pin-badge');
+  const badge = page.locator('.fruitback-pin-badge');
   const shape = await badge.evaluate((node) => {
     const style = getComputedStyle(node);
 

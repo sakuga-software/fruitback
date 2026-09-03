@@ -52,21 +52,21 @@ export function createComposer(options: ComposerOptions): Composer {
   style.textContent = STYLES;
 
   const root = document.createElement('div');
-  root.className = 'fb-composer';
-  root.dataset.fbComposer = '';
+  root.className = 'fruitback-composer';
+  root.dataset.fruitbackComposer = '';
   root.hidden = true;
   root.innerHTML = TEMPLATE;
 
   options.host.append(style, root);
 
-  const field = root.querySelector('[data-fb-note]') as HTMLTextAreaElement;
-  const send = root.querySelector('[data-fb-send]') as HTMLButtonElement;
-  const cancel = root.querySelector('[data-fb-cancel]') as HTMLButtonElement;
-  const status = root.querySelector('[data-fb-status]') as HTMLElement;
-  const identify = root.querySelector('[data-fb-identify]') as HTMLButtonElement;
-  const who = root.querySelector('[data-fb-who]') as HTMLElement;
-  const name = root.querySelector('[data-fb-name]') as HTMLInputElement;
-  const email = root.querySelector('[data-fb-email]') as HTMLInputElement;
+  const field = root.querySelector('[data-fruitback-note]') as HTMLTextAreaElement;
+  const send = root.querySelector('[data-fruitback-send]') as HTMLButtonElement;
+  const cancel = root.querySelector('[data-fruitback-cancel]') as HTMLButtonElement;
+  const status = root.querySelector('[data-fruitback-status]') as HTMLElement;
+  const identify = root.querySelector('[data-fruitback-identify]') as HTMLButtonElement;
+  const who = root.querySelector('[data-fruitback-who]') as HTMLElement;
+  const name = root.querySelector('[data-fruitback-name]') as HTMLInputElement;
+  const email = root.querySelector('[data-fruitback-email]') as HTMLInputElement;
 
   let state: ComposerState = 'idle';
   let closing = 0;
@@ -79,7 +79,7 @@ export function createComposer(options: ComposerOptions): Composer {
 
   function setState(next: ComposerState): void {
     state = next;
-    root.dataset.fbState = next;
+    root.dataset.fruitbackState = next;
     // Disabled while in flight: a second click would plant the same note twice, and the worker has
     // no way to tell the difference.
     send.disabled = next === 'sending' || next === 'harvested';
@@ -140,9 +140,12 @@ export function createComposer(options: ComposerOptions): Composer {
 
     // Custom properties rather than inline `left`/`top`: an inline style would beat the media query
     // below and leave the mobile sheet offset by whatever the element's position happened to be.
-    root.style.setProperty('--fruit-composer-left', `${Math.max(GAP, Math.min(anchor.left, width - WIDTH - GAP))}px`);
     root.style.setProperty(
-      '--fruit-composer-top',
+      '--fruitback-composer-left',
+      `${Math.max(GAP, Math.min(anchor.left, width - WIDTH - GAP))}px`,
+    );
+    root.style.setProperty(
+      '--fruitback-composer-top',
       `${fitsBelow ? below : Math.max(0, anchor.top - own.height - GAP)}px`,
     );
   }
@@ -212,21 +215,22 @@ const MESSAGES: Record<ComposerState, string> = {
 };
 
 const TEMPLATE = `
-  <div class="fb-composer-drop" aria-hidden="true"></div>
-  <textarea data-fb-note rows="3" placeholder="Qu'est-ce qui ne va pas ici ?" aria-label="Votre commentaire"></textarea>
-  <button type="button" data-fb-identify class="fb-composer-identify" aria-expanded="false">
+  <div class="fruitback-composer-drop" aria-hidden="true"></div>
+  <textarea data-fruitback-note rows="3" placeholder="Qu'est-ce qui ne va pas ici ?"
+            aria-label="Votre commentaire"></textarea>
+  <button type="button" data-fruitback-identify class="fruitback-composer-identify" aria-expanded="false">
     Ajouter mon nom (facultatif)
   </button>
-  <div data-fb-who class="fb-composer-who" hidden>
-    <input data-fb-name type="text" name="fb-name" placeholder="Votre nom" aria-label="Votre nom (facultatif)"
-           autocomplete="name" />
-    <input data-fb-email type="email" name="fb-email" placeholder="vous@exemple.fr"
+  <div data-fruitback-who class="fruitback-composer-who" hidden>
+    <input data-fruitback-name type="text" name="fruitback-name" placeholder="Votre nom"
+           aria-label="Votre nom (facultatif)" autocomplete="name" />
+    <input data-fruitback-email type="email" name="fruitback-email" placeholder="vous@exemple.fr"
            aria-label="Votre e-mail (facultatif)" autocomplete="email" />
   </div>
-  <div class="fb-composer-foot">
-    <span data-fb-status class="fb-composer-status" role="status" aria-live="polite"></span>
-    <button type="button" data-fb-cancel class="fb-composer-ghost">Annuler</button>
-    <button type="button" data-fb-send class="fb-composer-send">Planter</button>
+  <div class="fruitback-composer-foot">
+    <span data-fruitback-status class="fruitback-composer-status" role="status" aria-live="polite"></span>
+    <button type="button" data-fruitback-cancel class="fruitback-composer-ghost">Annuler</button>
+    <button type="button" data-fruitback-send class="fruitback-composer-send">Planter</button>
   </div>
 `;
 
@@ -237,93 +241,96 @@ const TEMPLATE = `
  * last thing that should ignore that setting.
  */
 const STYLES = `
-.fb-composer {
+.fruitback-composer {
   position: absolute;
   /* WIDTH is what place() clamps against, so the rendered box has to be exactly that — with
      content-box the padding sat outside it and the popover could overhang the viewport. Set here
      rather than inherited from the host's reset: this file has to hold up wherever it is mounted. */
   box-sizing: border-box;
-  left: var(--fruit-composer-left, 0px);
-  top: var(--fruit-composer-top, 0px);
+  left: var(--fruitback-composer-left, 0px);
+  top: var(--fruitback-composer-top, 0px);
   z-index: 2147483300;
   width: ${WIDTH}px;
   padding: 14px;
   border-radius: 18px;
-  background: var(--fruit-color-surface-raised);
-  color: var(--fruit-color-text);
-  font: 14px/1.5 var(--fruit-font-sans);
-  box-shadow: var(--fruit-shadow-xl);
-  animation: fb-composer-in var(--fruit-duration-fast) cubic-bezier(0.22, 1.2, 0.36, 1);
+  background: var(--fruitback-color-surface-raised);
+  color: var(--fruitback-color-text);
+  font: 14px/1.5 var(--fruitback-font-sans);
+  box-shadow: var(--fruitback-shadow-xl);
+  animation: fruitback-composer-in var(--fruitback-duration-fast) cubic-bezier(0.22, 1.2, 0.36, 1);
 }
-.fb-composer[hidden] { display: none; }
-.fb-composer-drop {
+.fruitback-composer[hidden] { display: none; }
+.fruitback-composer-drop {
   position: absolute;
   top: -7px;
   left: 22px;
   width: 14px;
   height: 14px;
-  background: var(--fruit-color-surface-raised);
+  background: var(--fruitback-color-surface-raised);
   /* A seed rather than a triangle: three round corners and one sharp, turned to point at the pin. */
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
 }
-.fb-composer textarea {
+.fruitback-composer textarea {
   display: block;
   width: 100%;
-  border: 1px solid var(--fruit-color-border);
+  border: 1px solid var(--fruitback-color-border);
   border-radius: 12px;
   padding: 10px 12px;
   font: inherit;
   resize: vertical;
-  background: var(--fruit-color-surface);
+  background: var(--fruitback-color-surface);
   color: inherit;
 }
-.fb-composer textarea:focus-visible { outline: 2px solid var(--fruit-color-accent); outline-offset: 1px; }
-.fb-composer-identify {
+.fruitback-composer textarea:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 1px; }
+.fruitback-composer-identify {
   display: block;
   margin-top: 8px;
   border: 0;
   background: none;
   padding: 0;
-  color: var(--fruit-color-text-muted);
+  color: var(--fruitback-color-text-muted);
   font: inherit;
   font-size: 12px;
   text-decoration: underline;
   cursor: pointer;
 }
-.fb-composer-who { display: flex; gap: 6px; margin-top: 8px; }
-.fb-composer-who[hidden] { display: none; }
-.fb-composer-who input {
+.fruitback-composer-who { display: flex; gap: 6px; margin-top: 8px; }
+.fruitback-composer-who[hidden] { display: none; }
+.fruitback-composer-who input {
   flex: 1;
   min-width: 0;
   padding: 6px 8px;
-  border: 1px solid var(--fruit-color-border-strong);
+  border: 1px solid var(--fruitback-color-border-strong);
   border-radius: 8px;
   font: inherit;
   font-size: 12px;
   color: inherit;
-  background: var(--fruit-color-surface);
+  background: var(--fruitback-color-surface);
 }
-.fb-composer-who input:focus-visible { outline: 2px solid var(--fruit-color-accent); outline-offset: 1px; }
-.fb-composer-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
-.fb-composer-status { flex: 1; font-size: 12px; color: var(--fruit-color-text-muted); }
-.fb-composer-ghost, .fb-composer-send {
+.fruitback-composer-who input:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 1px; }
+.fruitback-composer-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.fruitback-composer-status { flex: 1; font-size: 12px; color: var(--fruitback-color-text-muted); }
+.fruitback-composer-ghost, .fruitback-composer-send {
   border: 0; border-radius: 999px; padding: 8px 14px; font: 600 13px/1 inherit; cursor: pointer;
 }
-.fb-composer-ghost { background: transparent; color: var(--fruit-color-text-muted); }
-.fb-composer-send { background: var(--fruit-color-accent); color: var(--fruit-color-on-accent); }
-.fb-composer-send[disabled] { opacity: 0.55; cursor: default; }
-.fb-composer[data-fb-state="harvested"] .fb-composer-status { color: var(--fruit-color-success); font-weight: 600; }
-.fb-composer[data-fb-state="failed"] .fb-composer-status { color: var(--fruit-color-accent); }
+.fruitback-composer-ghost { background: transparent; color: var(--fruitback-color-text-muted); }
+.fruitback-composer-send { background: var(--fruitback-color-accent); color: var(--fruitback-color-on-accent); }
+.fruitback-composer-send[disabled] { opacity: 0.55; cursor: default; }
+.fruitback-composer[data-fruitback-state="harvested"] .fruitback-composer-status {
+  color: var(--fruitback-color-success);
+  font-weight: 600;
+}
+.fruitback-composer[data-fruitback-state="failed"] .fruitback-composer-status { color: var(--fruitback-color-accent); }
 
-@keyframes fb-composer-in {
+@keyframes fruitback-composer-in {
   from { opacity: 0; transform: translateY(-6px) scale(0.96); }
   to { opacity: 1; transform: none; }
 }
 
 /* Full screen on a phone: a 320px popover anchored to an element is unusable at that width. */
 @media (max-width: 640px) {
-  .fb-composer {
+  .fruitback-composer {
     position: fixed;
     /* Beats the custom properties above, which are only meaningful for the anchored popover. */
     inset: auto 0 0 0;
@@ -332,18 +339,18 @@ const STYLES = `
     width: auto;
     border-radius: 18px 18px 0 0;
     padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
-    animation-name: fb-composer-sheet-in;
+    animation-name: fruitback-composer-sheet-in;
   }
-  .fb-composer-drop { display: none; }
-  .fb-composer textarea { min-height: 96px; }
+  .fruitback-composer-drop { display: none; }
+  .fruitback-composer textarea { min-height: 96px; }
 }
 
-@keyframes fb-composer-sheet-in {
+@keyframes fruitback-composer-sheet-in {
   from { transform: translateY(100%); }
   to { transform: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fb-composer { animation: none; }
+  .fruitback-composer { animation: none; }
 }
 `;

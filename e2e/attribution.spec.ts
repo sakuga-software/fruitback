@@ -15,10 +15,10 @@ test('a note is anonymous unless the reporter says otherwise', async ({ page }) 
   await page.getByRole('button', { name: /Laisser un feedback/ }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   // The fields are behind a disclosure: anonymous is what happens if you do nothing.
-  await expect(page.locator('[data-fb-who]')).toBeHidden();
+  await expect(page.locator('[data-fruitback-who]')).toBeHidden();
   await page.getByPlaceholder("Qu'est-ce qui ne va pas ici ?").fill('Personne ne saura qui je suis');
   await page.getByRole('button', { name: 'Planter' }).click();
-  await expect(page.locator('[data-fb-dev="status"]')).toHaveText(/^planté ·/);
+  await expect(page.locator('[data-fruitback-dev="status"]')).toHaveText(/^planté ·/);
 
   const [seed] = await storedSeeds(page);
   expect(seed?.reporter).toBeUndefined();
@@ -34,7 +34,7 @@ test('a typed name reaches Linear, and is stored as the claim it is', async ({ p
   await page.getByLabel('Votre e-mail (facultatif)').fill('alice@acme.test');
   await page.getByPlaceholder("Qu'est-ce qui ne va pas ici ?").fill('Signé Alice');
   await page.getByRole('button', { name: 'Planter' }).click();
-  await expect(page.locator('[data-fb-dev="status"]')).toHaveText(/^planté ·/);
+  await expect(page.locator('[data-fruitback-dev="status"]')).toHaveText(/^planté ·/);
 
   const [seed] = await storedSeeds(page);
   expect(seed?.reporter).toEqual({ name: 'Alice', email: 'alice@acme.test' });

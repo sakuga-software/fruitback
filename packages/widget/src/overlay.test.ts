@@ -43,12 +43,12 @@ describe('createOverlay', () => {
 
     overlay.render([issueOnCta()]);
 
-    const pin = page.document.querySelector('[data-fb-pin]') as HTMLElement;
+    const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
     assert.equal(pin.style.left, '100px');
     assert.equal(pin.style.top, '200px');
     assert.equal(pin.style.width, '200px');
     assert.equal(pin.style.height, '40px');
-    assert.equal(pin.dataset.fbStrategy, 'selector');
+    assert.equal(pin.dataset.fruitbackStrategy, 'selector');
   });
 
   it('colours the pin by the Linear state, not by anything it stores itself', () => {
@@ -57,12 +57,12 @@ describe('createOverlay', () => {
 
     overlay.render([issueOnCta({ stage: 'ripe', stateName: 'Done' })]);
 
-    const pin = page.document.querySelector('[data-fb-pin]') as HTMLElement;
-    assert.equal(pin.dataset.fbStage, 'ripe');
+    const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
+    assert.equal(pin.dataset.fruitbackStage, 'ripe');
     // The token, not the hexadecimal (SKG-528). What the pin actually renders is asserted end to
     // end in `e2e/overlay.spec.ts`, which reads the computed colour in a real browser — the only
     // place a `var()` can be resolved at all.
-    assert.equal(pin.style.getPropertyValue('--fruit-pin-color'), 'var(--fruit-stage-ripe)');
+    assert.equal(pin.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-stage-ripe)');
   });
 
   it('places a pin whose element is gone at its remembered position, and says so', () => {
@@ -72,9 +72,9 @@ describe('createOverlay', () => {
 
     overlay.render([issueOnCta()]);
 
-    const pin = page.document.querySelector('[data-fb-pin]') as HTMLElement;
-    assert.equal(pin.dataset.fbStrategy, 'orphan');
-    assert.ok(pin.className.includes('fb-pin-orphan'));
+    const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
+    assert.equal(pin.dataset.fruitbackStrategy, 'orphan');
+    assert.ok(pin.className.includes('fruitback-pin-orphan'));
     // 10% of 1000 across, 20% down: the box the note was planted on.
     assert.equal(pin.style.left, '100px');
     assert.equal(pin.style.top, '200px');
@@ -94,14 +94,14 @@ describe('createOverlay', () => {
       }),
     ]);
 
-    const pin = page.document.querySelector('[data-fb-pin]') as HTMLElement;
-    assert.equal(pin.dataset.fbStrategy, 'bounds');
-    assert.equal(pin.dataset.fbConfident, 'false');
-    assert.ok(pin.className.includes('fb-pin-uncertain'));
-    assert.match(page.document.querySelector('.fb-pin-badge')?.textContent ?? '', /≈/);
+    const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
+    assert.equal(pin.dataset.fruitbackStrategy, 'bounds');
+    assert.equal(pin.dataset.fruitbackConfident, 'false');
+    assert.ok(pin.className.includes('fruitback-pin-uncertain'));
+    assert.match(page.document.querySelector('.fruitback-pin-badge')?.textContent ?? '', /≈/);
 
-    (page.document.querySelector('.fb-pin-badge') as HTMLElement).click();
-    assert.match(page.document.querySelector('[data-fb-thread]')?.textContent ?? '', /par sa position/i);
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+    assert.match(page.document.querySelector('[data-fruitback-thread]')?.textContent ?? '', /par sa position/i);
   });
 
   it('re-measures when the page moves under it', () => {
@@ -113,7 +113,7 @@ describe('createOverlay', () => {
     setRect(page.query('button'), { left: 100, top: 460, width: 200, height: 40 });
     overlay.reposition();
 
-    assert.equal((page.document.querySelector('[data-fb-pin]') as HTMLElement).style.top, '460px');
+    assert.equal((page.document.querySelector('[data-fruitback-pin]') as HTMLElement).style.top, '460px');
   });
 
   it('falls back to the remembered box when the element is torn out of the page', () => {
@@ -126,21 +126,21 @@ describe('createOverlay', () => {
     page.query('button').remove();
     overlay.reposition();
 
-    const pin = page.document.querySelector('[data-fb-pin]') as HTMLElement;
+    const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
     assert.equal(pin.style.left, '100px');
     assert.equal(pin.style.top, '200px');
-    assert.ok(pin.className.includes('fb-pin-orphan'), 'the pin should show that it lost its element');
+    assert.ok(pin.className.includes('fruitback-pin-orphan'), 'the pin should show that it lost its element');
   });
 
   it('does not close the thread when the click is inside it', () => {
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });
     overlay.render([issueOnCta()]);
-    (page.document.querySelector('.fb-pin-badge') as HTMLElement).click();
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
 
-    (page.document.querySelector('.fb-thread-note') as HTMLElement).click();
+    (page.document.querySelector('.fruitback-thread-note') as HTMLElement).click();
 
-    assert.ok(page.document.querySelector('[data-fb-thread]'), 'the thread closed under its own click');
+    assert.ok(page.document.querySelector('[data-fruitback-thread]'), 'the thread closed under its own click');
   });
 
   it('lets clicks through to the page, except on the badge', () => {
@@ -149,8 +149,8 @@ describe('createOverlay', () => {
     overlay = createOverlay({ document: page.document });
     overlay.render([issueOnCta()]);
 
-    const pin = page.document.querySelector('.fb-pin') as HTMLElement;
-    const badge = page.document.querySelector('.fb-pin-badge') as HTMLElement;
+    const pin = page.document.querySelector('.fruitback-pin') as HTMLElement;
+    const badge = page.document.querySelector('.fruitback-pin-badge') as HTMLElement;
     const styles = page.view.getComputedStyle(pin);
 
     assert.equal(styles.pointerEvents, 'none');
@@ -162,9 +162,9 @@ describe('createOverlay', () => {
     overlay = createOverlay({ document: page.document });
     overlay.render([issueOnCta({ identifier: 'SKG-742', stateName: 'In Progress' })]);
 
-    (page.document.querySelector('.fb-pin-badge') as HTMLElement).click();
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
 
-    const thread = page.document.querySelector('[data-fb-thread]');
+    const thread = page.document.querySelector('[data-fruitback-thread]');
     assert.ok(thread, 'no thread opened');
     assert.match(thread.textContent ?? '', /In Progress/);
     assert.match(thread.textContent ?? '', /Commander/);
@@ -179,20 +179,20 @@ describe('createOverlay', () => {
     overlay = createOverlay({ document: page.document });
     overlay.render([issueOnCta()]);
 
-    (page.document.querySelector('.fb-pin-badge') as HTMLElement).click();
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
 
-    assert.match(page.document.querySelector('[data-fb-thread]')?.textContent ?? '', /introuvable/i);
+    assert.match(page.document.querySelector('[data-fruitback-thread]')?.textContent ?? '', /introuvable/i);
   });
 
   it('closes the thread on Escape', () => {
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });
     overlay.render([issueOnCta()]);
-    (page.document.querySelector('.fb-pin-badge') as HTMLElement).click();
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
 
     pressKey(page, 'Escape');
 
-    assert.equal(page.document.querySelector('[data-fb-thread]'), null);
+    assert.equal(page.document.querySelector('[data-fruitback-thread]'), null);
   });
 
   it('reports what found each pin, so a bad resolution is visible rather than plausible', () => {
@@ -222,7 +222,7 @@ describe('createOverlay', () => {
     overlay.destroy();
     overlay = null;
 
-    assert.equal(page.document.querySelector('[data-fb-pin]'), null);
+    assert.equal(page.document.querySelector('[data-fruitback-pin]'), null);
     assert.equal(page.document.querySelector('[data-fruitback-overlay]'), null);
   });
 });
@@ -241,8 +241,8 @@ describe('the page changing underneath', () => {
       onResolve: (entries) => resolved.push(...entries.map((entry) => entry.strategy)),
     });
     overlay.render([issueOnCta()]);
-    const before = page.document.querySelector('[data-fb-pin]') as HTMLElement;
-    assert.equal(before.dataset.fbStrategy, 'selector');
+    const before = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
+    assert.equal(before.dataset.fruitbackStrategy, 'selector');
 
     // What React does on a re-render: the old node goes, an equivalent one takes its place
     // elsewhere on the page.
@@ -255,7 +255,7 @@ describe('the page changing underneath', () => {
 
     await settle();
 
-    const pin = page.document.querySelector('[data-fb-pin]') as HTMLElement;
+    const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
     assert.equal(pin.style.left, '400px', 'the pin followed its element');
     assert.equal(pin.style.top, '600px');
     assert.deepEqual(resolved, ['selector'], 'and the host was told, rather than asked to notice');
@@ -266,16 +266,16 @@ describe('the page changing underneath', () => {
     overlay = createOverlay({ document: page.document });
     overlay.render([issueOnCta()]);
 
-    const pin = page.document.querySelector('[data-fb-pin]') as HTMLElement;
-    assert.equal(pin.dataset.fbConfident, 'true');
+    const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
+    assert.equal(pin.dataset.fruitbackConfident, 'true');
 
     page.query('button').remove();
     await settle();
 
     // Re-resolved in place: the same pin element, carrying different marks.
-    assert.equal(pin.dataset.fbConfident, 'false');
-    assert.equal(pin.querySelector('.fb-pin-glyph')?.textContent, '≈');
-    assert.ok(pin.classList.contains('fb-pin-uncertain'));
+    assert.equal(pin.dataset.fruitbackConfident, 'false');
+    assert.equal(pin.querySelector('.fruitback-pin-glyph')?.textContent, '≈');
+    assert.ok(pin.classList.contains('fruitback-pin-uncertain'));
   });
 
   it('does not close a thread someone is reading', async () => {
@@ -284,13 +284,13 @@ describe('the page changing underneath', () => {
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });
     overlay.render([issueOnCta()]);
-    (page.document.querySelector('.fb-pin-badge') as HTMLElement).click();
-    assert.equal(page.document.querySelectorAll('[data-fb-thread]').length, 1);
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+    assert.equal(page.document.querySelectorAll('[data-fruitback-thread]').length, 1);
 
     page.document.querySelector('main')?.append(page.document.createElement('div'));
     await settle();
 
-    assert.equal(page.document.querySelectorAll('[data-fb-thread]').length, 1, 'still open');
+    assert.equal(page.document.querySelectorAll('[data-fruitback-thread]').length, 1, 'still open');
   });
 
   it('does not wake itself up on the pins it draws', async () => {
@@ -366,20 +366,20 @@ describe('showing only some pins', () => {
     });
 
     overlay.render([issueOnCta({ stage: 'ripe' }), issueOnCta({ stage: 'seeded' })]);
-    assert.equal(page.document.querySelectorAll('[data-fb-pin]').length, 2);
+    assert.equal(page.document.querySelectorAll('[data-fruitback-pin]').length, 2);
 
     hidden = ['ripe'];
     overlay.refilter();
 
-    const stages = [...page.document.querySelectorAll('[data-fb-pin]')].map(
-      (pin) => (pin as HTMLElement).dataset.fbStage,
+    const stages = [...page.document.querySelectorAll('[data-fruitback-pin]')].map(
+      (pin) => (pin as HTMLElement).dataset.fruitbackStage,
     );
     assert.deepEqual(stages, ['seeded']);
 
     // And back again, from the issues it kept rather than from a request.
     hidden = [];
     overlay.refilter();
-    assert.equal(page.document.querySelectorAll('[data-fb-pin]').length, 2);
+    assert.equal(page.document.querySelectorAll('[data-fruitback-pin]').length, 2);
   });
 });
 
@@ -393,7 +393,7 @@ describe('the issues it was handed', () => {
     issues.push(issueOnCta());
     overlay.refilter();
 
-    assert.equal(page.document.querySelectorAll('[data-fb-pin]').length, 1);
+    assert.equal(page.document.querySelectorAll('[data-fruitback-pin]').length, 1);
   });
 });
 
@@ -409,11 +409,11 @@ describe('the team’s replies', () => {
         ],
       }),
     ]);
-    (page.document.querySelector('.fb-pin-badge') as HTMLElement).click();
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
 
-    const bodies = [...page.document.querySelectorAll('.fb-thread-reply-body')].map((node) => node.textContent);
+    const bodies = [...page.document.querySelectorAll('.fruitback-thread-reply-body')].map((node) => node.textContent);
     assert.deepEqual(bodies, ['On regarde ça.', 'Corrigé sur la préprod.']);
-    assert.match(page.document.querySelector('.fb-thread-reply-who')?.textContent ?? '', /Alice/);
+    assert.match(page.document.querySelector('.fruitback-thread-reply-who')?.textContent ?? '', /Alice/);
   });
 
   it('renders a reply as text, never as markup', () => {
@@ -426,9 +426,9 @@ describe('the team’s replies', () => {
         comments: [{ id: 'c1', body: '<img src=x onerror="alert(1)">', createdAt: '2026-08-01T10:00:00.000Z' }],
       }),
     ]);
-    (page.document.querySelector('.fb-pin-badge') as HTMLElement).click();
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
 
-    const body = page.document.querySelector('.fb-thread-reply-body');
+    const body = page.document.querySelector('.fruitback-thread-reply-body');
     assert.equal(body?.textContent, '<img src=x onerror="alert(1)">');
     assert.equal(body?.querySelector('img'), null);
   });
@@ -439,19 +439,19 @@ describe('the team’s replies', () => {
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });
     overlay.render([issueOnCta({ comments: undefined })]);
-    (page.document.querySelector('.fb-pin-badge') as HTMLElement).click();
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
 
-    assert.equal(page.document.querySelector('.fb-thread-empty'), null);
-    assert.equal(page.document.querySelector('.fb-thread-replies'), null);
+    assert.equal(page.document.querySelector('.fruitback-thread-empty'), null);
+    assert.equal(page.document.querySelector('.fruitback-thread-replies'), null);
   });
 
   it('says so when it asked and there were none', () => {
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });
     overlay.render([issueOnCta({ comments: [] })]);
-    (page.document.querySelector('.fb-pin-badge') as HTMLElement).click();
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
 
-    assert.match(page.document.querySelector('.fb-thread-empty')?.textContent ?? '', /Pas encore/);
+    assert.match(page.document.querySelector('.fruitback-thread-empty')?.textContent ?? '', /Pas encore/);
   });
 });
 
@@ -477,7 +477,7 @@ describe('the detached notes', () => {
     overlay = createOverlay({ document: page.document });
     overlay.render([issueOnCta()]);
 
-    assert.equal((page.document.querySelector('[data-fb-orphans]') as HTMLElement).hidden, true);
+    assert.equal((page.document.querySelector('[data-fruitback-orphans]') as HTMLElement).hidden, true);
   });
 
   it('lists a note whose element the cascade could not find at all', () => {
@@ -485,10 +485,13 @@ describe('the detached notes', () => {
     overlay = createOverlay({ document: page.document });
     overlay.render([orphanIssue('La carte que le redesign a supprimée')]);
 
-    const drawer = page.document.querySelector('[data-fb-orphans]') as HTMLElement;
+    const drawer = page.document.querySelector('[data-fruitback-orphans]') as HTMLElement;
     assert.equal(drawer.hidden, false);
-    assert.match(drawer.querySelector('.fb-orphans-toggle')?.textContent ?? '', /1 note détachée/);
-    assert.match(drawer.querySelector('.fb-orphans-note')?.textContent ?? '', /La carte que le redesign a supprimée/);
+    assert.match(drawer.querySelector('.fruitback-orphans-toggle')?.textContent ?? '', /1 note détachée/);
+    assert.match(
+      drawer.querySelector('.fruitback-orphans-note')?.textContent ?? '',
+      /La carte que le redesign a supprimée/,
+    );
   });
 
   it('does not list a pin that was placed by position', () => {
@@ -512,13 +515,13 @@ describe('the detached notes', () => {
       }),
     ]);
 
-    const listed = page.document.querySelectorAll('.fb-orphans-item').length;
-    const pin = page.document.querySelector('[data-fb-pin]') as HTMLElement;
+    const listed = page.document.querySelectorAll('.fruitback-orphans-item').length;
+    const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
 
     // The fixture has to land on `bounds` for this test to mean anything: on `selector` or `text` it
     // would be confident, and the hardened version this guards against would not have listed it.
-    assert.equal(pin.dataset.fbStrategy, 'bounds');
-    assert.equal(pin.dataset.fbConfident, 'false');
+    assert.equal(pin.dataset.fruitbackStrategy, 'bounds');
+    assert.equal(pin.dataset.fruitbackConfident, 'false');
     assert.equal(listed, 0);
   });
 
@@ -526,13 +529,13 @@ describe('the detached notes', () => {
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });
     overlay.render([orphanIssue('Temporairement introuvable')]);
-    assert.equal((page.document.querySelector('[data-fb-orphans]') as HTMLElement).hidden, false);
+    assert.equal((page.document.querySelector('[data-fruitback-orphans]') as HTMLElement).hidden, false);
 
     overlay.render([issueOnCta()]);
 
-    const drawer = page.document.querySelector('[data-fb-orphans]') as HTMLElement;
+    const drawer = page.document.querySelector('[data-fruitback-orphans]') as HTMLElement;
     assert.equal(drawer.hidden, true);
-    assert.equal(drawer.querySelectorAll('.fb-orphans-item').length, 0);
+    assert.equal(drawer.querySelectorAll('.fruitback-orphans-item').length, 0);
   });
 
   it('opens the note when its entry is clicked', () => {
@@ -540,9 +543,9 @@ describe('the detached notes', () => {
     overlay = createOverlay({ document: page.document });
     overlay.render([orphanIssue('Ouvre-moi')]);
 
-    (page.document.querySelector('.fb-orphans-note') as HTMLElement).click();
+    (page.document.querySelector('.fruitback-orphans-note') as HTMLElement).click();
 
-    assert.equal(page.document.querySelectorAll('[data-fb-thread]').length, 1);
+    assert.equal(page.document.querySelectorAll('[data-fruitback-thread]').length, 1);
   });
 
   it('takes its DOM with it when the overlay is destroyed', () => {
@@ -553,7 +556,7 @@ describe('the detached notes', () => {
     overlay.destroy();
     overlay = null;
 
-    assert.equal(page.document.querySelector('[data-fb-orphans]'), null);
+    assert.equal(page.document.querySelector('[data-fruitback-orphans]'), null);
   });
 });
 

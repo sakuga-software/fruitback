@@ -256,13 +256,36 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - **Custom properties, because inheritance is what crosses the modules.** Each module injects its own
   `<style>` into the one Shadow root, so a token on `:host` reaches all of them with nobody importing
   anything. `THEME_STYLES` is concatenated ahead of `host.ts`'s reset for that reason.
-- **The prefix is `--fruit-`, and it is the whole defence.** A custom property inherits *into* the
+- **The prefix is `--fruitback-`, and it is the whole defence.** A custom property inherits *into* the
   Shadow root from the client's page — the root blocks their selectors, never their inherited
   properties — so a name the host also uses repaints our widget silently. `--color-text` would be
-  reckless. `--fb-` was the first attempt and barely better: it is what a Facebook SDK or somebody's
-  flexbox utilities would plausibly pick. Renamed wholesale, 151 occurrences, `.fb-` class names and
-  `data-fb-*` attributes deliberately untouched — those live inside the Shadow root and collide with
-  nothing.
+  reckless, and `--fb-` no better: it is what a Facebook SDK or somebody's flexbox utilities would
+  plausibly pick.
+
+## One prefix, and it is `fruitback`
+
+- **`--fruitback-*` tokens, `.fruitback-*` classes, `data-fruitback-*` attributes.** One word
+  everywhere (SKG-580), including the names on the `<script>` tag the README documents.
+- **It took three goes, and the reason it landed here is worth keeping.** `--fb-` was reckless for a
+  property that inherits into a Shadow root. `--fruit-` fixed that and introduced a subtler problem:
+  the repo then had `--fruit-`, `.fruit-`, *and* `data-fruitback-` on the script tag, and an
+  intermediate prefix reads as an inconsistency, not as a tier. A rule a newcomer has to be told is a
+  rule that will be broken. One word is a rule nobody has to be told.
+- **The distinction it collapses was real but not worth its cost.** `data-fruitback-endpoint` sits in
+  someone else's DOM and `data-fruitback-pin` sits in our Shadow root, and one could argue those
+  deserve different spellings. Nobody reading the code would have inferred which was which, so what
+  the two prefixes actually bought was a question every reader has to answer twice.
+- **The failure mode of these renames is silent**, which is why `pnpm e2e` is the proof and the unit
+  tests are not: the JavaScript writes one name, the stylesheet reads another, and a pin renders with
+  no colour and no error anywhere.
+- **The DOM camelCases, and that is where a rename hides.** `data-fruitback-pin` is written
+  `dataset.fruitbackPin`, with no hyphen, so a pass over the kebab spelling misses every one of them
+  — 32 in this package. Renaming the stylesheet without the JavaScript that sets the attribute turned
+  25 unit tests red on the first attempt, which is the loud version of exactly the failure above.
+- **`--fb-` and `--fruit-` survive in the prose above, and only there.** They are the history that
+  explains the current name; the first pass of SKG-580 spared them mechanically and left a paragraph
+  describing a distinction the code had stopped making, which is the worse failure — a comment that
+  outlives what it described.
 - **`init({ theme })` takes tokens, never CSS.** A host that could write a stylesheet into the Shadow
   root would turn our class names into a contract by accident, which is what the Shadow root exists
   to prevent. `applyTheme` writes only names `THEME_TOKENS` declares and silently drops the rest, so
@@ -296,7 +319,7 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - **Losing what someone just wrote is the one failure this widget cannot afford.** Anything that
   would clear the field on an error path is a bug, however tidy it looks.
 - Popover on desktop, **sheet on a phone** — a 320px popover anchored to an element is unusable at
-  that width. The anchored position goes through `--fruit-composer-*` custom properties rather than
+  that width. The anchored position goes through `--fruitback-composer-*` custom properties rather than
   inline `left`/`top`, because an inline style beats the media query and leaves the sheet offset.
 - **`all: initial` resets `display` too.** Every block element in the Shadow root is inline until the
   stylesheet says otherwise, and vertical margins on it silently do nothing — the note thread ran its

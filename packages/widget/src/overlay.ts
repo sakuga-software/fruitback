@@ -95,7 +95,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   const document = options.document ?? globalThis.document;
   const view = document.defaultView;
   const container = document.createElement('div');
-  container.className = 'fb-overlay';
+  container.className = 'fruitback-overlay';
   container.dataset.fruitbackOverlay = '';
 
   const style = document.createElement('style');
@@ -143,7 +143,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 
   function reposition(): void {
     for (const entry of placed) place(entry);
-    if (thread !== null) positionThread(thread, placed.find((entry) => entry.pin.dataset.fbOpen === '')?.pin);
+    if (thread !== null) positionThread(thread, placed.find((entry) => entry.pin.dataset.fruitbackOpen === '')?.pin);
   }
 
   function place(entry: Placed): void {
@@ -158,8 +158,8 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     const attached = element !== null && element.isConnected;
     const rect = attached ? documentRect(element) : boundsToPixels(entry.issue.seed.anchor.bounds, document);
 
-    entry.pin.classList.toggle('fb-pin-orphan', !attached);
-    entry.pin.classList.toggle('fb-pin-uncertain', !attached || !entry.resolution.confident);
+    entry.pin.classList.toggle('fruitback-pin-orphan', !attached);
+    entry.pin.classList.toggle('fruitback-pin-uncertain', !attached || !entry.resolution.confident);
 
     Object.assign(entry.pin.style, {
       left: `${rect.left}px`,
@@ -179,7 +179,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   function resolve(): void {
     if (placed.length === 0) return;
 
-    const open = placed.find((entry) => entry.pin.dataset.fbOpen === '');
+    const open = placed.find((entry) => entry.pin.dataset.fruitbackOpen === '');
 
     for (const entry of placed) {
       entry.resolution = resolveAnchor(entry.issue.seed.anchor, { document });
@@ -273,7 +273,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
         const pin = buildPin(document, issue, resolution);
         const entry = { issue, resolution, pin };
 
-        pin.querySelector('.fb-pin-badge')?.addEventListener('click', (event) => {
+        pin.querySelector('.fruitback-pin-badge')?.addEventListener('click', (event) => {
           event.preventDefault();
           event.stopPropagation();
           openThread(entry);
@@ -298,16 +298,16 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   function reopenThread(entry: Placed): void {
     thread?.remove();
     thread = buildThread(document, entry.issue, entry.resolution);
-    thread.querySelector('.fb-thread-close')?.addEventListener('click', () => closeThread());
+    thread.querySelector('.fruitback-thread-close')?.addEventListener('click', () => closeThread());
     container.append(thread);
     positionThread(thread, entry.pin);
   }
 
   function openThread(entry: Placed): void {
     closeThread();
-    entry.pin.dataset.fbOpen = '';
+    entry.pin.dataset.fruitbackOpen = '';
     thread = buildThread(document, entry.issue, entry.resolution);
-    thread.querySelector('.fb-thread-close')?.addEventListener('click', () => closeThread());
+    thread.querySelector('.fruitback-thread-close')?.addEventListener('click', () => closeThread());
     container.append(thread);
     positionThread(thread, entry.pin);
     options.onSelect?.(entry.issue);
@@ -316,7 +316,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   function closeThread(): void {
     thread?.remove();
     thread = null;
-    for (const entry of placed) delete entry.pin.dataset.fbOpen;
+    for (const entry of placed) delete entry.pin.dataset.fruitbackOpen;
   }
 
   function onDocumentClick(event: Event): void {
@@ -382,21 +382,21 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolution): HTMLElement {
   const pin = document.createElement('div');
 
-  pin.className = 'fb-pin';
+  pin.className = 'fruitback-pin';
   // The token rather than the hexadecimal the contract carries (SKG-528). One indirection buys the
   // dark theme, the host override and, once SKG-517 lands, a contract that stops shipping colours at
   // all — a widget's palette has no business travelling in the payload both ends must agree on.
-  pin.style.setProperty('--fruit-pin-color', stageToken(issue.stage));
-  pin.dataset.fbPin = issue.seed.id;
-  pin.dataset.fbStage = issue.stage;
+  pin.style.setProperty('--fruitback-pin-color', stageToken(issue.stage));
+  pin.dataset.fruitbackPin = issue.seed.id;
+  pin.dataset.fruitbackStage = issue.stage;
 
   const badge = document.createElement('button');
   badge.type = 'button';
-  badge.className = 'fb-pin-badge';
+  badge.className = 'fruitback-pin-badge';
   badge.title = `${issue.identifier} · ${issue.stateName}`;
   // The drop is rotated, so the glyph rides in its own span and is turned back upright.
   const glyph = document.createElement('span');
-  glyph.className = 'fb-pin-glyph';
+  glyph.className = 'fruitback-pin-glyph';
   badge.append(glyph);
   pin.append(badge);
 
@@ -417,19 +417,19 @@ function applyResolution(pin: HTMLElement, issue: SeedIssue, resolution: AnchorR
 
   // Three looks, because they mean three different things: found by identity, placed by position,
   // and not found at all.
-  pin.classList.toggle('fb-pin-uncertain', !resolution.confident);
-  pin.classList.toggle('fb-pin-orphan', resolution.element === null);
-  pin.dataset.fbStrategy = resolution.strategy;
-  pin.dataset.fbConfident = String(resolution.confident);
+  pin.classList.toggle('fruitback-pin-uncertain', !resolution.confident);
+  pin.classList.toggle('fruitback-pin-orphan', resolution.element === null);
+  pin.dataset.fruitbackStrategy = resolution.strategy;
+  pin.dataset.fruitbackConfident = String(resolution.confident);
 
-  const badge = pin.querySelector('.fb-pin-badge');
+  const badge = pin.querySelector('.fruitback-pin-badge');
   // A drop of fruit rather than a rectangle of text. The note moves to the accessible name, which is
   // also what keeps it reachable by a screen reader and by a test looking for it by role.
   badge?.setAttribute(
     'aria-label',
     `${style.label} · ${summarise(issue)}${resolution.confident ? '' : ' (position approximative)'}`,
   );
-  const glyph = pin.querySelector('.fb-pin-glyph');
+  const glyph = pin.querySelector('.fruitback-pin-glyph');
   // The `≈` is the whole warning, in one character, where the pin is: this one was placed by
   // coordinates, not recognised.
   if (glyph !== null) glyph.textContent = resolution.confident ? style.emoji : '≈';
@@ -459,26 +459,26 @@ function replies(document: Document, issue: SeedIssue): HTMLElement[] {
   if (issue.comments === undefined) return [];
 
   if (issue.comments.length === 0) {
-    return [element(document, 'p', 'fb-thread-empty', 'Pas encore de réponse.')];
+    return [element(document, 'p', 'fruitback-thread-empty', 'Pas encore de réponse.')];
   }
 
   const list = document.createElement('ul');
-  list.className = 'fb-thread-replies';
+  list.className = 'fruitback-thread-replies';
 
   for (const comment of issue.comments) {
     const written = new Date(comment.createdAt);
     const item = document.createElement('li');
-    item.className = 'fb-thread-reply';
+    item.className = 'fruitback-thread-reply';
     item.append(
       element(
         document,
         'span',
-        'fb-thread-reply-who',
+        'fruitback-thread-reply-who',
         `${comment.author ?? 'Équipe'} · ${Number.isNaN(written.getTime()) ? comment.createdAt : written.toLocaleDateString()}`,
       ),
       // `textContent`, never markup: this is Linear's markdown, written by whoever can comment on the
       // issue, rendered inside someone else's page. It is text here and nothing more.
-      element(document, 'p', 'fb-thread-reply-body', comment.body),
+      element(document, 'p', 'fruitback-thread-reply-body', comment.body),
     );
     list.append(item);
   }
@@ -490,23 +490,23 @@ function replies(document: Document, issue: SeedIssue): HTMLElement[] {
 function buildThread(document: Document, issue: SeedIssue, resolution: AnchorResolution): HTMLElement {
   const style = SEED_STAGE_STYLES[issue.stage];
   const thread = document.createElement('div');
-  thread.className = 'fb-thread';
-  thread.dataset.fbThread = issue.seed.id;
-  thread.style.setProperty('--fruit-pin-color', stageToken(issue.stage));
+  thread.className = 'fruitback-thread';
+  thread.dataset.fruitbackThread = issue.seed.id;
+  thread.style.setProperty('--fruitback-pin-color', stageToken(issue.stage));
 
   const reporter = issue.seed.reporter?.name ?? issue.seed.reporter?.email ?? 'Anonyme';
   const planted = new Date(issue.seed.createdAt);
 
   thread.append(
-    element(document, 'header', 'fb-thread-head', [
-      element(document, 'span', 'fb-thread-stage', `${style.emoji} ${issue.stateName}`),
+    element(document, 'header', 'fruitback-thread-head', [
+      element(document, 'span', 'fruitback-thread-stage', `${style.emoji} ${issue.stateName}`),
       closeButton(document),
     ]),
-    element(document, 'p', 'fb-thread-note', issue.seed.note || 'Aucune note.'),
+    element(document, 'p', 'fruitback-thread-note', issue.seed.note || 'Aucune note.'),
     element(
       document,
       'p',
-      'fb-thread-meta',
+      'fruitback-thread-meta',
       `${reporter} · ${Number.isNaN(planted.getTime()) ? issue.seed.createdAt : planted.toLocaleDateString()}`,
     ),
     // Said out loud rather than hidden. A reader who is told the pin might be on the wrong element
@@ -521,14 +521,14 @@ function buildThread(document: Document, issue: SeedIssue, resolution: AnchorRes
 
 function uncertaintyNote(document: Document, resolution: AnchorResolution): HTMLElement[] {
   if (resolution.element === null) {
-    return [element(document, 'p', 'fb-thread-orphan', 'Élément introuvable — position approximative.')];
+    return [element(document, 'p', 'fruitback-thread-orphan', 'Élément introuvable — position approximative.')];
   }
   if (!resolution.confident) {
     return [
       element(
         document,
         'p',
-        'fb-thread-orphan',
+        'fruitback-thread-orphan',
         'Élément retrouvé par sa position, pas par son identité — la page a peut-être changé sous le pin.',
       ),
     ];
@@ -540,7 +540,7 @@ function uncertaintyNote(document: Document, resolution: AnchorResolution): HTML
 function closeButton(document: Document): HTMLElement {
   const button = document.createElement('button');
   button.type = 'button';
-  button.className = 'fb-thread-close';
+  button.className = 'fruitback-thread-close';
   button.setAttribute('aria-label', 'Fermer');
   button.textContent = '×';
 
@@ -549,7 +549,7 @@ function closeButton(document: Document): HTMLElement {
 
 function link(document: Document, issue: SeedIssue): HTMLElement {
   const anchor = document.createElement('a');
-  anchor.className = 'fb-thread-link';
+  anchor.className = 'fruitback-thread-link';
   anchor.href = issue.url;
   anchor.target = '_blank';
   anchor.rel = 'noreferrer noopener';
@@ -621,19 +621,19 @@ function boundsToPixels(
  * whole sheet moves inside it untouched, and the class names stop mattering.
  */
 const STYLES = `
-.fb-overlay { position: absolute; top: 0; left: 0; }
-.fb-pin {
+.fruitback-overlay { position: absolute; top: 0; left: 0; }
+.fruitback-pin {
   position: absolute;
   z-index: 2147483000;
   /* Clicks go through to the client's page: the pin is an annotation, not a lid. */
   pointer-events: none;
-  border: 2px solid var(--fruit-pin-color);
+  border: 2px solid var(--fruitback-pin-color);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--fruit-pin-color) 12%, transparent);
+  background: color-mix(in srgb, var(--fruitback-pin-color) 12%, transparent);
 }
-.fb-pin-uncertain { border-style: dashed; opacity: 0.85; }
-.fb-pin-orphan { border-style: dotted; }
-.fb-pin-badge {
+.fruitback-pin-uncertain { border-style: dashed; opacity: 0.85; }
+.fruitback-pin-orphan { border-style: dotted; }
+.fruitback-pin-badge {
   position: absolute;
   bottom: 100%;
   left: -6px;
@@ -649,52 +649,64 @@ const STYLES = `
   /* Three round corners and one sharp: a seed, pointing down at the element it belongs to. */
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
-  background: var(--fruit-pin-color);
-  color: var(--fruit-color-on-stage);
-  font: 13px/1 var(--fruit-font-sans);
+  background: var(--fruitback-pin-color);
+  color: var(--fruitback-color-on-stage);
+  font: 13px/1 var(--fruitback-font-sans);
   cursor: pointer;
-  box-shadow: var(--fruit-shadow-sm);
+  box-shadow: var(--fruitback-shadow-sm);
   /* Squash and stretch: the drop lands, flattens, and settles. */
-  animation: fb-pin-drop var(--fruit-duration-slow) cubic-bezier(0.2, 1.4, 0.35, 1);
+  animation: fruitback-pin-drop var(--fruitback-duration-slow) cubic-bezier(0.2, 1.4, 0.35, 1);
 }
-.fb-pin-glyph { transform: rotate(45deg); font-size: 13px; line-height: 1; }
-.fb-pin-badge:hover { filter: brightness(1.06); }
-.fb-pin-badge:focus-visible { outline: 2px solid var(--fruit-color-text); outline-offset: 2px; }
+.fruitback-pin-glyph { transform: rotate(45deg); font-size: 13px; line-height: 1; }
+.fruitback-pin-badge:hover { filter: brightness(1.06); }
+.fruitback-pin-badge:focus-visible { outline: 2px solid var(--fruitback-color-text); outline-offset: 2px; }
 
-@keyframes fb-pin-drop {
+@keyframes fruitback-pin-drop {
   0% { opacity: 0; transform: rotate(-45deg) translate(0, -10px) scale(0.7, 1.25); }
   55% { opacity: 1; transform: rotate(-45deg) translate(0, 0) scale(1.18, 0.82); }
   100% { opacity: 1; transform: rotate(-45deg) scale(1, 1); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fb-pin-badge { animation: none; }
+  .fruitback-pin-badge { animation: none; }
 }
-.fb-thread {
+.fruitback-thread {
   position: absolute;
   z-index: 2147483100;
   width: 300px;
   pointer-events: auto;
-  border: 1px solid var(--fruit-color-border-strong);
-  border-top: 3px solid var(--fruit-pin-color);
+  border: 1px solid var(--fruitback-color-border-strong);
+  border-top: 3px solid var(--fruitback-pin-color);
   border-radius: 10px;
   padding: 12px 14px;
-  background: var(--fruit-color-surface);
-  color: var(--fruit-color-text);
-  font: 14px/1.5 var(--fruit-font-sans);
-  box-shadow: var(--fruit-shadow-lg);
+  background: var(--fruitback-color-surface);
+  color: var(--fruitback-color-text);
+  font: 14px/1.5 var(--fruitback-font-sans);
+  box-shadow: var(--fruitback-shadow-lg);
 }
-.fb-thread-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.fb-thread-stage { font-weight: 600; font-size: 13px; }
-.fb-thread-close { border: 0; background: none; font-size: 18px; line-height: 1; cursor: pointer; color: var(--fruit-color-text-muted); }
-.fb-thread-note { margin: 8px 0 0; white-space: pre-wrap; }
-.fb-thread-meta { margin: 8px 0 0; font-size: 12px; color: var(--fruit-color-text-muted); }
-.fb-thread-orphan { margin: 8px 0 0; font-size: 12px; color: var(--fruit-color-warning); }
-.fb-thread-empty { margin: 8px 0 0; font-size: 12px; color: var(--fruit-color-text-subtle); font-style: italic; }
-.fb-thread-replies {
+.fruitback-thread-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.fruitback-thread-stage { font-weight: 600; font-size: 13px; }
+.fruitback-thread-close {
+  border: 0;
+  background: none;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--fruitback-color-text-muted);
+}
+.fruitback-thread-note { margin: 8px 0 0; white-space: pre-wrap; }
+.fruitback-thread-meta { margin: 8px 0 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
+.fruitback-thread-orphan { margin: 8px 0 0; font-size: 12px; color: var(--fruitback-color-warning); }
+.fruitback-thread-empty {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--fruitback-color-text-subtle);
+  font-style: italic;
+}
+.fruitback-thread-replies {
   margin: 10px 0 0;
   padding: 0 0 0 10px;
-  border-left: 2px solid var(--fruit-color-border);
+  border-left: 2px solid var(--fruitback-color-border);
   list-style: none;
   /* A long conversation belongs in Linear, which the link below goes to. */
   max-height: 180px;
@@ -705,9 +717,14 @@ const STYLES = `
   item's own list-style-type to its initial value of disc — and a reset value beats what it would have
   inherited from the list. The bullets came back, and only a recording showed it.
 */
-.fb-thread-reply { list-style: none; }
-.fb-thread-reply + .fb-thread-reply { margin-top: 8px; }
-.fb-thread-reply-who { display: block; font-size: 11px; color: var(--fruit-color-text-muted); }
-.fb-thread-reply-body { margin: 2px 0 0; font-size: 12px; white-space: pre-wrap; }
-.fb-thread-link { display: inline-block; margin-top: 10px; font-size: 13px; color: var(--fruit-color-accent); }
+.fruitback-thread-reply { list-style: none; }
+.fruitback-thread-reply + .fruitback-thread-reply { margin-top: 8px; }
+.fruitback-thread-reply-who { display: block; font-size: 11px; color: var(--fruitback-color-text-muted); }
+.fruitback-thread-reply-body { margin: 2px 0 0; font-size: 12px; white-space: pre-wrap; }
+.fruitback-thread-link {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--fruitback-color-accent);
+}
 `;

@@ -63,7 +63,7 @@ export function AddToCartButton({ className }: { className: string }) {
 
 export function NewThisReleaseCard() {
   return (
-    <Card className="card" data-fb-inserted="true">
+    <Card className="card" data-fruitback-inserted="true">
       <Card.Content className="flex flex-col gap-2">
         <h3 className="text-lg font-semibold">Nouveau</h3>
         <div className="text-3xl font-bold">—</div>

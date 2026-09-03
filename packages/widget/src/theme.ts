@@ -12,11 +12,13 @@ import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
  * module injects its own `<style>` into the one Shadow root, so a token declared on `:host` reaches
  * all of them without any of them importing anything.
  *
- * **`--fruit-`, and the prefix is the whole defence.** A custom property inherits *into* a Shadow
+ * **`--fruitback-`, and the prefix is the whole defence.** A custom property inherits *into* a Shadow
  * root from the client's page, so a name the host also uses silently repaints us — the Shadow root
- * blocks their selectors, never their inherited properties. `--color-text` would be reckless; `--fb-`
- * was the first attempt and is not much better, since it is exactly what a Facebook SDK or somebody's
- * flexbox utilities would pick. `--fruit-` is ours in a way two letters never were.
+ * blocks their selectors, never their inherited properties. `--color-text` would be reckless. `--fb-`
+ * was the first attempt and no better, being exactly what a Facebook SDK or somebody's flexbox
+ * utilities would pick. `--fruit-` was the second and did fix that, but the package already spelled
+ * its script-tag attributes `data-fruitback-*`, so two prefixes coexisted with no rule saying which
+ * belonged where. SKG-580 settled on the whole word for all of it: tokens, classes and attributes.
  *
  * **No rendered colour changes here.** Every colour below is the hexadecimal that was already in the
  * stylesheets, so the E2E specs that read a pin's computed colour are the proof. Choosing different
@@ -76,7 +78,7 @@ export type FruitbackTheme = Partial<Record<ThemeToken, string>>;
 
 /** The stage a pin is at, as the token that colours it. Used by the overlay and the panel. */
 export function stageToken(stage: SeedStage): string {
-  return `var(--fruit-stage-${stage})`;
+  return `var(--fruitback-stage-${stage})`;
 }
 
 const KNOWN = new Set<string>(THEME_TOKENS);
@@ -94,7 +96,7 @@ export function applyTheme(element: HTMLElement, theme: FruitbackTheme | undefin
   for (const [name, value] of Object.entries(theme)) {
     if (!KNOWN.has(name) || typeof value !== 'string' || value === '') continue;
 
-    element.style.setProperty(`--fruit-${name}`, value);
+    element.style.setProperty(`--fruitback-${name}`, value);
   }
 }
 
@@ -112,7 +114,7 @@ export function missingStageTokens(): SeedStage[] {
  */
 export const THEME_STYLES = `
 :host {
-  --fruit-color-accent: #e53935;
+  --fruitback-color-accent: #e53935;
   /*
     One foreground per filled background, and not one shared by all of them.
     All four hold #fff today, which is why a single on-accent looked harmless: the original CSS said
@@ -121,38 +123,38 @@ export const THEME_STYLES = `
     warning. A host pairing a pale accent with a dark foreground would have turned those three into
     dark text on unchanged dark fills. Caught in review on SKG-528.
   */
-  --fruit-color-on-accent: #fff;
-  --fruit-color-on-chip: #fff;
-  --fruit-color-on-stage: #fff;
-  --fruit-color-on-warning: #fff;
-  --fruit-color-surface: #fff;
-  --fruit-color-surface-raised: #fffdf9;
-  --fruit-color-border: #e7e5e4;
-  --fruit-color-border-strong: #d6d3d1;
-  --fruit-color-text: #1c1917;
-  --fruit-color-text-muted: #78716c;
-  --fruit-color-text-subtle: #a8a29e;
-  --fruit-color-chip: #44403c;
-  --fruit-color-success: #7cb342;
-  --fruit-color-warning: #8d6e63;
+  --fruitback-color-on-accent: #fff;
+  --fruitback-color-on-chip: #fff;
+  --fruitback-color-on-stage: #fff;
+  --fruitback-color-on-warning: #fff;
+  --fruitback-color-surface: #fff;
+  --fruitback-color-surface-raised: #fffdf9;
+  --fruitback-color-border: #e7e5e4;
+  --fruitback-color-border-strong: #d6d3d1;
+  --fruitback-color-text: #1c1917;
+  --fruitback-color-text-muted: #78716c;
+  --fruitback-color-text-subtle: #a8a29e;
+  --fruitback-color-chip: #44403c;
+  --fruitback-color-success: #7cb342;
+  --fruitback-color-warning: #8d6e63;
 
   /* Ripening, not a rainbow. Same five values the contract used to carry. */
-  --fruit-stage-seeded: #a3b18a;
-  --fruit-stage-green: #7cb342;
-  --fruit-stage-ripening: #fb8c00;
-  --fruit-stage-ripe: #e53935;
-  --fruit-stage-composted: #8d6e63;
+  --fruitback-stage-seeded: #a3b18a;
+  --fruitback-stage-green: #7cb342;
+  --fruitback-stage-ripening: #fb8c00;
+  --fruitback-stage-ripe: #e53935;
+  --fruitback-stage-composted: #8d6e63;
 
   /* Named for the elevation they belong to, not for a size, so a fifth one has to justify itself. */
-  --fruit-shadow-sm: 0 3px 10px rgba(28, 25, 23, 0.28);
-  --fruit-shadow-md: 0 4px 18px rgba(0, 0, 0, 0.25);
-  --fruit-shadow-lg: 0 10px 30px rgb(0 0 0 / 18%);
-  --fruit-shadow-xl: 0 14px 40px rgba(28, 25, 23, 0.22);
+  --fruitback-shadow-sm: 0 3px 10px rgba(28, 25, 23, 0.28);
+  --fruitback-shadow-md: 0 4px 18px rgba(0, 0, 0, 0.25);
+  --fruitback-shadow-lg: 0 10px 30px rgb(0 0 0 / 18%);
+  --fruitback-shadow-xl: 0 14px 40px rgba(28, 25, 23, 0.22);
 
-  --fruit-font-sans: -apple-system, system-ui, sans-serif;
+  --fruitback-font-sans: -apple-system, system-ui, sans-serif;
 
-  --fruit-duration-fast: 220ms;
-  --fruit-duration-slow: 420ms;
+  --fruitback-duration-fast: 220ms;
+  --fruitback-duration-slow: 420ms;
 }
 
 /*
@@ -162,18 +164,18 @@ export const THEME_STYLES = `
 */
 @media (prefers-color-scheme: dark) {
   :host {
-    --fruit-color-surface: #1c1917;
-    --fruit-color-surface-raised: #262220;
-    --fruit-color-border: #3a3532;
-    --fruit-color-border-strong: #4a4441;
-    --fruit-color-text: #f5f5f4;
-    --fruit-color-text-muted: #a8a29e;
-    --fruit-color-text-subtle: #78716c;
-    --fruit-color-chip: #57534e;
-    --fruit-shadow-sm: 0 3px 10px rgba(0, 0, 0, 0.55);
-    --fruit-shadow-md: 0 4px 18px rgba(0, 0, 0, 0.6);
-    --fruit-shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.5);
-    --fruit-shadow-xl: 0 14px 40px rgba(0, 0, 0, 0.55);
+    --fruitback-color-surface: #1c1917;
+    --fruitback-color-surface-raised: #262220;
+    --fruitback-color-border: #3a3532;
+    --fruitback-color-border-strong: #4a4441;
+    --fruitback-color-text: #f5f5f4;
+    --fruitback-color-text-muted: #a8a29e;
+    --fruitback-color-text-subtle: #78716c;
+    --fruitback-color-chip: #57534e;
+    --fruitback-shadow-sm: 0 3px 10px rgba(0, 0, 0, 0.55);
+    --fruitback-shadow-md: 0 4px 18px rgba(0, 0, 0, 0.6);
+    --fruitback-shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.5);
+    --fruitback-shadow-xl: 0 14px 40px rgba(0, 0, 0, 0.55);
   }
 }
 
@@ -183,10 +185,10 @@ export const THEME_STYLES = `
 */
 @media (prefers-contrast: more) {
   :host {
-    --fruit-color-border: var(--fruit-color-text);
-    --fruit-color-border-strong: var(--fruit-color-text);
-    --fruit-color-text-muted: var(--fruit-color-text);
-    --fruit-color-text-subtle: var(--fruit-color-text);
+    --fruitback-color-border: var(--fruitback-color-text);
+    --fruitback-color-border-strong: var(--fruitback-color-text);
+    --fruitback-color-text-muted: var(--fruitback-color-text);
+    --fruitback-color-text-subtle: var(--fruitback-color-text);
   }
 }
 `;

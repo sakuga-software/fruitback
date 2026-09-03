@@ -40,10 +40,10 @@ test('the page underneath stays clickable, and the badge opens the thread', asyn
 
   // The pin covers the button exactly; a widget that swallowed this click would be unusable.
   await cta.click();
-  await expect(page.locator('[data-fb-thread]')).toHaveCount(0);
+  await expect(page.locator('[data-fruitback-thread]')).toHaveCount(0);
 
   await badgeFor(page, 'Le CTA devrait').click();
-  const thread = page.locator('[data-fb-thread]');
+  const thread = page.locator('[data-fruitback-thread]');
   await expect(thread).toBeVisible();
   await expect(thread).toContainText('Le CTA devrait être plus large');
   // Whatever state the in-memory Linear gave it, the thread names it and links to the issue.
@@ -60,10 +60,10 @@ test('a pin that was placed rather than recognised warns whoever opens it', asyn
   await page.getByRole('button', { name: 'Supprimer la carte Latte' }).click();
   await waitForPins(page, 1);
 
-  await expect(pinFor(page, 'Sur une carte')).toHaveAttribute('data-fb-confident', 'false');
+  await expect(pinFor(page, 'Sur une carte')).toHaveAttribute('data-fruitback-confident', 'false');
   await badgeFor(page, 'Sur une carte').click();
   // Not "here is your feedback": "the page moved, check this one".
-  await expect(page.locator('[data-fb-thread]')).toContainText(/position|introuvable/i);
+  await expect(page.locator('[data-fruitback-thread]')).toContainText(/position|introuvable/i);
 });
 
 test('the colour of a pin is the Linear state, and nothing the widget decided', async ({ page }) => {
@@ -74,8 +74,8 @@ test('the colour of a pin is the Linear state, and nothing the widget decided', 
   await plantPin(page, page.locator('#checkout-cta'), 'Deuxième');
   await plantPin(page, page.locator('main header button'), 'Troisième');
 
-  const stages = await page.locator('[data-fb-pin]').evaluateAll((pins) =>
-    pins.map((pin) => (pin as HTMLElement).dataset.fbStage),
+  const stages = await page.locator('[data-fruitback-pin]').evaluateAll((pins) =>
+    pins.map((pin) => (pin as HTMLElement).dataset.fruitbackStage),
   );
 
   assertDistinct(stages);
@@ -116,18 +116,18 @@ test('the team’s replies show up inside the pin', async ({ page }) => {
     await plantPin(page, button, `Note ${attempt} en attente de réponse`);
     await badgeFor(page, `Note ${attempt} en attente de réponse`).click();
 
-    const replies = page.locator('.fb-thread-reply-body');
+    const replies = page.locator('.fruitback-thread-reply-body');
     if ((await replies.count()) > 0) {
       // Oldest first, so it reads as a conversation rather than as an inbox.
       await expect(replies.first()).toHaveText(/Bien vu/);
       await expect(replies.last()).toHaveText(/préprod/);
-      await expect(page.locator('.fb-thread-reply-who').first()).toContainText('Alice');
+      await expect(page.locator('.fruitback-thread-reply-who').first()).toContainText('Alice');
 
       return;
     }
 
     // The pin that got no reply says so, which is a different thing from saying nothing.
-    await expect(page.locator('.fb-thread-empty')).toHaveText(/Pas encore de réponse/);
+    await expect(page.locator('.fruitback-thread-empty')).toHaveText(/Pas encore de réponse/);
     await page.keyboard.press('Escape');
   }
 
@@ -145,7 +145,7 @@ test('a reply is not drawn as a bullet point', async ({ page }) => {
     await plantPin(page, button, `Puces ${attempt} à vérifier`);
     await badgeFor(page, `Puces ${attempt} à vérifier`).click();
 
-    const reply = page.locator('.fb-thread-reply').first();
+    const reply = page.locator('.fruitback-thread-reply').first();
     if ((await reply.count()) > 0) {
       expect(await reply.evaluate((node) => getComputedStyle(node).listStyleType)).toBe('none');
 

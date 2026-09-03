@@ -49,17 +49,17 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
   style.textContent = STYLES;
 
   const root = document.createElement('div');
-  root.className = 'fb-orphans';
-  root.dataset.fbOrphans = '';
+  root.className = 'fruitback-orphans';
+  root.dataset.fruitbackOrphans = '';
   root.hidden = true;
 
   const toggle = document.createElement('button');
   toggle.type = 'button';
-  toggle.className = 'fb-orphans-toggle';
+  toggle.className = 'fruitback-orphans-toggle';
   toggle.setAttribute('aria-expanded', 'false');
 
   const list = document.createElement('ul');
-  list.className = 'fb-orphans-list';
+  list.className = 'fruitback-orphans-list';
   list.hidden = true;
 
   toggle.addEventListener('click', () => {
@@ -108,17 +108,17 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
 
 function entry(document: Document, issue: SeedIssue, onSelect?: (issue: SeedIssue) => void): HTMLElement {
   const item = document.createElement('li');
-  item.className = 'fb-orphans-item';
-  item.dataset.fbOrphan = issue.seed.id;
+  item.className = 'fruitback-orphans-item';
+  item.dataset.fruitbackOrphan = issue.seed.id;
 
   const button = document.createElement('button');
   button.type = 'button';
-  button.className = 'fb-orphans-note';
+  button.className = 'fruitback-orphans-note';
   button.textContent = `${SEED_STAGE_STYLES[issue.stage].emoji} ${excerpt(issue)}`;
   button.addEventListener('click', () => onSelect?.(issue));
 
   const link = document.createElement('a');
-  link.className = 'fb-orphans-link';
+  link.className = 'fruitback-orphans-link';
   link.href = issue.url;
   link.target = '_blank';
   link.rel = 'noreferrer noopener';
@@ -143,7 +143,7 @@ function excerpt(issue: SeedIssue): string {
 // No backticks in here: one inside this literal closes it and the module stops parsing. It has
 // happened four times in this repo.
 const STYLES = `
-.fb-orphans {
+.fruitback-orphans {
   position: fixed;
   /*
     Stacked above the widget's own dock rather than in the opposite corner. Claiming a second corner
@@ -154,39 +154,39 @@ const STYLES = `
   bottom: 60px;
   z-index: 2147483000;
   max-width: 300px;
-  font: 13px/1.45 var(--fruit-font-sans);
-  color: var(--fruit-color-text);
+  font: 13px/1.45 var(--fruitback-font-sans);
+  color: var(--fruitback-color-text);
 }
-.fb-orphans[hidden] { display: none; }
+.fruitback-orphans[hidden] { display: none; }
 /* Chip last in the DOM order it reads in, list above it on screen. */
-.fb-orphans { display: flex; flex-direction: column-reverse; align-items: flex-end; }
-.fb-orphans-toggle {
+.fruitback-orphans { display: flex; flex-direction: column-reverse; align-items: flex-end; }
+.fruitback-orphans-toggle {
   display: block;
   padding: 8px 12px;
   border: 0;
   border-radius: 999px;
-  background: var(--fruit-color-warning);
-  color: var(--fruit-color-on-warning);
-  font: 600 12px/1 var(--fruit-font-sans);
-  box-shadow: var(--fruit-shadow-md);
+  background: var(--fruitback-color-warning);
+  color: var(--fruitback-color-on-warning);
+  font: 600 12px/1 var(--fruitback-font-sans);
+  box-shadow: var(--fruitback-shadow-md);
   cursor: pointer;
 }
-.fb-orphans-list {
+.fruitback-orphans-list {
   display: block;
   /* Above the chip: it sits at the bottom of the page, so a list below it would have nowhere to go. */
   margin: 0 0 8px;
   padding: 8px;
   border-radius: 12px;
-  background: var(--fruit-color-surface);
-  box-shadow: var(--fruit-shadow-lg);
+  background: var(--fruitback-color-surface);
+  box-shadow: var(--fruitback-shadow-lg);
   list-style: none;
   max-height: 220px;
   overflow-y: auto;
 }
-.fb-orphans-list[hidden] { display: none; }
-.fb-orphans-item { display: flex; align-items: baseline; gap: 8px; list-style: none; }
-.fb-orphans-item + .fb-orphans-item { margin-top: 6px; }
-.fb-orphans-note {
+.fruitback-orphans-list[hidden] { display: none; }
+.fruitback-orphans-item { display: flex; align-items: baseline; gap: 8px; list-style: none; }
+.fruitback-orphans-item + .fruitback-orphans-item { margin-top: 6px; }
+.fruitback-orphans-note {
   flex: 1;
   border: 0;
   background: none;
@@ -196,5 +196,10 @@ const STYLES = `
   text-align: left;
   cursor: pointer;
 }
-.fb-orphans-link { font-size: 11px; color: var(--fruit-color-accent); text-decoration: none; white-space: nowrap; }
+.fruitback-orphans-link {
+  font-size: 11px;
+  color: var(--fruitback-color-accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
 `;
