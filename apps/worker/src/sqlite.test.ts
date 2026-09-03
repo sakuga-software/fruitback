@@ -143,6 +143,29 @@ describe('the file survives the process', () => {
     assert.equal(issues.length, 1);
   });
 
+  it('lands the schema and its version together', async () => {
+    // They are two autocommitted statements otherwise, and a crash between them leaves the tables
+    // created with the version still at 0 — so the next open re-runs CREATE TABLE, fails, and the
+    // database is bricked. The transaction is what makes that state unreachable; this asserts the
+    // consistent one it leaves instead. Raised in review on SKG-524.
+    const path = freshPath();
+    await createSqliteStore({ path }).create(seedFixture(), undefined, POLICY);
+    closeSqliteConnections();
+
+    const database = new DatabaseSync(path);
+    const version = database.prepare('PRAGMA user_version').get() as { user_version: number };
+    const tables = database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all() as {
+      name: string;
+    }[];
+    database.close();
+
+    assert.equal(version.user_version, 1);
+    assert.deepEqual(
+      tables.map((table) => table.name).filter((name) => !name.startsWith('sqlite_')),
+      ['comments', 'seeds'],
+    );
+  });
+
   it('opens the file once, however many stores are built on it', async () => {
     // `handleRequest` still falls back to building a store when the transport did not hand it one,
     // so without the shared handle that path opens a database per request — the exact hazard SKG-522
@@ -306,9 +329,12 @@ describe('the replies', () => {
       POLICY,
     );
 
+    // The **newest** twenty, handed over oldest-first. Keeping the oldest twenty was the first
+    // version of this, and it made every reply past the twentieth unreachable — with no `url` on
+    // this store, the pin's thread is the only place a reply is ever seen. Raised in review.
     assert.equal(issues[0]?.comments?.length, 20);
-    // The oldest ones, since that is the end the thread reads from.
-    assert.equal(issues[0]?.comments?.[0]?.body, 'reponse 0');
+    assert.equal(issues[0]?.comments?.[0]?.body, 'reponse 5');
+    assert.equal(issues[0]?.comments?.at(-1)?.body, 'reponse 24');
   });
 
   it('leaves the author out when nobody signed it', async () => {

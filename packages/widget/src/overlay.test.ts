@@ -157,6 +157,37 @@ describe('createOverlay', () => {
     assert.equal(page.view.getComputedStyle(badge).pointerEvents, 'auto');
   });
 
+  it('names no vendor in the way out, because the widget does not know which store answered', () => {
+    // The label said "sur Linear" until SKG-524, in a widget that is not supposed to know what is
+    // behind the worker — the same defect `store-unavailable` fixed in the error codes.
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta({ identifier: 'SKG-742' })]);
+
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+
+    const link = page.document.querySelector('[data-fruitback-thread] a');
+    assert.match(link?.textContent ?? '', /SKG-742/);
+    assert.doesNotMatch(link?.textContent ?? '', /Linear/);
+  });
+
+  it('draws no link at all when the store has nowhere to open (SKG-524)', () => {
+    // SQLite has no interface, so it reports no `url`. An anchor with an empty href resolves to the
+    // current page: clicking it would reload the client's site and lose whatever they were doing —
+    // and a link that goes nowhere reads as the store having lost the note.
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta({ url: undefined, identifier: 'FB-12' })]);
+
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+
+    const thread = page.document.querySelector('[data-fruitback-thread]');
+    assert.ok(thread, 'no thread opened');
+    assert.equal(thread.querySelector('a'), null, 'a store with no interface must draw no anchor');
+    // The rest of the thread is untouched: it is the link that is absent, not the note.
+    assert.match(thread.textContent ?? '', /Commander/);
+  });
+
   it('opens the thread on the badge: the note, the state and the way to Linear', () => {
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });

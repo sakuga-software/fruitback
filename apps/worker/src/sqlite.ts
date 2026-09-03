@@ -147,10 +147,22 @@ function migrate(database: DatabaseSync): void {
   const version = row?.user_version ?? 0;
 
   for (let index = version; index < MIGRATIONS.length; index += 1) {
-    database.exec(MIGRATIONS[index] as string);
-    // Interpolated because PRAGMA does not take a bound parameter, and the value is a loop counter
-    // rather than anything a caller can influence.
-    database.exec(`PRAGMA user_version = ${index + 1}`);
+    // One transaction, because the migration and the version it records are otherwise two
+    // autocommitted statements. A crash between them leaves the tables created with the version
+    // still at 0, so the next open re-runs `CREATE TABLE seeds`, fails, and answers 502 for ever —
+    // an unrecoverable database from one badly timed restart. Measured: `PRAGMA user_version` is
+    // transactional, and a rollback takes the tables and the version back together.
+    database.exec('BEGIN');
+    try {
+      database.exec(MIGRATIONS[index] as string);
+      // Interpolated because PRAGMA does not take a bound parameter, and the value is a loop counter
+      // rather than anything a caller can influence.
+      database.exec(`PRAGMA user_version = ${index + 1}`);
+      database.exec('COMMIT');
+    } catch (error) {
+      database.exec('ROLLBACK');
+      throw error;
+    }
   }
 }
 
@@ -316,9 +328,11 @@ function commentsFor(database: DatabaseSync, rows: SeedRow[]): Map<number, SeedC
   const placeholders = rows.map(() => '?').join(', ');
   const found = database
     .prepare(
-      // Oldest first, because a conversation reads that way — the same order the Linear connector
-      // has to reverse, since Linear answers newest-first.
-      `SELECT id, seed_id, author, body, created_at FROM comments WHERE seed_id IN (${placeholders}) ORDER BY seed_id, created_at`,
+      // **Newest first**, and the cap therefore keeps the newest. Ordering oldest-first and capping
+      // while iterating kept the *oldest* twenty, so past twenty replies every new answer became
+      // unreachable — and this store reports no `url`, so the pin's thread is the only interface
+      // there is. Linear keeps the newest for the same reason; it just gets them in that order.
+      `SELECT id, seed_id, author, body, created_at FROM comments WHERE seed_id IN (${placeholders}) ORDER BY seed_id, created_at DESC, id DESC`,
     )
     .all(...rows.map((row) => row.id)) as CommentRow[];
 
@@ -336,6 +350,10 @@ function commentsFor(database: DatabaseSync, rows: SeedRow[]): Map<number, SeedC
     });
     byId.set(row.seed_id, thread);
   }
+
+  // Reversed on the way out: selected newest-first so the cap keeps the right end, handed over
+  // oldest-first because that is the end a conversation reads from.
+  for (const thread of byId.values()) thread.reverse();
 
   return byId;
 }
