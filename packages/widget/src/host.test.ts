@@ -56,7 +56,7 @@ const moveOver = (page: MountedPage) =>
 
 /** The host is non-null in every test that reaches for it; `mount` has just built it. */
 function launchButton(): HTMLElement {
-  const button = host?.root.querySelector('[data-fruit-host-launch]');
+  const button = host?.root.querySelector('[data-fruitback-host-launch]');
   assert.ok(button, 'the launch button is missing');
 
   return button as HTMLElement;
@@ -70,10 +70,10 @@ describe('createCaptureHost', () => {
     const container = page.document.querySelector('[data-fruitback-host]');
     assert.ok(container, 'no host element');
     assert.ok(container.shadowRoot, 'the host has no Shadow root');
-    assert.ok(container.shadowRoot.querySelector('[data-fruit-host-launch]'), 'the launch button leaked out');
+    assert.ok(container.shadowRoot.querySelector('[data-fruitback-host-launch]'), 'the launch button leaked out');
     // Nothing of ours in the page's own tree beyond the single empty container.
-    assert.equal(page.document.querySelector('.fruit-launch'), null);
-    assert.equal(page.document.querySelector('.fruit-highlight'), null);
+    assert.equal(page.document.querySelector('.fruitback-launch'), null);
+    assert.equal(page.document.querySelector('.fruitback-highlight'), null);
   });
 
   it('sits at the document origin, so the overlay can position in document coordinates', () => {
@@ -92,7 +92,7 @@ describe('createCaptureHost', () => {
     assert.equal(host?.capturing(), false);
 
     moveOver(page);
-    const highlight = host?.root.querySelector('[data-fruit-host-highlight]') as HTMLElement;
+    const highlight = host?.root.querySelector('[data-fruitback-host-highlight]') as HTMLElement;
     assert.equal(highlight.style.display, '');
 
     launchButton().click();
@@ -105,7 +105,7 @@ describe('createCaptureHost', () => {
 
     moveOver(page);
 
-    const highlight = host?.root.querySelector('[data-fruit-host-highlight]') as HTMLElement;
+    const highlight = host?.root.querySelector('[data-fruitback-host-highlight]') as HTMLElement;
     assert.equal(highlight.style.display, 'block');
     assert.equal(highlight.style.left, '10px');
     assert.equal(highlight.style.top, '20px');
@@ -115,13 +115,13 @@ describe('createCaptureHost', () => {
   it('refuses to point at its own UI', async () => {
     // react-grab traverses open Shadow roots, so without the filter the pointer lands on our
     // highlight box instead of the element behind it.
-    const { page, engine } = mount(() => host?.root.querySelector('[data-fruit-host-launch]') ?? null);
+    const { page, engine } = mount(() => host?.root.querySelector('[data-fruitback-host-launch]') ?? null);
     host?.start();
 
     moveOver(page);
 
     assert.equal(engine.rejected.length, 1, 'the host did not reject its own button');
-    const highlight = host?.root.querySelector('[data-fruit-host-highlight]') as HTMLElement;
+    const highlight = host?.root.querySelector('[data-fruitback-host-highlight]') as HTMLElement;
     assert.equal(highlight.style.display, 'none');
   });
 

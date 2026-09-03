@@ -83,7 +83,7 @@ export function Fruitback() {
         setStatus(selected.source?.component ? `cible : <${selected.source.component}>` : 'cible sélectionnée');
       },
       // The dev toolbar is the playground's, not the widget's and not the page's.
-      ignore: (element) => element.closest('[data-fruit-dev]') !== null,
+      ignore: (element) => element.closest('[data-fruitback-dev]') !== null,
       onConfigure: () => widget.current?.panel.toggle(),
     });
 
@@ -255,30 +255,30 @@ function createRefresher(
   };
 }
 
-/** Dev-only chrome. Marked `data-fruit-dev` so pointing at it never captures it. */
+/** Dev-only chrome. Marked `data-fruitback-dev` so pointing at it never captures it. */
 function DevToolbar({ status, planted, onReload }: { status: string; planted: string; onReload: () => void }) {
   return (
     <div
-      data-fruit-dev="toolbar"
+      data-fruitback-dev="toolbar"
       className="fixed bottom-4 left-4 z-[2147483001] flex items-center gap-2 rounded-xl bg-stone-900 px-4 py-3 text-sm text-stone-50 shadow-lg"
     >
       <strong>
         🌱 Fruitback <span className="rounded bg-red-600 px-1.5 py-0.5 font-semibold">playground</span>
       </strong>
-      <Button data-fruit-dev="reload" size="sm" variant="secondary" onPress={onReload}>
+      <Button data-fruitback-dev="reload" size="sm" variant="secondary" onPress={onReload}>
         Recharger les pins
       </Button>
-      <Button data-fruit-dev="redeploy" size="sm" variant="secondary" onPress={() => redeploy()}>
+      <Button data-fruitback-dev="redeploy" size="sm" variant="secondary" onPress={() => redeploy()}>
         Redéployer
       </Button>
-      <Button data-fruit-dev="remove-latte" size="sm" variant="secondary" onPress={() => removeCard('latte')}>
+      <Button data-fruitback-dev="remove-latte" size="sm" variant="secondary" onPress={() => removeCard('latte')}>
         Supprimer la carte Latte
       </Button>
       {/* Written once per successful plant and never overwritten — see `planted` above. */}
-      <span data-fruit-dev="planted" hidden>
+      <span data-fruitback-dev="planted" hidden>
         {planted}
       </span>
-      <span data-fruit-dev="status" className="min-w-[150px] opacity-70">
+      <span data-fruitback-dev="status" className="min-w-[150px] opacity-70">
         {status}
       </span>
     </div>

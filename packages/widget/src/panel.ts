@@ -40,8 +40,8 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   style.textContent = STYLES;
 
   const root = document.createElement('div');
-  root.className = 'fruit-panel-config';
-  root.dataset.fruitConfig = '';
+  root.className = 'fruitback-panel-config';
+  root.dataset.fruitbackConfig = '';
   root.hidden = true;
   root.setAttribute('role', 'dialog');
   root.setAttribute('aria-label', 'Réglages Fruitback');
@@ -50,7 +50,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   const clientId = field(document, 'client', 'Client', 'acme');
 
   const stages = document.createElement('div');
-  stages.className = 'fruit-config-stages';
+  stages.className = 'fruitback-config-stages';
   const stageInputs = new Map<SeedStage, HTMLInputElement>();
   for (const stage of SEED_STAGES) {
     const { input, label } = checkbox(
@@ -76,7 +76,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
 
   const close = document.createElement('button');
   close.type = 'button';
-  close.className = 'fruit-config-close';
+  close.className = 'fruitback-config-close';
   close.setAttribute('aria-label', 'Fermer les réglages');
   close.textContent = '×';
 
@@ -84,14 +84,14 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   // makes the client's own `header button` ambiguous for anything that inspects the composed tree.
   // The dialog already carries its name through `aria-label`.
   const head = document.createElement('div');
-  head.className = 'fruit-config-head';
+  head.className = 'fruitback-config-head';
   const title = document.createElement('span');
-  title.className = 'fruit-config-title';
+  title.className = 'fruitback-config-title';
   title.textContent = '🌱 Réglages';
   head.append(title, close);
 
   const stagesTitle = document.createElement('p');
-  stagesTitle.className = 'fruit-config-legend';
+  stagesTitle.className = 'fruitback-config-legend';
   stagesTitle.textContent = 'Pins affichés';
 
   root.append(head, endpoint.label, clientId.label, stagesTitle, stages, hideResolvedLabel);
@@ -173,7 +173,7 @@ function field(
   placeholder: string,
 ): { label: HTMLLabelElement; input: HTMLInputElement } {
   const label = document.createElement('label');
-  label.className = 'fruit-config-field';
+  label.className = 'fruitback-config-field';
 
   const span = document.createElement('span');
   span.textContent = text;
@@ -196,7 +196,7 @@ function checkbox(
   text: string,
 ): { label: HTMLLabelElement; input: HTMLInputElement } {
   const label = document.createElement('label');
-  label.className = 'fruit-config-check';
+  label.className = 'fruitback-config-check';
 
   const input = document.createElement('input');
   input.type = 'checkbox';
@@ -212,7 +212,7 @@ function checkbox(
 
 // No backticks in here: one inside this literal closes it and the module stops parsing.
 const STYLES = `
-.fruit-panel-config {
+.fruitback-panel-config {
   position: fixed;
   right: 16px;
   bottom: 68px;
@@ -220,29 +220,43 @@ const STYLES = `
   width: 280px;
   padding: 14px;
   border-radius: 14px;
-  background: var(--fruit-color-surface);
-  color: var(--fruit-color-text);
+  background: var(--fruitback-color-surface);
+  color: var(--fruitback-color-text);
   font-size: 13px;
   line-height: 1.45;
-  box-shadow: var(--fruit-shadow-lg);
+  box-shadow: var(--fruitback-shadow-lg);
 }
-.fruit-panel-config[hidden] { display: none; }
-.fruit-config-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.fruit-config-title { font-weight: 600; }
-.fruit-config-close {
-  border: 0; background: none; font-size: 18px; line-height: 1; cursor: pointer; color: var(--fruit-color-text-muted);
+.fruitback-panel-config[hidden] { display: none; }
+.fruitback-config-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.fruitback-config-title { font-weight: 600; }
+.fruitback-config-close {
+  border: 0;
+  background: none;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--fruitback-color-text-muted);
 }
-.fruit-config-field { display: block; margin-top: 10px; }
-.fruit-config-field span { display: block; margin-bottom: 3px; font-size: 12px; color: var(--fruit-color-text-muted); }
-.fruit-config-field input {
-  display: block; width: 100%; padding: 6px 8px; border: 1px solid var(--fruit-color-border-strong); border-radius: 8px;
-  font: inherit; color: inherit; background: var(--fruit-color-surface);
+.fruitback-config-field { display: block; margin-top: 10px; }
+.fruitback-config-field span {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 12px;
+  color: var(--fruitback-color-text-muted);
 }
-.fruit-config-field input:focus-visible { outline: 2px solid var(--fruit-color-accent); outline-offset: 1px; }
-.fruit-config-legend { margin: 12px 0 4px; font-size: 12px; color: var(--fruit-color-text-muted); }
-.fruit-config-stages { display: flex; flex-direction: column; gap: 2px; }
-.fruit-config-check { display: flex; align-items: center; gap: 6px; cursor: pointer; }
-.fruit-config-check input {
+.fruitback-config-field input {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--fruitback-color-border-strong);
+  border-radius: 8px;
+  font: inherit; color: inherit; background: var(--fruitback-color-surface);
+}
+.fruitback-config-field input:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 1px; }
+.fruitback-config-legend { margin: 12px 0 4px; font-size: 12px; color: var(--fruitback-color-text-muted); }
+.fruitback-config-stages { display: flex; flex-direction: column; gap: 2px; }
+.fruitback-config-check { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.fruitback-config-check input {
   /*
     all:initial in the host reset sets appearance to none, which is its initial value — so a native
     checkbox draws nothing at all. The boxes were invisible while still being checkable, which no
@@ -252,15 +266,19 @@ const STYLES = `
   -webkit-appearance: checkbox;
   width: 14px;
   height: 14px;
-  accent-color: var(--fruit-color-accent);
+  accent-color: var(--fruitback-color-accent);
 }
-.fruit-panel-config > .fruit-config-check {
+.fruitback-panel-config > .fruitback-config-check {
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid var(--fruit-color-border);
+  border-top: 1px solid var(--fruitback-color-border);
 }
-.fruit-panel-config > .fruit-config-check + .fruit-config-check { margin-top: 6px; padding-top: 0; border-top: 0; }
+.fruitback-panel-config > .fruitback-config-check + .fruitback-config-check {
+  margin-top: 6px;
+  padding-top: 0;
+  border-top: 0;
+}
 @media (max-width: 480px) {
-  .fruit-panel-config { right: 8px; left: 8px; width: auto; }
+  .fruitback-panel-config { right: 8px; left: 8px; width: auto; }
 }
 `;

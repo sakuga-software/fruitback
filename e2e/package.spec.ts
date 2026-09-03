@@ -59,13 +59,13 @@ test('the snippet plants a note and reads it back, through its own transport', a
   await page.getByRole('button', { name: 'Planter' }).click();
 
   // The pin appears because `init` re-read after writing, not because anything told it to.
-  await expect(page.locator('[data-fruit-pin]')).toHaveCount(1);
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 
   // And it survives a reload, which is the read path answering on a page the widget mounted itself.
   await page.reload();
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await mountFromScriptTag(page);
-  await expect(page.locator('[data-fruit-pin]')).toHaveCount(1);
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 });
 
 test('a client-side navigation changes which pins are on screen', async ({ page }) => {
@@ -79,12 +79,12 @@ test('a client-side navigation changes which pins are on screen', async ({ page 
   await page.locator('[data-testid="card-latte"] .add').click();
   await page.getByPlaceholder("Qu'est-ce qui ne va pas ici ?").fill('Sur la page des formules');
   await page.getByRole('button', { name: 'Planter' }).click();
-  await expect(page.locator('[data-fruit-pin]')).toHaveCount(1);
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 
   await page.getByRole('link', { name: 'Commander' }).click();
   await page.getByRole('heading', { name: 'Votre commande' }).waitFor();
 
-  await expect(page.locator('[data-fruit-pin]')).toHaveCount(0);
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(0);
 });
 
 test('the documented snippet mounts on its own, from its data attributes', async ({ page }) => {
@@ -117,7 +117,7 @@ test('the documented snippet mounts on its own, from its data attributes', async
   await page.getByPlaceholder("Qu'est-ce qui ne va pas ici ?").fill('Planté par le snippet du README');
   await page.getByRole('button', { name: 'Planter' }).click();
 
-  await expect(page.locator('[data-fruit-pin]')).toHaveCount(1);
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 });
 
 test('a half-configured tag leaves the page alone', async ({ page }) => {

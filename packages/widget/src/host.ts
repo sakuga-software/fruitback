@@ -83,39 +83,39 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   const root = container.attachShadow({ mode: 'open' });
   const style = document.createElement('style');
   // Tokens first: every other stylesheet in this root — the overlay's, the composer's, the panel's —
-  // resolves `var(--fruit-…)` against them by inheritance, without importing anything.
+  // resolves `var(--fruitback-…)` against them by inheritance, without importing anything.
   style.textContent = THEME_STYLES + STYLES;
 
   const button = document.createElement('button');
   button.type = 'button';
-  button.className = 'fruit-launch';
-  button.dataset.fruitHostLaunch = '';
+  button.className = 'fruitback-launch';
+  button.dataset.fruitbackHostLaunch = '';
   button.textContent = options.label ?? '🌱 Laisser un feedback';
 
   // Beside the launch button rather than inside the settings panel, because the panel is what it
   // opens. Only built when there is something to open.
   const configure = document.createElement('button');
   configure.type = 'button';
-  configure.className = 'fruit-configure';
-  configure.dataset.fruitHostConfigure = '';
+  configure.className = 'fruitback-configure';
+  configure.dataset.fruitbackHostConfigure = '';
   // Distinct from the panel's own name: two things sharing one accessible name is ambiguous to a
   // screen reader, and to anything else that finds elements by their name.
   configure.setAttribute('aria-label', 'Ouvrir les réglages Fruitback');
   configure.textContent = '⚙';
 
   const highlight = document.createElement('div');
-  highlight.className = 'fruit-highlight';
-  highlight.dataset.fruitHostHighlight = '';
+  highlight.className = 'fruitback-highlight';
+  highlight.dataset.fruitbackHostHighlight = '';
 
   const panel = document.createElement('div');
-  panel.className = 'fruit-panel';
-  panel.dataset.fruitHostPanel = '';
+  panel.className = 'fruitback-panel';
+  panel.dataset.fruitbackHostPanel = '';
 
   // A dock rather than two fixed corners: the gear has to sit beside a button whose width is the
   // embedder's label, and no offset computed from the gear's own size can know that. It overlapped
   // the launch button until a recording showed it.
   const dock = document.createElement('div');
-  dock.className = 'fruit-dock';
+  dock.className = 'fruitback-dock';
   if (options.onConfigure !== undefined) dock.append(configure);
   dock.append(button);
 
@@ -184,14 +184,14 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
 
   function start(): void {
     capturing = true;
-    container.dataset.fruitCapturing = '';
+    container.dataset.fruitbackCapturing = '';
     button.textContent = 'Échap pour annuler';
   }
 
   function stop(): void {
     capturing = false;
     hovered = null;
-    delete container.dataset.fruitCapturing;
+    delete container.dataset.fruitbackCapturing;
     button.textContent = options.label ?? '🌱 Laisser un feedback';
     highlight.style.display = 'none';
   }
@@ -223,7 +223,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
  */
 const STYLES = `
 :host { all: initial; }
-* { all: initial; box-sizing: border-box; font-family: var(--fruit-font-sans); }
+* { all: initial; box-sizing: border-box; font-family: var(--fruitback-font-sans); }
 /*
   all:initial is thorough enough to undo the browser's own display:none on a style element, which
   then renders the stylesheet as a column of visible text in the corner of the client's page. Found
@@ -239,7 +239,7 @@ style, script { display: none; }
 */
 div, p, header, footer, section, form { display: block; }
 li { display: list-item; }
-.fruit-dock {
+.fruitback-dock {
   position: fixed;
   right: 16px;
   bottom: 16px;
@@ -248,35 +248,35 @@ li { display: list-item; }
   align-items: center;
   gap: 8px;
 }
-.fruit-launch {
+.fruitback-launch {
   padding: 10px 14px;
   border-radius: 999px;
-  background: var(--fruit-color-accent);
-  color: var(--fruit-color-on-accent);
-  font: 600 13px/1 var(--fruit-font-sans);
-  box-shadow: var(--fruit-shadow-md);
+  background: var(--fruitback-color-accent);
+  color: var(--fruitback-color-on-accent);
+  font: 600 13px/1 var(--fruitback-font-sans);
+  box-shadow: var(--fruitback-shadow-md);
   cursor: pointer;
 }
-.fruit-configure {
+.fruitback-configure {
   width: 30px;
   height: 30px;
   border-radius: 999px;
-  background: var(--fruit-color-chip);
-  color: var(--fruit-color-on-chip);
-  font: 600 14px/1 var(--fruit-font-sans);
-  box-shadow: var(--fruit-shadow-md);
+  background: var(--fruitback-color-chip);
+  color: var(--fruitback-color-on-chip);
+  font: 600 14px/1 var(--fruitback-font-sans);
+  box-shadow: var(--fruitback-shadow-md);
   cursor: pointer;
 }
-.fruit-highlight {
+.fruitback-highlight {
   position: absolute;
   display: none;
   z-index: 2147483100;
   /* The reporter is aiming at the page, not at this box. */
   pointer-events: none;
-  outline: 2px solid var(--fruit-color-accent);
-  background: color-mix(in srgb, var(--fruit-color-accent) 8%, transparent);
+  outline: 2px solid var(--fruitback-color-accent);
+  background: color-mix(in srgb, var(--fruitback-color-accent) 8%, transparent);
   border-radius: 4px;
 }
-.fruit-panel { position: absolute; top: 0; left: 0; }
-:host([data-fruit-capturing]) .fruit-launch { background: var(--fruit-color-chip); }
+.fruitback-panel { position: absolute; top: 0; left: 0; }
+:host([data-fruitback-capturing]) .fruitback-launch { background: var(--fruitback-color-chip); }
 `;

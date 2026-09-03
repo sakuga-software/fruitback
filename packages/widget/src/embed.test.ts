@@ -160,14 +160,14 @@ describe('reading pins', () => {
     const widget = init({ document: page.document, endpoint: ENDPOINT, clientId: 'acme' });
     await widget.refresh();
     assert.equal(
-      shadowOf(page).querySelectorAll('[data-fruit-pin]').length,
+      shadowOf(page).querySelectorAll('[data-fruitback-pin]').length,
       1,
       'the first read should have drawn a pin',
     );
 
     await widget.refresh();
 
-    assert.equal(shadowOf(page).querySelectorAll('[data-fruit-pin]').length, 1, 'the 401 blanked the page');
+    assert.equal(shadowOf(page).querySelectorAll('[data-fruitback-pin]').length, 1, 'the 401 blanked the page');
 
     widget.destroy();
   });
@@ -186,7 +186,7 @@ describe('the theme a host passes in', () => {
     });
 
     const container = page.document.querySelector('[data-fruitback-host]') as HTMLElement;
-    assert.equal(container.style.getPropertyValue('--fruit-color-accent'), '#0055ff');
+    assert.equal(container.style.getPropertyValue('--fruitback-color-accent'), '#0055ff');
 
     widget.destroy();
   });
@@ -197,7 +197,7 @@ describe('the theme a host passes in', () => {
 
     const container = page.document.querySelector('[data-fruitback-host]') as HTMLElement;
     // The container carries its own positioning, so what is asserted is that no token was written.
-    assert.equal(container.style.getPropertyValue('--fruit-color-accent'), '');
+    assert.equal(container.style.getPropertyValue('--fruitback-color-accent'), '');
     assert.match(
       page.document.querySelector('[data-fruitback-host]')?.shadowRoot?.textContent ?? '',
       /prefers-color-scheme: dark/,

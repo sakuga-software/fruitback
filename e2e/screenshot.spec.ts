@@ -54,7 +54,7 @@ async function plant(page: import('@playwright/test').Page, note: string) {
   await page.locator('[data-testid="card-latte"] .add').click();
   await page.getByPlaceholder("Qu'est-ce qui ne va pas ici ?").fill(note);
   await page.getByRole('button', { name: 'Planter' }).click();
-  await expect(page.locator('[data-fruit-pin]')).toHaveCount(1);
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 }
 
 /** What the worker actually stored, which is the only thing that settles this. */

@@ -8,7 +8,7 @@ import { openPlayground, plantPin, status } from './pin.ts';
  * a stage actually removes the pin the client can see.
  */
 
-const panel = '[data-fruit-config]';
+const panel = '[data-fruitback-config]';
 
 test('the settings open from the floating button and survive a reload', async ({ page }) => {
   await openPlayground(page, 'config');
@@ -38,17 +38,17 @@ test('hiding a stage takes its pin off the page, and showing it puts it back', a
   await plantPin(page, button, 'Un pin qui va être masqué');
   // Read the stage rather than assume it: it is the Linear workflow state that decides, and this
   // suite runs against whatever the fake Linear opens an issue in.
-  const stage = await page.locator('[data-fruit-pin]').first().getAttribute('data-fruit-stage');
+  const stage = await page.locator('[data-fruitback-pin]').first().getAttribute('data-fruitback-stage');
   const box = page.locator(`[name="stage-${stage}"]`);
 
   await page.getByLabel('Ouvrir les réglages Fruitback').click();
   await box.uncheck();
 
-  await expect(page.locator('[data-fruit-pin]')).toHaveCount(0);
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(0);
 
   // And back from the issues already held — no reload, no second request.
   await box.check();
-  await expect(page.locator('[data-fruit-pin]')).toHaveCount(1);
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 });
 
 test('the panel belongs to the widget, so the page cannot restyle it', async ({ page }) => {
@@ -79,18 +79,18 @@ test('a stage hidden before the pins arrive is never drawn', async ({ page }) =>
   await openPlayground(page, 'config-before');
   const button = page.locator('[data-testid="card-latte"] .add');
   await plantPin(page, button, 'Planté puis masqué au chargement');
-  const stage = await page.locator('[data-fruit-pin]').first().getAttribute('data-fruit-stage');
+  const stage = await page.locator('[data-fruitback-pin]').first().getAttribute('data-fruitback-stage');
 
   await page.getByLabel('Ouvrir les réglages Fruitback').click();
   await page.locator(`[name="stage-${stage}"]`).uncheck();
-  await expect(page.locator('[data-fruit-pin]')).toHaveCount(0);
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(0);
 
   // The preference is read before the first render, not applied after it. Waiting on the status
   // rather than on `waitForPins` is the point of the test: the worker still returns the seed — the
   // status says so — and the widget draws nothing.
   await page.reload();
   await expect(status(page)).toHaveText(/^1 pin$/);
-  await expect(page.locator('[data-fruit-pin]')).toHaveCount(0);
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(0);
 
   await page.getByLabel('Ouvrir les réglages Fruitback').click();
   await page.locator(`[name="stage-${stage}"]`).check();
@@ -150,5 +150,5 @@ test('a slow read from an old endpoint never overwrites a newer one', async ({ p
   // unreachable worker over a page that is perfectly fine.
   await page.waitForTimeout(2000);
   await expect(status(page)).toHaveText(/^1 pin$/);
-  await expect(page.locator('[data-fruit-pin]')).toHaveCount(1);
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 });

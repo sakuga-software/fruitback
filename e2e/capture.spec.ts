@@ -17,7 +17,7 @@ test('a click plants a pin, and the worker gives it back on reload', async ({ pa
   const pin = pinFor(page, 'Le bouton Ajouter');
   await expectPinOn(pin, button);
   // Resolved by the selector, not by falling back down the chain.
-  await expect(pin).toHaveAttribute('data-fruit-strategy', 'selector');
+  await expect(pin).toHaveAttribute('data-fruitback-strategy', 'selector');
 
   // The reload is the read path: nothing is kept client-side, so a pin that survives it came back
   // from `GET /feedback`.

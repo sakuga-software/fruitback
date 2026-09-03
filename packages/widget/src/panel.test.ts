@@ -43,7 +43,7 @@ describe('createConfigPanel', () => {
   it('starts closed, because the widget is not a settings screen', () => {
     const { page } = mount();
 
-    assert.equal((page.document.querySelector('[data-fruit-config]') as HTMLElement).hidden, true);
+    assert.equal((page.document.querySelector('[data-fruitback-config]') as HTMLElement).hidden, true);
     assert.equal(panel?.isOpen, false);
   });
 
@@ -115,7 +115,7 @@ describe('createConfigPanel', () => {
     const { page } = mount();
     panel?.open();
 
-    (page.document.querySelector('.fruit-config-close') as HTMLElement).click();
+    (page.document.querySelector('.fruitback-config-close') as HTMLElement).click();
 
     assert.equal(panel?.isOpen, false);
   });
@@ -126,7 +126,7 @@ describe('createConfigPanel', () => {
     panel?.destroy();
     panel = null;
 
-    assert.equal(page.document.querySelector('[data-fruit-config]'), null);
+    assert.equal(page.document.querySelector('[data-fruitback-config]'), null);
     assert.equal(page.document.querySelector('style'), null);
   });
 });

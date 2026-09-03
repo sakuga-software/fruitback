@@ -38,15 +38,27 @@ function press(key: string, modifiers: { metaKey?: boolean; ctrlKey?: boolean } 
   field().dispatchEvent(new KeyboardEventCtor('keydown', { key, bubbles: true, ...modifiers }));
 }
 
-const field = () => composer?.element.querySelector('[data-fruit-note]') as HTMLTextAreaElement;
-const sendButton = () => composer?.element.querySelector('[data-fruit-send]') as HTMLButtonElement;
-const statusText = () => composer?.element.querySelector('[data-fruit-status]')?.textContent ?? '';
+const field = () => composer?.element.querySelector('[data-fruitback-note]') as HTMLTextAreaElement;
+const sendButton = () => composer?.element.querySelector('[data-fruitback-send]') as HTMLButtonElement;
+const statusText = () => composer?.element.querySelector('[data-fruitback-status]')?.textContent ?? '';
 
 describe('createComposer', () => {
   it('stays out of the way until it is opened', () => {
     mount(async () => true);
 
     assert.equal(composer?.element.hidden, true);
+  });
+
+  it('carries no content in the template, so the field is not prefilled before any open', () => {
+    // Measured before any `open()`, which sets `value` to '' and would mask a polluted template.
+    // The trap is that a textarea's content is whitespace-sensitive: SKG-580 wrapped this tag to get
+    // under 120 columns, and a break placed between `>` and `</textarea>` rather than between two
+    // attributes puts text in the field that nobody typed. Losing or inventing what someone wrote is
+    // the one failure this widget cannot afford.
+    mount(async () => true);
+
+    assert.equal(field().textContent, '');
+    assert.equal(field().value, '');
   });
 
   it('opens empty, whatever the last note said', async () => {
@@ -213,7 +225,7 @@ describe('createComposer', () => {
   it('announces its state to a screen reader', () => {
     mount(async () => true);
 
-    const status = composer?.element.querySelector('[data-fruit-status]');
+    const status = composer?.element.querySelector('[data-fruitback-status]');
     assert.equal(status?.getAttribute('role'), 'status');
     assert.equal(status?.getAttribute('aria-live'), 'polite');
     assert.equal(field().getAttribute('aria-label'), 'Votre commentaire');
@@ -225,7 +237,7 @@ describe('createComposer', () => {
     composer?.destroy();
     composer = null;
 
-    assert.equal(host.querySelector('[data-fruit-composer]'), null);
+    assert.equal(host.querySelector('[data-fruitback-composer]'), null);
     assert.equal(host.querySelector('style'), null);
   });
 });
@@ -240,9 +252,9 @@ describe('saying who you are, or not', () => {
     const { page } = mount(async (_note, reporter) => void seen.push(reporter));
     composer?.open(ANCHOR);
 
-    assert.equal((query(page, '[data-fruit-who]') as HTMLElement).hidden, true);
-    (query(page, '[data-fruit-note]') as HTMLTextAreaElement).value = 'Une note';
-    query(page, '[data-fruit-send]').click();
+    assert.equal((query(page, '[data-fruitback-who]') as HTMLElement).hidden, true);
+    (query(page, '[data-fruitback-note]') as HTMLTextAreaElement).value = 'Une note';
+    query(page, '[data-fruitback-send]').click();
     await Promise.resolve();
 
     assert.deepEqual(seen, [undefined]);
@@ -251,11 +263,11 @@ describe('saying who you are, or not', () => {
   it('reveals the fields when asked, and says so to a screen reader', () => {
     const { page } = mount(async () => true);
     composer?.open(ANCHOR);
-    const toggle = query(page, '[data-fruit-identify]');
+    const toggle = query(page, '[data-fruitback-identify]');
 
     toggle.click();
 
-    assert.equal((query(page, '[data-fruit-who]') as HTMLElement).hidden, false);
+    assert.equal((query(page, '[data-fruitback-who]') as HTMLElement).hidden, false);
     assert.equal(toggle.getAttribute('aria-expanded'), 'true');
   });
 
@@ -264,9 +276,9 @@ describe('saying who you are, or not', () => {
     const { page } = mount(async (_note, reporter) => void seen.push(reporter));
     composer?.open(ANCHOR);
 
-    (query(page, '[data-fruit-name]') as HTMLInputElement).value = '  Alice  ';
-    (query(page, '[data-fruit-note]') as HTMLTextAreaElement).value = 'Une note';
-    query(page, '[data-fruit-send]').click();
+    (query(page, '[data-fruitback-name]') as HTMLInputElement).value = '  Alice  ';
+    (query(page, '[data-fruitback-note]') as HTMLTextAreaElement).value = 'Une note';
+    query(page, '[data-fruitback-send]').click();
     await Promise.resolve();
 
     // No `email` key at all: the round-trip forbids a field the caller did not provide.
@@ -278,10 +290,10 @@ describe('saying who you are, or not', () => {
     const { page } = mount(async (_note, reporter) => void seen.push(reporter));
     composer?.open(ANCHOR);
 
-    (query(page, '[data-fruit-name]') as HTMLInputElement).value = 'Alice';
-    (query(page, '[data-fruit-email]') as HTMLInputElement).value = 'alice@acme.test';
-    (query(page, '[data-fruit-note]') as HTMLTextAreaElement).value = 'Une note';
-    query(page, '[data-fruit-send]').click();
+    (query(page, '[data-fruitback-name]') as HTMLInputElement).value = 'Alice';
+    (query(page, '[data-fruitback-email]') as HTMLInputElement).value = 'alice@acme.test';
+    (query(page, '[data-fruitback-note]') as HTMLTextAreaElement).value = 'Une note';
+    query(page, '[data-fruitback-send]').click();
     await Promise.resolve();
 
     assert.deepEqual(seen, [{ name: 'Alice', email: 'alice@acme.test' }]);
