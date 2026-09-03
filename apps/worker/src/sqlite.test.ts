@@ -17,8 +17,31 @@ import { closeSqliteConnections, createSqliteStore, createSqliteStoreSpec, sqlit
  * that one connection is shared. An in-memory database would make all three vacuously true.
  */
 
+/**
+ * Whether this platform lets a process count its own open descriptors.
+ *
+ * `/dev/fd` exists on Linux and macOS — CI and every machine this is developed on — and not on
+ * Windows. **Reported as skipped rather than quietly passing**, because the alternative is a guard
+ * that returns green on the one platform where it measured nothing, which is the failure mode this
+ * particular test already had once.
+ */
+const descriptorsReadable = (() => {
+  try {
+    readdirSync('/dev/fd');
+
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
 const POLICY: ClientPolicy = { showComments: true, identitySecret: undefined, read: 'public' };
 const QUIET: ClientPolicy = { ...POLICY, showComments: false };
+
+/** A reason, not `true`: a skipped test should say which platform dropped it and why. */
+const skipUnlessDescriptors = descriptorsReadable
+  ? false
+  : 'no /dev/fd on this platform, so a leaked handle is not observable';
 
 let directories: string[] = [];
 
@@ -190,7 +213,7 @@ describe('the file survives the process', () => {
     assert.equal(issues.length, 2);
   });
 
-  it('closes the handle when the file turns out not to be a database', async () => {
+  it('closes the handle when the file turns out not to be a database', { skip: skipUnlessDescriptors }, async () => {
     // The constructor succeeds on any file; the first PRAGMA is what discovers it is not a database —
     // a bad restore, a truncated volume. The handle is open by then, and `handleRequest` still falls
     // back to building a store per request, so an unclosed one leaks a descriptor on every request
