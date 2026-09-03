@@ -2,13 +2,17 @@
 
 Visual feedback on a live site, without a backend to host.
 
-A client opens their staging site, clicks the element that bothers them, types a note. It lands in
-Linear as a triaged issue — with the CSS selector, the React component and the source file behind
-the element. When they come back to the page, their pins are still there, coloured by the Linear
-status: 🌱 seeded → 🍏 green → 🍊 ripening → 🍓 ripe.
+A client opens their staging site, clicks the element that bothers them, types a note. It lands as a
+triaged issue — with the CSS selector, the React component and the source file behind the element.
+When they come back to the page, their pins are still there, coloured by its status:
+🌱 seeded → 🍏 green → 🍊 ripening → 🍓 ripe.
 
-Pastel-like review, but **Linear is the database** — the dashboard, the triage, the API, the MCP
-server and the integrations all come for free.
+Pastel-like review, but **Fruitback does not store your feedback — a system you already run does.**
+
+**Linear is the default**, and the richest: the dashboard, the triage, the API, the MCP server and
+the integrations all come for free. **SQLite is the other end**, and it is what makes self-hosting
+mean what it says — one file on a volume, no account anywhere, nothing to sign up for. Choose with
+`FRUITBACK_STORE`; see [Where your feedback lives](#where-your-feedback-lives).
 
 ## Install
 
@@ -54,9 +58,51 @@ Alternatives we looked at and dropped:
   something Linear already does.
 
 So: build **only** the missing piece — the capture and restitution layer — on top of
-[react-grab](https://github.com/aidenybai/react-grab) (MIT), and let Linear absorb everything else.
-The one thing Linear cannot do is redraw a pin on the page; that part we reconstruct from the anchor
-we stored.
+[react-grab](https://github.com/aidenybai/react-grab) (MIT), and let the issue tracker absorb
+everything else. The one thing it cannot do is redraw a pin on the page; that part we reconstruct
+from the anchor we stored.
+
+## Where your feedback lives
+
+`FRUITBACK_STORE` picks the connector. It defaults to `linear`, so a deployment that sets nothing
+keeps the behaviour it has. Each connector reads only its own variables — a worker on SQLite is never
+asked for a Linear key, and an unknown name is refused at boot rather than quietly defaulted.
+
+| `FRUITBACK_STORE` | Needs | Good for |
+| --- | --- | --- |
+| `linear` *(default)* | `LINEAR_API_KEY`, `LINEAR_TEAM_ID` | A team already triaging in Linear. Everything comes for free: dashboard, API, MCP, integrations. |
+| `sqlite` | `FRUITBACK_SQLITE_PATH` | Self-hosting with **no third party at all**. One file on a volume. |
+| `memory` | nothing | The dev loop only. Refused under `NODE_ENV=production`. |
+
+### SQLite
+
+One file, `node:sqlite`, no dependency and no native module to compile. The schema is created on
+first open and migrated in place, so there is no separate command to run — a self-hoster starts one
+container, not two.
+
+```yaml
+# docker-compose.yml
+services:
+  worker:
+    environment:
+      FRUITBACK_STORE: sqlite
+      FRUITBACK_SQLITE_PATH: /data/fruitback.db
+    volumes:
+      - fruitback-data:/data
+```
+
+**Back it up with one line**, and do it against the running container rather than copying the file —
+a live SQLite database has a write-ahead log beside it, and `cp` catches neither consistently:
+
+```bash
+docker compose exec worker sqlite3 /data/fruitback.db ".backup '/data/backup.db'"
+```
+
+What you give up: **SQLite needs a persistent filesystem**, so it cannot run on a serverless runtime.
+That is the trade, not an oversight. And with no issue tracker behind it there is no dashboard and no
+triage UI — the pins on the page are the interface, and a note's thread lives in the `comments`
+table. A store with no web interface reports no link, and the widget renders none rather than one
+that leads back to the page you are already on.
 
 ## Architecture
 

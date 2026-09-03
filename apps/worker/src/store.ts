@@ -25,8 +25,14 @@ import type { ClientConfig, ClientPolicy } from './clients.ts';
  */
 export class StoreError extends Error {}
 
-/** What a store hands back after planting a seed. */
-export type CreatedIssue = { id: string; identifier: string; url: string };
+/**
+ * What a store hands back after planting a seed.
+ *
+ * `url` is optional for the same reason it is on `SeedIssue`: a store may have no interface to open
+ * (SKG-524). The widget does not read it — this travels in the `201` body, where an empty string
+ * would be a URL the caller could follow to nowhere.
+ */
+export type CreatedIssue = { id: string; identifier: string; url?: string };
 
 /** The read the worker asks for: every seed on one page, for one client. */
 export type SeedIssueQuery = { url: string; clientId: string | undefined };

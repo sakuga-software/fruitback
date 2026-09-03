@@ -24,6 +24,19 @@ FROM node:26-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
+# The `sqlite3` CLI, and only for the backup the README documents (SKG-524). The store itself uses
+# `node:sqlite` and needs nothing installed; what needs a binary is `.backup`, which is the one safe
+# way to copy a live database — `cp` misses the write-ahead log beside it. About 1.5 MB, and without
+# it "the database is the product" comes with a documented command that is not there. Alpine has no
+# curl either, which is why the healthcheck below probes with Node.
+RUN apk add --no-cache sqlite
+
+# The default home for FRUITBACK_SQLITE_PATH, and a mount point for the volume that outlives the
+# container. Created here and owned by `node`, because the process does not run as root and a store
+# that cannot write its own directory fails at the first note rather than at boot.
+RUN mkdir -p /data && chown node:node /data
+VOLUME /data
+
 # The bundle carries its own dependencies, so the runtime image needs no node_modules at all.
 COPY --from=build /repo/apps/worker/dist/server.mjs ./server.mjs
 

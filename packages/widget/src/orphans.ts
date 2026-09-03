@@ -117,6 +117,29 @@ function entry(document: Document, issue: SeedIssue, onSelect?: (issue: SeedIssu
   button.textContent = `${SEED_STAGE_STYLES[issue.stage].emoji} ${excerpt(issue)}`;
   button.addEventListener('click', () => onSelect?.(issue));
 
+  item.append(button, ...handle(document, issue));
+
+  return item;
+}
+
+/**
+ * The identifier, as a link when the store has somewhere to open it and as plain text otherwise
+ * (SKG-524).
+ *
+ * A store with no web interface — SQLite — reports no `url`, and an anchor with an empty `href`
+ * resolves to the current page: clicking it reloads the client's site and loses whatever the
+ * reporter was doing. The identifier is still worth showing, so it degrades to a span rather than
+ * disappearing with the link.
+ */
+function handle(document: Document, issue: SeedIssue): HTMLElement[] {
+  if (issue.url === undefined) {
+    const label = document.createElement('span');
+    label.className = 'fruitback-orphans-link';
+    label.textContent = issue.identifier;
+
+    return [label];
+  }
+
   const link = document.createElement('a');
   link.className = 'fruitback-orphans-link';
   link.href = issue.url;
@@ -124,9 +147,7 @@ function entry(document: Document, issue: SeedIssue, onSelect?: (issue: SeedIssu
   link.rel = 'noreferrer noopener';
   link.textContent = issue.identifier;
 
-  item.append(button, link);
-
-  return item;
+  return [link];
 }
 
 function excerpt(issue: SeedIssue): string {
