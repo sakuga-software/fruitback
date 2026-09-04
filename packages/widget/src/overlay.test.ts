@@ -171,6 +171,18 @@ describe('createOverlay', () => {
     assert.equal(header?.textContent, 'Ripening');
   });
 
+  it('leaves no dangling separator in the badge tooltip when the state is unnamed', () => {
+    // The second site of the same hole, and the reason `stateLabel` is a function: the header was
+    // fixed and this one was left behind, giving `SKG-742 · ` with nothing after the separator.
+    // Raised in review on SKG-517.
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta({ identifier: 'SKG-742', stateName: '', stage: 'composted' })]);
+
+    const badge = page.document.querySelector('.fruitback-pin-badge');
+    assert.equal(badge?.getAttribute('title'), 'SKG-742 · Composted');
+  });
+
   it('prefers the store’s own word when it has one', () => {
     // The fallback must not swallow the real answer: Linear's "In Progress" is what a team named its
     // column, and the contract's stage vocabulary is not a substitute for it.

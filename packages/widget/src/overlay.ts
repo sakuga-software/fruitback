@@ -394,7 +394,7 @@ function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolu
   const badge = document.createElement('button');
   badge.type = 'button';
   badge.className = 'fruitback-pin-badge';
-  badge.title = `${issue.identifier} · ${issue.stateName}`;
+  badge.title = `${issue.identifier} · ${stateLabel(issue)}`;
   // The drop is rotated, so the glyph rides in its own span and is turned back upright.
   const glyph = document.createElement('span');
   glyph.className = 'fruitback-pin-glyph';
@@ -487,6 +487,23 @@ function replies(document: Document, issue: SeedIssue): HTMLElement[] {
   return [list];
 }
 
+/**
+ * What the store calls this issue's state, or the stage when it calls it nothing.
+ *
+ * The Linear connector reports `node.state?.name ?? ''`, so an issue with no state gives an empty
+ * string. That used to be hidden behind the stage's emoji; with the glyph gone (SKG-517) it surfaced
+ * twice — an empty thread header, and a tooltip reading `SKG-742 · ` with a dangling separator.
+ *
+ * **A function and not the expression inlined twice**, because the second site is how this was found:
+ * the header was fixed in review and the badge's `title` was left behind. Two copies of a fallback
+ * are two chances to fix only one of them.
+ *
+ * `||` and not `??`: an empty string is exactly the case being caught, and `??` would let it through.
+ */
+function stateLabel(issue: SeedIssue): string {
+  return issue.stateName || STAGE_LABELS[issue.stage];
+}
+
 /** Note, status, who said it, and the way through to Linear, which owns everything else. */
 function buildThread(document: Document, issue: SeedIssue, resolution: AnchorResolution): HTMLElement {
   const thread = document.createElement('div');
@@ -503,11 +520,8 @@ function buildThread(document: Document, issue: SeedIssue, resolution: AnchorRes
       // store said — Linear's "In Progress", SQLite's own — and the stage colour is already on the
       // thread's top border through `--fruitback-pin-color`.
       //
-      // The fallback is not decoration: the Linear connector reports `node.state?.name ?? ''`, so an
-      // issue with no state used to leave a lone glyph here and would now leave an **empty span** —
-      // a thread whose header is just a close button. The widget always knows the stage, so it says
-      // that instead. Raised in review on SKG-517.
-      element(document, 'span', 'fruitback-thread-stage', issue.stateName || STAGE_LABELS[issue.stage]),
+      // See `stateLabel` for why this is not just `issue.stateName`.
+      element(document, 'span', 'fruitback-thread-stage', stateLabel(issue)),
       closeButton(document),
     ]),
     element(document, 'p', 'fruitback-thread-note', issue.seed.note || 'Aucune note.'),

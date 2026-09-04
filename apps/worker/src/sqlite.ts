@@ -11,7 +11,7 @@ import {
   seedIssueSchema,
   seedSchema,
 } from '@fruitback/shared';
-import type { ClientConfig, ClientPolicy } from './clients.ts';
+import type { ClientPolicy } from './clients.ts';
 import { type CreatedIssue, type SeedIssueQuery, type SeedStore, StoreError } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
 
