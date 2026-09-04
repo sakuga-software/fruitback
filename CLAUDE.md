@@ -305,8 +305,9 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   did not start filtering theirs: `e2e/package.spec.ts` **and** `e2e/screenshot.spec.ts` both mount
   with `label: '🌱 Feedback'` on purpose and assert it renders. What changed is the *documented*
   snippet, in `README.md` and `docs/install.md`, which no longer suggests one. The first version of
-  this bullet named one file and called it the only one, which is the same failure as the count two
-  bullets down — `grep -rnP "[\x{1F300}-\x{1FAFF}]" e2e` rather than a number written here.
+  this bullet named one file and called it the only one; run
+  `grep -rnP "[\x{1F300}-\x{1FAFF}]" e2e` rather than trusting a number written here, which is the
+  same rule the SKG-517 emoji inventory in *The seed contract* had to learn twice.
 - **The guard is `icons.test.ts`'s `has none in any source file of this package`**, and it reads every
   `.ts` in the package rather than the rendered strings — a rendered check only sees the states a test
   reaches, and each of the removed emoji sat on a path some test did not run. `e2e/host.spec.ts`'s
