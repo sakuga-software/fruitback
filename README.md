@@ -30,7 +30,7 @@ optional:
   src="https://cdn.acme.dev/fruitback.iife.js"
   data-fruitback-endpoint="https://feedback.acme.dev"
   data-fruitback-client="acme"
-  data-fruitback-label="🌱 Leave feedback"
+  data-fruitback-label="Leave feedback"
   defer
 ></script>
 ```

@@ -42,6 +42,28 @@ const field = () => composer?.element.querySelector('[data-fruitback-note]') as 
 const sendButton = () => composer?.element.querySelector('[data-fruitback-send]') as HTMLButtonElement;
 const statusText = () => composer?.element.querySelector('[data-fruitback-status]')?.textContent ?? '';
 
+describe('what the popover looks like (SKG-529)', () => {
+  it('draws the seed on the send button and still calls it Planter', () => {
+    // The icon is prepended after the template is parsed, because an SVG written into an innerHTML
+    // string lands in the HTML namespace and renders nothing at all. It is aria-hidden, so the
+    // button's accessible name has to be the word alone.
+    mount(async () => {});
+
+    assert.ok(sendButton().querySelector('svg.fruitback-icon'), 'the send button lost its mark');
+    assert.equal(sendButton().textContent, 'Planter');
+  });
+
+  it('confirms in words, with no strawberry in front of them', async () => {
+    mount(async () => {});
+    composer?.open(ANCHOR);
+
+    sendButton().click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(statusText(), 'récolté');
+  });
+});
+
 describe('createComposer', () => {
   it('stays out of the way until it is opened', () => {
     mount(async () => true);

@@ -2,6 +2,7 @@ import type { SeedSource } from '@fruitback/shared';
 import { isElement } from './dom.ts';
 import { type FruitbackTheme, THEME_STYLES, applyTheme } from './theme.ts';
 import { type CaptureEngine, reactGrabEngine } from './engine.ts';
+import { createIcon } from './icons.ts';
 
 /**
  * The widget's own patch of DOM, and the selection mode that runs inside it.
@@ -64,6 +65,9 @@ export type CaptureHost = {
   destroy(): void;
 };
 
+/** What the button says when the embedder said nothing. */
+const DEFAULT_LABEL = 'Laisser un feedback';
+
 export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   const document = options.document ?? globalThis.document;
   const engine = options.engine ?? reactGrabEngine;
@@ -90,7 +94,12 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   button.type = 'button';
   button.className = 'fruitback-launch';
   button.dataset.fruitbackHostLaunch = '';
-  button.textContent = options.label ?? '🌱 Laisser un feedback';
+  // The seed the button plants, as the shape the page will then show — not as an emoji (SKG-529).
+  // The label lives in its own span so that setting it never removes the icon, and so the button's
+  // accessible name stays exactly the label: the SVG is aria-hidden and contributes no text.
+  const launchLabel = document.createElement('span');
+  launchLabel.textContent = options.label ?? DEFAULT_LABEL;
+  button.append(createIcon(document, 'drop'), launchLabel);
 
   // Beside the launch button rather than inside the settings panel, because the panel is what it
   // opens. Only built when there is something to open.
@@ -101,7 +110,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   // Distinct from the panel's own name: two things sharing one accessible name is ambiguous to a
   // screen reader, and to anything else that finds elements by their name.
   configure.setAttribute('aria-label', 'Ouvrir les réglages Fruitback');
-  configure.textContent = '⚙';
+  configure.append(createIcon(document, 'gear'));
 
   const highlight = document.createElement('div');
   highlight.className = 'fruitback-highlight';
@@ -185,14 +194,14 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   function start(): void {
     capturing = true;
     container.dataset.fruitbackCapturing = '';
-    button.textContent = 'Échap pour annuler';
+    launchLabel.textContent = 'Échap pour annuler';
   }
 
   function stop(): void {
     capturing = false;
     hovered = null;
     delete container.dataset.fruitbackCapturing;
-    button.textContent = options.label ?? '🌱 Laisser un feedback';
+    launchLabel.textContent = options.label ?? DEFAULT_LABEL;
     highlight.style.display = 'none';
   }
 
@@ -223,7 +232,13 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
  */
 const STYLES = `
 :host { all: initial; }
-* { all: initial; box-sizing: border-box; font-family: var(--fruitback-font-sans); }
+/*
+  The reset stops at the edge of an SVG, and that exclusion is load-bearing rather than tidy. Under a
+  plain star selector, a path computes d:none and stroke:none — the geometry itself is a CSS property
+  since SVG2, so all:initial erases the drawing. Every icon renders as an empty box, with no error
+  anywhere. Measured in Chromium before this was written (SKG-529).
+*/
+*:not(svg, svg *) { all: initial; box-sizing: border-box; font-family: var(--fruitback-font-sans); }
 /*
   all:initial is thorough enough to undo the browser's own display:none on a style element, which
   then renders the stylesheet as a column of visible text in the corner of the client's page. Found
@@ -239,6 +254,25 @@ style, script { display: none; }
 */
 div, p, header, footer, section, form { display: block; }
 li { display: list-item; }
+/*
+  Every glyph in the widget, in one place. The size follows the text beside it and the paint follows
+  its colour, which is the whole reason these are SVG and not characters: an emoji would obey neither.
+*/
+.fruitback-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  /* A flex item shrinks by default, and a squashed icon reads as a rendering bug. */
+  flex: none;
+  overflow: hidden;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.fruitback-icon-filled { fill: currentColor; fill-rule: evenodd; stroke: none; }
+.fruitback-icon-dashed { stroke-dasharray: 2.6 2.2; }
 .fruitback-dock {
   position: fixed;
   right: 16px;
@@ -246,21 +280,29 @@ li { display: list-item; }
   z-index: 2147483200;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 .fruitback-launch {
-  padding: 10px 14px;
-  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 14px;
+  border-radius: var(--fruitback-radius-pill);
   background: var(--fruitback-color-accent);
   color: var(--fruitback-color-on-accent);
+  /* Tightened tracking rather than a smaller size: the label is the widget's only voice on the
+     page, and shrinking it is how a control starts looking like an advert. */
   font: 600 13px/1 var(--fruitback-font-sans);
+  letter-spacing: -0.006em;
   box-shadow: var(--fruitback-shadow-md);
   cursor: pointer;
 }
 .fruitback-configure {
+  display: grid;
+  place-items: center;
   width: 30px;
   height: 30px;
-  border-radius: 999px;
+  border-radius: var(--fruitback-radius-pill);
   background: var(--fruitback-color-chip);
   color: var(--fruitback-color-on-chip);
   font: 600 14px/1 var(--fruitback-font-sans);
@@ -275,7 +317,7 @@ li { display: list-item; }
   pointer-events: none;
   outline: 2px solid var(--fruitback-color-accent);
   background: color-mix(in srgb, var(--fruitback-color-accent) 8%, transparent);
-  border-radius: 4px;
+  border-radius: var(--fruitback-radius-sm);
 }
 .fruitback-panel { position: absolute; top: 0; left: 0; }
 :host([data-fruitback-capturing]) .fruitback-launch { background: var(--fruitback-color-chip); }

@@ -1,6 +1,7 @@
 import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
 import { STAGE_LABELS } from './stages.ts';
 import { RESOLVED_STAGES, type ConfigStore } from './config.ts';
+import { createIcon } from './icons.ts';
 
 /**
  * The settings panel, opened from the floating button (SKG-503).
@@ -75,7 +76,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   close.type = 'button';
   close.className = 'fruitback-config-close';
   close.setAttribute('aria-label', 'Fermer les réglages');
-  close.textContent = '×';
+  close.append(createIcon(document, 'close'));
 
   // A div, not a header: Playwright's selectors pierce open shadow roots, so a generic tag here
   // makes the client's own `header button` ambiguous for anything that inspects the composed tree.
@@ -84,7 +85,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   head.className = 'fruitback-config-head';
   const title = document.createElement('span');
   title.className = 'fruitback-config-title';
-  title.textContent = '🌱 Réglages';
+  title.textContent = 'Réglages';
   head.append(title, close);
 
   const stagesTitle = document.createElement('p');
@@ -216,7 +217,7 @@ const STYLES = `
   z-index: 2147483000;
   width: 280px;
   padding: 14px;
-  border-radius: 14px;
+  border-radius: var(--fruitback-radius-lg);
   background: var(--fruitback-color-surface);
   color: var(--fruitback-color-text);
   font-size: 13px;
@@ -225,15 +226,18 @@ const STYLES = `
 }
 .fruitback-panel-config[hidden] { display: none; }
 .fruitback-config-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.fruitback-config-title { font-weight: 600; }
+.fruitback-config-title { font-weight: 600; letter-spacing: -0.006em; }
 .fruitback-config-close {
+  display: grid;
+  place-items: center;
   border: 0;
   background: none;
-  font-size: 18px;
+  font-size: 15px;
   line-height: 1;
   cursor: pointer;
   color: var(--fruitback-color-text-muted);
 }
+.fruitback-config-close:hover { color: var(--fruitback-color-text); }
 .fruitback-config-field { display: block; margin-top: 10px; }
 .fruitback-config-field span {
   display: block;
@@ -246,7 +250,7 @@ const STYLES = `
   width: 100%;
   padding: 6px 8px;
   border: 1px solid var(--fruitback-color-border-strong);
-  border-radius: 8px;
+  border-radius: var(--fruitback-radius-sm);
   font: inherit; color: inherit; background: var(--fruitback-color-surface);
 }
 .fruitback-config-field input:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 1px; }

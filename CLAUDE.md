@@ -257,7 +257,7 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 
 ## The look, and the one thing a host may change
 
-- **`theme.ts` owns every colour, shadow, font family and duration** (SKG-528). They were
+- **`theme.ts` owns every colour, shadow, radius, font family and duration** (SKG-528, SKG-529). They were
   hexadecimals spread across five `STYLES` literals — `host.ts`, `overlay.ts`, `composer.ts`,
   `panel.ts`, `orphans.ts` — plus the stage colours, which travelled in the *published contract*.
 - **Custom properties, because inheritance is what crosses the modules.** Each module injects its own
@@ -268,6 +268,48 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   properties — so a name the host also uses repaints our widget silently. `--color-text` would be
   reckless, and `--fb-` no better: it is what a Facebook SDK or somebody's flexbox utilities would
   plausibly pick.
+
+## No emoji, and what replaced them
+
+- **Nothing in `packages/widget` renders an emoji** (SKG-529). A sprout opened the launch button, a
+  gear sat on the settings chip, a fallen leaf on the detached-notes count, a strawberry on the
+  confirmation. An emoji is drawn by the system's own font: the same codepoint is flat on Windows,
+  glossy on macOS and something else on Android, it takes no colour, sits on no typographic grid, and
+  carries a register that cannot be dialled down. A review tool laid over a client's site is seen by
+  that client.
+- **`icons.ts` holds all four glyphs**, built with `createElementNS`, sized in `em`, painted in
+  `currentColor`, `aria-hidden` and `focusable="false"`. An SVG assigned through `innerHTML` is parsed
+  into the HTML namespace and renders nothing at all, which is why `composer.ts` prepends its mark
+  after the template rather than writing it into `TEMPLATE`.
+- **`*:not(svg, svg *) { all: initial }`, and that exclusion is the whole ticket's riskiest line.**
+  Since SVG2 a path's own geometry is a CSS property, so a bare star selector computes `d: none` and
+  `stroke: none` — every icon renders as an empty box, with nothing in the console and nothing a unit
+  test can see, because happy-dom draws nothing either. Measured in Chromium before the code was
+  written, and `e2e/host.spec.ts`'s *the icons are actually drawn* was measured failing against the
+  bare selector.
+- **The fruit did not leave, it moved into the geometry.** `drop` is the pin's own silhouette — three
+  round corners and one sharp — so the launch button plants the thing the page then shows; `dropDashed`
+  is that shape drawn the way the overlay draws a pin it could not re-anchor, which is what the
+  detached-notes chip now opens with. An orphan row carries the same drop in its **stage's** colour,
+  which is what finally made `orphans.ts`'s signature honest — it had been over-invalidating on a
+  stage nothing rendered.
+- **The gear is filled, not stroked, and its hole is a second subpath cut by `fill-rule: evenodd`.**
+  A stroked gear at 14px reads as a flower; two paths would have filled the hole back in. Its teeth
+  are generated — the first attempt overlapped its tooth and valley angles and drew a spiky blob,
+  which only showed up when the icons were rendered at 4× and looked at.
+- **`≈`, `×` and `→` are not emoji and were judged separately.** They are typographic symbols with one
+  drawing in every font. `≈` stays on an unsure pin — it is the whole warning in one character; `×`
+  became the `close` icon because it was standing in for a drawing at 18px and aligning on no
+  baseline; `→` stays on the thread's link.
+- **A host's label is still the host's word.** SKG-529 took our emoji out of the widget's chrome and
+  did not start filtering theirs: `e2e/package.spec.ts` passes `label: '🌱 Feedback'` on purpose and
+  asserts it renders. What changed is the *documented* snippet, in `README.md` and `docs/install.md`,
+  which no longer suggests one.
+- **The guard is `icons.test.ts`'s `has none in any source file of this package`**, and it reads every
+  `.ts` in the package rather than the rendered strings — a rendered check only sees the states a test
+  reaches, and each of the four removed emoji sat on a path some test did not run. `e2e/host.spec.ts`
+  reads the composed Shadow root with the composer and the panel open, which is the half a source
+  sweep cannot vouch for. Both were measured failing on a planted emoji.
 
 ## One prefix, and it is `fruitback`
 
@@ -304,10 +346,15 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   to that block. Searching the whole stylesheet passed a mutation that deleted a declaration, because
   the dark block redeclares it — a token declared only under `prefers-color-scheme: dark` is undefined
   in light mode.
-- **Radii are not tokenised, on purpose.** Eight distinct values are in use and each would map to
-  exactly one token: indirection wearing the costume of a scale, and more for SKG-529 to undo when it
-  shortens the scale deliberately. Spacing likewise — nobody overrides it, and substituting sixty
-  literals is where a silent visual regression hides.
+- **Radii are tokenised now, and the order of the two moves is the point** (SKG-529). SKG-528 refused
+  to name eight distinct values, because eight tokens each used once is indirection wearing the
+  costume of a scale. SKG-529 shortened the scale first — 4, 6 and 8 became `sm`; 10 and 12 became
+  `md`; 14 and 18 became `lg`; 999px is `pill` — and named the four that were left. Naming them before
+  reducing them would have frozen the accident.
+- The pin's silhouette is **not** in that scale: `border-radius: 50% 50% 50% 0` is a shape, not a
+  corner size, and it is the product's identity rather than a preference a host may set.
+- Spacing is still literal — nobody overrides it, and substituting sixty numbers is where a silent
+  visual regression hides.
 - SKG-528 changed **no colour**: every token holds the hexadecimal that was already there, and
   `e2e/overlay.spec.ts`'s computed-colour read is the proof. One shadow moved 4px, because the thread
   and the panel spelled the same intention two ways.
@@ -700,15 +747,15 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   now. What it really guarded — that the signature invalidates on a stage change — is still worth
   keeping, so it asserts a **rebuilt node** instead of different text. The signature deliberately
   over-invalidates by one field, because SKG-529 decides how a stage shows up there and a signature
-  that had forgotten it would leave a stale entry.
-- **Six emoji remain, on five sites, and they are SKG-529's rather than this ticket's**: `host.ts`
-  (the launch button's default label, twice, and the gear), `panel.ts` (the settings title),
-  `orphans.ts` (the detached-notes count) and `composer.ts` (the harvested state). Those are
-  standalone literals in the widget's own copy; what SKG-517 removed is only what the *contract* was
-  dictating. Count them rather than trusting this line —
-  `grep -rnoP "[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}]" --include="*.ts" packages/widget/src` — because
-  the first version of this sentence said *four* and named four, missing `composer.ts` entirely and
-  undercounting `host.ts`. A reader working from it would have left one behind.
+  that had forgotten it would leave a stale entry. **SKG-529 answered**: each row carries a drop in
+  its stage's colour, so the signature is honest and the test asserts the colour rather than a
+  rebuilt node.
+- **The six emoji SKG-517 left behind were SKG-529's, and there are none now.** They were standalone
+  literals in the widget's own copy — the launch label, the gear, the settings title, the
+  detached-notes count, the harvested state — rather than anything the *contract* was dictating,
+  which is why SKG-517 scoped them out. See *No emoji, and what replaced them*. The count in this
+  paragraph was wrong twice before it was right, so do not trust a number here: `icons.test.ts`
+  asserts zero across the package, and it was measured failing on a planted one.
 - **The stage vocabulary is the contract's; the projection onto it is the connector's** (SKG-516).
   `SEED_STAGES` and `DEFAULT_SEED_STAGE` live in `shared`; `stageForLinearState` and
   `LINEAR_STATE_TYPES` moved to `apps/worker/src/linear.ts`, where Linear's vocabulary belongs.

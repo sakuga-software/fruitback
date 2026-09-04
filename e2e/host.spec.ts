@@ -40,6 +40,56 @@ test('the page cannot restyle the widget, however hard it tries', async ({ page 
   expect(styles.fontFamily).not.toContain('Papyrus');
 });
 
+test('the icons are actually drawn, not empty boxes (SKG-529)', async ({ page }) => {
+  // The one failure this ticket could ship silently. The host reset is `all: initial`, and since
+  // SVG2 a path's own geometry is a CSS property — so a bare star selector computes `d: none` and
+  // `stroke: none`, every icon renders as nothing, and neither the console nor a unit test says a
+  // word. happy-dom draws nothing at all, so this is the only place the pixels can be checked.
+  //
+  // Measured before the fix: `d` came back as the string "none" under `* { all: initial }`.
+  await openPlayground(page, 'icons');
+
+  const drawn = await page.getByRole('button', { name: /Laisser un feedback/ }).evaluate((node) => {
+    const path = node.querySelector('svg path');
+    if (path === null) return null;
+
+    const box = path.getBoundingClientRect();
+
+    return {
+      d: getComputedStyle(path).d,
+      fill: getComputedStyle(path).fill,
+      width: Math.round(box.width),
+      height: Math.round(box.height),
+    };
+  });
+
+  expect(drawn).not.toBeNull();
+  expect(drawn?.d).not.toBe('none');
+  // Filled with the button's own colour rather than the browser's default black.
+  expect(drawn?.fill).not.toBe('rgb(0, 0, 0)');
+  // Roughly the 13px text beside it, which is what sizing in `em` buys.
+  expect(drawn?.width).toBeGreaterThan(6);
+  expect(drawn?.height).toBeGreaterThan(6);
+});
+
+test('no emoji survives anywhere in the widget chrome (SKG-529)', async ({ page }) => {
+  // The unit guard reads this package's sources; this one reads what a visitor actually sees, with
+  // the composer open and the settings panel over it — the states a source sweep cannot tell apart
+  // from a string nobody renders.
+  await openPlayground(page, 'no-emoji');
+  await page.locator('[data-fruitback-host-configure]').click();
+  await expect(page.getByRole('dialog', { name: 'Réglages Fruitback' })).toBeVisible();
+
+  const text = await page.evaluate(() => {
+    const host = document.querySelector('[data-fruitback-host]');
+
+    return host?.shadowRoot?.textContent ?? '';
+  });
+
+  expect(text).not.toBe('');
+  expect(text).not.toMatch(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]|\u{FE0F}/u);
+});
+
 test('the widget does not print its own stylesheets onto the page', async ({ page }) => {
   // `all: initial` in the Shadow root undoes the browser's `display: none` on <style>, and the CSS
   // text lands in the corner of the client's page. It looked exactly as bad as it sounds.

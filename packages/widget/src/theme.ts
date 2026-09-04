@@ -27,10 +27,14 @@ import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
  * One thing does move, by 4 pixels: the thread's shadow was `0 10px 34px rgba(0, 0, 0, 0.18)` and the
  * panel's `0 10px 30px rgb(0 0 0 / 18%)` — the same intention spelled twice. They are one token now.
  *
- * **Radii are deliberately not tokenised.** There are eight distinct ones in use and each would map
- * to exactly one token, which is indirection wearing the costume of a scale — and more for SKG-529 to
- * undo when it shortens the scale on purpose. Colour, shadow, typography and duration are what a dark
- * theme and a host override actually need.
+ * **Radii are tokenised now, and only because the scale was shortened first** (SKG-529). SKG-528 left
+ * them out on purpose: there were eight distinct values in use, each mapping to exactly one token,
+ * which is indirection wearing the costume of a scale. The eight are four — 4, 6 and 8 became `sm`;
+ * 10 and 12 became `md`; 14 and 18 became `lg`; 999px is `pill` — and four is a scale a reader can
+ * hold. Naming them before reducing them would have frozen the accident.
+ *
+ * The pin's own silhouette is **not** in the scale and is not settable: `border-radius: 50% 50% 50% 0`
+ * is a shape, not a corner size, and it is the product's identity rather than a preference.
  */
 
 /** Every token a host may set. An unknown name is ignored rather than written — see `applyTheme`. */
@@ -59,6 +63,10 @@ export const THEME_TOKENS = [
   'shadow-md',
   'shadow-lg',
   'shadow-xl',
+  'radius-sm',
+  'radius-md',
+  'radius-lg',
+  'radius-pill',
   'font-sans',
   'duration-fast',
   'duration-slow',
@@ -150,6 +158,12 @@ export const THEME_STYLES = `
   --fruitback-shadow-md: 0 4px 18px rgba(0, 0, 0, 0.25);
   --fruitback-shadow-lg: 0 10px 30px rgb(0 0 0 / 18%);
   --fruitback-shadow-xl: 0 14px 40px rgba(28, 25, 23, 0.22);
+
+  /* Four steps, and each one is a decision: a chip, a control, a surface, a pill. */
+  --fruitback-radius-sm: 6px;
+  --fruitback-radius-md: 10px;
+  --fruitback-radius-lg: 14px;
+  --fruitback-radius-pill: 999px;
 
   --fruitback-font-sans: -apple-system, system-ui, sans-serif;
 
