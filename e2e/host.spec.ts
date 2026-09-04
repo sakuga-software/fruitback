@@ -100,8 +100,10 @@ test('no emoji survives anywhere in the widget chrome (SKG-529)', async ({ page 
   // Polled, and the polled value is the value kept. The confirmation clears itself 1.1s after it
   // appears, so waiting for it and *then* reading the root again is two round trips with a deadline
   // between them: on a loaded machine the second one finds a closed popover, and the presence marker
-  // below fails on a widget that behaved perfectly. Same rule as the computed-colour reads in
-  // `overlay.spec.ts` — assert on what you measured, not on a second measurement. Raised in review.
+  // below fails on a widget that behaved perfectly. Same rule as the computed-colour poll further
+  // down this file — assert on what you measured, not on a second measurement. Raised in review,
+  // twice: the first version of this comment sent the reader to `overlay.spec.ts`, which has no
+  // poll in it at all.
   let harvested = '';
   await expect.poll(async () => (harvested = await chrome())).toMatch(/récolté/);
   seen.push(harvested);

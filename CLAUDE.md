@@ -117,7 +117,13 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - **Assert on colours by polling, not by reading once.** A design system animates its own colours,
   and a computed style read mid-transition is the interpolated value — which Chromium serializes in a
   different colour space (`oklab(…)` where the resting declaration says `oklch(…)`). The same colour,
-  a different string.
+  a different string. `e2e/host.spec.ts`'s `the widget cannot restyle the page either` is the
+  instance.
+- **The rule generalises past colour: assert on what you measured, not on a second measurement.**
+  Anything the widget takes away by itself has the same shape — the composer clears its confirmation
+  1.1s after showing it, so waiting for `récolté` and *then* reading the Shadow root again is two
+  round trips with a deadline between them. Poll, and keep the value that satisfied the poll
+  (SKG-529). Measured: the two-step form fails once 1.5s passes between the steps.
 - It has already earned its keep four times: the browser caching `GET /feedback` and serving the
   widget its own stale answer right after planting a pin; `domPath` resolving cleanly onto the
   neighbouring card; React 19's `useId` format accepted as a stable id; and the fiber walk throwing on
