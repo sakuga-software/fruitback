@@ -82,6 +82,19 @@ describe('parseSeedFromDescription', () => {
     assert.deepEqual(parsedSeed(`${SEED_BLOCK_CAPTION}\n\n\`\`\`json\n${payload}`), seed);
   });
 
+  it('finds the block by its JSON, never by the caption above it (SKG-517)', () => {
+    // `SEED_BLOCK_CAPTION` is written into every issue description, so whether it is load-bearing
+    // decides whether it can ever be reworded. It is not: `parseSeedFromDescription` iterates fenced
+    // blocks and recognises ours by parsing the JSON. Asserted rather than read, because "the parser
+    // does not use it" is exactly the kind of claim that ages badly — and SKG-517 needed it true
+    // before dropping the emoji the caption used to open with.
+    const block = ['```json', payload, '```'].join('\n');
+
+    assert.deepEqual(parsedSeed(`Une prose quelconque\n\n${block}`), seed, 'no caption at all');
+    assert.deepEqual(parsedSeed(`## Something else entirely\n\n${block}`), seed, 'a different caption');
+    assert.deepEqual(parsedSeed(block), seed, 'nothing above it');
+  });
+
   it('survives a human replying underneath', () => {
     const edited = `${buildIssueDescription(seed)}\n---\n\nFixed in the next deploy — can you confirm?\n`;
 

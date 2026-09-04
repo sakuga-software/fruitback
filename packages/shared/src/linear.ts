@@ -37,7 +37,14 @@ export function buildIssueLabels(seed: Seed): string[] {
 }
 
 /** Deliberately shouty: this line is the only thing standing between the payload and an editor. */
-export const SEED_BLOCK_CAPTION = '🌱 **Fruitback seed** · machine-readable, do not edit';
+/**
+ * The line above the JSON block, for whoever opens the issue in the store's own interface.
+ *
+ * Free to reword: the parser finds the block by parsing its JSON, never by matching this — pinned by
+ * `finds the block by its JSON, never by the caption above it`, which fails if the parser ever starts
+ * depending on it. The emoji it used to open with left with SKG-517.
+ */
+export const SEED_BLOCK_CAPTION = '**Fruitback seed** · machine-readable, do not edit';
 
 const DEFAULT_TITLE_MAX_LENGTH = 80;
 
@@ -212,13 +219,24 @@ export type SeedStage = (typeof SEED_STAGES)[number];
  */
 export const DEFAULT_SEED_STAGE: SeedStage = 'seeded';
 
-export const SEED_STAGE_STYLES: Record<SeedStage, { emoji: string; label: string; color: string }> = {
-  seeded: { emoji: '🌱', label: 'Seeded', color: '#A3B18A' },
-  green: { emoji: '🍏', label: 'Green', color: '#7CB342' },
-  ripening: { emoji: '🍊', label: 'Ripening', color: '#FB8C00' },
-  ripe: { emoji: '🍓', label: 'Ripe', color: '#E53935' },
-  composted: { emoji: '🍂', label: 'Composted', color: '#8D6E63' },
-};
+/*
+ * `SEED_STAGE_STYLES` used to live here, carrying an `emoji`, a `label` and a `color` per stage. All
+ * three are gone (SKG-517), and each for its own reason:
+ *
+ * - **`color`** was already dead. SKG-528 moved every colour into the widget's `theme.ts` as a
+ *   `--fruitback-stage-*` token, so a host can repaint the stages; nothing had read this field since.
+ * - **`emoji`** was a rendering decision travelling in a published type. A consumer of this package
+ *   could not change it, and the widget could not drop it without a major version. It is the widget's
+ *   business now, and by default there is no glyph at all — the pin's shape and colour carry the
+ *   stage (SKG-529).
+ * - **`label`** was an English string in a contract, which is untranslatable by anyone downstream.
+ *   The vocabulary is `SEED_STAGES`; the *words* belong to whoever renders them. The widget keeps its
+ *   own map (`stages.ts`), ready for SKG-530 to make it locale-aware, and each store names its own
+ *   states in `stateName`.
+ *
+ * The pattern is SKG-516's, one level further in: the contract holds the vocabulary, and every
+ * projection onto something a human sees belongs to the side doing the showing.
+ */
 
 /**
  * A reply from the team, as the widget shows it (SKG-502).

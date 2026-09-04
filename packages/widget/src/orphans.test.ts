@@ -62,14 +62,32 @@ describe('createOrphanList', () => {
     assert.equal(handle?.getAttribute('href'), 'https://linear.app/sakuga-software/issue/SKG-901');
   });
 
-  it('redraws when a note changed stage, because its emoji did', () => {
+  it('rebuilds when a note changed stage, although nothing here shows the stage yet', () => {
+    // It used to assert the *text* changed, because the entry opened with the stage's emoji. SKG-517
+    // took that emoji out, so the rendered entry no longer depends on the stage at all — and the old
+    // assertion could no longer hold however correct the code was.
+    //
+    // What is still worth guarding is the signature: it keeps the stage, so a stage change rebuilds.
+    // That over-invalidates by one field today and is deliberate, because SKG-529 decides how a stage
+    // shows up here and a signature that had forgotten it would leave a stale entry. So this asserts
+    // a **new node**, which is what a rebuild actually produces, rather than different text.
     const page = mount();
     list?.update([seedIssueFixture({ seed: seedFixture({ id: 'sd_1' }), stage: 'seeded' })]);
-    const before = page.document.querySelector('.fruitback-orphans-note')?.textContent;
+    const before = page.document.querySelector('.fruitback-orphans-item');
 
     list?.update([seedIssueFixture({ seed: seedFixture({ id: 'sd_1' }), stage: 'composted' })]);
 
-    assert.notEqual(page.document.querySelector('.fruitback-orphans-note')?.textContent, before);
+    assert.notEqual(page.document.querySelector('.fruitback-orphans-item'), before, 'a rebuilt node');
+  });
+
+  it('no longer puts a glyph in front of a detached note (SKG-517)', () => {
+    // The entry opened with `SEED_STAGE_STYLES[stage].emoji`, a rendering decision that travelled in
+    // the published contract. There is no glyph by default now; the note's own words are the entry.
+    const page = mount();
+
+    list?.update([issue('sd_1', 'Une note')]);
+
+    assert.equal(page.document.querySelector('.fruitback-orphans-note')?.textContent, 'Une note');
   });
 
   it('owns its own DOM and nothing else', () => {

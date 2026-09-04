@@ -1,4 +1,5 @@
-import { SEED_STAGES, SEED_STAGE_STYLES, type SeedStage } from '@fruitback/shared';
+import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
+import { STAGE_LABELS } from './stages.ts';
 import { RESOLVED_STAGES, type ConfigStore } from './config.ts';
 
 /**
@@ -53,11 +54,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   stages.className = 'fruitback-config-stages';
   const stageInputs = new Map<SeedStage, HTMLInputElement>();
   for (const stage of SEED_STAGES) {
-    const { input, label } = checkbox(
-      document,
-      `stage-${stage}`,
-      `${SEED_STAGE_STYLES[stage].emoji} ${SEED_STAGE_STYLES[stage].label}`,
-    );
+    const { input, label } = checkbox(document, `stage-${stage}`, STAGE_LABELS[stage]);
     stageInputs.set(stage, input);
     stages.append(label);
   }
