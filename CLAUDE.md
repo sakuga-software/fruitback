@@ -687,6 +687,15 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 
 ## Conventions
 
+- **Commit subjects and PR titles are Conventional Commits**: `type(scope): what changed (SKG-xxx)`.
+  Types in use: `feat`, `fix`, `refactor`, `chore`, `docs`, `test`, `style`, `ci`. The scope is the
+  package — `worker`, `widget`, `shared`, `playground` — and is omitted when the change spans them.
+  A squash merge takes the PR title as the subject, so the **PR title** is the one that has to be
+  well-formed.
+  - **Do not infer this from the top of `git log`.** Three merges (#25, #26, #27) broke the pattern
+    because a title was written by reading the most recent subjects, which were themselves the first
+    two deviations. Twenty-four conventional merges sat underneath and went unread. The convention is
+    written here so it is read here.
 - Formatting and linting are oxfmt / oxlint (config at the root). 120 columns, single quotes,
   trailing commas.
 - **Tests run on `node:test` and `node:assert/strict`** — no test runner, no transpiler, no loader.
