@@ -1,4 +1,4 @@
-import { SEED_STAGE_STYLES, type SeedIssue } from '@fruitback/shared';
+import { type SeedIssue } from '@fruitback/shared';
 
 /**
  * The notes whose element is gone (SKG-501).
@@ -76,8 +76,10 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
 
   return {
     update(issues) {
-      // Short-circuited on identity *and* stage: a pin whose Linear state moved needs its emoji
-      // redrawn, and nothing else here changes without one of the two changing.
+      // Short-circuited on identity *and* stage. Nothing rendered here depends on the stage since
+      // SKG-517 took the emoji out, so this over-invalidates by one field on purpose: SKG-529 decides
+      // how a stage shows up in this list, and a signature that forgot it then would leave a stale
+      // entry. Costing one rebuild when a stage moves is the cheaper of the two mistakes.
       const next = issues.map((issue) => `${issue.seed.id}:${issue.stage}`).join('|');
       if (next === drawn) return;
       drawn = next;
@@ -114,7 +116,7 @@ function entry(document: Document, issue: SeedIssue, onSelect?: (issue: SeedIssu
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'fruitback-orphans-note';
-  button.textContent = `${SEED_STAGE_STYLES[issue.stage].emoji} ${excerpt(issue)}`;
+  button.textContent = excerpt(issue);
   button.addEventListener('click', () => onSelect?.(issue));
 
   item.append(button, ...handle(document, issue));

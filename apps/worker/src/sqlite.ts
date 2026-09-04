@@ -3,7 +3,6 @@ import { z } from 'zod';
 import {
   DEFAULT_SEED_STAGE,
   SEED_STAGES,
-  SEED_STAGE_STYLES,
   type Seed,
   type SeedComment,
   type SeedIssue,
@@ -12,7 +11,7 @@ import {
   seedIssueSchema,
   seedSchema,
 } from '@fruitback/shared';
-import type { ClientConfig, ClientPolicy } from './clients.ts';
+import type { ClientPolicy } from './clients.ts';
 import { type CreatedIssue, type SeedIssueQuery, type SeedStore, StoreError } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
 
@@ -200,6 +199,23 @@ function stageOf(value: string): SeedStage {
 }
 
 /**
+ * What this store calls each of its states, for `stateName` (SKG-517).
+ *
+ * It read `SEED_STAGE_STYLES[stage].label` until the contract stopped carrying words at all, and the
+ * replacement belongs **here** rather than in a shared helper: `stateName` is by definition the
+ * store's own word. Linear reports whatever a team named its workflow column; this store's states are
+ * the stages themselves, so these are the stages, capitalised. A second store agreeing with this one
+ * by accident is not something to factor out.
+ */
+const STATE_NAMES: Record<SeedStage, string> = {
+  seeded: 'Seeded',
+  green: 'Green',
+  ripening: 'Ripening',
+  ripe: 'Ripe',
+  composted: 'Composted',
+};
+
+/**
  * A row back into the read envelope.
  *
  * Parsed through `seedSchema` rather than trusted: the column holds JSON this worker wrote, but a
@@ -232,8 +248,8 @@ function toSeedIssue(row: SeedRow, comments: SeedComment[] | undefined): SeedIss
     // No `url`: there is no interface to open. See the field's own note in the contract.
     title: buildIssueTitle(seed.data),
     stage,
-    // The stage's own label, because the state and the stage are the same thing in this store.
-    stateName: SEED_STAGE_STYLES[stage].label,
+    // The state and the stage are the same thing in this store, so this names the stage.
+    stateName: STATE_NAMES[stage],
     updatedAt: row.updated_at,
     ...(comments === undefined ? {} : { comments }),
     seed: seed.data,

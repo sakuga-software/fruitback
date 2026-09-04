@@ -157,6 +157,44 @@ describe('createOverlay', () => {
     assert.equal(page.view.getComputedStyle(badge).pointerEvents, 'auto');
   });
 
+  it('falls back to the stage when the store reports no state name (SKG-517)', () => {
+    // The Linear connector reports `node.state?.name ?? ''`, so an issue with no state gives an empty
+    // string. That used to leave a lone glyph in the header; with the glyph gone it would leave an
+    // empty span — a thread whose top row is just a close button. Raised in review.
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta({ stateName: '', stage: 'ripening' })]);
+
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+
+    const header = page.document.querySelector('.fruitback-thread-stage');
+    assert.equal(header?.textContent, 'Ripening');
+  });
+
+  it('leaves no dangling separator in the badge tooltip when the state is unnamed', () => {
+    // The second site of the same hole, and the reason `stateLabel` is a function: the header was
+    // fixed and this one was left behind, giving `SKG-742 · ` with nothing after the separator.
+    // Raised in review on SKG-517.
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta({ identifier: 'SKG-742', stateName: '', stage: 'composted' })]);
+
+    const badge = page.document.querySelector('.fruitback-pin-badge');
+    assert.equal(badge?.getAttribute('title'), 'SKG-742 · Composted');
+  });
+
+  it('prefers the store’s own word when it has one', () => {
+    // The fallback must not swallow the real answer: Linear's "In Progress" is what a team named its
+    // column, and the contract's stage vocabulary is not a substitute for it.
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta({ stateName: 'In Progress', stage: 'ripening' })]);
+
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+
+    assert.equal(page.document.querySelector('.fruitback-thread-stage')?.textContent, 'In Progress');
+  });
+
   it('names no vendor in the way out, because the widget does not know which store answered', () => {
     // The label said "sur Linear" until SKG-524, in a widget that is not supposed to know what is
     // behind the worker — the same defect `store-unavailable` fixed in the error codes.

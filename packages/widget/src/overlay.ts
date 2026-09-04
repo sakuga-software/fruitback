@@ -1,4 +1,5 @@
-import { SEED_STAGE_STYLES, type SeedBounds, type SeedIssue } from '@fruitback/shared';
+import { type SeedBounds, type SeedIssue } from '@fruitback/shared';
+import { STAGE_LABELS } from './stages.ts';
 import { stageToken } from './theme.ts';
 import { isElement } from './dom.ts';
 import { createOrphanList, type OrphanList } from './orphans.ts';
@@ -393,7 +394,7 @@ function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolu
   const badge = document.createElement('button');
   badge.type = 'button';
   badge.className = 'fruitback-pin-badge';
-  badge.title = `${issue.identifier} · ${issue.stateName}`;
+  badge.title = `${issue.identifier} · ${stateLabel(issue)}`;
   // The drop is rotated, so the glyph rides in its own span and is turned back upright.
   const glyph = document.createElement('span');
   glyph.className = 'fruitback-pin-glyph';
@@ -413,8 +414,6 @@ function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolu
  * had been recognised.
  */
 function applyResolution(pin: HTMLElement, issue: SeedIssue, resolution: AnchorResolution): void {
-  const style = SEED_STAGE_STYLES[issue.stage];
-
   // Three looks, because they mean three different things: found by identity, placed by position,
   // and not found at all.
   pin.classList.toggle('fruitback-pin-uncertain', !resolution.confident);
@@ -427,12 +426,14 @@ function applyResolution(pin: HTMLElement, issue: SeedIssue, resolution: AnchorR
   // also what keeps it reachable by a screen reader and by a test looking for it by role.
   badge?.setAttribute(
     'aria-label',
-    `${style.label} · ${summarise(issue)}${resolution.confident ? '' : ' (position approximative)'}`,
+    `${STAGE_LABELS[issue.stage]} · ${summarise(issue)}${resolution.confident ? '' : ' (position approximative)'}`,
   );
   const glyph = pin.querySelector('.fruitback-pin-glyph');
-  // The `≈` is the whole warning, in one character, where the pin is: this one was placed by
-  // coordinates, not recognised.
-  if (glyph !== null) glyph.textContent = resolution.confident ? style.emoji : '≈';
+  // Empty when the pin is sure of itself (SKG-517): the drop's shape and its stage colour say which
+  // stage it is, and the emoji that used to sit here was a rendering choice travelling in a published
+  // type. The `≈` stays, because it is the whole warning in one character — this one was placed by
+  // coordinates, not recognised — and a typographic symbol is not an emoji.
+  if (glyph !== null) glyph.textContent = resolution.confident ? '' : '≈';
 }
 
 function summarise(issue: SeedIssue): string {
@@ -486,9 +487,25 @@ function replies(document: Document, issue: SeedIssue): HTMLElement[] {
   return [list];
 }
 
+/**
+ * What the store calls this issue's state, or the stage when it calls it nothing.
+ *
+ * The Linear connector reports `node.state?.name ?? ''`, so an issue with no state gives an empty
+ * string. That used to be hidden behind the stage's emoji; with the glyph gone (SKG-517) it surfaced
+ * twice — an empty thread header, and a tooltip reading `SKG-742 · ` with a dangling separator.
+ *
+ * **A function and not the expression inlined twice**, because the second site is how this was found:
+ * the header was fixed in review and the badge's `title` was left behind. Two copies of a fallback
+ * are two chances to fix only one of them.
+ *
+ * `||` and not `??`: an empty string is exactly the case being caught, and `??` would let it through.
+ */
+function stateLabel(issue: SeedIssue): string {
+  return issue.stateName || STAGE_LABELS[issue.stage];
+}
+
 /** Note, status, who said it, and the way through to Linear, which owns everything else. */
 function buildThread(document: Document, issue: SeedIssue, resolution: AnchorResolution): HTMLElement {
-  const style = SEED_STAGE_STYLES[issue.stage];
   const thread = document.createElement('div');
   thread.className = 'fruitback-thread';
   thread.dataset.fruitbackThread = issue.seed.id;
@@ -499,7 +516,12 @@ function buildThread(document: Document, issue: SeedIssue, resolution: AnchorRes
 
   thread.append(
     element(document, 'header', 'fruitback-thread-head', [
-      element(document, 'span', 'fruitback-thread-stage', `${style.emoji} ${issue.stateName}`),
+      // The store's own word for the state, with no glyph in front of it. `stateName` is what the
+      // store said — Linear's "In Progress", SQLite's own — and the stage colour is already on the
+      // thread's top border through `--fruitback-pin-color`.
+      //
+      // See `stateLabel` for why this is not just `issue.stateName`.
+      element(document, 'span', 'fruitback-thread-stage', stateLabel(issue)),
       closeButton(document),
     ]),
     element(document, 'p', 'fruitback-thread-note', issue.seed.note || 'Aucune note.'),

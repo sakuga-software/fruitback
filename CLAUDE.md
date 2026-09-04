@@ -676,6 +676,39 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   what makes the Linear `description: { contains: … }` filter work.
 - Pin colour comes from a `SeedStage`, and the widget never stores a status of its own — it renders
   the one the store reports.
+- **The contract holds the vocabulary and nothing a human reads** (SKG-517). `SEED_STAGE_STYLES` used
+  to sit in `shared` carrying an `emoji`, a `label` and a `color` per stage — a published type nobody
+  downstream could change, holding three decisions that were never the contract's:
+  - `color` was already dead, moved to the widget's `--fruitback-stage-*` tokens by SKG-528 and read
+    by nothing since. Deleting a field nobody reads is the cheap half.
+  - `emoji` was a **rendering decision travelling in a type**. The widget could not drop it without a
+    major version, and a consumer could not replace it at all. It is the widget's now, and by default
+    there is no glyph: the pin's drop shape and its stage colour carry the stage. The `≈` on an unsure
+    pin stays — it is a typographic symbol and the whole warning in one character.
+  - `label` was an English string in a contract, which is untranslatable by anyone downstream. The
+    widget keeps its own `stages.ts`, ready for SKG-530; each store names its own states in
+    `stateName`, which is what `sqlite.ts` now does with a local map rather than a shared one.
+- **Doing this before the first publish cost nothing.** Removing a field from a published type is a
+  major version; SKG-517 blocks SKG-521 for exactly that reason.
+- **`SEED_BLOCK_CAPTION` is free to reword, and that is now asserted rather than believed.** It is
+  written into every issue description, so whether the parser depends on it decides whether it can
+  ever change. It does not — `parseSeedFromDescription` iterates fenced blocks and recognises ours by
+  parsing the JSON. The test `finds the block by its JSON, never by the caption above it` fails if
+  that stops being true, which is what made dropping its emoji safe instead of hopeful.
+- **A test whose premise disappeared was rewritten, not deleted.** `redraws when a note changed
+  stage, because its emoji did` could no longer hold: nothing in the orphan entry depends on the stage
+  now. What it really guarded — that the signature invalidates on a stage change — is still worth
+  keeping, so it asserts a **rebuilt node** instead of different text. The signature deliberately
+  over-invalidates by one field, because SKG-529 decides how a stage shows up there and a signature
+  that had forgotten it would leave a stale entry.
+- **Six emoji remain, on five sites, and they are SKG-529's rather than this ticket's**: `host.ts`
+  (the launch button's default label, twice, and the gear), `panel.ts` (the settings title),
+  `orphans.ts` (the detached-notes count) and `composer.ts` (the harvested state). Those are
+  standalone literals in the widget's own copy; what SKG-517 removed is only what the *contract* was
+  dictating. Count them rather than trusting this line —
+  `grep -rnoP "[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}]" --include="*.ts" packages/widget/src` — because
+  the first version of this sentence said *four* and named four, missing `composer.ts` entirely and
+  undercounting `host.ts`. A reader working from it would have left one behind.
 - **The stage vocabulary is the contract's; the projection onto it is the connector's** (SKG-516).
   `SEED_STAGES` and `DEFAULT_SEED_STAGE` live in `shared`; `stageForLinearState` and
   `LINEAR_STATE_TYPES` moved to `apps/worker/src/linear.ts`, where Linear's vocabulary belongs.
@@ -687,6 +720,15 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 
 ## Conventions
 
+- **Commit subjects and PR titles are Conventional Commits**: `type(scope): what changed (SKG-xxx)`.
+  Types in use: `feat`, `fix`, `refactor`, `chore`, `docs`, `test`, `style`, `ci`. The scope is the
+  package — `worker`, `widget`, `shared`, `playground` — and is omitted when the change spans them.
+  A squash merge takes the PR title as the subject, so the **PR title** is the one that has to be
+  well-formed.
+  - **Do not infer this from the top of `git log`.** Three merges (#25, #26, #27) broke the pattern
+    because a title was written by reading the most recent subjects, which were themselves the first
+    two deviations. Twenty-four conventional merges sat underneath and went unread. The convention is
+    written here so it is read here.
 - Formatting and linting are oxfmt / oxlint (config at the root). 120 columns, single quotes,
   trailing commas.
 - **Tests run on `node:test` and `node:assert/strict`** — no test runner, no transpiler, no loader.
