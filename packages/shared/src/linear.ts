@@ -36,13 +36,16 @@ export function buildIssueLabels(seed: Seed): string[] {
   return seed.client ? [FRUITBACK_LABEL, clientLabelName(seed.client.id)] : [FRUITBACK_LABEL];
 }
 
-/** Deliberately shouty: this line is the only thing standing between the payload and an editor. */
 /**
- * The line above the JSON block, for whoever opens the issue in the store's own interface.
+ * The line above the JSON block, and the only thing standing between the payload and an editor.
  *
- * Free to reword: the parser finds the block by parsing its JSON, never by matching this — pinned by
- * `finds the block by its JSON, never by the caption above it`, which fails if the parser ever starts
- * depending on it. The emoji it used to open with left with SKG-517.
+ * Deliberately shouty for that reason: whoever opens the issue in the store's own interface has to
+ * understand that the block below is not prose to tidy up.
+ *
+ * Free to reword, though — the parser finds the block by parsing its JSON, never by matching this.
+ * Pinned by `finds the block by its JSON, never by the caption above it`, which fails if the parser
+ * ever starts depending on it. That is what made dropping the emoji it used to open with safe rather
+ * than hopeful (SKG-517).
  */
 export const SEED_BLOCK_CAPTION = '**Fruitback seed** · machine-readable, do not edit';
 
