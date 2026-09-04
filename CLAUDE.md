@@ -701,9 +701,14 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   keeping, so it asserts a **rebuilt node** instead of different text. The signature deliberately
   over-invalidates by one field, because SKG-529 decides how a stage shows up there and a signature
   that had forgotten it would leave a stale entry.
-- **The four remaining emoji are SKG-529's, not this ticket's**: the launch button, the gear, the
-  panel title, the detached-notes count. Those are standalone literals in the widget's own copy; what
-  SKG-517 removed is only what the *contract* was dictating.
+- **Six emoji remain, on five sites, and they are SKG-529's rather than this ticket's**: `host.ts`
+  (the launch button's default label, twice, and the gear), `panel.ts` (the settings title),
+  `orphans.ts` (the detached-notes count) and `composer.ts` (the harvested state). Those are
+  standalone literals in the widget's own copy; what SKG-517 removed is only what the *contract* was
+  dictating. Count them rather than trusting this line —
+  `grep -rnoP "[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}]" --include="*.ts" packages/widget/src` — because
+  the first version of this sentence said *four* and named four, missing `composer.ts` entirely and
+  undercounting `host.ts`. A reader working from it would have left one behind.
 - **The stage vocabulary is the contract's; the projection onto it is the connector's** (SKG-516).
   `SEED_STAGES` and `DEFAULT_SEED_STAGE` live in `shared`; `stageForLinearState` and
   `LINEAR_STATE_TYPES` moved to `apps/worker/src/linear.ts`, where Linear's vocabulary belongs.

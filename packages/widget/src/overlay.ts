@@ -502,7 +502,12 @@ function buildThread(document: Document, issue: SeedIssue, resolution: AnchorRes
       // The store's own word for the state, with no glyph in front of it. `stateName` is what the
       // store said — Linear's "In Progress", SQLite's own — and the stage colour is already on the
       // thread's top border through `--fruitback-pin-color`.
-      element(document, 'span', 'fruitback-thread-stage', issue.stateName),
+      //
+      // The fallback is not decoration: the Linear connector reports `node.state?.name ?? ''`, so an
+      // issue with no state used to leave a lone glyph here and would now leave an **empty span** —
+      // a thread whose header is just a close button. The widget always knows the stage, so it says
+      // that instead. Raised in review on SKG-517.
+      element(document, 'span', 'fruitback-thread-stage', issue.stateName || STAGE_LABELS[issue.stage]),
       closeButton(document),
     ]),
     element(document, 'p', 'fruitback-thread-note', issue.seed.note || 'Aucune note.'),
