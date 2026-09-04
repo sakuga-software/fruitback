@@ -28,9 +28,10 @@ async function mountFromScriptTag(page: import('@playwright/test').Page): Promis
       (globalThis as { Fruitback: { init(options: Record<string, string>): unknown } }).Fruitback.init({
         endpoint,
         clientId: 'playground',
-        // An emoji on purpose, and the only one left in the suite: a host's label is the host's
-        // word, and SKG-529 took our emoji out of the widget's own chrome without starting to
-        // filter theirs. The documented snippet below no longer suggests one.
+        // An emoji on purpose: a host's label is the host's word, and SKG-529 took our emoji out of
+        // the widget's own chrome without starting to filter theirs. `screenshot.spec.ts` mounts
+        // with the same label and exercises the same promise. What changed is the *documented*
+        // snippet further down, which no longer suggests one.
         label: '🌱 Feedback',
       }),
     WORKER_ORIGIN,

@@ -302,14 +302,24 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   became the `close` icon because it was standing in for a drawing at 18px and aligning on no
   baseline; `→` stays on the thread's link.
 - **A host's label is still the host's word.** SKG-529 took our emoji out of the widget's chrome and
-  did not start filtering theirs: `e2e/package.spec.ts` passes `label: '🌱 Feedback'` on purpose and
-  asserts it renders. What changed is the *documented* snippet, in `README.md` and `docs/install.md`,
-  which no longer suggests one.
+  did not start filtering theirs: `e2e/package.spec.ts` **and** `e2e/screenshot.spec.ts` both mount
+  with `label: '🌱 Feedback'` on purpose and assert it renders. What changed is the *documented*
+  snippet, in `README.md` and `docs/install.md`, which no longer suggests one. The first version of
+  this bullet named one file and called it the only one, which is the same failure as the count two
+  bullets down — `grep -rnP "[\x{1F300}-\x{1FAFF}]" e2e` rather than a number written here.
 - **The guard is `icons.test.ts`'s `has none in any source file of this package`**, and it reads every
   `.ts` in the package rather than the rendered strings — a rendered check only sees the states a test
-  reaches, and each of the four removed emoji sat on a path some test did not run. `e2e/host.spec.ts`
-  reads the composed Shadow root with the composer and the panel open, which is the half a source
-  sweep cannot vouch for. Both were measured failing on a planted emoji.
+  reaches, and each of the removed emoji sat on a path some test did not run. `e2e/host.spec.ts`'s
+  `no emoji survives anywhere in the widget chrome` is the other half: it **drives** the widget
+  through the dock, the settings panel, the open composer, the confirmation and the detached drawer,
+  reading the composed Shadow root after each, because a popover that has closed leaves nothing to
+  read. Both were measured failing on a planted emoji — the E2E one on `MESSAGES.harvested`
+  specifically, which is the string the first version could not have reached.
+- **That first version is why the presence markers are there.** It opened the settings panel, claimed
+  to cover the composer, and guarded itself with "the text is not empty" — which passes before a
+  single piece of chrome has rendered, because `textContent` on a Shadow root includes the CSS of
+  every `<style>` in it. It now asserts each state's own words are present, so a passing emoji check
+  is a check on something. Raised in review, both halves.
 
 ## One prefix, and it is `fruitback`
 

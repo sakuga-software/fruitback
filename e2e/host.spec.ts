@@ -73,20 +73,49 @@ test('the icons are actually drawn, not empty boxes (SKG-529)', async ({ page })
 });
 
 test('no emoji survives anywhere in the widget chrome (SKG-529)', async ({ page }) => {
-  // The unit guard reads this package's sources; this one reads what a visitor actually sees, with
-  // the composer open and the settings panel over it — the states a source sweep cannot tell apart
-  // from a string nobody renders.
+  // The unit guard reads this package's sources. This one reads what a visitor actually sees — and
+  // it therefore has to *reach* each state, which is the whole reason it drives the widget rather
+  // than opening one panel. The first version only opened the settings panel and claimed to cover
+  // the composer, whose strings are written on `setState` and are the empty string while idle: a
+  // planted emoji in `MESSAGES` would have gone straight past it. Raised in review.
   await openPlayground(page, 'no-emoji');
+
+  // Read after each state rather than once at the end: a popover that has closed again leaves
+  // nothing behind to read.
+  const chrome = () =>
+    page.evaluate(() => document.querySelector('[data-fruitback-host]')?.shadowRoot?.textContent ?? '');
+  const seen = [await chrome()];
+
   await page.locator('[data-fruitback-host-configure]').click();
   await expect(page.getByRole('dialog', { name: 'Réglages Fruitback' })).toBeVisible();
+  seen.push(await chrome());
+  await page.locator('.fruitback-config-close').click();
 
-  const text = await page.evaluate(() => {
-    const host = document.querySelector('[data-fruitback-host]');
+  await page.getByRole('button', { name: /Laisser un feedback/ }).click();
+  await page.locator('#email-field').click();
+  await page.getByPlaceholder("Qu'est-ce qui ne va pas ici ?").fill('Une note sur un champ qui disparaît');
+  seen.push(await chrome());
 
-    return host?.shadowRoot?.textContent ?? '';
-  });
+  await page.getByRole('button', { name: 'Planter' }).click();
+  await expect(page.locator('[data-fruitback-status]')).toHaveText(/récolté/);
+  seen.push(await chrome());
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 
-  expect(text).not.toBe('');
+  // The detached drawer, which needs an element to have gone.
+  await page.evaluate(() => document.querySelector('#email-field')?.remove());
+  const drawer = page.locator('[data-fruitback-orphans]');
+  await expect(drawer).toBeVisible();
+  await drawer.locator('.fruitback-orphans-toggle').click();
+  seen.push(await chrome());
+
+  const text = seen.join('\n');
+  // Proof that the emoji check below is checking something. `textContent` on a Shadow root includes
+  // the CSS of every <style> in it, so asserting the text is non-empty passes before a single piece
+  // of chrome has rendered — which is what the first version of this test did. Raised in review.
+  for (const rendered of ['Laisser un feedback', 'Réglages', 'récolté', 'note détachée']) {
+    expect(text, `never reached the state that renders ${rendered}`).toContain(rendered);
+  }
+
   expect(text).not.toMatch(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]|\u{FE0F}/u);
 });
 
