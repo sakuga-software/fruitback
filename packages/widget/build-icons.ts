@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { spawnSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -124,5 +125,18 @@ ${entries.map((e) => `  ${e.ours}: {\n    viewBox: '${e.viewBox}',\n    paths: $
 } satisfies Record<string, IconShape>;
 `;
 
-writeFileSync(join(here, 'src', 'icon-data.ts'), source);
+const target = join(here, 'src', 'icon-data.ts');
+writeFileSync(target, source);
+
+/*
+ * Formatted by the generator, not afterwards by a human.
+ *
+ * Without this, `pnpm icons:build` writes a file `oxfmt --check` rejects — so running it on its own
+ * turns the `format` job red, and the committed file is whatever the formatter made of it rather
+ * than what this script produces. A generated file nobody can regenerate byte for byte is a
+ * generated file that is really hand-maintained. Raised in review.
+ */
+const formatted = spawnSync('npx', ['oxfmt', target], { cwd: here, stdio: 'inherit' });
+if (formatted.status !== 0) throw new Error('icons: oxfmt refused the generated file');
+
 console.log(`icons: wrote src/icon-data.ts — ${entries.map((e) => `${e.ours} (${SET}:${e.theirs})`).join(', ')}`);

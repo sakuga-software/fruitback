@@ -311,6 +311,10 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   `.fruitback-icon { fill: … }` rule is a class selector beating their `fill="currentColor"`
   presentation attribute, and every imported icon would render in the wrong colour or not at all. The
   stylesheet sizes them and stops there.
+- **The generator formats what it writes.** Without that, `pnpm icons:build` produces a file
+  `oxfmt --check` rejects: running it alone reddens the `format` job, and the committed file is the
+  formatter's version rather than the script's. A generated file nobody can regenerate byte for byte
+  is a generated file that is really hand-maintained. Raised in review.
 - **`icon-data.ts` is generated and committed, so something has to stop it drifting.** `icons.test.ts`
   reads `@iconify-json/ph` directly — not through the generator, so the two cannot share a parsing
   bug — and asserts each committed `d` appears verbatim in the installed set, plus that the recorded

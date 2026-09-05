@@ -185,8 +185,9 @@ describe('createOverlay', () => {
 
   it('closes the thread with a drawing rather than a character (SKG-529)', () => {
     // The close button was a multiplication sign set at 18px, which every font draws differently and
-    // no font aligns on the header's baseline. It is a stroked cross now, sized in em and painted in
-    // currentColor. Its name stays on the button, so nothing about the change reaches a reader.
+    // no font aligns on the header's baseline. It is `ph:x-bold` now — a filled path, sized in em and
+    // painted in currentColor. Its name stays on the button, so nothing about the change reaches a
+    // reader.
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });
     overlay.render([issueOnCta({})]);
