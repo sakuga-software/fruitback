@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { createRequire } from 'node:module';
 import { type IconName, createIcon } from './icons.ts';
+import { ICON_DATA, ICON_SOURCE } from './icon-data.ts';
 import { mountPage } from './dom.fixture.ts';
 
 const NAMES: IconName[] = ['gear', 'close', 'drop', 'dropDashed'];
@@ -43,14 +45,77 @@ describe('createIcon', () => {
     }
   });
 
-  it('carries the class the stylesheet paints it through', () => {
-    // `all: initial` in the host reset would otherwise leave every icon black and unsized; the paint
-    // rules hang off these two classes.
+  it('carries its own paint, rather than waiting for a stylesheet', () => {
+    // Phosphor ships `fill="currentColor"` as a presentation attribute, and a `.fruitback-icon { fill }`
+    // rule would beat it — class selector against specificity zero — so every imported icon would
+    // render in the wrong colour or not at all. Ours are written the same way for that reason, and
+    // the stylesheet only sizes them.
     const page = mountPage('<main></main>');
 
-    assert.equal(createIcon(page.document, 'close').getAttribute('class'), 'fruitback-icon');
-    assert.equal(createIcon(page.document, 'drop').getAttribute('class'), 'fruitback-icon fruitback-icon-filled');
-    assert.equal(createIcon(page.document, 'dropDashed').getAttribute('class'), 'fruitback-icon fruitback-icon-dashed');
+    for (const name of NAMES) {
+      const icon = createIcon(page.document, name);
+
+      assert.equal(icon.getAttribute('class'), 'fruitback-icon', name);
+      for (const path of icon.querySelectorAll('path')) {
+        const painted = path.getAttribute('fill') !== null || path.getAttribute('stroke') !== null;
+        assert.ok(painted, `${name}: a path with no paint of its own`);
+      }
+    }
+  });
+
+  it('keeps its own shapes on its own grid, and takes the set on the set’s', () => {
+    // Two sources, one shape. `drop` and `dropDashed` are the pin's silhouette and are drawn here on
+    // a 16 grid; `gear` and `close` come from Phosphor, whose grid is 256. Mixing them costs nothing
+    // because each carries its own viewBox — which is exactly what a shared one would have broken.
+    const page = mountPage('<main></main>');
+
+    assert.equal(createIcon(page.document, 'drop').getAttribute('viewBox'), '0 0 16 16');
+    assert.equal(createIcon(page.document, 'gear').getAttribute('viewBox'), '0 0 256 256');
+  });
+});
+
+describe('the icons taken from Iconify (SKG-529)', () => {
+  /**
+   * The committed data against the installed package.
+   *
+   * `icon-data.ts` is generated and committed, so the widget builds with no generation step — which
+   * means nothing stops someone editing a path by hand, or a version bump leaving the copy stale.
+   * This is what does. It reads `@iconify-json/ph` directly rather than re-running the generator,
+   * so the two do not share the parsing that could be wrong in both.
+   */
+  const require = createRequire(import.meta.url);
+  const set = require('@iconify-json/ph/icons.json') as { icons: Record<string, { body: string }> };
+  const installed = require('@iconify-json/ph/package.json') as { version: string };
+
+  it('carries the exact geometry the set ships', () => {
+    for (const [ours, theirs] of Object.entries(ICON_SOURCE.names)) {
+      const body = set.icons[theirs]?.body;
+      assert.ok(body, `ph:${theirs} is not in the installed set`);
+
+      const paths = ICON_DATA[ours as keyof typeof ICON_DATA]?.paths ?? [];
+      assert.ok(paths.length > 0, `${ours} has no path`);
+      for (const path of paths) {
+        assert.ok(path.d, `${ours}: a path with no geometry`);
+        assert.ok(body.includes(path.d as string), `${ours} has drifted from ph:${theirs} — run pnpm icons:build`);
+      }
+    }
+  });
+
+  it('records the version it was generated from', () => {
+    // A bump that changes a path and not this field would leave the assertion above passing against
+    // whatever happened to be installed, which is the one way it could lie.
+    assert.equal(ICON_SOURCE.version, installed.version, 'icon-data.ts is stale — run pnpm icons:build');
+    assert.equal(ICON_SOURCE.license, 'MIT');
+  });
+
+  it('is named in the notices, because it is compiled into dist', () => {
+    // MIT asks the notice to travel with the code, and this geometry ships inside the bundle rather
+    // than being installed by the consumer. Same obligation as react-grab and zod (SKG-515), and the
+    // same guard: `package.test.ts` asserts the file is in the tarball, this asserts it says so.
+    const notices = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'THIRD-PARTY-NOTICES.md'), 'utf8');
+
+    assert.match(notices, /## Phosphor/);
+    assert.match(notices, /MIT License/);
   });
 });
 

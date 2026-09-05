@@ -174,7 +174,11 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - `react-grab` and `zod` are **bundled, and are devDependencies**: a client site must not have to
   install — or resolve a version conflict over — a library it never asked for.
 - **Bundling them makes their MIT notices our obligation** (SKG-515). MIT asks the notice to travel
-  with the code, and both are compiled into `dist`. Measured: `react-grab` carries `@license` banners
+  with the code, and both are compiled into `dist`. **Phosphor joined them for the same reason by a
+  different route** (SKG-529): the widget installs no icon library, but two of its paths are copied
+  into `src/icon-data.ts` and compiled in, and copied geometry is still their work. Like `zod`, the
+  package carries no notice of its own — and no `LICENSE` file either — so the text in
+  `THIRD-PARTY-NOTICES.md` came from Phosphor's own repository, which `info.json` names. Measured: `react-grab` carries `@license` banners
   esbuild preserves — four survive into the bundle — and **`zod` carries none**, so its notice
   reaches a consumer through `packages/widget/THIRD-PARTY-NOTICES.md` or not at all. `packages/shared`
   is compiled by `tsc` rather than bundled, keeps `zod` as an ordinary dependency, and owes nothing.
@@ -287,6 +291,31 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   `currentColor`, `aria-hidden` and `focusable="false"`. An SVG assigned through `innerHTML` is parsed
   into the HTML namespace and renders nothing at all, which is why `composer.ts` prepends its mark
   after the template rather than writing it into `TEMPLATE`.
+- **Two of the four come from Phosphor and two are ours, and the split is the rule for the next one.**
+  `gear` and `close` are generic affordances a maintained set draws better than we do. `drop` and
+  `dropDashed` are the pin's own silhouette — the product, not its furniture — and no set has them.
+  Reach for the set when the glyph names an action; draw it here when it *is* Fruitback.
+- **Iconify is a source, never a runtime.** `iconify-icon` and `@iconify/iconify` fetch their paths
+  from Iconify's API on first render: a network call to a third party, from a client's page, by a
+  widget whose whole argument is that it needs nobody's service. `build-icons.ts` reads the
+  `@iconify-json/ph` devDependency at authoring time and writes `src/icon-data.ts`, which is
+  committed so the widget builds with no generation step. Measured cost in `dist`: **+376 bytes
+  gzipped**, against the 150 kB tripwire.
+- **Phosphor, and the reason is its filled weight.** Measured at 14px on the settings chip, every
+  stroked gear tried — `lucide:settings`, `tabler:settings`, `ph:gear` — collapses into a ring with
+  bumps, while the filled ones stay legible. A filled weight is only worth choosing a set for if the
+  *next* icon has one too: Phosphor ships `-fill` for 1525 of its 1527 base icons, Tabler for 1056 of
+  5144, Lucide for none. Counted, not assumed — and the first count was wrong because it divided by
+  Phosphor's six weights rather than by its base set.
+- **Paint travels as path attributes, not as CSS**, because that is how Phosphor ships its own. A
+  `.fruitback-icon { fill: … }` rule is a class selector beating their `fill="currentColor"`
+  presentation attribute, and every imported icon would render in the wrong colour or not at all. The
+  stylesheet sizes them and stops there.
+- **`icon-data.ts` is generated and committed, so something has to stop it drifting.** `icons.test.ts`
+  reads `@iconify-json/ph` directly — not through the generator, so the two cannot share a parsing
+  bug — and asserts each committed `d` appears verbatim in the installed set, plus that the recorded
+  version is the installed one. Both mutation-tested: a hand-edited path and a stale version each
+  fail with the message that names `pnpm icons:build`.
 - **`*:not(svg, svg *) { all: initial }`, and that exclusion is the whole ticket's riskiest line.**
   Since SVG2 a path's own geometry is a CSS property, so a bare star selector computes `d: none` and
   `stroke: none` — every icon renders as an empty box, with nothing in the console and nothing a unit
@@ -296,13 +325,15 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - **The fruit did not leave, it moved into the geometry.** `drop` is the pin's own silhouette — three
   round corners and one sharp — so the launch button plants the thing the page then shows; `dropDashed`
   is that shape drawn the way the overlay draws a pin it could not re-anchor, which is what the
-  detached-notes chip now opens with. An orphan row carries the same drop in its **stage's** colour,
+  detached-notes chip now opens with. These two stay hand-drawn for the same reason the set covers
+  the other two. An orphan row carries the same drop in its **stage's** colour,
   which is what finally made `orphans.ts`'s signature honest — it had been over-invalidating on a
   stage nothing rendered.
-- **The gear is filled, not stroked, and its hole is a second subpath cut by `fill-rule: evenodd`.**
-  A stroked gear at 14px reads as a flower; two paths would have filled the hole back in. Its teeth
-  are generated — the first attempt overlapped its tooth and valley angles and drew a spiky blob,
-  which only showed up when the icons were rendered at 4× and looked at.
+- **The gear was hand-drawn twice before it was borrowed, and that is the argument for the set.** The
+  first attempt overlapped its tooth and valley angles and drew a spiky blob; the second was a
+  passable filled gear. Both only revealed themselves when the icons were rendered at 4× and looked
+  at. `ph:gear-fill` is better than either and cost nothing to maintain, which is exactly the work an
+  icon set exists to absorb.
 - **`≈`, `×` and `→` are not emoji and were judged separately.** They are typographic symbols with one
   drawing in every font. `≈` stays on an unsure pin — it is the whole warning in one character; `×`
   became the `close` icon because it was standing in for a drawing at 18px and aligning on no

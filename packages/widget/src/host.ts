@@ -255,8 +255,11 @@ style, script { display: none; }
 div, p, header, footer, section, form { display: block; }
 li { display: list-item; }
 /*
-  Every glyph in the widget, in one place. The size follows the text beside it and the paint follows
-  its colour, which is the whole reason these are SVG and not characters: an emoji would obey neither.
+  Every glyph in the widget, and this rule sizes them and nothing else. The paint is on the paths
+  themselves, because a fill declared here would be a class selector beating the presentation
+  attribute Phosphor ships its icons with — every imported icon would render in the wrong colour, or
+  not at all. Size in em so an icon is as big as the text beside it, which is the whole reason these
+  are SVG and not characters: an emoji obeys neither the size nor the colour.
 */
 .fruitback-icon {
   display: inline-block;
@@ -265,14 +268,7 @@ li { display: list-item; }
   /* A flex item shrinks by default, and a squashed icon reads as a rendering bug. */
   flex: none;
   overflow: hidden;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
-.fruitback-icon-filled { fill: currentColor; fill-rule: evenodd; stroke: none; }
-.fruitback-icon-dashed { stroke-dasharray: 2.6 2.2; }
 .fruitback-dock {
   position: fixed;
   right: 16px;

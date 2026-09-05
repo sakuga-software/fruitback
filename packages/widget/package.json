@@ -32,6 +32,7 @@
     "build": "node build.ts",
     "format": "oxfmt --check .",
     "format:fix": "oxfmt .",
+    "icons:build": "node build-icons.ts",
     "lint": "oxlint .",
     "prepack": "pnpm build",
     "test": "node --test 'src/**/*.test.ts'",
@@ -42,6 +43,7 @@
     "@fruitback/shared": "workspace:*"
   },
   "devDependencies": {
+    "@iconify-json/ph": "^1.2.2",
     "@types/node": "catalog:",
     "esbuild": "catalog:",
     "happy-dom": "catalog:",
