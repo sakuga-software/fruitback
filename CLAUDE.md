@@ -311,10 +311,16 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   `.fruitback-icon { fill: … }` rule is a class selector beating their `fill="currentColor"`
   presentation attribute, and every imported icon would render in the wrong colour or not at all. The
   stylesheet sizes them and stops there.
-- **The generator formats what it writes.** Without that, `pnpm icons:build` produces a file
-  `oxfmt --check` rejects: running it alone reddens the `format` job, and the committed file is the
-  formatter's version rather than the script's. A generated file nobody can regenerate byte for byte
-  is a generated file that is really hand-maintained. Raised in review.
+- **The generator formats what it writes, with the installed binary and never `npx`.** Without the
+  formatting step, `pnpm icons:build` produces a file `oxfmt --check` rejects: running it alone
+  reddens the `format` job, and the committed file is the formatter's version rather than the
+  script's. A generated file nobody can regenerate byte for byte is a generated file that is really
+  hand-maintained. And `npx` would have undone the fix it implements — it resolves against the
+  caller's cwd and installs from the registry when it finds nothing, so a machine missing the local
+  copy formats with another version and writes different bytes, silently. The bin is resolved out of
+  its own `package.json` and run through `process.execPath`, which is the idiom `build.ts` already
+  uses for `tsc`: no PATH, no shell, no package manager. Verified with `PATH=/nonexistent`. Both
+  halves raised in review.
 - **`icon-data.ts` is generated and committed, so something has to stop it drifting.** `icons.test.ts`
   reads `@iconify-json/ph` directly — not through the generator, so the two cannot share a parsing
   bug — and asserts each committed `d` appears verbatim in the installed set, plus that the recorded

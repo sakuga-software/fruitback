@@ -135,8 +135,17 @@ writeFileSync(target, source);
  * turns the `format` job red, and the committed file is whatever the formatter made of it rather
  * than what this script produces. A generated file nobody can regenerate byte for byte is a
  * generated file that is really hand-maintained. Raised in review.
+ *
+ * **The installed binary, run through this Node, and never `npx`.** `npx` resolves against the
+ * caller's cwd and *installs from the registry* when it finds nothing — so on a machine where the
+ * local copy is missing it would silently format with some other version of oxfmt and write
+ * different bytes, which is precisely the failure this step exists to prevent. Resolving the bin
+ * out of its own `package.json` is the idiom `build.ts` already uses for `tsc`, and it needs no
+ * PATH, no shell and no package manager. Raised in review.
  */
-const formatted = spawnSync('npx', ['oxfmt', target], { cwd: here, stdio: 'inherit' });
-if (formatted.status !== 0) throw new Error('icons: oxfmt refused the generated file');
+const oxfmtPackage = require.resolve('oxfmt/package.json');
+const oxfmt = join(dirname(oxfmtPackage), (require(oxfmtPackage) as { bin: { oxfmt: string } }).bin.oxfmt);
+const formatted = spawnSync(process.execPath, [oxfmt, target], { stdio: 'inherit' });
+if (formatted.status !== 0) throw new Error(`icons: oxfmt refused the generated file (${formatted.status})`);
 
 console.log(`icons: wrote src/icon-data.ts — ${entries.map((e) => `${e.ours} (${SET}:${e.theirs})`).join(', ')}`);
