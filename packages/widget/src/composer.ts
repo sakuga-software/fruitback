@@ -1,4 +1,5 @@
 import type { SeedReporter } from '@fruitback/shared';
+import { createIcon } from './icons.ts';
 
 /**
  * The note popover: what the reporter actually writes in.
@@ -61,6 +62,10 @@ export function createComposer(options: ComposerOptions): Composer {
 
   const field = root.querySelector('[data-fruitback-note]') as HTMLTextAreaElement;
   const send = root.querySelector('[data-fruitback-send]') as HTMLButtonElement;
+  // Prepended after the template is parsed: the seed the button plants, in the shape the page will
+  // then show it in. Written here rather than in TEMPLATE because an SVG in an innerHTML string is
+  // parsed into the HTML namespace and renders nothing (SKG-529).
+  send.prepend(createIcon(document, 'drop'));
   const cancel = root.querySelector('[data-fruitback-cancel]') as HTMLButtonElement;
   const status = root.querySelector('[data-fruitback-status]') as HTMLElement;
   const identify = root.querySelector('[data-fruitback-identify]') as HTMLButtonElement;
@@ -210,7 +215,7 @@ const GAP = 10;
 const MESSAGES: Record<ComposerState, string> = {
   idle: '',
   sending: 'on plante…',
-  harvested: '🍓 récolté',
+  harvested: 'récolté',
   failed: 'pas passé — le texte est gardé, réessayez',
 };
 
@@ -252,7 +257,7 @@ const STYLES = `
   z-index: 2147483300;
   width: ${WIDTH}px;
   padding: 14px;
-  border-radius: 18px;
+  border-radius: var(--fruitback-radius-lg);
   background: var(--fruitback-color-surface-raised);
   color: var(--fruitback-color-text);
   font: 14px/1.5 var(--fruitback-font-sans);
@@ -275,7 +280,7 @@ const STYLES = `
   display: block;
   width: 100%;
   border: 1px solid var(--fruitback-color-border);
-  border-radius: 12px;
+  border-radius: var(--fruitback-radius-md);
   padding: 10px 12px;
   font: inherit;
   resize: vertical;
@@ -302,7 +307,7 @@ const STYLES = `
   min-width: 0;
   padding: 6px 8px;
   border: 1px solid var(--fruitback-color-border-strong);
-  border-radius: 8px;
+  border-radius: var(--fruitback-radius-sm);
   font: inherit;
   font-size: 12px;
   color: inherit;
@@ -312,10 +317,20 @@ const STYLES = `
 .fruitback-composer-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .fruitback-composer-status { flex: 1; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-composer-ghost, .fruitback-composer-send {
-  border: 0; border-radius: 999px; padding: 8px 14px; font: 600 13px/1 inherit; cursor: pointer;
+  border: 0;
+  border-radius: var(--fruitback-radius-pill);
+  padding: 8px 14px;
+  font: 600 13px/1 inherit;
+  cursor: pointer;
 }
 .fruitback-composer-ghost { background: transparent; color: var(--fruitback-color-text-muted); }
-.fruitback-composer-send { background: var(--fruitback-color-accent); color: var(--fruitback-color-on-accent); }
+.fruitback-composer-send {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--fruitback-color-accent);
+  color: var(--fruitback-color-on-accent);
+}
 .fruitback-composer-send[disabled] { opacity: 0.55; cursor: default; }
 .fruitback-composer[data-fruitback-state="harvested"] .fruitback-composer-status {
   color: var(--fruitback-color-success);
@@ -337,7 +352,7 @@ const STYLES = `
     left: 0;
     top: auto;
     width: auto;
-    border-radius: 18px 18px 0 0;
+    border-radius: var(--fruitback-radius-lg) var(--fruitback-radius-lg) 0 0;
     padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
     animation-name: fruitback-composer-sheet-in;
   }

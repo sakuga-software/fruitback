@@ -37,8 +37,9 @@ export async function plantPin(page: Page, target: Locator, note: string): Promi
   const before = await page.locator('[data-fruitback-pin]').count();
   const plantedBefore = await planted(page).textContent();
 
-  // The launch button now lives in the widget's Shadow root and carries an emoji; Playwright's
-  // selectors pierce open shadow roots, so only the name had to become a pattern.
+  // The launch button lives in the widget's Shadow root, which Playwright's selectors pierce. The
+  // name is a pattern rather than a string because an embedder sets the label — it opened with a
+  // sprout until SKG-529, and it is a mark beside the words now.
   await page.getByRole('button', { name: /Laisser un feedback/ }).click();
   await target.click();
   await page.getByPlaceholder("Qu'est-ce qui ne va pas ici ?").fill(note);

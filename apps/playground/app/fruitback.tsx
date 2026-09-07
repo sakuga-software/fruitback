@@ -263,7 +263,7 @@ function DevToolbar({ status, planted, onReload }: { status: string; planted: st
       className="fixed bottom-4 left-4 z-[2147483001] flex items-center gap-2 rounded-xl bg-stone-900 px-4 py-3 text-sm text-stone-50 shadow-lg"
     >
       <strong>
-        🌱 Fruitback <span className="rounded bg-red-600 px-1.5 py-0.5 font-semibold">playground</span>
+        Fruitback <span className="rounded bg-red-600 px-1.5 py-0.5 font-semibold">playground</span>
       </strong>
       <Button data-fruitback-dev="reload" size="sm" variant="secondary" onPress={onReload}>
         Recharger les pins

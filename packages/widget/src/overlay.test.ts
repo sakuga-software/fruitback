@@ -183,6 +183,23 @@ describe('createOverlay', () => {
     assert.equal(badge?.getAttribute('title'), 'SKG-742 · Composted');
   });
 
+  it('closes the thread with a drawing rather than a character (SKG-529)', () => {
+    // The close button was a multiplication sign set at 18px, which every font draws differently and
+    // no font aligns on the header's baseline. It is `ph:x-bold` now — a filled path, sized in em and
+    // painted in currentColor. Its name stays on the button, so nothing about the change reaches a
+    // reader.
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta({})]);
+
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+
+    const close = page.document.querySelector('.fruitback-thread-close');
+    assert.ok(close?.querySelector('svg.fruitback-icon'), 'the close button is not drawn');
+    assert.equal(close?.textContent, '', 'the close button still carries a character');
+    assert.equal(close?.getAttribute('aria-label'), 'Fermer');
+  });
+
   it('prefers the store’s own word when it has one', () => {
     // The fallback must not swallow the real answer: Linear's "In Progress" is what a team named its
     // column, and the contract's stage vocabulary is not a substitute for it.

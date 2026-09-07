@@ -1,4 +1,7 @@
 import { type SeedIssue } from '@fruitback/shared';
+import { STAGE_LABELS } from './stages.ts';
+import { createIcon } from './icons.ts';
+import { stageToken } from './theme.ts';
 
 /**
  * The notes whose element is gone (SKG-501).
@@ -57,6 +60,11 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
   toggle.type = 'button';
   toggle.className = 'fruitback-orphans-toggle';
   toggle.setAttribute('aria-expanded', 'false');
+  // A dashed drop rather than the fallen leaf that used to open this label (SKG-529). It is the pin's
+  // own silhouette, drawn the way the overlay draws a pin it could not re-anchor — the chip and the
+  // pin then say the same thing in the same language, which an emoji could not do.
+  const toggleCount = document.createElement('span');
+  toggle.append(createIcon(document, 'dropDashed'), toggleCount);
 
   const list = document.createElement('ul');
   list.className = 'fruitback-orphans-list';
@@ -76,10 +84,10 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
 
   return {
     update(issues) {
-      // Short-circuited on identity *and* stage. Nothing rendered here depends on the stage since
-      // SKG-517 took the emoji out, so this over-invalidates by one field on purpose: SKG-529 decides
-      // how a stage shows up in this list, and a signature that forgot it then would leave a stale
-      // entry. Costing one rebuild when a stage moves is the cheaper of the two mistakes.
+      // Identity *and* stage, and the stage is in there because the entry draws it: each row carries
+      // a drop in its stage's colour. SKG-517 left this over-invalidating on purpose, pending the
+      // ticket that would decide how a stage shows up here; that ticket is SKG-529, and this is the
+      // answer. Drop the stage from this key and a note that ripens keeps the colour it had.
       const next = issues.map((issue) => `${issue.seed.id}:${issue.stage}`).join('|');
       if (next === drawn) return;
       drawn = next;
@@ -94,9 +102,8 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
         return;
       }
 
-      toggle.textContent = `🍂 ${issues.length} note${issues.length > 1 ? 's' : ''} détachée${
-        issues.length > 1 ? 's' : ''
-      }`;
+      const plural = issues.length > 1 ? 's' : '';
+      toggleCount.textContent = `${issues.length} note${plural} détachée${plural}`;
 
       list.replaceChildren(...issues.map((issue) => entry(document, issue, options.onSelect)));
     },
@@ -113,13 +120,21 @@ function entry(document: Document, issue: SeedIssue, onSelect?: (issue: SeedIssu
   item.className = 'fruitback-orphans-item';
   item.dataset.fruitbackOrphan = issue.seed.id;
 
+  // How ripe the note is, as the pin's shape in the stage's colour — the same vocabulary the page
+  // itself uses, which is what a reporter has to be able to match up. The stage is named in the
+  // button's accessible name rather than in the mark, because colour alone is not a label.
+  const mark = createIcon(document, 'drop');
+  mark.classList.add('fruitback-orphans-stage');
+  mark.style.setProperty('--fruitback-pin-color', stageToken(issue.stage));
+
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'fruitback-orphans-note';
   button.textContent = excerpt(issue);
+  button.setAttribute('aria-label', `${STAGE_LABELS[issue.stage]} · ${excerpt(issue)}`);
   button.addEventListener('click', () => onSelect?.(issue));
 
-  item.append(button, ...handle(document, issue));
+  item.append(mark, button, ...handle(document, issue));
 
   return item;
 }
@@ -184,10 +199,12 @@ const STYLES = `
 /* Chip last in the DOM order it reads in, list above it on screen. */
 .fruitback-orphans { display: flex; flex-direction: column-reverse; align-items: flex-end; }
 .fruitback-orphans-toggle {
-  display: block;
-  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--fruitback-radius-pill);
   background: var(--fruitback-color-warning);
   color: var(--fruitback-color-on-warning);
   font: 600 12px/1 var(--fruitback-font-sans);
@@ -199,7 +216,7 @@ const STYLES = `
   /* Above the chip: it sits at the bottom of the page, so a list below it would have nowhere to go. */
   margin: 0 0 8px;
   padding: 8px;
-  border-radius: 12px;
+  border-radius: var(--fruitback-radius-md);
   background: var(--fruitback-color-surface);
   box-shadow: var(--fruitback-shadow-lg);
   list-style: none;
@@ -207,7 +224,8 @@ const STYLES = `
   overflow-y: auto;
 }
 .fruitback-orphans-list[hidden] { display: none; }
-.fruitback-orphans-item { display: flex; align-items: baseline; gap: 8px; list-style: none; }
+.fruitback-orphans-item { display: flex; align-items: baseline; gap: 6px; list-style: none; }
+.fruitback-orphans-stage { color: var(--fruitback-pin-color); font-size: 11px; }
 .fruitback-orphans-item + .fruitback-orphans-item { margin-top: 6px; }
 .fruitback-orphans-note {
   flex: 1;

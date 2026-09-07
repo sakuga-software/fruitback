@@ -40,10 +40,14 @@ function fakeEngine(page: MountedPage, under: () => Element | null): CaptureEngi
   };
 }
 
-function mount(under: () => Element | null, onSelect: (target: CaptureTarget) => void = () => {}) {
+function mount(
+  under: () => Element | null,
+  onSelect: (target: CaptureTarget) => void = () => {},
+  extra: Partial<Parameters<typeof createCaptureHost>[0]> = {},
+) {
   const page = mountPage(PAGE, { width: 1_000, height: 1_000 });
   const engine = fakeEngine(page, under);
-  host = createCaptureHost({ document: page.document, engine, onSelect });
+  host = createCaptureHost({ document: page.document, engine, onSelect, ...extra });
 
   return { page, engine };
 }
@@ -61,6 +65,68 @@ function launchButton(): HTMLElement {
 
   return button as HTMLElement;
 }
+
+describe('the chrome the reporter sees (SKG-529)', () => {
+  it('names the launch button in words, and draws the seed as a shape', () => {
+    // The label used to open with a sprout. An emoji is drawn by the system font, so nothing about
+    // it is ours to set — and the accessible name is the label, which is what every E2E spec finds
+    // this button by, so the icon has to contribute no text at all.
+    mount(() => null);
+    const button = launchButton();
+
+    assert.equal(button.textContent, 'Laisser un feedback');
+    assert.ok(button.querySelector('svg.fruitback-icon'), 'the launch button lost its mark');
+  });
+
+  it('keeps the mark when the embedder supplies its own label', () => {
+    // The label is a string a host passes; setting it through textContent would have taken the icon
+    // out with it, which is why the two live in separate nodes.
+    mount(
+      () => null,
+      () => {},
+      { label: 'Leave feedback' },
+    );
+    const button = launchButton();
+
+    assert.equal(button.textContent, 'Leave feedback');
+    assert.ok(button.querySelector('svg.fruitback-icon'), 'a custom label removed the mark');
+  });
+
+  it('restores the label after a capture, mark included', () => {
+    mount(() => null);
+
+    host?.start();
+    assert.equal(launchButton().textContent, 'Échap pour annuler');
+
+    host?.stop();
+    assert.equal(launchButton().textContent, 'Laisser un feedback');
+    assert.ok(launchButton().querySelector('svg.fruitback-icon'), 'stopping a capture removed the mark');
+  });
+
+  it('gives the gear a drawing and a name, and no character', () => {
+    mount(
+      () => null,
+      () => {},
+      { onConfigure: () => {} },
+    );
+    const gear = host?.root.querySelector('[data-fruitback-host-configure]');
+
+    assert.ok(gear?.querySelector('svg.fruitback-icon'), 'the gear is not drawn');
+    assert.equal(gear?.textContent, '', 'the gear still carries a character');
+    assert.equal(gear?.getAttribute('aria-label'), 'Ouvrir les réglages Fruitback');
+  });
+
+  it('stops the reset at the edge of an SVG, or every icon renders empty', () => {
+    // Measured in Chromium: under a bare star selector, a path computes d:none and stroke:none —
+    // the geometry is a CSS property since SVG2, so all:initial erases the drawing. Nothing throws,
+    // nothing logs, and every icon in the widget is an empty box. happy-dom draws nothing, so this
+    // asserts the selector; `e2e/host.spec.ts` asserts the pixels.
+    const { page } = mount(() => null);
+    const sheet = page.document.querySelector('[data-fruitback-host]')?.shadowRoot?.querySelector('style');
+
+    assert.match(sheet?.textContent ?? '', /\*:not\(svg, svg \*\) \{ all: initial;/);
+  });
+});
 
 describe('createCaptureHost', () => {
   it('puts everything it draws inside a Shadow root', () => {

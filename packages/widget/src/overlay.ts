@@ -1,5 +1,6 @@
 import { type SeedBounds, type SeedIssue } from '@fruitback/shared';
 import { STAGE_LABELS } from './stages.ts';
+import { createIcon } from './icons.ts';
 import { stageToken } from './theme.ts';
 import { isElement } from './dom.ts';
 import { createOrphanList, type OrphanList } from './orphans.ts';
@@ -564,7 +565,7 @@ function closeButton(document: Document): HTMLElement {
   button.type = 'button';
   button.className = 'fruitback-thread-close';
   button.setAttribute('aria-label', 'Fermer');
-  button.textContent = '×';
+  button.append(createIcon(document, 'close'));
 
   return button;
 }
@@ -664,7 +665,7 @@ const STYLES = `
   /* Clicks go through to the client's page: the pin is an annotation, not a lid. */
   pointer-events: none;
   border: 2px solid var(--fruitback-pin-color);
-  border-radius: 6px;
+  border-radius: var(--fruitback-radius-sm);
   background: color-mix(in srgb, var(--fruitback-pin-color) 12%, transparent);
 }
 .fruitback-pin-uncertain { border-style: dashed; opacity: 0.85; }
@@ -713,7 +714,7 @@ const STYLES = `
   pointer-events: auto;
   border: 1px solid var(--fruitback-color-border-strong);
   border-top: 3px solid var(--fruitback-pin-color);
-  border-radius: 10px;
+  border-radius: var(--fruitback-radius-md);
   padding: 12px 14px;
   background: var(--fruitback-color-surface);
   color: var(--fruitback-color-text);
@@ -721,15 +722,18 @@ const STYLES = `
   box-shadow: var(--fruitback-shadow-lg);
 }
 .fruitback-thread-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.fruitback-thread-stage { font-weight: 600; font-size: 13px; }
+.fruitback-thread-stage { font-weight: 600; font-size: 13px; letter-spacing: -0.006em; }
 .fruitback-thread-close {
+  display: grid;
+  place-items: center;
   border: 0;
   background: none;
-  font-size: 18px;
+  font-size: 15px;
   line-height: 1;
   cursor: pointer;
   color: var(--fruitback-color-text-muted);
 }
+.fruitback-thread-close:hover { color: var(--fruitback-color-text); }
 .fruitback-thread-note { margin: 8px 0 0; white-space: pre-wrap; }
 .fruitback-thread-meta { margin: 8px 0 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-thread-orphan { margin: 8px 0 0; font-size: 12px; color: var(--fruitback-color-warning); }

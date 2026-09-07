@@ -28,6 +28,10 @@ async function mountFromScriptTag(page: import('@playwright/test').Page): Promis
       (globalThis as { Fruitback: { init(options: Record<string, string>): unknown } }).Fruitback.init({
         endpoint,
         clientId: 'playground',
+        // An emoji on purpose: a host's label is the host's word, and SKG-529 took our emoji out of
+        // the widget's own chrome without starting to filter theirs. `screenshot.spec.ts` mounts
+        // with the same label and exercises the same promise. What changed is the *documented*
+        // snippet further down, which no longer suggests one.
         label: '🌱 Feedback',
       }),
     WORKER_ORIGIN,
@@ -103,16 +107,16 @@ test('the documented snippet mounts on its own, from its data attributes', async
     script.src = 'https://cdn.acme.dev/fruitback.iife.js';
     script.dataset.fruitbackEndpoint = endpoint;
     script.dataset.fruitbackClient = 'playground';
-    script.dataset.fruitbackLabel = '🌱 Leave feedback';
+    script.dataset.fruitbackLabel = 'Leave feedback';
     script.defer = true;
     document.head.append(script);
   }, WORKER_ORIGIN);
 
   // Nothing called `init`: the tag configured itself.
-  await expect(page.getByRole('button', { name: '🌱 Leave feedback' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
 
   // And it is a working widget, not just a button.
-  await page.getByRole('button', { name: '🌱 Leave feedback' }).click();
+  await page.getByRole('button', { name: 'Leave feedback' }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   await page.getByPlaceholder("Qu'est-ce qui ne va pas ici ?").fill('Planté par le snippet du README');
   await page.getByRole('button', { name: 'Planter' }).click();

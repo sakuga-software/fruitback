@@ -39,6 +39,21 @@ function toggle(input: HTMLInputElement, checked: boolean, document: Document): 
   input.dispatchEvent(new document.defaultView!.Event('change', { bubbles: true }));
 }
 
+describe('what the panel looks like (SKG-529)', () => {
+  it('titles itself in words and closes with a drawing', () => {
+    // The title opened with a sprout and the close button was a multiplication sign set at 18px —
+    // one a character we do not control, the other a character standing in for an icon. The dialog
+    // still names itself through aria-label, which is what a screen reader reads.
+    const { page } = mount();
+    const close = page.document.querySelector('.fruitback-config-close');
+
+    assert.equal(page.document.querySelector('.fruitback-config-title')?.textContent, 'Réglages');
+    assert.ok(close?.querySelector('svg.fruitback-icon'), 'the close button is not drawn');
+    assert.equal(close?.textContent, '', 'the close button still carries a character');
+    assert.equal(close?.getAttribute('aria-label'), 'Fermer les réglages');
+  });
+});
+
 describe('createConfigPanel', () => {
   it('starts closed, because the widget is not a settings screen', () => {
     const { page } = mount();
