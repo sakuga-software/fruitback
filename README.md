@@ -248,22 +248,23 @@ docker run -d --name fruitback -p 8080:8080 \
   ghcr.io/sakuga-software/fruitback-worker:edge
 ```
 
-**`edge` and not `latest`, for now.** The versioned tags come from a `v*` git tag, and this repo has
-pushed none yet — so `latest`, `1.4.2` and `1.4` do not resolve, and asking for one gets you
-`manifest unknown` rather than an image. `edge` is every merge to `main`, which today is the only
-thing published.
+**`edge` and not `latest`, until the first release.** The versioned tags come from a `v*` git tag, so
+before one is pushed `latest`, `1.4.2` and `1.4` resolve to nothing and asking for one gets you
+`manifest unknown` rather than an image. `edge` and `sha-<commit>` are what exist from the first
+merge onwards; the rest arrive with the first release and are the better choice from then on.
 
 **`linux/amd64` and `linux/arm64` both**, because a Raspberry Pi or an ARM VPS is ordinary
 self-hosting, and an amd64-only image excludes them with an error that reads like a broken download.
 Docker picks the right one from the manifest list; there is no per-architecture tag to choose.
 
-| Tag | Moves | Exists today | Use it for |
+| Tag | Moves | Published by | Use it for |
 | --- | --- | --- | --- |
-| `1.4.2`, `1.4` | On a release / on a patch | Not yet | Production. Pin the minor and get patches, or the patch and get nothing. |
-| `latest` | On a `v*` release tag only | Not yet | A deployment that follows releases and nothing else. |
-| `edge` | Every push to `main` | Yes | Running what is not released yet — which is all there is so far. |
-| `sha-<commit>` | Only if that commit is rebuilt | Yes | Naming one commit's build, in an incident or a bisect. |
-| `@sha256:…` | **Never** | Yes | The only immutable reference. Pin this when it must not move. |
+| `1.4.2` | Only if that release is rebuilt | A `v1.4.2` git tag | Production. This is the one to pin and to roll back to. |
+| `1.4` | On every patch in that minor | Any `v1.4.x` git tag | Taking patches without reading a changelog. It moves — do not call it a pin. |
+| `latest` | On every release | Any `v*` git tag | A deployment that follows releases and nothing else. |
+| `edge` | Every push to `main` | A merge to `main` | Running what is not released yet. |
+| `sha-<commit>` | Only if that commit is rebuilt | Every publish | Naming one commit's build, in an incident or a bisect. |
+| `@sha256:…` | **Never** | Every publish | The only immutable reference. Pin this when it must not move. |
 
 `latest` deliberately does **not** follow `main`: a `latest` that moved on every merge would take
 away the one thing a tag is for.

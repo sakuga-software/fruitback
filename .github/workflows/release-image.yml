@@ -47,6 +47,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # `actions/checkout` writes GITHUB_TOKEN into .git/config by default, where any later step
+          # in the job can read it — and this job's token carries `packages: write`. Nothing here
+          # runs a git command after the checkout; `docker/login-action` is handed the token
+          # explicitly. Raised in review.
+          persist-credentials: false
 
       # arm64 runs on this amd64 runner through binfmt, for the runtime stage and for `docker run`
       # below. The heavy work is not emulated — see the BUILDPLATFORM pin in apps/worker/Dockerfile.
@@ -148,6 +154,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # `actions/checkout` writes GITHUB_TOKEN into .git/config by default, where any later step
+          # in the job can read it — and this job's token carries `packages: write`. Nothing here
+          # runs a git command after the checkout; `docker/login-action` is handed the token
+          # explicitly. Raised in review.
+          persist-credentials: false
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3

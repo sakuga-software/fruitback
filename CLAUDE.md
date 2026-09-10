@@ -651,9 +651,18 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - **Trivy runs with `ignore-unfixed`.** An Alpine CVE with no patch available reddens every release
   for something nobody can act on, and a gate that cannot be satisfied is a gate somebody deletes.
 - **`org.opencontainers.image.source` is the one label with an effect** rather than a description:
-  GHCR reads it to attach the package to the repository, which is what gives it the repository's
-  README, licence and visibility. The volatile labels come from `docker/metadata-action`, which is
-  the only place that knows them.
+  GHCR reads it to attach the package to the repository, which is what gives the package its page,
+  its README and its licence. The volatile labels come from `docker/metadata-action`, which is the
+  only place that knows them.
+- **Attaching the package is not publishing it, and conflating the two is a documented install that
+  does not work.** A new package inherits the repository's visibility, so on a private repository it
+  is private and an unauthenticated `docker pull` answers `denied` — no label changes that. Making it
+  public is a manual, one-time change in the package settings, and the README says so above the
+  `docker run` rather than leaving a stranger to discover it. Raised in review, twice.
+- **`persist-credentials: false` on both checkouts.** `actions/checkout` writes `GITHUB_TOKEN` into
+  `.git/config` by default, where any later step can read it — and this workflow's token carries
+  `packages: write`. Nothing runs a git command after the checkout, and `docker/login-action` is
+  handed the token explicitly.
 - The push needs `packages: write`, the attestations need `id-token: write` **and**
   `attestations: write`. A missing one fails at the end of a long build with a 403 that names nothing.
 - **The publish leg cannot be proven from a branch.** What was proven locally: both architectures
