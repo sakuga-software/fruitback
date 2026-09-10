@@ -56,6 +56,9 @@ node --test src/seed.test.ts                 # one file, from the package direct
   Shadow DOM host** (`createCaptureHost`, SKG-492) and **the note popover** (`createComposer`,
   SKG-493). The playground only says where the worker is.
 
+- `apps/extension` (`@fruitback/extension`) — the browser extension (SKG-534): the same widget, on a
+  site that embeds nothing. wxt, MV3 on Chromium **and** Firefox. Two content scripts, one per world
+  — see *The extension, and the two worlds*.
 - `apps/playground` (`@fruitback/playground`) — the dev loop (SKG-511, SKG-512): a deliberately
   hostile fake client site with the widget mounted on it. **A React Router 8 + Vite app with HeroUI**
   since SKG-512, because the widget's clients are React apps and a static page could not exercise
@@ -583,6 +586,63 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   uniqueness and sibling questions cannot be answered honestly by a hand-rolled fake. Nothing outside
   `*.test.ts` and `*.fixture.ts` may import it, and `tsconfig.json` excludes both so the shipped code
   still compiles with `types: []`.
+
+## The extension, and the two worlds
+
+- **The client's site embeds nothing** (SKG-534). No tag, no npm package, no deployment — which is
+  also the end of the integration friction: today, getting a page reviewed needs a deploy. Ordinary
+  visitors see nothing because there is nothing in their page to see.
+- **`world: 'MAIN'` is the ticket, not a preference, and it was measured before it was written.** A
+  content script in the isolated world shares the DOM and **not** the properties page scripts put on
+  it. Probed in Chromium on the playground, on the same `<button>`:
+
+  | | isolated | main |
+  | --- | --- | --- |
+  | `__reactFiber$` | absent | present |
+  | `__reactProps$` | absent | present |
+  | `__REACT_DEVTOOLS_GLOBAL_HOOK__` | `undefined` | `object` |
+  | own properties | **0** | 2 |
+
+- **Both halves of `source` are blind from the isolated world, not one.** `readReactSource` finds the
+  fiber under `__reactFiber$…`; react-grab scans `__reactContainer$` / `__reactInternalInstance$` and
+  installs *itself* as `globalThis.__REACT_DEVTOOLS_GLOBAL_HOOK__`, which in the isolated world is a
+  global React never reads. So the widget would mount, work, and quietly never say which component a
+  note is about — the worst shape of failure, because nothing errors.
+- **Declared in the manifest rather than injected as a `<script>` tag.** A tag pointing at an
+  extension URL is evaluated in the page and **the page's CSP can refuse it**. A declared main-world
+  content script is not subject to it. That is the CSP trap the ticket names, avoided rather than
+  worked around.
+- **`packages/widget` is unchanged by this app, which is the ticket's own test.** The widget runs
+  where it always ran — in the page — so the extension is a fourth assembler beside `global.ts` and
+  nothing extension-shaped leaks into the widget. `createCaptureHost` does take an `engine` seam that
+  would have allowed a narrower bridge; it was not needed, and not using it is what keeps this app
+  off SKG-530's branch.
+- **No host permission at install.** The obvious build declares its content scripts on `<all_urls>`,
+  which asks a reviewer to let a tool read every page they will ever visit. `background.ts` registers
+  the two scripts at runtime for the origins somebody turned on and granted, and unregisters them on
+  the way out. The first draft of `wxt.config.ts` had a comment claiming this while the manifest said
+  `<all_urls>` — a comment describing a decision the code had not taken.
+- **`syncRegistration` unregisters on an empty set rather than updating.** `updateContentScripts`
+  refuses an empty `matches`, so an implementation that updated there would throw and leave the
+  previous origins registered — the extension would keep running on a site just switched off. That is
+  the test worth reading in `registration.test.ts`.
+- **The bridge is `window.postMessage`, and the page is on that channel too.** It receives everything
+  we post and can post anything back, so `parseBridgeMessage` refuses everything that is not exactly
+  a message we sent — including an `endpoint` on a scheme no worker answers on. Nothing secret
+  travels there: the endpoint and client id are already in the client's own DOM in tag mode, and an
+  identity token is not sent at all. SKG-535 gives the main world a relay instead.
+- **Nothing orders the two content scripts against each other**, so the main world announces itself
+  with `ready` and the isolated one applies its decision again. `postMessage` delivers that back to
+  the sender too, which the main world has to ignore explicitly — the type checker found that one.
+- **A site that embeds the widget *and* a reviewer who has the extension get two docks.** Measured on
+  the playground, which mounts its own: switching the extension on took the host count from 1 to 2.
+  Harmless, visibly silly, and not solved here — the extension cannot tell its own host from theirs
+  without the widget advertising itself, which is a widget change.
+- Verified in a real Chromium against the playground: switching the site on mounts a second host
+  **with no reload**, the fiber owner chain reads `SiteHeader < Pricing < …` from the page world, and
+  switching it off destroys it live. The permission prompt itself is a native dialog no automation
+  can drive, which is why that path is unit-tested and the browser run uses a build with the scripts
+  declared statically.
 
 ## The worker
 
