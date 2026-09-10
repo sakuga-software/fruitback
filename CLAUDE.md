@@ -608,10 +608,12 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   installs *itself* as `globalThis.__REACT_DEVTOOLS_GLOBAL_HOOK__`, which in the isolated world is a
   global React never reads. So the widget would mount, work, and quietly never say which component a
   note is about — the worst shape of failure, because nothing errors.
-- **Declared in the manifest rather than injected as a `<script>` tag.** A tag pointing at an
-  extension URL is evaluated in the page and **the page's CSP can refuse it**. A declared main-world
-  content script is not subject to it. That is the CSP trap the ticket names, avoided rather than
-  worked around.
+- **Registered as a content script rather than injected as a `<script>` tag.** A tag pointing at an
+  extension URL is evaluated in the page and **the page's CSP can refuse it**. A main-world content
+  script — whether it is declared in the manifest or registered through `scripting` — is not subject
+  to it. That is the CSP trap the ticket names, avoided rather than worked around. This paragraph
+  said *declared in the manifest* until review pointed at it: true of the first draft, and false from
+  the moment the manifest stopped declaring anything.
 - **`packages/widget` is unchanged by this app, which is the ticket's own test.** The widget runs
   where it always ran — in the page — so the extension is a fourth assembler beside `global.ts` and
   nothing extension-shaped leaks into the widget. `createCaptureHost` does take an `engine` seam that
@@ -644,6 +646,18 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   page with no dock while the popup says it is on. The browser run that first *proved* the no-reload
   flow had seeded storage **before** the page loaded — which is not what a person does, so it was a
   green check on a path nobody walks. Raised in review.
+- **An unchanged decision is never re-posted, and that is what protects a half-written note.**
+  `writeSite` stores the whole map under one key, so any change fires `storage.onChanged` in **every**
+  tab of every enabled origin — turning site B on from the popup reaches the tab open on site A. A
+  re-posted `mount` makes the page world destroy and rebuild the widget, which closes the composer
+  and loses what the reviewer was typing. That is the one failure this widget cannot afford, so the
+  bridge compares against what it last sent. The `ready` handshake forces past the comparison,
+  because the page world may have missed that same message. Raised in review.
+- **The first browser check of that guard proved nothing, and the mutation is what said so.** It
+  marked `[data-fruitback-host]` at index 1 and called it the extension's — but the playground mounts
+  its own and the order is not promised, so it may have been watching a host that never rebuilds. It
+  marks **every** host now and counts the ones that come back unmarked. Measured both ways: 0 rebuilt
+  with the guard, 1 without.
 - **`init` takes a `configKey`, and that is the one widget change this app forced.** The config store
   reads `fruitback:config` from the page's `localStorage` and lets it *override* what `init` was
   passed — correct for one widget, wrong the moment there are two. A site that embeds the widget,

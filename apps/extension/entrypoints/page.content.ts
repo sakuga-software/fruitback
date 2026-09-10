@@ -12,10 +12,10 @@ import { CHANNEL, parseBridgeMessage } from '../src/protocol.ts';
  * the hook is installed on a global React never reads — so the widget would appear to work and
  * quietly never report which component a note is about.
  *
- * Declared in the manifest rather than injected as a `<script>` tag, and that is the second half of
- * the same decision: a tag pointing at an extension URL is evaluated in the page and **the page's
- * CSP can refuse it**, which is the trap the ticket names. A declared main-world content script is
- * not subject to it.
+ * A content script rather than an injected `<script>` tag, and that is the second half of the same
+ * decision: a tag pointing at an extension URL is evaluated in the page and **the page's CSP can
+ * refuse it**, which is the trap the ticket names. A main-world content script is not subject to it,
+ * registered at runtime or declared.
  *
  * The cost is that there is no `chrome.*` in here at all — hence the bridge.
  */

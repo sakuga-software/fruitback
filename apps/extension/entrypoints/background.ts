@@ -29,7 +29,14 @@ export default defineBackground(() => {
       if (await browser.permissions.contains({ origins: [matchPatternFor(origin)] })) granted.push(origin);
     }
 
-    await syncRegistration(browser.scripting, granted);
+    try {
+      await syncRegistration(browser.scripting, granted);
+    } catch (error) {
+      // Said out loud, because the failure is otherwise perfectly silent: the scripts are not
+      // registered, so no page ever mounts anything, and the popup still reports the site as on.
+      // `serialize` swallows this to keep the queue moving, so the log has to be here.
+      console.error('[fruitback] could not register the content scripts', error);
+    }
   });
 
   browser.runtime.onInstalled.addListener(() => void sync());

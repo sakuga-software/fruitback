@@ -1,4 +1,4 @@
-import { CHANNEL, type MountMessage, parseBridgeMessage } from '../src/protocol.ts';
+import { CHANNEL, type BridgeMessage, parseBridgeMessage } from '../src/protocol.ts';
 import { readSite } from '../src/sites.ts';
 
 /**
@@ -19,26 +19,42 @@ export default defineContentScript({
   async main() {
     const origin = window.location.origin;
 
-    const post = (message: MountMessage | { channel: typeof CHANNEL; kind: 'unmount' }): void => {
+    const post = (message: BridgeMessage): void => {
       window.postMessage(message, window.location.origin);
     };
 
-    const apply = async (): Promise<void> => {
+    // What was last posted, so an unchanged decision is not posted again.
+    //
+    // **This is what protects a half-written note.** `writeSite` stores the whole map under one key,
+    // so any change fires `storage.onChanged` in every tab of every enabled origin — turning site B
+    // on from the popup reaches the tab open on site A. A re-posted `mount` makes the page world
+    // destroy and rebuild the widget, which closes the composer and loses what the reviewer was
+    // typing. Losing that is the one failure this widget cannot afford, so the guard is here rather
+    // than in the page world, where the message has already been treated as a config change.
+    // Raised in review.
+    let posted: string | undefined;
+
+    const apply = async (force = false): Promise<void> => {
       const site = await readSite(origin);
 
-      if (site === undefined || !site.enabled) {
-        post({ channel: CHANNEL, kind: 'unmount' });
+      const message: BridgeMessage =
+        site === undefined || !site.enabled
+          ? { channel: CHANNEL, kind: 'unmount' }
+          : {
+              channel: CHANNEL,
+              kind: 'mount',
+              endpoint: site.endpoint,
+              clientId: site.clientId,
+              ...(site.label !== undefined ? { label: site.label } : {}),
+            };
 
-        return;
-      }
+      const signature = JSON.stringify(message);
+      // `force` is for the handshake: the page world says it is listening, and it may have missed
+      // the message that carries this same decision.
+      if (!force && signature === posted) return;
 
-      post({
-        channel: CHANNEL,
-        kind: 'mount',
-        endpoint: site.endpoint,
-        clientId: site.clientId,
-        ...(site.label !== undefined ? { label: site.label } : {}),
-      });
+      posted = signature;
+      post(message);
     };
 
     // The main world may come up after this script has already decided, so it says when it is
@@ -48,7 +64,7 @@ export default defineContentScript({
       if (event.source !== window) return;
       if (parseBridgeMessage(event.data)?.kind !== 'ready') return;
 
-      void apply();
+      void apply(true);
     });
 
     // The popup writes to storage rather than messaging tabs, so the switch reaches every open tab
