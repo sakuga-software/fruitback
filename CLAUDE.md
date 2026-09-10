@@ -623,12 +623,19 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - **`latest` moves on a `v*` tag and never on a merge to `main`**; `main` publishes `edge`. A
   `latest` that followed every merge takes away the one thing a tag is for. `sha-<commit>` is always
   written, which is what a bisect or an incident needs.
+- **No tag is immutable, `sha-<commit>` included.** Rebuilding the same commit republishes it under a
+  new digest, because `org.opencontainers.image.created` moves. A tag names a commit; only a digest
+  names a build, and the README says so rather than promising an immutability the registry does not
+  give. Raised in review, against a table that claimed `sha-<commit>` never moves.
 - **Publishing is a second workflow, not a job in `ci.yml`.** That file's `image` job builds one
   architecture and `load: true`s it to boot it, and **a multi-platform build cannot be loaded into
   the daemon at all**. The two cannot be merged.
-- **`release-image.yml` builds one architecture first, checks it, and only then builds both and
-  pushes.** Nothing reaches the registry that has not booted and been scanned; the multi-platform
-  pass reuses the same gha cache, so it pays for the emulated runtime stage and nothing else.
+- **`release-image.yml` checks every architecture it publishes, one job each, before anything is
+  pushed.** The first version checked only the runner's own — so an arm64 failure in the base image,
+  the `apk add` or the healthcheck passed every gate and shipped, **on the architecture the workflow
+  exists to serve**. Raised in review. A single-platform build *can* be loaded into the daemon, which
+  is what lets the arm64 image be started under binfmt rather than only built; only a multi-platform
+  build cannot. The publish job then reads both caches and assembles.
 - **The check asserts the image *refuses* `FRUITBACK_STORE=memory`.** `NODE_ENV=production` is what
   refuses it, and a `--target` that stopped at the build stage would drop that with no other symptom.
   Mutation-tested: an image built without the `ENV` line answers `store: memory` and the step fails.

@@ -234,6 +234,11 @@ Self-hosting does not need this repository. Every push to `main` publishes
 pnpm install and a full compilation — which on a small VPS fails for lack of memory about as often as
 it succeeds.
 
+> **While this repository is private, so is the package.** GHCR gives a new package the visibility of
+> the repository it came from, so an unauthenticated `docker pull` answers `denied` until an owner
+> makes the package public — *Packages → `fruitback-worker` → Package settings → Change visibility*.
+> Until then, `docker login ghcr.io` with a token carrying `read:packages` is what works.
+
 ```bash
 docker run -d --name fruitback -p 8080:8080 \
   -e ALLOWED_ORIGINS=https://staging.example.com \
@@ -246,7 +251,7 @@ docker run -d --name fruitback -p 8080:8080 \
 **`edge` and not `latest`, for now.** The versioned tags come from a `v*` git tag, and this repo has
 pushed none yet — so `latest`, `1.4.2` and `1.4` do not resolve, and asking for one gets you
 `manifest unknown` rather than an image. `edge` is every merge to `main`, which today is the only
-thing published. Pin `sha-<commit>` if you want that not to move under you.
+thing published.
 
 **`linux/amd64` and `linux/arm64` both**, because a Raspberry Pi or an ARM VPS is ordinary
 self-hosting, and an amd64-only image excludes them with an error that reads like a broken download.
@@ -254,13 +259,24 @@ Docker picks the right one from the manifest list; there is no per-architecture 
 
 | Tag | Moves | Exists today | Use it for |
 | --- | --- | --- | --- |
-| `1.4.2`, `1.4` | Never / on a patch | Not yet | Production. This is what you can pin and roll back to. |
+| `1.4.2`, `1.4` | On a release / on a patch | Not yet | Production. Pin the minor and get patches, or the patch and get nothing. |
 | `latest` | On a `v*` release tag only | Not yet | A deployment that follows releases and nothing else. |
 | `edge` | Every push to `main` | Yes | Running what is not released yet — which is all there is so far. |
-| `sha-<commit>` | Never | Yes | Naming one exact build, in an incident or a bisect. |
+| `sha-<commit>` | Only if that commit is rebuilt | Yes | Naming one commit's build, in an incident or a bisect. |
+| `@sha256:…` | **Never** | Yes | The only immutable reference. Pin this when it must not move. |
 
 `latest` deliberately does **not** follow `main`: a `latest` that moved on every merge would take
 away the one thing a tag is for.
+
+**No tag is immutable, `sha-<commit>` included** — raised in review, and it is worth being exact
+about. Re-running the workflow on the same commit, or publishing a `v*` tag that points at a commit
+already on `main`, builds again and republishes every tag it computes. The image is identical in
+substance but not in bytes: `org.opencontainers.image.created` moves, so the digest does. A tag names
+a commit; only a digest names a build.
+
+```bash
+docker pull ghcr.io/sakuga-software/fruitback-worker@sha256:<digest>   # cannot move under you
+```
 
 The image runs as `node` rather than root, carries no `node_modules` — the build stage bundles
 everything into one file — and declares a `HEALTHCHECK` against `/health`, which answers `503` while
@@ -271,11 +287,12 @@ gh attestation verify oci://ghcr.io/sakuga-software/fruitback-worker:edge --owne
 docker buildx imagetools inspect ghcr.io/sakuga-software/fruitback-worker:edge --format '{{json .SBOM}}'
 ```
 
-Nothing is published before it has been booted and scanned. The release workflow builds one
-architecture first, starts it, waits for `/health`, asserts the image still **refuses**
-`FRUITBACK_STORE=memory` — `NODE_ENV=production` is what refuses it, and a mis-staged build would
-drop that with no other symptom — and runs Trivy at `CRITICAL,HIGH`. Only then does it build both
-architectures and push.
+**Nothing is published before it has been booted and scanned — on every architecture, not one.** The
+release workflow builds each platform separately, starts it, waits for `/health`, asserts the image
+still **refuses** `FRUITBACK_STORE=memory` — `NODE_ENV=production` is what refuses it, and a
+mis-staged build would drop that with no other symptom — and runs Trivy at `CRITICAL,HIGH`. Both must
+pass before either is pushed. Checking only the runner's own architecture would have let an
+arm64-only failure through every gate, on the architecture this is here to serve.
 
 ### Deploying with Dokploy
 

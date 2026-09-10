@@ -25,20 +25,32 @@ env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/fruitback-worker
 
 jobs:
-  publish:
-    name: build, check, push
+  # Every architecture that gets published is booted and scanned here first, and that is one job per
+  # architecture rather than one for the native one. An arm64-only failure — the base image, the
+  # `apk add`, the healthcheck — passes an amd64 gate and reaches the registry anyway, which is the
+  # architecture this whole workflow exists to serve. Raised in review, and it was true.
+  check:
+    name: check ${{ matrix.arch }}
     runs-on: ubuntu-latest
-    # The build stage is pinned to BUILDPLATFORM, so only the runtime stage is emulated. Sixty
-    # minutes is the ceiling for the day that stops being true, not the expected duration.
-    timeout-minutes: 60
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # `arch` is carried beside `platform` so the cache scope is a plain name. A scope built from
+        # "linux/amd64" puts a slash in a cache key, which is asking a question nobody needs asked.
+        include:
+          - platform: linux/amd64
+            arch: amd64
+          - platform: linux/arm64
+            arch: arm64
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # arm64 runs on this amd64 runner through binfmt. The heavy work is not emulated — see the
-      # BUILDPLATFORM pin in apps/worker/Dockerfile — but the runtime stage still installs a package.
-      # A public repository could drop this and build each platform on its own native runner.
+      # arm64 runs on this amd64 runner through binfmt, for the runtime stage and for `docker run`
+      # below. The heavy work is not emulated — see the BUILDPLATFORM pin in apps/worker/Dockerfile.
+      # A public repository could drop this and give each platform its own native runner.
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         with:
@@ -47,34 +59,19 @@ jobs:
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Compute tags and labels
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE }}
-          # `latest` moves only on a version tag. A `latest` that followed every push to main would
-          # take away the one thing this ticket is for: pinning a version and being able to go back.
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=edge,branch=main
-            type=sha,format=long
-
-      # Nothing is published before the image has been booted and scanned, so this builds the native
-      # architecture first and keeps it locally. The multi-platform build below reuses this cache,
-      # so the second pass pays for the emulated runtime stage and nothing else.
-      - name: Build the candidate, one architecture
+      # A single-platform build can be loaded into the daemon; only a multi-platform one cannot. That
+      # is what lets an arm64 image be started here and not merely built.
+      - name: Build the candidate
         uses: docker/build-push-action@v6
         with:
           context: .
           file: apps/worker/Dockerfile
-          platforms: linux/amd64
+          platforms: ${{ matrix.platform }}
           push: false
           load: true
           tags: fruitback-worker:candidate
-          cache-from: type=gha,scope=release-image
-          cache-to: type=gha,mode=max,scope=release-image
+          cache-from: type=gha,scope=release-image-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=release-image-${{ matrix.arch }}
 
       - name: It serves, and it still refuses the in-memory store
         run: |
@@ -83,8 +80,9 @@ jobs:
           # A misconfigured worker keeps serving and answers /health with 503 — that is the design,
           # so that a bad deploy is never routed to rather than crash-looping. Both checks therefore
           # wait for an answer and read its status, and neither waits for the process to exit.
+          # Ninety attempts, not thirty: a foreign architecture starts Node under emulation.
           health() {
-            for _ in $(seq 1 30); do
+            for _ in $(seq 1 90); do
               code=$(curl -s -o /tmp/body -w '%{http_code}' "http://127.0.0.1:$1/health" || true)
               if [ "$code" != "000" ]; then echo "$code"; return 0; fi
               sleep 1
@@ -140,6 +138,39 @@ jobs:
           ignore-unfixed: true
           exit-code: '1'
 
+  publish:
+    name: push
+    # Both architectures, so a red arm64 stops the amd64 one from being published beside it.
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Compute tags and labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          # `latest` moves only on a version tag. A `latest` that followed every push to main would
+          # take away the one thing this ticket is for: pinning a version and being able to go back.
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=edge,branch=main
+            type=sha,format=long
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -148,7 +179,8 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # A Raspberry Pi and an ARM VPS are ordinary self-hosting, and an amd64-only image excludes
-      # them with an error that reads like a broken download.
+      # them with an error that reads like a broken download. Each platform's layers were built by
+      # its own check job, so this reads both caches and assembles rather than rebuilding.
       - name: Build every architecture and push
         id: push
         uses: docker/build-push-action@v6
@@ -160,8 +192,9 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           annotations: ${{ steps.meta.outputs.annotations }}
-          cache-from: type=gha,scope=release-image
-          cache-to: type=gha,mode=max,scope=release-image
+          cache-from: |
+            type=gha,scope=release-image-amd64
+            type=gha,scope=release-image-arm64
           provenance: mode=max
           sbom: true
 
@@ -189,4 +222,7 @@ jobs:
             echo '```'
             echo
             echo "Digest: \`$DIGEST\` — \`linux/amd64\` and \`linux/arm64\`."
+            echo
+            echo "The digest is the only immutable reference. A re-run of this workflow on the same"
+            echo "commit republishes every tag above, including \`sha-\`, under a new digest."
           } >> "$GITHUB_STEP_SUMMARY"
