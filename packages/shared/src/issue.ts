@@ -67,14 +67,15 @@ export const DEFAULT_SEED_STAGE: SeedStage = 'seeded';
 /**
  * A reply from the team, as the widget shows it (SKG-502).
  *
- * Part of the **read envelope**, not of the seed: comments live in Linear and are fetched, never
- * stored in the description. Nothing here affects the round trip, so `SEED_VERSION` does not move.
+ * Part of the **read envelope**, not of the seed: comments live in whichever store answers and are
+ * fetched from it, never carried in the seed. Linear has them, and so does `sqlite.ts`, which keeps
+ * its own table. Nothing here affects the round trip, so `SEED_VERSION` does not move.
  */
 export const seedCommentSchema = z.object({
   id: z.string().min(1),
   body: z.string(),
   createdAt: z.string(),
-  /** Absent when Linear returns a comment with no user — an integration, or a deleted account. */
+  /** Absent when the store returns a comment with no user — an integration, or a deleted account. */
   author: z.string().optional(),
 });
 

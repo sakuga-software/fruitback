@@ -112,7 +112,7 @@ export function buildSeedBlock(seed: Seed): string {
   return ['```json', JSON.stringify(seed, null, 2), '```'].join('\n');
 }
 
-/** Full Linear description for a seed. `parseSeedFromDescription` is its exact inverse. */
+/** Full issue description for a seed. `parseSeedFromDescription` is its exact inverse. */
 export function buildIssueDescription(seed: Seed): string {
   const sections = [seed.note.trim(), buildIssueMetadata(seed).join('\n'), SEED_BLOCK_CAPTION, buildSeedBlock(seed)];
 
@@ -120,9 +120,10 @@ export function buildIssueDescription(seed: Seed): string {
 }
 
 /**
- * Recover the seed from a Linear description.
+ * Recover the seed from an issue description.
  *
- * Tolerant on purpose: the description round-trips through Linear's editor and through humans, so
+ * Tolerant on purpose: the description round-trips through the tracker's own editor and through
+ * humans, so
  * we accept any fenced block (backticks or tildes, with or without a language tag, CRLF endings,
  * an unterminated fence) and locate ours by its `kind` field rather than by position or marker.
  */
@@ -183,7 +184,8 @@ function* iterateFencedBlocks(markdown: string): Generator<FencedBlock> {
     open.body.push(line);
   }
 
-  // An unterminated fence still yields — Linear truncating a long description must not lose the seed.
+  // An unterminated fence still yields — a tracker that truncates a long description must not lose
+  // the seed.
   if (open !== null) yield { info: open.info, body: open.body.join('\n') };
 }
 
