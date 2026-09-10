@@ -608,6 +608,52 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   bad deploy is never routed to. **A code the widget reads is a promise**, so it names a role and
   never a vendor — `linear-unavailable` became `store-unavailable` with SKG-522 for that reason.
 
+## The published image
+
+- **`ghcr.io/<owner>/fruitback-worker`, and self-hosting stops needing this repository** (SKG-540).
+  Building from source on a small VPS means a clone, a pnpm install and a full compilation, which
+  fails for lack of memory about as often as it succeeds.
+- **The build stage is pinned to `--platform=$BUILDPLATFORM`, and that is what makes arm64 cheap.**
+  What the stage produces is one bundled JavaScript file, and those bytes are identical on every
+  platform, so emulating `pnpm install` and esbuild buys nothing. Measured cold on the arm64 → amd64
+  leg: **27 s with the pin, 1 min 32 s without**. Only the runtime stage is emulated, and all it does
+  there is `apk add sqlite`.
+- **`linux/arm64` is not a nicety.** A Raspberry Pi and an ARM VPS are ordinary self-hosting, and an
+  amd64-only image excludes them with an error that reads like a broken download.
+- **`latest` moves on a `v*` tag and never on a merge to `main`**; `main` publishes `edge`. A
+  `latest` that followed every merge takes away the one thing a tag is for. `sha-<commit>` is always
+  written, which is what a bisect or an incident needs.
+- **Publishing is a second workflow, not a job in `ci.yml`.** That file's `image` job builds one
+  architecture and `load: true`s it to boot it, and **a multi-platform build cannot be loaded into
+  the daemon at all**. The two cannot be merged.
+- **`release-image.yml` builds one architecture first, checks it, and only then builds both and
+  pushes.** Nothing reaches the registry that has not booted and been scanned; the multi-platform
+  pass reuses the same gha cache, so it pays for the emulated runtime stage and nothing else.
+- **The check asserts the image *refuses* `FRUITBACK_STORE=memory`.** `NODE_ENV=production` is what
+  refuses it, and a `--target` that stopped at the build stage would drop that with no other symptom.
+  Mutation-tested: an image built without the `ENV` line answers `store: memory` and the step fails.
+  It matches the `503` and the **variable name**, never the prose beside it — the diagnostic has to
+  name the variable and has its own tests, while the wording is free to change, and a check reading
+  the wording would go green on a broken image.
+- **`ci.yml`'s `image` job stays, and it is not the same job.** It is the only one that runs on a
+  **pull request**, which is where a broken Dockerfile has to be caught; this workflow runs after the
+  merge. They use different gha cache scopes, so neither evicts the other.
+- **A misconfigured worker does not exit — it serves `/health` as `503`.** So the check waits for an
+  answer and reads its status; a check that waited for the process to exit would hang until the job
+  timed out. That was the first version, and it was measured hanging.
+- **Trivy runs with `ignore-unfixed`.** An Alpine CVE with no patch available reddens every release
+  for something nobody can act on, and a gate that cannot be satisfied is a gate somebody deletes.
+- **`org.opencontainers.image.source` is the one label with an effect** rather than a description:
+  GHCR reads it to attach the package to the repository, which is what gives it the repository's
+  README, licence and visibility. The volatile labels come from `docker/metadata-action`, which is
+  the only place that knows them.
+- The push needs `packages: write`, the attestations need `id-token: write` **and**
+  `attestations: write`. A missing one fails at the end of a long build with a 403 that names nothing.
+- **The publish leg cannot be proven from a branch.** What was proven locally: both architectures
+  build, the manifest list carries both plus a provenance and SBOM attestation each, the image runs
+  as `node` with `NODE_ENV=production`, and the smoke script passes against the real image and fails
+  against the mutant. Verified by pushing to a throwaway `registry:2` on localhost.
+
 ## Where a seed is stored
 
 - **`store.ts` is the interface, and it existed before it was named** (SKG-522). `app.ts` used to
