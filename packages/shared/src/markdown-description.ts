@@ -1,40 +1,26 @@
-import {
-  canonicalizePageUrl,
-  type Seed,
-  type SeedParseFailure,
-  type SeedParseResult,
-  parseSeed,
-  seedSchema,
-} from './seed.ts';
-import { z } from 'zod';
+import { canonicalizePageUrl, type Seed, type SeedParseFailure, type SeedParseResult, parseSeed } from './seed.ts';
 
 /**
- * Mapping between a seed and a Linear issue.
+ * A seed stored in a markdown description, with the issue still readable by whoever triages it
+ * (SKG-523).
  *
- * Linear is the database: there is no Fruitback backend. So an issue has to carry everything the
- * widget needs to re-plant its pin later, while still reading like a normal ticket to whoever
- * triages it. The answer is two layers in the description — prose for humans on top, a JSON block
- * for the widget at the bottom.
+ * **Nothing here is Linear's**, which is why it stopped living in a file named after it. Every
+ * issue tracker worth connecting to — GitHub, Gitea, Jira, Plane — stores a body of markdown and
+ * lets something search it, so this is a *strategy those connectors share* rather than a part of
+ * the `SeedStore` interface. A connector picks it up; it is not obliged to. `sqlite.ts` is the
+ * proof that the obligation would have been wrong: it has columns, so it has no use for any of
+ * this.
  *
- * Why the description and not a custom field: it is portable (works on any workspace, no admin
- * setup), it survives an export, and Linear can filter on it server-side
- * (`description: { contains: <canonical url> }`), which is how "the seeds of this page" is queried
- * without walking every issue. The cost is that a human can corrupt the block by editing it —
- * hence the tolerant parser below and the loud caption.
+ * The shape is two layers. Prose on top, for the human in the tracker's own interface; a fenced
+ * JSON block underneath, for the widget that has to re-plant the pin. Storing it in the body rather
+ * than in a custom field is what makes it portable — no workspace admin setup, it survives an
+ * export, and a substring filter can find it server-side.
+ *
+ * The cost is that a human can edit the block, which is why `parseSeedFromDescription` is tolerant
+ * and must never throw. The round trip
+ * `parseSeedFromDescription(buildIssueDescription(seed)) === seed` is the invariant, and its test
+ * moved here with the code rather than being rewritten.
  */
-
-/** Every issue Fruitback creates carries this label. It is the read filter. */
-export const FRUITBACK_LABEL = 'fruitback';
-
-/** Per-client label, so one workspace can serve every client site. */
-export function clientLabelName(clientId: string): string {
-  return `${FRUITBACK_LABEL}:${clientId}`;
-}
-
-/** Labels to apply when creating the issue (M3 / SKG-497). */
-export function buildIssueLabels(seed: Seed): string[] {
-  return seed.client ? [FRUITBACK_LABEL, clientLabelName(seed.client.id)] : [FRUITBACK_LABEL];
-}
 
 /**
  * The line above the JSON block, and the only thing standing between the payload and an editor.
@@ -202,99 +188,11 @@ function* iterateFencedBlocks(markdown: string): Generator<FencedBlock> {
 }
 
 /**
- * How ripe a pin looks on the page. This is the whole status story: the widget never stores a status
- * of its own, it renders the one the store reports.
+ * The `description contains` term a store uses to fetch the seeds of one page.
  *
- * The vocabulary belongs here. The **projection** onto it does not: Linear has workflow state types,
- * GitHub has open/closed and some labels, a SQL store has whatever it chose. Each connector owns its
- * own, so naming one provider's states in the contract made every consumer of this package depend on
- * that provider (SKG-516).
- */
-export const SEED_STAGES = ['seeded', 'green', 'ripening', 'ripe', 'composted'] as const;
-export type SeedStage = (typeof SEED_STAGES)[number];
-
-/**
- * What a connector reports for a state it does not recognise.
- *
- * The tolerance is the contract's, not the connector's. A provider gains a state, or a team renames
- * one, and the pin still has to be drawn — dropping it would make someone's note vanish from the page
- * because a workflow column was added.
- */
-export const DEFAULT_SEED_STAGE: SeedStage = 'seeded';
-
-/*
- * `SEED_STAGE_STYLES` used to live here, carrying an `emoji`, a `label` and a `color` per stage. All
- * three are gone (SKG-517), and each for its own reason:
- *
- * - **`color`** was already dead. SKG-528 moved every colour into the widget's `theme.ts` as a
- *   `--fruitback-stage-*` token, so a host can repaint the stages; nothing had read this field since.
- * - **`emoji`** was a rendering decision travelling in a published type. A consumer of this package
- *   could not change it, and the widget could not drop it without a major version. It is the widget's
- *   business now, and by default there is no glyph at all — the pin's shape and colour carry the
- *   stage (SKG-529).
- * - **`label`** was an English string in a contract, which is untranslatable by anyone downstream.
- *   The vocabulary is `SEED_STAGES`; the *words* belong to whoever renders them. The widget keeps its
- *   own map (`stages.ts`), ready for SKG-530 to make it locale-aware, and each store names its own
- *   states in `stateName`.
- *
- * The pattern is SKG-516's, one level further in: the contract holds the vocabulary, and every
- * projection onto something a human sees belongs to the side doing the showing.
- */
-
-/**
- * A reply from the team, as the widget shows it (SKG-502).
- *
- * Part of the **read envelope**, not of the seed: comments live in Linear and are fetched, never
- * stored in the description. Nothing here affects the round trip, so `SEED_VERSION` does not move.
- */
-export const seedCommentSchema = z.object({
-  id: z.string().min(1),
-  body: z.string(),
-  createdAt: z.string(),
-  /** Absent when Linear returns a comment with no user — an integration, or a deleted account. */
-  author: z.string().optional(),
-});
-
-export type SeedComment = z.infer<typeof seedCommentSchema>;
-
-/**
- * What the worker sends back to the widget for one planted seed (M4 / SKG-499). Kept here because
- * both ends validate against it.
- */
-export const seedIssueSchema = z.object({
-  id: z.string().min(1),
-  /** Human handle, e.g. `SKG-491` from Linear, `FB-12` from a store that numbers its own. */
-  identifier: z.string().min(1),
-  /**
-   * Where a human can open this note in the store's own interface — **when the store has one**
-   * (SKG-524).
-   *
-   * Optional because SQLite has no web interface at all, and the only way to keep this required was
-   * to invent a URL that goes nowhere. A pin whose link leads back to the page it is already on is
-   * worse than a pin with no link: it looks like the store lost the note. The widget renders the
-   * link only when this is present.
-   *
-   * Read-envelope field, like `comments`: nothing here is stored in a seed, so `SEED_VERSION` does
-   * not move.
-   */
-  url: z.string().min(1).optional(),
-  title: z.string(),
-  stage: z.enum(SEED_STAGES),
-  stateName: z.string(),
-  updatedAt: z.string(),
-  /**
-   * Oldest first, so the thread reads as a conversation. Absent means the worker did not ask for
-   * them; empty means it did and there were none — the widget says something different for each.
-   */
-  comments: z.array(seedCommentSchema).optional(),
-  seed: seedSchema,
-});
-
-export type SeedIssue = z.infer<typeof seedIssueSchema>;
-
-/**
- * The `description contains` term used to fetch the seeds of one page. It works because
- * `buildSeedBlock` writes the canonical URL verbatim into the JSON.
+ * It works because `buildSeedBlock` writes the canonical URL verbatim into the JSON, which is a
+ * property of **this codec** rather than of any provider — so it belongs beside the writer that
+ * makes it true. A store with real search does not need it; Linear's substring filter does.
  */
 export function pageQueryTerm(url: string | URL): string {
   return canonicalizePageUrl(url);

@@ -161,13 +161,13 @@ that repeats is anchored under the nearest ancestor that *is* identifiable rathe
 `<html>`.
 
 See [`packages/shared/src/seed.ts`](packages/shared/src/seed.ts),
-[`packages/shared/src/linear.ts`](packages/shared/src/linear.ts) and
+[`packages/shared/src/markdown-description.ts`](packages/shared/src/markdown-description.ts) and
 [`packages/widget/src/selector.ts`](packages/widget/src/selector.ts).
 
 ## Layout
 
 ```
-packages/shared    the seed contract: schema, Linear mapping, round-trip   ✅
+packages/shared    the seed contract: schema, markdown codec, round-trip   ✅
 apps/worker        Node service in Docker: write + read path to Linear     ✅
 packages/widget    capture + overlay + Shadow DOM host + popover          ✅
 apps/playground    hostile demo page + dev loop, on a fake Linear          ✅  dev only
