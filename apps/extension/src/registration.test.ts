@@ -6,6 +6,7 @@ import {
   type RegisteredScript,
   type ScriptRegistrar,
   matchPatternFor,
+  serialize,
   syncRegistration,
 } from './registration.ts';
 
@@ -106,5 +107,44 @@ describe('matchPatternFor', () => {
   it('turns an origin into the pattern both APIs want', () => {
     assert.equal(matchPatternFor('https://acme.dev'), 'https://acme.dev/*');
     assert.equal(matchPatternFor('http://localhost:5177'), 'http://localhost:5177/*');
+  });
+});
+
+describe('serialize', () => {
+  it('runs one at a time, however many ask at once', async () => {
+    const order: string[] = [];
+    let release: (() => void) | undefined;
+    const run = serialize(async (name: string) => {
+      order.push(`start:${name}`);
+      if (name === 'a') await new Promise<void>((resolve) => (release = resolve));
+      order.push(`end:${name}`);
+    });
+
+    const first = run('a');
+    const second = run('b');
+    // The first link of the chain is a microtask, so let it run before looking.
+    await Promise.resolve();
+
+    // `b` must not have started while `a` is still in flight — that overlap is what made two runs
+    // both see an id as absent and both try to register it.
+    assert.deepEqual(order, ['start:a']);
+
+    release?.();
+    await Promise.all([first, second]);
+
+    assert.deepEqual(order, ['start:a', 'end:a', 'start:b', 'end:b']);
+  });
+
+  it('does not wedge the queue when a run fails', async () => {
+    const done: string[] = [];
+    const run = serialize(async (name: string) => {
+      if (name === 'bad') throw new Error('nope');
+      done.push(name);
+    });
+
+    await run('bad');
+    await run('good');
+
+    assert.deepEqual(done, ['good']);
   });
 });

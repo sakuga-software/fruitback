@@ -56,6 +56,11 @@ export default defineContentScript({
       widget = init({
         endpoint: message.endpoint,
         clientId: message.clientId,
+        // Our own key, so the site's stored preferences cannot override where the extension routes.
+        // The default key is global to the page, and a site that embeds the widget itself would
+        // otherwise hand this instance its `endpoint` and `clientId` — the reviewer's notes going to
+        // a worker nobody picked, with nothing on screen to say so. Raised in review.
+        configKey: 'fruitback:config:extension',
         ...(message.label !== undefined ? { label: message.label } : {}),
       });
     });

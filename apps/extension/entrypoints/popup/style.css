@@ -5,6 +5,7 @@
   --muted: #78716c;
   --line: #e7e5e4;
   --accent: #c2410c;
+  --on-accent: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -13,7 +14,11 @@
     --text: #fafaf9;
     --muted: #a8a29e;
     --line: #292524;
+    /* White on this orange measures about 2.3:1 at 13px, under the 4.5:1 AA threshold. The dark
+       theme keeps the lighter accent and puts dark text on it rather than dimming the accent.
+       Raised in review. */
     --accent: #fb923c;
+    --on-accent: #1c1917;
   }
 }
 
@@ -73,7 +78,7 @@ button {
   border: 0;
   border-radius: 6px;
   background: var(--accent);
-  color: #ffffff;
+  color: var(--on-accent);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
@@ -82,4 +87,9 @@ button {
 .state {
   margin: 0;
   color: var(--muted);
+}
+
+.problem {
+  margin: 8px 0 0;
+  color: var(--accent);
 }

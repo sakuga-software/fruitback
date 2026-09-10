@@ -626,11 +626,30 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   refuses an empty `matches`, so an implementation that updated there would throw and leave the
   previous origins registered — the extension would keep running on a site just switched off. That is
   the test worth reading in `registration.test.ts`.
-- **The bridge is `window.postMessage`, and the page is on that channel too.** It receives everything
-  we post and can post anything back, so `parseBridgeMessage` refuses everything that is not exactly
-  a message we sent — including an `endpoint` on a scheme no worker answers on. Nothing secret
-  travels there: the endpoint and client id are already in the client's own DOM in tag mode, and an
-  identity token is not sent at all. SKG-535 gives the main world a relay instead.
+- **The bridge is `window.postMessage`, and the page can forge on it.** `parseBridgeMessage` refuses
+  a *malformed* message; it cannot refuse a **well-formed** one the page wrote, because the two are
+  identical. A page can post its own `mount` and point the widget at its own worker, or post
+  `unmount` and take it away. The first version of this paragraph claimed the parse defended against
+  that. It does not, and claiming it was worse than the gap.
+- **That is inherent to the main world, not a flaw in the bridge, and no handoff closes it.** The
+  main world *is* the page's realm: a hostile page can patch `fetch`, `JSON.stringify` or the
+  widget's own methods however the config arrived, and a nonce would have to travel on the channel
+  the page reads. So it is stated rather than defended — **a reviewer grants an origin precisely
+  because they trust that origin's code**, and the extension runs on no other. What is reduced is
+  what is at stake: nothing secret travels there, the endpoint and client id are already in the
+  client's own DOM in tag mode, and an identity token is **not sent at all**. SKG-535 keeps the token
+  in the isolated world behind a relay, which is what has to keep being true.
+- **`registerContentScripts` reaches the *next* page load, never the open one.** So the popup injects
+  both files into the current tab after the grant, or the reviewer switches a site on and looks at a
+  page with no dock while the popup says it is on. The browser run that first *proved* the no-reload
+  flow had seeded storage **before** the page loaded — which is not what a person does, so it was a
+  green check on a path nobody walks. Raised in review.
+- **`init` takes a `configKey`, and that is the one widget change this app forced.** The config store
+  reads `fruitback:config` from the page's `localStorage` and lets it *override* what `init` was
+  passed — correct for one widget, wrong the moment there are two. A site that embeds the widget,
+  opened by a reviewer whose extension mounts its own, shares that key: one instance silently takes
+  the other's `endpoint` and `clientId`, and the notes go to a worker nobody chose. The seam is not
+  extension-shaped — any second instance needs it — which is why it passes the ticket's own test.
 - **Nothing orders the two content scripts against each other**, so the main world announces itself
   with `ready` and the isolated one applies its decision again. `postMessage` delivers that back to
   the sender too, which the main world has to ignore explicitly — the type checker found that one.

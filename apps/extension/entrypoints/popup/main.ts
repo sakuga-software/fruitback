@@ -1,4 +1,6 @@
 import { browser } from 'wxt/browser';
+import { isWorkerEndpoint } from '../../src/endpoint.ts';
+import { BRIDGE_FILE, PAGE_FILE, matchPatternFor, publicPath } from '../../src/registration.ts';
 import { type SiteConfig, readSite, writeSite } from '../../src/sites.ts';
 
 /**
@@ -43,20 +45,33 @@ function form(origin: string): HTMLElement {
   const endpoint = field('Worker endpoint', 'https://feedback.acme.dev');
   const clientId = field('Client id', 'acme');
   const save = element('button', 'Turn on for this site');
+  const problem = element('p', '', 'problem');
 
   save.addEventListener('click', () => {
     const values = { endpoint: endpoint.input.value.trim(), clientId: clientId.input.value.trim() };
-    // Refused rather than stored: an entry missing either one would read as configured and mount
-    // nothing, which is the failure that looks like a broken extension.
-    if (values.endpoint === '' || values.clientId === '') return;
+
+    // Said out loud rather than refused in silence. The bridge applies the same rule before it
+    // mounts, so an endpoint that fails here would have been stored, shown as **On**, and then
+    // ignored by a page that reported nothing — which reads as a broken extension. Raised in review.
+    problem.textContent = complaint(values);
+    if (problem.textContent !== '') return;
 
     void turnOn(origin, values);
   });
 
   const wrapper = document.createElement('div');
-  wrapper.append(endpoint.label, clientId.label, save);
+  wrapper.append(endpoint.label, clientId.label, save, problem);
 
   return wrapper;
+}
+
+/** What is wrong with these two fields, in the reporter's words, or nothing. */
+export function complaint(values: { endpoint: string; clientId: string }): string {
+  if (values.endpoint === '') return 'The worker endpoint is required.';
+  if (!isWorkerEndpoint(values.endpoint)) return 'The endpoint must be a full http:// or https:// URL.';
+  if (values.clientId === '') return 'The client id is required.';
+
+  return '';
 }
 
 /**
@@ -68,11 +83,38 @@ function form(origin: string): HTMLElement {
  * "on" for a site the background can never register, which reads as a broken extension.
  */
 async function turnOn(origin: string, values: { endpoint: string; clientId: string }): Promise<void> {
-  const granted = await browser.permissions.request({ origins: [`${origin}/*`] });
+  const granted = await browser.permissions.request({ origins: [matchPatternFor(origin)] });
   if (!granted) return;
 
   await writeSite(origin, { ...values, enabled: true });
+  await injectIntoCurrentTab();
   await render();
+}
+
+/**
+ * Put the scripts into the page that is open right now.
+ *
+ * `registerContentScripts` only reaches **future** page loads, so without this the tab the reviewer
+ * is looking at stays bare until they navigate — while the popup says the site is on. That is the
+ * gap between a switch and what the switch appears to promise, and it was measured only because a
+ * reviewer pointed at it: the browser run that "proved" the no-reload flow had seeded storage before
+ * the page loaded, which is not what a person does.
+ *
+ * Injecting a script that is already running is harmless here — the bridge only listens, and the
+ * page world refuses a second mount by destroying the first.
+ */
+async function injectIntoCurrentTab(): Promise<void> {
+  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+  if (tab?.id === undefined) return;
+
+  try {
+    await browser.scripting.executeScript({ target: { tabId: tab.id }, files: [publicPath(PAGE_FILE)], world: 'MAIN' });
+    await browser.scripting.executeScript({ target: { tabId: tab.id }, files: [publicPath(BRIDGE_FILE)] });
+  } catch {
+    // A page the browser will not let anything be injected into — its own error pages, another
+    // extension's. The registration still stands for the next load, so this costs the immediate
+    // appearance and nothing else.
+  }
 }
 
 /** Configured: the switch, and what it is switching. */

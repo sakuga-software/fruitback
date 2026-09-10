@@ -67,6 +67,19 @@ export type FruitbackOptions = {
    * Left out, the widget follows `prefers-color-scheme` on its own.
    */
   theme?: FruitbackTheme;
+  /**
+   * Where this instance keeps the reporter's preferences, when the default key is not right.
+   *
+   * The config store reads `fruitback:config` from `localStorage` and lets it **override** what is
+   * passed here — which is correct for one widget on one page and wrong the moment there are two.
+   * Two is not exotic: a site that embeds the widget, opened by a reviewer whose extension mounts
+   * its own, shares one key, so one instance silently takes over the other's `endpoint` and
+   * `clientId` and the notes go to a worker nobody chose.
+   *
+   * Not extension-specific, and named for what it is: a second instance needs a second key.
+   * Measured on the playground, which mounts its own widget.
+   */
+  configKey?: string;
   document?: Document;
 };
 
@@ -112,6 +125,7 @@ export function init(options: FruitbackOptions): Fruitback {
     // `screenshot` off at the start: it is the reporter's to turn on, and an image of the page they
     // are looking at is not something to start sending because a default said so.
     defaults: { endpoint: options.endpoint, clientId: options.clientId, hiddenStages: [], screenshot: false },
+    ...(options.configKey !== undefined ? { key: options.configKey } : {}),
   });
 
   let target: CaptureTarget | null = null;

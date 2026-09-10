@@ -14,6 +14,8 @@
  * relay through the isolated script instead.
  */
 
+import { isWorkerEndpoint } from './endpoint.ts';
+
 export const CHANNEL = 'fruitback-extension';
 
 export type MountMessage = {
@@ -62,11 +64,7 @@ export function parseBridgeMessage(data: unknown): BridgeMessage | undefined {
   if (data.kind !== 'mount') return undefined;
 
   const { endpoint, clientId, label } = data;
-  if (!isNonEmptyString(endpoint) || !isNonEmptyString(clientId)) return undefined;
-
-  // Rejected here rather than at the mount: `init` would happily take a `javascript:` endpoint and
-  // build a request URL from it. Only the two schemes a worker can actually answer on.
-  if (!isHttpUrl(endpoint)) return undefined;
+  if (!isWorkerEndpoint(endpoint) || !isNonEmptyString(clientId)) return undefined;
 
   return {
     channel: CHANNEL,
@@ -75,16 +73,6 @@ export function parseBridgeMessage(data: unknown): BridgeMessage | undefined {
     clientId,
     ...(isNonEmptyString(label) ? { label } : {}),
   };
-}
-
-function isHttpUrl(value: string): boolean {
-  try {
-    const { protocol } = new URL(value);
-
-    return protocol === 'https:' || protocol === 'http:';
-  } catch {
-    return false;
-  }
 }
 
 function isNonEmptyString(value: unknown): value is string {

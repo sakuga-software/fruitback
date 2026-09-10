@@ -1,6 +1,6 @@
 import { browser } from 'wxt/browser';
 import { readAll } from '../src/sites.ts';
-import { matchPatternFor, syncRegistration } from '../src/registration.ts';
+import { matchPatternFor, serialize, syncRegistration } from '../src/registration.ts';
 
 /**
  * Keeps the two content scripts registered for exactly the sites that are switched on (SKG-534).
@@ -13,7 +13,9 @@ import { matchPatternFor, syncRegistration } from '../src/registration.ts';
  * scripts survive the worker being killed, which is what makes that affordable.
  */
 export default defineBackground(() => {
-  const sync = async (): Promise<void> => {
+  // Serialised: four event sources call this, and the read-then-write inside would otherwise race
+  // with itself. See `serialize`.
+  const sync = serialize(async (): Promise<void> => {
     const sites = await readAll();
     const wanted = Object.entries(sites)
       .filter(([, site]) => site.enabled)
@@ -28,7 +30,7 @@ export default defineBackground(() => {
     }
 
     await syncRegistration(browser.scripting, granted);
-  };
+  });
 
   browser.runtime.onInstalled.addListener(() => void sync());
   browser.runtime.onStartup.addListener(() => void sync());
