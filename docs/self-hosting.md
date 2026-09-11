@@ -22,10 +22,14 @@ docker compose up --build worker                # the real image, locally
 
 | Route                            | Status                                                                    |
 | -------------------------------- | ------------------------------------------------------------------------- |
-| `POST /feedback`                 | plants a seed: creates the issue, returns `identifier` + `url`            |
-| `GET /feedback?url=…[&client=…]` | the seeds of that page: anchor, note, Linear state, stage                 |
-| `OPTIONS /feedback`              | CORS preflight, never touches Linear                                      |
+| `POST /feedback`                 | plants a seed in the configured store, returns `identifier` + `url`      |
+| `GET /feedback?url=…[&client=…]` | the seeds of that page: anchor, note, state, stage                        |
+| `OPTIONS /feedback`              | CORS preflight, never reaches the store                                   |
 | `GET /health`                    | `200` when it can serve, `503` naming the missing variables when it can't |
+
+**The three paragraphs below describe the `linear` connector**, which is the default. A worker on
+another store does the same job by its own means — see `apps/worker/src/store.ts`, where `findForPage`
+states the intention and never the method.
 
 Labels are created on demand, so a new client site needs no manual Linear setup. A label that cannot
 be created is dropped and the feedback still goes through — losing a label is a triage annoyance,

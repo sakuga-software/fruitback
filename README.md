@@ -12,8 +12,9 @@ When they come back to the page, their pins are still there, coloured by the iss
 
 ![A pin anchored on a button of a live page, coloured by its issue's status](docs/assets/pin-on-a-live-page.png)
 
-**Fruitback does not store your feedback — a system you already run does.** No database of ours, no
-dashboard of ours, no account to create. The widget captures; your issue tracker keeps.
+**Fruitback runs no service that holds your feedback.** It lands in the tracker your team already
+uses — or, with `FRUITBACK_STORE=sqlite`, in a file on a volume you own. No database of ours, no
+dashboard of ours, no account to create anywhere.
 
 ## Install
 
@@ -55,9 +56,10 @@ answers exist.
 | --- | --- | --- | --- |
 | The site embeds | the widget | **nothing** | the widget, dormant |
 | Delivered as | `<script>` tag or npm | a browser extension | `<script>` tag or npm |
+| Published | **not yet** — build it from this repo | **not yet** — load it unpacked | — |
 | Who sees the pins | every visitor | the reviewer who installed it | reviewers who are signed in |
 | Good for | a public "report a problem" | reviewing a client's site, invisibly | a team reviewing its own staging |
-| Today | **shipped** | **shipped** (MV3, Chromium + Firefox) | planned (SKG-596) |
+| Built | **yes** | **yes**, MV3 on Chromium and Firefox | planned (SKG-596) |
 
 The extension asks for **no host permission at install**: its content scripts are registered at
 runtime, per origin, when somebody switches that site on.

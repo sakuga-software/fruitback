@@ -24,8 +24,14 @@ from the anchor we stored.
 
 ## Architecture
 
+**The diagram shows the default path, `FRUITBACK_STORE=linear`.** Since SKG-526 the third column is
+whichever connector is configured — `sqlite` writes a row in a file the worker owns, and the shape of
+the exchange does not change. This page was written when Linear was the only answer, and it is scoped
+here rather than rewritten: the reasoning below is still why the Linear connector looks the way it
+does.
+
 ```
-widget (client site)            worker (proxy)              Linear
+widget (client site)            worker (proxy)              the store (linear by default)
 ──────────────────              ──────────────              ──────
 react-grab picker      ──POST──▶ create issue      ──────▶  issue + labels
 comment popover                  (server-side token)        description = seed
@@ -36,8 +42,8 @@ pin overlay            ◀──GET─── query by label+URL ◀────�
   touched). Picks the element via `react-grab/primitives`, captures the anchor, and later re-plants
   the pins it reads back.
 - **worker** — a small Node process in a container (Docker on a VPS, deployed by Dokploy from a
-  GitHub push). Its only reason to exist: the Linear token cannot live in client-side JS on a public
-  site. It also decides attribution (anonymous vs signed in).
+  GitHub push). Its only reason to exist: the tracker's API token cannot live in client-side JS on a
+  public site. It also decides attribution (anonymous vs signed in).
 - **shared** — `@fruitback/shared`, the _seed_ contract. Both ends depend on it.
 - **extension** — `@fruitback/extension`, the same widget on a site that embeds **nothing** (SKG-534).
   The reviewer installs it, switches a site on, and the page they are reviewing is untouched — no
@@ -45,12 +51,18 @@ pin overlay            ◀──GET─── query by label+URL ◀────�
   Firefox. It asks for **no host permission at install**: the content scripts are registered at
   runtime, per origin, when somebody turns that site on.
 
-No database, no dashboard, no session store.
+No dashboard and no user accounts: the tracker you already run is both. The sentence that stood here
+until SKG-519 said "no database, no session store" as well, and it had simply outlived itself —
+`FRUITBACK_STORE=sqlite` keeps the seeds in a file of the worker's own since SKG-524, and
+`FRUITBACK_SESSION_PATH` keeps the extension's sessions in another since SKG-535. Neither is a
+database *of users*, which is what the claim was ever about.
 
 ## The seed
 
-A **seed** is one piece of feedback planted on an element. It is stored as a JSON block inside the
-Linear issue description, under a human-readable summary.
+A **seed** is one piece of feedback planted on an element. **Where** it is stored is the connector's
+business: `linear` puts it as a JSON block inside the issue description, under a human-readable
+summary, and `sqlite` puts it in a column. The two decisions below are the Linear connector's, and
+they are what the markdown codec exists for.
 
 Two decisions worth knowing:
 
@@ -91,7 +103,7 @@ See [`packages/shared/src/seed.ts`](../packages/shared/src/seed.ts),
 
 ```
 packages/shared    the seed contract: schema, markdown codec, round-trip   ✅
-apps/worker        Node service in Docker: write + read path to Linear     ✅
+apps/worker        Node service in Docker: write + read path to the store  ✅
 packages/widget    capture + overlay + Shadow DOM host + popover          ✅
 apps/playground    hostile demo page + dev loop, on a fake Linear          ✅  dev only
 ```
