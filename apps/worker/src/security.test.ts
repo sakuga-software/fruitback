@@ -2,10 +2,17 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { ACCESS_TTL_SECONDS, PAIRING_TTL_SECONDS, REFRESH_TTL_SECONDS } from './session.ts';
+import {
+  ACCESS_TTL_SECONDS,
+  PAIRING_TTL_SECONDS,
+  REFRESH_TTL_SECONDS,
+  createPairingCode,
+  createRefreshToken,
+} from './session.ts';
 import { DEFAULT_TRUSTED_PROXY_HOPS } from './env.ts';
 import { DEFAULT_LIMIT } from './rate-limit.ts';
 import { readConfig } from './env.ts';
+import { handleRequest } from './app.ts';
 
 /**
  * `SECURITY.md` states numbers, and a security document that drifts from the code is worse than none
@@ -102,6 +109,31 @@ describe('SECURITY.md states what the code does', () => {
     );
   });
 
+  /**
+   * The two figures the first version of this suite did **not** derive, while its own docstring
+   * claimed every one of them was. Raised in review, and it was right: changing `CODE_LENGTH` or
+   * `REFRESH_TOKEN_BYTES` would have left the document stale with the suite green.
+   *
+   * Measured from what the functions actually produce rather than from the constants, because what
+   * the document promises a reader is the strength of the credential they are handed.
+   */
+  it('quotes the entropy the credentials actually carry', () => {
+    const alphabet = new Set(createPairingCode().replaceAll('-', ''));
+    assert.ok(alphabet.size > 1, 'a pairing code drew one symbol; something is very wrong');
+
+    const codeBits = Math.round(createPairingCode().replaceAll('-', '').length * Math.log2(32));
+    const refreshBits = Buffer.from(createRefreshToken(), 'base64url').byteLength * 8;
+
+    assert.ok(
+      SECURITY.includes(`${codeBits} bits, valid`),
+      `SECURITY.md does not say a pairing code carries ${codeBits} bits`,
+    );
+    assert.ok(
+      SECURITY.includes(`${refreshBits} bits, `),
+      `SECURITY.md does not say a refresh token carries ${refreshBits} bits`,
+    );
+  });
+
   it('names the only algorithm the verifier accepts', () => {
     assert.ok(SECURITY.includes(`\`${constantIn(IDENTITY, 'ALGORITHM')}\` is **asserted against**`));
   });
@@ -134,5 +166,45 @@ describe('SECURITY.md states what the code does', () => {
 
     const stripped = /export function stripClaimedVerification/.test(IDENTITY);
     assert.equal(stripped, true, 'SECURITY.md promises the flag is stripped, and nothing strips it');
+  });
+});
+
+describe('the preflight lets through what the widget actually sends', () => {
+  /**
+   * `read: 'authenticated'` is the mitigation SECURITY.md names, and it was unreachable from a
+   * browser (SKG-518).
+   *
+   * `embed.ts` sends `Authorization: Bearer …` on the read **and** on the write when a host mints a
+   * token. That header is not CORS-safelisted, so both requests are preflighted — and a preflight
+   * that does not list it is refused by the browser before the worker sees anything. Nothing
+   * server-side could have caught this: the request never arrived. Raised in review.
+   */
+  it('allows the Authorization header, or authenticated reads answer nobody', async () => {
+    const response = await handleRequest(
+      new Request('https://worker.test/feedback?url=https://acme.test/', {
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'https://acme.test',
+          'Access-Control-Request-Method': 'GET',
+          'Access-Control-Request-Headers': 'authorization',
+        },
+      }),
+      { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: 'https://acme.test' },
+      { clientIp: '198.51.100.41' },
+    );
+
+    assert.equal(response.status, 204);
+    const allowed = (response.headers.get('Access-Control-Allow-Headers') ?? '').toLowerCase();
+    assert.ok(allowed.includes('authorization'), `the preflight allows only: ${allowed}`);
+  });
+
+  /** The widget names the header; the worker must allow the same one. */
+  it('allows the header the widget is written to send', () => {
+    const embed = readFileSync(
+      fileURLToPath(new URL('../../../packages/widget/src/embed.ts', import.meta.url)),
+      'utf8',
+    );
+
+    assert.ok(/Authorization: `Bearer /.test(embed), 'embed.ts no longer sends Authorization; this guard is stale');
   });
 });

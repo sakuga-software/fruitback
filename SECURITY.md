@@ -27,7 +27,9 @@ version policy to state, and pretending otherwise would be the first thing in th
 true.
 
 `0.x` means the contract can change. Pin a digest rather than a tag if you need a build that cannot
-move under you — see *The published image*.
+move under you: no tag is immutable, `sha-<commit>` included, because rebuilding the same commit
+republishes it under a new digest. See
+[docs/decisions/image.md](docs/decisions/image.md).
 
 ## The threat model
 
@@ -44,8 +46,18 @@ client's site — and by `curl`. Hiding pins in a browser was never the fix.
 token. The default stays `public` for compatibility, so **an upgrade never closes it for you**. The
 boot log names every client whose pins anyone can read, and `/health` counts them.
 
+The widget sends that token in an `Authorization` header, which makes the request preflighted, so the
+worker has to advertise the header in `Access-Control-Allow-Headers`. **It did not until this file
+was written**, and the setting therefore answered nobody from a browser at all — the request was
+refused by the browser before the worker saw it. Writing the mitigation down is what found that.
+
 `FRUITBACK_HIDE_COMMENTS=1` keeps the team's replies out of the answer. Under `read: 'public'` that
 is the only thing between an issue thread and the internet.
+
+**It is the worker-wide fallback, not an override.** A client declared in `FRUITBACK_CLIENTS` with
+its own `showComments` wins over it, so setting the flag on a multi-client worker does not close
+every client — check each entry, or an operator who believes replies are hidden is wrong for the
+ones that say otherwise.
 
 ### `clientId` is asserted by the browser, never authenticated
 
@@ -54,8 +66,11 @@ the browser's own `Origin` header — **the trust level CORS gives, and strictly
 unrelated site from posting into your tracker through your worker. It is not authentication, and
 describing it as such in your own deployment notes would be a mistake.
 
-A request with no `Origin` at all is served: there is no cookie or session to escalate, so there is
-nothing for a forged cross-site request to steal.
+A request with no `Origin` at all is served — `curl`, a health check, anything server-to-server. That
+is about **cross-site forgery** and nothing else: there is no cookie or ambient session, so a page
+cannot make a visitor's browser do something privileged. It is emphatically **not** a claim that a
+direct caller reads nothing. Under the public default, `curl` reads every note on a page, and closing
+that is `FRUITBACK_READ=authenticated`, not CORS.
 
 ### `reporter.verified` is the worker's word
 
@@ -66,12 +81,19 @@ and an address are a claim by whoever was on the page, and they are stored as on
 ### A seed is stored in the clear, in your issue tracker
 
 The whole seed — note, page URL, selector, the reporter's name and address, the screenshot URL — is
-written verbatim into an issue description. **Anyone with access to that workspace can read it**, and
-it will outlive any expiry you had in mind. This is why an identity token travels in an
-`Authorization` header and never in the seed.
+stored as it arrived, and **where** depends on the connector:
+
+| Store | Where a seed lands | Who can read it |
+| --- | --- | --- |
+| `linear` | verbatim in an issue description | anyone with access to that workspace |
+| `sqlite` | `JSON.stringify(seed)` in a column of your database file | anyone who can read the file, or a backup of it |
+
+Either way it outlives any expiry you had in mind, which is why an identity token travels in an
+`Authorization` header and never in the seed. On SQLite the file and its backups are the boundary,
+and they deserve the care a database of personal data deserves.
 
 Tell your reporters not to type credentials into a feedback note, because the note is going to sit
-in a tracker.
+somewhere for a long time.
 
 ### The rate limit is per process
 
@@ -81,8 +103,21 @@ defence against a determined caller, who can rotate addresses anyway.
 
 `TRUSTED_PROXY_HOPS` (1 by default, which is one Traefik) decides how the client address is read:
 `X-Forwarded-For` is appended to by each proxy, so the real address is that many entries **from the
-right**. Set it too low and the value a caller sent is trusted, which makes the limit bypassable with
-one header. Set it too high and everyone shares one bucket.
+right**.
+
+**Set it too high and the limit is bypassable with one header.** Counting further left reaches the
+part of the chain a caller wrote, so anyone can mint a fresh bucket per request. Measured against
+`resolveClientIp`, with a caller sending `1.2.3.4` through one proxy that appends `203.0.113.9`:
+
+| `TRUSTED_PROXY_HOPS` | Address used | |
+| --- | --- | --- |
+| `1` — one proxy, the truth | `203.0.113.9` | the address the proxy observed |
+| `2` — one too many | `1.2.3.4` | **what the caller sent** |
+| `0` — none | the socket peer | the proxy's own address: everyone shares one bucket |
+
+Count the proxies that **append** to the header, and no others. An edge that rewrites the header
+rather than appending — Cloudflare does — is a different rule, and reading the leftmost entry is
+correct there and wrong here.
 
 ### The extension's page bridge can be forged by the page
 
@@ -116,8 +151,10 @@ carries an id that changes between an unpacked build and a store build. They car
 authority — no cookie, and both credentials are secrets the caller must already hold — so the rate
 limiter is what stops the pairing endpoint being guessed at.
 
-Revoking ends the session on the worker. It **cannot** reach an access token already minted: one is
-good for up to ten minutes after a logout.
+Revoking ends the session on the worker. It **cannot** reach an access token already minted, and the
+window is the token's lifetime **plus the clock skew the verifier allows** — 10 minutes and 60
+seconds, so about eleven. Stated as the sum rather than as the nominal lifetime, because the
+difference is exactly the part an operator would be surprised by.
 
 ### The widget is inside somebody else's page
 
