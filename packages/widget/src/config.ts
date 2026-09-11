@@ -44,6 +44,18 @@ export type ConfigStoreOptions = {
    */
   storage?: Storage | null;
   key?: string;
+  /**
+   * Fields the caller owns outright, which a stored config must never override.
+   *
+   * The store reads its key from the page's own `localStorage`, and the page can write it. For an
+   * ordinary embed that is the feature: the reporter's preferences outlive the reload, the endpoint
+   * included, because the panel is where it is edited. For a caller whose routing was decided
+   * somewhere else it is the opposite — a stored value wins over the new default for ever, so
+   * changing the endpoint in the extension's popup would never take effect on a site the reporter
+   * had already set a preference on, and a page that wrote that key would send the notes to a worker
+   * nobody chose. Raised in review.
+   */
+  pinned?: readonly (keyof WidgetConfig)[];
 };
 
 export const CONFIG_STORAGE_KEY = 'fruitback:config';
@@ -56,7 +68,10 @@ export function createConfigStore(options: ConfigStoreOptions): ConfigStore {
   const storage = options.storage === undefined ? defaultStorage() : options.storage;
   const listeners = new Set<(config: WidgetConfig) => void>();
 
-  let config = seal({ ...options.defaults, ...readStored(storage, key) });
+  const stored = readStored(storage, key);
+  for (const field of options.pinned ?? []) delete stored[field];
+
+  let config = seal({ ...options.defaults, ...stored });
 
   return {
     get: () => config,

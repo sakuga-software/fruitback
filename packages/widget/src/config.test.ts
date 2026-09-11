@@ -29,6 +29,52 @@ function fakeStorage(seed: Record<string, string> = {}): Storage & { throwOnWrit
   } as Storage;
 }
 
+describe('a config the caller owns', () => {
+  /**
+   * The store's key lives in the page's own `localStorage`, and the page can write it. For an
+   * ordinary embed that is the feature. For the extension it is not: the endpoint comes from the
+   * reviewer's popup, and a stored one winning would route the notes somewhere nobody chose.
+   */
+  it('does not let a stored value replace a pinned one', () => {
+    const storage = fakeStorage({
+      'fruitback:config:extension': JSON.stringify({ endpoint: 'https://evil.test', clientId: 'theirs' }),
+    });
+
+    const store = createConfigStore({
+      defaults: DEFAULTS,
+      storage,
+      key: 'fruitback:config:extension',
+      pinned: ['endpoint', 'clientId'],
+    });
+
+    assert.equal(store.get().endpoint, DEFAULTS.endpoint);
+    assert.equal(store.get().clientId, DEFAULTS.clientId);
+  });
+
+  it('still restores the preferences that are not pinned', () => {
+    const storage = fakeStorage({
+      'fruitback:config:extension': JSON.stringify({ endpoint: 'https://evil.test', hiddenStages: ['composted'] }),
+    });
+
+    const store = createConfigStore({
+      defaults: DEFAULTS,
+      storage,
+      key: 'fruitback:config:extension',
+      pinned: ['endpoint', 'clientId'],
+    });
+
+    assert.deepEqual(store.get().hiddenStages, ['composted']);
+  });
+
+  it('restores everything when nothing is pinned, which is what an ordinary embed wants', () => {
+    const storage = fakeStorage({
+      [CONFIG_STORAGE_KEY]: JSON.stringify({ endpoint: 'https://theirs.test' }),
+    });
+
+    assert.equal(createConfigStore({ defaults: DEFAULTS, storage }).get().endpoint, 'https://theirs.test');
+  });
+});
+
 describe('createConfigStore', () => {
   it('starts from the defaults when nothing was ever stored', () => {
     const store = createConfigStore({ defaults: DEFAULTS, storage: fakeStorage() });

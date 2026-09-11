@@ -1,4 +1,5 @@
-import { CHANNEL, type BridgeMessage, parseBridgeMessage } from '../src/protocol.ts';
+import { type BridgeMessage, parseBridgeMessage } from '../src/protocol.ts';
+import { createApply } from '../src/bridge.ts';
 import { readSite } from '../src/sites.ts';
 
 /**
@@ -23,39 +24,7 @@ export default defineContentScript({
       window.postMessage(message, window.location.origin);
     };
 
-    // What was last posted, so an unchanged decision is not posted again.
-    //
-    // **This is what protects a half-written note.** `writeSite` stores the whole map under one key,
-    // so any change fires `storage.onChanged` in every tab of every enabled origin — turning site B
-    // on from the popup reaches the tab open on site A. A re-posted `mount` makes the page world
-    // destroy and rebuild the widget, which closes the composer and loses what the reviewer was
-    // typing. Losing that is the one failure this widget cannot afford, so the guard is here rather
-    // than in the page world, where the message has already been treated as a config change.
-    // Raised in review.
-    let posted: string | undefined;
-
-    const apply = async (force = false): Promise<void> => {
-      const site = await readSite(origin);
-
-      const message: BridgeMessage =
-        site === undefined || !site.enabled
-          ? { channel: CHANNEL, kind: 'unmount' }
-          : {
-              channel: CHANNEL,
-              kind: 'mount',
-              endpoint: site.endpoint,
-              clientId: site.clientId,
-              ...(site.label !== undefined ? { label: site.label } : {}),
-            };
-
-      const signature = JSON.stringify(message);
-      // `force` is for the handshake: the page world says it is listening, and it may have missed
-      // the message that carries this same decision.
-      if (!force && signature === posted) return;
-
-      posted = signature;
-      post(message);
-    };
+    const apply = createApply({ readSite: () => readSite(origin), post });
 
     // The main world may come up after this script has already decided, so it says when it is
     // listening and the decision is applied again. Cheap, and the alternative is a timeout that is

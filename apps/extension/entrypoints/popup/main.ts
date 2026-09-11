@@ -1,5 +1,5 @@
 import { browser } from 'wxt/browser';
-import { isWorkerEndpoint } from '../../src/endpoint.ts';
+import { isWorkerEndpoint, normalizeWorkerEndpoint } from '../../src/endpoint.ts';
 import { BRIDGE_FILE, PAGE_FILE, matchPatternFor, publicPath } from '../../src/registration.ts';
 import { type SiteConfig, readSite, writeSite } from '../../src/sites.ts';
 
@@ -86,7 +86,7 @@ async function turnOn(origin: string, values: { endpoint: string; clientId: stri
   const granted = await browser.permissions.request({ origins: [matchPatternFor(origin)] });
   if (!granted) return;
 
-  await writeSite(origin, { ...values, enabled: true });
+  await writeSite(origin, { ...values, endpoint: normalizeWorkerEndpoint(values.endpoint), enabled: true });
   await injectIntoCurrentTab();
   await render();
 }

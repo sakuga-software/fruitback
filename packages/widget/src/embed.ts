@@ -78,6 +78,10 @@ export type FruitbackOptions = {
    *
    * Not extension-specific, and named for what it is: a second instance needs a second key.
    * Measured on the playground, which mounts its own widget.
+   *
+   * A second key is not enough by itself, and the second half was missed the first time: the page
+   * can write *this* key too. So a mount that names its own key also pins `endpoint` and `clientId`
+   * — they are the caller's word, and no stored value replaces them. Raised in review.
    */
   configKey?: string;
   document?: Document;
@@ -105,6 +109,9 @@ export type Fruitback = {
   destroy(): void;
 };
 
+/** Where a mount routes to. A caller that named its own config key decided these, not the page. */
+const ROUTING_FIELDS = ['endpoint', 'clientId'] as const;
+
 /** The panel writes on every keystroke, so a typed endpoint must not become a request per character. */
 const REQUERY_DEBOUNCE_MS = 300;
 
@@ -125,7 +132,7 @@ export function init(options: FruitbackOptions): Fruitback {
     // `screenshot` off at the start: it is the reporter's to turn on, and an image of the page they
     // are looking at is not something to start sending because a default said so.
     defaults: { endpoint: options.endpoint, clientId: options.clientId, hiddenStages: [], screenshot: false },
-    ...(options.configKey !== undefined ? { key: options.configKey } : {}),
+    ...(options.configKey !== undefined ? { key: options.configKey, pinned: ROUTING_FIELDS } : {}),
   });
 
   let target: CaptureTarget | null = null;

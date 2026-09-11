@@ -664,6 +664,32 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   opened by a reviewer whose extension mounts its own, shares that key: one instance silently takes
   the other's `endpoint` and `clientId`, and the notes go to a worker nobody chose. The seam is not
   extension-shaped — any second instance needs it — which is why it passes the ticket's own test.
+- **A second key was half the answer, and the half that was missing is the page can write *ours*.**
+  The store restores its key from the page's own `localStorage`, so a page that wrote
+  `fruitback:config:extension` before the widget mounted chose where the notes went. The same gap
+  faces the other way with nobody hostile at all: a stored `endpoint` beats the new default for ever,
+  so changing it in the popup would never take effect on a site the reporter had already set a
+  preference on. `createConfigStore({ pinned })` is the fix — `endpoint` and `clientId` are the
+  caller's word and are not restorable — and a mount that names its own key pins them. Raised in
+  review, mutation-tested.
+- **`apply` awaits in the middle, and three things call it**: the first run, the `ready` handshake,
+  and every storage change. Two can be in flight, and the older read can post last — a site switched
+  off that stays mounted. The `posted` signature made that **stick rather than heal**: the stale run
+  writes its own signature, so the correction is then suppressed as unchanged. A generation token
+  taken before the await is what discards it. That is also why the decision moved to `src/bridge.ts`:
+  an entrypoint binds `browser` and `window` at import, and neither guard could be run at all.
+- **The background sync logs the whole body, not the registration call.** `serialize` swallows a
+  rejection to keep the queue moving and every caller is fire-and-forget, so a throw that is not
+  logged there is logged nowhere: the scripts stay unregistered, no page mounts anything, and the
+  popup still says the site is on. The first version wrapped `syncRegistration` alone and left a
+  failing `readAll` perfectly silent. The reviewer's own fix — returning the caller's rejection —
+  was **not** taken: every call site is `void sync()`, so it would turn a silent failure into an
+  unhandled rejection in the service worker rather than into a message.
+- **The endpoint is normalized before it is stored, and a path survives it.** `embed.ts` interpolates
+  — `${endpoint}/feedback?url=…` — so `https://worker.test?tenant=a` asks for `/` with a parameter
+  whose value ends in `/feedback`: the site reads as **On** and no pin ever appears. Query and
+  fragment go, a trailing slash goes, and the path **stays**, because a worker behind
+  `https://example.com/fruitback` is an ordinary Traefik deployment that an origin-only rule breaks.
 - **Nothing orders the two content scripts against each other**, so the main world announces itself
   with `ready` and the isolated one applies its decision again. `postMessage` delivers that back to
   the sender too, which the main world has to ignore explicitly — the type checker found that one.

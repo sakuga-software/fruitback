@@ -15,27 +15,29 @@ import { matchPatternFor, serialize, syncRegistration } from '../src/registratio
 export default defineBackground(() => {
   // Serialised: four event sources call this, and the read-then-write inside would otherwise race
   // with itself. See `serialize`.
+  // The whole body is guarded, not just the registration call. `serialize` swallows a rejection to
+  // keep the queue moving, and every caller below is fire-and-forget, so a throw that is not logged
+  // here is logged nowhere at all: the scripts stay unregistered, no page mounts anything, and the
+  // popup still reports the site as on. The first version wrapped `syncRegistration` alone, which
+  // left a failing `readAll` or a throwing `permissions.contains` perfectly silent. Raised in review.
   const sync = serialize(async (): Promise<void> => {
-    const sites = await readAll();
-    const wanted = Object.entries(sites)
-      .filter(([, site]) => site.enabled)
-      .map(([origin]) => origin);
-
-    // A permission the reviewer granted once can be revoked in the browser's own settings, without
-    // this extension hearing about it in any way it could act on. Registering a script for an origin
-    // we no longer hold throws, so the grant is checked rather than assumed.
-    const granted: string[] = [];
-    for (const origin of wanted) {
-      if (await browser.permissions.contains({ origins: [matchPatternFor(origin)] })) granted.push(origin);
-    }
-
     try {
+      const sites = await readAll();
+      const wanted = Object.entries(sites)
+        .filter(([, site]) => site.enabled)
+        .map(([origin]) => origin);
+
+      // A permission the reviewer granted once can be revoked in the browser's own settings, without
+      // this extension hearing about it in any way it could act on. Registering a script for an
+      // origin we no longer hold throws, so the grant is checked rather than assumed.
+      const granted: string[] = [];
+      for (const origin of wanted) {
+        if (await browser.permissions.contains({ origins: [matchPatternFor(origin)] })) granted.push(origin);
+      }
+
       await syncRegistration(browser.scripting, granted);
     } catch (error) {
-      // Said out loud, because the failure is otherwise perfectly silent: the scripts are not
-      // registered, so no page ever mounts anything, and the popup still reports the site as on.
-      // `serialize` swallows this to keep the queue moving, so the log has to be here.
-      console.error('[fruitback] could not register the content scripts', error);
+      console.error('[fruitback] could not sync the content script registration', error);
     }
   });
 
