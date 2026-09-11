@@ -16,7 +16,6 @@ import {
   revokeSession,
 } from './session.ts';
 import { closeSessionConnections, createSqliteSessionStore } from './session-sqlite.ts';
-import type { SessionStore } from './session.ts';
 import { verifyIdentityToken } from './identity.ts';
 
 const SECRET = 'a-worker-secret-nobody-else-has';

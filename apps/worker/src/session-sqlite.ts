@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import type { SessionIdentity, SessionRecord, SessionStore } from './session.ts';
+import type { SessionIdentity, SessionStore } from './session.ts';
 import { StoreError } from './store.ts';
 
 /**

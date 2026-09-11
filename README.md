@@ -62,6 +62,23 @@ So: build **only** the missing piece — the capture and restitution layer — o
 everything else. The one thing it cannot do is redraw a pin on the page; that part we reconstruct
 from the anchor we stored.
 
+## Security, and what is open by default
+
+Fruitback puts a widget in somebody else's page and a worker in front of somebody's issue tracker.
+**[SECURITY.md](SECURITY.md) says where those boundaries are**, and it is worth reading before you
+deploy rather than after.
+
+Two things surprise people most often, so they are here too:
+
+- **`GET /feedback` answers anyone who can build the URL**, unless you set
+  `FRUITBACK_READ=authenticated`. Every note, its reporter's name and address, and the team's replies
+  are readable by any visitor of the client's site — and by `curl`. The default stays open so an
+  upgrade never blanks a working deployment; the boot log names every client it applies to.
+- **`clientId` is asserted by the browser, never authenticated.** `origins` makes the claim checkable
+  against the browser's own header — the trust level CORS gives, and no more.
+
+It also says how to report a vulnerability.
+
 ## Where your feedback lives
 
 `FRUITBACK_STORE` picks the connector. It defaults to `linear`, so a deployment that sets nothing

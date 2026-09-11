@@ -29,7 +29,14 @@ export function resolveCors(request: Request, allowedOrigins: string[]): CorsDec
       // The response differs per origin; without this a shared cache would serve the wrong header.
       Vary: 'Origin',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      // `Authorization` is not optional here, and leaving it out made the identity feature
+      // unreachable from a browser (SKG-518). `embed.ts` sends `Authorization: Bearer …` on both the
+      // read and the write when a host mints a token. That header is not CORS-safelisted, so the
+      // request is preflighted, and a preflight that does not list it is refused by the browser
+      // before the worker sees anything — `read: 'authenticated'` answered nobody, and a verified
+      // reporter could never be posted cross-origin. Raised in review; nothing server-side could
+      // have noticed, because the request never arrived.
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       'Access-Control-Max-Age': '86400',
     },
   };

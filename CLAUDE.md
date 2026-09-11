@@ -633,6 +633,11 @@ And *The published image* in [docs/decisions/image.md](docs/decisions/image.md).
     assertion catches is an even number: it parses, and silently truncates the stylesheet.
 - Comments explain _why_, not _what_ — the tolerant parser and the redundant anchor both exist for
   reasons that are not obvious from the code.
+- **[SECURITY.md](SECURITY.md) states the threat model, and a change to any of it lands there too.**
+  Every number in it — the rate-limit default, the proxy hops, the token lifetimes — is asserted
+  against the code by `security.test.ts`, so a constant that moves without the file fails the suite.
+  What that test cannot check is a *property* that changed: a new route, a new thing stored in the
+  clear, a guarantee tightened or dropped. Those are a hand edit, in the same commit.
 - Work is tracked in Linear on the
   [Fruitback](https://linear.app/sakuga-software/project/fruitback-ed574263d8d6) project (team SKG).
   Reference tickets as `SKG-xxx` in commits.
