@@ -56,6 +56,9 @@ node --test src/seed.test.ts                 # one file, from the package direct
   Shadow DOM host** (`createCaptureHost`, SKG-492) and **the note popover** (`createComposer`,
   SKG-493). The playground only says where the worker is.
 
+- `apps/extension` (`@fruitback/extension`) — the browser extension (SKG-534): the same widget, on a
+  site that embeds nothing. wxt, MV3 on Chromium **and** Firefox. Two content scripts, one per world
+  — see *The extension, and the two worlds*.
 - `apps/playground` (`@fruitback/playground`) — the dev loop (SKG-511, SKG-512): a deliberately
   hostile fake client site with the widget mounted on it. **A React Router 8 + Vite app with HeroUI**
   since SKG-512, because the widget's clients are React apps and a static page could not exercise
@@ -583,6 +586,122 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   uniqueness and sibling questions cannot be answered honestly by a hand-rolled fake. Nothing outside
   `*.test.ts` and `*.fixture.ts` may import it, and `tsconfig.json` excludes both so the shipped code
   still compiles with `types: []`.
+
+## The extension, and the two worlds
+
+- **The client's site embeds nothing** (SKG-534). No tag, no npm package, no deployment — which is
+  also the end of the integration friction: today, getting a page reviewed needs a deploy. Ordinary
+  visitors see nothing because there is nothing in their page to see.
+- **`world: 'MAIN'` is the ticket, not a preference, and it was measured before it was written.** A
+  content script in the isolated world shares the DOM and **not** the properties page scripts put on
+  it. Probed in Chromium on the playground, on the same `<button>`:
+
+  | | isolated | main |
+  | --- | --- | --- |
+  | `__reactFiber$` | absent | present |
+  | `__reactProps$` | absent | present |
+  | `__REACT_DEVTOOLS_GLOBAL_HOOK__` | `undefined` | `object` |
+  | own properties | **0** | 2 |
+
+- **Both halves of `source` are blind from the isolated world, not one.** `readReactSource` finds the
+  fiber under `__reactFiber$…`; react-grab scans `__reactContainer$` / `__reactInternalInstance$` and
+  installs *itself* as `globalThis.__REACT_DEVTOOLS_GLOBAL_HOOK__`, which in the isolated world is a
+  global React never reads. So the widget would mount, work, and quietly never say which component a
+  note is about — the worst shape of failure, because nothing errors.
+- **Registered as a content script rather than injected as a `<script>` tag.** A tag pointing at an
+  extension URL is evaluated in the page and **the page's CSP can refuse it**. A main-world content
+  script — whether it is declared in the manifest or registered through `scripting` — is not subject
+  to it. That is the CSP trap the ticket names, avoided rather than worked around. This paragraph
+  said *declared in the manifest* until review pointed at it: true of the first draft, and false from
+  the moment the manifest stopped declaring anything.
+- **`packages/widget` is unchanged by this app, which is the ticket's own test.** The widget runs
+  where it always ran — in the page — so the extension is a fourth assembler beside `global.ts` and
+  nothing extension-shaped leaks into the widget. `createCaptureHost` does take an `engine` seam that
+  would have allowed a narrower bridge; it was not needed, and not using it is what keeps this app
+  off SKG-530's branch.
+- **No host permission at install.** The obvious build declares its content scripts on `<all_urls>`,
+  which asks a reviewer to let a tool read every page they will ever visit. `background.ts` registers
+  the two scripts at runtime for the origins somebody turned on and granted, and unregisters them on
+  the way out. The first draft of `wxt.config.ts` had a comment claiming this while the manifest said
+  `<all_urls>` — a comment describing a decision the code had not taken.
+- **`syncRegistration` unregisters on an empty set rather than updating.** `updateContentScripts`
+  refuses an empty `matches`, so an implementation that updated there would throw and leave the
+  previous origins registered — the extension would keep running on a site just switched off. That is
+  the test worth reading in `registration.test.ts`.
+- **The bridge is `window.postMessage`, and the page can forge on it.** `parseBridgeMessage` refuses
+  a *malformed* message; it cannot refuse a **well-formed** one the page wrote, because the two are
+  identical. A page can post its own `mount` and point the widget at its own worker, or post
+  `unmount` and take it away. The first version of this paragraph claimed the parse defended against
+  that. It does not, and claiming it was worse than the gap.
+- **That is inherent to the main world, not a flaw in the bridge, and no handoff closes it.** The
+  main world *is* the page's realm: a hostile page can patch `fetch`, `JSON.stringify` or the
+  widget's own methods however the config arrived, and a nonce would have to travel on the channel
+  the page reads. So it is stated rather than defended — **a reviewer grants an origin precisely
+  because they trust that origin's code**, and the extension runs on no other. What is reduced is
+  what is at stake: nothing secret travels there, the endpoint and client id are already in the
+  client's own DOM in tag mode, and an identity token is **not sent at all**. SKG-535 keeps the token
+  in the isolated world behind a relay, which is what has to keep being true.
+- **`registerContentScripts` reaches the *next* page load, never the open one.** So the popup injects
+  both files into the current tab after the grant, or the reviewer switches a site on and looks at a
+  page with no dock while the popup says it is on. The browser run that first *proved* the no-reload
+  flow had seeded storage **before** the page loaded — which is not what a person does, so it was a
+  green check on a path nobody walks. Raised in review.
+- **An unchanged decision is never re-posted, and that is what protects a half-written note.**
+  `writeSite` stores the whole map under one key, so any change fires `storage.onChanged` in **every**
+  tab of every enabled origin — turning site B on from the popup reaches the tab open on site A. A
+  re-posted `mount` makes the page world destroy and rebuild the widget, which closes the composer
+  and loses what the reviewer was typing. That is the one failure this widget cannot afford, so the
+  bridge compares against what it last sent. The `ready` handshake forces past the comparison,
+  because the page world may have missed that same message. Raised in review.
+- **The first browser check of that guard proved nothing, and the mutation is what said so.** It
+  marked `[data-fruitback-host]` at index 1 and called it the extension's — but the playground mounts
+  its own and the order is not promised, so it may have been watching a host that never rebuilds. It
+  marks **every** host now and counts the ones that come back unmarked. Measured both ways: 0 rebuilt
+  with the guard, 1 without.
+- **`init` takes a `configKey`, and that is the one widget change this app forced.** The config store
+  reads `fruitback:config` from the page's `localStorage` and lets it *override* what `init` was
+  passed — correct for one widget, wrong the moment there are two. A site that embeds the widget,
+  opened by a reviewer whose extension mounts its own, shares that key: one instance silently takes
+  the other's `endpoint` and `clientId`, and the notes go to a worker nobody chose. The seam is not
+  extension-shaped — any second instance needs it — which is why it passes the ticket's own test.
+- **A second key was half the answer, and the half that was missing is the page can write *ours*.**
+  The store restores its key from the page's own `localStorage`, so a page that wrote
+  `fruitback:config:extension` before the widget mounted chose where the notes went. The same gap
+  faces the other way with nobody hostile at all: a stored `endpoint` beats the new default for ever,
+  so changing it in the popup would never take effect on a site the reporter had already set a
+  preference on. `createConfigStore({ pinned })` is the fix — `endpoint` and `clientId` are the
+  caller's word and are not restorable — and a mount that names its own key pins them. Raised in
+  review, mutation-tested.
+- **`apply` awaits in the middle, and three things call it**: the first run, the `ready` handshake,
+  and every storage change. Two can be in flight, and the older read can post last — a site switched
+  off that stays mounted. The `posted` signature made that **stick rather than heal**: the stale run
+  writes its own signature, so the correction is then suppressed as unchanged. A generation token
+  taken before the await is what discards it. That is also why the decision moved to `src/bridge.ts`:
+  an entrypoint binds `browser` and `window` at import, and neither guard could be run at all.
+- **The background sync logs the whole body, not the registration call.** `serialize` swallows a
+  rejection to keep the queue moving and every caller is fire-and-forget, so a throw that is not
+  logged there is logged nowhere: the scripts stay unregistered, no page mounts anything, and the
+  popup still says the site is on. The first version wrapped `syncRegistration` alone and left a
+  failing `readAll` perfectly silent. The reviewer's own fix — returning the caller's rejection —
+  was **not** taken: every call site is `void sync()`, so it would turn a silent failure into an
+  unhandled rejection in the service worker rather than into a message.
+- **The endpoint is normalized before it is stored, and a path survives it.** `embed.ts` interpolates
+  — `${endpoint}/feedback?url=…` — so `https://worker.test?tenant=a` asks for `/` with a parameter
+  whose value ends in `/feedback`: the site reads as **On** and no pin ever appears. Query and
+  fragment go, a trailing slash goes, and the path **stays**, because a worker behind
+  `https://example.com/fruitback` is an ordinary Traefik deployment that an origin-only rule breaks.
+- **Nothing orders the two content scripts against each other**, so the main world announces itself
+  with `ready` and the isolated one applies its decision again. `postMessage` delivers that back to
+  the sender too, which the main world has to ignore explicitly — the type checker found that one.
+- **A site that embeds the widget *and* a reviewer who has the extension get two docks.** Measured on
+  the playground, which mounts its own: switching the extension on took the host count from 1 to 2.
+  Harmless, visibly silly, and not solved here — the extension cannot tell its own host from theirs
+  without the widget advertising itself, which is a widget change.
+- Verified in a real Chromium against the playground: switching the site on mounts a second host
+  **with no reload**, the fiber owner chain reads `SiteHeader < Pricing < …` from the page world, and
+  switching it off destroys it live. The permission prompt itself is a native dialog no automation
+  can drive, which is why that path is unit-tested and the browser run uses a build with the scripts
+  declared statically.
 
 ## The worker
 

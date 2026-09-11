@@ -23,6 +23,93 @@ describe('init', () => {
   });
 });
 
+describe('where a second instance keeps its preferences', () => {
+  afterEach(() => {
+    mock.restoreAll();
+    Reflect.deleteProperty(globalThis, 'localStorage');
+  });
+
+  const mountable = () => mountPage('<main><button id="cta">Commander</button></main>');
+
+  /**
+   * The store reads `globalThis.localStorage`, not the mounted document's own window — so this is
+   * where the config has to be planted for the widget to find it. Written down because the first
+   * version of these tests seeded `page.view.localStorage` and passed while asserting nothing: under
+   * Node there is no global storage, so no config was ever read and both keys behaved alike.
+   */
+  function storageHolding(entries: Record<string, string>): void {
+    const store = new Map(Object.entries(entries));
+    const fake = {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, value),
+      removeItem: (key: string) => void store.delete(key),
+    };
+
+    Object.defineProperty(globalThis, 'localStorage', { value: fake, configurable: true });
+  }
+
+  /** Which worker was actually asked, which is the thing that goes wrong when a key is shared. */
+  function urlsFetched(): string[] {
+    const urls: string[] = [];
+    mock.method(globalThis, 'fetch', async (input: RequestInfo | URL) => {
+      urls.push(String(input));
+
+      return new Response(JSON.stringify({ issues: [] }), { headers: { 'Content-Type': 'application/json' } });
+    });
+
+    return urls;
+  }
+
+  /**
+   * The defect this seam exists for, written as the failure rather than as the fix.
+   *
+   * The store lets what is in `localStorage` **override** what `init` was passed, which is right for
+   * one widget and wrong for two. The browser extension (SKG-534) mounts a second one on a site that
+   * may embed its own, and without a key of its own it would inherit the site's `endpoint` and
+   * `clientId` — the reviewer's notes going to a worker nobody chose, with nothing on screen to say
+   * so.
+   */
+  it('reads from the worker it was given, not the one the page remembered', async () => {
+    const page = mountable();
+    storageHolding({
+      'fruitback:config': JSON.stringify({ endpoint: 'https://the-sites-own-worker.test', clientId: 'somebody-else' }),
+    });
+    const urls = urlsFetched();
+
+    const widget = init({
+      document: page.document,
+      endpoint: 'https://mine.test',
+      clientId: 'mine',
+      configKey: 'fruitback:config:extension',
+    });
+    await widget.refresh();
+
+    assert.ok(
+      urls.at(-1)?.startsWith('https://mine.test/'),
+      `asked ${urls.at(-1)} instead of the endpoint it was given`,
+    );
+    assert.ok(urls.at(-1)?.includes('client=mine'), `asked for ${urls.at(-1)}`);
+
+    widget.destroy();
+  });
+
+  it('still remembers under the default key when no other was named', async () => {
+    // The seam must change nothing for one widget on one page, which is every embed that exists.
+    const page = mountable();
+    storageHolding({
+      'fruitback:config': JSON.stringify({ endpoint: 'https://remembered.test', clientId: 'acme' }),
+    });
+    const urls = urlsFetched();
+
+    const widget = init({ document: page.document, endpoint: 'https://fresh.test', clientId: 'acme' });
+    await widget.refresh();
+
+    assert.ok(urls.at(-1)?.startsWith('https://remembered.test/'), `asked ${urls.at(-1)}`);
+
+    widget.destroy();
+  });
+});
+
 describe('the optional picture', () => {
   const mountable = () => mountPage('<main><button id="cta">Commander</button></main>');
 

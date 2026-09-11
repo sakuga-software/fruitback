@@ -121,6 +121,11 @@ pin overlay            ◀──GET─── query by label+URL ◀────�
   GitHub push). Its only reason to exist: the Linear token cannot live in client-side JS on a public
   site. It also decides attribution (anonymous vs signed in).
 - **shared** — `@fruitback/shared`, the _seed_ contract. Both ends depend on it.
+- **extension** — `@fruitback/extension`, the same widget on a site that embeds **nothing** (SKG-534).
+  The reviewer installs it, switches a site on, and the page they are reviewing is untouched — no
+  tag, no package, no deploy, and nothing for an ordinary visitor to see. MV3 on Chromium and
+  Firefox. It asks for **no host permission at install**: the content scripts are registered at
+  runtime, per origin, when somebody turns that site on.
 
 No database, no dashboard, no session store.
 
