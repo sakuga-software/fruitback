@@ -27,6 +27,22 @@ docker compose up --build worker                # the real image, locally
 | `OPTIONS /feedback`              | CORS preflight, never reaches the store                                   |
 | `GET /health`                    | `200` when it can serve, `503` naming the missing variables when it can't |
 
+The three below exist only when `FRUITBACK_SESSION_PATH` is set, and answer `404` otherwise — a
+worker without the extension does not advertise that they are there. They are the browser
+extension's session (SKG-535), and they are **exempt from `ALLOWED_ORIGINS`**: an extension's origin
+carries an id that differs between an unpacked build and a store build, so an operator cannot put it
+on a list. The rate limiter is what protects them, which is why it runs above the path dispatch.
+
+| Route                            | Status                                                                    |
+| -------------------------------- | ------------------------------------------------------------------------- |
+| `POST /session/pair`             | spends a pairing code, opens a session                                    |
+| `POST /session/refresh`          | a refresh token for a fresh access token                                  |
+| `POST /session/revoke`           | ends the session; `204` whether or not there was one to end               |
+
+A pairing code is minted by a **command on the container**, never over HTTP:
+`node server.mjs pair --subject … --name …`. Vouching for a person is not something this worker has
+to defend as a network surface.
+
 **The three paragraphs below describe the `linear` connector**, which is the default. A worker on
 another store does the same job by its own means — see `apps/worker/src/store.ts`, where `findForPage`
 states the intention and never the method.
