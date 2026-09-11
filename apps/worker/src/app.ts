@@ -9,9 +9,17 @@ import {
 } from './clients.ts';
 import { type WorkerConfig, type WorkerEnv, readAllowedOrigins, readConfig } from './env.ts';
 import { type SeedStore, StoreError } from './store.ts';
-import { diagnosticCorsHeaders, resolveCors } from './cors.ts';
+import { diagnosticCorsHeaders, openCors, resolveCors } from './cors.ts';
 import { checkRateLimit } from './rate-limit.ts';
 import { cached, invalidate } from './cache.ts';
+import {
+  type SessionStore,
+  createPairing as openPairing,
+  redeemPairing,
+  refreshSession,
+  revokeSession,
+} from './session.ts';
+import { createSqliteSessionStore } from './session-sqlite.ts';
 
 /**
  * The only server-side piece of Fruitback. Its single reason to exist: the Linear API key cannot
@@ -42,6 +50,16 @@ export function storeFor(config: WorkerConfig): SeedStore {
   return config.store.create();
 }
 
+/**
+ * The extension's session store, or `undefined` when this worker runs without one (SKG-535).
+ *
+ * Deliberately not built from `config.store`: sessions are credentials and seeds are not, so they
+ * never share a backend. See `FRUITBACK_SESSION_PATH`.
+ */
+export function sessionStoreFor(config: WorkerConfig): SessionStore | undefined {
+  return config.sessionPath === undefined ? undefined : createSqliteSessionStore(config.sessionPath);
+}
+
 /** What the transport knows and the request itself cannot say. */
 export type RequestContext = {
   /** Already resolved against the trusted proxy chain — see `resolveClientIp`. */
@@ -60,6 +78,8 @@ export type RequestContext = {
    * fresh store per case.
    */
   store?: SeedStore;
+  /** Same reason as `store`, for the sessions (SKG-535). A suite hands over a fresh file per case. */
+  sessionStore?: SessionStore;
 };
 
 export async function handleRequest(request: Request, env: WorkerEnv, context: RequestContext): Promise<Response> {
@@ -101,7 +121,10 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
     return json(500, { error: 'misconfigured', missing: config.missing }, headers);
   }
 
-  const cors = resolveCors(request, config.config.allowedOrigins);
+  // The session routes answer the extension, which is not a site on the allowlist and cannot be put
+  // on one — see `openCors`. Resolved before the gate, so the preflight succeeds too.
+  const session = pathname.startsWith('/session/');
+  const cors = session ? openCors(request) : resolveCors(request, config.config.allowedOrigins);
   if (!cors.allowed) {
     return json(403, { error: 'origin-not-allowed' });
   }
@@ -110,18 +133,32 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
     return new Response(null, { status: 204, headers: cors.headers });
   }
 
-  if (pathname !== '/feedback') {
-    return json(404, { error: 'not-found' }, cors.headers);
-  }
-
   if (request.method !== 'GET' && request.method !== 'POST') {
     return json(405, { error: 'method-not-allowed' }, cors.headers);
   }
 
-  // Both directions are metered: a read hits Linear too, and the quota it burns is the same one the
-  // write path needs.
+  // Metered before the dispatch, and that ordering is the point (SKG-535). Both feedback directions
+  // burn the same provider quota, and `/session/pair` is a code-guessing oracle without a limit —
+  // this check used to sit *below* the `404`, so a new route would have been unmetered by default.
+  // An unknown path costs quota too now, which is the right answer for something being probed.
   if (!checkRateLimit(context.clientIp, { limit: config.config.rateLimitPerMinute })) {
     return json(429, { error: 'rate-limited' }, cors.headers);
+  }
+
+  if (session) {
+    try {
+      return await handleSession(request, pathname, config.config, context, cors.headers);
+    } catch (error) {
+      // A volume nobody mounted, a read-only disk, a file that is not a database. Answered like the
+      // seed path's outage rather than as a bare `500`, so the extension can tell "retry later" from
+      // "this request was wrong" — and so the answer carries the CORS headers it needs to read it.
+      if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, cors.headers);
+      throw error;
+    }
+  }
+
+  if (pathname !== '/feedback') {
+    return json(404, { error: 'not-found' }, cors.headers);
   }
 
   // Resolved once here, not inside each handler: see `RequestContext.store`.
@@ -130,6 +167,105 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
   return request.method === 'GET'
     ? getFeedback(request, config.config, store, cors.headers)
     : postFeedback(request, config.config, store, cors.headers);
+}
+
+/**
+ * The extension's session endpoints (SKG-535).
+ *
+ * Three routes and no more: spend a pairing code, exchange a refresh token for an access token, and
+ * end the session. Minting a code is **not** here — it is a command an operator runs on the
+ * container, so that vouching for a person never becomes a network surface this worker has to
+ * defend. See `main.ts`.
+ *
+ * All three answer `404` when no session store is configured, which is the same answer an unknown
+ * path gets: a worker without the extension does not advertise that these exist.
+ */
+async function handleSession(
+  request: Request,
+  pathname: string,
+  config: WorkerConfig,
+  context: RequestContext,
+  headers: Record<string, string>,
+): Promise<Response> {
+  const store = context.sessionStore ?? sessionStoreFor(config);
+  // `identitySecret` is present whenever `sessionPath` is — `readConfig` refuses the pair at boot.
+  if (store === undefined || config.identitySecret === undefined) return json(404, { error: 'not-found' }, headers);
+  if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+
+  // `readBoundedText` and not `request.text()`: it refuses a declared length over the cap before a
+  // byte is read, and cancels the stream once a chunked upload crosses it. The first version of this
+  // handler buffered the whole body and then measured `text.length` — which is UTF-16 units, not
+  // bytes, so a multibyte body passed a byte cap it had already exceeded. Raised in review.
+  const text = await readBoundedText(request);
+  if (text === null) return json(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, headers);
+
+  const body = parseJsonObject(text);
+  if (body === undefined) return json(400, { error: 'invalid-body' }, headers);
+
+  if (pathname === '/session/pair') {
+    const code = typeof body.code === 'string' ? body.code : undefined;
+    if (code === undefined) return json(400, { error: 'invalid-body' }, headers);
+
+    const redeemed = await redeemPairing(store, code, config.identitySecret);
+    // One answer for a code that never existed and one already spent: telling them apart is how a
+    // caller works out which codes exist. `session.ts` returns the same reason for both.
+    if (!redeemed.ok) return json(401, { error: redeemed.reason }, headers);
+
+    return json(200, redeemed.session, headers);
+  }
+
+  const refreshToken = typeof body.refreshToken === 'string' ? body.refreshToken : undefined;
+  if (refreshToken === undefined) return json(400, { error: 'invalid-body' }, headers);
+
+  if (pathname === '/session/refresh') {
+    const refreshed = await refreshSession(store, refreshToken, config.identitySecret);
+
+    return refreshed.ok
+      ? json(
+          200,
+          {
+            accessToken: refreshed.accessToken,
+            expiresIn: refreshed.expiresIn,
+            identity: refreshed.identity,
+          },
+          headers,
+        )
+      : json(401, { error: refreshed.reason }, headers);
+  }
+
+  if (pathname === '/session/revoke') {
+    // `204` whether or not this call is what revoked it. A logout that reported "there was nothing
+    // to revoke" would tell a caller which refresh tokens are live.
+    await revokeSession(store, refreshToken);
+
+    return new Response(null, { status: 204, headers });
+  }
+
+  return json(404, { error: 'not-found' }, headers);
+}
+
+/** Mints a pairing code. Not reachable over HTTP — see `handleSession` and `main.ts`. */
+export async function createPairingCommand(
+  config: WorkerConfig,
+  identity: { subject: string; name?: string; email?: string },
+): Promise<{ code: string; expiresAt: number }> {
+  const store = sessionStoreFor(config);
+  if (store === undefined) throw new Error('FRUITBACK_SESSION_PATH is not set, so this worker keeps no sessions');
+
+  return openPairing(store, identity);
+}
+
+/** A session body is a JSON object or nothing. An array is not an object here, whatever `typeof` says. */
+function parseJsonObject(text: string): Record<string, unknown> | undefined {
+  try {
+    const parsed: unknown = JSON.parse(text);
+
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**

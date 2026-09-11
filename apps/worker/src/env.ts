@@ -54,6 +54,15 @@ export type WorkerEnv = {
    * `authenticated` (SKG-533). A mapped client's own `read` overrides this.
    */
   FRUITBACK_READ?: string;
+  /**
+   * SQLite file holding the extension's sessions (SKG-535). Absent turns the `/session` endpoints
+   * off, which is every worker that has no extension pointed at it.
+   *
+   * **Not the seed store, whatever `FRUITBACK_STORE` says.** Seeds go wherever the team already
+   * tracks issues, and neither Linear nor GitHub is a place to keep credentials — so a worker on any
+   * store still keeps its sessions on a disk it owns. A separate file, with its own schema.
+   */
+  FRUITBACK_SESSION_PATH?: string;
 };
 
 export const DEFAULT_PORT = 8080;
@@ -110,6 +119,11 @@ const configSchema = z.object({
    * team would be the leak in either direction.
    */
   clients: z.custom<ClientMap | undefined>().optional(),
+  /**
+   * Where the extension's sessions live (SKG-535). Absent means the `/session` endpoints answer
+   * `404`, exactly as they did before this feature existed.
+   */
+  sessionPath: z.string().min(1).optional(),
 });
 
 export type WorkerConfig = z.infer<typeof configSchema>;
@@ -144,6 +158,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     // A malformed map is a misconfiguration, not a reason to quietly pool every client into one
     // team — which is precisely the leak the map exists to prevent.
     clients: clients.ok ? clients.clients : Number.NaN,
+    sessionPath: env.FRUITBACK_SESSION_PATH || undefined,
   };
 
   const result = configSchema.safeParse(candidate);
@@ -177,6 +192,27 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     return {
       ok: false,
       missing: [`FRUITBACK_IDENTITY_SECRET (read is "authenticated" but ${unreadable.join(', ')} has no key)`],
+    };
+  }
+
+  // Refused at boot for the same reason as the clause above: a session path with nothing to sign
+  // with mints no access token, so pairing would succeed and every call it enabled would fail.
+  if (result.data.sessionPath !== undefined && result.data.identitySecret === undefined) {
+    return {
+      ok: false,
+      missing: ['FRUITBACK_IDENTITY_SECRET (FRUITBACK_SESSION_PATH is set, and a session signs its access token)'],
+    };
+  }
+
+  // A session's access token is signed with the worker-wide key, and a worker with a client map
+  // ignores that key — each client brings its own. So on a mapped worker a session would mint tokens
+  // no client accepts: pairing works, the reviewer looks logged in, and every read answers 401.
+  // Refused loudly rather than shipped as a feature that quietly does nothing. Per-client session
+  // minting belongs with team mode (SKG-596), where a client id is what a request carries.
+  if (result.data.sessionPath !== undefined && result.data.clients !== undefined) {
+    return {
+      ok: false,
+      missing: ['FRUITBACK_SESSION_PATH (sessions sign with the worker key, which FRUITBACK_CLIENTS replaces)'],
     };
   }
 

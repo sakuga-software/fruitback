@@ -490,6 +490,40 @@ mode, SKG-534.
   client IP is the entry `TRUSTED_PROXY_HOPS` from the **right**. Reading the leftmost entry makes
   the rate limit bypassable with one header.
 
+**The extension's session**
+
+- **A session is credentials, and credentials are not seeds** (SKG-535). `FRUITBACK_SESSION_PATH` is
+  its own SQLite file, whatever `FRUITBACK_STORE` says — a worker keeping its seeds in Linear still
+  keeps its sessions on a disk it owns.
+- **Do not reuse `sqlite.ts`'s `connect` for it.** That helper applies the *seeds* migrations and
+  drives `PRAGMA user_version` with them, so a session database opened through it gets `seeds` and
+  `comments` tables and two schemas fighting over one counter. `session-sqlite.ts` has its own.
+- **The operator names the person; the browser never does.** A pairing code is minted *for* someone,
+  carrying their name, and whoever redeems it gets a session that says so. An extension supplying its
+  own name at pairing time is the browser asserting an identity, which is what SKG-498 closed.
+- **The access token is an ordinary identity token**, signed with the same key `identity.ts`
+  verifies. One verification path in this worker rather than two, and `read: 'authenticated'` accepts
+  the extension with no change at all.
+- **Pairing codes and refresh tokens are stored as SHA-256 digests.** A copy of the file must not be
+  a set of working logins. A test reads the bytes SQLite wrote — the `-wal` file included, because a
+  row just written is only there.
+- **Minting a code is a command, not a route** (`node server.mjs pair --subject …`, and
+  `server.mjs` because the image copies the bundle and no source). An endpoint
+  would need an admin credential of its own and would stay reachable for ever; a command is reachable
+  by whoever already sets the secrets.
+- **The session routes are exempt from `ALLOWED_ORIGINS`, and only they are.** That list names client
+  *sites*; an extension's origin carries an id that differs between an unpacked build and a store
+  build, so an operator cannot put it there. Measured: an MV3 service worker posting JSON sends
+  `chrome-extension://<id>` and triggers a preflight, and both answered `403`. Echoing any origin is
+  safe on these three routes because they carry no ambient authority — no cookie, and both
+  credentials are secrets the caller must already hold.
+- **`checkRateLimit` runs above the path dispatch**, so a route added later is metered by default. It
+  used to sit below the `404`, which would have left `/session/pair` an unmetered guessing oracle.
+  `/health` stays free — a readiness probe that can be rate-limited takes the container out.
+- **Two boot refusals, both loud rather than silent.** A session path with no `FRUITBACK_IDENTITY_SECRET`
+  mints nothing; a session path alongside `FRUITBACK_CLIENTS` mints tokens no client accepts, because
+  a mapped worker ignores the worker-wide key.
+
 **The markdown codec**
 
 - **`markdown-description.ts` holds "put a seed in a markdown body and keep the issue readable"**
@@ -503,7 +537,7 @@ mode, SKG-534.
 **Deeper** — in [docs/decisions/worker.md](docs/decisions/worker.md):
 *The worker*, *Who may read a pin*, *The team's replies*, *Where a seed is stored*,
 *Which store, and who validates it*, *SQLite, and what a second connector actually proved*,
-*The markdown codec, and the file that outlived its name*.
+*The markdown codec, and the file that outlived its name*, *The extension's session*.
 And *The published image* in [docs/decisions/image.md](docs/decisions/image.md).
 
 ## The published image

@@ -262,3 +262,95 @@ connector's environment, and what a second connector with no markdown body actua
   **off**, so a renamed file that broke the published declarations fails there rather than in a
   consumer's build.
 
+
+## The extension's session
+
+- **The reviewer is not a visitor who typed a name** (SKG-535). SKG-498 defined `reporter.verified`
+  and left nothing able to set it on this side: a client site could mint an identity token, and the
+  extension could not. A session is what finally makes that flag the worker's own word.
+- **The operator vouches, and the code carries who for.** A pairing code is minted *for* Alice, with
+  her name and address in it. The alternative — the extension supplying a name at pairing time — is
+  the browser asserting an identity again, which is the hole SKG-498 was written to close. It was
+  rejected for that reason and not on ergonomics.
+- **The access token is an ordinary identity token, and that is the whole economy of the design.**
+  `identity.ts` already mints and verifies HS256 JWTs, and both request paths already check them. A
+  session that mints the same shape adds no second verification path, and `read: 'authenticated'`
+  (SKG-533) started accepting the extension with no change to a single line of the read path.
+- **Refusing rotation was a decision, not an omission.** Rotating the refresh token on every use is
+  the stronger design and it needs a replay window: a refresh whose answer is lost to a dropped
+  connection would log the reviewer out with no way back. That window can only be observed from the
+  extension side, so rotation belongs there.
+- **No OAuth, no identity provider, no user table.** Every decision leans on "one administrator, one
+  container, no third party". An authentication flow assuming an identity provider makes the project
+  unselfhostable in practice, which is the one thing this store was added to avoid.
+
+- **The site allowlist does not reach these routes, and that is a decision rather than an oversight.**
+  `ALLOWED_ORIGINS` lists the client sites the widget is embedded on. An extension is not one: its
+  origin is `chrome-extension://<id>`, and that id changes when an unpacked build becomes a store
+  build — so an operator who listed it would find pairing broken on the day they published. Probed
+  against this worker before `openCors` was written: with a normal allowlist, the POST answered
+  `403 origin-not-allowed` and so did the preflight. What makes the exemption safe is that these
+  three routes carry no ambient authority at all — there is no cookie to ride on, the pairing code is
+  a secret the caller must already hold, and the refresh token lives where no page can read it. The
+  rate limiter is what stops the pairing endpoint being guessed at.
+
+### What review found, and what it narrowed
+
+- **The redemption is one transaction, not one statement.** Marking the code spent and then failing
+  to insert the session — a full volume, a locked file — burns the only code the reviewer has, and
+  the retry answers `code-spent-or-expired`, which is true and useless. Unlike the atomicity of the
+  spend, this guard *is* observable: the test makes the insert collide on `sessions.token_hash`,
+  which is a real failure inside the transaction rather than a raced one.
+- **A row is parsed, never trusted — and SQLite narrows what can arrive.** The first version of that
+  test asserted an integer `subject`, and it failed: the column has `TEXT` affinity, so `42` comes
+  back as `"42.0"` and never reaches the guard as a non-string. Measured. What does reach it is a
+  **BLOB**, which keeps its type, and an empty string, which `NOT NULL` holds quite happily. The
+  guard is right; the example behind it was not.
+- **The body cap was defeated twice over in one line.** `request.text()` buffers the whole upload
+  before anything is measured, and `.length` counts UTF-16 units rather than bytes — so a multibyte
+  body passed a cap it had already crossed. `readBoundedText` already existed on the feedback path
+  and does both correctly; the session handler had quietly reimplemented a weaker version of it.
+- **A session store that cannot be opened raises `StoreError` now.** It threw a plain `Error`, which
+  `handleSession` had nothing to map, so a missing volume became a bare `500` with no CORS headers —
+  unreadable by the extension, and indistinguishable from a bug.
+- **`node src/main.ts pair` is a command nobody can run.** The image copies `dist/server.mjs` and no
+  source at all, so the documented path fails with a missing file. `node server.mjs pair` is the
+  spelling, checked by running it against a real build. The whole argument for minting being a
+  command rather than a route rests on that command existing.
+- **An unknown flag is refused.** `--emali alice@acme.dev` minted a code whose session carried no
+  address, and the operator had no way to know.
+
+### What the tests hold, and one they could not
+
+- **Revocation is mutation-tested.** Dropping `revoked_at IS NULL` from `findSession` fails exactly
+  `revokes on the worker, so the refresh token stops working everywhere`.
+- **The CORS exemption is mutation-tested.** Replacing `openCors` with the ordinary `resolveCors`
+  fails both `answers an extension origin that is on no allowlist` and `lets the preflight through`,
+  while `leaves the allowlist in force on /feedback` stays green — which is what says the exemption
+  is scoped to `/session/` rather than a hole in the gate.
+- **The rate-limit move is mutation-tested.** Putting `checkRateLimit` back below the path dispatch —
+  where it sat before this ticket — fails `meters the pairing endpoint, not only /feedback`. The
+  unknown-path test stays green under that mutation, because it guards a different ordering.
+- **Nothing in this process can prove the redeem is atomic.** `redeemPairing` marks the code spent in
+  one `UPDATE ... WHERE redeemed_at IS NULL` and acts on `changes === 1`, which is right for two
+  workers on one volume or an asynchronous driver later. But `DatabaseSync` is synchronous and the
+  store awaits nothing between its read and its write, so two redemptions cannot interleave here
+  however they are scheduled: a `Promise.all` over three of them passes against a read-then-write
+  store too. Measured. The concurrency test that claimed to guard this was deleted rather than kept
+  green, and the reason is recorded beside the code.
+- **The digest guard reads the `-wal` file too.** A row just written is in `sessions.db-wal` and
+  nowhere else, so a check that read only the `.db` would pass against a store writing codes in the
+  clear. Same trap as the seed store's backup note, arriving from the other side.
+
+### What this deliberately does not do
+
+The extension half — `chrome.storage.local` for the refresh token, `chrome.storage.session` for the
+short access token, and the background refresh — is **not** here. The two halves have different
+verification stories: this one is fully covered by `node --test`, and the other needs a real Chromium
+with an extension loaded, which SKG-538 exists to build and which does not exist yet. Shipping them
+together would let the half nobody can test ride in on the half that is.
+
+Per-client session minting is absent for a stated reason rather than an accidental one: a session
+signs with the worker-wide key, and a worker with `FRUITBACK_CLIENTS` ignores that key. The pair is
+refused at boot instead of shipping a feature that pairs successfully and then answers `401` to
+everything. That belongs with team mode (SKG-596), where a request carries a client id.
