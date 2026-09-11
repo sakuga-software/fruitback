@@ -262,3 +262,55 @@ connector's environment, and what a second connector with no markdown body actua
   **off**, so a renamed file that broke the published declarations fails there rather than in a
   consumer's build.
 
+
+## The extension's session
+
+- **The reviewer is not a visitor who typed a name** (SKG-535). SKG-498 defined `reporter.verified`
+  and left nothing able to set it on this side: a client site could mint an identity token, and the
+  extension could not. A session is what finally makes that flag the worker's own word.
+- **The operator vouches, and the code carries who for.** A pairing code is minted *for* Alice, with
+  her name and address in it. The alternative — the extension supplying a name at pairing time — is
+  the browser asserting an identity again, which is the hole SKG-498 was written to close. It was
+  rejected for that reason and not on ergonomics.
+- **The access token is an ordinary identity token, and that is the whole economy of the design.**
+  `identity.ts` already mints and verifies HS256 JWTs, and both request paths already check them. A
+  session that mints the same shape adds no second verification path, and `read: 'authenticated'`
+  (SKG-533) started accepting the extension with no change to a single line of the read path.
+- **Refusing rotation was a decision, not an omission.** Rotating the refresh token on every use is
+  the stronger design and it needs a replay window: a refresh whose answer is lost to a dropped
+  connection would log the reviewer out with no way back. That window can only be observed from the
+  extension side, so rotation belongs there.
+- **No OAuth, no identity provider, no user table.** Every decision leans on "one administrator, one
+  container, no third party". An authentication flow assuming an identity provider makes the project
+  unselfhostable in practice, which is the one thing this store was added to avoid.
+
+### What the tests hold, and one they could not
+
+- **Revocation is mutation-tested.** Dropping `revoked_at IS NULL` from `findSession` fails exactly
+  `revokes on the worker, so the refresh token stops working everywhere`.
+- **The rate-limit move is mutation-tested.** Putting `checkRateLimit` back below the path dispatch —
+  where it sat before this ticket — fails `meters the pairing endpoint, not only /feedback`. The
+  unknown-path test stays green under that mutation, because it guards a different ordering.
+- **Nothing in this process can prove the redeem is atomic.** `redeemPairing` marks the code spent in
+  one `UPDATE ... WHERE redeemed_at IS NULL` and acts on `changes === 1`, which is right for two
+  workers on one volume or an asynchronous driver later. But `DatabaseSync` is synchronous and the
+  store awaits nothing between its read and its write, so two redemptions cannot interleave here
+  however they are scheduled: a `Promise.all` over three of them passes against a read-then-write
+  store too. Measured. The concurrency test that claimed to guard this was deleted rather than kept
+  green, and the reason is recorded beside the code.
+- **The digest guard reads the `-wal` file too.** A row just written is in `sessions.db-wal` and
+  nowhere else, so a check that read only the `.db` would pass against a store writing codes in the
+  clear. Same trap as the seed store's backup note, arriving from the other side.
+
+### What this deliberately does not do
+
+The extension half — `chrome.storage.local` for the refresh token, `chrome.storage.session` for the
+short access token, and the background refresh — is **not** here. The two halves have different
+verification stories: this one is fully covered by `node --test`, and the other needs a real Chromium
+with an extension loaded, which SKG-538 exists to build and which does not exist yet. Shipping them
+together would let the half nobody can test ride in on the half that is.
+
+Per-client session minting is absent for a stated reason rather than an accidental one: a session
+signs with the worker-wide key, and a worker with `FRUITBACK_CLIENTS` ignores that key. The pair is
+refused at boot instead of shipping a feature that pairs successfully and then answers `401` to
+everything. That belongs with team mode (SKG-596), where a request carries a client id.

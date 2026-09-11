@@ -1,0 +1,290 @@
+import { afterEach, describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { type WorkerEnv, readConfig } from './env.ts';
+import { closeSessionConnections, createSqliteSessionStore } from './session-sqlite.ts';
+import { createPairing } from './session.ts';
+import { handleRequest } from './app.ts';
+import { verifyIdentityToken } from './identity.ts';
+import { runPair } from './cli.ts';
+
+/** 32 characters, because `readConfig` refuses a shorter HMAC secret. */
+const SECRET = 'a-worker-secret-of-exactly-enough';
+const ALICE = { subject: 'alice', name: 'Alice Martin', email: 'alice@acme.dev' };
+
+const directories: string[] = [];
+
+function sessionPath(): string {
+  const directory = mkdtempSync(join(tmpdir(), 'fruitback-routes-'));
+  directories.push(directory);
+
+  return join(directory, 'sessions.db');
+}
+
+function envWith(overrides: Partial<WorkerEnv> = {}): WorkerEnv {
+  return {
+    FRUITBACK_STORE: 'memory',
+    ALLOWED_ORIGINS: '*',
+    FRUITBACK_IDENTITY_SECRET: SECRET,
+    FRUITBACK_SESSION_PATH: sessionPath(),
+    ...overrides,
+  };
+}
+
+async function call(
+  env: WorkerEnv,
+  path: string,
+  body?: unknown,
+  method = 'POST',
+  ip = '203.0.113.7',
+): Promise<Response> {
+  return handleRequest(
+    new Request(`https://worker.test${path}`, {
+      method,
+      ...(body === undefined ? {} : { body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } }),
+    }),
+    env,
+    { clientIp: ip },
+  );
+}
+
+/** Mints a code straight against the same file the routes will use. */
+async function codeFor(env: WorkerEnv): Promise<string> {
+  const store = createSqliteSessionStore(env.FRUITBACK_SESSION_PATH as string);
+
+  return (await createPairing(store, ALICE)).code;
+}
+
+afterEach(() => {
+  closeSessionConnections();
+  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
+});
+
+describe('POST /session/pair', () => {
+  it('answers a session the read path already knows how to verify', async () => {
+    const env = envWith();
+    const response = await call(env, '/session/pair', { code: await codeFor(env) });
+
+    assert.equal(response.status, 200);
+    const session = (await response.json()) as { accessToken: string; refreshToken: string; expiresIn: number };
+
+    const verified = await verifyIdentityToken(session.accessToken, SECRET);
+    assert.ok(verified.ok);
+    assert.deepEqual(verified.reporter, { id: 'alice', name: 'Alice Martin', email: 'alice@acme.dev', verified: true });
+    assert.ok(session.refreshToken.length > 0);
+  });
+
+  it('refuses a code that was never minted', async () => {
+    const response = await call(envWith(), '/session/pair', { code: 'ZZZZ-ZZZZ-ZZZZ' });
+
+    assert.equal(response.status, 401);
+  });
+
+  it('refuses a body that is not an object with a code', async () => {
+    const env = envWith();
+
+    assert.equal((await call(env, '/session/pair', { code: 42 })).status, 400);
+    assert.equal((await call(env, '/session/pair', ['a-code'])).status, 400);
+  });
+
+  it('refuses a method other than POST', async () => {
+    assert.equal((await call(envWith(), '/session/pair', undefined, 'GET')).status, 405);
+  });
+});
+
+describe('POST /session/refresh', () => {
+  it('mints a fresh access token for a live session', async () => {
+    const env = envWith();
+    const paired = (await (await call(env, '/session/pair', { code: await codeFor(env) })).json()) as {
+      refreshToken: string;
+    };
+
+    const response = await call(env, '/session/refresh', { refreshToken: paired.refreshToken });
+
+    assert.equal(response.status, 200);
+    const refreshed = (await response.json()) as { accessToken: string; identity: unknown };
+    assert.ok((await verifyIdentityToken(refreshed.accessToken, SECRET)).ok);
+    assert.deepEqual(refreshed.identity, ALICE);
+  });
+
+  /** The refresh token is what the extension keeps for weeks. It must never come back in an answer. */
+  it('does not hand the refresh token back', async () => {
+    const env = envWith();
+    const paired = (await (await call(env, '/session/pair', { code: await codeFor(env) })).json()) as {
+      refreshToken: string;
+    };
+
+    const body = await (await call(env, '/session/refresh', { refreshToken: paired.refreshToken })).text();
+
+    assert.equal(body.includes(paired.refreshToken), false);
+  });
+
+  it('refuses a token this worker never issued', async () => {
+    const response = await call(envWith(), '/session/refresh', { refreshToken: 'invented' });
+
+    assert.equal(response.status, 401);
+  });
+});
+
+describe('POST /session/revoke', () => {
+  it('ends the session on the worker, not only in the extension', async () => {
+    const env = envWith();
+    const paired = (await (await call(env, '/session/pair', { code: await codeFor(env) })).json()) as {
+      refreshToken: string;
+    };
+
+    assert.equal((await call(env, '/session/revoke', { refreshToken: paired.refreshToken })).status, 204);
+    assert.equal((await call(env, '/session/refresh', { refreshToken: paired.refreshToken })).status, 401);
+  });
+
+  /** A logout that reported "nothing to revoke" would tell a caller which refresh tokens are live. */
+  it('answers the same way for a token that was never issued', async () => {
+    const env = envWith();
+
+    assert.equal((await call(env, '/session/revoke', { refreshToken: 'invented' })).status, 204);
+  });
+});
+
+describe('a worker with no session store', () => {
+  it('does not advertise that these routes exist', async () => {
+    const env = { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' } satisfies WorkerEnv;
+
+    assert.equal((await call(env, '/session/pair', { code: 'ZZZZ-ZZZZ-ZZZZ' })).status, 404);
+    assert.equal((await call(env, '/session/refresh', { refreshToken: 'x' })).status, 404);
+  });
+
+  it('leaves /health exactly as it was', async () => {
+    const env = { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' } satisfies WorkerEnv;
+    const response = await handleRequest(new Request('https://worker.test/health'), env, { clientIp: '203.0.113.7' });
+
+    assert.deepEqual(await response.json(), { ok: true, store: 'memory', openRead: 1 });
+  });
+});
+
+describe('the boot guards', () => {
+  it('refuses a session path with no key to sign an access token with', () => {
+    const result = readConfig({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*', FRUITBACK_SESSION_PATH: '/tmp/s.db' });
+
+    assert.equal(result.ok, false);
+    assert.ok(
+      result.ok === false && result.missing.some((name) => name.startsWith('FRUITBACK_IDENTITY_SECRET')),
+      `expected the identity secret to be named, got ${result.ok === false ? result.missing.join(', ') : ''}`,
+    );
+  });
+
+  /**
+   * A session signs with the worker-wide key, and a mapped worker ignores it — each client brings
+   * its own. Pairing would work, the reviewer would look logged in, and every read would answer 401.
+   */
+  it('refuses sessions on a worker that routes by client', () => {
+    const result = readConfig({
+      FRUITBACK_STORE: 'memory',
+      ALLOWED_ORIGINS: '*',
+      FRUITBACK_IDENTITY_SECRET: SECRET,
+      FRUITBACK_SESSION_PATH: '/tmp/s.db',
+      FRUITBACK_CLIENTS: '{"acme":{"teamId":"team_1","projectId":"proj_1","origins":["https://acme.test"]}}',
+    });
+
+    assert.equal(result.ok, false);
+    assert.ok(
+      result.ok === false && result.missing.some((name) => name.startsWith('FRUITBACK_SESSION_PATH')),
+      `expected the session path to be named, got ${result.ok === false ? result.missing.join(', ') : ''}`,
+    );
+  });
+});
+
+describe('the pair command', () => {
+  it('mints a code the pair route then accepts', async () => {
+    const env = envWith();
+    const outcome = await runPair(['--subject', 'alice', '--name', 'Alice Martin'], env);
+
+    assert.ok(outcome.ok, outcome.lines.join('\n'));
+    const code = outcome.lines.find((line) => /^ {4}[0-9A-Z]{4}-/.test(line))?.trim();
+    assert.ok(code !== undefined, `no code in:\n${outcome.lines.join('\n')}`);
+
+    const response = await call(env, '/session/pair', { code });
+    assert.equal(response.status, 200);
+
+    const session = (await response.json()) as { identity: unknown };
+    assert.deepEqual(session.identity, { subject: 'alice', name: 'Alice Martin' });
+  });
+
+  /**
+   * A worker with no session path is a perfectly valid worker, so `readConfig` passes it — the
+   * command is what cannot run. It has to name the variable rather than fail on the database file.
+   */
+  it('names the variable when this worker keeps no sessions', async () => {
+    const outcome = await runPair(['--subject', 'alice'], { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' });
+
+    assert.equal(outcome.ok, false);
+    assert.ok(outcome.lines.join(' ').includes('FRUITBACK_SESSION_PATH'), outcome.lines.join('\n'));
+  });
+
+  it('reports a misconfigured worker rather than minting against it', async () => {
+    const outcome = await runPair(['--subject', 'alice'], {
+      FRUITBACK_STORE: 'memory',
+      ALLOWED_ORIGINS: '*',
+      FRUITBACK_SESSION_PATH: '/tmp/never-opened.db',
+    });
+
+    assert.equal(outcome.ok, false);
+    // The boot guard: a session path with no key to sign with. Named, not discovered at runtime.
+    assert.ok(outcome.lines.join(' ').includes('FRUITBACK_IDENTITY_SECRET'), outcome.lines.join('\n'));
+  });
+
+  it('requires a subject, because that is what lands in reporter.id', async () => {
+    const outcome = await runPair(['--name', 'Alice Martin'], envWith());
+
+    assert.equal(outcome.ok, false);
+    assert.ok(outcome.lines.join(' ').includes('--subject'), outcome.lines.join('\n'));
+  });
+
+  /** `--name=Alice Martin` is the spelling that silently drops the surname, so it is refused. */
+  it('refuses --flag=value rather than half-supporting it', async () => {
+    const outcome = await runPair(['--subject=alice'], envWith());
+
+    assert.equal(outcome.ok, false);
+  });
+});
+
+describe('the rate limit', () => {
+  /**
+   * The reason `checkRateLimit` moved above the path dispatch (SKG-535).
+   *
+   * A pairing code is 60 bits, which is plenty on its own — but an unmetered endpoint that answers
+   * "yes or no" to a guess is an oracle, and this check used to sit *below* the `404` that rejected
+   * every path but `/feedback`. A route added there would have been unmetered by default, with
+   * nothing to notice.
+   */
+  it('meters the pairing endpoint, not only /feedback', async () => {
+    const env = envWith({ RATE_LIMIT_PER_MINUTE: '2' });
+    const guess = { code: 'ZZZZ-ZZZZ-ZZZZ' };
+    const ip = '198.51.100.11';
+
+    assert.equal((await call(env, '/session/pair', guess, 'POST', ip)).status, 401);
+    assert.equal((await call(env, '/session/pair', guess, 'POST', ip)).status, 401);
+    assert.equal((await call(env, '/session/pair', guess, 'POST', ip)).status, 429);
+  });
+
+  /** An unknown path costs quota now too, which is the right answer for something being probed. */
+  it('meters a path that matches nothing', async () => {
+    const env = envWith({ RATE_LIMIT_PER_MINUTE: '1' });
+    const ip = '198.51.100.12';
+
+    assert.equal((await call(env, '/nothing-here', undefined, 'GET', ip)).status, 404);
+    assert.equal((await call(env, '/nothing-here', undefined, 'GET', ip)).status, 429);
+  });
+
+  /** `/health` stays free: a readiness probe that can be rate-limited takes the container out. */
+  it('leaves /health unmetered', async () => {
+    const env = envWith({ RATE_LIMIT_PER_MINUTE: '1' });
+    const ip = '198.51.100.13';
+
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const response = await handleRequest(new Request('https://worker.test/health'), env, { clientIp: ip });
+      assert.equal(response.status, 200, `attempt ${attempt} answered ${response.status}`);
+    }
+  });
+});
