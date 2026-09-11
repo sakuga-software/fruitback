@@ -47,6 +47,7 @@ function readSecurityDoc(): string {
 
 const SECURITY = readSecurityDoc();
 const IDENTITY = readFileSync(fileURLToPath(new URL('./identity.ts', import.meta.url)), 'utf8');
+const SESSION = readFileSync(fileURLToPath(new URL('./session.ts', import.meta.url)), 'utf8');
 
 /**
  * Reads a constant out of a source file, for the ones that are not exported.
@@ -118,10 +119,13 @@ describe('SECURITY.md states what the code does', () => {
    * the document promises a reader is the strength of the credential they are handed.
    */
   it('quotes the entropy the credentials actually carry', () => {
-    const alphabet = new Set(createPairingCode().replaceAll('-', ''));
-    assert.ok(alphabet.size > 1, 'a pairing code drew one symbol; something is very wrong');
+    // The radix comes from the implementation's own alphabet, not from a literal 32. A hard-coded
+    // radix is the same defect one level down: shrink the alphabet to 31 symbols and the arithmetic
+    // still says 60 bits while the document overstates what a code is worth. Raised in review.
+    const radix = constantIn(SESSION, 'CODE_ALPHABET').length;
+    assert.ok(radix > 1, `CODE_ALPHABET has ${radix} symbols; a code drawn from it carries nothing`);
 
-    const codeBits = Math.round(createPairingCode().replaceAll('-', '').length * Math.log2(32));
+    const codeBits = Math.round(createPairingCode().replaceAll('-', '').length * Math.log2(radix));
     const refreshBits = Buffer.from(createRefreshToken(), 'base64url').byteLength * 8;
 
     assert.ok(
