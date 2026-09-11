@@ -19,7 +19,26 @@ import { readConfig } from './env.ts';
  * guarantee dropped. Those are a hand edit, and `CLAUDE.md` says so beside the rule.
  */
 
-const SECURITY = readFileSync(fileURLToPath(new URL('../../../SECURITY.md', import.meta.url)), 'utf8');
+/**
+ * Read by path, so say which path when it is not there.
+ *
+ * GitHub looks in `.github/SECURITY.md` as well as the root, so a later tidy-up can move this file
+ * and leave the suite failing with a bare `ENOENT` that names a line of test code rather than the
+ * thing that actually broke.
+ */
+function readSecurityDoc(): string {
+  for (const candidate of ['../../../SECURITY.md', '../../../.github/SECURITY.md']) {
+    try {
+      return readFileSync(fileURLToPath(new URL(candidate, import.meta.url)), 'utf8');
+    } catch {
+      continue;
+    }
+  }
+
+  assert.fail('SECURITY.md is in neither the repository root nor .github/; this suite asserts on it');
+}
+
+const SECURITY = readSecurityDoc();
 const IDENTITY = readFileSync(fileURLToPath(new URL('./identity.ts', import.meta.url)), 'utf8');
 
 /**
