@@ -6,6 +6,7 @@ import {
   type SessionResponse,
   type StoredSession,
   REFRESH_MARGIN_MS,
+  RETRY_DELAY_MS,
   createSessions,
   nextWakeAt,
   parseIssued,
@@ -288,9 +289,39 @@ describe('nextWakeAt', () => {
     );
   });
 
-  /** `chrome.storage.session` is empty after a restart, so a session with no token is due now. */
-  it('is due now for a session whose access token did not survive the browser closing', () => {
-    assert.equal(nextWakeAt({ [ENDPOINT]: { refreshToken: 'r', identity: IDENTITY } }, {}, NOW), NOW);
+  /**
+   * The alarm never asks for a time that has already passed, and the two ways of getting one are the
+   * same failure: a browser restart emptied `chrome.storage.session`, or the last refresh could not
+   * reach the worker and left the old token in place. An alarm in the past is an alarm every minute,
+   * for as long as the worker stays down. Raised in review; nothing here composed the two functions
+   * that produce it.
+   */
+  it('backs off rather than asking for an alarm that is already due', () => {
+    const session = { [ENDPOINT]: { refreshToken: 'r', identity: IDENTITY } };
+
+    assert.equal(nextWakeAt(session, {}, NOW), NOW + RETRY_DELAY_MS);
+    assert.equal(
+      nextWakeAt(session, { [ENDPOINT]: { accessToken: 'a', expiresAt: NOW - 1, identity: IDENTITY } }, NOW),
+      NOW + RETRY_DELAY_MS,
+    );
+  });
+
+  /**
+   * And the first token after a restart does not wait for that: the service worker refreshes once as
+   * it starts, which is `background.ts`'s top-level call and not this alarm.
+   */
+  it('leaves the first refresh of the day to the service worker starting up', async () => {
+    const { subject, remote } = setup({
+      sessions: { [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } },
+      answers: [{ status: 200, body: issued() }],
+    });
+
+    await subject.refreshDue();
+
+    assert.deepEqual(
+      remote.calls.map((call) => call.url),
+      [`${ENDPOINT}/session/refresh`],
+    );
   });
 
   it('is the earliest deadline across every worker', () => {

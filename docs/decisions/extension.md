@@ -147,6 +147,10 @@ both: an access token the host site's JavaScript can read is the worst outcome o
     why `world: 'MAIN'` is the ticket, so the first version kept the file in the list after the
     declaration itself had changed — it then guarded a file that no longer reached the page and
     reported three passes. Found by mutating the declaration and watching nothing fail.
+  - **All three import spellings, not only `from`.** A side-effect `import './x.ts'` and a lazy
+    `await import('./x.ts')` reach the page exactly as well, and following only one of them would
+    have made the "fails by default" promise quietly false. Raised in review; each spelling was then
+    mutated in and watched to fail.
   - The built bundles say the same thing, which is the version that cannot be argued with:
     `refreshToken`, `accessToken`, `/session/` and `storage.session` each appear **once in
     `background.js` and zero times in `page.js` and `bridge.js`**.
@@ -162,9 +166,16 @@ both: an access token the host site's JavaScript can read is the worst outcome o
   arrived leaves the token live on the worker until it expires, which is what the 30-day limit is
   for, and that is the honest trade rather than a screen saying signed out over a working credential.
 - **An alarm, not a timer.** An MV3 service worker is stopped whenever the browser feels like it, so
-  a `setTimeout` dies with it. The alarm is set at the next due moment rather than every minute, and
-  a session with no access token is due *now* — which is what mints the first token of the day after
-  a restart empties `chrome.storage.session`.
+  a `setTimeout` dies with it. It is set at the next due moment rather than on a period: one session
+  with a ten-minute token and a two-minute margin wakes the worker every eight minutes.
+- **A failed refresh backs off, and the first version did not.** A refresh that could not reach the
+  worker leaves the grant stale, `nextWakeAt` then asked for a moment already past, the alarm was
+  clamped to a minute — and the service worker woke to fail again every minute for as long as a
+  staging endpoint stayed down. `RETRY_DELAY_MS` is the floor for any due time in the past, missing
+  token included. Nothing is lost by waiting: a browser restart, a pairing and a logout each refresh
+  directly rather than through the alarm, and the first token after a restart comes from the service
+  worker's own start-up call. Raised in review — both halves were tested and their composition was
+  not.
 - **Rotation is half-built on purpose.** A rotated refresh token is stored when one arrives, and none
   ever does: the worker does not rotate. A rotation whose response is lost leaves this side holding a
   token the worker has already retired, with nothing to retry — closing that needs a replay window on

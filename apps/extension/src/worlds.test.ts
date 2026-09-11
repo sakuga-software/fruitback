@@ -55,7 +55,13 @@ function mainWorldEntrypoints(): string[] {
     .filter((path) => /world:\s*'MAIN'/.test(codeOf(read(path))));
 }
 
-/** Every file the page's world ends up with, following this app's own relative imports. */
+/**
+ * Every file the page's world ends up with, following this app's own relative imports.
+ *
+ * All three spellings, not only `from`: a side-effect `import './x.ts'` and a lazy
+ * `await import('./x.ts')` reach the page exactly as well, and a guard that followed one of them
+ * would promise to fail by default and quietly not. Raised in review.
+ */
 function reachableFrom(entry: string): string[] {
   const seen = new Set<string>();
   const queue = [entry];
@@ -65,7 +71,7 @@ function reachableFrom(entry: string): string[] {
     if (seen.has(path)) continue;
     seen.add(path);
 
-    for (const match of read(path).matchAll(/\bfrom\s+'(\.[^']*)'/g)) {
+    for (const match of read(path).matchAll(/\b(?:from|import)\s*\(?\s*'(\.[^']*)'/g)) {
       queue.push(resolve(dirname(path), match[1] as string));
     }
   }

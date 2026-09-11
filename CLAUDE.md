@@ -418,6 +418,10 @@ mode, SKG-534.
 - `src/session.ts` is the logic behind seams and `src/session-browser.ts` binds the real
   `browser.storage` and `fetch`, the same split `bridge.ts` made. **Refreshing runs on an alarm, not
   a timer** — an MV3 service worker is stopped whenever the browser feels like it.
+- **`nextWakeAt` never returns a moment in the past**, missing token included. It did, and the alarm
+  was then clamped to a minute: a worker that stayed down woke the service worker to fail every
+  minute, for ever. `isFresh` is the single freshness rule the three callers share so they cannot
+  drift apart.
 
 **Deeper** — *The extension, and the two worlds* and *The session, and the token that never goes
 down*: [docs/decisions/extension.md](docs/decisions/extension.md).

@@ -69,6 +69,22 @@ export type SessionSeams = {
  */
 export const REFRESH_MARGIN_MS = 2 * 60 * 1000;
 
+/**
+ * How long to wait before trying a refresh that failed.
+ *
+ * Without it the alarm is a one-minute loop with no end: a refresh that cannot reach the worker
+ * leaves the grant stale, `nextWakeAt` then asks for a time already past, and the service worker
+ * wakes up to fail again every minute for as long as the worker is unreachable — a decommissioned
+ * staging endpoint, or a laptop shut on a train. Nothing is lost by waiting: a browser restart, a
+ * pairing and a logout each ask for a refresh directly rather than through the alarm.
+ */
+export const RETRY_DELAY_MS = 5 * 60 * 1000;
+
+/** The one freshness rule, so the three places that need it cannot drift apart. */
+export function isFresh(grant: AccessGrant | undefined, now: number): grant is AccessGrant {
+  return grant !== undefined && grant.expiresAt - REFRESH_MARGIN_MS > now;
+}
+
 /** A code that never existed and one already spent answer the same, because the worker does. */
 export type PairFailure = 'code-spent-or-expired' | 'unavailable';
 
@@ -161,6 +177,12 @@ export function createSessions({ sessions, grants, post, now = Date.now }: Sessi
     return { ok: true, grant: await grant(endpoint, issued) };
   }
 
+  async function ensureAccess(endpoint: string): Promise<AccessResult> {
+    const held = (await grants.read())[endpoint];
+
+    return isFresh(held, now()) ? { ok: true, grant: held } : refresh(endpoint);
+  }
+
   return {
     list: () => sessions.read(),
 
@@ -189,23 +211,10 @@ export function createSessions({ sessions, grants, post, now = Date.now }: Sessi
       return { ok: true, identity: issued.identity };
     },
 
-    async ensureAccess(endpoint) {
-      const held = (await grants.read())[endpoint];
-      if (held !== undefined && held.expiresAt - REFRESH_MARGIN_MS > now()) return { ok: true, grant: held };
-
-      return refresh(endpoint);
-    },
+    ensureAccess,
 
     async refreshDue() {
-      const [storedSessions, storedGrants] = await Promise.all([sessions.read(), grants.read()]);
-      const deadline = now() + REFRESH_MARGIN_MS;
-
-      for (const endpoint of Object.keys(storedSessions)) {
-        const held = storedGrants[endpoint];
-        if (held !== undefined && held.expiresAt > deadline) continue;
-
-        await refresh(endpoint);
-      }
+      for (const endpoint of Object.keys(await sessions.read())) await ensureAccess(endpoint);
     },
 
     /**
@@ -230,8 +239,10 @@ export function createSessions({ sessions, grants, post, now = Date.now }: Sessi
 /**
  * When the background should next wake up, or `undefined` when there is nothing to keep alive.
  *
- * A session with no access token is due now: `chrome.storage.session` is emptied when the browser
- * closes, so the first run after a restart mints one rather than waiting for something to ask.
+ * A session whose token is missing or already stale asks for `RETRY_DELAY_MS` rather than for now.
+ * Both cases mean the last attempt did not leave a usable token, and an alarm in the past is an
+ * alarm every minute. The first token after a browser restart does not come from here: the service
+ * worker refreshes once as it starts.
  */
 export function nextWakeAt(
   sessions: Record<string, StoredSession>,
@@ -242,7 +253,7 @@ export function nextWakeAt(
 
   for (const endpoint of Object.keys(sessions)) {
     const held = grants[endpoint];
-    const due = held === undefined ? now : held.expiresAt - REFRESH_MARGIN_MS;
+    const due = isFresh(held, now) ? held.expiresAt - REFRESH_MARGIN_MS : now + RETRY_DELAY_MS;
     if (earliest === undefined || due < earliest) earliest = due;
   }
 
