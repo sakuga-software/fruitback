@@ -372,3 +372,86 @@ describe('the session connection', () => {
     assert.equal(sessionConnectionsOpened() - before, 1);
   });
 });
+
+describe('a session store that cannot be opened', () => {
+  /**
+   * A volume nobody mounted, a read-only disk, a file that is not a database.
+   *
+   * Answered like the seed path's outage rather than as a bare `500`, so the extension can tell
+   * "retry later" from "this request was wrong" — and so the answer carries the CORS headers it
+   * needs to read it at all. Raised in review: the session connector threw a plain `Error`, which
+   * `handleSession` had nothing to map. It raises `StoreError` now, like the seed connector.
+   */
+  it('answers 502 store-unavailable, with the headers the extension can read', async () => {
+    // A path whose parent does not exist: `new DatabaseSync` cannot create the file.
+    const env = envWith({ FRUITBACK_SESSION_PATH: '/nonexistent-directory-for-this-test/sessions.db' });
+    const extension = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
+
+    const response = await handleRequest(
+      new Request('https://worker.test/session/pair', {
+        method: 'POST',
+        body: JSON.stringify({ code: 'ZZZZ-ZZZZ-ZZZZ' }),
+        headers: { 'Content-Type': 'application/json', Origin: extension },
+      }),
+      env,
+      { clientIp: '198.51.100.31' },
+    );
+
+    assert.equal(response.status, 502);
+    assert.deepEqual(await response.json(), { error: 'store-unavailable' });
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'), extension);
+  });
+});
+
+describe('the body cap', () => {
+  /**
+   * The first version of this handler called `request.text()` and then measured `text.length`.
+   *
+   * Two defects in one line: the whole upload was buffered before anything was checked, and
+   * `.length` counts UTF-16 units rather than bytes — so a multibyte body passed a cap it had
+   * already crossed. `readBoundedText` refuses a declared length before a byte is read and cancels
+   * the stream once a chunked upload crosses it. Raised in review.
+   */
+  it('refuses a declared length over the cap before reading the body', async () => {
+    const env = envWith();
+    const response = await handleRequest(
+      new Request('https://worker.test/session/pair', {
+        method: 'POST',
+        body: 'x'.repeat(100),
+        // What an attacker declares. The body never has to match it for the cap to apply.
+        headers: { 'Content-Type': 'application/json', 'Content-Length': String(70 * 1024) },
+      }),
+      env,
+      { clientIp: '198.51.100.32' },
+    );
+
+    assert.equal(response.status, 413);
+  });
+
+  /** Counted in bytes, not UTF-16 units: 40k of three-byte characters is over a 64 KiB cap. */
+  it('counts bytes rather than characters', async () => {
+    const env = envWith();
+    const response = await call(env, '/session/pair', { code: '€'.repeat(40 * 1024) }, 'POST', '198.51.100.33');
+
+    assert.equal(response.status, 413);
+  });
+});
+
+describe('the pair command, on a typo', () => {
+  /** `--emali alice@acme.dev` used to mint a code whose session carried no address, silently. */
+  it('refuses an unknown flag rather than dropping it', async () => {
+    const outcome = await runPair(['--subject', 'alice', '--emali', 'alice@acme.dev'], envWith());
+
+    assert.equal(outcome.ok, false);
+    assert.ok(outcome.lines.join(' ').includes('--emali'), outcome.lines.join('\n'));
+  });
+
+  it('still accepts the three it knows', async () => {
+    const outcome = await runPair(
+      ['--subject', 'alice', '--name', 'Alice Martin', '--email', 'alice@acme.dev'],
+      envWith(),
+    );
+
+    assert.ok(outcome.ok, outcome.lines.join('\n'));
+  });
+});

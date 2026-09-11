@@ -1,5 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import type { SessionIdentity, SessionRecord, SessionStore } from './session.ts';
+import { StoreError } from './store.ts';
 
 /**
  * Where the extension's sessions live (SKG-535).
@@ -42,7 +43,10 @@ const MIGRATIONS: readonly string[] = [
     revoked_at INTEGER
   );
 
-  -- Purging walks by expiry, and nothing else ever does.
+  -- Purging walks both tables by expiry, and nothing else ever does. Pairings need this as much as
+  -- sessions do: the purge runs before every redemption, so without it a guessed code costs a full
+  -- table scan and traffic meant to be cheap to refuse becomes the expensive path. Raised in review.
+  CREATE INDEX pairings_by_expiry ON pairings (expires_at);
   CREATE INDEX sessions_by_expiry ON sessions (expires_at);
   `,
 ];
@@ -65,7 +69,7 @@ function connect(path: string): DatabaseSync {
   try {
     database = new DatabaseSync(path);
   } catch (error) {
-    throw new Error(`Session store could not open ${path}: ${String(error)}`);
+    throw new StoreError(`Session store could not open ${path}: ${String(error)}`);
   }
 
   opened += 1;
@@ -77,7 +81,7 @@ function connect(path: string): DatabaseSync {
     migrate(database);
   } catch (error) {
     database.close();
-    throw new Error(`Session store could not initialise ${path}: ${String(error)}`);
+    throw new StoreError(`Session store could not initialise ${path}: ${String(error)}`);
   }
 
   connections.set(path, database);
@@ -115,13 +119,26 @@ export function closeSessionConnections(): void {
   opened = 0;
 }
 
-type IdentityRow = { subject: string; name: string | null; email: string | null };
+type IdentityRow = { subject: unknown; name: unknown; email: unknown };
 
-function identityOf(row: IdentityRow): SessionIdentity {
+/**
+ * A row is parsed, never trusted — the same rule the seed store follows, and for the same reason.
+ *
+ * This file sits on a volume an operator can edit and a restore can be older than the code. A cast
+ * describes the row to TypeScript and checks nothing. `TEXT` affinity narrows what can actually
+ * arrive — an integer written here comes back as a string — but a **BLOB** keeps its type, and a
+ * `NOT NULL` column holds an empty string quite happily. Either would otherwise reach
+ * `signIdentityToken` and mint a token behind a `200` that this worker's own verifier then rejects.
+ * An unreadable row answers like a missing one, so it costs that session and never the endpoint.
+ * Raised in review.
+ */
+function identityOf(row: IdentityRow): SessionIdentity | undefined {
+  if (typeof row.subject !== 'string' || row.subject === '') return undefined;
+
   return {
     subject: row.subject,
-    ...(row.name === null ? {} : { name: row.name }),
-    ...(row.email === null ? {} : { email: row.email }),
+    ...(typeof row.name === 'string' && row.name !== '' ? { name: row.name } : {}),
+    ...(typeof row.email === 'string' && row.email !== '' ? { email: row.email } : {}),
   };
 }
 
@@ -138,37 +155,60 @@ export function createSqliteSessionStore(path: string): SessionStore {
     },
 
     /**
-     * Marks the code spent, then reads it. In that order, and `changes === 1` is the guard: the
-     * `WHERE` matches only an unredeemed, unexpired row, and SQLite applies one statement atomically.
+     * Spends the code and opens the session it buys, in one transaction.
      *
-     * **No test in this process can tell this apart from a read followed by a write.** `DatabaseSync`
-     * is synchronous and nothing here awaits between the two, so two redemptions never interleave in
+     * **No test in this process can tell the spend apart from a read followed by a write.**
+     * `DatabaseSync` is synchronous and nothing here awaits, so two redemptions never interleave in
      * one process however they are scheduled — measured, against exactly that mutation, which stayed
-     * green. What this form buys is the case a unit test cannot reach: two workers on one volume, or
-     * an asynchronous driver later. It is written the correct way rather than the way this process
-     * happens to make safe.
+     * green. What the single statement buys is the case a unit test cannot reach: two workers on one
+     * volume, or an asynchronous driver later.
+     *
+     * The **transaction** is a different guard, and that one is observable: marking the code spent
+     * and then failing to insert the session burns the only code the reviewer has, and the retry
+     * answers `code-spent-or-expired`, which is true and useless. Raised in review, and mutation-tested
+     * by making the insert collide on its primary key.
      */
-    async redeemPairing(codeHash, now) {
+    async redeemPairing({ codeHash, tokenHash, expiresAt, now }) {
       const database = connect(path);
-      const spent = database
-        .prepare('UPDATE pairings SET redeemed_at = ? WHERE code_hash = ? AND redeemed_at IS NULL AND expires_at > ?')
-        .run(now, codeHash, now);
 
-      if (spent.changes !== 1) return undefined;
+      database.exec('BEGIN IMMEDIATE');
+      try {
+        // `changes === 1` is what proves this call is the one that spent it: the `WHERE` matches only
+        // an unredeemed, unexpired row.
+        const spent = database
+          .prepare('UPDATE pairings SET redeemed_at = ? WHERE code_hash = ? AND redeemed_at IS NULL AND expires_at > ?')
+          .run(now, codeHash, now);
 
-      const row = database.prepare('SELECT subject, name, email FROM pairings WHERE code_hash = ?').get(codeHash) as
-        | IdentityRow
-        | undefined;
+        if (spent.changes !== 1) {
+          database.exec('ROLLBACK');
 
-      return row === undefined ? undefined : identityOf(row);
-    },
+          return undefined;
+        }
 
-    async createSession({ tokenHash, identity, expiresAt }) {
-      connect(path)
-        .prepare(
-          'INSERT INTO sessions (token_hash, subject, name, email, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
-        )
-        .run(tokenHash, identity.subject, identity.name ?? null, identity.email ?? null, Date.now(), expiresAt);
+        const row = database.prepare('SELECT subject, name, email FROM pairings WHERE code_hash = ?').get(codeHash) as
+          | IdentityRow
+          | undefined;
+        const identity = row === undefined ? undefined : identityOf(row);
+
+        if (identity === undefined) {
+          database.exec('ROLLBACK');
+
+          return undefined;
+        }
+
+        database
+          .prepare(
+            'INSERT INTO sessions (token_hash, subject, name, email, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
+          )
+          .run(tokenHash, identity.subject, identity.name ?? null, identity.email ?? null, now, expiresAt);
+
+        database.exec('COMMIT');
+
+        return identity;
+      } catch (error) {
+        database.exec('ROLLBACK');
+        throw error;
+      }
     },
 
     async findSession(tokenHash, now) {
@@ -176,9 +216,15 @@ export function createSqliteSessionStore(path: string): SessionStore {
         .prepare(
           'SELECT subject, name, email, expires_at FROM sessions WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?',
         )
-        .get(tokenHash, now) as (IdentityRow & { expires_at: number }) | undefined;
+        .get(tokenHash, now) as (IdentityRow & { expires_at: unknown }) | undefined;
 
-      return row === undefined ? undefined : { ...identityOf(row), expiresAt: row.expires_at };
+      if (row === undefined) return undefined;
+
+      const identity = identityOf(row);
+
+      return identity === undefined || typeof row.expires_at !== 'number'
+        ? undefined
+        : { ...identity, expiresAt: row.expires_at };
     },
 
     async revokeSession(tokenHash, now) {

@@ -45,14 +45,20 @@ export type SessionRecord = SessionIdentity & { expiresAt: number };
 export type SessionStore = {
   createPairing(pairing: { codeHash: string; identity: SessionIdentity; expiresAt: number }): Promise<void>;
   /**
-   * Spends the code, or answers `undefined`.
+   * Spends the code **and** opens the session it buys, or answers `undefined`.
    *
-   * One operation and not a read then a write: two reviewers redeeming the same code at once must
-   * produce one session, not two. The implementation marks it spent and acts on whether that
-   * changed a row.
+   * One operation, for two separate reasons. Two reviewers redeeming the same code at once must
+   * produce one session rather than two, so the code is marked spent by a statement that acts on
+   * whether it changed a row. And the code must not be spendable without the session it paid for:
+   * marking it redeemed, then failing to write the session — a full volume, a locked file — burns
+   * the only code the reviewer has and leaves them nothing. Raised in review.
    */
-  redeemPairing(codeHash: string, now: number): Promise<SessionIdentity | undefined>;
-  createSession(session: { tokenHash: string; identity: SessionIdentity; expiresAt: number }): Promise<void>;
+  redeemPairing(redemption: {
+    codeHash: string;
+    tokenHash: string;
+    expiresAt: number;
+    now: number;
+  }): Promise<SessionIdentity | undefined>;
   /** The live session behind this refresh token, or `undefined` when it is expired or revoked. */
   findSession(tokenHash: string, now: number): Promise<SessionRecord | undefined>;
   /** `true` when this call is what revoked it. A second logout is not an error, it is a no-op. */
@@ -173,10 +179,26 @@ export async function redeemPairing(
 ): Promise<{ ok: true; session: IssuedSession } | { ok: false; reason: PairingFailure }> {
   await store.purge(now);
 
-  const identity = await store.redeemPairing(await digest(normalizePairingCode(code)), now);
+  // The refresh token is minted before the store is asked, so the code and the session it buys are
+  // written by one operation. A code cannot be spent without the session existing.
+  const refreshToken = createRefreshToken();
+  const identity = await store.redeemPairing({
+    codeHash: await digest(normalizePairingCode(code)),
+    tokenHash: await digest(refreshToken),
+    expiresAt: now + REFRESH_TTL_SECONDS * 1000,
+    now,
+  });
   if (identity === undefined) return { ok: false, reason: 'code-spent-or-expired' };
 
-  return { ok: true, session: await openSession(store, identity, secret, now) };
+  return {
+    ok: true,
+    session: {
+      refreshToken,
+      accessToken: await mintAccessToken(identity, secret, now),
+      expiresIn: ACCESS_TTL_SECONDS,
+      identity,
+    },
+  };
 }
 
 /**
@@ -221,28 +243,6 @@ export async function revokeSession(
   now: number = Date.now(),
 ): Promise<boolean> {
   return store.revokeSession(await digest(refreshToken), now);
-}
-
-async function openSession(
-  store: SessionStore,
-  identity: SessionIdentity,
-  secret: string,
-  now: number,
-): Promise<IssuedSession> {
-  const refreshToken = createRefreshToken();
-
-  await store.createSession({
-    tokenHash: await digest(refreshToken),
-    identity,
-    expiresAt: now + REFRESH_TTL_SECONDS * 1000,
-  });
-
-  return {
-    refreshToken,
-    accessToken: await mintAccessToken(identity, secret, now),
-    expiresIn: ACCESS_TTL_SECONDS,
-    identity,
-  };
 }
 
 /** The same token a client site mints for itself, signed here instead. See `identity.ts`. */

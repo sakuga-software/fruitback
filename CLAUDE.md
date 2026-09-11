@@ -507,7 +507,8 @@ mode, SKG-534.
 - **Pairing codes and refresh tokens are stored as SHA-256 digests.** A copy of the file must not be
   a set of working logins. A test reads the bytes SQLite wrote — the `-wal` file included, because a
   row just written is only there.
-- **Minting a code is a command, not a route** (`node src/main.ts pair --subject …`). An endpoint
+- **Minting a code is a command, not a route** (`node server.mjs pair --subject …`, and
+  `server.mjs` because the image copies the bundle and no source). An endpoint
   would need an admin credential of its own and would stay reachable for ever; a command is reachable
   by whoever already sets the secrets.
 - **The session routes are exempt from `ALLOWED_ORIGINS`, and only they are.** That list names client

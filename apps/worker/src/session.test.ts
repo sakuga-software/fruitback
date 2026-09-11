@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   ACCESS_TTL_SECONDS,
+  digest,
   PAIRING_TTL_SECONDS,
   REFRESH_TTL_SECONDS,
   createPairing,
@@ -15,6 +16,7 @@ import {
   revokeSession,
 } from './session.ts';
 import { closeSessionConnections, createSqliteSessionStore } from './session-sqlite.ts';
+import type { SessionStore } from './session.ts';
 import { verifyIdentityToken } from './identity.ts';
 
 const SECRET = 'a-worker-secret-nobody-else-has';
@@ -258,4 +260,74 @@ describe('what is on the disk', () => {
     assert.equal(written.includes(normalizePairingCode(code)), false, 'the pairing code is stored in the clear');
     assert.equal(written.includes(redeemed.session.refreshToken), false, 'the refresh token is stored in the clear');
   });
+});
+
+describe('a store that fails mid-redemption', () => {
+  /**
+   * The reason the spend and the session are one transaction.
+   *
+   * Marking the code spent and then failing to write the session burns the only code the reviewer
+   * has: the retry answers `code-spent-or-expired`, which is true and leaves them with nothing.
+   *
+   * The failure is injected through the real store rather than a stub, and it is a real one:
+   * `sessions.token_hash` is the primary key, so reusing a digest already on file makes the INSERT
+   * throw *inside* the transaction — which is where a full volume or a locked file would throw too.
+   * Unlike the atomicity of the spend itself, this guard is observable, because it is not a race.
+   */
+  it('leaves the code spendable when the session cannot be written', async () => {
+    const { store } = storeOnDisk();
+
+    // A session already on file. Its digest is what the failed redemption will collide with.
+    const first = await redeemPairing(store, (await createPairing(store, ALICE)).code, SECRET);
+    assert.ok(first.ok);
+    const taken = await digest(first.session.refreshToken);
+
+    const { code } = await createPairing(store, ALICE);
+    const codeHash = await digest(normalizePairingCode(code));
+    await assert.rejects(() =>
+      store.redeemPairing({
+        codeHash,
+        tokenHash: taken,
+        expiresAt: Date.now() + 60_000,
+        now: Date.now(),
+      }),
+    );
+
+    // The rollback is what makes this pass. Without it the code is gone and so is the reviewer.
+    const retried = await redeemPairing(store, code, SECRET);
+    assert.ok(retried.ok, 'the pairing code was burned by a failed attempt');
+    assert.deepEqual(retried.session.identity, ALICE);
+  });
+});
+
+describe('a row nobody can trust', () => {
+  /**
+   * `A row is parsed, never trusted` — the rule this repo already states for the seed store. The file
+   * sits on a volume an operator can edit and a restore can be older than the code.
+   *
+   * **SQLite narrows what can actually arrive, and the first version of this test got that wrong.**
+   * The column has `TEXT` affinity, so an integer or a float written into it comes back as a string
+   * (`42` reads as `"42.0"`) and never reaches the guard as a non-string. Measured. What does reach
+   * it is a **BLOB**, which keeps its type and arrives as an object, and an empty string, which a
+   * `NOT NULL` column happily holds. Those are the two cases below.
+   */
+  for (const [label, subject] of [
+    ['a blob, which keeps its type through TEXT affinity', Buffer.from('alice')],
+    ['an empty string, which NOT NULL does not stop', ''],
+  ] as const) {
+    it(`refuses a pairing whose subject is ${label}`, async () => {
+      const { store } = storeOnDisk();
+      const code = createPairingCode();
+
+      await store.createPairing({
+        codeHash: await digest(normalizePairingCode(code)),
+        identity: { subject } as unknown as Parameters<typeof store.createPairing>[0]['identity'],
+        expiresAt: Date.now() + 60_000,
+      });
+
+      const redeemed = await redeemPairing(store, code, SECRET);
+
+      assert.equal(redeemed.ok, false, 'a malformed row minted a session');
+    });
+  }
 });

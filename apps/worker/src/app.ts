@@ -146,7 +146,15 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
   }
 
   if (session) {
-    return handleSession(request, pathname, config.config, context, cors.headers);
+    try {
+      return await handleSession(request, pathname, config.config, context, cors.headers);
+    } catch (error) {
+      // A volume nobody mounted, a read-only disk, a file that is not a database. Answered like the
+      // seed path's outage rather than as a bare `500`, so the extension can tell "retry later" from
+      // "this request was wrong" — and so the answer carries the CORS headers it needs to read it.
+      if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, cors.headers);
+      throw error;
+    }
   }
 
   if (pathname !== '/feedback') {
@@ -184,9 +192,14 @@ async function handleSession(
   if (store === undefined || config.identitySecret === undefined) return json(404, { error: 'not-found' }, headers);
   if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
 
-  const body = await readJsonBody(request);
-  // `413` and not `400` for the oversized case: the failure codes are a contract the widget reads.
-  if (body === 'too-large') return json(413, { error: 'body-too-large' }, headers);
+  // `readBoundedText` and not `request.text()`: it refuses a declared length over the cap before a
+  // byte is read, and cancels the stream once a chunked upload crosses it. The first version of this
+  // handler buffered the whole body and then measured `text.length` — which is UTF-16 units, not
+  // bytes, so a multibyte body passed a byte cap it had already exceeded. Raised in review.
+  const text = await readBoundedText(request);
+  if (text === null) return json(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, headers);
+
+  const body = parseJsonObject(text);
   if (body === undefined) return json(400, { error: 'invalid-body' }, headers);
 
   if (pathname === '/session/pair') {
@@ -242,11 +255,8 @@ export async function createPairingCommand(
   return openPairing(store, identity);
 }
 
-/** The body of a session call: small, and JSON or nothing. `'too-large'` so the caller can say 413. */
-async function readJsonBody(request: Request): Promise<Record<string, unknown> | 'too-large' | undefined> {
-  const text = await request.text();
-  if (text.length > MAX_BODY_BYTES) return 'too-large';
-
+/** A session body is a JSON object or nothing. An array is not an object here, whatever `typeof` says. */
+function parseJsonObject(text: string): Record<string, unknown> | undefined {
   try {
     const parsed: unknown = JSON.parse(text);
 

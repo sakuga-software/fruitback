@@ -10,7 +10,10 @@ import { createPairingCommand } from './app.ts';
  * and it would be reachable from the internet for ever after. As a command it is reachable by
  * whoever can already run things in the container, which is the same person who set the secrets.
  *
- * `docker exec <container> node src/main.ts pair --subject alice --name "Alice Martin"`
+ * `docker exec <container> node server.mjs pair --subject alice --name "Alice Martin"`
+ *
+ * `server.mjs` and not `src/main.ts`: the image copies the bundle and nothing else, so the source
+ * path is a command an operator cannot run. Raised in review, and checked against a real build.
  */
 
 export type PairArgs = { subject: string; name?: string; email?: string };
@@ -18,6 +21,8 @@ export type PairArgs = { subject: string; name?: string; email?: string };
 export type PairArgsResult = { ok: true; args: PairArgs } | { ok: false; error: string };
 
 const USAGE = 'usage: pair --subject <id> [--name "<full name>"] [--email <address>]';
+
+const KNOWN_FLAGS = new Set(['subject', 'name', 'email']);
 
 /**
  * `--flag value` only.
@@ -38,6 +43,11 @@ export function parsePairArgs(argv: readonly string[]): PairArgsResult {
 
     values.set(flag.slice(2), value);
   }
+
+  // An unknown flag is refused rather than ignored. `--emali alice@acme.dev` would otherwise mint a
+  // code whose session carries no address, and the operator would believe it did. Raised in review.
+  const unknown = [...values.keys()].filter((flag) => !KNOWN_FLAGS.has(flag));
+  if (unknown.length > 0) return { ok: false, error: `${USAGE}\nunknown: --${unknown.join(', --')}` };
 
   const subject = values.get('subject');
   if (subject === undefined || subject.trim() === '') return { ok: false, error: `${USAGE}\n--subject is required` };

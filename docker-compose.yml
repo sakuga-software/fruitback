@@ -23,3 +23,8 @@ services:
       # FRUITBACK_IDENTITY_SECRET and is refused at boot without one.
       FRUITBACK_READ: ${FRUITBACK_READ:-public}
       FRUITBACK_IDENTITY_SECRET: ${FRUITBACK_IDENTITY_SECRET:-}
+      # The browser extension's sessions, and empty means the /session endpoints are off. Not the
+      # seed store: credentials are not seeds, so this is its own file whatever FRUITBACK_STORE says.
+      # It needs FRUITBACK_IDENTITY_SECRET, and a persistent volume — see .env.example.
+      # Mint a code with: docker compose exec worker node server.mjs pair --subject alice
+      FRUITBACK_SESSION_PATH: ${FRUITBACK_SESSION_PATH:-}

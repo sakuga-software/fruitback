@@ -294,6 +294,32 @@ connector's environment, and what a second connector with no markdown body actua
   a secret the caller must already hold, and the refresh token lives where no page can read it. The
   rate limiter is what stops the pairing endpoint being guessed at.
 
+### What review found, and what it narrowed
+
+- **The redemption is one transaction, not one statement.** Marking the code spent and then failing
+  to insert the session — a full volume, a locked file — burns the only code the reviewer has, and
+  the retry answers `code-spent-or-expired`, which is true and useless. Unlike the atomicity of the
+  spend, this guard *is* observable: the test makes the insert collide on `sessions.token_hash`,
+  which is a real failure inside the transaction rather than a raced one.
+- **A row is parsed, never trusted — and SQLite narrows what can arrive.** The first version of that
+  test asserted an integer `subject`, and it failed: the column has `TEXT` affinity, so `42` comes
+  back as `"42.0"` and never reaches the guard as a non-string. Measured. What does reach it is a
+  **BLOB**, which keeps its type, and an empty string, which `NOT NULL` holds quite happily. The
+  guard is right; the example behind it was not.
+- **The body cap was defeated twice over in one line.** `request.text()` buffers the whole upload
+  before anything is measured, and `.length` counts UTF-16 units rather than bytes — so a multibyte
+  body passed a cap it had already crossed. `readBoundedText` already existed on the feedback path
+  and does both correctly; the session handler had quietly reimplemented a weaker version of it.
+- **A session store that cannot be opened raises `StoreError` now.** It threw a plain `Error`, which
+  `handleSession` had nothing to map, so a missing volume became a bare `500` with no CORS headers —
+  unreadable by the extension, and indistinguishable from a bug.
+- **`node src/main.ts pair` is a command nobody can run.** The image copies `dist/server.mjs` and no
+  source at all, so the documented path fails with a missing file. `node server.mjs pair` is the
+  spelling, checked by running it against a real build. The whole argument for minting being a
+  command rather than a route rests on that command existing.
+- **An unknown flag is refused.** `--emali alice@acme.dev` minted a code whose session carried no
+  address, and the operator had no way to know.
+
 ### What the tests hold, and one they could not
 
 - **Revocation is mutation-tested.** Dropping `revoked_at IS NULL` from `findSession` fails exactly
