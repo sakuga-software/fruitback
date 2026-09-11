@@ -4,8 +4,8 @@ import { z } from 'zod';
 /**
  * An issue as the two ends exchange it: its labels, its stage, and the envelope of a read.
  *
- * Nothing here names a provider. This file was `linear.ts` until SKG-523; see CLAUDE.md for what
- * left it and when.
+ * Nothing here names a provider. This file was `linear.ts` until SKG-523; see
+ * docs/decisions/worker.md for what left it and when.
  */
 
 /** Every issue Fruitback creates carries this label. It is the read filter. */

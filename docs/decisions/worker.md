@@ -1,0 +1,264 @@
+# The worker, and where a seed is stored
+
+The Node service, who may read a pin, and the store interface — what `SeedStore` is, who validates a
+connector's environment, and what a second connector with no markdown body actually proved.
+
+## The worker
+
+- It exists for exactly one reason: the Linear API key cannot ship in client-side JS. Resist putting
+  logic here that belongs in the widget or in Linear.
+- **`app.ts` is transport-agnostic** — a `handleRequest(request, env, context)` over web
+  `Request`/`Response`. `server.ts` adapts `node:http` onto it and `main.ts` starts it. Keep new
+  behaviour in `app.ts` so it stays testable without opening a socket.
+- The env is validated up front (`readConfig`), so a missing secret surfaces at boot and on
+  `/health`, not as an opaque Linear error per request.
+- `POST /feedback` re-canonicalizes `seed.page.url` server-side. The read path finds seeds by
+  matching that URL inside the description, so a client that skipped normalization would plant a pin
+  nobody can find again. `GET /feedback` canonicalizes its `url` parameter for the same reason.
+- **The `description contains` filter is a substring match**, so `/pricing` also matches the seeds of
+  `/pricing?tab=annual`. `fetchSeedIssues` therefore re-checks `seed.page.url` exactly before
+  returning an issue — dropping that check silently mixes two pages' pins.
+- The read cache (`cache.ts`) holds the in-flight promise, not the value, so a burst of visitors on
+  one page costs one Linear call. Failures are evicted at once: an outage must not be served for the
+  whole TTL. In-process, therefore per replica — same caveat as the rate limiter.
+- Failure codes are deliberate: `400` the caller's fault, `403` origin not allowed, `413` oversized
+  body, `429` rate-limited, `500` misconfigured, `502` `store-unavailable` (the widget should keep the
+  note and retry), `401` the read needs an identity. `/health` answers `503` when misconfigured so a
+  bad deploy is never routed to. **A code the widget reads is a promise**, so it names a role and
+  never a vendor — `linear-unavailable` became `store-unavailable` with SKG-522 for that reason.
+
+
+## Who may read a pin
+
+- **`GET /feedback` used to answer anyone who could build the URL.** Every note, its author and the
+  team's replies were readable by any visitor of the client's site, and by `curl` — which is why
+  hiding pins in the browser was never the fix. `read: 'public' | 'authenticated'` is (SKG-533), per
+  client in `FRUITBACK_CLIENTS` or worker-wide via `FRUITBACK_READ`.
+- **The extension is a different problem.** It settles *visibility* — the pins leave the visitor's
+  DOM. It settles nothing about *authorisation*: the endpoint stays open and `curl` still works.
+  Building SKG-534 without this ticket hides the comments in the UI and leaves them in the API.
+- **`authorizeRead` runs before `cached`, and the guard is `stub.calls`, not the status code.** A
+  gate moved below the cache still returns `401`, so asserting the status cannot tell the two apart
+  — it was measured passing against exactly that mutation. What it costs is a Linear call per
+  unauthorised request, so the test that pins the position asserts **no call reached Linear**. The
+  warm-cache test is a narrower guard: it catches a cache-hit fast path that answers before the gate.
+- **`public` stays the default, and that is compatibility rather than security.** Defaulting to
+  `authenticated` would blank the pins on every upgraded worker with no error anywhere, and the
+  operator would hear about it from users. The exposure is made *sayable* instead: the boot log names
+  every client whose pins anyone can read, `/health` counts them. Loud beats silent both ways.
+- **`/health` carries a count, never the ids.** It needs no authentication either, so listing client
+  ids would hand over the map the worker serves. The boot log names them, where only an operator looks.
+- **A client that requires a token and has no key to check one is refused at boot.** The trap is
+  inheritance: `read` is inherited from the worker-wide default, `identitySecret` deliberately never
+  is, so flipping `FRUITBACK_READ` can make a client unreadable without its own entry changing.
+  `unreadableClients` names them; the alternative is a permanent `401` that looks like a broken widget.
+- **A `401` on a read leaves the pins where they are.** Same rule as an unreachable worker: losing
+  what is correctly on screen reads as "my notes are gone". Mutation-tested — blanking on a failed
+  read fails `embed.test.ts`.
+- The switch is applied in **`toSeedIssue`**, which both the real Linear and the in-memory one go
+  through, rather than only through the query's `first:` argument. `first: 0` is an assumption about
+  what Linear accepts, and this promise should not rest on a backend behaving a particular way.
+- **A comment body is `textContent`, never markup.** It is Linear markdown written by anyone who can
+  comment on the issue, rendered inside someone else's page; treating it as HTML would make the
+  feedback widget the way into their site.
+- Sorted oldest-first in the worker, because Linear answers newest-first and a conversation reads the
+  other way. Capped at `COMMENTS_PER_ISSUE` — a longer thread belongs in Linear, which the pin links
+  to.
+
+
+## The team's replies
+
+- **Comments come from Linear on every read** (SKG-502), and close the loop: someone leaves a note,
+  the team answers in the issue, and the answer appears where the note was left rather than in an
+  inbox the reporter does not have.
+- **Absent and empty mean different things.** No `comments` field at all means the worker was not
+  asked for them, and the widget says nothing; `[]` means it asked and there were none, and the
+  widget says so. A client with replies switched off must not read as a team that never answered.
+- **`showComments` is on by default and is a real switch**, per client or worker-wide
+  (`FRUITBACK_HIDE_COMMENTS=1`). Under `read: 'public'` it is the only thing between an issue thread
+  and anyone who can load the client's page; under `read: 'authenticated'` (SKG-533) it is back to
+  being the editorial choice it should always have been, because the reader is someone the worker
+  checked.
+
+
+## Where a seed is stored
+
+- **`store.ts` is the interface, and it existed before it was named** (SKG-522). `app.ts` used to
+  select between the real and the in-memory module through
+  `Pick<typeof realLinear, 'createSeedIssue' | 'fetchSeedIssues'>` — two methods, two
+  implementations, an interface discovered by accident. `SeedStore` writes it down so SQLite
+  (SKG-524) and GitHub (SKG-525) are implementations rather than new branches.
+- **`findForPage` states the intention, not the method.** Linear filters server-side with
+  `description: { contains: … }`, GitHub searches bodies, SQL does a `WHERE`, and a store with no
+  search would walk everything. Exposing a `contains` filter on the interface would have made
+  Linear's trick the contract.
+- **The old `Routing` mixed two things, and the split is the point.** `ClientPolicy` — `showComments`,
+  `identitySecret`, `read` — is what the *worker* decided, whatever store is behind it. `teamId` and
+  `projectId` went to `linear.ts`, where a team means something. `resolveClient` hands the client
+  entry on whole, and **each store reads its own fields from it**.
+- **`store.scope(client)` is what took `teamId` out of the read cache key.** The worker was building
+  its key from `routing.teamId`, so the read path knew that stores route by team. Only the store
+  knows what identifies a tenant — a team for Linear, an `owner/repo` for GitHub, nothing for a
+  single-file SQLite. The client id stays in the key regardless, which is what keeps two clients
+  sharing one team from sharing an entry.
+- **`linear-memory.ts` is a `SeedStore` now but keeps importing `toSeedIssue` from the real
+  connector, on purpose.** That coupling is the feature: an issue is stored as the description
+  `buildIssueDescription` produces and read back through production's own mapping, so a broken round
+  trip breaks the playground too. Renaming the file to something provider-agnostic would advertise an
+  independence it should not have.
+- **The store is built once per process, by the transport.** `createFruitbackServer` constructs it
+  and every request gets it through `RequestContext`. It began as `storeFor(config)` inside the two
+  handlers, which is invisible for Linear and the in-memory one — both stateless closures — and
+  would have opened a SQLite connection per request the moment SKG-524 landed. Caught in review, not
+  by a test, because nothing observable was wrong yet. The tests that hold it now assert the handler
+  used the store it was **given**: a Linear stub left untouched is the proof it built none of its own.
+## Which store, and who validates it
+
+- **`FRUITBACK_STORE` selects the connector, and each connector validates its own environment**
+  (SKG-526). SKG-522 named the interface but left the worker Linear-shaped anyway: `WorkerConfig`
+  carried `linearApiKey`, `linearTeamId` and `linearProjectId`, so every module that could read the
+  config could read one provider's credentials — and `readConfig` checked those three for **every**
+  deployment, so a SQLite worker (SKG-524) would have been refused at boot for a missing Linear key.
+- **What the worker keeps of a store is a name and a way to build one.** `StoreConfig` is
+  `{ provider, create() }` and nothing else; a test asserts exactly those two keys, so the next
+  provider's fields cannot arrive here either. `storeFor` is now one line.
+- **`store-config.ts` is the mechanism, `stores.ts` is the registry**, and they are two files because
+  the connectors import `defineStore` — holding the list in the same file would make it and
+  `linear.ts` import each other. A new store is one entry in `STORE_SPECS`.
+- **A store names its own environment variables.** `envNames` is required per field, so a boot
+  diagnostic says `LINEAR_API_KEY` and never `apiKey` — mutation-tested, and the mutation also trips
+  three older tests, which is how load-bearing that diagnostic is. `never reports a field name from
+  any store` asks it of every spec rather than of Linear.
+- **An unknown provider and a dev-only one in production are both refused, never defaulted.** A typo
+  falling back to Linear would send a worker configured for SQLite to an API it has no key for; and
+  feedback accepted into RAM behind a green health check is worse than a worker that will not start.
+  That second guard is the one thing this ticket had to generalise without loosening.
+- **`FRUITBACK_FAKE_LINEAR=1` still works, and it *degrades* where `FRUITBACK_STORE=memory` is
+  refused.** The asymmetry is deliberate: a flag a container inherited must not stop it serving
+  production, while a provider somebody deliberately named must not be silently swapped for another.
+  So the sugar falls back to the real store and says so in the log; the explicit selection is refused
+  at boot. `pnpm dev` and the E2E suite use the new spelling, which is what keeps the selection path
+  exercised outside the unit tests.
+- **`/health` answers `store: '<provider>'` instead of `fakeLinear: true`**, always. Which store a
+  process runs on is exactly what an operator cannot tell from a green check, and naming one provider
+  in the answer was the last place the endpoint assumed there was only ever one. Compared exactly in
+  `app.test.ts`, on purpose: this endpoint is public, so a field appearing on it has to be written
+  down.
+- **A short `FRUITBACK_IDENTITY_SECRET` used to answer `missing:` and then nothing.** The field failed
+  the schema, matched no entry in `NAMES_BY_FIELD`, and the list came back empty. Fixed in passing
+  here, and `answers no empty diagnostic` walks every way of making the config invalid rather than the
+  one that was noticed.
+- **Still Linear-shaped in one place, and left there on purpose**: `apps/worker/src/linear-memory.ts`
+  keeps its name and its import of `toSeedIssue`. See *Where a seed is stored* — that coupling is the
+  feature.
+
+## SQLite, and what a second connector actually proved
+
+- **`sqlite.ts` is the connector that had to be uncomfortable** (SKG-524). One implementation of
+  `SeedStore` proved nothing; GitHub Issues would have proved almost as little, since markdown bodies,
+  labels and full-text search are Linear's shape under another name. SQLite shares none of it — no
+  description, no `contains` filter, no labels, no workflow states.
+- **It found exactly two places the interface leaked, and both were ours.** `SeedIssue.url` was
+  required, and the only way to satisfy it was to invent a URL for a store with no web page; it is
+  optional now. And the widget's thread said **"sur Linear"** — a vendor name in a widget that is not
+  supposed to know which store answers, the same defect `store-unavailable` fixed in the error codes.
+  Everything else fitted, which is the result the ticket was for.
+- **`findForPage` gets to be a plain equality here**, where Linear can only filter by substring and
+  re-checks afterwards. That is the payoff of naming the intention rather than the method.
+- **The connection is shared per path, and the store object is not.** `handleRequest` still falls back
+  to building a store when the transport did not hand it one, so without the shared handle that path
+  opens a database per request — the hazard SKG-522 was written to prevent. The test asserts **how
+  many handles were opened**, not `connections.size`: the map is keyed by path, so a `connect` that
+  stopped reusing overwrites the entry and leaves the size at one. Both weaker spellings were measured
+  passing against the mutation before this one was written.
+- **There is nothing to project onto `SeedStage`.** The column *is* a stage, so `stageOf` only applies
+  the contract's own tolerance — an unrecognised value colours the pin rather than hiding the note.
+- **A row is parsed, never trusted.** The file sits on a volume an operator can edit and a restore can
+  be older than the code. A malformed row costs that one pin; the page keeps its other notes.
+- **`insert` and `select` are `async` so a failure to open the file rejects rather than throwing
+  synchronously.** `connect` throws before any `await`, and `app.ts` happens to catch it either way —
+  but a caller reaching for `.catch()` would have been bypassed on the one path that matters, a volume
+  nobody mounted.
+- **`sqlite3` is in the runtime image for one reason: the backup line in the README.** The store needs
+  nothing installed; `.backup` needs a binary, and it is the only safe way to copy a live database.
+  Measured in a container: `fruitback.db` was 4 KB while `fruitback.db-wal` held 53 KB, so a `cp`
+  of the `.db` alone would have lost the note that had just been planted.
+- **Verified in the container, not only in `node --test`**: boot on `FRUITBACK_STORE=sqlite`, `/health`
+  answering `store: sqlite`, a seed posted and read back, the pin surviving `docker restart`, and the
+  documented backup command producing a file that holds the seed.
+- **`resolveClientIp` is security-relevant.** `X-Forwarded-For` is appended to by each proxy, so the
+  left of the chain is caller-controlled and forgeable; the client IP is the entry
+  `TRUSTED_PROXY_HOPS` from the **right**. Reading the leftmost entry — correct behind Cloudflare,
+  wrong behind Traefik — makes the rate limit bypassable with one header.
+- **`FRUITBACK_CLIENTS` makes one worker serve several client sites** (SKG-504). It maps a
+  `clientId` to a team, a project and the origins that client may be embedded on. Absent, nothing
+  changes: one team, one project, `client` optional on a read.
+- **Configured, a client has to be named on both paths** — the `client` parameter on a read,
+  `seed.client.id` on a write — and an unknown one is refused. A read that named nobody used to
+  answer with every seed on that URL, which on a shared worker is one client reading another's
+  feedback; a write that names nobody would land in the default team, which is the same leak facing
+  the other way. The read cache key carries the team for the same reason.
+- **`normalizeClientId` runs before the id is used for anything**, and that ordering is the whole
+  point. The id does three jobs — it picks the route, it builds the `fruitback:<id>` label a read
+  filters on, and it keys the cache. Normalising it for the route alone put a note in the right team
+  under `fruitback:  acme  ` while its owner's clean read asked for `fruitback:acme` and found
+  nothing: authorised at both ends, invisible in between. The write path normalises it into the seed
+  the same way it re-canonicalises `page.url`, and for the same reason.
+- **`clientId` is client-asserted**, and SKG-498 did not change that: identity tokens say who the
+  *reporter* is, not which client the page is. `origins` is what turns the claim into something
+  checkable against the browser's own header — the trust level CORS gives, and strictly more than
+  nothing. Do not describe it as authentication.
+- A malformed `FRUITBACK_CLIENTS` is refused at boot rather than ignored, and named on `/health`.
+- The rate limiter is in-process, therefore **per replica**. Scaling to N containers multiplies the
+  effective ceiling by N; a shared store is the fix if that ever matters.
+- Tests drive `handleRequest` with plain `Request` objects against a stubbed Linear
+  (`linear-stub.ts`); no container needed. The assertion that matters most is that the stored
+  description parses back into the exact seed that was posted.
+- **`reporter.verified` is the worker's word, never the client's** (SKG-498). Anything arriving with
+  that flag has it stripped, whatever else it says: without that, a browser posting
+  `reporter: { name: 'CEO', verified: true }` reads in Linear exactly like an identity this worker
+  checked. `identity.ts` sets it only after verifying a **standard compact JWT (HS256)** against the
+  client's `identitySecret` (or `FRUITBACK_IDENTITY_SECRET` on a single-client worker), so a client
+  site mints one with whatever library it already has.
+- **`alg` is asserted against the token, never read from it.** That interoperability is what makes
+  the header an attack surface: a verifier that trusts the token's own algorithm accepts `alg: none`
+  and validates everything. Anything but `HS256` is refused before a byte of the signature is looked
+  at, and the signing input is `header.payload` so swapping the header breaks the signature. Both are
+  tested, and both tests fail if the check is removed.
+- **The identity token arrives in an `Authorization` header, never in the seed.** The seed is stored
+  verbatim in an issue description anyone with workspace access can read, so a credential in there
+  would outlive its expiry by months.
+- A token that fails to verify is a **401**, not a downgrade to anonymous: a site that meant to
+  identify someone and got it wrong should hear about it, rather than have a broken integration go
+  unnoticed for a month. No token at all is fine and stays the default.
+- `exp` is **required** in the claims — a token that never expires is a password. Signatures are
+  compared in constant time, because a `===` on the base64 leaks how much of it was right.
+
+## The markdown codec, and the file that outlived its name
+
+- **`markdown-description.ts` holds "put a seed in a markdown body and keep the issue readable"**
+  (SKG-523) — `buildIssueTitle`, `buildIssueMetadata`, `buildSeedBlock`, `buildIssueDescription`,
+  `parseSeedFromDescription` and `pageQueryTerm`. None of it was ever Linear's; every issue tracker
+  worth connecting to stores a markdown body and lets something search it.
+- **It is a strategy connectors share, not part of `SeedStore`.** Putting it on the interface would
+  have obliged a store that has columns to implement a codec it has no use for — and `sqlite.ts` is
+  the standing proof that such a store exists. A connector picks this up; it is not required to.
+- **`pageQueryTerm` moved with it, and that is the reason it is a separate point.** The term works
+  only because `buildSeedBlock` writes the canonical URL verbatim into the JSON — a property of the
+  *writer*, not of any provider. Beside the code that makes it true, it cannot drift from it.
+- **The round-trip test travelled with the code rather than being rewritten**, which is what the
+  ticket asked for and what makes the move provable: 44 shared tests before, 44 after, and
+  `parseSeedFromDescription(buildIssueDescription(seed)) === seed` is still the same assertion on the
+  same fixture.
+- **`linear.ts` became `issue.ts`, because the name had outlived what it described.** SKG-516 took
+  Linear's workflow states out of it, SKG-517 took the words a human reads, and this ticket took the
+  codec. What was left — a label, a ripeness, and the shape of what a read answers — names no
+  provider at all. `apps/worker/src/linear.ts` keeps its name: over there, a team really is Linear's.
+- **Nothing outside the package had to change**, because every consumer imports through the
+  `@fruitback/shared` barrel rather than from a file. That is the property that made the rename cost
+  one line in `index.ts`, and it is worth not losing.
+- The guard that proves it is `package.test.ts`'s `type-checks an import with no special tsconfig`:
+  it deletes every `dist`, packs all three packages and type-checks an import with `skipLibCheck`
+  **off**, so a renamed file that broke the published declarations fails there rather than in a
+  consumer's build.
+
