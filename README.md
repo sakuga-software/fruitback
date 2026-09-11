@@ -17,8 +17,9 @@ dashboard of ours, no account to create. The widget captures; your issue tracker
 
 ## Install
 
-Two lines on a site with no build step. `endpoint` is your own worker (below); `client` is the name
-this site reports under.
+Two lines on a site with no build step. `client` is the name this site reports under, and `endpoint`
+is **your own worker** — the piece that holds the tracker's API key, because that key cannot ship in
+client-side JavaScript. It is one container: [docs/self-hosting.md](docs/self-hosting.md).
 
 ```html
 <script
@@ -56,7 +57,7 @@ answers exist.
 | Delivered as | `<script>` tag or npm | a browser extension | `<script>` tag or npm |
 | Who sees the pins | every visitor | the reviewer who installed it | reviewers who are signed in |
 | Good for | a public "report a problem" | reviewing a client's site, invisibly | a team reviewing its own staging |
-| Today | **shipped** | **shipped** (MV3, Chromium + Firefox) | in progress (SKG-596) |
+| Today | **shipped** | **shipped** (MV3, Chromium + Firefox) | planned (SKG-596) |
 
 The extension asks for **no host permission at install**: its content scripts are registered at
 runtime, per origin, when somebody switches that site on.
@@ -75,7 +76,9 @@ asked for a Linear key — and an unknown name is refused at boot rather than qu
 
 SQLite is one file through `node:sqlite` — no dependency, no native module, and the schema migrates
 itself on open, so a self-hoster starts one container rather than two. What it gives up is the
-dashboard: with no tracker behind it, the pins on the page are the interface.
+dashboard: with no tracker behind it, the pins on the page are the interface. The compose snippet,
+the one-line backup and what else you trade are in
+[docs/self-hosting.md](docs/self-hosting.md#storing-the-seeds-in-sqlite).
 
 A GitHub Issues connector is planned (SKG-525). The interface it plugs into is
 [`apps/worker/src/store.ts`](apps/worker/src/store.ts).

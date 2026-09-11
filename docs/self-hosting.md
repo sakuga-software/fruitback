@@ -38,6 +38,36 @@ without the worker walking them. `contains` being a substring match, the seed's 
 Answers are cached in-process for 15 s: the same page opened by a room full of reviewers costs one
 call against the Linear quota, and a failed call is never cached.
 
+## Storing the seeds in SQLite
+
+One file, `node:sqlite`, no dependency and no native module to compile. The schema is created on
+first open and migrated in place, so there is no separate command to run — a self-hoster starts one
+container, not two.
+
+```yaml
+# docker-compose.yml
+services:
+  worker:
+    environment:
+      FRUITBACK_STORE: sqlite
+      FRUITBACK_SQLITE_PATH: /data/fruitback.db
+    volumes:
+      - fruitback-data:/data
+```
+
+**Back it up with one line**, and do it against the running container rather than copying the file —
+a live SQLite database has a write-ahead log beside it, and `cp` catches neither consistently:
+
+```bash
+docker compose exec worker sqlite3 /data/fruitback.db ".backup '/data/backup.db'"
+```
+
+What you give up: **SQLite needs a persistent filesystem**, so it cannot run on a serverless runtime.
+That is the trade, not an oversight. And with no issue tracker behind it there is no dashboard and no
+triage UI — the pins on the page are the interface, and a note's thread lives in the `comments`
+table. A store with no web interface reports no link, and the widget renders none rather than one
+that leads back to the page you are already on.
+
 ## Running the published image
 
 Self-hosting does not need this repository. Every push to `main` publishes
