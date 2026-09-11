@@ -823,6 +823,34 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - `exp` is **required** in the claims — a token that never expires is a password. Signatures are
   compared in constant time, because a `===` on the base64 leaks how much of it was right.
 
+## The markdown codec, and the file that outlived its name
+
+- **`markdown-description.ts` holds "put a seed in a markdown body and keep the issue readable"**
+  (SKG-523) — `buildIssueTitle`, `buildIssueMetadata`, `buildSeedBlock`, `buildIssueDescription`,
+  `parseSeedFromDescription` and `pageQueryTerm`. None of it was ever Linear's; every issue tracker
+  worth connecting to stores a markdown body and lets something search it.
+- **It is a strategy connectors share, not part of `SeedStore`.** Putting it on the interface would
+  have obliged a store that has columns to implement a codec it has no use for — and `sqlite.ts` is
+  the standing proof that such a store exists. A connector picks this up; it is not required to.
+- **`pageQueryTerm` moved with it, and that is the reason it is a separate point.** The term works
+  only because `buildSeedBlock` writes the canonical URL verbatim into the JSON — a property of the
+  *writer*, not of any provider. Beside the code that makes it true, it cannot drift from it.
+- **The round-trip test travelled with the code rather than being rewritten**, which is what the
+  ticket asked for and what makes the move provable: 44 shared tests before, 44 after, and
+  `parseSeedFromDescription(buildIssueDescription(seed)) === seed` is still the same assertion on the
+  same fixture.
+- **`linear.ts` became `issue.ts`, because the name had outlived what it described.** SKG-516 took
+  Linear's workflow states out of it, SKG-517 took the words a human reads, and this ticket took the
+  codec. What was left — a label, a ripeness, and the shape of what a read answers — names no
+  provider at all. `apps/worker/src/linear.ts` keeps its name: over there, a team really is Linear's.
+- **Nothing outside the package had to change**, because every consumer imports through the
+  `@fruitback/shared` barrel rather than from a file. That is the property that made the rename cost
+  one line in `index.ts`, and it is worth not losing.
+- The guard that proves it is `package.test.ts`'s `type-checks an import with no special tsconfig`:
+  it deletes every `dist`, packs all three packages and type-checks an import with `skipLibCheck`
+  **off**, so a renamed file that broke the published declarations fails there rather than in a
+  consumer's build.
+
 ## The seed contract
 
 `packages/shared` is the contract both ends depend on. Treat changes to it as breaking.
