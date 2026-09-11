@@ -1,8 +1,13 @@
 # The project, and the layout
 
-The two sections `CLAUDE.md` states as they stand today. Kept here as they were written, because
-each carries a history the condensed version drops: what the project said about itself before
-SKG-524 gave it a store of its own, and which ticket built each part of the widget.
+**What `CLAUDE.md` used to say**, before SKG-598 condensed both sections. The current versions are
+in [CLAUDE.md](../../CLAUDE.md) and they are the ones to trust — the Layout below predates
+`packages/fruitback` and the settings panel, and names `packages/widget`'s parts by the tickets that
+built them.
+
+It is kept because each section carries a history the condensed version drops: what the project
+claimed about itself before SKG-524 gave the worker a store of its own, and which ticket built which
+part of the widget.
 
 ## Project
 
@@ -20,7 +25,7 @@ What has **not** changed is the instinct behind that sentence. Status, threads, 
 still belong to the store, never to a second model kept in step with it — and every store the worker
 speaks to is one somebody already runs. Linear stays the default and the richest of them: the
 dashboard, the triage, the API, the MCP server and the integrations all come for free. See
-[README.md](README.md) for the reasoning and the alternatives that were dropped.
+[README.md](../../README.md) for the reasoning and the alternatives that were dropped.
 
 Deployment is **Docker on a VPS, driven by Dokploy from GitHub** — no Cloudflare, no serverless, no
 managed platform primitives. When something needs infrastructure, reach for what a single container
