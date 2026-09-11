@@ -1,6 +1,7 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { init } from './embed.ts';
+import { init, plant } from './embed.ts';
+import type { TransportRequest } from './transport.ts';
 import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
 import { type MountedPage, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
 import { readFile } from 'node:fs/promises';
@@ -388,20 +389,88 @@ describe('who carries the calls', () => {
   });
 
   /**
-   * The write path needs a real hit test to reach the popover, which happy-dom cannot do — the same
-   * wall the picture suite above meets. So the guard is on the source instead, and it covers both
-   * paths: a call added later that goes straight to the network bypasses the seam silently, and
-   * silently is exactly how the extension relay would stop relaying.
+   * The write path, reached without the popover.
+   *
+   * The composer is behind a hit test happy-dom cannot do, but `plant` only needs a target, and a
+   * target is an element. So the request the transport is handed can be asserted in full — method,
+   * URL, headers and body — where before this suite only covered reads. Raised in review.
+   *
+   * What it still does not cover is the composer calling `plant` at all; that stays `e2e`'s.
+   */
+  it('hands the transport the whole write request, not only the read', async () => {
+    const page = mountPage('<main><button id="cta">Commander</button></main>');
+    setDocumentSize(page.document, 1_000, 1_000);
+    setRect(page.query('button'), { left: 100, top: 200, width: 200, height: 40 });
+    forbidFetch();
+
+    const seen: TransportRequest[] = [];
+    const planted = await plant({
+      note: 'the price is wrong',
+      target: { element: page.query('button'), source: undefined },
+      reporter: undefined,
+      config: { endpoint: ENDPOINT, clientId: 'acme', hiddenStages: [], screenshot: false },
+      options: {
+        endpoint: ENDPOINT,
+        clientId: 'acme',
+        identityToken: () => 'a-token',
+        transport: async (request) => {
+          seen.push(request);
+
+          return { ok: true, status: 201, body: '{}' };
+        },
+      },
+    });
+
+    assert.equal(planted, true);
+
+    const request = seen.at(-1);
+    assert.equal(request?.method, 'POST');
+    assert.equal(request?.url, `${ENDPOINT}/feedback`);
+    assert.equal(request?.headers['Content-Type'], 'application/json');
+    assert.equal(request?.headers.Authorization, 'Bearer a-token');
+    assert.equal((JSON.parse(request?.body ?? '{}') as { note: string }).note, 'the price is wrong');
+  });
+
+  it('reports a refused write as a failure, so the composer keeps the note', async () => {
+    // Losing what someone just wrote is the failure this widget cannot afford, and a relay that
+    // answers `ok: false` must read as a failure rather than as a note that landed.
+    const page = mountPage('<main><button id="cta">Commander</button></main>');
+    setDocumentSize(page.document, 1_000, 1_000);
+    setRect(page.query('button'), { left: 100, top: 200, width: 200, height: 40 });
+    forbidFetch();
+
+    const planted = await plant({
+      note: 'the price is wrong',
+      target: { element: page.query('button'), source: undefined },
+      reporter: undefined,
+      config: { endpoint: ENDPOINT, clientId: 'acme', hiddenStages: [], screenshot: false },
+      options: {
+        endpoint: ENDPOINT,
+        clientId: 'acme',
+        transport: async () => ({ ok: false, status: 502, body: '{"error":"store-unavailable"}' }),
+      },
+    });
+
+    assert.equal(planted, false);
+  });
+
+  /**
+   * Both paths, from the source. A call added later that goes straight to the network bypasses the
+   * seam silently, and silently is exactly how the extension relay would stop relaying.
    */
   it('has no call in embed.ts that goes around the transport', async () => {
     const source = await readFile(new URL('./embed.ts', import.meta.url), 'utf8');
 
     assert.equal(
-      /(?<![.\w])fetch\(/.test(source),
+      /(?<!\w)fetch\(/.test(source),
       false,
       'embed.ts calls fetch directly; route it through transportFor(options)',
     );
 
+    // The lookbehind excludes a preceding word character and **not** a dot, on purpose: a
+    // `globalThis.fetch(` or a `view.fetch(` is a bypass like any other, and the first version of
+    // this check excluded the dot and let both through. Raised in review.
+    //
     // Twice and no more: the import, and the one line of `transportFor`. A third mention is a call
     // site that took the default instead of asking, which the check above cannot see.
     assert.equal(

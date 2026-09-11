@@ -468,9 +468,14 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   calling the default directly is not calling `fetch`.
 - **That count includes comments**, which the first version learned by failing: a sentence naming the
   default sat in `transportFor`'s own docstring and made three.
-- **The write path is not unit-tested here**, and the source guard is why that is acceptable. Reaching
-  the composer needs a real hit test, which happy-dom has no `elementsFromPoint` for — the same wall
-  *The optional picture* meets.
+- **The lookbehind excludes a word character and not a dot**, and the first version excluded both.
+  `globalThis.fetch(` and `view.fetch(` went straight through a check written to stop exactly them.
+  Raised in review, and the mutation now measured red.
+- **`plant` is exported for its tests and never from `public.ts`.** The composer sits behind a hit
+  test happy-dom cannot do, so the write path had no unit cover and a regression in its method,
+  headers or body would have passed — the source guard rules out a bypass, not a malformed request.
+  What `plant` actually needs is a target, and a target is an element, which happy-dom does have.
+  Raised in review. What stays `e2e`'s is the composer calling it at all.
 - **`fetchTransport` does not catch.** A worker nobody can reach rejects, `embed.ts` treats that and a
   failed status identically, and swallowing it here would only hide an outage from an implementer who
   wanted to log it. Mutation-tested.

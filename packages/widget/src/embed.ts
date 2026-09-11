@@ -297,7 +297,14 @@ function createReader(
   };
 }
 
-async function plant({
+/**
+ * Exported for its tests, never from `public.ts`.
+ *
+ * The composer reaches this through a hit test happy-dom cannot do, so the write path had no unit
+ * cover at all: a regression in its method, headers or body would have passed. What it needs is a
+ * target, and a target is an element — which happy-dom does have. Raised in review.
+ */
+export async function plant({
   note,
   target,
   reporter,
