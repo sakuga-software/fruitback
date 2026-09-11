@@ -375,8 +375,8 @@ mode, SKG-534.
   a *malformed* message and cannot refuse a **well-formed** one the page wrote. That is inherent to
   the main world and no handoff closes it — it is stated rather than defended, because a reviewer
   grants an origin precisely because they trust that origin's code. **Nothing secret travels there,
-  and an identity token is not sent at all.** SKG-535 keeps the token in the isolated world behind a
-  relay, and that has to keep being true.
+  and an identity token is not sent at all.** `worlds.test.ts` is what keeps that true, and
+  `protocol.test.ts` pins that a parsed message carries only the four fields it declares.
 - **`registerContentScripts` reaches the *next* page load, never the open one.** The popup injects
   both files into the current tab after the grant.
 - **An unchanged decision is never re-posted**, because a re-posted `mount` destroys and rebuilds the
@@ -393,8 +393,34 @@ mode, SKG-534.
 - **A site that embeds the widget *and* a reviewer who has the extension get two docks.** Known,
   harmless, and not solved here.
 
-**Deeper** — *The extension, and the two worlds*:
-[docs/decisions/extension.md](docs/decisions/extension.md).
+**The session** (SKG-599, the extension half of SKG-535)
+
+- **The refresh token lives in `chrome.storage.local` and the access token in
+  `chrome.storage.session`.** One survives the browser closing and the other must not. Both in
+  `session` would make a reviewer pair again every morning, and somebody who does that keeps their
+  pairing code in a text file — a worse place than the one the split protects.
+- **Nothing calls `setAccessLevel` on the session area.** Its default excludes content scripts, which
+  is the boundary this whole batch exists to hold. The background is the only context that ever holds
+  a token; the isolated script asks it to make the call, which is the seam SKG-596's relay needs.
+- **The guard is an allowlist**: `worlds.test.ts` *discovers* every `*.content.ts` declaring
+  `world: 'MAIN'`, follows its relative imports, and refuses a `session*` module or the name
+  `refreshToken` / `accessToken` anywhere in that closure. A main-world file added later is covered
+  the day it is written. **It detects the world on the code, not on the file** — the docstring of
+  `page.content.ts` quotes `world: 'MAIN'`, so the first version guarded a file that had stopped
+  reaching the page and reported a pass.
+- **Only a `401` ends a session.** An outage or a `502` keeps the refresh token: throwing it away on
+  a network blip logs a reviewer out of a session the worker still considers open, and the only way
+  back is an operator minting a new pairing code. For the same reason a `429` on `/session/pair`
+  answers `unavailable` and never `code-spent-or-expired`.
+- **Log out revokes, then clears — and clears whatever the revoke answered.** A failed revoke leaves
+  the token live on the worker until it expires; a screen saying signed out over a working credential
+  would be worse.
+- `src/session.ts` is the logic behind seams and `src/session-browser.ts` binds the real
+  `browser.storage` and `fetch`, the same split `bridge.ts` made. **Refreshing runs on an alarm, not
+  a timer** — an MV3 service worker is stopped whenever the browser feels like it.
+
+**Deeper** — *The extension, and the two worlds* and *The session, and the token that never goes
+down*: [docs/decisions/extension.md](docs/decisions/extension.md).
 
 ## The worker
 

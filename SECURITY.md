@@ -142,6 +142,19 @@ person; redeeming it opens a session.
 | Refresh token | 256 bits, 30 days, revocable |
 | On disk | codes and refresh tokens are stored as **SHA-256 digests** |
 
+Since SKG-599 the extension holds its half of that, and **where** matters as much as the lifetimes:
+
+| | |
+| --- | --- |
+| Refresh token | `chrome.storage.local`, in the reviewer's browser profile — it survives a restart |
+| Access token | `chrome.storage.session`, which the browser empties when it closes |
+
+Neither is readable from a reviewed page. The access token is held only by the extension's background
+service worker, `chrome.storage.session` keeps its default access level (which excludes content
+scripts), and nothing about a session travels on the `window.postMessage` bridge. A browser profile
+is now part of this boundary: somebody who can read a reviewer's profile can read their refresh
+token, and revoking it is the answer.
+
 **`FRUITBACK_SESSION_PATH` is a credentials file.** Give it the same care as a key: a copy of it is
 not a set of working logins, but it is a list of who holds a session and until when. Back it up with
 `sqlite3 … ".backup"` rather than `cp`, which loses the write-ahead log.

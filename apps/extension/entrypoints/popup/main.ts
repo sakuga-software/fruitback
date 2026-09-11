@@ -2,6 +2,8 @@ import { browser } from 'wxt/browser';
 import { isWorkerEndpoint, normalizeWorkerEndpoint } from '../../src/endpoint.ts';
 import { BRIDGE_FILE, PAGE_FILE, matchPatternFor, publicPath } from '../../src/registration.ts';
 import { type SiteConfig, readSite, writeSite } from '../../src/sites.ts';
+import { createBrowserSessions } from '../../src/session-browser.ts';
+import { type PairFailure, describeIdentity } from '../../src/session.ts';
 
 /**
  * The switch for the tab you are looking at, and the two fields that make it work (SKG-534).
@@ -38,6 +40,79 @@ async function render(): Promise<void> {
     element('p', origin, 'origin'),
     site === undefined ? form(origin) : status(origin, site),
   );
+
+  // Pairing is against the **worker**, not the site, so there is nothing to ask for until one is
+  // named. A reviewer holds one session per worker however many of its sites they have turned on.
+  if (site !== undefined) app.append(await session(site.endpoint));
+}
+
+/** What a failed pairing is, in the reporter's words. */
+const PAIRING_PROBLEM: Record<PairFailure, string> = {
+  'code-spent-or-expired': 'That code has been used or has expired. Ask for a new one.',
+  unavailable: 'The worker did not answer. Try again.',
+};
+
+/**
+ * Paste a code, see who you are, log out (SKG-599).
+ *
+ * Deliberately thin: everything it decides lives in `src/session.ts`, where `node --test` can reach
+ * it. What is here is four elements and the two strings a person reads.
+ */
+async function session(endpoint: string): Promise<HTMLElement> {
+  const sessions = createBrowserSessions();
+  const held = (await sessions.list())[endpoint];
+  const wrapper = document.createElement('div');
+  wrapper.className = 'session';
+
+  if (held !== undefined) {
+    const out = element('button', 'Log out');
+    out.addEventListener('click', () => {
+      out.disabled = true;
+      // `logout` revokes on the worker first and clears here whatever that answers. See its comment:
+      // a screen that says signed out while this extension still holds a working credential is the
+      // one outcome worth avoiding.
+      void sessions.logout(endpoint).then(render);
+    });
+
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.append(element('span', `Paired as ${describeIdentity(held.identity)}`, 'state'), out);
+    wrapper.append(row);
+
+    return wrapper;
+  }
+
+  const code = field('Pairing code', 'ABCD-EFGH-JKMN');
+  const submit = element('button', 'Pair with this worker');
+  const problem = element('p', '', 'problem');
+
+  submit.addEventListener('click', () => {
+    const value = code.input.value.trim();
+    problem.textContent = value === '' ? 'The pairing code is required.' : '';
+    if (problem.textContent !== '') return;
+
+    // A code is spendable once. A second click while the first is in flight would spend it, then be
+    // told by the worker that it is spent — a success reported as a failure. Same rule as the
+    // widget's send button.
+    submit.disabled = true;
+    void sessions.pair(endpoint, value).then((result) => {
+      if (result.ok) {
+        void render();
+
+        return;
+      }
+
+      submit.disabled = false;
+      problem.textContent = PAIRING_PROBLEM[result.reason];
+    });
+  });
+
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.append(element('span', 'Not paired with this worker', 'state'));
+  wrapper.append(row, code.label, submit, problem);
+
+  return wrapper;
 }
 
 /** No entry yet: ask for the two things `init` cannot be called without. */

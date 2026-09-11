@@ -121,3 +121,56 @@ is the private mode as SKG-534 built it.
   can drive, which is why that path is unit-tested and the browser run uses a build with the scripts
   declared statically.
 
+
+## The session, and the token that never goes down (SKG-599)
+
+SKG-535 built the worker half — pairing codes, access and refresh tokens, revocation, three routes
+exempt from the origin allowlist. This is the other half, and it carries the constraint that shaped
+both: an access token the host site's JavaScript can read is the worst outcome of this batch.
+
+- **Two storage areas, and the split is the decision.** The refresh token goes in
+  `chrome.storage.local`, which survives the browser closing; the access token goes in
+  `chrome.storage.session`, which does not. Both in `session` would look tidier and be worse: a
+  reviewer who pairs again every morning keeps their pairing code in a text file, which is a worse
+  place than the one the split was protecting. SKG-535's "when the lifetime suits it" is what allows
+  this.
+- **Nothing calls `setAccessLevel` on the session area, on purpose.** Its default excludes content
+  scripts, which is exactly the boundary this ticket holds. Widening it to
+  `TRUSTED_AND_UNTRUSTED_CONTEXTS` so the isolated script could read the token directly would put the
+  token one `postMessage` mistake away from the page — the isolated script asks the background to
+  make the call instead, which is the same seam SKG-596's relay needs.
+- **The guard is an allowlist, not a denylist** (`src/worlds.test.ts`). Naming the files that must
+  stay clean passes a main-world entrypoint added next year. So the entrypoints are *discovered* —
+  every `*.content.ts` declaring `world: 'MAIN'` — their transitive relative imports are computed,
+  and none of those may be a `session*` module or name `refreshToken` / `accessToken` in code.
+  - **The detection reads the code, not the file.** `page.content.ts` opens with a paragraph about
+    why `world: 'MAIN'` is the ticket, so the first version kept the file in the list after the
+    declaration itself had changed — it then guarded a file that no longer reached the page and
+    reported three passes. Found by mutating the declaration and watching nothing fail.
+  - The built bundles say the same thing, which is the version that cannot be argued with:
+    `refreshToken`, `accessToken`, `/session/` and `storage.session` each appear **once in
+    `background.js` and zero times in `page.js` and `bridge.js`**.
+- **Only a `401` ends a session.** An outage, a `502` from a store nobody mounted, a laptop on a
+  train: all of those keep the refresh token. Throwing it away on a network blip logs a reviewer out
+  of a session the worker still considers open, and the only way back is an operator minting a new
+  pairing code on the container.
+- **A busy worker is not a bad code.** A `429` or a `502` on `/session/pair` answers `unavailable`
+  and not `code-spent-or-expired`, because the second sends a reviewer for a replacement code while
+  the one in their hand is still good.
+- **Log out revokes, then clears — and clears whatever the revoke answered.** The other order cannot
+  work: the token the call needs is the one the clear has just thrown away. A revoke that never
+  arrived leaves the token live on the worker until it expires, which is what the 30-day limit is
+  for, and that is the honest trade rather than a screen saying signed out over a working credential.
+- **An alarm, not a timer.** An MV3 service worker is stopped whenever the browser feels like it, so
+  a `setTimeout` dies with it. The alarm is set at the next due moment rather than every minute, and
+  a session with no access token is due *now* — which is what mints the first token of the day after
+  a restart empties `chrome.storage.session`.
+- **Rotation is half-built on purpose.** A rotated refresh token is stored when one arrives, and none
+  ever does: the worker does not rotate. A rotation whose response is lost leaves this side holding a
+  token the worker has already retired, with nothing to retry — closing that needs a replay window on
+  the worker, which is SKG-600.
+- Verified over the real transport rather than against the handler, which is this repo's recurring
+  defect (SKG-518): a real `OPTIONS` preflight from `chrome-extension://…` for
+  `Content-Type: application/json`, then pair → refresh → revoke → refresh, answering
+  `204 / 200 / 200 / 204 / 401`. What is **not** verified here is `chrome.storage` itself and the
+  real world boundary — that is SKG-538, and no browser runs on this machine.

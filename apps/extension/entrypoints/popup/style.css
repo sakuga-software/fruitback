@@ -93,3 +93,8 @@ button {
   margin: 8px 0 0;
   color: var(--accent);
 }
+
+/* The pairing block sits under the site row, which already draws the separator above it. */
+.session label {
+  margin-top: 10px;
+}
