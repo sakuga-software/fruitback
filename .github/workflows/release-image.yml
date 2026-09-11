@@ -135,8 +135,11 @@ jobs:
 
       # `ignore-unfixed` on purpose: an Alpine CVE with no patch available reddens every release for
       # something nobody can act on, and a gate that cannot be satisfied is a gate somebody deletes.
+      # Pin with the `v`. This action has one tag without it out of 75 — `0.35.0` — so the wrong
+      # form looks valid until the next bump: `@0.36.0` resolves to nothing, and the job then dies
+      # in set-up before a single step runs.
       - name: Scan it, and fail on anything actionable
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: fruitback-worker:candidate
           format: table
@@ -148,6 +151,11 @@ jobs:
     name: push
     # Both architectures, so a red arm64 stops the amd64 one from being published beside it.
     needs: check
+    # `workflow_dispatch` runs on whatever ref you pick it from, and `type=sha` below produces a tag
+    # on any of them — so without this line a dispatch from a branch pushes an image built from
+    # unmerged code. With it, a dispatch checks both architectures and publishes nothing, which is
+    # what makes this workflow provable before it reaches main.
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 60
 

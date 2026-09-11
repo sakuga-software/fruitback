@@ -44,7 +44,13 @@ WORKDIR /app
 # way to copy a live database — `cp` misses the write-ahead log beside it. About 1.5 MB, and without
 # it "the database is the product" comes with a documented command that is not there. Alpine has no
 # curl either, which is why the healthcheck below probes with Node.
-RUN apk add --no-cache sqlite
+# `upgrade` before `add`, and it is not belt-and-braces. The base image is rebuilt on its own
+# schedule, so it ships whatever Alpine packages it held on that day — measured here as openssl
+# 3.5.7-r0 against CVE-2026-14456, which Alpine had already fixed in 3.5.8-r0. The release gate
+# scans with `ignore-unfixed`, so a lag like that reddens it for something an upgrade does fix.
+# The cost is that the runtime layer is no longer byte-identical between two builds of the same
+# commit; the image is pinned by digest at deploy time, which is where that guarantee belongs.
+RUN apk upgrade --no-cache && apk add --no-cache sqlite
 
 # The default home for FRUITBACK_SQLITE_PATH, and a mount point for the volume that outlives the
 # container. Created here and owned by `node`, because the process does not run as root and a store
