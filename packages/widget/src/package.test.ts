@@ -107,13 +107,21 @@ describe('the script-tag build', () => {
    */
   it('documents the attributes the script tag cannot mount without', async () => {
     const bootstrap = await readFile(join(root, 'src', 'global.ts'), 'utf8');
-    const guarded = /if \(endpoint !== undefined && clientId !== undefined\)/.test(bootstrap);
-    assert.ok(guarded, 'global.ts no longer gates the mount on those two locals; this guard is stale');
 
-    const required = [...bootstrap.matchAll(/script\.dataset\.(fruitback[A-Za-z]+)/g)]
-      .map((match) => match[1] ?? '')
-      .filter((name) => name !== '' && !bootstrap.includes(`label: script.dataset.${name}`));
-    assert.equal(required.length, 2, `expected two required attributes, found ${required.join(', ')}`);
+    // Read off the **mount condition**, not off every `script.dataset.*` in the file minus the ones
+    // known to be optional. That subtraction was a denylist: an optional `fruitbackTheme` added later
+    // and read inline would have been counted as required, because the filter only knew about
+    // `label`. The condition names exactly what the tag cannot mount without, so it is the allowlist.
+    // Raised in review — the same rule this PR applies to `worlds.test.ts`.
+    const condition = /if \((\w+) !== undefined && (\w+) !== undefined\)/.exec(bootstrap);
+    assert.ok(condition, 'global.ts no longer gates the mount on two locals; this guard is stale');
+
+    const required = condition.slice(1, 3).map((local) => {
+      const assignment = new RegExp(`const ${local} = script\\.dataset\\.(fruitback[A-Za-z]+);`).exec(bootstrap);
+      assert.ok(assignment, `the mount condition names ${local}, and nothing assigns it from a data attribute`);
+
+      return assignment[1] as string;
+    });
 
     const readme = await readFile(join(root, '..', '..', 'README.md'), 'utf8');
     for (const camel of required) {
