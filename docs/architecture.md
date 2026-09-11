@@ -42,8 +42,9 @@ pin overlay            ◀──GET─── query by label+URL ◀────�
   touched). Picks the element via `react-grab/primitives`, captures the anchor, and later re-plants
   the pins it reads back.
 - **worker** — a small Node process in a container (Docker on a VPS, deployed by Dokploy from a
-  GitHub push). Its only reason to exist: the tracker's API token cannot live in client-side JS on a
-  public site. It also decides attribution (anonymous vs signed in).
+  GitHub push). Why it exists at all: a tracker's API token cannot live in client-side JS on a public
+  site. On `FRUITBACK_STORE=sqlite` there is no such token and it still exists, because somebody has
+  to hold the file and answer the two routes. It also decides attribution (anonymous vs signed in).
 - **shared** — `@fruitback/shared`, the _seed_ contract. Both ends depend on it.
 - **extension** — `@fruitback/extension`, the same widget on a site that embeds **nothing** (SKG-534).
   The reviewer installs it, switches a site on, and the page they are reviewing is untouched — no

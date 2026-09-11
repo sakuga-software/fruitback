@@ -403,8 +403,10 @@ mode, SKG-534.
 
 ## The worker
 
-- It exists for exactly one reason: the Linear API key cannot ship in client-side JS. Resist putting
-  logic here that belongs in the widget or in Linear.
+- It exists because a store's API key cannot ship in client-side JS — and, since SKG-524, because
+  somebody has to hold the SQLite file too. **Resist putting logic here that belongs in the widget or
+  in the store.** The rule is the point; "exactly one reason" was the wording until SKG-519, and it
+  stopped being true when a store with no API key shipped.
 - **`app.ts` is transport-agnostic** — a `handleRequest(request, env, context)` over web
   `Request`/`Response`. `server.ts` adapts `node:http` onto it and `main.ts` starts it. Keep new
   behaviour in `app.ts` so it stays testable without opening a socket.
