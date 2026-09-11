@@ -1,0 +1,240 @@
+name: Release image
+
+# Publishing is a different job from checking, which is why this is not a job in ci.yml: that
+# workflow's `image` job builds one architecture and loads it into the local daemon to boot it, and
+# a multi-platform build cannot be loaded at all. The two must stay apart.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # The push needs `packages`. The attestations need the other two, and a missing one fails at the
+  # very end of a long build with a 403 that names nothing.
+  packages: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-image-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/fruitback-worker
+
+jobs:
+  # Every architecture that gets published is booted and scanned here first, and that is one job per
+  # architecture rather than one for the native one. An arm64-only failure — the base image, the
+  # `apk add`, the healthcheck — passes an amd64 gate and reaches the registry anyway, which is the
+  # architecture this whole workflow exists to serve. Raised in review, and it was true.
+  check:
+    name: check ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # `arch` is carried beside `platform` so the cache scope is a plain name. A scope built from
+        # "linux/amd64" puts a slash in a cache key, which is asking a question nobody needs asked.
+        include:
+          - platform: linux/amd64
+            arch: amd64
+          - platform: linux/arm64
+            arch: arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # `actions/checkout` writes GITHUB_TOKEN into .git/config by default, where any later step
+          # in the job can read it — and this job's token carries `packages: write`. Nothing here
+          # runs a git command after the checkout; `docker/login-action` is handed the token
+          # explicitly. Raised in review.
+          persist-credentials: false
+
+      # arm64 runs on this amd64 runner through binfmt, for the runtime stage and for `docker run`
+      # below. The heavy work is not emulated — see the BUILDPLATFORM pin in apps/worker/Dockerfile.
+      # A public repository could drop this and give each platform its own native runner.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # A single-platform build can be loaded into the daemon; only a multi-platform one cannot. That
+      # is what lets an arm64 image be started here and not merely built.
+      - name: Build the candidate
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/worker/Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: false
+          load: true
+          tags: fruitback-worker:candidate
+          cache-from: type=gha,scope=release-image-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=release-image-${{ matrix.arch }}
+
+      - name: It serves, and it still refuses the in-memory store
+        run: |
+          set -euo pipefail
+
+          # A misconfigured worker keeps serving and answers /health with 503 — that is the design,
+          # so that a bad deploy is never routed to rather than crash-looping. Both checks therefore
+          # wait for an answer and read its status, and neither waits for the process to exit.
+          # Ninety attempts, not thirty: a foreign architecture starts Node under emulation.
+          health() {
+            for _ in $(seq 1 90); do
+              code=$(curl -s -o /tmp/body -w '%{http_code}' "http://127.0.0.1:$1/health" || true)
+              if [ "$code" != "000" ]; then echo "$code"; return 0; fi
+              sleep 1
+            done
+            echo "000"
+          }
+
+          docker run -d --name serves -p 8080:8080 \
+            -e ALLOWED_ORIGINS=http://localhost:5173 \
+            -e LINEAR_API_KEY=ci-not-a-real-key \
+            -e LINEAR_TEAM_ID=ci-team \
+            fruitback-worker:candidate
+          code=$(health 8080)
+          body=$(cat /tmp/body)
+          if [ "$code" != "200" ]; then
+            echo "the container never became ready (HTTP $code, body: $body):"
+            docker logs serves
+            exit 1
+          fi
+          echo "ready: $body"
+
+          # NODE_ENV=production is what refuses FRUITBACK_STORE=memory, and a --target that stopped
+          # at the build stage would take it away with no other symptom at all. Asserting the refusal
+          # tests the guard; asserting the variable would only test that somebody wrote it down.
+          docker run -d --name dev-store -p 8081:8080 \
+            -e ALLOWED_ORIGINS=http://localhost:5173 \
+            -e FRUITBACK_STORE=memory \
+            fruitback-worker:candidate
+          code=$(health 8081)
+          body=$(cat /tmp/body)
+          # Matched on the 503 and on the variable name, never on the wording beside it. The
+          # diagnostic names the environment variable it refused because `store-config.ts` is
+          # required to, and that is a contract with its own tests; the prose around it is free to be
+          # reworded, and a check that read the prose would go green on a broken image.
+          case "$code:$body" in
+            503:*FRUITBACK_STORE*) echo "refused as it should: $body" ;;
+            *)
+              echo "the image did not refuse FRUITBACK_STORE=memory (HTTP $code, body: $body)"
+              echo "NODE_ENV=production did not survive the build"
+              docker logs dev-store
+              exit 1
+              ;;
+          esac
+
+      # `ignore-unfixed` on purpose: an Alpine CVE with no patch available reddens every release for
+      # something nobody can act on, and a gate that cannot be satisfied is a gate somebody deletes.
+      - name: Scan it, and fail on anything actionable
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          image-ref: fruitback-worker:candidate
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+
+  publish:
+    name: push
+    # Both architectures, so a red arm64 stops the amd64 one from being published beside it.
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # `actions/checkout` writes GITHUB_TOKEN into .git/config by default, where any later step
+          # in the job can read it — and this job's token carries `packages: write`. Nothing here
+          # runs a git command after the checkout; `docker/login-action` is handed the token
+          # explicitly. Raised in review.
+          persist-credentials: false
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Compute tags and labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          # `latest` moves only on a version tag. A `latest` that followed every push to main would
+          # take away the one thing this ticket is for: pinning a version and being able to go back.
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=edge,branch=main
+            type=sha,format=long
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # A Raspberry Pi and an ARM VPS are ordinary self-hosting, and an amd64-only image excludes
+      # them with an error that reads like a broken download. Each platform's layers were built by
+      # its own check job, so this reads both caches and assembles rather than rebuilding.
+      - name: Build every architecture and push
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/worker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          cache-from: |
+            type=gha,scope=release-image-amd64
+            type=gha,scope=release-image-arm64
+          provenance: mode=max
+          sbom: true
+
+      # The registry attestation above travels with the image; this one is signed by GitHub and is
+      # what `gh attestation verify` reads. Same intent as the --provenance on the npm publish.
+      - name: Attest what was built
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      # The tags come from a git ref, so they reach the shell through the environment and never
+      # through an expression pasted into the script.
+      - name: Say what was published
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          {
+            echo "### Published"
+            echo
+            echo '```'
+            echo "$TAGS"
+            echo '```'
+            echo
+            echo "Digest: \`$DIGEST\` — \`linux/amd64\` and \`linux/arm64\`."
+            echo
+            echo "The digest is the only immutable reference. A re-run of this workflow on the same"
+            echo "commit republishes every tag above, including \`sha-\`, under a new digest."
+          } >> "$GITHUB_STEP_SUMMARY"

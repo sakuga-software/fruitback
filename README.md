@@ -227,6 +227,74 @@ without the worker walking them. `contains` being a substring match, the seed's 
 Answers are cached in-process for 15 s: the same page opened by a room full of reviewers costs one
 call against the Linear quota, and a failed call is never cached.
 
+### Running the published image
+
+Self-hosting does not need this repository. Every push to `main` publishes
+`ghcr.io/sakuga-software/fruitback-worker`, so the install is a `docker run` rather than a clone, a
+pnpm install and a full compilation — which on a small VPS fails for lack of memory about as often as
+it succeeds.
+
+> **While this repository is private, so is the package.** GHCR gives a new package the visibility of
+> the repository it came from, so an unauthenticated `docker pull` answers `denied` until an owner
+> makes the package public — *Packages → `fruitback-worker` → Package settings → Change visibility*.
+> Until then, `docker login ghcr.io` with a token carrying `read:packages` is what works.
+
+```bash
+docker run -d --name fruitback -p 8080:8080 \
+  -e ALLOWED_ORIGINS=https://staging.example.com \
+  -e FRUITBACK_STORE=sqlite \
+  -e FRUITBACK_SQLITE_PATH=/data/fruitback.db \
+  -v fruitback-data:/data \
+  ghcr.io/sakuga-software/fruitback-worker:edge
+```
+
+**`edge` and not `latest`, until the first release.** The versioned tags come from a `v*` git tag, so
+before one is pushed `latest`, `1.4.2` and `1.4` resolve to nothing and asking for one gets you
+`manifest unknown` rather than an image. `edge` and `sha-<commit>` are what exist from the first
+merge onwards; the rest arrive with the first release and are the better choice from then on.
+
+**`linux/amd64` and `linux/arm64` both**, because a Raspberry Pi or an ARM VPS is ordinary
+self-hosting, and an amd64-only image excludes them with an error that reads like a broken download.
+Docker picks the right one from the manifest list; there is no per-architecture tag to choose.
+
+| Tag | Moves | Published by | Use it for |
+| --- | --- | --- | --- |
+| `1.4.2` | Only if that release is rebuilt | A `v1.4.2` git tag | Production. This is the one to pin and to roll back to. |
+| `1.4` | On every patch in that minor | Any `v1.4.x` git tag | Taking patches without reading a changelog. It moves — do not call it a pin. |
+| `latest` | On every release | Any `v*` git tag | A deployment that follows releases and nothing else. |
+| `edge` | Every push to `main` | A merge to `main` | Running what is not released yet. |
+| `sha-<commit>` | Only if that commit is rebuilt | Every publish | Naming one commit's build, in an incident or a bisect. |
+| `@sha256:…` | **Never** | Every publish | The only immutable reference. Pin this when it must not move. |
+
+`latest` deliberately does **not** follow `main`: a `latest` that moved on every merge would take
+away the one thing a tag is for.
+
+**No tag is immutable, `sha-<commit>` included** — raised in review, and it is worth being exact
+about. Re-running the workflow on the same commit, or publishing a `v*` tag that points at a commit
+already on `main`, builds again and republishes every tag it computes. The image is identical in
+substance but not in bytes: `org.opencontainers.image.created` moves, so the digest does. A tag names
+a commit; only a digest names a build.
+
+```bash
+docker pull ghcr.io/sakuga-software/fruitback-worker@sha256:<digest>   # cannot move under you
+```
+
+The image runs as `node` rather than root, carries no `node_modules` — the build stage bundles
+everything into one file — and declares a `HEALTHCHECK` against `/health`, which answers `503` while
+a required variable is missing. Every published build ships a provenance attestation and an SBOM:
+
+```bash
+gh attestation verify oci://ghcr.io/sakuga-software/fruitback-worker:edge --owner sakuga-software
+docker buildx imagetools inspect ghcr.io/sakuga-software/fruitback-worker:edge --format '{{json .SBOM}}'
+```
+
+**Nothing is published before it has been booted and scanned — on every architecture, not one.** The
+release workflow builds each platform separately, starts it, waits for `/health`, asserts the image
+still **refuses** `FRUITBACK_STORE=memory` — `NODE_ENV=production` is what refuses it, and a
+mis-staged build would drop that with no other symptom — and runs Trivy at `CRITICAL,HIGH`. Both must
+pass before either is pushed. Checking only the runner's own architecture would have let an
+arm64-only failure through every gate, on the architecture this is here to serve.
+
 ### Deploying with Dokploy
 
 Create an **Application** on the fruitback repo with:
