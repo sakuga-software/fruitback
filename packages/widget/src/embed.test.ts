@@ -1,8 +1,10 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { init } from './embed.ts';
+import { init, plant } from './embed.ts';
+import type { TransportRequest } from './transport.ts';
 import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
 import { type MountedPage, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
+import { readFile } from 'node:fs/promises';
 
 /**
  * `init` is the published entry point, so the way it fails is part of the contract.
@@ -224,13 +226,21 @@ describe('reading pins', () => {
 
   it('sends no Authorization header when the host mints no token', async () => {
     // The anonymous case stays the default, and an empty header is not the same as none.
+    //
+    // This asserted `init === undefined` until SKG-595, which is the shape the old code happened to
+    // pass rather than the promise being made: every call carries a method now, so the absence of
+    // the header is what has to be checked.
     const page = mountWithCta();
     const seen = stubReads(() => ok([]));
 
     const widget = init({ document: page.document, endpoint: ENDPOINT, clientId: 'acme' });
     await widget.refresh();
 
-    assert.equal(seen.at(-1), undefined);
+    const headers = (seen.at(-1)?.headers ?? {}) as Record<string, string>;
+    assert.deepEqual(
+      Object.keys(headers).filter((name) => name.toLowerCase() === 'authorization'),
+      [],
+    );
 
     widget.destroy();
   });
@@ -291,5 +301,182 @@ describe('the theme a host passes in', () => {
     );
 
     widget.destroy();
+  });
+});
+
+describe('who carries the calls', () => {
+  const ENDPOINT = 'https://worker.test';
+
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
+  /** Fails the test if anything reaches the network while a transport was supposed to carry it. */
+  function forbidFetch() {
+    mock.method(globalThis, 'fetch', async () => {
+      throw new Error('the widget went to the network instead of using the transport it was given');
+    });
+  }
+
+  it('uses the transport it was given, and never the network', async () => {
+    const page = mountPage('<main><button id="cta">Commander</button></main>');
+    forbidFetch();
+
+    const seen: string[] = [];
+    const widget = init({
+      document: page.document,
+      endpoint: ENDPOINT,
+      clientId: 'acme',
+      transport: async (request) => {
+        seen.push(`${request.method} ${request.url}`);
+
+        return { ok: true, status: 200, body: JSON.stringify({ issues: [] }) };
+      },
+    });
+    await widget.refresh();
+
+    assert.equal(seen.length > 0, true, 'the transport was never called');
+    assert.equal(
+      seen.at(-1)?.startsWith(`GET ${ENDPOINT}/feedback?url=`),
+      true,
+      `the transport was handed ${String(seen.at(-1))}`,
+    );
+
+    widget.destroy();
+  });
+
+  it('hands the transport the identity token, so a relay can carry it or replace it', async () => {
+    const page = mountPage('<main><button id="cta">Commander</button></main>');
+    forbidFetch();
+
+    const seen: Record<string, string>[] = [];
+    const widget = init({
+      document: page.document,
+      endpoint: ENDPOINT,
+      clientId: 'acme',
+      identityToken: () => 'a-token',
+      transport: async (request) => {
+        seen.push(request.headers);
+
+        return { ok: true, status: 200, body: JSON.stringify({ issues: [] }) };
+      },
+    });
+    await widget.refresh();
+
+    assert.equal(seen.at(-1)?.Authorization, 'Bearer a-token');
+
+    widget.destroy();
+  });
+
+  it('leaves a failing transport to the same rule as a failing fetch', async () => {
+    // Losing what is correctly on screen is the failure this widget cannot afford, and a transport
+    // that rejects must not be the one exception to it.
+    const page = mountPage('<main><button id="cta">Commander</button></main>');
+    forbidFetch();
+
+    const widget = init({
+      document: page.document,
+      endpoint: ENDPOINT,
+      clientId: 'acme',
+      transport: async () => {
+        throw new Error('the relay is gone');
+      },
+    });
+
+    await widget.refresh();
+
+    widget.destroy();
+  });
+
+  /**
+   * The write path, reached without the popover.
+   *
+   * The composer is behind a hit test happy-dom cannot do, but `plant` only needs a target, and a
+   * target is an element. So the request the transport is handed can be asserted in full — method,
+   * URL, headers and body — where before this suite only covered reads. Raised in review.
+   *
+   * What it still does not cover is the composer calling `plant` at all; that stays `e2e`'s.
+   */
+  it('hands the transport the whole write request, not only the read', async () => {
+    const page = mountPage('<main><button id="cta">Commander</button></main>');
+    setDocumentSize(page.document, 1_000, 1_000);
+    setRect(page.query('button'), { left: 100, top: 200, width: 200, height: 40 });
+    forbidFetch();
+
+    const seen: TransportRequest[] = [];
+    const planted = await plant({
+      note: 'the price is wrong',
+      target: { element: page.query('button'), source: undefined },
+      reporter: undefined,
+      config: { endpoint: ENDPOINT, clientId: 'acme', hiddenStages: [], screenshot: false },
+      options: {
+        endpoint: ENDPOINT,
+        clientId: 'acme',
+        identityToken: () => 'a-token',
+        transport: async (request) => {
+          seen.push(request);
+
+          return { ok: true, status: 201, body: '{}' };
+        },
+      },
+    });
+
+    assert.equal(planted, true);
+
+    const request = seen.at(-1);
+    assert.equal(request?.method, 'POST');
+    assert.equal(request?.url, `${ENDPOINT}/feedback`);
+    assert.equal(request?.headers['Content-Type'], 'application/json');
+    assert.equal(request?.headers.Authorization, 'Bearer a-token');
+    assert.equal((JSON.parse(request?.body ?? '{}') as { note: string }).note, 'the price is wrong');
+  });
+
+  it('reports a refused write as a failure, so the composer keeps the note', async () => {
+    // Losing what someone just wrote is the failure this widget cannot afford, and a relay that
+    // answers `ok: false` must read as a failure rather than as a note that landed.
+    const page = mountPage('<main><button id="cta">Commander</button></main>');
+    setDocumentSize(page.document, 1_000, 1_000);
+    setRect(page.query('button'), { left: 100, top: 200, width: 200, height: 40 });
+    forbidFetch();
+
+    const planted = await plant({
+      note: 'the price is wrong',
+      target: { element: page.query('button'), source: undefined },
+      reporter: undefined,
+      config: { endpoint: ENDPOINT, clientId: 'acme', hiddenStages: [], screenshot: false },
+      options: {
+        endpoint: ENDPOINT,
+        clientId: 'acme',
+        transport: async () => ({ ok: false, status: 502, body: '{"error":"store-unavailable"}' }),
+      },
+    });
+
+    assert.equal(planted, false);
+  });
+
+  /**
+   * Both paths, from the source. A call added later that goes straight to the network bypasses the
+   * seam silently, and silently is exactly how the extension relay would stop relaying.
+   */
+  it('has no call in embed.ts that goes around the transport', async () => {
+    const source = await readFile(new URL('./embed.ts', import.meta.url), 'utf8');
+
+    assert.equal(
+      /(?<!\w)fetch\(/.test(source),
+      false,
+      'embed.ts calls fetch directly; route it through transportFor(options)',
+    );
+
+    // The lookbehind excludes a preceding word character and **not** a dot, on purpose: a
+    // `globalThis.fetch(` or a `view.fetch(` is a bypass like any other, and the first version of
+    // this check excluded the dot and let both through. Raised in review.
+    //
+    // Twice and no more: the import, and the one line of `transportFor`. A third mention is a call
+    // site that took the default instead of asking, which the check above cannot see.
+    assert.equal(
+      source.match(/fetchTransport/g)?.length,
+      2,
+      'fetchTransport is named outside transportFor; call transportFor(options) instead',
+    );
   });
 });
