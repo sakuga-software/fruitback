@@ -1,0 +1,119 @@
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { ACCESS_TTL_SECONDS, PAIRING_TTL_SECONDS, REFRESH_TTL_SECONDS } from './session.ts';
+import { DEFAULT_TRUSTED_PROXY_HOPS } from './env.ts';
+import { DEFAULT_LIMIT } from './rate-limit.ts';
+import { readConfig } from './env.ts';
+
+/**
+ * `SECURITY.md` states numbers, and a security document that drifts from the code is worse than none
+ * — it is a promise nobody is keeping.
+ *
+ * Every figure it quotes is built here from the constant it describes and looked for **in context**,
+ * not as a bare number: `20` appears in a document for a dozen reasons, and matching it alone would
+ * go green against a rate limit that had moved. What is asserted is the sentence.
+ *
+ * This cannot check a *property* that changed — a new route, a new thing stored in the clear, a
+ * guarantee dropped. Those are a hand edit, and `CLAUDE.md` says so beside the rule.
+ */
+
+const SECURITY = readFileSync(fileURLToPath(new URL('../../../SECURITY.md', import.meta.url)), 'utf8');
+const IDENTITY = readFileSync(fileURLToPath(new URL('./identity.ts', import.meta.url)), 'utf8');
+
+/**
+ * Reads a constant out of a source file, for the ones that are not exported.
+ *
+ * Plain literals only, and a computed one fails loudly rather than being evaluated: this file exists
+ * to check a security document, and running source out of it to do that is the wrong trade.
+ */
+function constantIn(source: string, name: string): string {
+  const match = new RegExp(`const ${name} = ('?[\\w.]+'?);`).exec(source);
+  const value = match?.[1];
+  assert.ok(
+    value !== undefined,
+    `${name} is gone from identity.ts, or is no longer a plain literal; SECURITY.md describes it`,
+  );
+
+  return value.replace(/^'|'$/g, '');
+}
+
+describe('SECURITY.md states what the code does', () => {
+  it('quotes the rate limit this worker actually applies', () => {
+    assert.ok(
+      SECURITY.includes(`\`RATE_LIMIT_PER_MINUTE\` (${DEFAULT_LIMIT} by default)`),
+      `SECURITY.md does not name ${DEFAULT_LIMIT} as the rate-limit default`,
+    );
+  });
+
+  it('quotes the proxy hops this worker actually trusts', () => {
+    assert.ok(
+      SECURITY.includes(`\`TRUSTED_PROXY_HOPS\` (${DEFAULT_TRUSTED_PROXY_HOPS} by default`),
+      `SECURITY.md does not name ${DEFAULT_TRUSTED_PROXY_HOPS} as the proxy-hop default`,
+    );
+  });
+
+  it('quotes the session lifetimes the worker issues', () => {
+    assert.ok(
+      SECURITY.includes(`valid ${PAIRING_TTL_SECONDS / 60} minutes`),
+      `SECURITY.md does not say a pairing code lasts ${PAIRING_TTL_SECONDS / 60} minutes`,
+    );
+    assert.ok(
+      SECURITY.includes(`HS256 identity token, ${ACCESS_TTL_SECONDS / 60} minutes`),
+      `SECURITY.md does not say an access token lasts ${ACCESS_TTL_SECONDS / 60} minutes`,
+    );
+    assert.ok(
+      SECURITY.includes(`${REFRESH_TTL_SECONDS / 86_400} days`),
+      `SECURITY.md does not say a refresh token lasts ${REFRESH_TTL_SECONDS / 86_400} days`,
+    );
+  });
+
+  it('quotes the token cap and the clock skew the verifier enforces', () => {
+    const maxBytes = Number(constantIn(IDENTITY, 'MAX_TOKEN_BYTES'));
+    const skew = constantIn(IDENTITY, 'CLOCK_SKEW_SECONDS');
+
+    assert.ok(
+      SECURITY.includes(`over ${maxBytes / 1024} KiB is refused`),
+      `SECURITY.md does not say a token over ${maxBytes / 1024} KiB is refused`,
+    );
+    assert.ok(
+      SECURITY.includes(`capped at ${skew} seconds`),
+      `SECURITY.md does not say clock skew is capped at ${skew} seconds`,
+    );
+  });
+
+  it('names the only algorithm the verifier accepts', () => {
+    assert.ok(SECURITY.includes(`\`${constantIn(IDENTITY, 'ALGORITHM')}\` is **asserted against**`));
+  });
+
+  /**
+   * The claim this file exists to make, and the one that would be worst to get wrong.
+   *
+   * Asserted against `readConfig` rather than against a constant: what a self-hoster is promised is
+   * the behaviour of a worker configured with nothing, which is what this builds.
+   */
+  it('is right that a worker configured with nothing serves reads to anyone', () => {
+    const result = readConfig({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' });
+
+    assert.ok(result.ok);
+    assert.equal(result.config.read, 'public');
+    assert.ok(SECURITY.includes('The read path is public by default'));
+  });
+
+  /**
+   * The document promises that a browser cannot mint a verified reporter. The prose is checked for
+   * exactly once, and the mechanism behind it separately — a heading that survived a deleted guard
+   * would be the worst version of this file.
+   */
+  it('is right that a browser cannot claim a verified reporter', () => {
+    assert.equal(
+      SECURITY.includes("### `reporter.verified` is the worker's word"),
+      true,
+      'SECURITY.md no longer makes the claim this test guards',
+    );
+
+    const stripped = /export function stripClaimedVerification/.test(IDENTITY);
+    assert.equal(stripped, true, 'SECURITY.md promises the flag is stripped, and nothing strips it');
+  });
+});

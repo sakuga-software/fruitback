@@ -1,0 +1,169 @@
+# Security
+
+Fruitback puts a widget inside somebody else's page and a worker in front of somebody's issue
+tracker. Both of those are trust boundaries, and this file says where they are.
+
+**Writing the known limits down is the policy.** A file that only says "email us" leaves a
+self-hoster to discover on their own that their read path is open to anyone who can build a URL.
+
+## Reporting a vulnerability
+
+**This repository is private today**, so GitHub's Private Vulnerability Reporting is not available
+on it — that feature is for public repositories, and the endpoint answers `404` here. Checked, not
+assumed.
+
+- **While the repository is private**, report through the repository itself. Everyone who can read
+  it can already see an issue, so there is no public disclosure to avoid.
+- **When it becomes public**, Private Vulnerability Reporting is the channel, and enabling it is part
+  of going public. Until it is on, *this section is wrong* — update it in the same change.
+
+Please do not open a public issue for a vulnerability once the repository is public.
+
+## What is supported
+
+Nothing is released yet. `@fruitback/shared`, `@fruitback/widget` and `fruitback` are at `0.1.0` and
+**unpublished**; the worker image on GHCR is the only distributed artefact. There is no supported
+version policy to state, and pretending otherwise would be the first thing in this file that is not
+true.
+
+`0.x` means the contract can change. Pin a digest rather than a tag if you need a build that cannot
+move under you — see *The published image*.
+
+## The threat model
+
+Everything below is a property of the code as it stands, not an aspiration. Each one is somewhere a
+self-hoster could otherwise be surprised.
+
+### The read path is public by default
+
+`GET /feedback` answers **anyone who can build the URL** unless you say otherwise. Every note, the
+name and address its reporter typed, and the team's replies are readable by any visitor of the
+client's site — and by `curl`. Hiding pins in a browser was never the fix.
+
+`FRUITBACK_READ=authenticated`, or `"read": "authenticated"` on a client, requires a signed identity
+token. The default stays `public` for compatibility, so **an upgrade never closes it for you**. The
+boot log names every client whose pins anyone can read, and `/health` counts them.
+
+`FRUITBACK_HIDE_COMMENTS=1` keeps the team's replies out of the answer. Under `read: 'public'` that
+is the only thing between an issue thread and the internet.
+
+### `clientId` is asserted by the browser, never authenticated
+
+A page says which client it is. `origins` is what turns that claim into something checkable against
+the browser's own `Origin` header — **the trust level CORS gives, and strictly no more**. It stops an
+unrelated site from posting into your tracker through your worker. It is not authentication, and
+describing it as such in your own deployment notes would be a mistake.
+
+A request with no `Origin` at all is served: there is no cookie or session to escalate, so there is
+nothing for a forged cross-site request to steal.
+
+### `reporter.verified` is the worker's word
+
+Anything a browser posts carrying `verified` has it stripped before storage, whatever else it says.
+The flag is set only after an HS256 token verifies against the client's key. Without a token, a name
+and an address are a claim by whoever was on the page, and they are stored as one.
+
+### A seed is stored in the clear, in your issue tracker
+
+The whole seed — note, page URL, selector, the reporter's name and address, the screenshot URL — is
+written verbatim into an issue description. **Anyone with access to that workspace can read it**, and
+it will outlive any expiry you had in mind. This is why an identity token travels in an
+`Authorization` header and never in the seed.
+
+Tell your reporters not to type credentials into a feedback note, because the note is going to sit
+in a tracker.
+
+### The rate limit is per process
+
+`RATE_LIMIT_PER_MINUTE` (20 by default) is held in memory, per container. **Run N replicas and the
+effective ceiling is N times what you configured.** It protects your provider quota; it is not a
+defence against a determined caller, who can rotate addresses anyway.
+
+`TRUSTED_PROXY_HOPS` (1 by default, which is one Traefik) decides how the client address is read:
+`X-Forwarded-For` is appended to by each proxy, so the real address is that many entries **from the
+right**. Set it too low and the value a caller sent is trusted, which makes the limit bypassable with
+one header. Set it too high and everyone shares one bucket.
+
+### The extension's page bridge can be forged by the page
+
+In private mode the widget runs in the page's own JavaScript realm, and the bridge is
+`window.postMessage`. The parser refuses a malformed message; it **cannot** refuse a well-formed one
+the page wrote, because the two are identical. A page on an origin the reviewer enabled can point the
+widget at its own worker, or take it away.
+
+That is inherent to the main world and no handshake closes it. What is reduced is what is at stake:
+nothing secret travels there, the endpoint and client id are already in the client's own DOM in tag
+mode, and **an identity token is not sent at all**.
+
+### What a session protects, and what it does not
+
+The worker can hold sessions for the browser extension. An operator mints a pairing code for a named
+person; redeeming it opens a session.
+
+| | |
+| --- | --- |
+| Pairing code | 60 bits, valid 15 minutes, usable **once** |
+| Access token | HS256 identity token, 10 minutes |
+| Refresh token | 256 bits, 30 days, revocable |
+| On disk | codes and refresh tokens are stored as **SHA-256 digests** |
+
+**`FRUITBACK_SESSION_PATH` is a credentials file.** Give it the same care as a key: a copy of it is
+not a set of working logins, but it is a list of who holds a session and until when. Back it up with
+`sqlite3 … ".backup"` rather than `cp`, which loses the write-ahead log.
+
+The three `/session/` routes are **exempt from `ALLOWED_ORIGINS`**, because an extension's origin
+carries an id that changes between an unpacked build and a store build. They carry no ambient
+authority — no cookie, and both credentials are secrets the caller must already hold — so the rate
+limiter is what stops the pairing endpoint being guessed at.
+
+Revoking ends the session on the worker. It **cannot** reach an access token already minted: one is
+good for up to ten minutes after a logout.
+
+### The widget is inside somebody else's page
+
+A Shadow root isolates **styles**, in both directions. It is not a security boundary: in tag mode the
+widget is code the client site chose to load, running in that site's realm, and the site can reach
+it. What the Shadow root buys is that our stylesheet cannot reshape their page and theirs cannot
+reshape ours.
+
+A comment coming back from the tracker is rendered as `textContent`, never as markup — it is text
+written by anyone who can comment on the issue, displayed inside a client's page.
+
+The widget bundles no rasteriser. If you supply `captureScreenshot`, the image lands in **your**
+storage and the seed holds a URL; whether that URL is public is your decision, not the widget's.
+
+### The identity verifier is hand-written
+
+`apps/worker/src/identity.ts` verifies a compact JWS itself, so a client site can mint one with
+whatever library it already has. That interoperability is exactly what makes the header an attack
+surface, so:
+
+- `HS256` is **asserted against** the token, never read from it. A verifier that trusts the token's
+  own `alg` accepts `none` and validates everything.
+- `exp` is required. A token that never expires is a password.
+- The signature is compared in constant time; `===` on the base64 leaks how much of it was right.
+- A token over 4 KiB is refused before it is parsed, and clock skew is capped at 60 seconds.
+
+It is a small amount of cryptography and it is reviewed as such. If you find a flaw in it, that is
+squarely a vulnerability and we want to hear about it.
+
+### Personal data
+
+The widget can send, from a third party's page: a hand-written note, a name, an address, the user
+agent (`includeEnv`), the page URL, and a picture of what the person was looking at. All of it lands
+in an issue tracker, and for the Linear connector that is outside your own infrastructure.
+
+That is a processing of personal data and a deployment of Fruitback has to be declared as one. What
+Fruitback owes its operators here is documentation, and that is tracked separately.
+
+## What is not a vulnerability
+
+- **A reporter typing somebody else's name.** With no token that is a claim, which is what
+  `verified: false` means. Report a case where a claim comes back marked verified.
+- **Pins readable on a worker left at `read: 'public'`.** That is the documented default and the boot
+  log says so. Report a case where `authenticated` still answers without a valid token.
+- **Exceeding the rate limit from several addresses.** It is quota protection, not authentication.
+  Report a bypass from *one* address, or one that works by setting a header.
+- **A page forging bridge messages on an origin its reviewer enabled.** Stated above, and inherent to
+  the main world. Report a case where an origin nobody enabled can do it, or where a session token
+  reaches the page.
