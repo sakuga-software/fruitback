@@ -510,6 +510,12 @@ mode, SKG-534.
 - **Minting a code is a command, not a route** (`node src/main.ts pair --subject …`). An endpoint
   would need an admin credential of its own and would stay reachable for ever; a command is reachable
   by whoever already sets the secrets.
+- **The session routes are exempt from `ALLOWED_ORIGINS`, and only they are.** That list names client
+  *sites*; an extension's origin carries an id that differs between an unpacked build and a store
+  build, so an operator cannot put it there. Measured: an MV3 service worker posting JSON sends
+  `chrome-extension://<id>` and triggers a preflight, and both answered `403`. Echoing any origin is
+  safe on these three routes because they carry no ambient authority — no cookie, and both
+  credentials are secrets the caller must already hold.
 - **`checkRateLimit` runs above the path dispatch**, so a route added later is metered by default. It
   used to sit below the `404`, which would have left `/session/pair` an unmetered guessing oracle.
   `/health` stays free — a readiness probe that can be rate-limited takes the container out.

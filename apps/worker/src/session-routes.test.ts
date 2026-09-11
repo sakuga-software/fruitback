@@ -9,6 +9,7 @@ import { createPairing } from './session.ts';
 import { handleRequest } from './app.ts';
 import { verifyIdentityToken } from './identity.ts';
 import { runPair } from './cli.ts';
+import { sessionConnectionsOpened } from './session-sqlite.ts';
 
 /** 32 characters, because `readConfig` refuses a shorter HMAC secret. */
 const SECRET = 'a-worker-secret-of-exactly-enough';
@@ -286,5 +287,88 @@ describe('the rate limit', () => {
       const response = await handleRequest(new Request('https://worker.test/health'), env, { clientIp: ip });
       assert.equal(response.status, 200, `attempt ${attempt} answered ${response.status}`);
     }
+  });
+});
+
+describe('who may call these routes', () => {
+  /**
+   * The extension is not a site on `ALLOWED_ORIGINS` and cannot be put on one: its origin carries an
+   * id that differs between an unpacked build and a store build. Measured before `openCors` existed
+   * — an MV3 service worker posting JSON sends that origin, triggers a preflight, and both answered
+   * `403` against a normal allowlist.
+   */
+  it('answers an extension origin that is on no allowlist', async () => {
+    const env = envWith({ ALLOWED_ORIGINS: 'https://staging.acme.dev' });
+    const extension = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
+
+    const response = await handleRequest(
+      new Request('https://worker.test/session/pair', {
+        method: 'POST',
+        body: JSON.stringify({ code: await codeFor(env) }),
+        headers: { 'Content-Type': 'application/json', Origin: extension },
+      }),
+      env,
+      { clientIp: '198.51.100.21' },
+    );
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'), extension);
+  });
+
+  it('lets the preflight through, or the POST never happens', async () => {
+    const env = envWith({ ALLOWED_ORIGINS: 'https://staging.acme.dev' });
+    const response = await handleRequest(
+      new Request('https://worker.test/session/pair', {
+        method: 'OPTIONS',
+        headers: { Origin: 'chrome-extension://abcdefghijklmnopabcdefghijklmnop' },
+      }),
+      env,
+      { clientIp: '198.51.100.22' },
+    );
+
+    assert.equal(response.status, 204);
+    assert.ok(response.headers.get('Access-Control-Allow-Headers')?.includes('Content-Type'));
+  });
+
+  /** The exemption is for `/session/` only. Everything else still answers to the allowlist. */
+  it('leaves the allowlist in force on /feedback', async () => {
+    const env = envWith({ ALLOWED_ORIGINS: 'https://staging.acme.dev' });
+    const response = await handleRequest(
+      new Request('https://worker.test/feedback?url=https://staging.acme.dev/', {
+        headers: { Origin: 'chrome-extension://abcdefghijklmnopabcdefghijklmnop' },
+      }),
+      env,
+      { clientIp: '198.51.100.23' },
+    );
+
+    assert.equal(response.status, 403);
+  });
+
+  it('answers 413 on an oversized body, which is what the failure codes promise', async () => {
+    const env = envWith();
+    const response = await call(env, '/session/pair', { code: 'x'.repeat(70 * 1024) }, 'POST', '198.51.100.24');
+
+    assert.equal(response.status, 413);
+  });
+});
+
+describe('the session connection', () => {
+  /**
+   * `handleSession` builds a store per request wherever the transport did not hand one over, which
+   * is production. Without the map that opens a database handle per call — the hazard SKG-522 was
+   * written to prevent, and one nothing observable reports.
+   *
+   * The assertion is on the counter and not `connections.size`: the map is keyed by path, so a
+   * `connect` that stopped reusing would overwrite the one entry and leave the size at one.
+   */
+  it('opens one handle however many requests arrive', async () => {
+    const env = envWith();
+    const before = sessionConnectionsOpened();
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await call(env, '/session/refresh', { refreshToken: 'invented' }, 'POST', '198.51.100.25');
+    }
+
+    assert.equal(sessionConnectionsOpened() - before, 1);
   });
 });

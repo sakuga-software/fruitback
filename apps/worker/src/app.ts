@@ -9,7 +9,7 @@ import {
 } from './clients.ts';
 import { type WorkerConfig, type WorkerEnv, readAllowedOrigins, readConfig } from './env.ts';
 import { type SeedStore, StoreError } from './store.ts';
-import { diagnosticCorsHeaders, resolveCors } from './cors.ts';
+import { diagnosticCorsHeaders, openCors, resolveCors } from './cors.ts';
 import { checkRateLimit } from './rate-limit.ts';
 import { cached, invalidate } from './cache.ts';
 import {
@@ -121,7 +121,10 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
     return json(500, { error: 'misconfigured', missing: config.missing }, headers);
   }
 
-  const cors = resolveCors(request, config.config.allowedOrigins);
+  // The session routes answer the extension, which is not a site on the allowlist and cannot be put
+  // on one — see `openCors`. Resolved before the gate, so the preflight succeeds too.
+  const session = pathname.startsWith('/session/');
+  const cors = session ? openCors(request) : resolveCors(request, config.config.allowedOrigins);
   if (!cors.allowed) {
     return json(403, { error: 'origin-not-allowed' });
   }
@@ -142,7 +145,7 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
     return json(429, { error: 'rate-limited' }, cors.headers);
   }
 
-  if (pathname.startsWith('/session/')) {
+  if (session) {
     return handleSession(request, pathname, config.config, context, cors.headers);
   }
 
@@ -182,6 +185,8 @@ async function handleSession(
   if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
 
   const body = await readJsonBody(request);
+  // `413` and not `400` for the oversized case: the failure codes are a contract the widget reads.
+  if (body === 'too-large') return json(413, { error: 'body-too-large' }, headers);
   if (body === undefined) return json(400, { error: 'invalid-body' }, headers);
 
   if (pathname === '/session/pair') {
@@ -237,10 +242,10 @@ export async function createPairingCommand(
   return openPairing(store, identity);
 }
 
-/** The body of a session call: small, and JSON or nothing. */
-async function readJsonBody(request: Request): Promise<Record<string, unknown> | undefined> {
+/** The body of a session call: small, and JSON or nothing. `'too-large'` so the caller can say 413. */
+async function readJsonBody(request: Request): Promise<Record<string, unknown> | 'too-large' | undefined> {
   const text = await request.text();
-  if (text.length > MAX_BODY_BYTES) return undefined;
+  if (text.length > MAX_BODY_BYTES) return 'too-large';
 
   try {
     const parsed: unknown = JSON.parse(text);

@@ -284,10 +284,24 @@ connector's environment, and what a second connector with no markdown body actua
   container, no third party". An authentication flow assuming an identity provider makes the project
   unselfhostable in practice, which is the one thing this store was added to avoid.
 
+- **The site allowlist does not reach these routes, and that is a decision rather than an oversight.**
+  `ALLOWED_ORIGINS` lists the client sites the widget is embedded on. An extension is not one: its
+  origin is `chrome-extension://<id>`, and that id changes when an unpacked build becomes a store
+  build — so an operator who listed it would find pairing broken on the day they published. Probed
+  against this worker before `openCors` was written: with a normal allowlist, the POST answered
+  `403 origin-not-allowed` and so did the preflight. What makes the exemption safe is that these
+  three routes carry no ambient authority at all — there is no cookie to ride on, the pairing code is
+  a secret the caller must already hold, and the refresh token lives where no page can read it. The
+  rate limiter is what stops the pairing endpoint being guessed at.
+
 ### What the tests hold, and one they could not
 
 - **Revocation is mutation-tested.** Dropping `revoked_at IS NULL` from `findSession` fails exactly
   `revokes on the worker, so the refresh token stops working everywhere`.
+- **The CORS exemption is mutation-tested.** Replacing `openCors` with the ordinary `resolveCors`
+  fails both `answers an extension origin that is on no allowlist` and `lets the preflight through`,
+  while `leaves the allowlist in force on /feedback` stays green — which is what says the exemption
+  is scoped to `/session/` rather than a hole in the gate.
 - **The rate-limit move is mutation-tested.** Putting `checkRateLimit` back below the path dispatch —
   where it sat before this ticket — fails `meters the pairing endpoint, not only /feedback`. The
   unknown-path test stays green under that mutation, because it guards a different ordering.

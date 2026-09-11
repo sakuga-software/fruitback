@@ -36,6 +36,36 @@ export function resolveCors(request: Request, allowedOrigins: string[]): CorsDec
 }
 
 /**
+ * CORS for the extension's session routes, which are **not** bound to the site allowlist (SKG-535).
+ *
+ * `ALLOWED_ORIGINS` lists the client *sites* the widget is embedded on. An extension is not one of
+ * them: its origin is `chrome-extension://<id>`, and that id differs between an unpacked build and a
+ * store build — so asking an operator to add it is a rule that breaks on the day they publish.
+ * Measured before this was written: an MV3 service worker posting JSON sends that origin and
+ * triggers a preflight, and both answered `403` against a normal allowlist.
+ *
+ * Echoing any origin is safe on these three routes because they carry no ambient authority. There is
+ * no cookie to ride on, the pairing code is a secret the caller must already hold, and the refresh
+ * token lives in extension storage no page can read. What protects the pairing endpoint from being
+ * guessed at is the rate limiter, which is why it runs above the path dispatch.
+ */
+export function openCors(request: Request): CorsDecision {
+  const origin = request.headers.get('Origin');
+  if (origin === null) return { allowed: true, headers: {} };
+
+  return {
+    allowed: true,
+    headers: {
+      'Access-Control-Allow-Origin': origin,
+      Vary: 'Origin',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Max-Age': '86400',
+    },
+  };
+}
+
+/**
  * Headers for the one response that has to be readable even when there is no allowlist to check
  * against: `500 misconfigured`. Echoing the origin is safe here — the body says only that the Worker
  * is missing a variable, and carries no user or client data.
