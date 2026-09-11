@@ -123,9 +123,10 @@ Two licences, split where the client/server boundary is (SKG-515).
 | `packages/widget`, `packages/shared`, `packages/fruitback` | **MIT** |
 | `apps/worker` | **AGPL-3.0-only** |
 
-The three published packages are **MIT** because they are compiled into someone else's site: a
+The three client-side packages are **MIT** because they are compiled into someone else's site: a
 copyleft licence on code that ships inside a client's own bundle is one nobody can adopt, and the
-widget is worth nothing unadopted. The worker is **AGPL-3.0-only** — it is the server, the only place
+widget is worth nothing unadopted. (They are the three meant for npm — not three that are on it; see
+the install note above.) The worker is **AGPL-3.0-only** — it is the server, the only place
 copyleft actually bites, so anyone who hosts a modified version publishes their modifications.
 Copyright (C) 2026 Sakuga Software; the full text is in
 [`apps/worker/LICENSE`](apps/worker/LICENSE).
