@@ -4,34 +4,23 @@ import { canonicalizePageUrl, type Seed, type SeedParseFailure, type SeedParseRe
  * A seed stored in a markdown description, with the issue still readable by whoever triages it
  * (SKG-523).
  *
- * **Nothing here is Linear's**, which is why it stopped living in a file named after it. Every
- * issue tracker worth connecting to — GitHub, Gitea, Jira, Plane — stores a body of markdown and
- * lets something search it, so this is a *strategy those connectors share* rather than a part of
- * the `SeedStore` interface. A connector picks it up; it is not obliged to. `sqlite.ts` is the
- * proof that the obligation would have been wrong: it has columns, so it has no use for any of
- * this.
+ * Nothing here belongs to one provider. Every tracker worth connecting to stores a markdown body and
+ * lets something search it, so this is a strategy connectors share rather than part of `SeedStore`.
+ * A connector picks it up or ignores it: `sqlite.ts` has columns and uses none of this.
  *
- * The shape is two layers. Prose on top, for the human in the tracker's own interface; a fenced
- * JSON block underneath, for the widget that has to re-plant the pin. Storing it in the body rather
- * than in a custom field is what makes it portable — no workspace admin setup, it survives an
- * export, and a substring filter can find it server-side.
+ * Two layers. Prose on top for the human in the tracker; a fenced JSON block underneath for the
+ * widget that re-plants the pin. The body rather than a custom field, because a body needs no
+ * workspace setup, survives an export, and a substring filter finds it server-side.
  *
- * The cost is that a human can edit the block, which is why `parseSeedFromDescription` is tolerant
- * and must never throw. The round trip
- * `parseSeedFromDescription(buildIssueDescription(seed)) === seed` is the invariant, and its test
- * moved here with the code rather than being rewritten.
+ * A human can edit that block, so `parseSeedFromDescription` is tolerant and must never throw.
+ * `parseSeedFromDescription(buildIssueDescription(seed)) === seed` is the invariant.
  */
 
 /**
- * The line above the JSON block, and the only thing standing between the payload and an editor.
+ * The line above the JSON block. It tells whoever opens the issue not to tidy the block below.
  *
- * Deliberately shouty for that reason: whoever opens the issue in the store's own interface has to
- * understand that the block below is not prose to tidy up.
- *
- * Free to reword, though — the parser finds the block by parsing its JSON, never by matching this.
- * Pinned by `finds the block by its JSON, never by the caption above it`, which fails if the parser
- * ever starts depending on it. That is what made dropping the emoji it used to open with safe rather
- * than hopeful (SKG-517).
+ * Free to reword: the parser recognises the block by parsing it, never by matching this caption.
+ * `finds the block by its JSON, never by the caption above it` fails if that stops being true.
  */
 export const SEED_BLOCK_CAPTION = '**Fruitback seed** · machine-readable, do not edit';
 
@@ -122,10 +111,9 @@ export function buildIssueDescription(seed: Seed): string {
 /**
  * Recover the seed from an issue description.
  *
- * Tolerant on purpose: the description round-trips through the tracker's own editor and through
- * humans, so
- * we accept any fenced block (backticks or tildes, with or without a language tag, CRLF endings,
- * an unterminated fence) and locate ours by its `kind` field rather than by position or marker.
+ * Tolerant on purpose: the description passes through the tracker's editor and through humans. Any
+ * fenced block is accepted — backticks or tildes, with or without a language tag, CRLF endings, an
+ * unterminated fence — and ours is found by parsing it, never by its position or by a marker.
  */
 export function parseSeedFromDescription(description: string | null | undefined): SeedParseResult {
   if (!description) return { ok: false, reason: 'not-found' };
@@ -192,9 +180,9 @@ function* iterateFencedBlocks(markdown: string): Generator<FencedBlock> {
 /**
  * The `description contains` term a store uses to fetch the seeds of one page.
  *
- * It works because `buildSeedBlock` writes the canonical URL verbatim into the JSON, which is a
- * property of **this codec** rather than of any provider — so it belongs beside the writer that
- * makes it true. A store with real search does not need it; Linear's substring filter does.
+ * It works because `buildSeedBlock` writes the canonical URL verbatim into the JSON. That is a
+ * property of this codec, not of any provider, so it lives beside the writer that makes it true.
+ * A store with real search does not need it; Linear's substring filter does.
  */
 export function pageQueryTerm(url: string | URL): string {
   return canonicalizePageUrl(url);
