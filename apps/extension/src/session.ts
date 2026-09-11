@@ -164,6 +164,21 @@ export function createSessions({ sessions, grants, post, now = Date.now }: Sessi
     const issued = parseIssued(answer.body);
     if (answer.status !== 200 || issued === undefined) return { ok: false, reason: 'unavailable' };
 
+    // **The session may have ended while this request was in the air.** The popup and the background
+    // are separate contexts holding separate `Sessions`, and they share only storage: a reviewer can
+    // click log out — revoking and clearing — while an alarm is already awaiting this answer. Writing
+    // the grant then would put a working access token back into storage under a screen that says
+    // signed out, and revocation does not reach an access token already minted.
+    //
+    // The refresh token is its own generation marker, which is what makes this work across contexts
+    // with nothing to keep in step: if the one in storage is not the one this request spent, the
+    // session was logged out or re-paired, and this answer is about a session that no longer exists.
+    // `chrome.storage` has no transaction, so the window is not closed, only narrowed from a network
+    // round trip to two storage operations. Raised in review.
+    if ((await sessions.read())[endpoint]?.refreshToken !== stored.refreshToken) {
+      return { ok: false, reason: 'not-paired' };
+    }
+
     // The worker does not rotate refresh tokens today, and this is the half that has to exist before
     // it can: a rotation whose response is lost leaves this side holding a token the worker has
     // already retired, and the reviewer locked out with nothing to retry. Closing that needs a

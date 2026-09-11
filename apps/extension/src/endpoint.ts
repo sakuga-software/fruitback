@@ -34,3 +34,13 @@ export function isWorkerEndpoint(value: unknown): value is string {
     return false;
   }
 }
+
+/**
+ * The origin a host permission has to name, out of an endpoint that may carry a path.
+ *
+ * `https://example.com/fruitback` is an ordinary deployment, and a match pattern is about the
+ * origin. Throws on a value that is not a URL, which cannot happen after `isWorkerEndpoint`.
+ */
+export function workerOrigin(endpoint: string): string {
+  return new URL(endpoint).origin;
+}

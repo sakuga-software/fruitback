@@ -57,9 +57,9 @@ export default defineBackground(() => {
   /**
    * Keeps every paired worker's access token fresh, and the alarm pointed at the next one (SKG-599).
    *
-   * **The token lives and dies in here.** The background is the only context that holds one: the
-   * isolated content script asks it to make a call and the page's world is never told anything. See
-   * `src/session.ts`, and `src/worlds.test.ts` for the guard.
+   * **No token leaves the extension's trusted contexts.** This one and the popup hold them; the
+   * isolated content script asks this to make a call, and the page's world is never told anything.
+   * See `src/session.ts`, and `src/worlds.test.ts` for the guard.
    *
    * An alarm rather than a timer, because an MV3 service worker is stopped whenever the browser
    * feels like it and a `setTimeout` dies with it. Scheduled at the next due moment rather than on a
@@ -82,7 +82,8 @@ export default defineBackground(() => {
         return;
       }
 
-      browser.alarms.create(SESSION_ALARM, { when: Math.max(due, Date.now() + MIN_ALARM_DELAY_MS) });
+      // Awaited: it answers a promise, so a rejection would escape the guard below. Raised in review.
+      await browser.alarms.create(SESSION_ALARM, { when: Math.max(due, Date.now() + MIN_ALARM_DELAY_MS) });
     } catch (error) {
       console.error('[fruitback] could not refresh the extension session', error);
     }

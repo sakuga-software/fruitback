@@ -33,9 +33,10 @@ function localArea(): Area<StoredSession> {
 /**
  * The access token, in the area the browser empties when it closes.
  *
- * **Nothing changes the access level of this area, and that is deliberate.** Its default excludes
- * content scripts, which is exactly the boundary this ticket exists to hold: the isolated script
- * does not read the token, it asks the background to make the call. Widening the area to
+ * **Nothing changes the access level of this area, and that is deliberate.** Its default keeps it to
+ * the extension's trusted contexts — this background and the popup — and out of content scripts,
+ * which is exactly the boundary this ticket exists to hold: the isolated script does not read the
+ * token, it asks the background to make the call. Widening the area to
  * `TRUSTED_AND_UNTRUSTED_CONTEXTS` would put the token one `postMessage` mistake away from the page.
  */
 function sessionArea(): Area<AccessGrant> {
@@ -70,10 +71,12 @@ function area<T>(
 /**
  * The three session routes, over `fetch`.
  *
- * **No host permission is needed for this and none is asked for.** The routes are exempt from the
- * worker's origin allowlist (SKG-535) and answer a `chrome-extension://` origin with the CORS
- * headers that let an extension page read the reply, so an ordinary cross-origin `fetch` reaches
- * them. `Content-Type: application/json` makes the request preflighted, which the worker allows.
+ * The routes are exempt from the worker's origin allowlist (SKG-535) and answer a
+ * `chrome-extension://` origin with the CORS headers that let an extension page read the reply, so
+ * an ordinary cross-origin `fetch` should reach them. `Content-Type: application/json` makes the
+ * request preflighted, which the worker allows. **That was measured with `curl`, which does not
+ * enforce CORS**, so the popup asks for a host permission on the worker's origin before pairing
+ * rather than relying on it — see `grantWorkerOrigin`. Raised in review.
  *
  * A body that is not JSON is handed on as `undefined` rather than throwing: the caller already has
  * to tell a refusal from an outage, and a parser is not the place to decide which one a broken body

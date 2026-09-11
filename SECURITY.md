@@ -149,11 +149,15 @@ Since SKG-599 the extension holds its half of that, and **where** matters as muc
 | Refresh token | `chrome.storage.local`, in the reviewer's browser profile — it survives a restart |
 | Access token | `chrome.storage.session`, which the browser empties when it closes |
 
-Neither is readable from a reviewed page. The access token is held only by the extension's background
-service worker, `chrome.storage.session` keeps its default access level (which excludes content
-scripts), and nothing about a session travels on the `window.postMessage` bridge. A browser profile
-is now part of this boundary: somebody who can read a reviewer's profile can read their refresh
-token, and revoking it is the answer.
+Neither is readable from a reviewed page. Both stay inside the extension's **trusted contexts** — the
+background service worker, which refreshes, and the popup, which pairs and logs out.
+`chrome.storage.session` keeps its default access level, which excludes content scripts, and nothing
+about a session travels on the `window.postMessage` bridge. A browser profile is now part of this
+boundary: somebody who can read a reviewer's profile can read their refresh token, and revoking it is
+the answer.
+
+Pairing asks for a host permission on the **worker's** origin, which is not the site's. It is optional
+and granted per worker at the moment somebody pairs, never at install.
 
 **`FRUITBACK_SESSION_PATH` is a credentials file.** Give it the same care as a key: a copy of it is
 not a set of working logins, but it is a list of who holds a session and until when. Back it up with

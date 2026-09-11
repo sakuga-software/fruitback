@@ -230,6 +230,82 @@ describe('keeping an access token fresh', () => {
   });
 });
 
+describe('a session that ends while a refresh is in the air', () => {
+  /**
+   * A refresh that has been sent and not yet answered, so the test can end the session underneath it.
+   *
+   * Synchronised on the request being **entered**, not merely started: `ensureAccess` reads storage
+   * before it posts, and a first version that wrote before that read never reached the guard at all —
+   * it took the early `not-paired` and passed for the wrong reason.
+   */
+  function refreshInFlight(body: Record<string, unknown>) {
+    const sessions = area<StoredSession>({ [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } });
+    const grants = area<AccessGrant>();
+    let entered = (): void => {};
+    let release = (): void => {};
+    const sent = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const answered = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const subject = createSessions({
+      sessions,
+      grants,
+      now: () => NOW,
+      post: async (url) => {
+        if (url.endsWith('/session/refresh')) {
+          entered();
+          await answered;
+        }
+
+        return { status: 200, body };
+      },
+    });
+
+    return { sessions, grants, sent, release, refreshing: subject.ensureAccess(ENDPOINT) };
+  }
+
+  /**
+   * The popup and the background are separate contexts with separate `Sessions`, sharing only
+   * storage. A reviewer clicking log out while an alarm is already awaiting `/session/refresh` used
+   * to get the grant written back afterwards — a working access token in storage under a screen that
+   * says signed out, and revoking does not reach a token already minted. Raised in review.
+   */
+  it('writes nothing back after a logout cleared the session', async () => {
+    const { sessions, grants, sent, release, refreshing } = refreshInFlight(issued());
+
+    await sent;
+    await sessions.write({});
+    await grants.write({});
+    release();
+
+    assert.deepEqual(await refreshing, { ok: false, reason: 'not-paired' });
+    assert.deepEqual(await grants.read(), {});
+    assert.deepEqual(await sessions.read(), {});
+  });
+
+  /**
+   * Re-pairing while a refresh is in flight is the same shape, and the worse one: the stale answer
+   * carries its own rotated token, which would overwrite the credential the new pairing just stored.
+   */
+  it('writes nothing back after the session was replaced by a new pairing', async () => {
+    const { sessions, grants, sent, release, refreshing } = refreshInFlight(
+      issued({ refreshToken: 'rotated.by.the.stale.run' }),
+    );
+    const repaired = { refreshToken: 'refresh.2', identity: IDENTITY };
+
+    await sent;
+    await sessions.write({ [ENDPOINT]: repaired });
+    release();
+
+    assert.deepEqual(await refreshing, { ok: false, reason: 'not-paired' });
+    assert.deepEqual(await sessions.read(), { [ENDPOINT]: repaired });
+    assert.deepEqual(await grants.read(), {});
+  });
+});
+
 describe('logging out', () => {
   /**
    * Revoke first, clear second. The other order cannot work: the token the call needs is the one the

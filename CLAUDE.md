@@ -400,8 +400,20 @@ mode, SKG-534.
   `session` would make a reviewer pair again every morning, and somebody who does that keeps their
   pairing code in a text file — a worse place than the one the split protects.
 - **Nothing calls `setAccessLevel` on the session area.** Its default excludes content scripts, which
-  is the boundary this whole batch exists to hold. The background is the only context that ever holds
-  a token; the isolated script asks it to make the call, which is the seam SKG-596's relay needs.
+  is the boundary this whole batch exists to hold. A token is held only by the extension's **trusted
+  contexts** — the background, which refreshes, and the popup, which pairs and logs out. The isolated
+  script never reads one; it asks the background to make the call, the seam SKG-596's relay needs.
+- **Pairing asks for a host permission on the worker's origin**, which is not the site's. The session
+  routes answer a `chrome-extension://` origin with CORS headers that ought to make an unprivileged
+  `fetch` enough — but that was measured with `curl`, which does not enforce CORS. It is the
+  repository's recurring defect (SKG-518) waiting to happen, so the permission is asked for rather
+  than relied on. **It must be requested before anything is awaited in the click handler**, like
+  `turnOn`: a gesture is lost across an await and the prompt never appears.
+- **A refresh writes nothing back once the refresh token in storage is no longer the one it spent.**
+  The popup and the background are separate contexts sharing only storage, so a logout can land while
+  an alarm is awaiting `/session/refresh` — and the answer used to put a working access token back
+  under a screen saying signed out. The token is its own generation marker; `chrome.storage` has no
+  transaction, so the window is narrowed, not closed.
 - **The guard is an allowlist**: `worlds.test.ts` *discovers* every `*.content.ts` declaring
   `world: 'MAIN'`, follows its relative imports, and refuses a `session*` module or the name
   `refreshToken` / `accessToken` anywhere in that closure. A main-world file added later is covered

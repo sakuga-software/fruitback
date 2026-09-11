@@ -138,7 +138,30 @@ both: an access token the host site's JavaScript can read is the worst outcome o
   scripts, which is exactly the boundary this ticket holds. Widening it to
   `TRUSTED_AND_UNTRUSTED_CONTEXTS` so the isolated script could read the token directly would put the
   token one `postMessage` mistake away from the page — the isolated script asks the background to
-  make the call instead, which is the same seam SKG-596's relay needs.
+  make the call instead, which is the same seam SKG-596's relay needs. What *does* hold a token is
+  every trusted context: the background refreshes and the popup pairs and logs out, which is what
+  `TRUSTED_CONTEXTS` means and what the documentation now says. Raised in review, where the first
+  wording claimed the background was the only one.
+- **Pairing asks for a host permission on the worker's origin, and that is a hedge rather than a
+  proof.** `turnOn` only ever requested the *site*; a worker normally lives somewhere else entirely,
+  so nothing had asked for it. The session routes answer a `chrome-extension://` origin with CORS
+  headers that ought to make an unprivileged `fetch` enough — and that was measured against a real
+  worker with a real preflight, **with `curl`, which does not enforce CORS**. No browser runs on this
+  machine to settle it, and the failure mode if it is wrong is total: pairing simply never works,
+  with the request never arriving. So the permission is requested, and granted it makes the call
+  privileged and CORS irrelevant. Raised in review; the reviewer's stated reason was wrong (CORS is
+  precisely what would grant it) and the recommendation was right anyway.
+- **A refresh writes nothing back once the token in storage is no longer the one it spent.** The
+  popup and the background are separate contexts with separate `Sessions`, sharing only storage: a
+  reviewer can click log out — revoking, then clearing — while an alarm is already awaiting
+  `/session/refresh`. Writing the grant afterwards put a working access token back under a screen
+  saying signed out, and revocation does not reach an access token already minted. The refresh token
+  is its own generation marker, which is what makes the check work across contexts with nothing to
+  keep in step. `chrome.storage` has no transaction, so the window is narrowed from a network round
+  trip to two storage operations rather than closed. Raised in review.
+  - The first test for it passed for the wrong reason: it mutated storage before the refresh had
+    read it, so the early `not-paired` answered and the guard never ran. Synchronised on the request
+    being *entered* instead, then mutated — and removing the guard now fails both cases.
 - **The guard is an allowlist, not a denylist** (`src/worlds.test.ts`). Naming the files that must
   stay clean passes a main-world entrypoint added next year. So the entrypoints are *discovered* —
   every `*.content.ts` declaring `world: 'MAIN'` — their transitive relative imports are computed,
