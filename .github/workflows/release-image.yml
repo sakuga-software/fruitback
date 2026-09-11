@@ -135,8 +135,11 @@ jobs:
 
       # `ignore-unfixed` on purpose: an Alpine CVE with no patch available reddens every release for
       # something nobody can act on, and a gate that cannot be satisfied is a gate somebody deletes.
+      # Pin with the `v`. This action has one tag without it out of 75 — `0.35.0` — so the wrong
+      # form looks valid until the next bump: `@0.36.0` resolves to nothing, and the job then dies
+      # in set-up before a single step runs.
       - name: Scan it, and fail on anything actionable
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: fruitback-worker:candidate
           format: table
