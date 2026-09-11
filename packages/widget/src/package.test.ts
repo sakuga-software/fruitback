@@ -60,6 +60,36 @@ describe('the script-tag build', () => {
     assert.match(source, /data-fruitback-endpoint|fruitbackEndpoint/);
   });
 
+  /**
+   * The README's snippet, read from the README (SKG-519).
+   *
+   * `CLAUDE.md` said the snippet was executed by the suite, and it was not: the test above asserts
+   * the *build* names one attribute, and nothing had ever opened the file a reader copies from. So a
+   * renamed attribute would have left the landing page quietly wrong — the reader pastes the tag,
+   * the widget mounts with no endpoint, and nothing in this repository fails.
+   *
+   * Every attribute the page documents has to be one the build reads. Not the reverse: the snippet
+   * is deliberately the short form, and `label` and the rest live in `docs/install.md`.
+   */
+  it('reads every attribute the README tells a reader to write', async () => {
+    const source = await readFile(join(dist, 'fruitback.iife.js'), 'utf8');
+    const readme = await readFile(join(root, '..', '..', 'README.md'), 'utf8');
+    const captures = [...readme.matchAll(/data-(fruitback-[a-z]+)=/g)].map((match) => match[1] ?? '');
+    const documented = [...new Set(captures)].filter((name) => name !== '');
+
+    // A guard over an empty set passes. The snippet is the first thing on the landing page; if it is
+    // gone, that is the failure, not a reason to skip.
+    assert.ok(documented.length > 0, 'the README documents no data-fruitback-* attribute any more');
+
+    for (const attribute of documented) {
+      const camel = attribute.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
+      assert.ok(
+        source.includes(`data-${attribute}`) || source.includes(camel),
+        `the README documents data-${attribute} and the built script never reads it`,
+      );
+    }
+  });
+
   it('is small enough to put on someone else’s page', async () => {
     const { size } = await import('node:fs').then((fs) => fs.promises.stat(join(dist, 'fruitback.iife.js')));
     const gzipped = await gzipSize(join(dist, 'fruitback.iife.js'));
