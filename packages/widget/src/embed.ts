@@ -3,6 +3,7 @@ import { captureSeed } from './capture.ts';
 import { type WidgetConfig, createConfigStore } from './config.ts';
 import { type CaptureHost, type CaptureTarget, createCaptureHost } from './host.ts';
 import type { FruitbackTheme } from './theme.ts';
+import { type FruitbackTransport, fetchTransport } from './transport.ts';
 import { type Composer, createComposer } from './composer.ts';
 import { type Overlay, createOverlay } from './overlay.ts';
 import { type ConfigPanel, createConfigPanel } from './panel.ts';
@@ -84,6 +85,18 @@ export type FruitbackOptions = {
    * — they are the caller's word, and no stored value replaces them. Raised in review.
    */
   configKey?: string;
+  /**
+   * Who carries the calls to the worker. Defaults to `fetch`, from this page.
+   *
+   * The seam exists so a host can put the calls somewhere the page cannot reach. The browser
+   * extension relays them through its own session (SKG-595), which is the only way a team token can
+   * gate a read without the page's JavaScript being able to read that token.
+   *
+   * It is also how a mount stays dormant: a site that wants the widget only for a reviewer does not
+   * call `init` until it has a transport. A widget that was never built shows nothing and asks for
+   * nothing, which is a stronger promise than one that hides itself.
+   */
+  transport?: FruitbackTransport;
   document?: Document;
 };
 
@@ -111,6 +124,17 @@ export type Fruitback = {
 
 /** Where a mount routes to. A caller that named its own config key decided these, not the page. */
 const ROUTING_FIELDS = ['endpoint', 'clientId'] as const;
+
+/**
+ * The transport this mount uses.
+ *
+ * One place, so a call site added later cannot quietly take the default and leave a host's relay
+ * out of the loop. `embed.test.ts` asserts the default is named nowhere else in this file — and
+ * that assertion counts every mention, this comment included, so do not spell it here.
+ */
+function transportFor(options: FruitbackOptions): FruitbackTransport {
+  return options.transport ?? fetchTransport;
+}
 
 /** The panel writes on every keystroke, so a typed endpoint must not become a request per character. */
 const REQUERY_DEBOUNCE_MS = 300;
@@ -252,16 +276,17 @@ function createReader(
       const token = await options.identityToken?.();
       if (mine !== generation) return;
 
-      const response = await fetch(
-        `${config.endpoint}/feedback?url=${encodeURIComponent(url)}&client=${encodeURIComponent(config.clientId)}`,
-        token === undefined ? undefined : { headers: { Authorization: `Bearer ${token}` } },
-      );
+      const response = await transportFor(options)({
+        url: `${config.endpoint}/feedback?url=${encodeURIComponent(url)}&client=${encodeURIComponent(config.clientId)}`,
+        method: 'GET',
+        headers: token === undefined ? {} : { Authorization: `Bearer ${token}` },
+      });
       // A 401 lands here like any other failure, and that is deliberate: the pins already on screen
       // are correct, and blanking the page because a token expired would read as "my notes are
       // gone". Same rule as an unreachable worker below.
       if (mine !== generation || !response.ok) return;
 
-      const { issues } = (await response.json()) as { issues: SeedIssue[] };
+      const { issues } = JSON.parse(response.body) as { issues: SeedIssue[] };
       if (mine !== generation) return;
 
       overlay.render(issues);
@@ -301,7 +326,8 @@ async function plant({
   // otherwise turn every later note into a 401.
   const token = await options.identityToken?.();
 
-  const response = await fetch(`${config.endpoint}/feedback`, {
+  const response = await transportFor(options)({
+    url: `${config.endpoint}/feedback`,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

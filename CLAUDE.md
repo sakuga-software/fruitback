@@ -447,6 +447,42 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   squash-and-stretch entrance. The note moved to the badge's `aria-label` — that is what keeps it
   reachable by a screen reader, and by a test looking for it by role.
 
+## Who carries the calls
+
+- **`transport` is a seam, and it is the same one twice** (SKG-595). The widget stays dormant when a
+  host has nothing to reach the worker with, and the extension relays the calls when it does. Those
+  looked like two features; they are one question — *who carries this* — asked once.
+- **Plain objects, not `Request` and `Response`.** Neither survives `postMessage`, and the
+  implementation this exists for lives on the other side of one. `TransportRequest` is a URL, a
+  method, headers and an optional body; `TransportResponse` is `ok`, `status` and a text body.
+- **Dormancy is not an option on `init`, it is not calling `init`.** A promise on `init` was the
+  first design and it was wrong: `init` is synchronous and hands back a `ConfigPanel`, so deferring
+  the mount would have made that panel a promise or a proxy. A site that wants the widget only for a
+  reviewer waits for its transport and calls `init` then. A widget that was never built shows
+  nothing and asks for nothing, which is a stronger promise than one that hides itself — and the
+  waiting has to live somewhere either way, so the promise only moved it.
+- **`transportFor` is one line and one place**, because a call site added later would otherwise take
+  the default and leave a host's relay out of the loop with nothing to see. `embed.test.ts` reads the
+  source and asserts two things: no bare `fetch(` survives, and the default is named exactly twice —
+  the import and that one line. The second check is what catches a bypass the first cannot, since
+  calling the default directly is not calling `fetch`.
+- **That count includes comments**, which the first version learned by failing: a sentence naming the
+  default sat in `transportFor`'s own docstring and made three.
+- **The write path is not unit-tested here**, and the source guard is why that is acceptable. Reaching
+  the composer needs a real hit test, which happy-dom has no `elementsFromPoint` for — the same wall
+  *The optional picture* meets.
+- **`fetchTransport` does not catch.** A worker nobody can reach rejects, `embed.ts` treats that and a
+  failed status identically, and swallowing it here would only hide an outage from an implementer who
+  wanted to log it. Mutation-tested.
+- **One existing assertion changed, and it was asserting the mechanism.** `sends no Authorization
+  header when the host mints no token` compared `fetch`'s second argument to `undefined` — true only
+  because the old code passed nothing there. Every call carries a method now, so it asserts the
+  absence of the header, which is what its own comment always said it meant.
+- **`identityToken` and `transport` overlap and are left overlapping.** In the extension's mode the
+  relay holds the session, so the token seam is dead there; with no extension the transport is the
+  default, so the relay is dead. Unifying them belongs with the extension side, not here, where there
+  is nothing yet to unify against.
+
 ## The optional picture
 
 - **The widget does not bundle a rasteriser** (SKG-495). `captureScreenshot` is a seam the embedder
