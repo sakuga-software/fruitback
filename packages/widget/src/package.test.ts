@@ -74,18 +74,53 @@ describe('the script-tag build', () => {
   it('reads every attribute the README tells a reader to write', async () => {
     const source = await readFile(join(dist, 'fruitback.iife.js'), 'utf8');
     const readme = await readFile(join(root, '..', '..', 'README.md'), 'utf8');
-    const captures = [...readme.matchAll(/data-(fruitback-[a-z]+)=/g)].map((match) => match[1] ?? '');
-    const documented = [...new Set(captures)].filter((name) => name !== '');
+    // `[a-z-]*[a-z]` and not `[a-z]+`: the first version stopped at the first hyphen, so a name like
+    // `data-fruitback-endpoint-extra` matched **nothing at all** and was skipped in silence — the
+    // guard then checked the one attribute left and passed while the snippet no longer mounted
+    // anything. Raised in review, and measured: that spelling captured `[]`.
+    const captures = [...readme.matchAll(/data-(fruitback[a-z-]*[a-z])=/g)].map((match) => match[1] ?? '');
+    const documented = new Set(captures.filter((name) => name !== ''));
 
     // A guard over an empty set passes. The snippet is the first thing on the landing page; if it is
     // gone, that is the failure, not a reason to skip.
-    assert.ok(documented.length > 0, 'the README documents no data-fruitback-* attribute any more');
+    assert.ok(documented.size > 0, 'the README documents no data-fruitback-* attribute any more');
 
     for (const attribute of documented) {
       const camel = attribute.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
       assert.ok(
         source.includes(`data-${attribute}`) || source.includes(camel),
         `the README documents data-${attribute} and the built script never reads it`,
+      );
+    }
+  });
+
+  /**
+   * The other direction, which the first version left open (SKG-519).
+   *
+   * "Everything documented is read" says nothing about a snippet that stopped documenting what the
+   * tag cannot mount without. `global.ts` returns early unless **both** `fruitbackEndpoint` and
+   * `fruitbackClient` are on the tag, so a README that lost either one would hand a reader a script
+   * tag that loads, does nothing, and reports nothing. Raised in review.
+   *
+   * The required names are taken from `global.ts`'s own early return rather than listed here, so
+   * renaming one fails this test instead of quietly narrowing it.
+   */
+  it('documents the attributes the script tag cannot mount without', async () => {
+    const bootstrap = await readFile(join(root, 'src', 'global.ts'), 'utf8');
+    const guarded = /if \(endpoint !== undefined && clientId !== undefined\)/.test(bootstrap);
+    assert.ok(guarded, 'global.ts no longer gates the mount on those two locals; this guard is stale');
+
+    const required = [...bootstrap.matchAll(/script\.dataset\.(fruitback[A-Za-z]+)/g)]
+      .map((match) => match[1] ?? '')
+      .filter((name) => name !== '' && !bootstrap.includes(`label: script.dataset.${name}`));
+    assert.equal(required.length, 2, `expected two required attributes, found ${required.join(', ')}`);
+
+    const readme = await readFile(join(root, '..', '..', 'README.md'), 'utf8');
+    for (const camel of required) {
+      const kebab = camel.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+      assert.ok(
+        readme.includes(`data-${kebab}=`),
+        `the script tag will not mount without data-${kebab}, and the README no longer documents it`,
       );
     }
   });
