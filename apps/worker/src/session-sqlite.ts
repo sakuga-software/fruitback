@@ -49,15 +49,25 @@ const MIGRATIONS: readonly string[] = [
   CREATE INDEX pairings_by_expiry ON pairings (expires_at);
   CREATE INDEX sessions_by_expiry ON sessions (expires_at);
   `,
-  // Rotation (SKG-600). `rotated_at` marks a token that has issued its successor; `predecessor_hash`
-  // is the link back to the one it replaced, and reading it the other way — every row that names a
-  // token as its predecessor — is how a leaked chain is walked forward. One column rather than two,
-  // and the index is what makes the backward reading cheap.
+  // Rotation (SKG-600). `rotated_at` marks a token that has issued its successor and
+  // `predecessor_hash` is the link back to the one it replaced — kept because retiring a predecessor
+  // when its successor is used needs exactly that one hop.
+  //
+  // `root_hash` names the chain. Revoking a session used to walk `predecessor_hash` in both
+  // directions, and a walk is linear in the chain: measured at 10 microseconds a link, with nothing
+  // enforcing the eight-minute cadence the first estimate assumed. A holder refreshing at the rate
+  // limit builds hundreds of thousands of rows inside one `expires_at`, and a single logout or
+  // replay then held the database for seconds inside `BEGIN IMMEDIATE`. With the chain named it is
+  // one indexed statement, whatever the length. Raised in review.
+  //
+  // It is NULL on every row written before this migration. Read it as `root_hash ?? token_hash`:
+  // a row that names no chain is the head of its own.
   `
   ALTER TABLE sessions ADD COLUMN rotated_at INTEGER;
   ALTER TABLE sessions ADD COLUMN predecessor_hash TEXT;
+  ALTER TABLE sessions ADD COLUMN root_hash TEXT;
 
-  CREATE INDEX sessions_by_predecessor ON sessions (predecessor_hash);
+  CREATE INDEX sessions_by_root ON sessions (root_hash);
   `,
 ];
 
@@ -157,6 +167,7 @@ type SessionRow = IdentityRow & {
   revoked_at: unknown;
   rotated_at: unknown;
   predecessor_hash: unknown;
+  root_hash: unknown;
 };
 
 /** Marked, never deleted: a revoked row is what turns a later replay into `reused` rather than into an unknown token. */
@@ -166,69 +177,35 @@ function revoke(database: DatabaseSync, tokenHash: string, now: number): void {
     .run(now, tokenHash);
 }
 
-/**
- * Every token that descends from this one, revoked.
- *
- * Walked forward through `predecessor_hash`, which is the column read the other way round. A
- * predecessor can have several rows naming it — each retry inside the grace mints one — so this
- * takes a queue rather than a single successor.
- *
- * `seen` is not defensive tidiness: this file sits on a volume an operator can edit, and a row whose
- * `predecessor_hash` points back into its own chain would otherwise spin here for ever, inside a
- * transaction, holding the database.
- *
- * The walk is not short-circuited on an already revoked row, and must not be: a rotation revokes
- * each predecessor, so every link but the tip is revoked in the ordinary case and a filtered walk
- * would stop at the first hop without ever reaching the live token.
- *
- * The cost, stated rather than guessed. Chain length is bounded by the rotations that fit inside
- * one `expires_at` — about 5400 for a session refreshed every 8 minutes for 30 days. Measured at
- * 45 ms on such a chain, through `sessions_by_predecessor`, and a replay pays it again each time.
- * `checkRateLimit` caps that at 20 requests a minute per IP. The two calls inside the grace walk
- * one row, not the chain, and `revokeSession` walks it once per logout.
- */
-/**
- * The oldest token this one descends from, found by walking `predecessor_hash` back.
- *
- * A chain branches forward — a grace retry mints a second successor — but never backward: a row
- * names one predecessor. So this is a straight walk, and `seen` is here for the same reason the
- * forward walk keeps one, an operator editing the file into a cycle.
- */
-function rootOf(database: DatabaseSync, tokenHash: string): string {
-  const seen = new Set([tokenHash]);
-  let current = tokenHash;
-
-  for (;;) {
-    const row = database.prepare('SELECT predecessor_hash FROM sessions WHERE token_hash = ?').get(current) as
-      | { predecessor_hash: unknown }
-      | undefined;
-
-    const parent = row?.predecessor_hash;
-    if (typeof parent !== 'string' || seen.has(parent)) return current;
-
-    seen.add(parent);
-    current = parent;
-  }
+/** The chain a row belongs to. A row with no `root_hash` predates the column and heads its own. */
+function chainOf(row: { root_hash: unknown }, tokenHash: string): string {
+  return typeof row.root_hash === 'string' ? row.root_hash : tokenHash;
 }
 
-function revokeDescendants(database: DatabaseSync, tokenHash: string, now: number): void {
-  const seen = new Set([tokenHash]);
-  const queue = [tokenHash];
+/**
+ * Every live token of one chain, revoked — except `keep`, when the caller still needs it.
+ *
+ * One statement rather than a walk, and `revoked_at IS NULL` is what makes a repeat call free: the
+ * rows are already marked, so nothing is written.
+ *
+ * The cost, measured rather than reasoned about. The walk this replaced ran at 10 microseconds a
+ * link and the chain has no bound but `expires_at`: 605 ms over 60,000 rows, and a holder refreshing
+ * at the rate limit reaches an order of magnitude more inside thirty days. The same chains revoke in
+ * 0.6 ms and 6.4 ms now. What a walk made linear, an index makes flat. Raised in review, which also
+ * pointed out that the first estimate assumed a cadence nothing enforces.
+ *
+ * `keep` is the grace branch's, and it is the only place root-based revocation differs from walking
+ * descendants rather than merely costing less: that branch drops the successors nobody received
+ * while the token presenting itself stays live to mint another.
+ */
+function revokeChain(database: DatabaseSync, root: string, now: number, keep?: string): void {
+  database
+    .prepare('UPDATE sessions SET revoked_at = ? WHERE root_hash = ? AND token_hash IS NOT ? AND revoked_at IS NULL')
+    .run(now, root, keep ?? null);
 
-  while (queue.length > 0) {
-    const parent = queue.shift() as string;
-    const rows = database.prepare('SELECT token_hash FROM sessions WHERE predecessor_hash = ?').all(parent) as {
-      token_hash: unknown;
-    }[];
-
-    for (const { token_hash: child } of rows) {
-      if (typeof child !== 'string' || seen.has(child)) continue;
-
-      seen.add(child);
-      revoke(database, child, now);
-      queue.push(child);
-    }
-  }
+  // A chain rooted before `root_hash` existed has NULL on its head, so the statement above cannot
+  // reach it by chain. It is named directly instead.
+  if (root !== keep) revoke(database, root, now);
 }
 
 /**
@@ -262,7 +239,7 @@ function decide(
     // session. Raised in review.
     if (rotatedAt === undefined) return { answer: { outcome: 'gone' }, commit: false };
 
-    revokeDescendants(database, tokenHash, now);
+    revokeChain(database, chainOf(row, tokenHash), now);
 
     return { answer: { outcome: 'reused' }, commit: true };
   }
@@ -272,15 +249,14 @@ function decide(
     // ceiling the client has given up on, so does this — the chain goes rather than staying live
     // with nobody watching it.
     if (now > rotatedAt + graceMs) {
-      revoke(database, tokenHash, now);
-      revokeDescendants(database, tokenHash, now);
+      revokeChain(database, chainOf(row, tokenHash), now);
 
       return { answer: { outcome: 'gone' }, commit: true };
     }
 
     // Inside it: mint a fresh successor and drop the one nobody received, so this token never has
-    // two live successors.
-    revokeDescendants(database, tokenHash, now);
+    // two live successors. This token itself must survive — it is about to mint that successor.
+    revokeChain(database, chainOf(row, tokenHash), now, tokenHash);
   }
 
   const identity = identityOf(row);
@@ -288,7 +264,7 @@ function decide(
 
   database
     .prepare(
-      'INSERT INTO sessions (token_hash, subject, name, email, created_at, expires_at, predecessor_hash) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO sessions (token_hash, subject, name, email, created_at, expires_at, predecessor_hash, root_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
     )
     .run(
       successorHash,
@@ -298,6 +274,7 @@ function decide(
       now,
       row.expires_at,
       tokenHash,
+      chainOf(row, tokenHash),
     );
 
   // `rotated_at IS NULL` keeps the **first** rotation, which is what the grace is a ceiling on.
@@ -415,7 +392,7 @@ export function createSqliteSessionStore(path: string): SessionStore {
       try {
         const row = database
           .prepare(
-            'SELECT subject, name, email, expires_at, revoked_at, rotated_at, predecessor_hash FROM sessions WHERE token_hash = ?',
+            'SELECT subject, name, email, expires_at, revoked_at, rotated_at, predecessor_hash, root_hash FROM sessions WHERE token_hash = ?',
           )
           .get(tokenHash) as SessionRow | undefined;
 
@@ -443,13 +420,10 @@ export function createSqliteSessionStore(path: string): SessionStore {
      *   a logout with B left A usable inside its grace: whoever copied A presented it and got a
      *   fresh successor. The log out ended nothing. Measured before it was fixed.
      *
-     * So the walk starts at the **root**, not at the token presented. Any link ends the session.
+     * So it revokes by **chain**, not from the token presented. Any link ends the session.
      *
      * The answer stays derived from the presented row's own update. A logout on an already revoked
      * token must keep reading as "there was nothing live here" even when another row did change.
-     *
-     * The walk's cost is the one described above `revokeDescendants`, plus one indexed lookup per
-     * link on the way up.
      */
     async revokeSession(tokenHash, now) {
       const database = connect(path);
@@ -460,9 +434,11 @@ export function createSqliteSessionStore(path: string): SessionStore {
           .prepare('UPDATE sessions SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL')
           .run(now, tokenHash);
 
-        const root = rootOf(database, tokenHash);
-        revoke(database, root, now);
-        revokeDescendants(database, root, now);
+        const row = database.prepare('SELECT root_hash FROM sessions WHERE token_hash = ?').get(tokenHash) as
+          | { root_hash: unknown }
+          | undefined;
+
+        if (row !== undefined) revokeChain(database, chainOf(row, tokenHash), now);
         database.exec('COMMIT');
 
         return revoked.changes === 1;

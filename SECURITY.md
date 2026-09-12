@@ -148,8 +148,9 @@ the month and nothing observed the theft.
 
 **Rotation makes the theft detectable. It does not cap what the thief gets**, and an earlier version
 of this section said it did. A refresh token is a bearer credential: whoever presents it is served.
-A thief who presents a copy before the real client does receives the successor and can go on
-refreshing — the chain is theirs, and it is the reviewer who is locked out and has to pair again.
+Each presentation of a spent token revokes the successor the one before it minted, so the **last**
+holder to present it keeps the live chain and every earlier one is locked out. A thief who presents
+after the reviewer takes the session, and the reviewer pairs again.
 What rotation guarantees is that the two cannot both keep the session: the loser's next refresh is
 refused, so the theft surfaces within one refresh cycle instead of lasting a month. See *the cost*
 below, and `serves whoever presents first inside the grace, and locks the other one out`.
@@ -183,8 +184,9 @@ genuine confirms they hold the right kind of secret.
 The cost is stated rather than hidden, and the two cases differ:
 
 - **Inside the grace**, the successor has not been used yet and the worker cannot tell a retry from a
-  copy. Whoever presents first is served and the other one holds a revoked token. A thief who wins
-  that race keeps the live chain and the reviewer pairs again.
+  copy. Each presentation replaces the successor, so the **last** one to present holds the live chain
+  and the earlier holder finds their token revoked. A thief who presents after the reviewer takes the
+  session, and the reviewer pairs again.
 - **On a replay**, the successor has already been used, so the collision is unambiguous and the whole
   chain goes. Both of them lose the session.
 

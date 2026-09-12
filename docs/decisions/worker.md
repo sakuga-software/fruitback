@@ -325,8 +325,9 @@ connector's environment, and what a second connector with no markdown body actua
 - **Revocation is mutation-tested.** `findSession` is gone since SKG-600 — every read of a session
   rotates it, so there is no lookup beside `rotateSession`. Dropping `revoked_at IS NULL` from
   `revoke` still fails `revokes on the worker, so the refresh token stops working everywhere`, and
-  dropping the chain walk from `revokeSession` fails `ends the whole chain on log out, not only the
-  token it was handed` and `ends a chain from any link, including the token nobody is holding`.
+  dropping the chain revocation from `revokeSession` fails `ends the whole chain on log out, not only
+  the token it was handed` and `ends a chain from any link, including the token nobody is holding`,
+  and not inheriting `root_hash` on the successor fails nine tests at once.
 - **The CORS exemption is mutation-tested.** Replacing `openCors` with the ordinary `resolveCors`
   fails both `answers an extension origin that is on no allowlist` and `lets the preflight through`,
   while `leaves the allowlist in force on /feedback` stays green — which is what says the exemption
@@ -365,10 +366,12 @@ stays good for the rest of that month, and nothing observes the theft. Rotating 
 makes its use **visible**.
 
 It does **not** make the copy useful for at most one cycle, which is what this paragraph said until a
-reviewer read it properly. A refresh token is a bearer credential and whoever presents it is served:
-a thief who gets in before the real client receives the successor and goes on refreshing, while the
-client's own token is revoked under it. Measured, and kept as a test — `serves whoever presents first
-inside the grace, and locks the other one out`. What rotation guarantees is that the two cannot both
+reviewer read it properly. A refresh token is a bearer credential and whoever presents it is served.
+Inside the grace each presentation of the spent token revokes the successor the one before it
+minted, so it is the **last** presenter who ends up with the live chain: a thief who gets in after
+the real client takes the session and the client's own token is revoked under it. The first version
+of this paragraph said *first*, which is the opposite of what the code does. Measured, and kept as a
+test — `serves whoever presents last inside the grace, and locks the earlier holder out`. What rotation guarantees is that the two cannot both
 keep the session quietly, which is a detection property and not a lifetime one.
 
 ### The ticket asked for a replay window. Two measurements said no.
@@ -423,9 +426,26 @@ After that lost answer, a logout ended the predecessor and left its successor li
 the thirty days — held by nobody, revocable by nobody. Log out now revokes the chain, and its return
 value still describes the presented row alone, so a second log out keeps reading as "nothing live".
 
-The chain is walked forward through `predecessor_hash`, read the other way round. One column rather
-than two, with an index, and the walk keeps a `seen` set: this file sits on a volume an operator can
-edit, and a row pointing back into its own chain would otherwise spin for ever inside a transaction.
+The chain is **named**, not walked. `root_hash` carries the head's hash down every successor, so
+ending a session is one indexed `UPDATE ... WHERE root_hash = ?` however long the chain is.
+
+It was a walk first, forward through `predecessor_hash`, and that is the version a reviewer measured
+properly. A walk is linear in the chain — 10 microseconds a link — and the chain has no bound but
+`expires_at`: the first estimate said 5,400 rows by assuming the extension's eight-minute cadence,
+which nothing enforces. A holder refreshing at the rate limit reaches hundreds of thousands inside
+thirty days, and one logout or replay then held the database for seconds inside `BEGIN IMMEDIATE`.
+Measured before and after, on the same chains: 605 ms over 60,000 rows became 6.4 ms, and 42.7 ms
+over 5,400 became 0.6 ms.
+
+`predecessor_hash` stays, because retiring a predecessor when its successor is used needs exactly
+that one hop. What went with the walk is the `seen` set that kept an operator-edited cycle from
+spinning inside a transaction — a statement cannot loop.
+
+One place differs in behaviour rather than in cost. The grace branch drops the successors nobody
+received **while the token presenting itself stays live**, so it passes that token as `keep`. Removing
+it failed no test at all until `takes a third presentation inside the ceiling, not just a second` was
+written — the ceiling allowing more than one retry was a property this file promised and nothing
+held.
 
 The caller is told nothing about any of it. `gone` and `reused` answer the same `401`, the way the
 two pairing failures do — a reply that told a replayer their copy was genuine would confirm they had

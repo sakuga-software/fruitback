@@ -634,9 +634,11 @@ and *The team mode, and the call the page cannot make*:
   as for a token that never existed.
 - **Rotation is a detection property, not a lifetime cap.** Do not write that a stolen token is
   useful for "at most one cycle" — three places said so and none was true. Whoever presents a bearer
-  token first is served: a thief who gets in before the reviewer keeps the chain, and the reviewer is
-  the one who pairs again. What is guaranteed is that the two cannot both keep the session quietly.
-  `serves whoever presents first inside the grace, and locks the other one out` holds it.
+  token is served, and inside the grace each presentation revokes the successor the one before it
+  minted — so the **last** presenter keeps the chain and every earlier holder is locked out. Write
+  *last*, not *first*: the inverted version shipped into three documents and a test name. What is
+  guaranteed is only that the two cannot both keep the session quietly.
+  `serves whoever presents last inside the grace, and locks the earlier holder out` holds it.
 - **The successor inherits the predecessor's expiry.** Thirty days from pairing stays thirty days;
   rotation shortens what a leak is worth, it does not lengthen a session.
 - **Revoked *and* rotated is a signal, not a proof, and `revokeSession` ends the chain.** A log out

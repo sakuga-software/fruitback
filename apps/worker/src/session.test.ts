@@ -381,6 +381,25 @@ describe('rotation', () => {
     assert.notEqual(retry.refreshToken, first.refreshToken);
   });
 
+  /**
+   * The ceiling allows more than one retry, and only this says so.
+   *
+   * `SECURITY.md` promises that inside the ceiling the spent token may be presented **more than
+   * once**, each time replacing the successor nobody received. Every other test here presents it
+   * twice, so removing `keep` from the grace branch — which revokes the presenting token along with
+   * the orphans — failed nothing at all. The property was written down and guarded by nothing.
+   */
+  it('takes a third presentation inside the ceiling, not just a second', async () => {
+    const { store, token, at } = await opened();
+    assert.ok((await refreshSession(store, token, SECRET, at)).ok);
+    assert.ok((await refreshSession(store, token, SECRET, at + 60_000)).ok);
+
+    const third = await refreshSession(store, token, SECRET, at + 120_000);
+
+    assert.ok(third.ok, 'the spent token was retired by a retry rather than by its successor');
+    assert.ok((await refreshSession(store, third.refreshToken, SECRET, at + 180_000)).ok);
+  });
+
   /** And the successor nobody received goes, so one token never has two live successors. */
   it('drops the successor that was never received', async () => {
     const { store, token } = await opened();
@@ -545,6 +564,32 @@ describe('rotation', () => {
     assert.equal(copy.ok, false, 'a copy of the predecessor outlived the log out');
   });
 
+  /**
+   * A chain whose head predates `root_hash` still ends on log out.
+   *
+   * The column is NULL on every row written before migration #2, so `chainOf` reads such a row as
+   * the head of its own chain — and `revokeChain` names that head directly, because a statement
+   * filtering on `root_hash` cannot reach a row that has none. A session already open when this
+   * worker is upgraded is exactly that case, and it is the one nothing else here would cover.
+   */
+  it('ends a session whose root was written before the chain had a name', async () => {
+    const { store, path, token } = await opened();
+    const first = await refreshSession(store, token, SECRET);
+    assert.ok(first.ok);
+    const second = await refreshSession(store, first.refreshToken, SECRET);
+    assert.ok(second.ok);
+
+    // The upgrade case, written by hand: the head carries no chain name.
+    const database = new DatabaseSync(path);
+    database.prepare('UPDATE sessions SET root_hash = NULL WHERE predecessor_hash IS NULL').run();
+    database.close();
+
+    assert.equal(await revokeSession(store, second.refreshToken), true);
+
+    assert.equal((await refreshSession(store, token, SECRET)).ok, false, 'the head outlived the log out');
+    assert.equal((await refreshSession(store, first.refreshToken, SECRET)).ok, false);
+  });
+
   /** And the boolean still describes the row it was handed, so a second log out reads as nothing live. */
   it('answers false on a token already revoked, whatever the chain did', async () => {
     const { store, token } = await opened();
@@ -609,31 +654,33 @@ describe('rotation', () => {
   /**
    * What the grace costs, measured and kept rather than described.
    *
-   * Inside it, the token has two possible holders and the worker cannot tell them apart. Whoever
-   * presents first is served, and the grace branch revokes every descendant — so the other one is
-   * holding a revoked token and is logged out. When a thief wins that race they keep the live chain
-   * and the reviewer is the one who has to pair again.
+   * Inside it the predecessor has two possible holders and the worker cannot tell them apart. Each
+   * presentation revokes the successor the one before it minted, so it is the **last** presenter who
+   * holds the live chain and every earlier holder who is locked out. A thief who presents after the
+   * reviewer takes the session, and the reviewer pairs again.
    *
-   * This is the opposite of the replay case, where the successor has already been used and both
-   * parties lose. `SECURITY.md` says so, because the first version of it claimed this outcome was
-   * the one rotation prevents. Raised in review.
+   * The first version of this test was named for the *first* presenter, which is the opposite of
+   * what the code does and of what the run printed. Raised in review, twice over: the same inversion
+   * was in `SECURITY.md`, `docs/decisions/worker.md` and `CLAUDE.md`.
    *
-   * Delete `revokeDescendants` from the grace branch and this test tells you what you changed.
+   * This is not the replay case, where the successor has already been used, the collision is
+   * unambiguous and both parties lose. Delete `keep` from the grace branch's `revokeChain` and this
+   * test tells you what you changed.
    */
-  it('serves whoever presents first inside the grace, and locks the other one out', async () => {
+  it('serves whoever presents last inside the grace, and locks the earlier holder out', async () => {
     const { store, token } = await opened();
     const held = await refreshSession(store, token, SECRET);
     assert.ok(held.ok);
 
     const other = await refreshSession(store, token, SECRET);
 
-    assert.ok(other.ok, 'the second presenter is served, because nothing distinguishes it from a retry');
+    assert.ok(other.ok, 'the later presenter is served, because nothing distinguishes it from a retry');
     assert.equal(
       (await refreshSession(store, held.refreshToken, SECRET)).ok,
       false,
-      'the first successor stays live, so both holders keep a working session',
+      'the earlier holder kept a working session, so both of them have one',
     );
-    assert.ok((await refreshSession(store, other.refreshToken, SECRET)).ok, 'the winner keeps the chain');
+    assert.ok((await refreshSession(store, other.refreshToken, SECRET)).ok, 'the last presenter keeps the chain');
   });
 
   /**
