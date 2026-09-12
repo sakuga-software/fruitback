@@ -27,7 +27,7 @@ export const EXTENSION_EVENT = 'fruitback:extension';
 export const EXTENSION_API_VERSION = 1;
 
 export type FruitbackExtensionApi = {
-  version: number;
+  version: typeof EXTENSION_API_VERSION;
   transport: FruitbackTransport;
 };
 

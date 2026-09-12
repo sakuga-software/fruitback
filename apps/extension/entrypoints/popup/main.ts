@@ -19,7 +19,14 @@ const app = document.querySelector('#app');
 
 void render();
 
-async function render(): Promise<void> {
+/**
+ * @param editing Show the fields for an origin that already has an entry.
+ *
+ * Without it there is no way to change one. An entry is written once and then only switched on and
+ * off, so an origin turned on before SKG-596 could never be moved to team mode — which is every
+ * origin a reviewer already uses. The real editor is SKG-536; this is the one path out.
+ */
+async function render(editing = false): Promise<void> {
   if (app === null) return;
 
   const tab = await currentTab();
@@ -35,15 +42,17 @@ async function render(): Promise<void> {
 
   const site = await readSite(origin);
 
+  const open = site === undefined || editing;
+
   app.replaceChildren(
     element('h1', 'Fruitback'),
     element('p', origin, 'origin'),
-    site === undefined ? form(origin) : status(origin, site),
+    open ? form(origin, site) : status(origin, site),
   );
 
   // Pairing is against the **worker**, not the site, so there is nothing to ask for until one is
   // named. A reviewer holds one session per worker however many of its sites they have turned on.
-  if (site !== undefined) app.append(await session(site));
+  if (site !== undefined && !open) app.append(await session(site));
 }
 
 /** What a failed pairing is, in the reporter's words. */
@@ -91,7 +100,7 @@ async function session(site: SiteConfig): Promise<HTMLElement> {
       // `logout` revokes on the worker first and clears here whatever that answers. See its comment:
       // a screen that says signed out while this extension still holds a working credential is the
       // one outcome worth avoiding.
-      void sessions.logout(endpoint).then(render);
+      void sessions.logout(endpoint).then(() => render());
     });
 
     const row = document.createElement('div');
@@ -149,17 +158,20 @@ async function session(site: SiteConfig): Promise<HTMLElement> {
 }
 
 /**
- * No entry yet: ask for the mode, and for what that mode cannot work without.
+ * Ask for the mode, and for what that mode cannot work without.
  *
  * The client id is asked for in private mode only. In team mode the site embeds its own widget and
  * declares its own client id, and a second one stored here would be a value nothing reads.
  */
-function form(origin: string): HTMLElement {
-  const mode = modeField();
+function form(origin: string, site?: SiteConfig): HTMLElement {
+  const mode = modeField(site?.mode ?? 'private');
   const endpoint = field('Worker endpoint', 'https://feedback.acme.dev');
   const clientId = field('Client id', 'acme');
-  const save = element('button', 'Turn on for this site');
+  const save = element('button', site === undefined ? 'Turn on for this site' : 'Save');
   const problem = element('p', '', 'problem');
+
+  endpoint.input.value = site?.endpoint ?? '';
+  clientId.input.value = site !== undefined && site.mode === 'private' ? site.clientId : '';
 
   const showFields = (): void => {
     clientId.label.hidden = mode.select.value === 'team';
@@ -180,7 +192,8 @@ function form(origin: string): HTMLElement {
     problem.textContent = complaint(values);
     if (problem.textContent !== '') return;
 
-    void turnOn(origin, siteFrom(values));
+    // `enabled` is kept: changing the endpoint of a site that is switched off must not switch it on.
+    void turnOn(origin, siteFrom(values, site?.enabled ?? true));
   });
 
   const wrapper = document.createElement('div');
@@ -205,12 +218,12 @@ export function complaint(values: { mode: SiteMode; endpoint: string; clientId: 
  * at — the site does that. It is what the relay checks the site's declaration against, so a page
  * cannot name another worker and be handed this reviewer's token for it. See `src/relay.ts`.
  */
-export function siteFrom(values: { mode: SiteMode; endpoint: string; clientId: string }): SiteConfig {
+export function siteFrom(values: { mode: SiteMode; endpoint: string; clientId: string }, enabled: boolean): SiteConfig {
   const endpoint = normalizeWorkerEndpoint(values.endpoint);
 
   return values.mode === 'team'
-    ? { mode: 'team', endpoint, enabled: true }
-    : { mode: 'private', endpoint, clientId: values.clientId, enabled: true };
+    ? { mode: 'team', endpoint, enabled }
+    : { mode: 'private', endpoint, clientId: values.clientId, enabled };
 }
 
 /**
@@ -239,8 +252,10 @@ async function turnOn(origin: string, site: SiteConfig): Promise<void> {
  * reviewer pointed at it: the browser run that "proved" the no-reload flow had seeded storage before
  * the page loaded, which is not what a person does.
  *
- * Injecting a script that is already running is harmless here — the bridge only listens, and the
- * page world refuses a second mount by destroying the first.
+ * Injecting a script that is already running costs one repeated decision. In private mode the page
+ * world destroys the widget it has and mounts a new one. In team mode the fresh copy announces
+ * itself again, so a site that mounts blindly on `fruitback:extension` gets a second widget — which
+ * is why the snippet in `docs/install.md` checks whether it already has one.
  */
 async function injectIntoCurrentTab(): Promise<void> {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
@@ -261,7 +276,7 @@ function status(origin: string, site: SiteConfig): HTMLElement {
   const toggle = element('button', site.enabled ? 'Turn off here' : 'Turn on here');
   toggle.addEventListener('click', () => {
     if (site.enabled) {
-      void writeSite(origin, { ...site, enabled: false }).then(render);
+      void writeSite(origin, { ...site, enabled: false }).then(() => render());
 
       return;
     }
@@ -269,9 +284,16 @@ function status(origin: string, site: SiteConfig): HTMLElement {
     void turnOn(origin, { ...site, enabled: true });
   });
 
+  const change = element('button', 'Change');
+  change.className = 'secondary';
+  change.addEventListener('click', () => void render(true));
+
+  const buttons = document.createElement('span');
+  buttons.append(change, toggle);
+
   const row = document.createElement('div');
   row.className = 'row';
-  row.append(element('span', `${site.enabled ? 'On' : 'Off'} · ${describeSite(site)}`, 'state'), toggle);
+  row.append(element('span', `${site.enabled ? 'On' : 'Off'} · ${describeSite(site)}`, 'state'), buttons);
 
   return row;
 }
@@ -281,7 +303,7 @@ function describeSite(site: SiteConfig): string {
   return site.mode === 'team' ? "team mode · the site's own widget" : site.clientId;
 }
 
-function modeField(): { label: HTMLLabelElement; select: HTMLSelectElement } {
+function modeField(current: SiteMode): { label: HTMLLabelElement; select: HTMLSelectElement } {
   const select = document.createElement('select');
   for (const [value, text] of [
     ['private', 'Private · the extension mounts the widget'],
@@ -292,6 +314,8 @@ function modeField(): { label: HTMLLabelElement; select: HTMLSelectElement } {
     option.textContent = text as string;
     select.append(option);
   }
+
+  select.value = current;
 
   const wrapper = document.createElement('label');
   wrapper.append('Mode', select);

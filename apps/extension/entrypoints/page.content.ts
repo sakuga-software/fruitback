@@ -1,7 +1,12 @@
 import { init } from '@fruitback/widget';
 import { CHANNEL, type BridgeMessage, parseBridgeMessage } from '../src/protocol.ts';
 import { createRelayTransport } from '../src/relay-transport.ts';
-import { EXTENSION_API_VERSION, EXTENSION_EVENT, EXTENSION_GLOBAL } from '../src/page-api.ts';
+import {
+  EXTENSION_API_VERSION,
+  EXTENSION_EVENT,
+  EXTENSION_GLOBAL,
+  type FruitbackExtensionApi,
+} from '../src/page-api.ts';
 
 /**
  * The page's own world, which mounts the widget in private mode and announces itself in team mode
@@ -35,7 +40,7 @@ export default defineContentScript({
     let widget: ReturnType<typeof init> | undefined;
     const relayListeners: ((message: BridgeMessage) => void)[] = [];
 
-    const api = {
+    const api: FruitbackExtensionApi = {
       version: EXTENSION_API_VERSION,
       transport: createRelayTransport({
         // Same target as the handshake below. The request is the page's own call, and the token it
