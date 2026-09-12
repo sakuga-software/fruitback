@@ -175,10 +175,18 @@ export function createSessions({
    * holds.
    *
    * The compare and the write are not one operation and cannot be: `chrome.storage` has no
-   * transaction, and the popup and this context share nothing else. What makes a logout landing
-   * inside that window harmless is the **generation** the grant carries — an access token minted for
-   * a session storage no longer holds is refused on the next read rather than honoured for its
-   * remaining ten minutes. Raised in review on SKG-600.
+   * transaction, and the popup and this context share nothing else. **Which logout that catches
+   * depends on where it lands**, and only one of the two is covered:
+   *
+   * - between the session write and the grant write — the grant is minted for a session storage no
+   *   longer holds, so `matches` refuses it on the next read rather than honouring its remaining ten
+   *   minutes. This is the case the **generation** marker was added for, on SKG-600.
+   * - between the compare and the session write — both writes then land and agree with each other,
+   *   so nothing here can tell them from an ordinary refresh. The session is put back and its access
+   *   token is accepted for its ten minutes. The refresh token put back is revoked on the worker,
+   *   because logging out revokes the chain, so the next refresh answers `401` and ends the session
+   *   — but that does not reach a token already minted. **SKG-603**, and it needs something ordered
+   *   in storage rather than a tighter gap here.
    *
    * Since SKG-602 the two writes touch only this endpoint's own keys, so nothing here can reach
    * another worker's entry whatever else is running.
@@ -264,9 +272,9 @@ export function createSessions({
     // with nothing to keep in step: if the one in storage is not the one this request spent, the
     // session was logged out or re-paired, and this answer is about a session that no longer exists.
     //
-    // The check and the write are one operation — see `keepIfCurrent`. Doing them apart left three
-    // storage operations for a logout to land between, and rotation made this path run on every
-    // refresh rather than on the rare answer that carried a new token. Raised in review, twice.
+    // The check and the write are **not** one operation and cannot be — see `keepIfCurrent` for
+    // which logout that catches and which it does not. Rotation made this path run on every refresh
+    // rather than on the rare answer that carried a new token. Raised in review, three times.
     //
     // What protects a lost answer is on the worker's side: the token this request spent stays usable
     // until its successor is, so a retry with the old one lands on its feet.

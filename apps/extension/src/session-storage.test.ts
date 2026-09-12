@@ -137,6 +137,58 @@ describe('the upgrade from one record to one key per endpoint', () => {
     assert.deepEqual(store.log, ['get all', `remove ${LEGACY_SESSIONS_KEY}`]);
   });
 
+  /**
+   * The popup and the background upgrade independently, over the same storage.
+   *
+   * `key in snapshot` is what stops the second one writing an older value over a newer one, and it
+   * is only ever consulted while the legacy record is still there — so a second upgrade run after
+   * the first finished exercises nothing. The first one is held open here, inside its removal, so
+   * the second reads a snapshot that carries the legacy record **and** the new key. Raised in
+   * review, and the first version of this test passed under every mutation.
+   *
+   * What it does not cover is a second upgrade whose snapshot was taken before the first wrote.
+   * That one writes the legacy value back, and closing it needs ordering `chrome.storage` does not
+   * offer. It also needs a network round trip to finish inside one storage round trip, which is why
+   * `migrationOf` states it rather than defends it.
+   */
+  it('does not let a second context put an older value back', async () => {
+    const fresher = { ...SESSION, refreshToken: 'refresh.2', generation: 'gen.2' };
+    const store = storage({ [LEGACY_SESSIONS_KEY]: { [ENDPOINT]: SESSION } });
+
+    let wrote: () => void = () => {};
+    const written = new Promise<void>((resolve) => {
+      wrote = resolve;
+    });
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    let removals = 0;
+    const area: StorageArea = {
+      ...store.area,
+      set: async (items) => {
+        await store.area.set(items);
+        wrote();
+      },
+      remove: async (key) => {
+        removals += 1;
+        if (removals === 1) await held;
+        await store.area.remove(key);
+      },
+    };
+
+    const first = splitLegacyRecord(area, LEGACY_SESSIONS_KEY, SESSION_PREFIX, parseStoredSession);
+    await written;
+    await store.area.set({ [keyFor(SESSION_PREFIX, ENDPOINT)]: fresher });
+
+    await splitLegacyRecord(area, LEGACY_SESSIONS_KEY, SESSION_PREFIX, parseStoredSession);
+    release();
+    await first;
+
+    assert.deepEqual(store.read(), { [keyFor(SESSION_PREFIX, ENDPOINT)]: fresher });
+  });
+
   it('writes nothing and reads nothing twice once the legacy record is gone', async () => {
     const store = storage({ [keyFor(SESSION_PREFIX, ENDPOINT)]: SESSION });
 

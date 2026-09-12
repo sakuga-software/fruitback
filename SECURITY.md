@@ -216,7 +216,14 @@ Since SKG-599 the extension holds its half of that, and **where** matters as muc
 **Each endpoint has its own storage key** (SKG-602). One key holding every worker made the popup and
 the background write over each other: a refresh could put a credential back after a logout cleared
 it, so a session a reviewer had ended stayed usable until it expired. Logging out now removes the
-key it names, and nothing else writes it.
+key it names, and no ordinary operation on another endpoint writes it.
+
+Two writers still reach that key and neither is closed by the split. A refresh for the **same**
+endpoint compares the stored token and writes after it, so a logout landing between the two puts the
+session back and its access token is accepted for its remaining ten minutes; the refresh token put
+back is revoked on the worker, so the session ends at the next refresh. The upgrade to per-endpoint
+keys writes from a snapshot too. Both need ordering that `chrome.storage` does not offer — no
+transaction, no compare-and-set — and both are narrowed rather than closed. SKG-603 holds the first.
 
 Neither is readable from a reviewed page. Both stay inside the extension's **trusted contexts** — the
 background service worker, which refreshes, and the popup, which pairs and logs out.
