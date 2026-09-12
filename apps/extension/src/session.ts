@@ -57,7 +57,7 @@ export type StoredSession = {
   epoch?: string;
 };
 
-/** What must not. `expiresAt` is a moment in milliseconds, computed here from the worker's `expiresIn`. */
+/** What must not survive it. `expiresAt` is a moment in milliseconds, from the worker's `expiresIn`. */
 export type AccessGrant = {
   accessToken: string;
   expiresAt: number;
@@ -261,6 +261,13 @@ export function createSessions({
    * in storage before anything is removed. Everything stamped with the epoch before it is refused
    * from here on, whenever it lands.
    *
+   * **Minting it must not be able to keep the credentials**, which is why the drops are in a
+   * `finally`. Storage can refuse a write — a quota, a transient failure — and returning there would
+   * leave a fresh grant readable after the worker was already told to revoke, under a popup that
+   * says signed out. The drops run, the rejection still reaches the caller, and that logout is back
+   * to what it was before this ticket: cleared here, and a refresh already in flight can put the
+   * session back. Raised in review.
+   *
    * The rest is two operations rather than one, because each area owns its own keys. So a logout can
    * leave the session dropped and the grant still there for an instant — and if it fails between
    * them, for longer. That grant is unusable: it carries the generation of a session no longer in
@@ -272,8 +279,11 @@ export function createSessions({
    * above ended.
    */
   async function forget(endpoint: string): Promise<void> {
-    await epochs.put(endpoint, newEpoch());
-    await Promise.all([sessions.drop(endpoint), grants.drop(endpoint)]);
+    try {
+      await epochs.put(endpoint, newEpoch());
+    } finally {
+      await Promise.all([sessions.drop(endpoint), grants.drop(endpoint)]);
+    }
   }
 
   async function refresh(endpoint: string): Promise<AccessResult> {

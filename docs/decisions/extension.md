@@ -411,10 +411,28 @@ through, so every session read back from real storage was stamped with nothing a
 nothing worked: pairing, on real storage, signed the reviewer straight back out.
 
 The interleavings are arranged by holding one storage write open — the only place the two contexts
-can be ordered against each other, since they share nothing else. Ten mutations of the new rules were
-run and each fails a test, including the two that only say *when* something happens: minting the
-epoch after the clear, and reading the epoch in a second round trip instead of from the snapshot the
-session came from.
+can be ordered against each other, since they share nothing else. Thirteen mutations were run and
+each fails a test: the ten rules this ticket adds, including the two that only say *when* something
+happens — minting the epoch after the clear, and reading the epoch in a second round trip instead of
+from the snapshot the session came from — plus `matches`, which still refuses a grant and a session
+that drifted apart inside one run, and the two directions of the `finally` below.
+
+### What a logout can still lose, and what it cannot
+
+**Minting the epoch must not be able to keep the credentials.** The first version returned when
+`epochs.put` rejected, so a quota or a transient storage failure left both credentials in place after
+the worker had already been told to revoke — a fresh grant, still readable, under a popup saying
+signed out. The drops are in a `finally` and the rejection still reaches the caller; that logout is
+then back to what it was before this ticket, which is the side to degrade to. Raised in review.
+
+**A pairing made inside a refresh's window is still lost**, and this ticket does not close it. A
+refresh reads, the reviewer logs out and pairs again, and the refresh's write lands over the new
+pairing stamped with the run before it — so `stillOpen` hides an endpoint somebody just paired. It
+needs a whole pairing round trip inside the two storage operations that separate the read from the
+write. Before this ticket the same write put a **spent** token back and the endpoint read as paired
+until the next refresh answered `401`; now it reads as signed out at once, which is the more honest
+of the two. Closing it means versioning the key rather than stamping the value, which is a second
+storage-shape change and its own ticket: **SKG-604**. Raised in review.
 
 ## The team mode, and the call the page cannot make (SKG-596)
 

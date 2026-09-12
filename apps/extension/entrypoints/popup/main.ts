@@ -109,7 +109,14 @@ async function session(site: SiteConfig): Promise<HTMLElement> {
       // `logout` revokes on the worker first and clears here whatever that answers. See its comment:
       // a screen that says signed out while this extension still holds a working credential is the
       // one outcome worth avoiding.
-      void sessions.logout(endpoint).then(() => render());
+      void sessions
+        .logout(endpoint)
+        // Redrawn whatever it answered, because `logout` clears here whatever the revoke or the
+        // epoch write did. Rendering only on success leaves the row saying paired over storage that
+        // holds nothing, with a dead button. And a click is fire-and-forget, so a failure nobody
+        // logs here is logged nowhere at all. Raised in review.
+        .catch((error: unknown) => console.error('[fruitback] the log out did not finish', error))
+        .then(() => render());
     });
 
     const row = document.createElement('div');

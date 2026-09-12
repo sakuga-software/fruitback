@@ -230,7 +230,8 @@ The upgrade to per-endpoint keys writes from a snapshot too, and the epoch reach
 well: a legacy record predates the marker, so what the upgrade puts back carries no epoch and the
 logout minted one. What a logout cannot recover from that window is a **pairing** made inside it —
 the upgrade puts the older entry back over it, and the endpoint reads as signed out. That costs a
-pairing, never a credential somebody ended, and only on the first run after the upgrade.
+pairing, never a credential somebody ended, and only on the first run after the upgrade. A refresh in
+flight can lose a pairing the same way, on any run and not only the first: SKG-604.
 
 Neither is readable from a reviewed page. Both stay inside the extension's **trusted contexts** — the
 background service worker, which refreshes, and the popup, which pairs and logs out.

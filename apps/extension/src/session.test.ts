@@ -545,6 +545,38 @@ describe('a session that ends while a refresh is in the air', () => {
 
 describe('logging out', () => {
   /**
+   * The epoch is minted first, and storage can refuse a write.
+   *
+   * Returning there would leave both credentials in place after the worker was already told to
+   * revoke: a fresh grant, still readable, under a popup that says signed out. So the drops are in a
+   * `finally` and the failure still reaches the caller. That logout is then back to what it was
+   * before SKG-603 — cleared here, and a refresh in flight can put the session back — which is the
+   * side to degrade to. Raised in review.
+   */
+  it('clears both areas even when the epoch cannot be written', async () => {
+    const sessions = area<StoredSession>({ [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } });
+    const grants = area<AccessGrant>({
+      [ENDPOINT]: { accessToken: 'access.1', expiresAt: NOW + 600_000, identity: IDENTITY },
+    });
+    const subject = createSessions({
+      sessions,
+      grants,
+      epochs: {
+        put: async () => {
+          throw new Error('storage is full');
+        },
+      },
+      now: () => NOW,
+      post: async () => ({ status: 200, body: {} }),
+    });
+
+    await assert.rejects(subject.logout(ENDPOINT), /storage is full/);
+
+    assert.deepEqual(await sessions.read(), {});
+    assert.deepEqual(await grants.read(), {});
+  });
+
+  /**
    * Revoke first, clear second. The other order cannot work: the token the call needs is the one the
    * clear has just thrown away, and what is left behind is a live credential on the worker that
    * nobody can revoke any more.
