@@ -572,6 +572,41 @@ describe('rotation', () => {
   });
 
   /**
+   * A replay walks forward only, and this is what says that is enough.
+   *
+   * I claimed in review that the token presented on a replay is always an ancestor of the live tip,
+   * so the forward walk reaches everything. That was an assertion, and the two defects before it
+   * were both a direction nobody had tested. So: a deep chain with a fork in it — a grace retry
+   * leaves an orphan branch — replayed from the **root**, which is the furthest the walk has to go.
+   */
+  it('revokes a forked chain to its tip when the root is replayed', async () => {
+    const { store, token, at } = await opened();
+    const orphaned = await refreshSession(store, token, SECRET, at);
+    assert.ok(orphaned.ok);
+    const second = await refreshSession(store, token, SECRET, at + 1_000);
+    assert.ok(second.ok);
+    const third = await refreshSession(store, second.refreshToken, SECRET, at + 2_000);
+    assert.ok(third.ok);
+    const tip = await refreshSession(store, third.refreshToken, SECRET, at + 3_000);
+    assert.ok(tip.ok);
+
+    // The root is revoked and rotated by now, so presenting it is the `reused` case.
+    assert.equal((await refreshSession(store, token, SECRET, at + 4_000)).ok, false);
+
+    for (const [name, dead] of [
+      ['the orphan branch', orphaned.refreshToken],
+      ['the middle of the chain', second.refreshToken],
+      ['the tip', tip.refreshToken],
+    ] as const) {
+      assert.equal(
+        (await refreshSession(store, dead, SECRET, at + 5_000)).ok,
+        false,
+        `${name} survived a replay of the root`,
+      );
+    }
+  });
+
+  /**
    * What the grace costs, measured and kept rather than described.
    *
    * Inside it, the token has two possible holders and the worker cannot tell them apart. Whoever

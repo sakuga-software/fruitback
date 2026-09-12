@@ -232,9 +232,13 @@ both: an access token the host site's JavaScript can read is the worst outcome o
   worker's own start-up call. Raised in review — both halves were tested and their composition was
   not.
 - **Rotation was half-built on purpose, and SKG-600 built the other half.** A rotated refresh token
-  is stored when one arrives, and since SKG-600 one arrives on every refresh. The lost-answer case is
-  handled on the worker rather than here: the token a request spent stays usable until its successor
-  is, so this side needs nothing but the store it already had.
+  is stored when one arrives, and since SKG-600 one arrives on every **successful** refresh — an
+  answer without it is refused here rather than taken, because the worker has spent the stored token
+  by then. The lost-answer case is handled on the worker rather than here: the spent token stays
+  usable until its successor is used **or `ROTATION_GRACE_SECONDS` passes**, whichever comes first,
+  and nothing on this side ends that window. Raised in review, twice: this sentence carried both the
+  missing ceiling and the "on every refresh" overstatement. This side needs nothing but the store it
+  already had.
 - Verified over the real transport rather than against the handler, which is this repo's recurring
   defect (SKG-518): a real `OPTIONS` preflight from `chrome-extension://…` for
   `Content-Type: application/json`, then pair → refresh → revoke → refresh, answering
