@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isExtensionOrigin } from './cors.ts';
 
 /**
  * One worker, several client sites (SKG-504).
@@ -215,8 +216,14 @@ export function resolveClient({ clients, clientId, origin, fallback }: ResolveCl
 
   // A request with no Origin is not a browser request, so there is nothing to check it against —
   // the same reasoning `resolveCors` applies, and the same limit: this binds a claim to a site, it
-  // does not authenticate anyone.
-  if (client.origins !== undefined && origin !== null && !client.origins.includes(origin)) {
+  // does not authenticate anyone. An extension origin is the same case: the relay calls from a
+  // service worker whose id no operator can put in `origins` (SKG-596).
+  if (
+    client.origins !== undefined &&
+    origin !== null &&
+    !isExtensionOrigin(origin) &&
+    !client.origins.includes(origin)
+  ) {
     return { ok: false, reason: 'origin-not-allowed-for-client' };
   }
 

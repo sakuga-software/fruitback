@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { isWorkerEndpoint, normalizeWorkerEndpoint } from './endpoint.ts';
+import { isSecureWorkerEndpoint, isWorkerEndpoint, normalizeWorkerEndpoint } from './endpoint.ts';
 
 describe('isWorkerEndpoint', () => {
   it('accepts what a worker can answer on', () => {
@@ -44,5 +44,33 @@ describe('normalizeWorkerEndpoint', () => {
     const once = normalizeWorkerEndpoint('https://example.com/fruitback/?x=1#y');
 
     assert.equal(normalizeWorkerEndpoint(once), once);
+  });
+});
+
+describe('isSecureWorkerEndpoint', () => {
+  it('allows https, and loopback however it is spelled', () => {
+    for (const endpoint of [
+      'https://worker.test',
+      'https://example.com/fruitback',
+      'http://localhost:8788',
+      'http://127.0.0.1:8788',
+      'http://[::1]:8788',
+    ]) {
+      assert.equal(isSecureWorkerEndpoint(endpoint), true, endpoint);
+    }
+  });
+
+  /** A bearer credential travels over these, and anyone on the path reads it. */
+  it('refuses plain http anywhere else, and anything that is not a URL', () => {
+    for (const endpoint of [
+      'http://worker.test',
+      'http://192.168.1.10:8788',
+      'http://localhost.evil.dev',
+      'http://notlocalhost',
+      'ws://worker.test',
+      'not a url',
+    ]) {
+      assert.equal(isSecureWorkerEndpoint(endpoint), false, endpoint);
+    }
   });
 });

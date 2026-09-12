@@ -1,5 +1,27 @@
 const ALLOW_ANY_ORIGIN = '*';
 
+/**
+ * The schemes a browser extension's own pages and service worker send as their `Origin` (SKG-596).
+ *
+ * Named one by one rather than as "anything that is not http", because a scheme list fails closed:
+ * `null`, `file://` and whatever a browser adds next fall through to the allowlist, where they
+ * belong. One predicate for the whole worker — `resolveCors` and `resolveClient` both ask it, and
+ * two copies of this rule would drift apart in silence.
+ */
+const EXTENSION_SCHEMES = ['chrome-extension:', 'moz-extension:', 'safari-web-extension:'];
+
+/**
+ * True for the extension's own origin, which no operator can put on an allowlist.
+ *
+ * The id differs between an unpacked build and a store build, so `ALLOWED_ORIGINS` cannot name it.
+ * Admitting it grants exactly what a request with no `Origin` already has — `curl` is served today,
+ * and CORS was never what decides who may read a pin. Under `read: 'authenticated'` the token still
+ * is.
+ */
+export function isExtensionOrigin(origin: string): boolean {
+  return EXTENSION_SCHEMES.some((scheme) => origin.startsWith(`${scheme}//`));
+}
+
 export type CorsDecision = {
   /** False only when a browser sent an `Origin` we do not serve. */
   allowed: boolean;
@@ -13,13 +35,17 @@ export type CorsDecision = {
  * is allowed: there is no cookie or session auth here, so there is nothing for a forged
  * cross-site request to escalate. What the allowlist protects is quota — it stops an unrelated site
  * from posting into your Linear through your Worker.
+ *
+ * An extension origin is allowed for the same reason, and it is the one this batch needed: the
+ * extension relays a client site's call from its own service worker (SKG-596), which sends
+ * `chrome-extension://<id>` on the POST, and no allowlist can name that id.
  */
 export function resolveCors(request: Request, allowedOrigins: string[]): CorsDecision {
   const origin = request.headers.get('Origin');
   if (origin === null) return { allowed: true, headers: {} };
 
   const allowAny = allowedOrigins.includes(ALLOW_ANY_ORIGIN);
-  const allowed = allowAny || allowedOrigins.some((candidate) => candidate === origin);
+  const allowed = allowAny || isExtensionOrigin(origin) || allowedOrigins.some((candidate) => candidate === origin);
   if (!allowed) return { allowed: false, headers: {} };
 
   return {

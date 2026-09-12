@@ -4,9 +4,11 @@ import { createApply } from './bridge.ts';
 import { CHANNEL, type BridgeMessage } from './protocol.ts';
 import type { SiteConfig } from './sites.ts';
 
-const SITE: SiteConfig = { endpoint: 'https://worker.test', clientId: 'acme', enabled: true };
+const SITE: SiteConfig = { mode: 'private', endpoint: 'https://worker.test', clientId: 'acme', enabled: true };
+const TEAM_SITE: SiteConfig = { mode: 'team', endpoint: 'https://worker.test', enabled: true };
 const MOUNT = { channel: CHANNEL, kind: 'mount', endpoint: 'https://worker.test', clientId: 'acme' };
 const UNMOUNT = { channel: CHANNEL, kind: 'unmount' };
+const ANNOUNCE = { channel: CHANNEL, kind: 'announce' };
 
 /** A `readSite` whose answers are handed out on demand, so two reads can be in flight at once. */
 function gated() {
@@ -28,6 +30,25 @@ describe('createApply', () => {
     await createApply({ readSite: async () => SITE, post: (m) => void posts.push(m) })();
 
     assert.deepEqual(posts, [MOUNT]);
+  });
+
+  /**
+   * Team mode mounts nothing, which is the whole of it (SKG-596). The site embeds its own widget, so
+   * a mount here would put a second one beside it — and the client id this entry does not carry is
+   * the site's, not the reviewer's.
+   */
+  it('posts an announce for a team-mode site, and never a mount', async () => {
+    const posts: BridgeMessage[] = [];
+    await createApply({ readSite: async () => TEAM_SITE, post: (m) => void posts.push(m) })();
+
+    assert.deepEqual(posts, [ANNOUNCE]);
+  });
+
+  it('posts an unmount for a team-mode site that is off', async () => {
+    const posts: BridgeMessage[] = [];
+    await createApply({ readSite: async () => ({ ...TEAM_SITE, enabled: false }), post: (m) => void posts.push(m) })();
+
+    assert.deepEqual(posts, [UNMOUNT]);
   });
 
   it('posts an unmount for a site that is off, and for one it has never heard of', async () => {

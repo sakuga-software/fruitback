@@ -330,18 +330,26 @@ describe('who may call these routes', () => {
     assert.ok(response.headers.get('Access-Control-Allow-Headers')?.includes('Content-Type'));
   });
 
-  /** The exemption is for `/session/` only. Everything else still answers to the allowlist. */
-  it('leaves the allowlist in force on /feedback', async () => {
+  /**
+   * The allowlist still governs `/feedback`, and it governs **sites** (SKG-596).
+   *
+   * This test used to assert that an extension origin was refused here, and that was true until the
+   * relay existed: team mode has the extension call `/feedback` from its own service worker, which
+   * sends `chrome-extension://<id>` — an id no operator can put on an allowlist. So the scheme is
+   * admitted, and what the list still refuses is a site nobody named. `SECURITY.md` says the same in
+   * prose, in the same change.
+   */
+  it('leaves the allowlist in force on /feedback for sites, and admits the extension', async () => {
     const env = envWith({ ALLOWED_ORIGINS: 'https://staging.acme.dev' });
-    const response = await handleRequest(
-      new Request('https://worker.test/feedback?url=https://staging.acme.dev/', {
-        headers: { Origin: 'chrome-extension://abcdefghijklmnopabcdefghijklmnop' },
-      }),
-      env,
-      { clientIp: '198.51.100.23' },
-    );
+    const from = async (origin: string) =>
+      handleRequest(
+        new Request('https://worker.test/feedback?url=https://staging.acme.dev/', { headers: { Origin: origin } }),
+        env,
+        { clientIp: '198.51.100.23' },
+      );
 
-    assert.equal(response.status, 403);
+    assert.equal((await from('https://evil.test')).status, 403);
+    assert.notEqual((await from('chrome-extension://abcdefghijklmnopabcdefghijklmnop')).status, 403);
   });
 
   it('answers 413 on an oversized body, which is what the failure codes promise', async () => {

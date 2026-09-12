@@ -361,8 +361,9 @@ And *No emoji, and what replaced them* in [docs/decisions/icons.md](docs/decisio
 
 SKG-539 names three modes: **public** (the site embeds the widget, everyone sees the pins),
 **private** (the site embeds nothing and the extension injects the widget) and **équipe** (the site
-embeds a dormant widget the extension activates and relays for). What is built today is the private
-mode, SKG-534.
+embeds a dormant widget the extension activates and relays for). Private is SKG-534 and team is
+SKG-596; both are built. Which one an origin is in is one field on its entry, and **an entry with no
+`mode` reads as private** — that is every entry a reviewer's browser already holds.
 
 - **`world: 'MAIN'` is the ticket, not a preference.** A content script in the isolated world shares
   the DOM and **not** the properties page scripts put on it: `__reactFiber$` and
@@ -396,7 +397,62 @@ mode, SKG-534.
   `${endpoint}/feedback?url=…`, so query and fragment go, a trailing slash goes, and the **path
   stays** — a worker behind `https://example.com/fruitback` is an ordinary Traefik deployment.
 - **A site that embeds the widget *and* a reviewer who has the extension get two docks.** Known,
-  harmless, and not solved here.
+  harmless, and not solved here. It is the private mode's defect only: in team mode there is one
+  widget and it is the site's.
+
+**The team mode** (SKG-596)
+
+- **The main world announces instead of mounting.** `page.content.ts` puts
+  `window.fruitbackExtension = { version, transport }` on the page and fires `fruitback:extension`.
+  Two ways to find it because nothing orders a content script against a site's own bundle.
+- **Installing the API is idempotent, which is what makes the event safe to mount on.** The global is
+  set and the event fired only when the global is not already ours, so a re-posted decision announces
+  nothing. **Withdrawal is the same event with the global gone** — nothing here can destroy a widget
+  the site owns, so a site switched off would otherwise keep stale pins and a composer that fails
+  silently.
+- **`clientId` and the widget's endpoint come from the site.** The stored entry carries an endpoint
+  anyway, and it is not what the widget is pointed at: it is what the relay checks the page's
+  declaration against.
+- **The relay is the mode.** Without it this is decluttering: a page can forge the presence signal,
+  and `curl` still reads a worker left at `read: 'public'`. It has security value **only** on
+  `read: 'authenticated'` (SKG-533, which is built). Do not describe the mode as a guarantee
+  without naming that setting.
+- **Every decision the relay makes is in the background, and `src/relay.ts` holds all of them.** A
+  content script's own input is written by the page, so the isolated world carries the request
+  across and decides nothing. The origin comes from `sender`, never from the message; the endpoint
+  from storage; the credential from the session.
+- **A page that names another worker is refused, never redirected.** A reviewer holds a session per
+  worker, so a page free to choose the endpoint could be answered with their credential for a
+  worker nobody on that page chose. Relaying to the stored endpoint instead would be worse: the
+  widget would report success against a worker it never named.
+- **No session, no call, and no plain `http://` either.** Relaying without the header would work on a
+  `read: 'public'` worker, and a reviewer would never learn they are unpaired while the mode
+  delivered none of what it promises. The endpoint must be https or loopback, because the token is a
+  bearer credential and this is the only thing carrying it; the popup refuses a team entry and
+  disables pairing on the same rule. **`isWorkerEndpoint` is not tightened** — it gates the private
+  mode's mount, which carries no credential.
+- **`Authorization` is built in the background and `Content-Type` is the only header the page may
+  name.** `ALLOWED_HEADERS` in `protocol.ts` is an allowlist of one, and `relay.ts` writes the
+  credential name by name rather than spreading — two spellings of one header reach `fetch` as a
+  combined value.
+- **One path, `/feedback`.** `relay.test.ts` reads `packages/widget/src/embed.ts` and asserts the
+  widget calls that path and names no header the relay would drop, so a call the widget grows later
+  fails the suite instead of being dropped silently on a reviewer's page.
+- **Two deadlines, and the shorter one aborts.** The composer disables its send button in flight, so
+  a promise that never settles leaves a reviewer with a dead button and a written note inside it.
+  `RELAY_CALL_TIMEOUT_MS` aborts the background fetch — merely giving up would leave the request in
+  flight while the page is told it failed, and a second send plants the note twice.
+  `RELAY_ANSWER_TIMEOUT_MS` is longer, so a slow worker is a refusal the background sends rather than
+  a timeout the page invents. **`createRelay` never rejects**, because a rejection leaves the
+  background with nothing to answer the runtime message with.
+- **`relay-transport.ts` exists so `node --test` can reach the correlation**: the widget reads and
+  writes independently, so two calls are in flight in the ordinary case. Its ids come from
+  `randomId`, not `crypto.randomUUID` — that one needs a **secure context** and this script runs on
+  `http://` staging too. `capture.ts` already carried the same fallback for the seed id, and the trap
+  was walked back into here.
+- **An extension origin is exempt from `ALLOWED_ORIGINS` on every route, by scheme.** The relay
+  calls `/feedback` from the service worker, which sends `chrome-extension://<id>`. See the worker
+  section below.
 
 **The session** (SKG-599, the extension half of SKG-535)
 
@@ -425,6 +481,15 @@ mode, SKG-534.
   the day it is written. **It detects the world on the code, not on the file** — the docstring of
   `page.content.ts` quotes `world: 'MAIN'`, so the first version guarded a file that had stopped
   reaching the page and reported a pass.
+- **No credential crosses plain `http://`** (SKG-596). `isSecureWorkerEndpoint` requires https or
+  loopback, and `pair`, `refresh` and the revoke in `logout` all ask it — in `session.ts`, not only
+  in the popup that warns first, so a session stored before the rule cannot keep spending its token
+  over the wire. `isWorkerEndpoint` is **not** tightened: it gates the private mode's mount, which
+  carries no credential.
+- **`postJson` bounds its own request, and the reason is `serialize`.** The refresh chain runs one
+  promise after the last, so a worker that accepts a connection and never answers wedges every later
+  refresh for **every** worker, not just its own. Found by looking for the other half of a review
+  finding about the relay's fetch.
 - **Only a `401` ends a session.** An outage or a `502` keeps the refresh token: throwing it away on
   a network blip logs a reviewer out of a session the worker still considers open, and the only way
   back is an operator minting a new pairing code. For the same reason a `429` on `/session/pair`
@@ -440,8 +505,9 @@ mode, SKG-534.
   minute, for ever. `isFresh` is the single freshness rule the three callers share so they cannot
   drift apart.
 
-**Deeper** — *The extension, and the two worlds* and *The session, and the token that never goes
-down*: [docs/decisions/extension.md](docs/decisions/extension.md).
+**Deeper** — *The extension, and the two worlds*, *The session, and the token that never goes down*
+and *The team mode, and the call the page cannot make*:
+[docs/decisions/extension.md](docs/decisions/extension.md).
 
 ## The worker
 
@@ -560,12 +626,16 @@ down*: [docs/decisions/extension.md](docs/decisions/extension.md).
   `server.mjs` because the image copies the bundle and no source). An endpoint
   would need an admin credential of its own and would stay reachable for ever; a command is reachable
   by whoever already sets the secrets.
-- **The session routes are exempt from `ALLOWED_ORIGINS`, and only they are.** That list names client
-  *sites*; an extension's origin carries an id that differs between an unpacked build and a store
-  build, so an operator cannot put it there. Measured: an MV3 service worker posting JSON sends
-  `chrome-extension://<id>` and triggers a preflight, and both answered `403`. Echoing any origin is
-  safe on these three routes because they carry no ambient authority — no cookie, and both
-  credentials are secrets the caller must already hold.
+- **An extension origin is exempt from `ALLOWED_ORIGINS`, on every route** (SKG-535, widened by
+  SKG-596). That list names client *sites*; an extension's origin carries an id that differs between
+  an unpacked build and a store build, so an operator cannot put it there. Measured: an MV3 service
+  worker posting JSON sends `chrome-extension://<id>` and triggers a preflight, and both answered
+  `403`. The `/session/` routes needed it first; the relay then called `/feedback` the same way.
+  **`isExtensionOrigin` is one predicate in `cors.ts` that both gates ask** — `resolveCors` and
+  `resolveClient` — because two copies of this rule would drift apart in silence. It is a list of
+  schemes rather than "not http", so everything else falls through to the allowlist. It grants an
+  extension what a caller with no `Origin` already has, and `read: 'authenticated'` is still what
+  decides who may read.
 - **`checkRateLimit` runs above the path dispatch**, so a route added later is metered by default. It
   used to sit below the `404`, which would have left `/session/pair` an unmetered guessing oracle.
   `/health` stays free — a readiness probe that can be rate-limited takes the container out.

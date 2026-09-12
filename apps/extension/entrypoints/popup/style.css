@@ -61,6 +61,7 @@ label {
   margin-bottom: 8px;
 }
 
+select,
 input[type='text'] {
   box-sizing: border-box;
   width: 100%;
@@ -97,4 +98,11 @@ button {
 /* The pairing block sits under the site row, which already draws the separator above it. */
 .session label {
   margin-top: 10px;
+}
+
+/* The second button in a row, which must not read as the one somebody came here to press. */
+button.secondary {
+  background: transparent;
+  color: var(--muted);
+  box-shadow: inset 0 0 0 1px var(--line);
 }
