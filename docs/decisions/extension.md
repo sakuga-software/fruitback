@@ -191,6 +191,18 @@ both: an access token the host site's JavaScript can read is the worst outcome o
     passes with or without the lock, which is the shape of test this one exists not to be.
   - It lives in `session.ts` rather than the entrypoint for the reason `bridge.ts` gives: an
     entrypoint binds `browser` at import, and no test could reach the guard there.
+  - **And it is not enough, because the lock is per endpoint and the storage is not.** Both areas
+    hold every endpoint under one key, and a write replaces that key whole; two workers refreshing at
+    once each read the record and each replace it, so the later write restores the earlier one's
+    spent token. Under rotation that token is a replay, and its next use revokes the chain.
+    `lets two workers refresh at the same time` — a test written to prove the lock was correctly
+    scoped — is what makes it reachable. Every read-modify-write now goes through one queue, both
+    areas together, because `forget` writes to both and two queues would let a logout clear the
+    session while the grant sat behind something else. Raised in review.
+  - The first test for it **deadlocked the moment the fix landed**: it gated on two writes being in
+    flight at once, which is precisely what the fix prevents. A test that cannot pass against correct
+    code is not a test. It yields a few microtasks in the write instead — unserialised, both reads
+    land before either write; serialised, the yielding changes nothing.
 - **A `200` from `/session/refresh` carrying no `refreshToken` is a failure, not a success**
   (SKG-600, raised in review). Every refresh rotates, so an answer without a successor means the
   worker spent the stored token and the replacement did not arrive — a truncated body, a route that

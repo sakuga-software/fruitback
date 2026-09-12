@@ -252,6 +252,58 @@ describe('keeping an access token fresh', () => {
     assert.equal(remote.calls.length, 2);
   });
 
+  /**
+   * Two endpoints refreshing at once must not write each other's tokens away.
+   *
+   * One storage key holds every endpoint, and `write` replaces the whole key — so a read-modify-write
+   * for one worker can land on a snapshot taken before another's write and put a **spent** token
+   * back. The next refresh then presents a token the worker has already rotated, which is the replay
+   * signal: the chain is revoked and the reviewer pairs again.
+   *
+   * `refreshOnce` does not cover this and is not meant to: it is per endpoint, and
+   * `lets two workers refresh at the same time` asserts that on purpose. That test is what makes
+   * this reachable, and rotation is what made it likely — before it, `keep` ran only on the rare
+   * answer that carried a new token. Raised in review.
+   *
+   * The interleaving is not forced with a gate, and the first attempt to do so deadlocked the moment
+   * the fix landed — the gate waited for two writes at once, which is exactly what the fix prevents.
+   * A test that cannot pass against correct code is not a test. Each write simply yields a few
+   * microtasks instead: unserialised, both reads land before either write and the later one wins;
+   * serialised, they run in order and yielding changes nothing.
+   */
+  it('does not restore a spent token when another endpoint refreshes at the same time', async () => {
+    const other = 'https://other.test';
+    const backing = area<StoredSession>({
+      [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY },
+      [other]: { refreshToken: 'other.1', identity: IDENTITY },
+    });
+    const sessions: Area<StoredSession> = {
+      read: backing.read,
+      async write(next) {
+        for (let tick = 0; tick < 4; tick += 1) await Promise.resolve();
+
+        await backing.write(next);
+      },
+    };
+
+    const subject = createSessions({
+      sessions,
+      grants: area<AccessGrant>(),
+      now: () => NOW,
+      post: async (url) => ({
+        status: 200,
+        body: issued({ refreshToken: url.startsWith(other) ? 'other.2' : 'refresh.2' }),
+      }),
+    });
+
+    await Promise.all([subject.ensureAccess(ENDPOINT), subject.ensureAccess(other)]);
+
+    assert.deepEqual(await backing.read(), {
+      [ENDPOINT]: { refreshToken: 'refresh.2', identity: IDENTITY },
+      [other]: { refreshToken: 'other.2', identity: IDENTITY },
+    });
+  });
+
   /** The lock is released, so the next due refresh is not answered from the last one's promise. */
   it('refreshes again after the one in flight has settled', async () => {
     const { subject, remote } = setup({

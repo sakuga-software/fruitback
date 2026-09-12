@@ -110,6 +110,37 @@ export function createSessions({ sessions, grants, post, now = Date.now }: Sessi
   const refreshing = new Map<string, Promise<AccessResult>>();
 
   /**
+   * One read-modify-write on storage at a time.
+   *
+   * Both areas keep **every endpoint under one key**, and a write replaces that key whole. So two
+   * refreshes for different workers each read the record, each replace it, and the later write puts
+   * the earlier one's token back — a **spent** token, under rotation. Its next refresh is then a
+   * replay: the worker revokes the chain and the reviewer pairs again.
+   *
+   * `refreshOnce` cannot cover this and is not meant to. It is per endpoint on purpose, because two
+   * workers have nothing to do with each other — which is exactly what puts their writes in the same
+   * key. Raised in review.
+   *
+   * One queue for both areas rather than one each: `forget` writes to both, and two queues would let
+   * a logout clear the session while the grant is still queued behind something else. Serialising
+   * more than strictly needed costs a storage round trip; getting it wrong costs the session.
+   *
+   * This is per context, like everything else here. What crosses contexts is the compare in
+   * `keepIfCurrent`, and `chrome.storage` gives nothing stronger to build on.
+   */
+  let queue: Promise<unknown> = Promise.resolve();
+  function serialized<T>(run: () => Promise<T>): Promise<T> {
+    const next = queue.then(run, run);
+
+    queue = next.then(
+      () => undefined,
+      () => undefined,
+    );
+
+    return next;
+  }
+
+  /**
    * A request that answered, or nothing.
    *
    * Every caller has to tell "the worker refused this" from "the worker said nothing", because only
@@ -124,9 +155,11 @@ export function createSessions({ sessions, grants, post, now = Date.now }: Sessi
   }
 
   async function keep(endpoint: string, session: StoredSession): Promise<void> {
-    const all = await sessions.read();
+    await serialized(async () => {
+      const all = await sessions.read();
 
-    await sessions.write({ ...all, [endpoint]: session });
+      await sessions.write({ ...all, [endpoint]: session });
+    });
   }
 
   /**
@@ -142,34 +175,40 @@ export function createSessions({ sessions, grants, post, now = Date.now }: Sessi
    * what lets them agree with nothing kept in step. Narrowed twice in review, once when rotation
    * made this run on **every** refresh rather than on the rare one that carried a new token.
    */
-  async function keepIfCurrent(endpoint: string, spent: string, session: StoredSession): Promise<boolean> {
-    const all = await sessions.read();
-    if (all[endpoint]?.refreshToken !== spent) return false;
+  function keepIfCurrent(endpoint: string, spent: string, session: StoredSession): Promise<boolean> {
+    return serialized(async () => {
+      const all = await sessions.read();
+      if (all[endpoint]?.refreshToken !== spent) return false;
 
-    await sessions.write({ ...all, [endpoint]: session });
+      await sessions.write({ ...all, [endpoint]: session });
 
-    return true;
+      return true;
+    });
   }
 
-  async function grant(endpoint: string, issued: Issued): Promise<AccessGrant> {
-    const all = await grants.read();
-    const value: AccessGrant = {
-      accessToken: issued.accessToken,
-      expiresAt: now() + issued.expiresIn * 1000,
-      identity: issued.identity,
-    };
-    await grants.write({ ...all, [endpoint]: value });
+  function grant(endpoint: string, issued: Issued): Promise<AccessGrant> {
+    return serialized(async () => {
+      const all = await grants.read();
+      const value: AccessGrant = {
+        accessToken: issued.accessToken,
+        expiresAt: now() + issued.expiresIn * 1000,
+        identity: issued.identity,
+      };
+      await grants.write({ ...all, [endpoint]: value });
 
-    return value;
+      return value;
+    });
   }
 
   async function forget(endpoint: string): Promise<void> {
-    const [storedSessions, storedGrants] = await Promise.all([sessions.read(), grants.read()]);
+    await serialized(async () => {
+      const [storedSessions, storedGrants] = await Promise.all([sessions.read(), grants.read()]);
 
-    await Promise.all([
-      sessions.write(without(storedSessions, endpoint)),
-      grants.write(without(storedGrants, endpoint)),
-    ]);
+      await Promise.all([
+        sessions.write(without(storedSessions, endpoint)),
+        grants.write(without(storedGrants, endpoint)),
+      ]);
+    });
   }
 
   async function refresh(endpoint: string): Promise<AccessResult> {

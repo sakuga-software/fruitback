@@ -655,6 +655,12 @@ and *The team mode, and the call the page cannot make*:
 - **`rotated_at` marks the first rotation, never the last.** `AND rotated_at IS NULL` on that update
   is the grace being a ceiling: rewritten on every retry it slides, and whoever holds the token
   re-presents it just inside each window for ever.
+- **Both storage areas keep every endpoint under one key, and a write replaces that key whole.** So
+  every read-modify-write on them goes through one queue (`serialized`). Two refreshes for different
+  workers otherwise each read the record and each replace it, and the later write puts the earlier
+  one's **spent** token back — whose next refresh is a replay, so the worker revokes the chain and
+  the reviewer pairs again. `refreshOnce` is per endpoint and cannot cover this; it is what makes two
+  workers refresh in parallel in the first place.
 - **One refresh in flight per endpoint** (`refreshOnce` in the extension's `session.ts`). Two callers
   spending the same token is a lockout, not a wasted request: the worker treats the second as a
   retry inside the grace, revokes the first successor, and whichever `keep()` lands last can leave
