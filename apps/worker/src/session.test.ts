@@ -3,13 +3,17 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { DatabaseSync } from 'node:sqlite';
 import {
   ACCESS_TTL_SECONDS,
-  digest,
   PAIRING_TTL_SECONDS,
   REFRESH_TTL_SECONDS,
+  ROTATION_GRACE_SECONDS,
   createPairing,
   createPairingCode,
+  createRefreshToken,
+  digest,
   normalizePairingCode,
   redeemPairing,
   refreshSession,
@@ -329,4 +333,256 @@ describe('a row nobody can trust', () => {
       assert.equal(redeemed.ok, false, 'a malformed row minted a session');
     });
   }
+});
+
+/**
+ * Rotation, and the grace that keeps a lost answer from locking a reviewer out (SKG-600).
+ *
+ * A refresh token that never changes is a thirty-day password: a copy taken from a browser profile
+ * stays good for the rest of the month and nothing observes the theft. Every test below is about one
+ * of the two things rotation buys — shortening what a copy is worth, and making its use visible.
+ */
+describe('rotation', () => {
+  /** A session opened now, and the token it was handed. */
+  async function opened(at = Date.now()) {
+    const { store, path } = storeOnDisk();
+    const { code } = await createPairing(store, ALICE, at);
+    const redeemed = await redeemPairing(store, code, SECRET, at);
+    assert.ok(redeemed.ok);
+
+    return { store, path, token: redeemed.session.refreshToken, at };
+  }
+
+  it('hands back a new refresh token, and the new one works', async () => {
+    const { store, token } = await opened();
+
+    const first = await refreshSession(store, token, SECRET);
+    assert.ok(first.ok);
+    assert.notEqual(first.refreshToken, token);
+
+    const second = await refreshSession(store, first.refreshToken, SECRET);
+    assert.ok(second.ok);
+    assert.deepEqual(second.identity, ALICE);
+  });
+
+  /**
+   * The mechanism, and it uses no clock: what retires a predecessor is its successor being used,
+   * because that is the proof the client received it. Until then the client may still be holding
+   * only the old one — its answer may never have arrived.
+   */
+  it('keeps the old token usable until the new one is used', async () => {
+    const { store, token } = await opened();
+    const first = await refreshSession(store, token, SECRET);
+    assert.ok(first.ok);
+
+    const retry = await refreshSession(store, token, SECRET);
+
+    assert.ok(retry.ok, 'a client that never received the answer has nothing else to send');
+    assert.notEqual(retry.refreshToken, first.refreshToken);
+  });
+
+  /** And the successor nobody received goes, so one token never has two live successors. */
+  it('drops the successor that was never received', async () => {
+    const { store, token } = await opened();
+    const lost = await refreshSession(store, token, SECRET);
+    assert.ok(lost.ok);
+    assert.ok((await refreshSession(store, token, SECRET)).ok);
+
+    assert.equal((await refreshSession(store, lost.refreshToken, SECRET)).ok, false);
+  });
+
+  it('retires the old token the moment the new one is used', async () => {
+    const { store, token } = await opened();
+    const first = await refreshSession(store, token, SECRET);
+    assert.ok(first.ok);
+
+    assert.ok((await refreshSession(store, first.refreshToken, SECRET)).ok);
+    assert.equal((await refreshSession(store, token, SECRET)).ok, false, 'the predecessor is spent');
+  });
+
+  /**
+   * The reason rotation is worth having at all.
+   *
+   * A token presented after its successor was used cannot be the client's — the client moved on. So
+   * it is a copy, and the copy proves the session is compromised: every live token in the chain
+   * goes, not only the one that was replayed. The reviewer is logged out and has to pair again,
+   * which is the point: a silent thirty-day theft becomes a visible one.
+   */
+  it('revokes the whole chain when a retired token is replayed', async () => {
+    const { store, token } = await opened();
+    const first = await refreshSession(store, token, SECRET);
+    assert.ok(first.ok);
+    const second = await refreshSession(store, first.refreshToken, SECRET);
+    assert.ok(second.ok);
+
+    // The leaked copy, replayed after the real client had moved on twice.
+    assert.equal((await refreshSession(store, token, SECRET)).ok, false);
+
+    assert.equal(
+      (await refreshSession(store, second.refreshToken, SECRET)).ok,
+      false,
+      'the live token must go with the chain, or the theft costs the thief nothing',
+    );
+  });
+
+  it('gives up on a rotated token once the grace has run out, and takes the chain with it', async () => {
+    const { store, token, at } = await opened();
+    const lost = await refreshSession(store, token, SECRET, at);
+    assert.ok(lost.ok);
+
+    const late = at + ROTATION_GRACE_SECONDS * 1000 + 1;
+
+    assert.equal((await refreshSession(store, token, SECRET, late)).ok, false);
+    assert.equal((await refreshSession(store, lost.refreshToken, SECRET, late)).ok, false);
+  });
+
+  it('still accepts the retry the grace exists for, at the last moment it covers', async () => {
+    const { store, token, at } = await opened();
+    assert.ok((await refreshSession(store, token, SECRET, at)).ok);
+
+    const last = at + ROTATION_GRACE_SECONDS * 1000;
+
+    assert.ok((await refreshSession(store, token, SECRET, last)).ok);
+  });
+
+  /**
+   * Rotation shortens what a leaked token is worth; it does not lengthen a session. A successor that
+   * started its own thirty days would make a refreshing client immortal, and `SECURITY.md` says
+   * thirty days.
+   */
+  it('does not extend the session it rotates', async () => {
+    const { store, token, at } = await opened();
+    const halfway = at + (REFRESH_TTL_SECONDS / 2) * 1000;
+    const refreshed = await refreshSession(store, token, SECRET, halfway);
+    assert.ok(refreshed.ok);
+
+    const past = at + REFRESH_TTL_SECONDS * 1000 + 1;
+
+    assert.equal((await refreshSession(store, refreshed.refreshToken, SECRET, past)).ok, false);
+  });
+
+  /** A logout is not a leak. It revokes without rotating, so a replay of it is an ordinary refusal. */
+  it('tells a logged-out token apart from a replayed one', async () => {
+    const { store, token } = await opened();
+    assert.ok(await revokeSession(store, token));
+
+    assert.equal((await refreshSession(store, token, SECRET)).ok, false);
+  });
+
+  /**
+   * The property the whole file rests on, re-checked on the tokens rotation adds: a copy of this
+   * database is not a set of working logins. A successor that had to be answered twice would have to
+   * be stored in the clear, which is why a retry inside the grace mints a fresh one instead.
+   */
+  it('writes no rotated token into the database in the clear', async () => {
+    const { store, path, token } = await opened();
+    const first = await refreshSession(store, token, SECRET);
+    assert.ok(first.ok);
+    const second = await refreshSession(store, first.refreshToken, SECRET);
+    assert.ok(second.ok);
+
+    const bytes = readdirSync(join(path, '..'))
+      .map((name) => readFileSync(join(path, '..', name)).toString('latin1'))
+      .join('');
+
+    for (const secret of [token, first.refreshToken, second.refreshToken]) {
+      assert.equal(bytes.includes(secret), false, 'a refresh token is in the file the operator backs up');
+    }
+  });
+});
+
+/**
+ * The grace is the extension's worst case, read out of the extension rather than restated here.
+ *
+ * `ROTATION_GRACE_SECONDS` exists to cover one lost answer, and how long that takes is decided
+ * entirely on the other side: the margin before a token is due, plus the wait after a failed
+ * attempt. Either of those moving without this one leaves a window that is too short to catch the
+ * retry it was written for — and nothing else in either suite would notice, because both halves go
+ * on passing on their own. The same cross-package reading `security.test.ts` does.
+ */
+describe('the rotation grace is derived, not chosen', () => {
+  const EXTENSION_SESSION = readFileSync(
+    fileURLToPath(new URL('../../extension/src/session.ts', import.meta.url)),
+    'utf8',
+  );
+
+  /** Reads `const NAME = 2 * 60 * 1000;` by multiplying its factors, never by running it. */
+  function millisecondsIn(name: string): number {
+    const match = new RegExp(`const ${name} = ([\\d_* ]+);`).exec(EXTENSION_SESSION);
+    const expression = match?.[1];
+    assert.ok(
+      expression !== undefined,
+      `${name} is gone from the extension's session.ts, or is no longer a product of literals`,
+    );
+
+    const factors = expression.split('*').map((factor) => Number(factor.trim().replaceAll('_', '')));
+    assert.ok(
+      factors.length > 0 && factors.every((factor) => Number.isFinite(factor) && factor > 0),
+      `${name} reads as ${JSON.stringify(expression)}, which is not a product of positive literals`,
+    );
+
+    return factors.reduce((product, factor) => product * factor, 1);
+  }
+
+  it('is the margin before a refresh plus the wait after a failed one', () => {
+    const margin = millisecondsIn('REFRESH_MARGIN_MS');
+    const retry = millisecondsIn('RETRY_DELAY_MS');
+
+    assert.equal(
+      ROTATION_GRACE_SECONDS * 1000,
+      margin + retry,
+      'the extension changed how long it waits; this grace has to follow it',
+    );
+  });
+});
+
+/**
+ * The upgrade path, which a test on a fresh file never walks (SKG-600).
+ *
+ * Every other test here creates an empty database, so both migrations run together and
+ * `ALTER TABLE ... ADD COLUMN` is applied to a table with no rows in it. What ships is the opposite:
+ * a volume holding sessions somebody is using, opened by a worker one version newer. This builds the
+ * version-1 schema by hand, puts a live session in it, and then lets the store open it.
+ */
+describe('the rotation migration', () => {
+  it('adds its columns to a database that already holds a session', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'fruitback-session-'));
+    directories.push(directory);
+    const path = join(directory, 'sessions.db');
+
+    const token = createRefreshToken();
+    const before = new DatabaseSync(path);
+    before.exec(`
+      CREATE TABLE sessions (
+        token_hash TEXT PRIMARY KEY,
+        subject TEXT NOT NULL,
+        name TEXT,
+        email TEXT,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        revoked_at INTEGER
+      );
+      CREATE TABLE pairings (
+        code_hash TEXT PRIMARY KEY,
+        subject TEXT NOT NULL,
+        name TEXT,
+        email TEXT,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        redeemed_at INTEGER
+      );
+      PRAGMA user_version = 1;
+    `);
+    before
+      .prepare('INSERT INTO sessions (token_hash, subject, created_at, expires_at) VALUES (?, ?, ?, ?)')
+      .run(await digest(token), ALICE.subject, Date.now(), Date.now() + REFRESH_TTL_SECONDS * 1000);
+    before.close();
+
+    const store = createSqliteSessionStore(path);
+    const refreshed = await refreshSession(store, token, SECRET);
+
+    assert.ok(refreshed.ok, 'a session opened before rotation existed must survive the upgrade');
+    assert.ok((await refreshSession(store, refreshed.refreshToken, SECRET)).ok);
+    assert.equal((await refreshSession(store, token, SECRET)).ok, false, 'and it rotates from then on');
+  });
 });

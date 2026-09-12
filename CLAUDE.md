@@ -621,7 +621,20 @@ and *The team mode, and the call the page cannot make*:
   the extension with no change at all.
 - **Pairing codes and refresh tokens are stored as SHA-256 digests.** A copy of the file must not be
   a set of working logins. A test reads the bytes SQLite wrote — the `-wal` file included, because a
-  row just written is only there.
+  row just written is only there. **This is why a rotation cannot answer the same successor twice**,
+  and it is what shaped SKG-600.
+- **Every refresh rotates** (SKG-600). A refresh token that never changes is a thirty-day password.
+  What retires a predecessor is its **successor being used** — proof the client received it — not a
+  clock; `ROTATION_GRACE_SECONDS` is only the ceiling for an answer that was lost, and it is derived
+  from the extension's `REFRESH_MARGIN_MS + RETRY_DELAY_MS` by a test that reads them. A token
+  presented after its successor was used is a copy: the **whole chain** is revoked, and the caller
+  gets the same `401` as for a token that never existed.
+- **The successor inherits the predecessor's expiry.** Thirty days from pairing stays thirty days;
+  rotation shortens what a leak is worth, it does not lengthen a session.
+- **`app.ts` builds the refresh answer field by field, so `refreshToken` has to be named there.**
+  Leaving it out is what the route would do by default: the rotation works, the store holds the
+  successor, and the client keeps sending a token the worker retired. `tsc` cannot see it and the
+  extension's tests cannot either — they fake the worker. `session-routes.test.ts` asserts the body.
 - **Minting a code is a command, not a route** (`node server.mjs pair --subject …`, and
   `server.mjs` because the image copies the bundle and no source). An endpoint
   would need an admin credential of its own and would stay reachable for ever; a command is reachable

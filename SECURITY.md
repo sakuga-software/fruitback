@@ -139,8 +139,33 @@ person; redeeming it opens a session.
 | --- | --- |
 | Pairing code | 60 bits, valid 15 minutes, usable **once** |
 | Access token | HS256 identity token, 10 minutes |
-| Refresh token | 256 bits, 30 days, revocable |
+| Refresh token | 256 bits, 30 days, **rotated on every refresh**, revocable |
 | On disk | codes and refresh tokens are stored as **SHA-256 digests** |
+
+**Every refresh spends its refresh token and issues a new one** (SKG-600). A token that never
+changed was a thirty-day password: a copy taken from a browser profile stayed good for the rest of
+the month and nothing observed the theft. Rotation cuts that to one refresh cycle, and turns the
+copy's eventual use into a signal.
+
+What retires the spent token is its successor being **used**, which is proof the real client received
+it — not a timer. The timer is only a ceiling for the case with no such proof: an answer lost on the
+wire, where the client never learnt the successor exists. It is set from how long that client waits
+before retrying, and a test derives it from the extension's own constants rather than restating a
+number here.
+
+**A refresh token presented after its successor was used revokes the whole chain.** That combination
+cannot happen by accident: the real client had moved on, so whoever still holds this one copied it.
+Every live token descending from it goes with it, and the reviewer has to pair again. That is the
+intended outcome — a silent theft becomes a visible one.
+
+The reply says nothing about any of this. A replayed token and a token that never existed get the
+same `401`, for the same reason the two pairing failures do: telling a replayer that their copy was
+genuine confirms they hold the right kind of secret.
+
+The cost is stated rather than hidden: inside the ceiling, somebody holding a stolen token can rotate
+it and revoke the successor the real client received, logging that reviewer out. They already hold a
+working credential, so what changes is that the theft is now noticed within minutes instead of
+lasting a month.
 
 Since SKG-599 the extension holds its half of that, and **where** matters as much as the lifetimes:
 

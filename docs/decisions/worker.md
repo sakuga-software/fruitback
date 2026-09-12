@@ -277,10 +277,9 @@ connector's environment, and what a second connector with no markdown body actua
   `identity.ts` already mints and verifies HS256 JWTs, and both request paths already check them. A
   session that mints the same shape adds no second verification path, and `read: 'authenticated'`
   (SKG-533) started accepting the extension with no change to a single line of the read path.
-- **Refusing rotation was a decision, not an omission.** Rotating the refresh token on every use is
-  the stronger design and it needs a replay window: a refresh whose answer is lost to a dropped
-  connection would log the reviewer out with no way back. That window can only be observed from the
-  extension side, so rotation belongs there.
+- **Rotation was refused once, and then built** (SKG-600). It needs a grace for the answer that never
+  arrives, and until SKG-599 there was no client half to measure that against. There is now, and the
+  measurement changed the design — see *Rotation, and the grace that is not a clock* below.
 - **No OAuth, no identity provider, no user table.** Every decision leans on "one administrator, one
   container, no third party". An authentication flow assuming an identity provider makes the project
   unselfhostable in practice, which is the one thing this store was added to avoid.
@@ -355,3 +354,69 @@ Per-client session minting is absent for a stated reason rather than an accident
 signs with the worker-wide key, and a worker with `FRUITBACK_CLIENTS` ignores that key. The pair is
 refused at boot instead of shipping a feature that pairs successfully and then answers `401` to
 everything. That belongs with team mode (SKG-596), where a request carries a client id.
+
+## Rotation, and the grace that is not a clock (SKG-600)
+
+A refresh token that never changes is a thirty-day password. A copy taken from a browser profile
+stays good for the rest of that month, and nothing observes the theft. Rotating on every refresh
+makes the copy useful for at most one cycle, and — this is the half that matters more — makes its
+use **visible**.
+
+### The ticket asked for a replay window. Two measurements said no.
+
+The ask was that a rotated token stay accepted for *a few tens of seconds* and hand back **the same**
+successor, so a client whose answer was lost lands on its feet.
+
+Neither half survived contact:
+
+- **The same successor cannot be handed back twice.** Only its SHA-256 digest is stored, which is the
+  property that makes a copy of this database useless — and `session.test.ts` reads the bytes SQLite
+  wrote, the `-wal` file included, to prove it. Answering the same token again means keeping it in
+  the clear, or encrypting it with a key and reviewing a second piece of hand-written cryptography.
+- **A few tens of seconds is far too short for this client.** The extension retries a failed refresh
+  after `RETRY_DELAY_MS`, which is five minutes. A window of thirty seconds would expire before the
+  only retry it exists to catch.
+
+### What replaced it: usage, with a ceiling
+
+**A predecessor is retired the moment its successor is used**, and that needs no clock at all — a
+successor being presented is proof the client received it. Until that happens the predecessor stays
+usable, because the client may be holding nothing else.
+
+The ceiling is for the case that has no such proof: the answer was lost, so the successor will never
+be used by anybody. `ROTATION_GRACE_SECONDS` bounds how long the predecessor then stays live, and it
+is **derived** from the extension's own worst case — `REFRESH_MARGIN_MS + RETRY_DELAY_MS` — rather
+than chosen. A test reads both out of `apps/extension/src/session.ts` and checks the sum, because
+either of them moving would leave a window too short for the retry it was written for, with both
+suites still green on their own.
+
+A retry inside the ceiling rotates **again** and revokes the successor nobody received, so one token
+never has two live successors.
+
+### Reuse is the signal, and the chain is the answer
+
+Revoked **and** rotated is the one combination a logout cannot produce: it means this token issued a
+successor, the successor was used, and that is what retired this one. Whoever still holds it copied
+it. Every live token in the chain is revoked, not only the one replayed — a thief who keeps the
+session while the victim is locked out is the outcome worth preventing.
+
+The chain is walked forward through `predecessor_hash`, read the other way round. One column rather
+than two, with an index, and the walk keeps a `seen` set: this file sits on a volume an operator can
+edit, and a row pointing back into its own chain would otherwise spin for ever inside a transaction.
+
+The caller is told nothing about any of it. `gone` and `reused` answer the same `401`, the way the
+two pairing failures do — a reply that told a replayer their copy was genuine would confirm they had
+the right kind of secret.
+
+### What it does not change
+
+**The successor inherits the predecessor's expiry.** Rotation shortens what a leaked token is worth;
+it does not lengthen a session. Thirty days from pairing stays thirty days, and `SECURITY.md` stays
+true without an edit to that row.
+
+### The cost, stated
+
+Inside the grace, somebody holding a stolen predecessor can rotate it and revoke the successor the
+real client received — logging the reviewer out. That is worse than nothing only if the alternative
+were safety: the thief already holds a working refresh token, and without rotation they would hold it
+silently for thirty days. Here they get at most one cycle, and the victim finds out.

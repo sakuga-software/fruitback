@@ -185,12 +185,9 @@ export function createSessions({ sessions, grants, post, now = Date.now }: Sessi
       return { ok: false, reason: 'not-paired' };
     }
 
-    // The worker does not rotate refresh tokens today, and this is the half that has to exist before
-    // it can: a rotation whose response is lost leaves this side holding a token the worker has
-    // already retired, and the reviewer locked out with nothing to retry. Closing that needs a
-    // replay window on the worker — it accepts the retired token for a while — and the window is
-    // only worth what this side does with the new one. So a rotated token is stored when it arrives,
-    // and the worker half is a ticket of its own (SKG-600).
+    // The worker rotates on every refresh since SKG-600, so this runs on every successful one. What
+    // protects a lost answer is on the worker's side: the token this request spent stays usable
+    // until its successor is, so a retry with the old one lands on its feet.
     if (issued.refreshToken !== undefined && issued.refreshToken !== stored.refreshToken) {
       await keep(endpoint, { refreshToken: issued.refreshToken, identity: issued.identity });
     }
