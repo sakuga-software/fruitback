@@ -121,13 +121,6 @@ export const REFRESH_TTL_SECONDS = 30 * 24 * 60 * 60;
 export const ROTATION_GRACE_SECONDS = 7 * 60;
 
 /**
- * One reason each, and that is the design rather than a gap.
- *
- * A caller who can tell "no such code" from "that code is spent" can work out which codes existed,
- * so there is no variant for the first case — not an unused one either, because a union member
- * nothing ever returns reads as a distinction this worker makes.
- */
-/**
  * What a rotation did, and the middle one is the reason this ticket exists.
  *
  * `reused` is a refresh token presented after its successor was already used — the predecessor was
@@ -141,6 +134,13 @@ export type RotationOutcome =
   | { outcome: 'gone' }
   | { outcome: 'reused' };
 
+/**
+ * One reason each, and that is the design rather than a gap.
+ *
+ * A caller who can tell "no such code" from "that code is spent" can work out which codes existed,
+ * so there is no variant for the first case — not an unused one either, because a union member
+ * nothing ever returns reads as a distinction this worker makes.
+ */
 export type PairingFailure = 'code-spent-or-expired';
 export type SessionFailure = 'session-revoked-or-expired';
 

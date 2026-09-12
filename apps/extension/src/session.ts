@@ -106,6 +106,9 @@ export type Sessions = {
 };
 
 export function createSessions({ sessions, grants, post, now = Date.now }: SessionSeams): Sessions {
+  /** Endpoint to the refresh already running for it. See `refreshOnce`. */
+  const refreshing = new Map<string, Promise<AccessResult>>();
+
   /**
    * A request that answered, or nothing.
    *
@@ -168,7 +171,16 @@ export function createSessions({ sessions, grants, post, now = Date.now }: Sessi
     }
 
     const issued = parseIssued(answer.body);
-    if (answer.status !== 200 || issued === undefined) return { ok: false, reason: 'unavailable' };
+
+    // **A refresh without a successor is not a success.** Every refresh rotates since SKG-600, so a
+    // `200` carrying no `refreshToken` means the worker spent the stored token and this answer lost
+    // the replacement — a body truncated by a proxy, a route that stopped naming the field. Taking
+    // it leaves a spent token in storage and a working access token over it, and the session dies
+    // silently when the grace runs out. `unavailable` instead, so the retry runs while the
+    // predecessor is still good. `pair` asks for the same field in the same way. Raised in review.
+    if (answer.status !== 200 || issued?.refreshToken === undefined) {
+      return { ok: false, reason: 'unavailable' };
+    }
 
     // **The session may have ended while this request was in the air.** The popup and the background
     // are separate contexts holding separate `Sessions`, and they share only storage: a reviewer can
@@ -185,20 +197,46 @@ export function createSessions({ sessions, grants, post, now = Date.now }: Sessi
       return { ok: false, reason: 'not-paired' };
     }
 
-    // The worker rotates on every refresh since SKG-600, so this runs on every successful one. What
-    // protects a lost answer is on the worker's side: the token this request spent stays usable
+    // What protects a lost answer is on the worker's side: the token this request spent stays usable
     // until its successor is, so a retry with the old one lands on its feet.
-    if (issued.refreshToken !== undefined && issued.refreshToken !== stored.refreshToken) {
-      await keep(endpoint, { refreshToken: issued.refreshToken, identity: issued.identity });
-    }
+    await keep(endpoint, { refreshToken: issued.refreshToken, identity: issued.identity });
 
     return { ok: true, grant: await grant(endpoint, issued) };
+  }
+
+  /**
+   * One refresh in flight per endpoint, shared by whoever asks while it runs.
+   *
+   * Two callers that each spend the same refresh token are a lockout, not a wasted request. The
+   * worker rotates the first into a successor and treats the second as a retry inside the grace:
+   * it revokes the first successor and mints another. Both answers then race to `keep()`, and if
+   * the first lands last the extension is left holding a token the worker has revoked. The next
+   * refresh answers `401`, the session ends, and only an operator minting a new pairing code brings
+   * the reviewer back.
+   *
+   * `background.ts` already serialises the **alarm**, which is why this was not visible: the path
+   * it does not cover is the relay, and the widget has a read and a write in flight in the ordinary
+   * case. The lock lives here rather than in the entrypoint for the reason `bridge.ts` gives — an
+   * entrypoint binds `browser` at import and no test could reach it. Raised in review.
+   *
+   * `get` and `set` must stay on either side of no `await`: `ensureAccess` reads storage before it
+   * decides, so two callers can both find the grant stale, and this map is the only thing between
+   * them.
+   */
+  function refreshOnce(endpoint: string): Promise<AccessResult> {
+    const running = refreshing.get(endpoint);
+    if (running !== undefined) return running;
+
+    const started = refresh(endpoint).finally(() => refreshing.delete(endpoint));
+    refreshing.set(endpoint, started);
+
+    return started;
   }
 
   async function ensureAccess(endpoint: string): Promise<AccessResult> {
     const held = (await grants.read())[endpoint];
 
-    return isFresh(held, now()) ? { ok: true, grant: held } : refresh(endpoint);
+    return isFresh(held, now()) ? { ok: true, grant: held } : refreshOnce(endpoint);
   }
 
   return {
@@ -304,8 +342,12 @@ type Issued = {
  * What the worker answered, parsed rather than cast.
  *
  * The same rule as every seed and every stored site: a body that is not what it claims costs this
- * request, never the extension. `refreshToken` is optional because two routes share this shape —
- * `/session/pair` mints one and `/session/refresh` does not.
+ * request, never the extension.
+ *
+ * `refreshToken` stays optional **here** while both call sites require it: `/session/pair` and
+ * `/session/refresh` each mint one since SKG-600, and each says so itself. Requiring it in the
+ * parser would put the rule one level away from the failure it prevents, and a third route that
+ * issues only an access token would have to work around it.
  */
 export function parseIssued(body: unknown): Issued | undefined {
   if (!isRecord(body)) return undefined;

@@ -470,7 +470,70 @@ describe('rotation', () => {
   });
 
   /**
-   * The property the whole file rests on, re-checked on the tokens rotation adds: a copy of this
+   * The ceiling is a ceiling, and a retry must not push it away.
+   *
+   * `rotated_at` marks the first rotation only. Written afresh on every retry it slides, and
+   * whoever holds this token re-presents it just inside each window for ever, minting a successor
+   * every time — the lost-answer allowance turned into an unbounded lease. Raised in review.
+   */
+  it('does not extend the grace by retrying inside it', async () => {
+    const { store, token, at } = await opened();
+    const grace = ROTATION_GRACE_SECONDS * 1000;
+    assert.ok((await refreshSession(store, token, SECRET, at)).ok);
+
+    // Re-presented just inside the window, the way a caller stretching it would.
+    assert.ok((await refreshSession(store, token, SECRET, at + grace - 1_000)).ok);
+
+    const past = await refreshSession(store, token, SECRET, at + grace + 1_000);
+
+    assert.equal(past.ok, false, 'the grace is measured from the first rotation, not from the last retry');
+  });
+
+  /**
+   * Log out ends the session, and rotation made a session a chain.
+   *
+   * A refresh whose answer was lost leaves the client holding a token that has already issued a
+   * successor. A logout with that token used to revoke it alone, and the successor stayed live for
+   * the rest of the thirty days — held by nobody, revocable by nobody. Raised in review.
+   */
+  it('ends the whole chain on log out, not only the token it was handed', async () => {
+    const { store, token } = await opened();
+    const successor = await refreshSession(store, token, SECRET);
+    assert.ok(successor.ok);
+
+    assert.equal(await revokeSession(store, token), true);
+
+    assert.equal((await refreshSession(store, successor.refreshToken, SECRET)).ok, false);
+  });
+
+  /** And the boolean still describes the row it was handed, so a second log out reads as nothing live. */
+  it('answers false on a token already revoked, whatever the chain did', async () => {
+    const { store, token } = await opened();
+    assert.ok((await refreshSession(store, token, SECRET)).ok);
+    assert.equal(await revokeSession(store, token), true);
+
+    assert.equal(await revokeSession(store, token), false);
+  });
+
+  /**
+   * The other half of the chain revocation, checked rather than assumed: a rotation revokes the
+   * predecessor it retires and must **not** revoke that predecessor's descendants. Its stale
+   * successors are already gone, revoked by the grace branch, and the only live one is the token
+   * the client just received.
+   */
+  it('leaves the token a client just received alone when its predecessor is retired', async () => {
+    const { store, token, at } = await opened();
+    assert.ok((await refreshSession(store, token, SECRET, at)).ok);
+    const second = await refreshSession(store, token, SECRET, at + 1_000);
+    assert.ok(second.ok);
+
+    const third = await refreshSession(store, second.refreshToken, SECRET, at + 2_000);
+
+    assert.ok(third.ok, 'retiring the predecessor took the successor that retired it');
+  });
+
+  /**
+   * The property the whole file rests on, re-checked on the tokens a rotation adds: a copy of this
    * database is not a set of working logins. A successor that had to be answered twice would have to
    * be stored in the clear, which is why a retry inside the grace mints a fresh one instead.
    */

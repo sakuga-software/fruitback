@@ -395,10 +395,24 @@ never has two live successors.
 
 ### Reuse is the signal, and the chain is the answer
 
-Revoked **and** rotated is the one combination a logout cannot produce: it means this token issued a
-successor, the successor was used, and that is what retired this one. Whoever still holds it copied
-it. Every live token in the chain is revoked, not only the one replayed — a thief who keeps the
-session while the victim is locked out is the outcome worth preventing.
+Revoked **and** rotated is what a replay looks like: this token issued a successor, the successor was
+used, and that is what retired this one. Whoever still holds it copied it. Every live token in the
+chain is revoked, not only the one replayed — a thief who keeps the session while the victim is
+locked out is the outcome worth preventing.
+
+It is a **signal and not a proof**, and the first version of this section claimed otherwise. A logout
+reaches the same combination: a refresh whose answer was lost leaves the client holding a token that
+has already rotated, and revoking it marks a row that is revoked and rotated with nobody having
+replayed anything. Raised in review.
+
+What makes that safe is that both readings want the same act — revoke every live descendant, answer
+`401`, say nothing. Over-reading an ended session as a replay costs a line in an operator's log;
+under-reading a replay costs the session. So the discriminator stays, and the claim around it goes.
+
+The same review found the defect underneath: **`revokeSession` revoked only the row it was handed.**
+After that lost answer, a logout ended the predecessor and left its successor live for the rest of
+the thirty days — held by nobody, revocable by nobody. Log out now revokes the chain, and its return
+value still describes the presented row alone, so a second log out keeps reading as "nothing live".
 
 The chain is walked forward through `predecessor_hash`, read the other way round. One column rather
 than two, with an index, and the walk keeps a `seen` set: this file sits on a volume an operator can

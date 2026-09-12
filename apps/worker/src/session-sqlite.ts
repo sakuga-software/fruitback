@@ -185,7 +185,7 @@ function revoke(database: DatabaseSync, tokenHash: string, now: number): void {
  * one `expires_at` — about 5400 for a session refreshed every 8 minutes for 30 days. Measured at
  * 45 ms on such a chain, through `sessions_by_predecessor`, and a replay pays it again each time.
  * `checkRateLimit` caps that at 20 requests a minute per IP. The two calls inside the grace walk
- * one row, not the chain.
+ * one row, not the chain, and `revokeSession` walks it once per logout.
  */
 function revokeDescendants(database: DatabaseSync, tokenHash: string, now: number): void {
   const seen = new Set([tokenHash]);
@@ -228,8 +228,14 @@ function decide(
   const rotatedAt = typeof row.rotated_at === 'number' ? row.rotated_at : undefined;
 
   if (row.revoked_at !== null && row.revoked_at !== undefined) {
-    // Revoked *and* rotated is the combination a logout cannot produce: this token issued a
-    // successor, the successor was used, and that is what retired this one. Somebody kept a copy.
+    // Revoked *and* rotated is what a replay looks like: this token issued a successor, the
+    // successor was used, and that is what retired this one.
+    //
+    // A logout can reach the same combination — revoking a token whose answer was lost, so it is
+    // rotated and still in storage — which is why this is a signal and not a proof. Both readings
+    // want the same act: revoke every live descendant, answer `401`, say nothing to the caller.
+    // Over-reading an ended session as a replay costs a log line; under-reading a replay costs the
+    // session. Raised in review.
     if (rotatedAt === undefined) return { answer: { outcome: 'gone' }, commit: false };
 
     revokeDescendants(database, tokenHash, now);
@@ -270,7 +276,12 @@ function decide(
       tokenHash,
     );
 
-  database.prepare('UPDATE sessions SET rotated_at = ? WHERE token_hash = ?').run(now, tokenHash);
+  // `rotated_at IS NULL` keeps the **first** rotation, which is what the grace is a ceiling on.
+  // Writing `now` on every retry slides that ceiling: whoever holds this token re-presents it just
+  // inside each window and it never retires, minting a successor each time. Raised in review.
+  database
+    .prepare('UPDATE sessions SET rotated_at = ? WHERE token_hash = ? AND rotated_at IS NULL')
+    .run(now, tokenHash);
 
   // Using a token is the proof its client received it, and that is what retires the one it replaced.
   // A clock is the fallback, never the mechanism.
@@ -359,9 +370,10 @@ export function createSqliteSessionStore(path: string): SessionStore {
      * - **`gone`** — unknown, expired, or revoked by a logout. Also a rotated token presented after
      *   the grace ran out: the client that lost the answer waited too long, and the whole chain goes
      *   with it rather than leaving a token nobody is watching.
-     * - **`reused`** — revoked *and* rotated, which is the one combination a logout cannot produce:
-     *   it means the successor was already used, so whoever still holds this one copied it. Every
-     *   live descendant is revoked before answering.
+     * - **`reused`** — revoked *and* rotated: the successor was already used, so whoever still
+     *   holds this one copied it. A logout on a token whose answer was lost reads the same way, so
+     *   this is a signal rather than a proof — and both readings want the same act, which is why it
+     *   is safe. Every live descendant is revoked before answering.
      *
      * Inside the grace a rotated token rotates **again** rather than answering with the successor it
      * already minted. The successor cannot be answered twice: only its digest is stored, which is
@@ -393,12 +405,36 @@ export function createSqliteSessionStore(path: string): SessionStore {
       }
     },
 
+    /**
+     * Ends the session, and a session is the whole chain (SKG-600).
+     *
+     * Revoking the presented row alone was enough before rotation. It is not now: a refresh whose
+     * answer was lost leaves storage holding a token that has already issued a successor, and a
+     * logout with it would revoke that token while its successor stayed live for the rest of the
+     * thirty days, held by nobody and revocable by nobody. Raised in review.
+     *
+     * The answer stays derived from the presented row's own update. A logout on an already revoked
+     * token must keep reading as "there was nothing live here" even when a descendant did change.
+     *
+     * The walk's cost is the one described above `revokeDescendants`, and this is its second caller.
+     */
     async revokeSession(tokenHash, now) {
-      const revoked = connect(path)
-        .prepare('UPDATE sessions SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL')
-        .run(now, tokenHash);
+      const database = connect(path);
 
-      return revoked.changes === 1;
+      database.exec('BEGIN IMMEDIATE');
+      try {
+        const revoked = database
+          .prepare('UPDATE sessions SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL')
+          .run(now, tokenHash);
+
+        revokeDescendants(database, tokenHash, now);
+        database.exec('COMMIT');
+
+        return revoked.changes === 1;
+      } catch (error) {
+        database.exec('ROLLBACK');
+        throw error;
+      }
     },
 
     /**

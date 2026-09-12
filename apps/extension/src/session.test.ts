@@ -142,7 +142,7 @@ describe('keeping an access token fresh', () => {
       grants: {
         [ENDPOINT]: { accessToken: 'old', expiresAt: NOW + REFRESH_MARGIN_MS - 1_000, identity: IDENTITY },
       },
-      answers: [{ status: 200, body: issued({ accessToken: 'access.2' }) }],
+      answers: [{ status: 200, body: issued({ accessToken: 'access.2', refreshToken: 'refresh.2' }) }],
     });
 
     const result = await subject.ensureAccess(ENDPOINT);
@@ -210,6 +210,83 @@ describe('keeping an access token fresh', () => {
     assert.deepEqual(await sessions.read(), { [ENDPOINT]: { refreshToken: 'refresh.2', identity: IDENTITY } });
   });
 
+  /**
+   * The lockout rotation created, and the reason it was invisible: `background.ts` serialises the
+   * alarm, and the relay does not go through it. The widget reads and writes at once, so two
+   * `ensureAccess` calls on a stale grant are the ordinary case.
+   *
+   * Both are started before either is awaited. Awaiting the first would pass with or without the
+   * lock, which is the shape of test this guard exists to not be.
+   */
+  it('spends one refresh token when two callers ask at once', async () => {
+    const { subject, remote, sessions } = setup({
+      sessions: { [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } },
+      answers: [{ status: 200, body: issued({ refreshToken: 'refresh.2' }) }],
+    });
+
+    const [first, second] = await Promise.all([subject.ensureAccess(ENDPOINT), subject.ensureAccess(ENDPOINT)]);
+
+    assert.equal(remote.calls.length, 1, 'the same refresh token was spent twice');
+    assert.ok(first.ok);
+    assert.ok(second.ok);
+    assert.deepEqual(first.grant, second.grant);
+    assert.deepEqual(await sessions.read(), { [ENDPOINT]: { refreshToken: 'refresh.2', identity: IDENTITY } });
+  });
+
+  /** The lock is per endpoint, not one queue for every worker a reviewer is paired with. */
+  it('lets two workers refresh at the same time', async () => {
+    const other = 'https://other.test';
+    const { subject, remote } = setup({
+      sessions: {
+        [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY },
+        [other]: { refreshToken: 'other.1', identity: IDENTITY },
+      },
+      answers: [
+        { status: 200, body: issued({ refreshToken: 'refresh.2' }) },
+        { status: 200, body: issued({ refreshToken: 'other.2' }) },
+      ],
+    });
+
+    await Promise.all([subject.ensureAccess(ENDPOINT), subject.ensureAccess(other)]);
+
+    assert.equal(remote.calls.length, 2);
+  });
+
+  /** The lock is released, so the next due refresh is not answered from the last one's promise. */
+  it('refreshes again after the one in flight has settled', async () => {
+    const { subject, remote } = setup({
+      sessions: { [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } },
+      answers: [
+        { status: 200, body: issued({ refreshToken: 'refresh.2', expiresIn: 1 }) },
+        { status: 200, body: issued({ refreshToken: 'refresh.3', expiresIn: 1 }) },
+      ],
+    });
+
+    await subject.ensureAccess(ENDPOINT);
+    await subject.ensureAccess(ENDPOINT);
+
+    assert.equal(remote.calls.length, 2);
+    assert.deepEqual(remote.calls[1]?.body, { refreshToken: 'refresh.2' });
+  });
+
+  /**
+   * A `200` that carries no successor means the worker spent the stored token and the replacement
+   * did not arrive. Taking it would leave a spent token in storage under a working access token,
+   * and the session would die when the grace ran out with nothing to explain it.
+   */
+  it('refuses a refresh that answers without a successor', async () => {
+    const { subject, sessions, grants } = setup({
+      sessions: { [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } },
+      answers: [{ status: 200, body: issued() }],
+    });
+
+    const result = await subject.ensureAccess(ENDPOINT);
+
+    assert.deepEqual(result, { ok: false, reason: 'unavailable' });
+    assert.deepEqual(await sessions.read(), { [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } });
+    assert.deepEqual(await grants.read(), {}, 'a grant was written over a token the worker has spent');
+  });
+
   it('refreshes only what is due, across several workers', async () => {
     const other = 'https://other.test';
     const { subject, remote } = setup({
@@ -274,7 +351,7 @@ describe('a session that ends while a refresh is in the air', () => {
    * says signed out, and revoking does not reach a token already minted. Raised in review.
    */
   it('writes nothing back after a logout cleared the session', async () => {
-    const { sessions, grants, sent, release, refreshing } = refreshInFlight(issued());
+    const { sessions, grants, sent, release, refreshing } = refreshInFlight(issued({ refreshToken: 'refresh.2' }));
 
     await sent;
     await sessions.write({});

@@ -153,10 +153,15 @@ wire, where the client never learnt the successor exists. It is set from how lon
 before retrying, and a test derives it from the extension's own constants rather than restating a
 number here.
 
-**A refresh token presented after its successor was used revokes the whole chain.** That combination
-cannot happen by accident: the real client had moved on, so whoever still holds this one copied it.
-Every live token descending from it goes with it, and the reviewer has to pair again. That is the
-intended outcome — a silent theft becomes a visible one.
+**A refresh token presented after its successor was used revokes the whole chain.** The real client
+had moved on, so whoever still holds this one copied it. Every live token descending from it goes
+with it, and the reviewer has to pair again. That is the intended outcome — a silent theft becomes a
+visible one.
+
+It is read as a signal rather than a proof. A log out with a token whose refresh answer was lost
+reaches the same state without anyone replaying anything, and the answer is deliberately identical:
+the chain goes either way. **Log out revokes the chain too**, for the same reason — ending only the
+token presented would leave its successor live for the rest of the thirty days.
 
 The reply says nothing about any of this. A replayed token and a token that never existed get the
 same `401`, for the same reason the two pairing failures do: telling a replayer that their copy was

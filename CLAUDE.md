@@ -631,6 +631,23 @@ and *The team mode, and the call the page cannot make*:
   gets the same `401` as for a token that never existed.
 - **The successor inherits the predecessor's expiry.** Thirty days from pairing stays thirty days;
   rotation shortens what a leak is worth, it does not lengthen a session.
+- **Revoked *and* rotated is a signal, not a proof, and `revokeSession` ends the chain.** A log out
+  with a token whose refresh answer was lost reaches that combination with nobody having replayed
+  anything — so do not describe it as something only a replay can produce. Both readings want the
+  same act, which is what makes it safe. And a log out that revoked only the row it was handed left
+  the successor of such a token live for the rest of the thirty days, held by nobody.
+- **`rotated_at` marks the first rotation, never the last.** `AND rotated_at IS NULL` on that update
+  is the grace being a ceiling: rewritten on every retry it slides, and whoever holds the token
+  re-presents it just inside each window for ever.
+- **One refresh in flight per endpoint** (`refreshOnce` in the extension's `session.ts`). Two callers
+  spending the same token is a lockout, not a wasted request: the worker treats the second as a
+  retry inside the grace, revokes the first successor, and whichever `keep()` lands last can leave
+  the extension holding a revoked token. `background.ts` serialises the **alarm** only — the relay
+  calls `ensureAccess` directly, and the widget has a read and a write in flight in the ordinary
+  case. The lock is in `session.ts` and not the entrypoint, for the reason `bridge.ts` gives.
+- **A `200` from `/session/refresh` with no `refreshToken` is not a success.** Taking it leaves a
+  spent token in storage under a working access token, and the session dies when the grace runs out
+  with nothing to explain it. Both call sites require the field; `parseIssued` stays tolerant.
 - **`app.ts` builds the refresh answer field by field, so `refreshToken` has to be named there.**
   Leaving it out is what the route would do by default: the rotation works, the store holds the
   successor, and the client keeps sending a token the worker retired. `tsc` cannot see it and the
