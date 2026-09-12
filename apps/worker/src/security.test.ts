@@ -66,6 +66,34 @@ function constantIn(source: string, name: string): string {
   return value.replace(/^'|'$/g, '');
 }
 
+/**
+ * The reviewer's guide states the same lifetimes, in the reviewer's words (SKG-539).
+ *
+ * `docs/reviewing.md` tells somebody how long their pairing code is good for and what a log out
+ * leaves behind, so it carries the three numbers `SECURITY.md` already carries — a second place for
+ * them to drift, and this is what stops it. Each assertion quotes enough of the sentence around the
+ * number to pin which lifetime it is about: `15 minutes` and `10 minutes` would otherwise satisfy
+ * each other's check the day the two constants meet.
+ */
+describe('the reviewer guide states the lifetimes the worker issues', () => {
+  const REVIEWING = readFileSync(fileURLToPath(new URL('../../../docs/reviewing.md', import.meta.url)), 'utf8');
+
+  it('says how long a pairing code is good for', () => {
+    const phrase = `${PAIRING_TTL_SECONDS / 60} minutes after they are minted`;
+    assert.ok(REVIEWING.includes(phrase), `docs/reviewing.md does not say a pairing code expires ${phrase}`);
+  });
+
+  it('says how long an access token outlives a log out', () => {
+    const phrase = `within ${ACCESS_TTL_SECONDS / 60} minutes`;
+    assert.ok(REVIEWING.includes(phrase), `docs/reviewing.md does not say the access token expires ${phrase}`);
+  });
+
+  it('says how long a refresh token the revoke never reached stays alive', () => {
+    const phrase = `within ${REFRESH_TTL_SECONDS / 86_400} days`;
+    assert.ok(REVIEWING.includes(phrase), `docs/reviewing.md does not say the refresh token expires ${phrase}`);
+  });
+});
+
 describe('SECURITY.md states what the code does', () => {
   it('quotes the rate limit this worker actually applies', () => {
     assert.ok(

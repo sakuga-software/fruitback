@@ -16,11 +16,20 @@ When they come back to the page, their pins are still there, coloured by the iss
 uses — or, with `FRUITBACK_STORE=sqlite`, in a file on a volume you own. No database of ours, no
 dashboard of ours, no account to create anywhere.
 
-## Install
+**It comes in three modes, and which one you want is the first thing to settle.** They differ on what
+the site has to ship: **public**, where the site embeds the widget and every visitor can leave a
+note; **private**, where the site embeds nothing and a browser extension puts the widget on it for
+one reviewer; and **team**, where the site embeds a dormant widget that wakes up for a reviewer the
+extension has signed in. One page each way — [docs/modes.md](docs/modes.md).
+
+## Install, in public mode
 
 Two lines on a site with no build step. `client` is the name this site reports under, and `endpoint`
 is **your own worker** — the piece that holds the tracker's API key, because that key cannot ship in
 client-side JavaScript. It is one container: [docs/self-hosting.md](docs/self-hosting.md).
+
+The other two modes need the same worker and a browser extension on top; the reviewer's side of both
+is [docs/reviewing.md](docs/reviewing.md).
 
 ```html
 <script
@@ -50,21 +59,23 @@ The full walk-through — Linear setup, per-client routing, identified reporters
 ## Three ways to run it
 
 The first question a reader has is whether their reviewers need the site to ship anything. All three
-answers exist.
+answers exist, and [docs/modes.md](docs/modes.md) is the page that picks between them.
 
 | | **Public** | **Private** | **Team** |
 | --- | --- | --- | --- |
 | The site embeds | the widget | **nothing** | the widget, dormant |
 | Delivered as | `<script>` tag or npm | a browser extension | `<script>` tag or npm |
 | Published | **not yet** — build it from this repo | **not yet** — load it unpacked | **not yet** — both of the above |
-| Who sees the pins | every visitor | the reviewer who installed it | reviewers who are signed in |
+| Who is **shown** the pins | every visitor | the reviewer who switched the site on | reviewers who are signed in |
+| Who can **fetch** them | anyone | anyone | nobody, under `authenticated` |
 | Good for | a public "report a problem" | reviewing a client's site, invisibly | a team reviewing its own staging |
 | Built | **yes** | **yes**, MV3 on Chromium and Firefox | **yes** |
 
-**Team mode is worth turning on only with `FRUITBACK_READ=authenticated`.** The extension announces
-itself, the site's widget wakes up, and the calls are relayed through the reviewer's session. On a
-worker left at the `public` default the same pins are readable by anyone who can build the URL, so
-what the mode buys there is a tidier page and nothing more. The four lines a site adds are in
+**Only team mode protects a read, and only with `FRUITBACK_READ=authenticated`.** There the calls go
+through the extension with the reviewer's session attached, and the worker answers `401` to everyone
+else — `curl` included. Public and private mode both call the worker straight from the page with no
+credential: private mode changes who is *shown* the feedback, never who may *fetch* it, so treat
+those notes as readable by anyone who can build the URL. The four lines a team-mode site adds are in
 [docs/install.md](docs/install.md#team-mode-dormant-until-a-reviewer-arrives); what the relay
 refuses is in [SECURITY.md](SECURITY.md#what-the-extension-relays-and-what-it-refuses-to).
 
@@ -111,7 +122,9 @@ It also says how to report a vulnerability.
 
 | | |
 | --- | --- |
+| [docs/modes.md](docs/modes.md) | The three modes, what each protects, and which one you want |
 | [docs/install.md](docs/install.md) | Putting the widget on a site, end to end |
+| [docs/reviewing.md](docs/reviewing.md) | The reviewer's side: the extension, switching a site on, pairing |
 | [docs/self-hosting.md](docs/self-hosting.md) | Running the worker: the image, the tags, a deployment |
 | [docs/architecture.md](docs/architecture.md) | Why this shape, the seed contract, the layout, the commands |
 | [docs/decisions/](docs/decisions/) | Per-subject histories: what was measured, what failed first |

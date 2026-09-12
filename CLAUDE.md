@@ -15,6 +15,17 @@ Fruitback is a visual feedback widget: a client clicks an element on their stagi
 note, and it becomes an issue carrying the CSS selector, the React component and the source file.
 Coming back to the page, they see their pins again, coloured by that issue's status.
 
+**It is three products sharing one core, and they differ on what the site ships** (SKG-539):
+**public**, where the site embeds the widget and every visitor can leave a note; **private**, where
+the site embeds nothing and the extension mounts the widget for one reviewer; **team**, where the
+site embeds a dormant widget the extension wakes and relays for. [docs/modes.md](docs/modes.md) is
+the page that names them for a reader, and the one thing to carry from it here: **only team mode
+protects a read.** Public and private both call the worker straight from the page with **no
+credential**, so private mode changes who is *shown* the feedback and never who may *fetch* it —
+writing otherwise is the overclaim this repo keeps having to walk back. The three-mode split is a
+naming decision, not a third code path: what differs lives in the assembly layer, and
+`packages/widget` does not know which one it is in.
+
 **Status, threads, assignees and history belong to the store**, never to a second model kept in step
 with it. Every store the worker speaks to is one somebody already runs: Linear is the default and
 the richest of them, and `FRUITBACK_STORE=sqlite` is the door for a self-hoster who wants no third
@@ -359,11 +370,24 @@ And *No emoji, and what replaced them* in [docs/decisions/icons.md](docs/decisio
 
 ## The extension
 
-SKG-539 names three modes: **public** (the site embeds the widget, everyone sees the pins),
-**private** (the site embeds nothing and the extension injects the widget) and **équipe** (the site
-embeds a dormant widget the extension activates and relays for). Private is SKG-534 and team is
-SKG-596; both are built. Which one an origin is in is one field on its entry, and **an entry with no
-`mode` reads as private** — that is every entry a reviewer's browser already holds.
+Three modes: **public** (the site embeds the widget, everyone sees the pins), **private** (the site
+embeds nothing and the extension injects the widget) and **team** (the site embeds a dormant widget
+the extension activates and relays for). Private is SKG-534, team is SKG-596, and SKG-539 is where
+they were named for a reader — [docs/modes.md](docs/modes.md) and
+[docs/reviewing.md](docs/reviewing.md). Which one an origin is in is one field on its entry, and **an
+entry with no `mode` reads as private** — that is every entry a reviewer's browser already holds.
+
+- **The private-mode widget carries no credential**, and nothing about the mode is access control.
+  `page.content.ts` mounts it with no `transport`, so it calls the worker through `fetchTransport`
+  from the page, exactly as a public-mode site does. Two consequences to state rather than discover:
+  its reporter is self-declared like any other, and a worker on `read: 'authenticated'` answers its
+  reads `401` — a reviewer then gets a page with no pins and no reason, which is SKG-605. Set `read`
+  per client when one worker serves a private-mode client and a team-mode one.
+- **The guide's words are guarded against the popup's** (`reviewing-doc.test.ts`). `docs/reviewing.md`
+  walks somebody through a screen by naming what is on it, and a renamed button leaves it describing
+  a popup nobody has. The pairing failures and the mode labels are read **out of** `popup/main.ts`,
+  so a fifth message is covered the day it is written; the buttons are named one by one, because a
+  regex over them would guard whichever ones it happened to match.
 
 - **`world: 'MAIN'` is the ticket, not a preference.** A content script in the isolated world shares
   the DOM and **not** the properties page scripts put on it: `__reactFiber$` and

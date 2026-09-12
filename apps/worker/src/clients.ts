@@ -50,6 +50,12 @@ const clientSchema = z.object({
    * `read: 'authenticated'` the reader is someone this worker checked, so the comments are already
    * only reaching people entitled to them. Under `read: 'public'` it is still the only thing standing
    * between an issue thread and anyone who can load the page.
+   *
+   * **The two are not coupled, and that is the decision** (SKG-539). `authenticated` is what team
+   * mode runs on, and there the access question does not arise — but whether a reviewer should watch
+   * the team talk about their note is editorial, and it stays the operator's. Forcing this on under
+   * `authenticated` would change what a deployment already does, silently, to save a line of
+   * documentation. See `docs/modes.md`.
    */
   showComments: z.boolean().optional(),
   /**
