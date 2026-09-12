@@ -218,12 +218,20 @@ the background write over each other: a refresh could put a credential back afte
 it, so a session a reviewer had ended stayed usable until it expired. Logging out now removes the
 key it names, and no ordinary operation on another endpoint writes it.
 
-Two writers still reach that key and neither is closed by the split. A refresh for the **same**
-endpoint compares the stored token and writes after it, so a logout landing between the two puts the
-session back and its access token is accepted for its remaining ten minutes; the refresh token put
-back is revoked on the worker, so the session ends at the next refresh. The upgrade to per-endpoint
-keys writes from a snapshot too. Both need ordering that `chrome.storage` does not offer — no
-transaction, no compare-and-set — and both are narrowed rather than closed. SKG-603 holds the first.
+Two writers still reach that key, and the split does not order them. A refresh for the **same**
+endpoint compares the stored token and writes after it, so a logout can land between the two. **A
+logout mints a new epoch for the endpoint before it clears anything** (SKG-603), and an entry stamped
+with the epoch before it is refused by every reader. The write itself cannot be stopped — there is no
+transaction and no compare-and-set — and it no longer has to be: the session a refresh puts back is
+one nothing answers with, and the access token minted beside it has no session to match. It stays in
+storage until the next pairing writes over it, holding the refresh token the logout revoked.
+
+The upgrade to per-endpoint keys writes from a snapshot too, and the epoch reaches that write as
+well: a legacy record predates the marker, so what the upgrade puts back carries no epoch and the
+logout minted one. What a logout cannot recover from that window is a **pairing** made inside it —
+the upgrade puts the older entry back over it, and the endpoint reads as signed out. That costs a
+pairing, never a credential somebody ended, and only on the first run after the upgrade. A refresh in
+flight can lose a pairing the same way, on any run and not only the first: SKG-604.
 
 Neither is readable from a reviewed page. Both stay inside the extension's **trusted contexts** — the
 background service worker, which refreshes, and the popup, which pairs and logs out.

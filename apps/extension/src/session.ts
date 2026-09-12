@@ -7,13 +7,14 @@
  * that channel too. So nothing here is ever posted; the isolated content script asks the background
  * to make the call, and SKG-596 adds that relay. `worlds.test.ts` is what keeps it true.
  *
- * Written against two storage seams and one `post`, so all of it runs under `node --test`. The real
- * `browser.storage` and the real world boundary are `session-browser.ts` and SKG-538.
+ * Written against three storage seams and one `post`, so all of it runs under `node --test`. The
+ * real `browser.storage` is bound in `session-storage.ts`, and the real world boundary is SKG-538.
  *
  * **Two areas, on purpose.** The refresh token is worth weeks and goes in `local`; the access token
  * is worth ten minutes and goes in `session`, which the browser empties when it closes. Both in
  * `session` would make a reviewer pair again every morning, and somebody who has to do that keeps
- * their pairing code in a text file — a worse place than the one we were protecting.
+ * their pairing code in a text file — a worse place than the one we were protecting. The third seam
+ * is the epoch, which goes beside the session in `local` because it has to outlive what it refuses.
  */
 
 /** Who the worker says this session speaks for. Its word, from the pairing an operator created. */
@@ -42,9 +43,21 @@ export type StoredSession = {
    * which is the behaviour that entry already had.
    */
   generation?: string;
+  /**
+   * Which run of this endpoint's session the entry belongs to (SKG-603).
+   *
+   * A logout mints a new epoch before it clears, so an entry stamped with the one before it is
+   * refused by every reader — see `stillOpen` in `session-storage.ts`. That is what catches a logout
+   * landing between a refresh reading storage and writing it back: the write still happens, and it
+   * is dead on arrival. The generation cannot do this. It is minted by the refresh itself, so both
+   * of that refresh's writes agree with each other and nothing tells them from an ordinary one.
+   *
+   * Optional, on the same rule as `generation`: absent on both sides compares equal.
+   */
+  epoch?: string;
 };
 
-/** What must not. `expiresAt` is epoch milliseconds, computed here from the worker's `expiresIn`. */
+/** What must not survive it. `expiresAt` is a moment in milliseconds, from the worker's `expiresIn`. */
 export type AccessGrant = {
   accessToken: string;
   expiresAt: number;
@@ -78,11 +91,20 @@ export type SessionResponse = {
   body: unknown;
 };
 
+/**
+ * Where an endpoint's epoch is written. The read side is not here: it is inside the sessions area,
+ * so no reader of a session can forget to ask. See `stillOpen` in `session-storage.ts`.
+ */
+export type Epochs = Pick<Area<string>, 'put'>;
+
 export type SessionSeams = {
   /** Mints a session generation. Defaulted so only a test has to care. See `StoredSession.generation`. */
   newGeneration?: () => string;
+  /** Mints an epoch, the same way and for the same reason. See `StoredSession.epoch`. */
+  newEpoch?: () => string;
   sessions: Area<StoredSession>;
   grants: Area<AccessGrant>;
+  epochs: Epochs;
   post(url: string, body: Record<string, unknown>): Promise<SessionResponse>;
   now?: () => number;
 };
@@ -121,6 +143,10 @@ export function isFresh(grant: AccessGrant | undefined, now: number): grant is A
  * minutes because nothing looked past its clock. Revoking on the worker does not reach it. Raised in
  * review.
  *
+ * It is the second of the two refusals that case gets since SKG-603: the session that grant names is
+ * itself stamped with a run that is over, so `stillOpen` already keeps it out of the read this
+ * compares against.
+ *
  * An entry written before this marker existed has none on either side, and two absent markers
  * compare equal: an upgrade keeps the session it already had rather than signing the reviewer out.
  */
@@ -149,9 +175,11 @@ export type Sessions = {
 export function createSessions({
   sessions,
   grants,
+  epochs,
   post,
   now = Date.now,
   newGeneration = () => randomId(globalThis),
+  newEpoch = () => randomId(globalThis),
 }: SessionSeams): Sessions {
   /** Endpoint to the refresh already running for it. See `refreshOnce`. */
   const refreshing = new Map<string, Promise<AccessResult>>();
@@ -175,18 +203,20 @@ export function createSessions({
    * holds.
    *
    * The compare and the write are not one operation and cannot be: `chrome.storage` has no
-   * transaction, and the popup and this context share nothing else. **Which logout that catches
-   * depends on where it lands**, and only one of the two is covered:
+   * transaction, and the popup and this context share nothing else. **What the write carries is what
+   * covers the gap.** It is stamped with the epoch of the very read the comparison was made on
+   * (SKG-603), and a logout mints a new epoch before it clears, so a logout landing anywhere around
+   * these lines leaves the endpoint logged out:
    *
-   * - between the session write and the grant write — the grant is minted for a session storage no
-   *   longer holds, so `matches` refuses it on the next read rather than honouring its remaining ten
-   *   minutes. This is the case the **generation** marker was added for, on SKG-600.
-   * - between the compare and the session write — both writes then land and agree with each other,
-   *   so nothing here can tell them from an ordinary refresh. The session is put back and its access
-   *   token is accepted for its ten minutes. The refresh token put back is revoked on the worker,
-   *   because logging out revokes the chain, so the next refresh answers `401` and ends the session
-   *   — but that does not reach a token already minted. **SKG-603**, and it needs something ordered
-   *   in storage rather than a tighter gap here.
+   * - before the read — the session is gone, so the comparison refuses.
+   * - between the read and the session write — the stamp is a run of the session that is over, and
+   *   `stillOpen` refuses the entry for good. The grant below then has no session to match.
+   * - between the session write and the grant write — the same, and `matches` refuses the orphan
+   *   grant as well. That second refusal is the **generation** marker, added on SKG-600.
+   *
+   * The stamp has to come from **this** read and not from a fresher one, which is why the session is
+   * read here rather than handed in: a stamp read after the logout would agree with storage and put
+   * the session back.
    *
    * Since SKG-602 the two writes touch only this endpoint's own keys, so nothing here can reach
    * another worker's entry whatever else is running.
@@ -194,13 +224,18 @@ export function createSessions({
   async function keepIfCurrent(
     endpoint: string,
     spent: string,
-    session: Omit<StoredSession, 'generation'>,
+    session: Omit<StoredSession, 'generation' | 'epoch'>,
     issued: Issued,
   ): Promise<AccessGrant | undefined> {
-    if ((await sessions.read())[endpoint]?.refreshToken !== spent) return undefined;
+    const held = (await sessions.read())[endpoint];
+    if (held?.refreshToken !== spent) return undefined;
 
     const generation = newGeneration();
-    await sessions.put(endpoint, { ...session, generation });
+    await sessions.put(endpoint, {
+      ...session,
+      ...(held.epoch === undefined ? {} : { epoch: held.epoch }),
+      generation,
+    });
 
     return writeGrant(endpoint, issued, generation);
   }
@@ -218,16 +253,37 @@ export function createSessions({
   }
 
   /**
-   * Both credentials for one endpoint, gone.
+   * Both credentials for one endpoint, gone — and the run they belonged to marked over.
    *
-   * Two operations rather than one, because each area owns its own keys. So a logout can leave the
-   * session dropped and the grant still there for an instant — and if it fails between them, for
-   * longer. That grant is unusable: it carries the generation of a session no longer in storage, and
-   * `matches` refuses it. The whole-record write this replaced looked atomic across the two areas
-   * and was not either, because it was still two `set` calls.
+   * **The epoch is minted first, and that order is the whole of SKG-603.** A refresh in the other
+   * context can already be holding an answer for this session; dropping the keys does not reach it,
+   * and it writes them back. The new epoch is what that write is measured against, so it has to be
+   * in storage before anything is removed. Everything stamped with the epoch before it is refused
+   * from here on, whenever it lands.
+   *
+   * **Minting it must not be able to keep the credentials**, which is why the drops are in a
+   * `finally`. Storage can refuse a write — a quota, a transient failure — and returning there would
+   * leave a fresh grant readable after the worker was already told to revoke, under a popup that
+   * says signed out. The drops run, the rejection still reaches the caller, and that logout is back
+   * to what it was before this ticket: cleared here, and a refresh already in flight can put the
+   * session back. Raised in review.
+   *
+   * The rest is two operations rather than one, because each area owns its own keys. So a logout can
+   * leave the session dropped and the grant still there for an instant — and if it fails between
+   * them, for longer. That grant is unusable: it carries the generation of a session no longer in
+   * storage, and `matches` refuses it.
+   *
+   * What this does not remove is the entry a refused write leaves behind: a refresh that lost this
+   * race still writes its session key, stamped with the epoch before. `stillOpen` keeps it out of
+   * every read, and the next pairing writes over it. The refresh token in it is the one the revoke
+   * above ended.
    */
   async function forget(endpoint: string): Promise<void> {
-    await Promise.all([sessions.drop(endpoint), grants.drop(endpoint)]);
+    try {
+      await epochs.put(endpoint, newEpoch());
+    } finally {
+      await Promise.all([sessions.drop(endpoint), grants.drop(endpoint)]);
+    }
   }
 
   async function refresh(endpoint: string): Promise<AccessResult> {
@@ -272,9 +328,10 @@ export function createSessions({
     // with nothing to keep in step: if the one in storage is not the one this request spent, the
     // session was logged out or re-paired, and this answer is about a session that no longer exists.
     //
-    // The check and the write are **not** one operation and cannot be — see `keepIfCurrent` for
-    // which logout that catches and which it does not. Rotation made this path run on every refresh
-    // rather than on the rare answer that carried a new token. Raised in review, three times.
+    // The check and the write are **not** one operation and cannot be. What closes the gap between
+    // them is the epoch the write carries — see `keepIfCurrent`. Rotation made this path run on
+    // every refresh rather than on the rare answer that carried a new token. Raised in review,
+    // three times.
     //
     // What protects a lost answer is on the worker's side: the token this request spent stays usable
     // until its successor is, so a retry with the old one lands on its feet.
@@ -362,13 +419,20 @@ export function createSessions({
         return { ok: false, reason: refused ? 'code-spent-or-expired' : 'unavailable' };
       }
 
-      const opened: Omit<StoredSession, 'generation'> = {
-        refreshToken: issued.refreshToken,
-        identity: issued.identity,
-      };
+      // The epoch is minted here too, and written before the session it stamps. A pairing is the
+      // start of a run of this session, the way a logout is the end of one, and the two are the only
+      // things that mint one. An endpoint paired again after a logout would otherwise carry the
+      // epoch of the logout and read as signed out for ever.
+      const epoch = newEpoch();
+      await epochs.put(endpoint, epoch);
 
       const generation = newGeneration();
-      await sessions.put(endpoint, { ...opened, generation });
+      await sessions.put(endpoint, {
+        refreshToken: issued.refreshToken,
+        identity: issued.identity,
+        epoch,
+        generation,
+      });
       await writeGrant(endpoint, issued, generation);
 
       return { ok: true, identity: issued.identity };
@@ -486,6 +550,9 @@ export function parseStoredSession(value: unknown): StoredSession | undefined {
     refreshToken: value.refreshToken,
     identity,
     ...(isNonEmptyString(value.generation) ? { generation: value.generation } : {}),
+    // Dropped here and the entry reads as belonging to no run at all, so `stillOpen` refuses every
+    // session on an endpoint that has an epoch — every endpoint, one logout in.
+    ...(isNonEmptyString(value.epoch) ? { epoch: value.epoch } : {}),
   };
 }
 

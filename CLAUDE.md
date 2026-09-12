@@ -474,9 +474,19 @@ SKG-596; both are built. Which one an origin is in is one field on its entry, an
   (`keepIfCurrent`), and no write means no grant either. The popup and the background are separate
   contexts sharing only storage, so a logout can land while an alarm is awaiting `/session/refresh`,
   and the answer used to put a working access token back under a screen saying signed out. The token
-  is its own generation marker for that compare. The compare and the write are **not** one operation
-  and cannot be — `chrome.storage` has no transaction — so what closes the gap is the generation the
-  grant carries, not the ordering. The window is narrowed, not closed.
+  is its own generation marker for that compare.
+- **A logout mints a new epoch for the endpoint before it clears anything** (SKG-603), and a session
+  stamped with the one before it is refused by every reader (`stillOpen`). The compare and the write
+  in `keepIfCurrent` are **not** one operation and cannot be — `chrome.storage` has no transaction —
+  so what covers the gap is what the write **carries**: the epoch of the very read the compare was
+  made on. A logout landing anywhere around those lines leaves the endpoint logged out. Nothing
+  refuses the write itself; the entry lands, unreadable, until the next pairing writes over it.
+  **The stamp must come from that read and from no fresher one**, which is why `keepIfCurrent` reads
+  the session itself and why the `epochs` seam has `put` and no `read` — a writer that could read the
+  epoch could stamp with the logout's own.
+- **A pairing mints one too, and writes it before the session it stamps.** A logout leaves an epoch
+  behind on an endpoint holding nothing, so an endpoint paired again would otherwise read as signed
+  out for ever. Absent on both sides compares equal, the same rule the generation follows.
 - **The guard is an allowlist**: `worlds.test.ts` *discovers* every `*.content.ts` declaring
   `world: 'MAIN'`, follows its relative imports, and refuses a `session*` module or the name
   `refreshToken` / `accessToken` anywhere in that closure. A main-world file added later is covered
@@ -659,13 +669,15 @@ and *The team mode, and the call the page cannot make*:
   not enough: the popup and the background write the same two areas from separate contexts, so a
   logout can land between a refresh writing the session and the same refresh writing its grant, and
   the orphan was then honoured for its remaining ten minutes — which revoking on the worker does not
-  reach. The marker is what closes it — the two writes are not one operation and cannot be, because
-  `chrome.storage` has no transaction. It is an opaque id, never the refresh token: copying a
-  credential into the session area
-  would undo the split that keeps it out. Absent on both sides compares equal, so an upgrade keeps
-  the session it had.
+  reach. The two writes are not one operation and cannot be, because `chrome.storage` has no
+  transaction. It is an opaque id, never the refresh token: copying a credential into the session
+  area would undo the split that keeps it out. Absent on both sides compares equal, so an upgrade
+  keeps the session it had. Since SKG-603 that case is refused twice — the session the grant names is
+  itself stamped with a run that is over — and what the generation still holds on its own is a grant
+  and a session that drifted apart **inside** one run, which a partial write leaves behind.
 - **One storage key per endpoint, in both areas** (SKG-602). `fruitback:session:<endpoint>` and
-  `fruitback:grant:<endpoint>`, and `Area` has `put`/`drop` rather than a whole-record `write`. One
+  `fruitback:grant:<endpoint>`, joined by `fruitback:epoch:<endpoint>` beside the session it dates
+  (SKG-603), and `Area` has `put`/`drop` rather than a whole-record `write`. One
   key holding every endpoint made every write a read-modify-write, and the popup and the background
   do not share a lock: two refreshes each read the record and each replaced it, so the later write
   put the earlier one's **spent** token back — a replay, so the worker revokes the chain and the
@@ -684,13 +696,19 @@ and *The team mode, and the call the page cannot make*:
   quiet half of the same fact: a read answers that the reviewer is paired with nobody while a live
   credential sits under the legacy key. `upgradeAreas` marks its own rejection seen — an unhandled
   one stops a service worker — and still rejects for whoever waits on it.
-- **`session-storage.ts` holds the keys, the `Area` factory and the upgrade, behind a `StorageArea`
-  seam**, so `node --test` reaches all of it. `session-browser.ts` is left binding `browser` and
-  `fetch`. Same split as `bridge.ts`.
+- **`session-storage.ts` holds the keys, the `Area` factory, the upgrade and the wiring, behind a
+  `StorageArea` seam**, so `node --test` reaches all of it. `session-browser.ts` is left binding
+  `browser` and `fetch`. Same split as `bridge.ts`. **`createStoredSessions` is the only assembly**,
+  which is what lets a test drive two `Sessions` over one storage — the popup and the background, as
+  they really are — rather than over two fakes that cannot reach each other. A fake `Area` answers
+  from what a test put in it, so a value the parser drops on the way out of real storage is invisible
+  to it: `parseStoredSession` silently dropping the epoch is the defect that found this.
+- **The epoch is read inside the sessions area, from the same snapshot as the session** — a call site
+  cannot forget to ask, and no logout can land between the two halves of the comparison.
 - **One refresh in flight per endpoint** (`refreshOnce` in the extension's `session.ts`). Two callers
   spending the same token is a lockout, not a wasted request: the worker treats the second as a
-  retry inside the grace, revokes the first successor, and whichever `keep()` lands last can leave
-  the extension holding a revoked token. `background.ts` serialises the **alarm** only — the relay
+  retry inside the grace, revokes the first successor, and whichever answer lands last can leave the
+  extension holding a revoked token. `background.ts` serialises the **alarm** only — the relay
   calls `ensureAccess` directly, and the widget has a read and a write in flight in the ordinary
   case. The lock is in `session.ts` and not the entrypoint, for the reason `bridge.ts` gives.
 - **A `200` from `/session/refresh` with no `refreshToken` is not a success.** Taking it leaves a

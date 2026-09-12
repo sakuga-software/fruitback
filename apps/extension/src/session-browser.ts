@@ -1,15 +1,6 @@
 import { browser } from 'wxt/browser';
-import { GRANT_PREFIX, SESSION_PREFIX, createArea, upgradeAreas } from './session-storage.ts';
-import {
-  type AccessGrant,
-  type Area,
-  type SessionResponse,
-  type Sessions,
-  type StoredSession,
-  createSessions,
-  parseAccessGrant,
-  parseStoredSession,
-} from './session.ts';
+import { createStoredSessions } from './session-storage.ts';
+import type { SessionResponse, Sessions } from './session.ts';
 
 /**
  * `session.ts` wired to the real browser (SKG-599).
@@ -20,29 +11,6 @@ import {
 
 /** Long enough for a slow worker on a slow connection, short enough to unwedge the endpoint. */
 const REQUEST_TIMEOUT_MS = 20 * 1_000;
-
-/**
- * The refresh token, in the area that survives the browser closing.
- *
- * Read through a parser rather than cast: `chrome.storage` outlives an upgrade, so a shape an older
- * version wrote has to cost its own entry and not the extension.
- */
-function localArea(ready: Promise<void>): Area<StoredSession> {
-  return createArea(() => browser.storage.local, SESSION_PREFIX, parseStoredSession, ready);
-}
-
-/**
- * The access token, in the area the browser empties when it closes.
- *
- * **Nothing changes the access level of this area, and that is deliberate.** Its default keeps it to
- * the extension's trusted contexts — this background and the popup — and out of content scripts,
- * which is exactly the boundary this ticket exists to hold: the isolated script does not read the
- * token, it asks the background to make the call. Widening the area to
- * `TRUSTED_AND_UNTRUSTED_CONTEXTS` would put the token one `postMessage` mistake away from the page.
- */
-function sessionArea(ready: Promise<void>): Area<AccessGrant> {
-  return createArea(() => browser.storage.session, GRANT_PREFIX, parseAccessGrant, ready);
-}
 
 /**
  * The three session routes, over `fetch`.
@@ -74,8 +42,26 @@ async function postJson(url: string, body: Record<string, unknown>): Promise<Ses
   return { status: response.status, body: await response.json().catch(() => undefined) };
 }
 
+/**
+ * **Two areas, and nothing calls `setAccessLevel` on the session one.**
+ *
+ * The refresh token goes in `local`, which survives the browser closing, and the access token in
+ * `session`, which the browser empties. The epoch goes beside the session it dates, in `local`,
+ * because it has to outlive everything it refuses.
+ *
+ * The default access level of `session` keeps it to the extension's trusted contexts — this
+ * background and the popup — and out of content scripts, which is the boundary this whole batch
+ * exists to hold: the isolated script never reads a token, it asks the background to make the call.
+ * `TRUSTED_AND_UNTRUSTED_CONTEXTS` would put the token one `postMessage` mistake away from the page.
+ *
+ * Which key holds what is in `session-storage.ts`, and so is the upgrade. Both are read through a
+ * parser rather than cast: `chrome.storage` outlives an upgrade, so a shape an older version wrote
+ * costs its own entry and not the extension.
+ */
 export function createBrowserSessions(): Sessions {
-  const ready = upgradeAreas(browser.storage.local, browser.storage.session);
-
-  return createSessions({ sessions: localArea(ready), grants: sessionArea(ready), post: postJson });
+  return createStoredSessions(
+    () => browser.storage.local,
+    () => browser.storage.session,
+    postJson,
+  );
 }
