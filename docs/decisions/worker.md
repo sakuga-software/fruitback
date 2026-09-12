@@ -179,7 +179,8 @@ connector's environment, and what a second connector with no markdown body actua
   synchronously.** `connect` throws before any `await`, and `app.ts` happens to catch it either way —
   but a caller reaching for `.catch()` would have been bypassed on the one path that matters, a volume
   nobody mounted.
-- **`sqlite3` is in the runtime image for one reason: the backup line in the README.** The store needs
+- **`sqlite3` is in the runtime image for one reason: the backup line in
+  [self-hosting.md](../self-hosting.md)** (the README until SKG-519 moved it). The store needs
   nothing installed; `.backup` needs a binary, and it is the only safe way to copy a live database.
   Measured in a container: `fruitback.db` was 4 KB while `fruitback.db-wal` held 53 KB, so a `cp`
   of the `.db` alone would have lost the note that had just been planted.

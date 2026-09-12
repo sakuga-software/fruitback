@@ -53,3 +53,19 @@ behind Traefik can do.
   since SKG-512, because the widget's clients are React apps and a static page could not exercise
   half of what the widget does. Not shipped, not deployed.
 
+
+## The milestones, as the README carried them
+
+Archived here when the README became a landing page (SKG-519). It had gone stale where it mattered
+most — it still named `SKG-491 → SKG-497 → SKG-500` as the critical path, which was schema, write and
+read-back, all three long shipped. A roadmap on a landing page is a promise that ages badly; the live
+one is [the Linear project](https://linear.app/sakuga-software/project/fruitback-ed574263d8d6).
+
+| Milestone            | Scope                                                     |
+| -------------------- | --------------------------------------------------------- |
+| 🌱 M1 Foundation     | monorepo, seed schema + Linear mapping                    |
+| 🍓 M2 Capture        | react-grab in Shadow DOM, popover, anchor, screenshot     |
+| 🍊 M3 Write → Linear | worker, issue creation, anonymous/identified attribution  |
+| 🥝 M4 Read & overlay | query by label + URL, re-anchoring, orphan pins, comments |
+| 🫐 M5 Config in-app  | settings panel, multi-client mapping                      |
+| 🥥 M6 Packaging      | npm package, install snippet, optional Linear webhook     |

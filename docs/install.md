@@ -65,7 +65,7 @@ Linear and serves the playground next to it. Nothing is written to anyone's work
 ### On a server
 
 Deployment is Docker behind Traefik, driven by Dokploy from a GitHub push — see
-[the README](../README.md#deploying-with-dokploy) for the application settings. Whatever you use, two
+[docs/self-hosting.md](self-hosting.md) for the application settings. Whatever you use, two
 things matter:
 
 - **`/health` is a real readiness probe.** It answers `503` while a required variable is missing and

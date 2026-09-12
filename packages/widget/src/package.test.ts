@@ -60,6 +60,79 @@ describe('the script-tag build', () => {
     assert.match(source, /data-fruitback-endpoint|fruitbackEndpoint/);
   });
 
+  /**
+   * The README's snippet, read from the README (SKG-519).
+   *
+   * `CLAUDE.md` said the snippet was executed by the suite, and it was not: the test above asserts
+   * the *build* names one attribute, and nothing had ever opened the file a reader copies from. So a
+   * renamed attribute would have left the landing page quietly wrong — the reader pastes the tag,
+   * the widget mounts with no endpoint, and nothing in this repository fails.
+   *
+   * Every attribute the page documents has to be one the build reads. Not the reverse: the snippet
+   * is deliberately the short form, and `label` and the rest live in `docs/install.md`.
+   */
+  it('reads every attribute the README tells a reader to write', async () => {
+    const source = await readFile(join(dist, 'fruitback.iife.js'), 'utf8');
+    const readme = await readFile(join(root, '..', '..', 'README.md'), 'utf8');
+    // `[a-z-]*[a-z]` and not `[a-z]+`: the first version stopped at the first hyphen, so a name like
+    // `data-fruitback-endpoint-extra` matched **nothing at all** and was skipped in silence — the
+    // guard then checked the one attribute left and passed while the snippet no longer mounted
+    // anything. Raised in review, and measured: that spelling captured `[]`.
+    const captures = [...readme.matchAll(/data-(fruitback[a-z-]*[a-z])=/g)].map((match) => match[1] ?? '');
+    const documented = new Set(captures.filter((name) => name !== ''));
+
+    // A guard over an empty set passes. The snippet is the first thing on the landing page; if it is
+    // gone, that is the failure, not a reason to skip.
+    assert.ok(documented.size > 0, 'the README documents no data-fruitback-* attribute any more');
+
+    for (const attribute of documented) {
+      const camel = attribute.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
+      assert.ok(
+        source.includes(`data-${attribute}`) || source.includes(camel),
+        `the README documents data-${attribute} and the built script never reads it`,
+      );
+    }
+  });
+
+  /**
+   * The other direction, which the first version left open (SKG-519).
+   *
+   * "Everything documented is read" says nothing about a snippet that stopped documenting what the
+   * tag cannot mount without. `global.ts` returns early unless **both** `fruitbackEndpoint` and
+   * `fruitbackClient` are on the tag, so a README that lost either one would hand a reader a script
+   * tag that loads, does nothing, and reports nothing. Raised in review.
+   *
+   * The required names are taken from `global.ts`'s own early return rather than listed here, so
+   * renaming one fails this test instead of quietly narrowing it.
+   */
+  it('documents the attributes the script tag cannot mount without', async () => {
+    const bootstrap = await readFile(join(root, 'src', 'global.ts'), 'utf8');
+
+    // Read off the **mount condition**, not off every `script.dataset.*` in the file minus the ones
+    // known to be optional. That subtraction was a denylist: an optional `fruitbackTheme` added later
+    // and read inline would have been counted as required, because the filter only knew about
+    // `label`. The condition names exactly what the tag cannot mount without, so it is the allowlist.
+    // Raised in review — the same rule this PR applies to `worlds.test.ts`.
+    const condition = /if \((\w+) !== undefined && (\w+) !== undefined\)/.exec(bootstrap);
+    assert.ok(condition, 'global.ts no longer gates the mount on two locals; this guard is stale');
+
+    const required = condition.slice(1, 3).map((local) => {
+      const assignment = new RegExp(`const ${local} = script\\.dataset\\.(fruitback[A-Za-z]+);`).exec(bootstrap);
+      assert.ok(assignment, `the mount condition names ${local}, and nothing assigns it from a data attribute`);
+
+      return assignment[1] as string;
+    });
+
+    const readme = await readFile(join(root, '..', '..', 'README.md'), 'utf8');
+    for (const camel of required) {
+      const kebab = camel.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+      assert.ok(
+        readme.includes(`data-${kebab}=`),
+        `the script tag will not mount without data-${kebab}, and the README no longer documents it`,
+      );
+    }
+  });
+
   it('is small enough to put on someone else’s page', async () => {
     const { size } = await import('node:fs').then((fs) => fs.promises.stat(join(dist, 'fruitback.iife.js')));
     const gzipped = await gzipSize(join(dist, 'fruitback.iife.js'));

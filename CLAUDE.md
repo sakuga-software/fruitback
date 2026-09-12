@@ -19,7 +19,8 @@ Coming back to the page, they see their pins again, coloured by that issue's sta
 with it. Every store the worker speaks to is one somebody already runs: Linear is the default and
 the richest of them, and `FRUITBACK_STORE=sqlite` is the door for a self-hoster who wants no third
 party. Fruitback does not reinvent issue tracking, and since SKG-524 it no longer requires somebody
-else's account either. See [README.md](README.md) for the alternatives that were dropped.
+else's account either. See [docs/architecture.md](docs/architecture.md) for the alternatives that
+were dropped.
 
 **Deployment is Docker on a VPS, driven by Dokploy from GitHub** — no Cloudflare, no serverless, no
 managed platform primitives. When something needs infrastructure, reach for what a single container
@@ -154,8 +155,12 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   package with none of its own — so "the tarball contains a LICENSE" is true even for a package that
   never declared one. `THIRD-PARTY-NOTICES.md` is the opposite case: nothing force-includes it, so
   its `files` entry **is** load-bearing.
-- **The README snippet is executed by the suite**, not merely quoted. A snippet in a doc that nobody
-  runs is a snippet that stops working quietly.
+- **The README snippet is read from the README and checked against the build** (`package.test.ts`,
+  SKG-519). Every `data-fruitback-*` attribute the landing page tells a reader to write must be one
+  the built script actually reads. Before that, the claim in this file was an overclaim: the test
+  asserted the *build* named one attribute and nothing had ever opened the file a reader copies from,
+  so a renamed attribute left the landing page quietly wrong with a green suite. The built global is
+  separately *executed* on a real page by `e2e/package.spec.ts`.
 
 **Deeper** — *Licences*: [docs/decisions/packaging.md](docs/decisions/packaging.md).
 
@@ -440,8 +445,10 @@ down*: [docs/decisions/extension.md](docs/decisions/extension.md).
 
 ## The worker
 
-- It exists for exactly one reason: the Linear API key cannot ship in client-side JS. Resist putting
-  logic here that belongs in the widget or in Linear.
+- It exists because a store's API key cannot ship in client-side JS — and, since SKG-524, because
+  somebody has to hold the SQLite file too. **Resist putting logic here that belongs in the widget or
+  in the store.** The rule is the point; "exactly one reason" was the wording until SKG-519, and it
+  stopped being true when a store with no API key shipped.
 - **`app.ts` is transport-agnostic** — a `handleRequest(request, env, context)` over web
   `Request`/`Response`. `server.ts` adapts `node:http` onto it and `main.ts` starts it. Keep new
   behaviour in `app.ts` so it stays testable without opening a socket.
