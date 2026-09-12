@@ -404,8 +404,12 @@ SKG-596; both are built. Which one an origin is in is one field on its entry, an
 
 - **The main world announces instead of mounting.** `page.content.ts` puts
   `window.fruitbackExtension = { version, transport }` on the page and fires `fruitback:extension`.
-  Two ways to find it because nothing orders a content script against a site's own bundle, and the
-  announcement is **idempotent** — a second event would hand the site a second widget.
+  Two ways to find it because nothing orders a content script against a site's own bundle.
+- **Installing the API is idempotent, which is what makes the event safe to mount on.** The global is
+  set and the event fired only when the global is not already ours, so a re-posted decision announces
+  nothing. **Withdrawal is the same event with the global gone** — nothing here can destroy a widget
+  the site owns, so a site switched off would otherwise keep stale pins and a composer that fails
+  silently.
 - **`clientId` and the widget's endpoint come from the site.** The stored entry carries an endpoint
   anyway, and it is not what the widget is pointed at: it is what the relay checks the page's
   declaration against.
@@ -421,8 +425,12 @@ SKG-596; both are built. Which one an origin is in is one field on its entry, an
   worker, so a page free to choose the endpoint could be answered with their credential for a
   worker nobody on that page chose. Relaying to the stored endpoint instead would be worse: the
   widget would report success against a worker it never named.
-- **No session, no call.** Relaying without the header would work on a `read: 'public'` worker, and
-  a reviewer would never learn they are unpaired while the mode delivered none of what it promises.
+- **No session, no call, and no plain `http://` either.** Relaying without the header would work on a
+  `read: 'public'` worker, and a reviewer would never learn they are unpaired while the mode
+  delivered none of what it promises. The endpoint must be https or loopback, because the token is a
+  bearer credential and this is the only thing carrying it; the popup refuses a team entry and
+  disables pairing on the same rule. **`isWorkerEndpoint` is not tightened** — it gates the private
+  mode's mount, which carries no credential.
 - **`Authorization` is built in the background and `Content-Type` is the only header the page may
   name.** `ALLOWED_HEADERS` in `protocol.ts` is an allowlist of one, and `relay.ts` writes the
   credential name by name rather than spreading — two spellings of one header reach `fetch` as a
@@ -430,10 +438,18 @@ SKG-596; both are built. Which one an origin is in is one field on its entry, an
 - **One path, `/feedback`.** `relay.test.ts` reads `packages/widget/src/embed.ts` and asserts the
   widget calls that path and names no header the relay would drop, so a call the widget grows later
   fails the suite instead of being dropped silently on a reviewer's page.
-- **The relayed call has a timeout, and it is load-bearing.** The composer disables its send button
-  in flight, so a promise that never settles leaves a reviewer with a dead button and a written note
-  inside it. `relay-transport.ts` exists so `node --test` can reach that, and the correlation it
-  does: the widget reads and writes independently, so two calls are in flight in the ordinary case.
+- **Two deadlines, and the shorter one aborts.** The composer disables its send button in flight, so
+  a promise that never settles leaves a reviewer with a dead button and a written note inside it.
+  `RELAY_CALL_TIMEOUT_MS` aborts the background fetch — merely giving up would leave the request in
+  flight while the page is told it failed, and a second send plants the note twice.
+  `RELAY_ANSWER_TIMEOUT_MS` is longer, so a slow worker is a refusal the background sends rather than
+  a timeout the page invents. **`createRelay` never rejects**, because a rejection leaves the
+  background with nothing to answer the runtime message with.
+- **`relay-transport.ts` exists so `node --test` can reach the correlation**: the widget reads and
+  writes independently, so two calls are in flight in the ordinary case. Its ids come from
+  `randomId`, not `crypto.randomUUID` — that one needs a **secure context** and this script runs on
+  `http://` staging too. `capture.ts` already carried the same fallback for the seed id, and the trap
+  was walked back into here.
 - **An extension origin is exempt from `ALLOWED_ORIGINS` on every route, by scheme.** The relay
   calls `/feedback` from the service worker, which sends `chrome-extension://<id>`. See the worker
   section below.

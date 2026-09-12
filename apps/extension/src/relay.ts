@@ -1,5 +1,6 @@
 import { type RelayRequest, type RelayResponse, relayRefusal } from './protocol.ts';
 import type { AccessResult } from './session.ts';
+import { isSecureWorkerEndpoint } from './endpoint.ts';
 import type { SiteConfig } from './sites.ts';
 
 /**
@@ -32,7 +33,23 @@ export type RelaySeams = {
 export type Relay = (request: RelayRequest, origin: string | undefined) => Promise<RelayResponse>;
 
 export function createRelay({ readSite, ensureAccess, send }: RelaySeams): Relay {
+  /**
+   * Never rejects, whatever any of the three seams does.
+   *
+   * Storage and the session both do I/O, and a rejection would leave the background with nothing to
+   * answer the runtime message with: the page would then wait out its whole deadline for a refusal
+   * that had already happened, and the reviewer would watch a dead send button for half a minute.
+   * Raised in review.
+   */
   return async (request, origin) => {
+    try {
+      return await decide(request, origin);
+    } catch {
+      return relayRefusal('relay-failed');
+    }
+  };
+
+  async function decide(request: RelayRequest, origin: string | undefined): Promise<RelayResponse> {
     if (origin === undefined) return relayRefusal('unknown-sender');
 
     const site = await readSite(origin);
@@ -45,6 +62,12 @@ export function createRelay({ readSite, ensureAccess, send }: RelaySeams): Relay
     // the call to the stored endpoint instead would make the widget report to a worker nobody on the
     // page chose, and report success for it.
     if (!targets(request.url, site.endpoint)) return relayRefusal('endpoint-not-declared-for-this-site');
+
+    // The token below is a bearer credential, and this call is the only thing carrying it. An
+    // `http://` worker would put it on the wire in the clear, where the page's own network already
+    // is. Loopback is the exception, because it is the dev loop and is not on a wire. Raised in
+    // review.
+    if (!isSecureWorkerEndpoint(site.endpoint)) return relayRefusal('insecure-endpoint');
 
     // A session exists per endpoint, and the popup only opens one after `grantWorkerOrigin` has been
     // granted for that same endpoint's origin. So a grant here means this extension holds the host
@@ -66,10 +89,16 @@ export function createRelay({ readSite, ensureAccess, send }: RelaySeams): Relay
         headers,
         ...(request.body !== undefined ? { body: request.body } : {}),
       });
-    } catch {
-      return relayRefusal('worker-unreachable');
+    } catch (error) {
+      // The background aborts a call that runs past `RELAY_CALL_TIMEOUT_MS`. Said apart from an
+      // unreachable worker because it is the only refusal a reviewer can act on by waiting.
+      return relayRefusal(isTimeout(error) ? 'worker-timeout' : 'worker-unreachable');
     }
-  };
+  }
+}
+
+function isTimeout(error: unknown): boolean {
+  return error instanceof Error && error.name === 'TimeoutError';
 }
 
 /**

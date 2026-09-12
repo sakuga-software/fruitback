@@ -228,9 +228,18 @@ generation token and the unchanged-decision guard in `bridge.ts` already exist a
 review round each, and a mode flag read in the main world would have needed both again. The main
 world has no `chrome.*` to read a flag with, either.
 
-The announcement is idempotent — the site mounts its widget when the event fires, so a second event
-hands it a second widget. A re-posted decision therefore changes nothing, which is the same rule the
-mount has for the same reason.
+**Installing the API is what is idempotent, and that is what makes the event safe to mount on.** The
+main world sets the global and fires the event only when the global is not already its own, so
+re-posting the same decision installs nothing and fires nothing. A site can therefore mount on every
+event it receives without ever getting a second widget — which is what the snippet in
+`docs/install.md` does. Two guards, one behind the other: `createApply` does not re-post an
+unchanged decision, and this does not re-announce one that is already in place.
+
+Withdrawal travels on the **same** event, with the global gone. Nothing here can destroy a widget
+the site owns, so a reviewer who switches the site off — or to private mode — would otherwise leave
+it on screen with a transport every call is now refused for: stale pins, and a composer that fails
+without saying why. The site reads the property rather than assuming an arrival, and destroys its
+own.
 
 ### The endpoint check, and the ticket bullet it contradicts
 
@@ -266,6 +275,13 @@ written by the page**. The isolated world carries the request across and decides
   header works perfectly on a worker left at `read: 'public'`, so the pins appear, everything looks
   right, and the reviewer never learns they are unpaired while the mode delivers none of what it
   promises. The popup says so at the only moment anybody looks.
+- **The endpoint is on https, or there is no call.** The token is a bearer credential and this is the
+  only thing carrying it. Loopback is excepted because it is the dev loop and is not on a wire. The
+  popup refuses the same thing earlier and louder — a team entry on plain http cannot be stored, and
+  pairing is disabled on any insecure endpoint, because pairing is handed a refresh token worth
+  thirty days. `isWorkerEndpoint` is deliberately **not** tightened: it gates the private mode's
+  mount, which carries no credential, and an http staging worker that works today has nothing to
+  leak. Raised in review.
 
 ### What had to change on the worker, and what it gives away
 
@@ -288,6 +304,15 @@ still governs sites, and admits the extension.
 The transport returns a promise, and the composer disables its send button while a submit is in
 flight. A relay nobody answers therefore leaves a reviewer looking at a dead button with a written
 note inside it — and losing a written note is the one failure this widget cannot afford.
+
+There are **two** deadlines, and the shorter one is the background's. It aborts the call rather than
+merely giving up on it: a worker that accepts a connection and never answers would otherwise leave
+the request in flight while the page is told it failed, and a reviewer told their note failed presses
+send again — which plants it twice. The page's deadline is the longer one, so the ordinary slow
+worker becomes a refusal the background sends rather than a timeout the page invents; what is left
+for it to catch is a service worker stopped mid-call. `createRelay` never rejects for the same
+reason: storage and the session both do I/O, and a rejection would leave the background with nothing
+to answer with. All three were raised in review.
 
 `relay-transport.ts` exists so `node --test` can reach that, and the correlation around it: the
 widget reads and writes independently, so two calls are in flight in the ordinary case, and a single

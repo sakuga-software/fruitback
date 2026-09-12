@@ -44,3 +44,27 @@ export function isWorkerEndpoint(value: unknown): value is string {
 export function workerOrigin(endpoint: string): string {
   return new URL(endpoint).origin;
 }
+
+/**
+ * Where a credential may travel, which is not everywhere a worker may answer.
+ *
+ * A pairing code mints a refresh token and a refresh token is thirty days of access, so neither may
+ * cross a plain `http://` connection. Loopback is the exception every browser already makes for a
+ * secure context: `http://localhost:8788` is the dev loop, and it is not on a wire.
+ *
+ * Deliberately **not** folded into `isWorkerEndpoint`. That one answers "could a worker be there",
+ * and it gates the private mode's mount, which carries no credential at all — tightening it would
+ * turn off an http staging worker that works today and has nothing to leak. Raised in review.
+ */
+export function isSecureWorkerEndpoint(value: string): boolean {
+  try {
+    const { protocol, hostname } = new URL(value);
+
+    return protocol === 'https:' || LOOPBACK.includes(hostname);
+  } catch {
+    return false;
+  }
+}
+
+/** `new URL` keeps the brackets on an IPv6 host, so both spellings are named. */
+const LOOPBACK = ['localhost', '127.0.0.1', '[::1]', '::1'];

@@ -117,6 +117,28 @@ describe('the relay refuses before it sends', () => {
   });
 
   /**
+   * The token is a bearer credential and this call is the only thing carrying it, so it does not
+   * cross a plain `http://` connection. Loopback is the exception: it is the dev loop, and it is not
+   * on a wire. Raised in review.
+   */
+  it('refuses to carry a credential over plain http, loopback excepted', async () => {
+    for (const endpoint of ['http://worker.test', 'http://192.168.1.10:8788']) {
+      const { relay, sent } = harness({ readSite: async () => ({ mode: 'team', endpoint, enabled: true }) });
+      const answer = await relay({ ...READ, url: `${endpoint}/feedback?url=x` }, 'https://acme.dev');
+
+      assert.partialDeepStrictEqual(answer, { ok: false, body: 'insecure-endpoint' }, endpoint);
+      assert.deepEqual(sent, []);
+    }
+
+    for (const endpoint of ['http://localhost:8788', 'http://127.0.0.1:8788', 'https://worker.test']) {
+      const { relay, sent } = harness({ readSite: async () => ({ mode: 'team', endpoint, enabled: true }) });
+      await relay({ ...READ, url: `${endpoint}/feedback?url=x` }, 'https://acme.dev');
+
+      assert.equal(sent.length, 1, endpoint);
+    }
+  });
+
+  /**
    * No session, no call — and that is a decision, not an oversight.
    *
    * Relaying without the header would work on a worker left at `read: 'public'`: the pins would
@@ -141,6 +163,38 @@ describe('the relay refuses before it sends', () => {
     });
 
     assert.partialDeepStrictEqual(await relay(READ, 'https://acme.dev'), { ok: false, body: 'worker-unreachable' });
+  });
+
+  /** The background aborts a call that runs too long, and a reviewer can act on that by waiting. */
+  it('says a worker that never answered apart from one that could not be reached', async () => {
+    const { relay } = harness({
+      send: async () => {
+        const aborted = new Error('timed out');
+        aborted.name = 'TimeoutError';
+
+        throw aborted;
+      },
+    });
+
+    assert.partialDeepStrictEqual(await relay(READ, 'https://acme.dev'), { ok: false, body: 'worker-timeout' });
+  });
+
+  /**
+   * Storage and the session do I/O, and a rejection would leave the background with no answer to
+   * send — the page would then wait out its whole deadline for a refusal that already happened.
+   * Raised in review.
+   */
+  it('answers rather than rejects, whatever a seam does', async () => {
+    const throwing = async () => {
+      throw new Error('storage is gone');
+    };
+
+    for (const seam of [{ readSite: throwing }, { ensureAccess: throwing }]) {
+      const { relay, sent } = harness(seam);
+
+      assert.partialDeepStrictEqual(await relay(READ, 'https://acme.dev'), { ok: false, body: 'relay-failed' });
+      assert.deepEqual(sent, []);
+    }
   });
 });
 

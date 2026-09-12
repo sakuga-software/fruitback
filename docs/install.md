@@ -160,9 +160,19 @@ declare global {
 
 let widget: ReturnType<typeof init> | undefined;
 
-const wake = () => {
+const sync = () => {
   const extension = window.fruitbackExtension;
-  if (widget !== undefined || extension === undefined) return;
+
+  // Gone: the reviewer switched this site off, or to private mode. The extension cannot destroy a
+  // widget your site owns, so it tells you and you do.
+  if (extension === undefined) {
+    widget?.destroy();
+    widget = undefined;
+
+    return;
+  }
+
+  if (widget !== undefined) return;
 
   widget = init({
     endpoint: 'https://feedback.acme.dev',
@@ -172,13 +182,14 @@ const wake = () => {
   });
 };
 
-window.addEventListener('fruitback:extension', wake);
-wake();
+window.addEventListener('fruitback:extension', sync);
+sync();
 ```
 
 Both halves are needed: the event for a page that loaded before the extension announced itself, the
-call for one that loaded after. `wake` is written so a second announcement cannot mount a second
-widget.
+call for one that loaded after. The **same event fires when the extension withdraws**, so `sync`
+reads the property rather than assuming an arrival — and it is written so a second announcement
+cannot mount a second widget.
 
 The reviewer then turns your origin on in the extension's popup, in **Team** mode, and pairs with
 the worker. Until they pair, the extension relays nothing — see

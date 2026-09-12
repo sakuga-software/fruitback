@@ -1,4 +1,11 @@
-import { CHANNEL, type BridgeMessage, type RelayRequestMessage, type RelayResponse, relayRefusal } from './protocol.ts';
+import {
+  CHANNEL,
+  RELAY_ANSWER_TIMEOUT_MS,
+  type BridgeMessage,
+  type RelayRequestMessage,
+  type RelayResponse,
+  relayRefusal,
+} from './protocol.ts';
 import type { FruitbackTransport } from '@fruitback/widget';
 
 /**
@@ -18,14 +25,49 @@ export type RelayTransportSeams = {
 };
 
 /**
- * How long a relayed call may take before it is called a failure.
+ * An id for one call, without needing a secure context.
  *
- * **A promise that never settles is the failure this constant exists for.** The composer disables
- * its send button while a submit is in flight, so a relay nobody answers leaves a reviewer looking
- * at a dead button with their note inside it — and losing a written note is the one failure this
- * widget cannot afford. Well past a slow worker on a slow connection, and far short of forever.
+ * **`crypto.randomUUID` is secure-context only, and this script runs on `http://` too** — a staging
+ * site on plain http is exactly the audience, and `registration.ts` registers there. Requiring it
+ * would throw inside every call and leave team mode dead on those pages with nothing in a console
+ * to explain it. `capture.ts` already carries this fallback for the seed id, and the same trap was
+ * walked back into here. Raised in review.
+ *
+ * It only has to be unique among this page's own calls. The page shares the channel and can forge
+ * an answer whatever the id, so there is nothing here for unpredictability to buy.
  */
-export const RELAY_TIMEOUT_MS = 20 * 1_000;
+export function randomId(view: RandomSource): string {
+  const source = view.crypto;
+
+  if (typeof source?.randomUUID === 'function') return source.randomUUID().replaceAll('-', '').slice(0, ID_LENGTH);
+
+  if (typeof source?.getRandomValues === 'function') {
+    return [...source.getRandomValues(new Uint8Array(ID_LENGTH / 2))]
+      .map((byte) => byte.toString(16).padStart(2, '0'))
+      .join('');
+  }
+
+  // `Math.random().toString(16)` is not a fixed-width string — `0.5` prints as `0.8` — so the digits
+  // are padded and accumulated rather than sliced out of one draw. Same shape as `capture.ts`.
+  let hex = '';
+  while (hex.length < ID_LENGTH) {
+    hex += Math.floor(Math.random() * 0x1_0000)
+      .toString(16)
+      .padStart(4, '0');
+  }
+
+  return hex.slice(0, ID_LENGTH);
+}
+
+export type RandomSource = {
+  crypto?: {
+    randomUUID?: () => string;
+    getRandomValues?: (array: Uint8Array<ArrayBuffer>) => Uint8Array<ArrayBuffer>;
+  };
+};
+
+/** Sixteen hex characters, and the same shape whichever branch above produced it. */
+const ID_LENGTH = 16;
 
 export function createRelayTransport({ post, subscribe, newId, setTimer }: RelayTransportSeams): FruitbackTransport {
   const pending = new Map<string, (response: RelayResponse) => void>();
@@ -49,7 +91,7 @@ export function createRelayTransport({ post, subscribe, newId, setTimer }: Relay
       const cancel = setTimer(() => {
         pending.delete(id);
         resolve(relayRefusal('relay-timeout'));
-      }, RELAY_TIMEOUT_MS);
+      }, RELAY_ANSWER_TIMEOUT_MS);
 
       pending.set(id, (response) => {
         cancel();

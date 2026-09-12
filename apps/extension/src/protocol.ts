@@ -45,6 +45,26 @@ const MAX_BODY_BYTES = 64 * 1_024;
 /** Long enough for a UUID, short enough that a page cannot post a megabyte of it. */
 const MAX_ID_LENGTH = 100;
 
+/**
+ * How long the background lets one relayed call run before it aborts it.
+ *
+ * **The abort is the point, not the deadline.** Without it a worker that accepts a connection and
+ * never answers leaves the request in flight while the page is told the call failed — and a reviewer
+ * told their note failed presses send again, which plants it twice. The worker cannot tell the two
+ * apart (SKG-498 gives a seed its own id, which dedupes a retry of the *same* request, not a second
+ * one). Raised in review.
+ */
+export const RELAY_CALL_TIMEOUT_MS = 20 * 1_000;
+
+/**
+ * How long the page waits for any answer at all.
+ *
+ * Deliberately longer than the call above, so the ordinary slow worker becomes a refusal the
+ * background sends rather than a timeout the page invents. What is left for this one to catch is a
+ * service worker that was stopped mid-call and a channel nobody is on.
+ */
+export const RELAY_ANSWER_TIMEOUT_MS = RELAY_CALL_TIMEOUT_MS + 5 * 1_000;
+
 export type MountMessage = {
   channel: typeof CHANNEL;
   kind: 'mount';

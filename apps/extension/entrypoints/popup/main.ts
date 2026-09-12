@@ -1,5 +1,5 @@
 import { browser } from 'wxt/browser';
-import { isWorkerEndpoint, normalizeWorkerEndpoint, workerOrigin } from '../../src/endpoint.ts';
+import { isSecureWorkerEndpoint, isWorkerEndpoint, normalizeWorkerEndpoint, workerOrigin } from '../../src/endpoint.ts';
 import { BRIDGE_FILE, PAGE_FILE, matchPatternFor, publicPath } from '../../src/registration.ts';
 import { type SiteConfig, type SiteMode, readSite, writeSite } from '../../src/sites.ts';
 import { createBrowserSessions } from '../../src/session-browser.ts';
@@ -115,6 +115,13 @@ async function session(site: SiteConfig): Promise<HTMLElement> {
   const submit = element('button', 'Pair with this worker');
   const problem = element('p', '', 'problem');
 
+  // Pairing spends a code and is handed a refresh token — thirty days of access — so it does not
+  // happen over plain http. Loopback excepted: that is the dev loop. Raised in review.
+  if (!isSecureWorkerEndpoint(endpoint)) {
+    submit.disabled = true;
+    problem.textContent = 'Pairing needs https (localhost excepted): a session must not cross http.';
+  }
+
   submit.addEventListener('click', () => {
     const value = code.input.value.trim();
     problem.textContent = value === '' ? 'The pairing code is required.' : '';
@@ -193,7 +200,18 @@ function form(origin: string, site?: SiteConfig): HTMLElement {
     if (problem.textContent !== '') return;
 
     // `enabled` is kept: changing the endpoint of a site that is switched off must not switch it on.
-    void turnOn(origin, siteFrom(values, site?.enabled ?? true));
+    const next = siteFrom(values, site?.enabled ?? true);
+
+    // And a site that stays off must not ask for access or run anything. `turnOn` requests the host
+    // permission and injects both scripts into the open tab, neither of which belongs to saving an
+    // entry nobody has switched on. Raised in review.
+    if (!next.enabled) {
+      void writeSite(origin, next).then(() => render());
+
+      return;
+    }
+
+    void turnOn(origin, next);
   });
 
   const wrapper = document.createElement('div');
@@ -207,6 +225,11 @@ export function complaint(values: { mode: SiteMode; endpoint: string; clientId: 
   if (values.endpoint === '') return 'The worker endpoint is required.';
   if (!isWorkerEndpoint(values.endpoint)) return 'The endpoint must be a full http:// or https:// URL.';
   if (values.mode === 'private' && values.clientId === '') return 'The client id is required.';
+  // Team mode cannot work without a session, and a session may not be opened over plain http — so
+  // this entry would be stored, shown as **On**, and refuse every call. Say it here instead.
+  if (values.mode === 'team' && !isSecureWorkerEndpoint(values.endpoint)) {
+    return 'A team-mode worker must be on https (localhost excepted).';
+  }
 
   return '';
 }

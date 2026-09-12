@@ -2,7 +2,14 @@ import { browser } from 'wxt/browser';
 import { readAll, readSite } from '../src/sites.ts';
 import { matchPatternFor, serialize, syncRegistration } from '../src/registration.ts';
 import { SESSIONS_KEY, createBrowserSessions } from '../src/session-browser.ts';
-import { REFUSED_STATUS, type RelayRequest, type RelayResponse, parseBridgeMessage } from '../src/protocol.ts';
+import {
+  REFUSED_STATUS,
+  RELAY_CALL_TIMEOUT_MS,
+  type RelayRequest,
+  type RelayResponse,
+  parseBridgeMessage,
+  relayRefusal,
+} from '../src/protocol.ts';
 import { createRelay } from '../src/relay.ts';
 
 /** Named once: the alarm is created, cleared and answered in three different places. */
@@ -104,13 +111,17 @@ export default defineBackground(() => {
     const parsed = parseBridgeMessage(message);
     if (parsed?.kind !== 'relay-request') return false;
 
-    void relay(parsed.request, senderOrigin(sender)).then((response) => {
-      // The only place a refusal is ever readable. The widget treats it as an unreachable worker, so
-      // without this a reviewer whose session has expired sees a page with no pins and no reason.
-      if (response.status === REFUSED_STATUS) console.warn('[fruitback] the relay refused a call:', response.body);
+    void relay(parsed.request, senderOrigin(sender))
+      // `createRelay` answers rather than rejects, and this is the backstop for the case it cannot
+      // reach — the runtime message must be answered, or the page waits out its whole deadline.
+      .catch(() => relayRefusal('extension-unavailable'))
+      .then((response) => {
+        // The only place a refusal is ever readable. The widget treats it as an unreachable worker, so
+        // without this a reviewer whose session has expired sees a page with no pins and no reason.
+        if (response.status === REFUSED_STATUS) console.warn('[fruitback] the relay refused a call:', response.body);
 
-      sendResponse(response);
-    });
+        sendResponse(response);
+      });
 
     // The answer comes later, and returning `false` here would close the channel before it does.
     return true;
@@ -161,12 +172,18 @@ function senderOrigin(sender: { origin?: string; url?: string }): string | undef
  * `credentials: 'omit'` because the token in the headers is the only authority this call carries.
  * A cookie the reviewer happens to hold on the worker's domain is not something the page asking for
  * this relay should be able to spend.
+ *
+ * A rejection — an abort included — is caught by `createRelay`, which turns it into a refusal.
  */
 async function send(request: RelayRequest): Promise<RelayResponse> {
   const response = await fetch(request.url, {
     method: request.method,
     headers: request.headers,
     credentials: 'omit',
+    // Aborted rather than merely given up on. A worker that accepts the connection and never answers
+    // would otherwise keep this request in flight while the page is told the call failed — and a
+    // reviewer told their note failed presses send again, which plants it twice. Raised in review.
+    signal: AbortSignal.timeout(RELAY_CALL_TIMEOUT_MS),
     ...(request.body !== undefined ? { body: request.body } : {}),
   });
 

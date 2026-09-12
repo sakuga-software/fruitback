@@ -10,13 +10,18 @@ import type { FruitbackTransport } from '@fruitback/widget';
  * against the other: the property is there for a site that looks after the announcement, the event
  * for one that looked before it. A site reads the property in both cases.
  *
+ * **The event fires again when the property goes away** — the reviewer switched this site off, or to
+ * private mode. Nothing here can destroy a widget the site owns, so the site is told and destroys
+ * its own. One event, read the property, act on what it says:
+ *
  * ```js
- * const mount = () => {
+ * const sync = () => {
  *   const extension = window.fruitbackExtension;
- *   if (extension !== undefined) init({ endpoint, clientId, transport: extension.transport });
+ *   if (extension === undefined) return destroyMyWidget();
+ *   if (notMountedYet()) mountWith(extension.transport);
  * };
- * window.addEventListener('fruitback:extension', mount);
- * mount();
+ * window.addEventListener('fruitback:extension', sync);
+ * sync();
  * ```
  */
 export const EXTENSION_GLOBAL = 'fruitbackExtension';

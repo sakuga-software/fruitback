@@ -177,11 +177,18 @@ than it accepts. It sends nothing unless all of the following are true:
 | The path | is `/feedback`, the one path the widget calls |
 | The headers | are rebuilt: `Content-Type` may come from the page, `Authorization` never does |
 | The session | is open for that endpoint — with no session there is no call at all |
+| The scheme | is `https`, or loopback. A bearer token does not cross a plain `http://` connection |
 
 The endpoint check is the one that matters. A reviewer holds a session per worker, so a page allowed
 to name its own endpoint could ask for a call to a *different* worker that reviewer has paired with,
 and be answered with their credential for it. Binding the endpoint to the stored entry for that
 origin is what closes it, and it is why team mode still needs an entry in the popup.
+
+**Pairing is refused on an insecure endpoint too**, and that is the larger of the two: a pairing code
+is spent for a refresh token worth thirty days, so neither may travel in the clear. `http://localhost`
+is excepted, because it is the development loop and is not on a wire. The private mode's mount is
+deliberately **not** held to this rule — it carries no credential at all, and an http staging worker
+that works today has nothing to leak.
 
 Refusing when there is no session is deliberate, not an oversight. Relaying without the header would
 work on a worker left at `read: 'public'` — the pins would appear, and nothing would tell the

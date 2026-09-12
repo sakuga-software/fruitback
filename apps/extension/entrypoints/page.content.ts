@@ -1,6 +1,6 @@
 import { init } from '@fruitback/widget';
 import { CHANNEL, type BridgeMessage, parseBridgeMessage } from '../src/protocol.ts';
-import { createRelayTransport } from '../src/relay-transport.ts';
+import { createRelayTransport, randomId } from '../src/relay-transport.ts';
 import {
   EXTENSION_API_VERSION,
   EXTENSION_EVENT,
@@ -52,7 +52,7 @@ export default defineContentScript({
         // comes back with is attached in the background, so nothing secret travels here.
         post: (message) => window.postMessage(message, '*'),
         subscribe: (listener) => relayListeners.push(listener),
-        newId: () => crypto.randomUUID(),
+        newId: () => randomId(window),
         setTimer: (run, delayMs) => {
           const timer = setTimeout(run, delayMs);
 
@@ -70,8 +70,20 @@ export default defineContentScript({
       window.dispatchEvent(new CustomEvent(EXTENSION_EVENT));
     };
 
+    /**
+     * Taken back, and said out loud.
+     *
+     * In team mode the widget belongs to the site, so nothing here can destroy it. Without this
+     * event a reviewer who switches the site off — or to private mode — leaves the site's widget on
+     * screen with a transport every call is now refused for: stale pins, and a composer that fails
+     * silently. The site is told and destroys its own, which is the same event it mounted on.
+     * Raised in review.
+     */
     const withdraw = (): void => {
-      if (window[EXTENSION_GLOBAL] === api) delete window[EXTENSION_GLOBAL];
+      if (window[EXTENSION_GLOBAL] !== api) return;
+
+      delete window[EXTENSION_GLOBAL];
+      window.dispatchEvent(new CustomEvent(EXTENSION_EVENT));
     };
 
     window.addEventListener('message', (event: MessageEvent) => {

@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { createRelayTransport } from './relay-transport.ts';
+import { createRelayTransport, randomId } from './relay-transport.ts';
 import {
   CHANNEL,
   type BridgeMessage,
@@ -132,5 +132,35 @@ describe('createRelayTransport', () => {
     await call;
 
     assert.equal(timers[0]?.cancelled, true);
+  });
+});
+
+/**
+ * `crypto.randomUUID` is secure-context only and this runs on `http://` staging sites too, so the
+ * branch that matters is the one a test on a modern machine would never take. Each is exercised by
+ * handing `randomId` a source that has only what that branch needs.
+ */
+describe('randomId', () => {
+  const sources = {
+    randomUUID: { crypto: { randomUUID: () => '9f8b7c6d-1111-2222-3333-444455556666' } },
+    'getRandomValues, on an http page': {
+      crypto: { getRandomValues: (array: Uint8Array<ArrayBuffer>) => array.map((_, index) => index * 7) },
+    },
+    'no crypto at all': {},
+  };
+
+  for (const [name, source] of Object.entries(sources)) {
+    it(`builds an id from ${name}`, () => {
+      const id = randomId(source);
+
+      assert.equal(id.length, 16, `${name} produced ${JSON.stringify(id)}`);
+      assert.match(id, /^[0-9a-f]{16}$/, `${name} produced ${JSON.stringify(id)}`);
+    });
+  }
+
+  it('does not hand two calls the same id', () => {
+    const ids = new Set(Array.from({ length: 200 }, () => randomId(globalThis)));
+
+    assert.equal(ids.size, 200);
   });
 });
