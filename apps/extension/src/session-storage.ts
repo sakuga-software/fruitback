@@ -9,7 +9,7 @@
  * worker could write another worker's entry back, and a logout in the popup did not stick.
  */
 
-import type { Area } from './session.ts';
+import { type Area, parseAccessGrant, parseStoredSession } from './session.ts';
 
 /** The prefix of a key, per area. An endpoint is appended verbatim. */
 export const SESSION_PREFIX = 'fruitback:session:';
@@ -18,7 +18,7 @@ export const GRANT_PREFIX = 'fruitback:grant:';
 /**
  * The keys that held every endpoint at once, before SKG-602.
  *
- * `migrationOf` is the only thing that reads them, and it removes them. They are exported because
+ * `splitLegacyRecord` is the only thing that reads one, and it removes it. They are exported because
  * the test that covers the upgrade has to write one.
  */
 export const LEGACY_SESSIONS_KEY = 'sessions';
@@ -50,8 +50,14 @@ function endpointOf(prefix: string, key: string): string | undefined {
   return key.startsWith(prefix) ? key.slice(prefix.length) : undefined;
 }
 
-/** Whether a set of `storage.onChanged` keys holds a session. One key per endpoint, so it is a scan. */
-export function touchesASession(keys: string[]): boolean {
+/**
+ * Whether a set of `storage.onChanged` keys holds a refresh token. One key per endpoint, so it is a
+ * scan rather than a lookup.
+ *
+ * **Grants are deliberately out.** The listener watches `local`, and a grant lives in `session`; a
+ * reader who later widens that listener to both areas has to widen this too.
+ */
+export function touchesARefreshToken(keys: string[]): boolean {
   return keys.some((key) => key.startsWith(SESSION_PREFIX));
 }
 
@@ -106,6 +112,28 @@ export function createArea<T>(
 }
 
 /**
+ * The upgrade of both areas, as one promise for every `Area` over them to wait on.
+ *
+ * **A failure is not swallowed, and the gate stays shut.** Releasing it would let every operation
+ * run against storage still holding the legacy record: a read answers that the reviewer is paired
+ * with nobody while a live credential sits under the old key, and a `drop` removes a key that was
+ * never written. A rejection leaves the popup showing the site row with no session block under it,
+ * which is the loud half of the same fact, and the next time the context starts it tries again.
+ */
+export function upgradeAreas(local: StorageArea, session: StorageArea): Promise<void> {
+  const upgrade = Promise.all([
+    splitLegacyRecord(local, LEGACY_SESSIONS_KEY, SESSION_PREFIX, parseStoredSession),
+    splitLegacyRecord(session, LEGACY_GRANTS_KEY, GRANT_PREFIX, parseAccessGrant),
+  ]).then(() => undefined);
+
+  // Nothing awaits this before an operation does, and an unhandled rejection stops a service worker.
+  // The handler marks it seen; `upgrade` itself still rejects for whoever waits on it.
+  upgrade.catch(() => undefined);
+
+  return upgrade;
+}
+
+/**
  * The upgrade of one area, read and written.
  *
  * **The write lands before the removal**, so a failure between them leaves the credentials under the
@@ -128,17 +156,11 @@ export async function splitLegacyRecord<T>(
   await of.remove(legacyKey);
 }
 
-type Migration = {
-  write: Record<string, unknown>;
-  remove: string;
-};
-
 /**
  * The upgrade from the one legacy record to one key per endpoint, from a single snapshot.
  *
  * Returns nothing when there is no legacy record, which is every run after the first. Otherwise the
- * caller writes `write`, then removes `remove` — in that order, so a failure between them leaves the
- * credentials readable by the next attempt rather than gone.
+ * caller writes `write` and then removes the legacy key, in that order.
  *
  * **An endpoint that already has its own key is left alone.** The popup and the background both run
  * this at startup, and the other one may have finished first and had a newer value written over it
@@ -152,12 +174,12 @@ type Migration = {
  * so it is narrowed and stated rather than closed — the same limit as the generation marker in
  * `session.ts`.
  */
-export function migrationOf<T>(
+function migrationOf<T>(
   snapshot: Record<string, unknown>,
   legacyKey: string,
   prefix: string,
   parse: (value: unknown) => T | undefined,
-): Migration | undefined {
+): { write: Record<string, unknown> } | undefined {
   const legacy = snapshot[legacyKey];
   if (legacy === undefined) return undefined;
 
@@ -172,7 +194,7 @@ export function migrationOf<T>(
     }
   }
 
-  return { write, remove: legacyKey };
+  return { write };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

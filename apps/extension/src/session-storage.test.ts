@@ -10,7 +10,8 @@ import {
   entriesOf,
   keyFor,
   splitLegacyRecord,
-  touchesASession,
+  upgradeAreas,
+  touchesARefreshToken,
 } from './session-storage.ts';
 import { type StoredSession, parseAccessGrant, parseStoredSession } from './session.ts';
 
@@ -77,10 +78,10 @@ describe('one key per endpoint', () => {
     assert.deepEqual(entriesOf(snapshot, SESSION_PREFIX, parseStoredSession), { [ENDPOINT]: SESSION });
   });
 
-  it('tells a session key from every other key the area changes', () => {
-    assert.equal(touchesASession([keyFor(SESSION_PREFIX, ENDPOINT)]), true);
-    assert.equal(touchesASession(['sites', LEGACY_SESSIONS_KEY]), false);
-    assert.equal(touchesASession([keyFor(GRANT_PREFIX, ENDPOINT)]), false);
+  it('tells a refresh token from every other key the area changes', () => {
+    assert.equal(touchesARefreshToken([keyFor(SESSION_PREFIX, ENDPOINT)]), true);
+    assert.equal(touchesARefreshToken(['sites', LEGACY_SESSIONS_KEY]), false);
+    assert.equal(touchesARefreshToken([keyFor(GRANT_PREFIX, ENDPOINT)]), false);
   });
 });
 
@@ -232,5 +233,38 @@ describe('an area waits for its own upgrade', () => {
     const [entries] = await Promise.all([sessions.read(), ready]);
 
     assert.deepEqual(entries, { [ENDPOINT]: SESSION });
+  });
+});
+
+describe('an upgrade that could not run', () => {
+  /**
+   * The gate stays shut, and every operation says so.
+   *
+   * Releasing it on a failure would be the quiet half of the same fact: a read answers that the
+   * reviewer is paired with nobody while a live credential sits under the legacy key, and a logout
+   * removes a key that was never written. A rejection is the loud half, and the next time the
+   * context starts it tries again.
+   */
+  it('refuses to answer rather than answering that there is no session', async () => {
+    const store = storage({ [LEGACY_SESSIONS_KEY]: { [ENDPOINT]: SESSION } });
+    const broken: StorageArea = { ...store.area, get: async () => Promise.reject(new Error('unreadable')) };
+    const ready = upgradeAreas(broken, storage().area);
+    const sessions = createArea(() => broken, SESSION_PREFIX, parseStoredSession, ready);
+
+    await assert.rejects(ready);
+    await assert.rejects(sessions.read());
+    await assert.rejects(sessions.drop(ENDPOINT));
+    assert.deepEqual(store.read(), { [LEGACY_SESSIONS_KEY]: { [ENDPOINT]: SESSION } });
+  });
+
+  it('upgrades both areas, and the grants area is not the one that survives a restart', async () => {
+    const grant = { accessToken: 'access.1', expiresAt: 1_700_000_600_000, identity: IDENTITY, generation: 'gen.1' };
+    const local = storage({ [LEGACY_SESSIONS_KEY]: { [ENDPOINT]: SESSION } });
+    const session = storage({ [LEGACY_GRANTS_KEY]: { [ENDPOINT]: grant } });
+
+    await upgradeAreas(local.area, session.area);
+
+    assert.deepEqual(local.read(), { [keyFor(SESSION_PREFIX, ENDPOINT)]: SESSION });
+    assert.deepEqual(session.read(), { [keyFor(GRANT_PREFIX, ENDPOINT)]: grant });
   });
 });

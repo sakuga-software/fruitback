@@ -298,6 +298,12 @@ then removes the legacy key. The order is the guarantee: a failure between the t
 credentials readable by the next attempt rather than gone, and the way back from gone is an operator
 minting a new pairing code.
 
+**A failure keeps the gate shut.** The first version swallowed it, which released every operation
+against storage still holding the legacy record: a read then says the reviewer is paired with nobody
+while a live credential sits under the old key, and a `drop` removes a key that was never written.
+That is the quiet half of the failure. Rejecting is the loud half — the popup shows the site row with
+no session block — and the next time the context starts it tries again. Raised by the advisor.
+
 Both contexts run it at startup, which is why an endpoint that already has its own key is skipped —
 the other context may have finished first and had a refresh land since. What stays open: the other
 context can hold a snapshot, a logout can remove the new key, and the upgrade can then write the

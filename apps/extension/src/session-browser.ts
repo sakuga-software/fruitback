@@ -1,12 +1,5 @@
 import { browser } from 'wxt/browser';
-import {
-  GRANT_PREFIX,
-  LEGACY_GRANTS_KEY,
-  LEGACY_SESSIONS_KEY,
-  SESSION_PREFIX,
-  createArea,
-  splitLegacyRecord,
-} from './session-storage.ts';
+import { GRANT_PREFIX, SESSION_PREFIX, createArea, upgradeAreas } from './session-storage.ts';
 import {
   type AccessGrant,
   type Area,
@@ -52,24 +45,6 @@ function sessionArea(ready: Promise<void>): Area<AccessGrant> {
 }
 
 /**
- * The upgrade to one key per endpoint (SKG-602), once per context.
- *
- * It reads both areas, because a browser that was upgraded without closing still holds the legacy
- * grants record — and a grant left under a key nothing reads any more costs one needless refresh per
- * worker, with nothing anywhere to say why.
- *
- * A failure is swallowed on purpose. Storage that cannot be read is not a reason for the background
- * to stop registering content scripts, and the next startup tries again; the credentials are still
- * under the legacy key until the removal lands.
- */
-async function migrate(): Promise<void> {
-  await Promise.all([
-    splitLegacyRecord(browser.storage.local, LEGACY_SESSIONS_KEY, SESSION_PREFIX, parseStoredSession),
-    splitLegacyRecord(browser.storage.session, LEGACY_GRANTS_KEY, GRANT_PREFIX, parseAccessGrant),
-  ]).catch(() => undefined);
-}
-
-/**
  * The three session routes, over `fetch`.
  *
  * The routes are exempt from the worker's origin allowlist (SKG-535) and answer a
@@ -100,7 +75,7 @@ async function postJson(url: string, body: Record<string, unknown>): Promise<Ses
 }
 
 export function createBrowserSessions(): Sessions {
-  const ready = migrate();
+  const ready = upgradeAreas(browser.storage.local, browser.storage.session);
 
   return createSessions({ sessions: localArea(ready), grants: sessionArea(ready), post: postJson });
 }

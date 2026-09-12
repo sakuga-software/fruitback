@@ -680,8 +680,14 @@ and *The team mode, and the call the page cannot make*:
   `get(null)` snapshot, writes only the endpoints with no key of their own, then removes the legacy
   key — in that order, so a failure between the two leaves the credentials readable rather than gone.
   A `drop` that did not wait would remove a key not written yet and the upgrade would put the session
-  back: **a logout that does not stick**, the defect the ticket is named after. `session-storage.ts`
-  holds all of it so `node --test` reaches it; `session-browser.ts` only binds `browser`.
+  back: **a logout that does not stick**, the defect the ticket is named after.
+- **An upgrade that fails keeps the gate shut**, so every operation rejects. Releasing it is the
+  quiet half of the same fact: a read answers that the reviewer is paired with nobody while a live
+  credential sits under the legacy key. `upgradeAreas` marks its own rejection seen — an unhandled
+  one stops a service worker — and still rejects for whoever waits on it.
+- **`session-storage.ts` holds the keys, the `Area` factory and the upgrade, behind a `StorageArea`
+  seam**, so `node --test` reaches all of it. `session-browser.ts` is left binding `browser` and
+  `fetch`. Same split as `bridge.ts`.
 - **One refresh in flight per endpoint** (`refreshOnce` in the extension's `session.ts`). Two callers
   spending the same token is a lockout, not a wasted request: the worker treats the second as a
   retry inside the grace, revokes the first successor, and whichever `keep()` lands last can leave
