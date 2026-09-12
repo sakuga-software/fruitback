@@ -16,13 +16,24 @@ const ENDPOINT = 'https://worker.test';
 const IDENTITY = { subject: 'u_1', name: 'Alex' };
 const NOW = 1_700_000_000_000;
 
-/** One storage area, in memory. Two of these is the whole point: they are emptied by different events. */
-function area<T>(entries: Record<string, T> = {}): Area<T> {
+/**
+ * One storage area, in memory. Two of these is the whole point: they are emptied by different events.
+ *
+ * `set` is not part of `Area`. It is how a case arranges storage behind the subject's back, which is
+ * what the whole-record `write` used to be good for.
+ */
+function area<T>(entries: Record<string, T> = {}): Area<T> & { set(next: Record<string, T>): void } {
   let state: Record<string, T> = { ...entries };
 
   return {
     read: async () => ({ ...state }),
-    write: async (next) => {
+    put: async (endpoint, value) => {
+      state[endpoint] = value;
+    },
+    drop: async (endpoint) => {
+      delete state[endpoint];
+    },
+    set: (next) => {
       state = { ...next };
     },
   };
@@ -276,21 +287,23 @@ describe('keeping an access token fresh', () => {
   /**
    * Two endpoints refreshing at once must not write each other's tokens away.
    *
-   * One storage key holds every endpoint, and `write` replaces the whole key — so a read-modify-write
-   * for one worker can land on a snapshot taken before another's write and put a **spent** token
-   * back. The next refresh then presents a token the worker has already rotated, which is the replay
-   * signal: the chain is revoked and the reviewer pairs again.
+   * **This passes for a structural reason since SKG-602, not for a serialised one.** A write names
+   * the endpoint it touches, so a refresh for one worker cannot reach another's entry at all. Before
+   * that, one key held every endpoint and a write replaced it whole: a read-modify-write for one
+   * worker landed on a snapshot taken before another's write and put a **spent** token back. The
+   * next refresh presented a token the worker had already rotated, which is the replay signal — the
+   * chain revoked and the reviewer pairing again. A queue in `session.ts` held that inside one
+   * context; it did not reach the popup, and it is gone.
    *
    * `refreshOnce` does not cover this and is not meant to: it is per endpoint, and
    * `lets two workers refresh at the same time` asserts that on purpose. That test is what makes
    * this reachable, and rotation is what made it likely — before it, `keep` ran only on the rare
-   * answer that carried a new token. Raised in review.
+   * answer that carried a new token. Raised in review on SKG-600.
    *
    * The interleaving is not forced with a gate, and the first attempt to do so deadlocked the moment
    * the fix landed — the gate waited for two writes at once, which is exactly what the fix prevents.
    * A test that cannot pass against correct code is not a test. Each write simply yields a few
-   * microtasks instead: unserialised, both reads land before either write and the later one wins;
-   * serialised, they run in order and yielding changes nothing.
+   * microtasks instead, which is what lets a wrong implementation lose the race.
    */
   it('does not restore a spent token when another endpoint refreshes at the same time', async () => {
     const other = 'https://other.test';
@@ -300,10 +313,11 @@ describe('keeping an access token fresh', () => {
     });
     const sessions: Area<StoredSession> = {
       read: backing.read,
-      async write(next) {
+      drop: backing.drop,
+      async put(endpoint, value) {
         for (let tick = 0; tick < 4; tick += 1) await Promise.resolve();
 
-        await backing.write(next);
+        await backing.put(endpoint, value);
       },
     };
 
@@ -333,9 +347,9 @@ describe('keeping an access token fresh', () => {
    * an orphan over cleared storage — and freshness alone accepted it for its remaining ten minutes,
    * which revoking on the worker does not reach. Raised in review.
    *
-   * The two writes are one queue entry now, which narrows it; the marker is what closes it. Built
-   * here by hand rather than by racing two instances, because the state is what matters and a race
-   * that has to be won to fail is a flaky test.
+   * The marker is what closes it: the two writes are not one operation and cannot be. Built here by
+   * hand rather than by racing two instances, because the state is what matters and a race that has
+   * to be won to fail is a flaky test.
    */
   it('refuses an access token minted for a session that is no longer there', async () => {
     const { subject, sessions, grants, remote } = setup({
@@ -473,8 +487,8 @@ describe('a session that ends while a refresh is in the air', () => {
     const { sessions, grants, sent, release, refreshing } = refreshInFlight(issued({ refreshToken: 'refresh.2' }));
 
     await sent;
-    await sessions.write({});
-    await grants.write({});
+    sessions.set({});
+    grants.set({});
     release();
 
     assert.deepEqual(await refreshing, { ok: false, reason: 'not-paired' });
@@ -493,7 +507,7 @@ describe('a session that ends while a refresh is in the air', () => {
     const repaired = { refreshToken: 'refresh.2', identity: IDENTITY };
 
     await sent;
-    await sessions.write({ [ENDPOINT]: repaired });
+    sessions.set({ [ENDPOINT]: repaired });
     release();
 
     assert.deepEqual(await refreshing, { ok: false, reason: 'not-paired' });

@@ -489,10 +489,11 @@ SKG-596; both are built. Which one an origin is in is one field on its entry, an
   in the popup that warns first, so a session stored before the rule cannot keep spending its token
   over the wire. `isWorkerEndpoint` is **not** tightened: it gates the private mode's mount, which
   carries no credential.
-- **`postJson` bounds its own request, and the reason is `serialize`.** The refresh chain runs one
-  promise after the last, so a worker that accepts a connection and never answers wedges every later
-  refresh for **every** worker, not just its own. Found by looking for the other half of a review
-  finding about the relay's fetch.
+- **`postJson` bounds its own request.** `refreshOnce` holds the in-flight promise so a second
+  caller joins it rather than spending the token twice, so a worker that accepts a connection and
+  never answers leaves that endpoint unable to refresh for the life of the service worker. Found by
+  looking for the other half of a review finding about the relay's fetch. Until SKG-602 one queue
+  chained every storage write, and the same hang stopped **every** worker.
 - **Only a `401` ends a session.** An outage or a `502` keeps the refresh token: throwing it away on
   a network blip logs a reviewer out of a session the worker still considers open, and the only way
   back is an operator minting a new pairing code. For the same reason a `429` on `/session/pair`
@@ -659,16 +660,28 @@ and *The team mode, and the call the page cannot make*:
   not enough: the popup and the background write the same two areas from separate contexts, so a
   logout can land between a refresh writing the session and the same refresh writing its grant, and
   the orphan was then honoured for its remaining ten minutes — which revoking on the worker does not
-  reach. The two writes are one queue entry now, and the marker is what closes what the queue only
-  narrows. It is an opaque id, never the refresh token: copying a credential into the session area
+  reach. The marker is what closes it — the two writes are not one operation and cannot be, because
+  `chrome.storage` has no transaction. It is an opaque id, never the refresh token: copying a
+  credential into the session area
   would undo the split that keeps it out. Absent on both sides compares equal, so an upgrade keeps
   the session it had.
-- **Both storage areas keep every endpoint under one key, and a write replaces that key whole.** So
-  every read-modify-write on them goes through one queue (`serialized`). Two refreshes for different
-  workers otherwise each read the record and each replace it, and the later write puts the earlier
-  one's **spent** token back — whose next refresh is a replay, so the worker revokes the chain and
-  the reviewer pairs again. `refreshOnce` is per endpoint and cannot cover this; it is what makes two
-  workers refresh in parallel in the first place.
+- **One storage key per endpoint, in both areas** (SKG-602). `fruitback:session:<endpoint>` and
+  `fruitback:grant:<endpoint>`, and `Area` has `put`/`drop` rather than a whole-record `write`. One
+  key holding every endpoint made every write a read-modify-write, and the popup and the background
+  do not share a lock: two refreshes each read the record and each replaced it, so the later write
+  put the earlier one's **spent** token back — a replay, so the worker revokes the chain and the
+  reviewer pairs again. A logout in the popup was written away the same way. `refreshOnce` is per
+  endpoint and cannot cover this; it is what makes two workers refresh in parallel in the first
+  place. A queue in `session.ts` held it inside one context only, and it is gone.
+- **The key is the prefix with the endpoint appended, and the endpoint is recovered by `slice`.** An
+  endpoint is a URL a reviewer typed, so `https://a.test/x:session:y` is legal and splitting on the
+  separator files the entry under a worker nobody is paired with.
+- **The upgrade runs once per context and everything waits on it.** `splitLegacyRecord` takes one
+  `get(null)` snapshot, writes only the endpoints with no key of their own, then removes the legacy
+  key — in that order, so a failure between the two leaves the credentials readable rather than gone.
+  A `drop` that did not wait would remove a key not written yet and the upgrade would put the session
+  back: **a logout that does not stick**, the defect the ticket is named after. `session-storage.ts`
+  holds all of it so `node --test` reaches it; `session-browser.ts` only binds `browser`.
 - **One refresh in flight per endpoint** (`refreshOnce` in the extension's `session.ts`). Two callers
   spending the same token is a lockout, not a wasted request: the worker treats the second as a
   retry inside the grace, revokes the first successor, and whichever `keep()` lands last can leave

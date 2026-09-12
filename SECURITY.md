@@ -213,6 +213,11 @@ Since SKG-599 the extension holds its half of that, and **where** matters as muc
 | Refresh token | `chrome.storage.local`, in the reviewer's browser profile — it survives a restart |
 | Access token | `chrome.storage.session`, which the browser empties when it closes |
 
+**Each endpoint has its own storage key** (SKG-602). One key holding every worker made the popup and
+the background write over each other: a refresh could put a credential back after a logout cleared
+it, so a session a reviewer had ended stayed usable until it expired. Logging out now removes the
+key it names, and nothing else writes it.
+
 Neither is readable from a reviewed page. Both stay inside the extension's **trusted contexts** — the
 background service worker, which refreshes, and the popup, which pairs and logs out.
 `chrome.storage.session` keeps its default access level, which excludes content scripts, and nothing

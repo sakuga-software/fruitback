@@ -1,7 +1,8 @@
 import { browser } from 'wxt/browser';
 import { readAll, readSite } from '../src/sites.ts';
 import { matchPatternFor, serialize, syncRegistration } from '../src/registration.ts';
-import { SESSIONS_KEY, createBrowserSessions } from '../src/session-browser.ts';
+import { createBrowserSessions } from '../src/session-browser.ts';
+import { touchesASession } from '../src/session-storage.ts';
 import {
   REFUSED_STATUS,
   RELAY_CALL_TIMEOUT_MS,
@@ -135,7 +136,7 @@ export default defineBackground(() => {
     // A pairing or a logout from the popup, and this run's own write — the worker rotates on every
     // refresh (SKG-600), so every refresh stores a new token here. That re-entry settles at once:
     // the second run finds the token fresh, refreshes nothing and only re-arms the alarm.
-    if (changes[SESSIONS_KEY] !== undefined) void refreshSessions();
+    if (touchesASession(Object.keys(changes))) void refreshSessions();
   });
   browser.permissions.onRemoved.addListener(() => void sync());
   browser.alarms.onAlarm.addListener((alarm) => {

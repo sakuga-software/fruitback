@@ -15,6 +15,15 @@ import { type PairFailure, describeIdentity } from '../../src/session.ts';
  * a second, and a bundle for it would be larger than everything it renders.
  */
 
+/**
+ * One for the whole popup, not one per render.
+ *
+ * Building it runs the upgrade to one key per endpoint (SKG-602), and `render` runs again after
+ * every pairing, logout and site change. Two of these also hold separate in-flight refresh maps, so
+ * they can each spend the same refresh token.
+ */
+const sessions = createBrowserSessions();
+
 const app = document.querySelector('#app');
 
 void render();
@@ -89,7 +98,6 @@ async function grantWorkerOrigin(endpoint: string): Promise<boolean> {
  */
 async function session(site: SiteConfig): Promise<HTMLElement> {
   const endpoint = site.endpoint;
-  const sessions = createBrowserSessions();
   const held = (await sessions.list())[endpoint];
   const wrapper = document.createElement('div');
   wrapper.className = 'session';
