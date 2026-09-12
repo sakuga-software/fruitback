@@ -67,15 +67,19 @@ answers exist, and [docs/modes.md](docs/modes.md) is the page that picks between
 | Delivered as | `<script>` tag or npm | a browser extension | `<script>` tag or npm |
 | Published | **not yet** — build it from this repo | **not yet** — load it unpacked | **not yet** — both of the above |
 | Who is **shown** the pins | every visitor | the reviewer who switched the site on | reviewers who are signed in |
-| Who can **fetch** them | anyone | anyone | nobody, under `authenticated` |
+| Who can fetch them **with no credential** | anyone | anyone | nobody, under `authenticated` |
+| Who supplies the credential | the host's backend, or nobody | **nobody can** | the reviewer, by pairing |
 | Good for | a public "report a problem" | reviewing a client's site, invisibly | a team reviewing its own staging |
 | Built | **yes** | **yes**, MV3 on Chromium and Firefox | **yes** |
 
-**Only team mode protects a read, and only with `FRUITBACK_READ=authenticated`.** There the calls go
-through the extension with the reviewer's session attached, and the worker answers `401` to everyone
-else — `curl` included. Public and private mode both call the worker straight from the page with no
-credential: private mode changes who is *shown* the feedback, never who may *fetch* it, so treat
-those notes as readable by anyone who can build the URL. The four lines a team-mode site adds are in
+**Who may read is `FRUITBACK_READ`, and the mode decides who can satisfy it.** A public-mode site can
+run `read: 'authenticated'` if it mints identity tokens of its own — `init({ identityToken })` is the
+seam, and the credential then lives in that site's page. **Team mode is the only one where the
+reviewer supplies it and the page never holds it**, attached in the extension's background. **Private
+mode can supply nothing at all**: the widget it mounts has no token and no relay, so on an
+`authenticated` worker its reads answer `401`, and left at the `public` default its pins are readable
+by anyone who can build the URL — it changes who is *shown* the feedback, never who may *fetch* it.
+[docs/modes.md](docs/modes.md) is the page that lays this out. The four lines a team-mode site adds are in
 [docs/install.md](docs/install.md#team-mode-dormant-until-a-reviewer-arrives); what the relay
 refuses is in [SECURITY.md](SECURITY.md#what-the-extension-relays-and-what-it-refuses-to).
 

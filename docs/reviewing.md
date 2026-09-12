@@ -47,8 +47,11 @@ declares its own. Either row carries **Turn off here** and **Change**.
 A grant reaches the **next** page load, so the popup injects into the tab you have open. Come back to
 the page and the widget is there.
 
-The endpoint must be `https`, or loopback for the dev loop. That rule is the worker's and the
-popup's: a session is a bearer credential and it does not cross plain `http`.
+**A team-mode endpoint must be `https`, or loopback for the dev loop** — a session is a bearer
+credential and it does not cross plain `http`, so the popup refuses the entry rather than storing one
+that would be shown as **On** and refuse every call. **Private mode accepts plain `http://`**, and
+that is deliberate: the widget it mounts carries no credential, so there is nothing on the wire to
+protect, and an `http://` staging site is exactly the thing this mode is for.
 
 ## 3. Pair, in team mode
 

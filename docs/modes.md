@@ -9,36 +9,51 @@ three answers, and picking one is the only decision this page asks for.
 | Delivered as | `<script>` tag or npm | a browser extension | `<script>` tag or npm |
 | What wakes it | nothing, it is there | the extension's popup | the extension announcing itself |
 | Who sees pins **on the page** | every visitor | the reviewer who switched the site on | reviewers who are signed in |
-| Who can read them **with `curl`** | anyone | anyone | nobody, under `authenticated` |
-| The reporter is | anonymous or self-declared | self-declared | **verified**, by the session |
+| Who can fetch them, **unauthenticated** | anyone | anyone | nobody, under `authenticated` |
+| Who supplies the credential | the host's own backend, or nobody | **nobody can** | the reviewer, by pairing |
+| The reporter is | anonymous, or verified by the host's token | self-declared | **verified**, by the session |
 | Good for | a public "report a problem" | reviewing a client's site, invisibly | a team reviewing its own staging |
 
-The last two rows are the ones worth reading twice, and the next section is why.
+Those middle rows are the ones worth reading twice, and the next section is why.
 
-## Only team mode protects a read
+## Who may read is `read`, and the mode decides who can satisfy it
 
-**Public and private mode both call the worker straight from the page, with no credential.** In
-private mode the extension mounts the widget, so a visitor of that site sees nothing — but the pins
-are the same pins, on the same open read path, and anybody who can build
-`GET /feedback?url=…&client=…` gets them. Private mode changes **who is shown** the feedback, never
-**who may fetch** it.
+**Access is not the mode.** `FRUITBACK_READ`, or `read` on one client, is what decides whether a read
+needs a credential; it is `public` by default, and under `authenticated` every read wants an HS256
+identity token. What the three modes differ on is **who can produce one**.
 
-Team mode is the one that changes the second. The site's widget is handed the extension's transport,
-every call is made from the extension's background with the reviewer's access token attached, and the
-worker set to `FRUITBACK_READ=authenticated` answers `401` to everyone else — `curl` included. That
-is the whole of its security value, and it is worth saying the other way round too: **team mode on a
-worker left at the `public` default buys a tidier page and nothing more.**
+- **Public mode can, if the host mints them.** `init({ identityToken })` is a function the embedding
+  site supplies, and the widget sends what it returns on reads as well as writes. A site with its own
+  login can therefore run `read: 'authenticated'` and get verified reporters — the credential is
+  minted by that site's backend and lives in its page's JavaScript.
+- **Private mode cannot.** The extension mounts the widget with no `identityToken` and no transport,
+  so it has nothing to attach and the site embeds nothing that could supply one. On an `authenticated`
+  worker those reads answer `401`, and the reviewer gets a page with no pins and no reason
+  (SKG-605). Left at the `public` default, the pins are the same pins on the same open path: private
+  mode changes **who is shown** the feedback, never **who may fetch** it.
+- **Team mode is the only one where the reviewer supplies it, and the only one that keeps it out of
+  the page.** The site's widget is handed the extension's transport, and the token is attached in the
+  background — the page never holds it, and the host mints nothing. Which is also worth saying the
+  other way round: **team mode on a worker left at the `public` default buys a tidier page and
+  nothing more.**
+
+A credential is a credential in every mode: somebody holding a valid token reads that worker with
+`curl` too. That is what the token is for. The row above is about the callers who have none.
 
 So:
 
 - pins nobody minds being read → **public**, and the simplest of the three;
+- a site with its own login, and notes only its users should see → **public** with
+  `read: 'authenticated'` and an `identityToken`;
 - a client's staging you must not ask them to deploy to → **private**, and treat the notes as
-  readable;
-- your own product, and the notes are internal → **team**, with `FRUITBACK_READ=authenticated`.
+  readable by anyone who can build the URL;
+- your own product, notes internal, and nobody wants to mint tokens → **team**, with
+  `FRUITBACK_READ=authenticated`.
 
-A private-mode reviewer cannot be verified either: verification comes from the session the extension
+A private-mode reviewer is not verified either: verification comes from the session the extension
 holds, and only the relay carries it. Their name and address on a note are self-declared, exactly as
-in public mode — `reporter.verified` is the worker's word and it withholds it.
+in a public-mode site that supplies no token — `reporter.verified` is the worker's word and it
+withholds it.
 
 ## Private mode is not going away
 
@@ -65,8 +80,14 @@ client-side JavaScript. One container — [self-hosting.md](self-hosting.md).
 
 `FRUITBACK_READ=authenticated` under private mode is worth spelling out: the widget the extension
 mounts sends no token, so the read answers `401` and the reviewer gets a page with no pins and no
-reason — the same screen as a worker that is down (SKG-605). If a worker serves both a private-mode
-client and a team-mode one, set `read` per client in `FRUITBACK_CLIENTS` rather than worker-wide.
+reason — the same screen as a worker that is down (SKG-605).
+
+**And one worker cannot serve team mode and a client map at the same time.** `FRUITBACK_SESSION_PATH`
+alongside `FRUITBACK_CLIENTS` is refused at boot: a session signs its access token with the
+worker-wide key, and a mapped worker ignores that key because each client brings its own — so pairing
+would work, the reviewer would look signed in, and every read would answer `401`. A worker that holds
+sessions is therefore single-tenant today, and its `read` is worker-wide. If you need a private-mode
+client beside a team-mode one, that is two workers, or a worker left at `public`.
 
 ## `showComments` is an editorial switch, not an access control
 

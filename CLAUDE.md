@@ -19,10 +19,13 @@ Coming back to the page, they see their pins again, coloured by that issue's sta
 **public**, where the site embeds the widget and every visitor can leave a note; **private**, where
 the site embeds nothing and the extension mounts the widget for one reviewer; **team**, where the
 site embeds a dormant widget the extension wakes and relays for. [docs/modes.md](docs/modes.md) is
-the page that names them for a reader, and the one thing to carry from it here: **only team mode
-protects a read.** Public and private both call the worker straight from the page with **no
-credential**, so private mode changes who is *shown* the feedback and never who may *fetch* it —
-writing otherwise is the overclaim this repo keeps having to walk back. The three-mode split is a
+the page that names them for a reader, and the one thing to carry from it here: **who may read is
+`read`, and the mode decides who can satisfy it.** Public mode can run `authenticated` when the host
+mints its own tokens (`init({ identityToken })`, sent on reads since SKG-533); team mode is the only
+one where the **reviewer** supplies the credential and the page never holds it; **private mode can
+supply neither**, so it changes who is *shown* the feedback and never who may *fetch* it. Writing
+"only team mode protects a read" is the overclaim in the other direction, and it shipped in this
+file for one review round. The three-mode split is a
 naming decision, not a third code path: what differs lives in the assembly layer, and
 `packages/widget` does not know which one it is in.
 

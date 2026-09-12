@@ -70,6 +70,10 @@ const clientSchema = z.object({
    * answers `401` without one. It needs this client's `identitySecret`; a client asking for it
    * without one is refused at boot rather than left permanently unreadable.
    *
+   * Team mode is what `authenticated` was built for, and it does not require it: the relay works
+   * against a `public` worker too, and buys a tidier page rather than a protected read. The
+   * dependency runs the other way — `authenticated` is what makes team mode worth turning on.
+   *
    * **This is the closest thing to a mode, and there is deliberately no `mode` field beside it**
    * (SKG-539). A client's mode is decided in the reviewer's browser — one field on the site's entry
    * in the extension — and the worker cannot observe it: a private-mode read and a public-mode read

@@ -31,8 +31,16 @@ describe('the guide quotes the popup this extension renders', () => {
     .map((match) => match[1] ?? '')
     .filter((message) => message !== '');
 
-  /** Every mode label the popup offers, by the tuple it builds its options from. */
-  const modes = [...popup.matchAll(/\['(?:private|team)', '([^']+)'\]/g)].map((match) => match[1] ?? '');
+  /**
+   * Every mode label the popup offers, out of the block that builds the options.
+   *
+   * **Matched by the tuple's shape and not by the two keys that exist today.** Naming `private|team`
+   * here left a third mode outside both this list and the count below, so the guide could omit its
+   * label with the suite green — a detector that passes while guarding less than it says. Raised in
+   * review.
+   */
+  const options = /function modeField[\s\S]*?\[([\s\S]*?)\]\) \{/.exec(popup)?.[1] ?? '';
+  const modes = [...options.matchAll(/\['[a-z-]+', '([^']+)'\]/g)].map((match) => match[1] ?? '');
 
   /**
    * A guard over an empty extraction passes. Say so here rather than discover it after a rewrite —
@@ -40,7 +48,15 @@ describe('the guide quotes the popup this extension renders', () => {
    */
   it('finds the strings it is written to guard', () => {
     assert.equal(problems.length, 4, `read ${problems.length} pairing failures out of the popup`);
-    assert.equal(modes.length, 2, `read ${modes.length} mode labels out of the popup`);
+    assert.ok(options !== '', 'the options block of modeField was not found; this guard reads nothing');
+    // Counted against the `SiteMode` union rather than against a number written here, so a third
+    // mode raises the bar instead of slipping under it.
+    const declared = (
+      /export type SiteMode = ([^;]+);/.exec(
+        readFileSync(fileURLToPath(new URL('./sites.ts', import.meta.url)), 'utf8'),
+      )?.[1] ?? ''
+    ).split('|').length;
+    assert.equal(modes.length, declared, `the popup offers ${modes.length} of the ${declared} modes SiteMode declares`);
   });
 
   it('names every way pairing can fail', () => {
