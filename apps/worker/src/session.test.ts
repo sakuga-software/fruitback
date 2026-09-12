@@ -391,6 +391,26 @@ describe('rotation', () => {
     assert.equal((await refreshSession(store, lost.refreshToken, SECRET)).ok, false);
   });
 
+  /**
+   * And rejecting that orphan takes nothing else with it.
+   *
+   * A revoked token that never rotated is `gone`, with no chain revocation: it is the answer to a
+   * credential that was only ever in flight, and whoever presents it learns nothing. Revoking the
+   * chain here instead would hand a caller who intercepted one lost answer the power to end the
+   * session whenever they chose. Raised in review, which asked for the opposite.
+   */
+  it('leaves the live branch alone when the orphan is presented', async () => {
+    const { store, token } = await opened();
+    const lost = await refreshSession(store, token, SECRET);
+    assert.ok(lost.ok);
+    const kept = await refreshSession(store, token, SECRET);
+    assert.ok(kept.ok);
+
+    assert.equal((await refreshSession(store, lost.refreshToken, SECRET)).ok, false);
+
+    assert.ok((await refreshSession(store, kept.refreshToken, SECRET)).ok, 'the orphan took the live token with it');
+  });
+
   it('retires the old token the moment the new one is used', async () => {
     const { store, token } = await opened();
     const first = await refreshSession(store, token, SECRET);
@@ -506,6 +526,25 @@ describe('rotation', () => {
     assert.equal((await refreshSession(store, successor.refreshToken, SECRET)).ok, false);
   });
 
+  /**
+   * The other direction, and the half the first fix missed.
+   *
+   * A rotation does not revoke the token it rotated — only that token's successor being *used*
+   * retires it. So after `A -> B` the client holds B while A is live and rotated, and a logout with
+   * B left A usable for the rest of its grace. Whoever copied A presented it and got a fresh
+   * successor: the log out ended nothing. Measured before the fix. Raised in review.
+   */
+  it('ends a chain from any link, including the token nobody is holding', async () => {
+    const { store, token } = await opened();
+    const successor = await refreshSession(store, token, SECRET);
+    assert.ok(successor.ok);
+
+    assert.equal(await revokeSession(store, successor.refreshToken), true);
+
+    const copy = await refreshSession(store, token, SECRET);
+    assert.equal(copy.ok, false, 'a copy of the predecessor outlived the log out');
+  });
+
   /** And the boolean still describes the row it was handed, so a second log out reads as nothing live. */
   it('answers false on a token already revoked, whatever the chain did', async () => {
     const { store, token } = await opened();
@@ -530,6 +569,36 @@ describe('rotation', () => {
     const third = await refreshSession(store, second.refreshToken, SECRET, at + 2_000);
 
     assert.ok(third.ok, 'retiring the predecessor took the successor that retired it');
+  });
+
+  /**
+   * What the grace costs, measured and kept rather than described.
+   *
+   * Inside it, the token has two possible holders and the worker cannot tell them apart. Whoever
+   * presents first is served, and the grace branch revokes every descendant — so the other one is
+   * holding a revoked token and is logged out. When a thief wins that race they keep the live chain
+   * and the reviewer is the one who has to pair again.
+   *
+   * This is the opposite of the replay case, where the successor has already been used and both
+   * parties lose. `SECURITY.md` says so, because the first version of it claimed this outcome was
+   * the one rotation prevents. Raised in review.
+   *
+   * Delete `revokeDescendants` from the grace branch and this test tells you what you changed.
+   */
+  it('serves whoever presents first inside the grace, and locks the other one out', async () => {
+    const { store, token } = await opened();
+    const held = await refreshSession(store, token, SECRET);
+    assert.ok(held.ok);
+
+    const other = await refreshSession(store, token, SECRET);
+
+    assert.ok(other.ok, 'the second presenter is served, because nothing distinguishes it from a retry');
+    assert.equal(
+      (await refreshSession(store, held.refreshToken, SECRET)).ok,
+      false,
+      'the first successor stays live, so both holders keep a working session',
+    );
+    assert.ok((await refreshSession(store, other.refreshToken, SECRET)).ok, 'the winner keeps the chain');
   });
 
   /**

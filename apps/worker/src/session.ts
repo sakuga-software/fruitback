@@ -121,6 +121,15 @@ export const REFRESH_TTL_SECONDS = 30 * 24 * 60 * 60;
 export const ROTATION_GRACE_SECONDS = 7 * 60;
 
 /**
+ * What that ceiling costs, now that `rotated_at` marks the first rotation and not the last.
+ *
+ * It covers **one** lost answer, exactly rather than approximately. A token spent at T and retried
+ * at T+5 min mints a successor; if that answer is lost too, the next retry at T+10 min is past the
+ * ceiling and the session ends — the reviewer pairs again. Letting the mark slide instead is what
+ * made the window unbounded, so this is the trade and not an oversight.
+ */
+
+/**
  * What a rotation did, and the middle one is the reason this ticket exists.
  *
  * `reused` is a refresh token presented after its successor was already used — the predecessor was
@@ -249,8 +258,13 @@ export async function redeemPairing(
  *
  * **Every refresh rotates.** A refresh token that never changes is a thirty-day password: a copy
  * taken from a browser profile stays good for the rest of that month, and nothing observes the
- * theft. Rotating makes a copy useful only until the real client refreshes again — at most one
- * cycle — and makes the theft *visible*, because the copy's eventual use is the `reused` outcome.
+ * theft.
+ *
+ * Rotating makes the theft *visible* — the copy's eventual use is the `reused` outcome. It does not
+ * cap what the copy is worth, and this comment claimed it did. The token is a bearer credential:
+ * whoever presents it first is served, so a thief who gets in before the real client keeps the chain
+ * and it is the reviewer who pairs again. What is guaranteed is that the two cannot both keep the
+ * session. Raised in review.
  *
  * The successor is minted here rather than in the store, so the code and the session it buys are
  * written by one operation — the same rule `redeemPairing` follows.

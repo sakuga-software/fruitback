@@ -624,11 +624,19 @@ and *The team mode, and the call the page cannot make*:
   row just written is only there. **This is why a rotation cannot answer the same successor twice**,
   and it is what shaped SKG-600.
 - **Every refresh rotates** (SKG-600). A refresh token that never changes is a thirty-day password.
-  What retires a predecessor is its **successor being used** — proof the client received it — not a
-  clock; `ROTATION_GRACE_SECONDS` is only the ceiling for an answer that was lost, and it is derived
-  from the extension's `REFRESH_MARGIN_MS + RETRY_DELAY_MS` by a test that reads them. A token
-  presented after its successor was used is a copy: the **whole chain** is revoked, and the caller
-  gets the same `401` as for a token that never existed.
+  What retires a predecessor is its **successor being used** — proof the *token holder* received it,
+  never proof of which holder, because a bearer token cannot say — not a clock.
+  `ROTATION_GRACE_SECONDS` is the ceiling for an answer that was lost, measured from the **first**
+  rotation, and derived from the extension's `REFRESH_MARGIN_MS + RETRY_DELAY_MS` by a test that
+  reads them. Inside it the predecessor may be presented repeatedly; each retry replaces the
+  successor nobody received, so one successor is live at a time. A token presented after its
+  successor was used is a copy: the **whole chain** is revoked, and the caller gets the same `401`
+  as for a token that never existed.
+- **Rotation is a detection property, not a lifetime cap.** Do not write that a stolen token is
+  useful for "at most one cycle" — three places said so and none was true. Whoever presents a bearer
+  token first is served: a thief who gets in before the reviewer keeps the chain, and the reviewer is
+  the one who pairs again. What is guaranteed is that the two cannot both keep the session quietly.
+  `serves whoever presents first inside the grace, and locks the other one out` holds it.
 - **The successor inherits the predecessor's expiry.** Thirty days from pairing stays thirty days;
   rotation shortens what a leak is worth, it does not lengthen a session.
 - **Revoked *and* rotated is a signal, not a proof, and `revokeSession` ends the chain.** A log out

@@ -168,6 +168,10 @@ both: an access token the host site's JavaScript can read is the worst outcome o
   first successor, and whichever `keep()` lands last decides what the extension holds. If it is the
   first, the extension holds a token the worker revoked; the next refresh answers `401`, the session
   ends, and only an operator minting a new pairing code brings the reviewer back.
+  - The spent token stays good only **until its successor is used, or `ROTATION_GRACE_SECONDS`
+    passes** — whichever comes first. A retry inside the ceiling lands on its feet; one after it is
+    refused and takes the chain with it. Raised in review, because this record described the first
+    half as if it had no second.
   - **What hid it was that half of the path was already serialised.** `background.ts` wraps
     `refreshDue` in `serialize`, so the alarm cannot overlap itself. The relay calls `ensureAccess`
     directly and goes nowhere near it — and the widget has a read and a write in flight in the

@@ -187,6 +187,30 @@ function revoke(database: DatabaseSync, tokenHash: string, now: number): void {
  * `checkRateLimit` caps that at 20 requests a minute per IP. The two calls inside the grace walk
  * one row, not the chain, and `revokeSession` walks it once per logout.
  */
+/**
+ * The oldest token this one descends from, found by walking `predecessor_hash` back.
+ *
+ * A chain branches forward — a grace retry mints a second successor — but never backward: a row
+ * names one predecessor. So this is a straight walk, and `seen` is here for the same reason the
+ * forward walk keeps one, an operator editing the file into a cycle.
+ */
+function rootOf(database: DatabaseSync, tokenHash: string): string {
+  const seen = new Set([tokenHash]);
+  let current = tokenHash;
+
+  for (;;) {
+    const row = database.prepare('SELECT predecessor_hash FROM sessions WHERE token_hash = ?').get(current) as
+      | { predecessor_hash: unknown }
+      | undefined;
+
+    const parent = row?.predecessor_hash;
+    if (typeof parent !== 'string' || seen.has(parent)) return current;
+
+    seen.add(parent);
+    current = parent;
+  }
+}
+
 function revokeDescendants(database: DatabaseSync, tokenHash: string, now: number): void {
   const seen = new Set([tokenHash]);
   const queue = [tokenHash];
@@ -406,17 +430,26 @@ export function createSqliteSessionStore(path: string): SessionStore {
     },
 
     /**
-     * Ends the session, and a session is the whole chain (SKG-600).
+     * Ends the session, and a session is the whole chain — in both directions (SKG-600).
      *
-     * Revoking the presented row alone was enough before rotation. It is not now: a refresh whose
-     * answer was lost leaves storage holding a token that has already issued a successor, and a
-     * logout with it would revoke that token while its successor stayed live for the rest of the
-     * thirty days, held by nobody and revocable by nobody. Raised in review.
+     * Revoking the presented row alone was enough before rotation. It is not now, and the first fix
+     * for it only covered half the chain. Both halves were raised in review, one round apart:
+     *
+     * - **Forward.** A refresh whose answer was lost leaves storage holding a token that has already
+     *   issued a successor. A logout with it revoked that token and left the successor live for the
+     *   rest of the thirty days, held by nobody and revocable by nobody.
+     * - **Backward.** A rotation does not revoke the token it rotated — only that token's successor
+     *   *being used* retires it. So after `A -> B` the client holds B and A is live and rotated, and
+     *   a logout with B left A usable inside its grace: whoever copied A presented it and got a
+     *   fresh successor. The log out ended nothing. Measured before it was fixed.
+     *
+     * So the walk starts at the **root**, not at the token presented. Any link ends the session.
      *
      * The answer stays derived from the presented row's own update. A logout on an already revoked
-     * token must keep reading as "there was nothing live here" even when a descendant did change.
+     * token must keep reading as "there was nothing live here" even when another row did change.
      *
-     * The walk's cost is the one described above `revokeDescendants`, and this is its second caller.
+     * The walk's cost is the one described above `revokeDescendants`, plus one indexed lookup per
+     * link on the way up.
      */
     async revokeSession(tokenHash, now) {
       const database = connect(path);
@@ -427,7 +460,9 @@ export function createSqliteSessionStore(path: string): SessionStore {
           .prepare('UPDATE sessions SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL')
           .run(now, tokenHash);
 
-        revokeDescendants(database, tokenHash, now);
+        const root = rootOf(database, tokenHash);
+        revoke(database, root, now);
+        revokeDescendants(database, root, now);
         database.exec('COMMIT');
 
         return revoked.changes === 1;

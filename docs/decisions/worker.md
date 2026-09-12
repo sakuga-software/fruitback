@@ -322,8 +322,11 @@ connector's environment, and what a second connector with no markdown body actua
 
 ### What the tests hold, and one they could not
 
-- **Revocation is mutation-tested.** Dropping `revoked_at IS NULL` from `findSession` fails exactly
-  `revokes on the worker, so the refresh token stops working everywhere`.
+- **Revocation is mutation-tested.** `findSession` is gone since SKG-600 — every read of a session
+  rotates it, so there is no lookup beside `rotateSession`. Dropping `revoked_at IS NULL` from
+  `revoke` still fails `revokes on the worker, so the refresh token stops working everywhere`, and
+  dropping the chain walk from `revokeSession` fails `ends the whole chain on log out, not only the
+  token it was handed` and `ends a chain from any link, including the token nobody is holding`.
 - **The CORS exemption is mutation-tested.** Replacing `openCors` with the ordinary `resolveCors`
   fails both `answers an extension origin that is on no allowlist` and `lets the preflight through`,
   while `leaves the allowlist in force on /feedback` stays green — which is what says the exemption
@@ -359,8 +362,14 @@ everything. That belongs with team mode (SKG-596), where a request carries a cli
 
 A refresh token that never changes is a thirty-day password. A copy taken from a browser profile
 stays good for the rest of that month, and nothing observes the theft. Rotating on every refresh
-makes the copy useful for at most one cycle, and — this is the half that matters more — makes its
-use **visible**.
+makes its use **visible**.
+
+It does **not** make the copy useful for at most one cycle, which is what this paragraph said until a
+reviewer read it properly. A refresh token is a bearer credential and whoever presents it is served:
+a thief who gets in before the real client receives the successor and goes on refreshing, while the
+client's own token is revoked under it. Measured, and kept as a test — `serves whoever presents first
+inside the grace, and locks the other one out`. What rotation guarantees is that the two cannot both
+keep the session quietly, which is a detection property and not a lifetime one.
 
 ### The ticket asked for a replay window. Two measurements said no.
 
