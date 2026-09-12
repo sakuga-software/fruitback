@@ -85,7 +85,10 @@ otherwise and no prompt ever appears.
 
 **Log out** revokes the session on the worker first, then clears both tokens here. The refresh token
 is dead and the chain with it, so nothing can be renewed. The access token already minted is not
-reachable by a revoke, and it expires on its own within 10 minutes — that is the one window.
+reachable by a revoke — nothing checks a list when one is presented — and it stops working on its
+own. That window is the token's **11 minutes**: its 10 minutes of life, plus the 60 seconds of clock
+skew the verifier allows past the moment it expires. Raised in review, which counted the lifetime
+and found the document counting one minute less than the code.
 
 If the worker cannot be reached, the tokens are cleared here anyway. A screen saying signed out over
 a credential this extension still holds would be the worse of the two, and the token on the worker

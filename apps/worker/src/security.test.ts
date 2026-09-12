@@ -83,9 +83,19 @@ describe('the reviewer guide states the lifetimes the worker issues', () => {
     assert.ok(REVIEWING.includes(phrase), `docs/reviewing.md does not say a pairing code expires ${phrase}`);
   });
 
-  it('says how long an access token outlives a log out', () => {
-    const phrase = `within ${ACCESS_TTL_SECONDS / 60} minutes`;
-    assert.ok(REVIEWING.includes(phrase), `docs/reviewing.md does not say the access token expires ${phrase}`);
+  /**
+   * **The lifetime is not the window.** `verifyIdentityToken` accepts a token until
+   * `exp + CLOCK_SKEW_SECONDS`, so what outlives a log out is the sum — and the first version of this
+   * assertion derived it from `ACCESS_TTL_SECONDS` alone, which let the guide say one minute less
+   * than the code does. `SECURITY.md` had it right all along. Raised in review.
+   */
+  it('says how long an access token outlives a log out, skew included', () => {
+    const window = (ACCESS_TTL_SECONDS + Number(constantIn(IDENTITY, 'CLOCK_SKEW_SECONDS'))) / 60;
+    const phrase = `**${window} minutes**`;
+    assert.ok(
+      REVIEWING.includes(phrase),
+      `docs/reviewing.md does not say the access token outlives a log out ${phrase}`,
+    );
   });
 
   it('says how long a refresh token the revoke never reached stays alive', () => {
