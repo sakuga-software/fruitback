@@ -301,6 +301,26 @@ describe('an upgrade that could not run', () => {
   });
 });
 
+describe('the storage the tests run against', () => {
+  /**
+   * The fixture is a fake of `chrome.storage`, and a fake that answers more than the real thing
+   * validates whatever is written against it next. Nothing reads by key today; this is what a reader
+   * that starts to would land on.
+   */
+  it('answers a keyed read with that key and nothing else', async () => {
+    const held = storage({ [keyFor(SESSION_PREFIX, ENDPOINT)]: SESSION, sites: {} });
+
+    assert.deepEqual(await held.area.get(keyFor(SESSION_PREFIX, ENDPOINT)), {
+      [keyFor(SESSION_PREFIX, ENDPOINT)]: SESSION,
+    });
+    assert.deepEqual(await held.area.get('nothing is under this'), {});
+    assert.deepEqual(Object.keys((await held.area.get(null)) as Record<string, unknown>).sort(), [
+      keyFor(SESSION_PREFIX, ENDPOINT),
+      'sites',
+    ]);
+  });
+});
+
 describe('the epoch that ends a run of a session', () => {
   const OTHER = 'https://other.test';
 

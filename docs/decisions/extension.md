@@ -410,6 +410,12 @@ through, so every session read back from real storage was stamped with nothing a
 `Area` answers with what a test put into it and never parses, so the whole suite stayed green while
 nothing worked: pairing, on real storage, signed the reviewer straight back out.
 
+**A fake that answers more than the real thing validates whatever is written against it next.** The
+storage fixture returned the whole area for a keyed `get` as well as for `get(null)`. Nothing reads
+by key — a key per endpoint leaves no one key to ask for — so it hid nothing yet, and the first
+keyed reader written against it would have passed whatever key it asked for. It answers by key now,
+and a test pins that. Raised in review, and it is the same lesson as the paragraph above.
+
 The interleavings are arranged by holding one storage write open — the only place the two contexts
 can be ordered against each other, since they share nothing else. Thirteen mutations were run and
 each fails a test: the ten rules this ticket adds, including the two that only say *when* something

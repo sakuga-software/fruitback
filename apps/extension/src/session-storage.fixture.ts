@@ -20,10 +20,17 @@ export function storage(initial: Record<string, unknown> = {}): FakeStorage {
   const log: string[] = [];
 
   const area: StorageArea = {
+    // A keyed read answers with that key and nothing else, the way `chrome.storage` does. Nothing
+    // reads by key today — every read here is `get(null)`, because a key per endpoint leaves no one
+    // key to ask for — so a fixture that answered with the whole area would validate the first
+    // keyed reader ever written. This ticket has already paid for a fake that answered differently
+    // from the real thing: `parseStoredSession` dropped the epoch and no fake `Area` could see it.
+    // Raised in review.
     get: async (keys) => {
       log.push(`get ${keys ?? 'all'}`);
+      if (keys === null) return { ...state };
 
-      return { ...state };
+      return Object.hasOwn(state, keys) ? { [keys]: state[keys] } : {};
     },
     set: async (items) => {
       log.push(`set ${Object.keys(items).join(',')}`);
