@@ -470,7 +470,10 @@ SKG-596; both are built. Which one an origin is in is one field on its entry, an
   repository's recurring defect (SKG-518) waiting to happen, so the permission is asked for rather
   than relied on. **It must be requested before anything is awaited in the click handler**, like
   `turnOn`: a gesture is lost across an await and the prompt never appears.
-- **A refresh writes nothing back once the refresh token in storage is no longer the one it spent.**
+- **A refresh writes nothing back once the refresh token in storage is no longer the one it spent**,
+  and the check shares **one read** with the write (`keepIfCurrent`). Checking first and calling
+  `keep` after read storage twice and wrote a third time, so a logout landing anywhere across those
+  three put a working credential back under a screen saying signed out. No write, no grant either.
   The popup and the background are separate contexts sharing only storage, so a logout can land while
   an alarm is awaiting `/session/refresh` — and the answer used to put a working access token back
   under a screen saying signed out. The token is its own generation marker; `chrome.storage` has no
@@ -621,7 +624,64 @@ and *The team mode, and the call the page cannot make*:
   the extension with no change at all.
 - **Pairing codes and refresh tokens are stored as SHA-256 digests.** A copy of the file must not be
   a set of working logins. A test reads the bytes SQLite wrote — the `-wal` file included, because a
-  row just written is only there.
+  row just written is only there. **This is why a rotation cannot answer the same successor twice**,
+  and it is what shaped SKG-600.
+- **Every refresh rotates** (SKG-600). A refresh token that never changes is a thirty-day password.
+  What retires a predecessor is its **successor being used** — proof the *token holder* received it,
+  never proof of which holder, because a bearer token cannot say — not a clock.
+  `ROTATION_GRACE_SECONDS` is the ceiling for an answer that was lost, measured from the **first**
+  rotation, and derived from the extension's `REFRESH_MARGIN_MS + RETRY_DELAY_MS` by a test that
+  reads them. Inside it the predecessor may be presented repeatedly; each retry replaces the
+  successor nobody received, so one successor is live at a time. A token presented after its
+  successor was used is a copy: the **whole chain** is revoked, and the caller gets the same `401`
+  as for a token that never existed.
+- **Rotation is a detection property, not a lifetime cap.** Do not write that a stolen token is
+  useful for "at most one cycle" — three places said so and none was true. Whoever presents a bearer
+  token is served, and inside the grace each presentation revokes the successor the one before it
+  minted — so the **last** presenter keeps the chain and every earlier holder is locked out. Write
+  *last*, not *first*: the inverted version shipped into three documents and a test name. What is
+  guaranteed is only that the two cannot both keep the session quietly.
+  `serves whoever presents last inside the grace, until the earlier holder comes back` holds it.
+- **The successor inherits the predecessor's expiry.** Thirty days from pairing stays thirty days;
+  rotation shortens what a leak is worth, it does not lengthen a session.
+- **The replay test is the chain, not the row**, and `revokeSession` ends the chain. A revoked
+  token presented while something in its chain is still live means two parties hold one chain: that
+  is the signal, and everything goes. A chain with nothing live left is an ended session and answers
+  `gone`. The earlier test — revoked *and* rotated — missed the case where a thief has the client's
+  own successor revoked under it inside the grace, which left the thief refreshing for thirty days.
+  The trade is that intercepting one answer in flight now ends the session at will; that capability
+  already subsumes the attack. And a log out that revoked only the row it was handed left the
+  successor of a lost-answer token live, held by nobody.
+- **`rotated_at` marks the first rotation, never the last.** `AND rotated_at IS NULL` on that update
+  is the grace being a ceiling: rewritten on every retry it slides, and whoever holds the token
+  re-presents it just inside each window for ever.
+- **An access token carries the generation of the session it was minted for** (`matches`). Fresh is
+  not enough: the popup and the background write the same two areas from separate contexts, so a
+  logout can land between a refresh writing the session and the same refresh writing its grant, and
+  the orphan was then honoured for its remaining ten minutes — which revoking on the worker does not
+  reach. The two writes are one queue entry now, and the marker is what closes what the queue only
+  narrows. It is an opaque id, never the refresh token: copying a credential into the session area
+  would undo the split that keeps it out. Absent on both sides compares equal, so an upgrade keeps
+  the session it had.
+- **Both storage areas keep every endpoint under one key, and a write replaces that key whole.** So
+  every read-modify-write on them goes through one queue (`serialized`). Two refreshes for different
+  workers otherwise each read the record and each replace it, and the later write puts the earlier
+  one's **spent** token back — whose next refresh is a replay, so the worker revokes the chain and
+  the reviewer pairs again. `refreshOnce` is per endpoint and cannot cover this; it is what makes two
+  workers refresh in parallel in the first place.
+- **One refresh in flight per endpoint** (`refreshOnce` in the extension's `session.ts`). Two callers
+  spending the same token is a lockout, not a wasted request: the worker treats the second as a
+  retry inside the grace, revokes the first successor, and whichever `keep()` lands last can leave
+  the extension holding a revoked token. `background.ts` serialises the **alarm** only — the relay
+  calls `ensureAccess` directly, and the widget has a read and a write in flight in the ordinary
+  case. The lock is in `session.ts` and not the entrypoint, for the reason `bridge.ts` gives.
+- **A `200` from `/session/refresh` with no `refreshToken` is not a success.** Taking it leaves a
+  spent token in storage under a working access token, and the session dies when the grace runs out
+  with nothing to explain it. Both call sites require the field; `parseIssued` stays tolerant.
+- **`app.ts` builds the refresh answer field by field, so `refreshToken` has to be named there.**
+  Leaving it out is what the route would do by default: the rotation works, the store holds the
+  successor, and the client keeps sending a token the worker retired. `tsc` cannot see it and the
+  extension's tests cannot either — they fake the worker. `session-routes.test.ts` asserts the body.
 - **Minting a code is a command, not a route** (`node server.mjs pair --subject …`, and
   `server.mjs` because the image copies the bundle and no source). An endpoint
   would need an admin credential of its own and would stay reachable for ever; a command is reachable

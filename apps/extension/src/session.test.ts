@@ -59,11 +59,26 @@ function setup(options: {
   const grants = area<AccessGrant>({ ...options.grants });
   const remote = worker(options.answers ?? []);
 
+  // Deterministic, so a test can assert the stored shape. Production mints a random one.
+  let minted = 0;
+  const newGeneration = () => {
+    minted += 1;
+
+    return `gen.${minted}`;
+  };
+
   return {
     sessions,
     grants,
     remote,
-    subject: createSessions({ sessions, grants, post: remote.post, now: () => options.now ?? NOW }),
+    newGeneration,
+    subject: createSessions({
+      sessions,
+      grants,
+      newGeneration,
+      post: remote.post,
+      now: () => options.now ?? NOW,
+    }),
   };
 }
 
@@ -80,9 +95,11 @@ describe('pairing', () => {
     const result = await subject.pair(ENDPOINT, 'ABCD-EFGH-JKMN');
 
     assert.deepEqual(result, { ok: true, identity: IDENTITY });
-    assert.deepEqual(await sessions.read(), { [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } });
+    assert.deepEqual(await sessions.read(), {
+      [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY, generation: 'gen.1' },
+    });
     assert.deepEqual(await grants.read(), {
-      [ENDPOINT]: { accessToken: 'access.1', expiresAt: NOW + 600_000, identity: IDENTITY },
+      [ENDPOINT]: { accessToken: 'access.1', expiresAt: NOW + 600_000, identity: IDENTITY, generation: 'gen.1' },
     });
   });
 
@@ -142,7 +159,7 @@ describe('keeping an access token fresh', () => {
       grants: {
         [ENDPOINT]: { accessToken: 'old', expiresAt: NOW + REFRESH_MARGIN_MS - 1_000, identity: IDENTITY },
       },
-      answers: [{ status: 200, body: issued({ accessToken: 'access.2' }) }],
+      answers: [{ status: 200, body: issued({ accessToken: 'access.2', refreshToken: 'refresh.2' }) }],
     });
 
     const result = await subject.ensureAccess(ENDPOINT);
@@ -207,7 +224,186 @@ describe('keeping an access token fresh', () => {
 
     await subject.ensureAccess(ENDPOINT);
 
-    assert.deepEqual(await sessions.read(), { [ENDPOINT]: { refreshToken: 'refresh.2', identity: IDENTITY } });
+    assert.deepEqual(await sessions.read(), {
+      [ENDPOINT]: { refreshToken: 'refresh.2', identity: IDENTITY, generation: 'gen.1' },
+    });
+  });
+
+  /**
+   * The lockout rotation created, and the reason it was invisible: `background.ts` serialises the
+   * alarm, and the relay does not go through it. The widget reads and writes at once, so two
+   * `ensureAccess` calls on a stale grant are the ordinary case.
+   *
+   * Both are started before either is awaited. Awaiting the first would pass with or without the
+   * lock, which is the shape of test this guard exists to not be.
+   */
+  it('spends one refresh token when two callers ask at once', async () => {
+    const { subject, remote, sessions } = setup({
+      sessions: { [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } },
+      answers: [{ status: 200, body: issued({ refreshToken: 'refresh.2' }) }],
+    });
+
+    const [first, second] = await Promise.all([subject.ensureAccess(ENDPOINT), subject.ensureAccess(ENDPOINT)]);
+
+    assert.equal(remote.calls.length, 1, 'the same refresh token was spent twice');
+    assert.ok(first.ok);
+    assert.ok(second.ok);
+    assert.deepEqual(first.grant, second.grant);
+    assert.deepEqual(await sessions.read(), {
+      [ENDPOINT]: { refreshToken: 'refresh.2', identity: IDENTITY, generation: 'gen.1' },
+    });
+  });
+
+  /** The lock is per endpoint, not one queue for every worker a reviewer is paired with. */
+  it('lets two workers refresh at the same time', async () => {
+    const other = 'https://other.test';
+    const { subject, remote } = setup({
+      sessions: {
+        [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY },
+        [other]: { refreshToken: 'other.1', identity: IDENTITY },
+      },
+      answers: [
+        { status: 200, body: issued({ refreshToken: 'refresh.2' }) },
+        { status: 200, body: issued({ refreshToken: 'other.2' }) },
+      ],
+    });
+
+    await Promise.all([subject.ensureAccess(ENDPOINT), subject.ensureAccess(other)]);
+
+    assert.equal(remote.calls.length, 2);
+  });
+
+  /**
+   * Two endpoints refreshing at once must not write each other's tokens away.
+   *
+   * One storage key holds every endpoint, and `write` replaces the whole key — so a read-modify-write
+   * for one worker can land on a snapshot taken before another's write and put a **spent** token
+   * back. The next refresh then presents a token the worker has already rotated, which is the replay
+   * signal: the chain is revoked and the reviewer pairs again.
+   *
+   * `refreshOnce` does not cover this and is not meant to: it is per endpoint, and
+   * `lets two workers refresh at the same time` asserts that on purpose. That test is what makes
+   * this reachable, and rotation is what made it likely — before it, `keep` ran only on the rare
+   * answer that carried a new token. Raised in review.
+   *
+   * The interleaving is not forced with a gate, and the first attempt to do so deadlocked the moment
+   * the fix landed — the gate waited for two writes at once, which is exactly what the fix prevents.
+   * A test that cannot pass against correct code is not a test. Each write simply yields a few
+   * microtasks instead: unserialised, both reads land before either write and the later one wins;
+   * serialised, they run in order and yielding changes nothing.
+   */
+  it('does not restore a spent token when another endpoint refreshes at the same time', async () => {
+    const other = 'https://other.test';
+    const backing = area<StoredSession>({
+      [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY },
+      [other]: { refreshToken: 'other.1', identity: IDENTITY },
+    });
+    const sessions: Area<StoredSession> = {
+      read: backing.read,
+      async write(next) {
+        for (let tick = 0; tick < 4; tick += 1) await Promise.resolve();
+
+        await backing.write(next);
+      },
+    };
+
+    const subject = createSessions({
+      sessions,
+      grants: area<AccessGrant>(),
+      now: () => NOW,
+      post: async (url) => ({
+        status: 200,
+        body: issued({ refreshToken: url.startsWith(other) ? 'other.2' : 'refresh.2' }),
+      }),
+    });
+
+    await Promise.all([subject.ensureAccess(ENDPOINT), subject.ensureAccess(other)]);
+
+    assert.partialDeepStrictEqual(await backing.read(), {
+      [ENDPOINT]: { refreshToken: 'refresh.2', identity: IDENTITY },
+      [other]: { refreshToken: 'other.2', identity: IDENTITY },
+    });
+  });
+
+  /**
+   * An access token outlives the session it was minted for, and must not be honoured.
+   *
+   * The popup and the background hold separate `Sessions` over the same two areas, so a logout can
+   * land after a refresh has written the session and before it writes the grant. The grant is then
+   * an orphan over cleared storage — and freshness alone accepted it for its remaining ten minutes,
+   * which revoking on the worker does not reach. Raised in review.
+   *
+   * The two writes are one queue entry now, which narrows it; the marker is what closes it. Built
+   * here by hand rather than by racing two instances, because the state is what matters and a race
+   * that has to be won to fail is a flaky test.
+   */
+  it('refuses an access token minted for a session that is no longer there', async () => {
+    const { subject, sessions, grants, remote } = setup({
+      sessions: { [ENDPOINT]: { refreshToken: 'refresh.2', identity: IDENTITY, generation: 'gen.2' } },
+      grants: {
+        [ENDPOINT]: { accessToken: 'orphan', expiresAt: NOW + 600_000, identity: IDENTITY, generation: 'gen.1' },
+      },
+      answers: [{ status: 200, body: issued({ accessToken: 'access.2', refreshToken: 'refresh.3' }) }],
+    });
+
+    const result = await subject.ensureAccess(ENDPOINT);
+
+    assert.ok(result.ok);
+    assert.equal(result.grant.accessToken, 'access.2', 'the orphan token was handed back');
+    assert.equal(remote.calls.length, 1, 'a stale grant must send the extension back to the worker');
+    assert.deepEqual(await sessions.read(), {
+      [ENDPOINT]: { refreshToken: 'refresh.3', identity: IDENTITY, generation: 'gen.1' },
+    });
+    assert.equal((await grants.read())[ENDPOINT]?.generation, 'gen.1');
+  });
+
+  /** An entry stored before the marker existed keeps working: two absent markers compare equal. */
+  it('honours a grant stored before sessions carried a generation', async () => {
+    const { subject, remote } = setup({
+      sessions: { [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } },
+      grants: { [ENDPOINT]: { accessToken: 'old', expiresAt: NOW + 600_000, identity: IDENTITY } },
+    });
+
+    const result = await subject.ensureAccess(ENDPOINT);
+
+    assert.ok(result.ok);
+    assert.equal(result.grant.accessToken, 'old');
+    assert.equal(remote.calls.length, 0, 'an upgrade signed the reviewer out');
+  });
+
+  /** The lock is released, so the next due refresh is not answered from the last one's promise. */
+  it('refreshes again after the one in flight has settled', async () => {
+    const { subject, remote } = setup({
+      sessions: { [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } },
+      answers: [
+        { status: 200, body: issued({ refreshToken: 'refresh.2', expiresIn: 1 }) },
+        { status: 200, body: issued({ refreshToken: 'refresh.3', expiresIn: 1 }) },
+      ],
+    });
+
+    await subject.ensureAccess(ENDPOINT);
+    await subject.ensureAccess(ENDPOINT);
+
+    assert.equal(remote.calls.length, 2);
+    assert.deepEqual(remote.calls[1]?.body, { refreshToken: 'refresh.2' });
+  });
+
+  /**
+   * A `200` that carries no successor means the worker spent the stored token and the replacement
+   * did not arrive. Taking it would leave a spent token in storage under a working access token,
+   * and the session would die when the grace ran out with nothing to explain it.
+   */
+  it('refuses a refresh that answers without a successor', async () => {
+    const { subject, sessions, grants } = setup({
+      sessions: { [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } },
+      answers: [{ status: 200, body: issued() }],
+    });
+
+    const result = await subject.ensureAccess(ENDPOINT);
+
+    assert.deepEqual(result, { ok: false, reason: 'unavailable' });
+    assert.deepEqual(await sessions.read(), { [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } });
+    assert.deepEqual(await grants.read(), {}, 'a grant was written over a token the worker has spent');
   });
 
   it('refreshes only what is due, across several workers', async () => {
@@ -274,7 +470,7 @@ describe('a session that ends while a refresh is in the air', () => {
    * says signed out, and revoking does not reach a token already minted. Raised in review.
    */
   it('writes nothing back after a logout cleared the session', async () => {
-    const { sessions, grants, sent, release, refreshing } = refreshInFlight(issued());
+    const { sessions, grants, sent, release, refreshing } = refreshInFlight(issued({ refreshToken: 'refresh.2' }));
 
     await sent;
     await sessions.write({});

@@ -110,16 +110,67 @@ describe('POST /session/refresh', () => {
     assert.deepEqual(refreshed.identity, ALICE);
   });
 
-  /** The refresh token is what the extension keeps for weeks. It must never come back in an answer. */
-  it('does not hand the refresh token back', async () => {
+  /**
+   * The answer carries a **new** refresh token, and the route is the half that can silently not
+   * (SKG-600).
+   *
+   * `app.ts` builds this body field by field, so omitting the rotated token is what it would do by
+   * default: the rotation would work perfectly, the store would hold the successor, and the client
+   * would go on sending a token the worker had already retired. `tsc` cannot see that, and the
+   * extension's own tests cannot either — they fake the worker.
+   */
+  it('hands back the rotated refresh token, and it is the one that works next', async () => {
     const env = envWith();
-    const paired = (await (await call(env, '/session/pair', { code: await codeFor(env) })).json()) as {
+    // Its own address: the rate limiter is per process and shared by every test in this file, so a
+    // case that makes several calls would otherwise push a later one into a `429`.
+    const ip = '198.51.100.60';
+    const paired = (await (await call(env, '/session/pair', { code: await codeFor(env) }, 'POST', ip)).json()) as {
       refreshToken: string;
     };
 
-    const body = await (await call(env, '/session/refresh', { refreshToken: paired.refreshToken })).text();
+    const refreshed = (await (
+      await call(env, '/session/refresh', { refreshToken: paired.refreshToken }, 'POST', ip)
+    ).json()) as { refreshToken?: string };
+
+    assert.ok(typeof refreshed.refreshToken === 'string', 'the route dropped the rotated token');
+    assert.notEqual(refreshed.refreshToken, paired.refreshToken);
+    const next = await call(env, '/session/refresh', { refreshToken: refreshed.refreshToken }, 'POST', ip);
+    assert.equal(next.status, 200);
+  });
+
+  /**
+   * The token that was **spent** never comes back, which is what the old version of this test meant
+   * before rotation existed. Echoing it would undo the rotation in the one place a client reads.
+   */
+  it('never echoes the token it was given', async () => {
+    const env = envWith();
+    const ip = '198.51.100.61';
+    const paired = (await (await call(env, '/session/pair', { code: await codeFor(env) }, 'POST', ip)).json()) as {
+      refreshToken: string;
+    };
+
+    const body = await (await call(env, '/session/refresh', { refreshToken: paired.refreshToken }, 'POST', ip)).text();
 
     assert.equal(body.includes(paired.refreshToken), false);
+  });
+
+  /** A token replayed after its successor was used is a copy, and the answer says nothing about it. */
+  it('answers a replayed token the same 401 as one that never existed', async () => {
+    const env = envWith();
+    const ip = '198.51.100.62';
+    const paired = (await (await call(env, '/session/pair', { code: await codeFor(env) }, 'POST', ip)).json()) as {
+      refreshToken: string;
+    };
+    const first = (await (
+      await call(env, '/session/refresh', { refreshToken: paired.refreshToken }, 'POST', ip)
+    ).json()) as { refreshToken: string };
+    await call(env, '/session/refresh', { refreshToken: first.refreshToken }, 'POST', ip);
+
+    const replayed = await call(env, '/session/refresh', { refreshToken: paired.refreshToken }, 'POST', ip);
+    const invented = await call(env, '/session/refresh', { refreshToken: 'invented' }, 'POST', ip);
+
+    assert.equal(replayed.status, 401);
+    assert.deepEqual(await replayed.json(), await invented.json());
   });
 
   it('refuses a token this worker never issued', async () => {

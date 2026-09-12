@@ -225,6 +225,11 @@ async function handleSession(
           200,
           {
             accessToken: refreshed.accessToken,
+            // Every refresh rotates (SKG-600), and this field is the whole of the client's half.
+            // It is named here rather than spread, so leaving it out is what this route would do by
+            // default — the rotation would work perfectly and reach nobody. A test asserts the body
+            // carries it, because `tsc` cannot: the object is built field by field.
+            refreshToken: refreshed.refreshToken,
             expiresIn: refreshed.expiresIn,
             identity: refreshed.identity,
           },

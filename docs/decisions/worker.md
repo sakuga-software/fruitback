@@ -277,10 +277,9 @@ connector's environment, and what a second connector with no markdown body actua
   `identity.ts` already mints and verifies HS256 JWTs, and both request paths already check them. A
   session that mints the same shape adds no second verification path, and `read: 'authenticated'`
   (SKG-533) started accepting the extension with no change to a single line of the read path.
-- **Refusing rotation was a decision, not an omission.** Rotating the refresh token on every use is
-  the stronger design and it needs a replay window: a refresh whose answer is lost to a dropped
-  connection would log the reviewer out with no way back. That window can only be observed from the
-  extension side, so rotation belongs there.
+- **Rotation was refused once, and then built** (SKG-600). It needs a grace for the answer that never
+  arrives, and until SKG-599 there was no client half to measure that against. There is now, and the
+  measurement changed the design — see *Rotation, and the grace that is not a clock* below.
 - **No OAuth, no identity provider, no user table.** Every decision leans on "one administrator, one
   container, no third party". An authentication flow assuming an identity provider makes the project
   unselfhostable in practice, which is the one thing this store was added to avoid.
@@ -323,12 +322,23 @@ connector's environment, and what a second connector with no markdown body actua
 
 ### What the tests hold, and one they could not
 
-- **Revocation is mutation-tested.** Dropping `revoked_at IS NULL` from `findSession` fails exactly
-  `revokes on the worker, so the refresh token stops working everywhere`.
+- **Revocation is mutation-tested.** `findSession` is gone since SKG-600 — every read of a session
+  rotates it, so there is no lookup beside `rotateSession`. Dropping `revoked_at IS NULL` from
+  `revoke` still fails `revokes on the worker, so the refresh token stops working everywhere`, and
+  dropping the chain revocation from `revokeSession` fails `ends the whole chain on log out, not only
+  the token it was handed` and `ends a chain from any link, including the token nobody is holding`,
+  and not inheriting `root_hash` on the successor fails nine tests at once.
 - **The CORS exemption is mutation-tested.** Replacing `openCors` with the ordinary `resolveCors`
-  fails both `answers an extension origin that is on no allowlist` and `lets the preflight through`,
-  while `leaves the allowlist in force on /feedback` stays green — which is what says the exemption
-  is scoped to `/session/` rather than a hole in the gate.
+  fails both `answers an extension origin that is on no allowlist` and `lets the preflight through,
+  or the POST never happens`. What says the exemption is not a hole in the gate is
+  `leaves the allowlist in force on /feedback for sites, and admits the extension`: an ordinary site
+  origin that is on no allowlist is still refused there.
+  - Two of those three names were quoted here **truncated**, and the second was quoted with a
+    sentence that had stopped being true. The exemption was scoped to `/session/` when this was
+    written; SKG-596 widened it to every route, because the relay calls `/feedback` from the service
+    worker. The test was renamed to say so and this paragraph was not. Found while fixing a third
+    stale test name a reviewer caught on this ticket — `grep` for a quoted name is the check, and
+    nothing runs it.
 - **The rate-limit move is mutation-tested.** Putting `checkRateLimit` back below the path dispatch —
   where it sat before this ticket — fails `meters the pairing endpoint, not only /feedback`. The
   unknown-path test stays green under that mutation, because it guards a different ordering.
@@ -355,3 +365,144 @@ Per-client session minting is absent for a stated reason rather than an accident
 signs with the worker-wide key, and a worker with `FRUITBACK_CLIENTS` ignores that key. The pair is
 refused at boot instead of shipping a feature that pairs successfully and then answers `401` to
 everything. That belongs with team mode (SKG-596), where a request carries a client id.
+
+## Rotation, and the grace that is not a clock (SKG-600)
+
+A refresh token that never changes is a thirty-day password. A copy taken from a browser profile
+stays good for the rest of that month, and nothing observes the theft. Rotating on every refresh
+makes its use **visible**.
+
+It does **not** make the copy useful for at most one cycle, which is what this paragraph said until a
+reviewer read it properly. A refresh token is a bearer credential and whoever presents it is served.
+Inside the grace each presentation of the spent token revokes the successor the one before it
+minted, so it is the **last** presenter who ends up with the live chain: a thief who gets in after
+the real client takes the session and the client's own token is revoked under it. The first version
+of this paragraph said *first*, which is the opposite of what the code does. Measured, and kept as a
+test — `serves whoever presents last inside the grace, until the earlier holder comes back`. What rotation guarantees is that the two cannot both
+keep the session quietly, which is a detection property and not a lifetime one.
+
+### The ticket asked for a replay window. Two measurements said no.
+
+The ask was that a rotated token stay accepted for *a few tens of seconds* and hand back **the same**
+successor, so a client whose answer was lost lands on its feet.
+
+Neither half survived contact:
+
+- **The same successor cannot be handed back twice.** Only its SHA-256 digest is stored, which is the
+  property that makes a copy of this database useless — and `session.test.ts` reads the bytes SQLite
+  wrote, the `-wal` file included, to prove it. Answering the same token again means keeping it in
+  the clear, or encrypting it with a key and reviewing a second piece of hand-written cryptography.
+- **A few tens of seconds is far too short for this client.** The extension retries a failed refresh
+  after `RETRY_DELAY_MS`, which is five minutes. A window of thirty seconds would expire before the
+  only retry it exists to catch.
+
+### What replaced it: usage, with a ceiling
+
+**A predecessor is retired the moment its successor is used**, and that needs no clock at all — a
+successor being presented is proof the client received it. Until that happens the predecessor stays
+usable, because the client may be holding nothing else.
+
+The ceiling is for the case that has no such proof: the answer was lost, so the successor will never
+be used by anybody. `ROTATION_GRACE_SECONDS` bounds how long the predecessor then stays live, and it
+is **derived** from the extension's own worst case — `REFRESH_MARGIN_MS + RETRY_DELAY_MS` — rather
+than chosen. A test reads both out of `apps/extension/src/session.ts` and checks the sum, because
+either of them moving would leave a window too short for the retry it was written for, with both
+suites still green on their own.
+
+A retry inside the ceiling rotates **again** and revokes the successor nobody received, so one token
+never has two live successors.
+
+### Reuse is the signal, and the chain is the answer
+
+A revoked token presented while something in its **chain** is still live: two parties hold tokens
+from one chain, so one of them copied theirs. Every live token in the chain is revoked, not only the
+one presented — a thief who keeps the session while the victim is locked out is the outcome worth
+preventing.
+
+The test was `revoked && rotated` for two rounds, and it was wrong twice over. It read a logout as a
+replay — revoking a token whose refresh answer was lost marks exactly that combination with nobody
+having replayed anything — and it missed the case that mattered, where the token a thief leaves
+revoked under the client was never rotated at all. Asking the chain is stricter *and* simpler:
+after a logout nothing in the chain is live, so a logout stops reading as a replay on its own.
+
+Both mistakes were raised in review, one round apart. See *the hole the grace left* below for the
+second, which is the one that cost something.
+
+The same review found the defect underneath: **`revokeSession` revoked only the row it was handed.**
+After that lost answer, a logout ended the predecessor and left its successor live for the rest of
+the thirty days — held by nobody, revocable by nobody. Log out now revokes the chain, and its return
+value still describes the presented row alone, so a second log out keeps reading as "nothing live".
+
+The chain is **named**, not walked. `root_hash` carries the head's hash down every successor, so
+ending a session is one indexed `UPDATE ... WHERE root_hash = ?` however long the chain is.
+
+It was a walk first, forward through `predecessor_hash`, and that is the version a reviewer measured
+properly. A walk is linear in the chain — 10 microseconds a link — and the chain has no bound but
+`expires_at`: the first estimate said 5,400 rows by assuming the extension's eight-minute cadence,
+which nothing enforces. A holder refreshing at the rate limit reaches hundreds of thousands inside
+thirty days, and one logout or replay then held the database for seconds inside `BEGIN IMMEDIATE`.
+Measured before and after, on the same chains: 605 ms over 60,000 rows became 6.4 ms, and 42.7 ms
+over 5,400 became 0.6 ms.
+
+`predecessor_hash` stays, because retiring a predecessor when its successor is used needs exactly
+that one hop. What went with the walk is the `seen` set that kept an operator-edited cycle from
+spinning inside a transaction — a statement cannot loop.
+
+One place differs in behaviour rather than in cost. The grace branch drops the successors nobody
+received **while the token presenting itself stays live**, so it passes that token as `keep`. Removing
+it failed no test at all until `takes a third presentation inside the ceiling, not just a second` was
+written — the ceiling allowing more than one retry was a property this file promised and nothing
+held.
+
+The caller is told nothing about any of it. `gone` and `reused` answer the same `401`, the way the
+two pairing failures do — a reply that told a replayer their copy was genuine would confirm they had
+the right kind of secret.
+
+### What it does not change
+
+**The successor inherits the predecessor's expiry.** Rotation shortens what a leaked token is worth;
+it does not lengthen a session. Thirty days from pairing stays thirty days, and `SECURITY.md` stays
+true without an edit to that row.
+
+### The cost, stated
+
+Inside the grace, somebody holding a stolen predecessor can rotate it and revoke the successor the
+real client received — logging the reviewer out. The thief already holds a working refresh token, and
+without rotation they would hold it silently for thirty days.
+
+They do **not** get "at most one cycle" — this paragraph said so after the sentence above had already
+been corrected, which is how a claim survives being disproved: it was written twice. The thief keeps
+the chain and can go on refreshing. What the reviewer gets is the only thing rotation can give them,
+and it is not small: their own next refresh fails, so they find out. Without rotation nothing ever
+tells them.
+
+There was a case where even that did not hold, and closing it changed what counts as evidence.
+
+### The hole the grace left, and the discriminator that closed it
+
+Raised by a reviewer and reproduced. A thief copies `A`; the client refreshes `A -> B1`; the thief
+presents `A` inside the grace, so `B1` is revoked and `B2` minted. The client then presents `B1` —
+revoked, `rotated_at` NULL, the orphan state — which answered `gone` **without revoking the chain**.
+The client was locked out, `B2` went on refreshing for the remaining thirty days, and nothing
+anywhere recorded that one chain had two holders. `SECURITY.md` promised the opposite.
+
+The first answer to this was that the orphan branch is deliberate: a revoked token that never rotated
+is a credential that was only ever in flight, and revoking the chain when one appears lets anyone who
+intercepted a single lost answer end the session at will.
+
+That reasoning weighed the wrong two things. Reading a response body already implies a position from
+which the session can be taken outright, so the denial of service is a capability an attacker who has
+it does not need — while the behaviour it protected left a thief with a live chain and no signal to
+anybody.
+
+So the test is no longer the row's own state. **Revoked, with something still live in the same
+chain, is the leak signal**; a chain with nothing live left is an ended session and answers `gone`.
+`root_hash` is what makes that one indexed lookup rather than a walk, which is the second time this
+column paid for itself.
+
+It is stricter and simpler than `revoked && rotated`, and it drops that predicate's awkwardness: a
+logout no longer reads as a replay, because after it nothing in the chain is live. The cost is
+written into `SECURITY.md` rather than left implicit, and the two tests that encoded the old answer
+were rewritten rather than deleted — `ends the chain when an orphan is presented and something in it
+is still live`, and `serves whoever presents last inside the grace, until the earlier holder comes
+back`.

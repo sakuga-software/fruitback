@@ -162,6 +162,55 @@ both: an access token the host site's JavaScript can read is the worst outcome o
   - The first test for it passed for the wrong reason: it mutated storage before the refresh had
     read it, so the early `not-paired` answered and the guard never ran. Synchronised on the request
     being *entered* instead, then mutated — and removing the guard now fails both cases.
+  - **Narrowed again by SKG-600**, because rotation made this path run on *every* refresh rather than
+    on the rare answer that carried a new token. The compare and the write were separate — a read, a
+    read, a write — so a logout landing across any of the three was enough. `keepIfCurrent` does both
+    on one read and reports whether it wrote; nothing mints a grant when it did not. Still not
+    closed, and it cannot be: `chrome.storage` has no transaction. Raised in review.
+- **One refresh in flight per endpoint, and the race is not the one above** (SKG-600, raised in
+  review). Rotation turned a duplicated refresh from a wasted request into a lockout: two callers
+  spend the same token, the worker reads the second as a retry inside the grace and revokes the
+  first successor, and whichever `keep()` lands last decides what the extension holds. If it is the
+  first, the extension holds a token the worker revoked; the next refresh answers `401`, the session
+  ends, and only an operator minting a new pairing code brings the reviewer back.
+  - The spent token stays good only **until its successor is used, or `ROTATION_GRACE_SECONDS`
+    passes** — whichever comes first. A retry inside the ceiling lands on its feet; one after it is
+    refused and takes the chain with it. Raised in review, because this record described the first
+    half as if it had no second.
+  - **What hid it was that half of the path was already serialised.** `background.ts` wraps
+    `refreshDue` in `serialize`, so the alarm cannot overlap itself. The relay calls `ensureAccess`
+    directly and goes nowhere near it — and the widget has a read and a write in flight in the
+    ordinary case, so two concurrent refreshes are the normal state of team mode, not a rare one.
+  - I had checked the *other* half and concluded there was no race: the popup calls `list`, `pair`
+    and `logout` only, so it never refreshes. True, and it answered a question nobody needed
+    answering. The PR body said so before the review corrected it.
+  - `refreshOnce` holds an endpoint-to-promise map with **no `await` between the `get` and the
+    `set`**. `ensureAccess` awaits `grants.read()` before deciding, so two callers can both find the
+    grant stale; the map is the only thing between them and it only works if that pair is
+    synchronous. The test starts both calls before awaiting either — `await ensureAccess()` twice
+    passes with or without the lock, which is the shape of test this one exists not to be.
+  - It lives in `session.ts` rather than the entrypoint for the reason `bridge.ts` gives: an
+    entrypoint binds `browser` at import, and no test could reach the guard there.
+  - **And it is not enough, because the lock is per endpoint and the storage is not.** Both areas
+    hold every endpoint under one key, and a write replaces that key whole; two workers refreshing at
+    once each read the record and each replace it, so the later write restores the earlier one's
+    spent token. Under rotation that token is a replay, and its next use revokes the chain.
+    `lets two workers refresh at the same time` — a test written to prove the lock was correctly
+    scoped — is what makes it reachable. Every read-modify-write now goes through one queue, both
+    areas together, because `forget` writes to both and two queues would let a logout clear the
+    session while the grant sat behind something else. Raised in review.
+  - The first test for it **deadlocked the moment the fix landed**: it gated on two writes being in
+    flight at once, which is precisely what the fix prevents. A test that cannot pass against correct
+    code is not a test. It yields a few microtasks in the write instead — unserialised, both reads
+    land before either write; serialised, the yielding changes nothing.
+- **A `200` from `/session/refresh` carrying no `refreshToken` is a failure, not a success**
+  (SKG-600, raised in review). Every refresh rotates, so an answer without a successor means the
+  worker spent the stored token and the replacement did not arrive — a truncated body, a route that
+  stopped naming the field. Accepting it stored a spent token under a working access token, and the
+  session died at the end of the grace with nothing to explain it. It answers `unavailable`, so the
+  retry runs while the predecessor is still good. `parseIssued` stays tolerant and both call sites
+  require the field: the rule belongs beside the failure it prevents, and a later route issuing only
+  an access token would otherwise have to work around it.
 - **The guard is an allowlist, not a denylist** (`src/worlds.test.ts`). Naming the files that must
   stay clean passes a main-world entrypoint added next year. So the entrypoints are *discovered* —
   every `*.content.ts` declaring `world: 'MAIN'` — their transitive relative imports are computed,
@@ -199,10 +248,14 @@ both: an access token the host site's JavaScript can read is the worst outcome o
   directly rather than through the alarm, and the first token after a restart comes from the service
   worker's own start-up call. Raised in review — both halves were tested and their composition was
   not.
-- **Rotation is half-built on purpose.** A rotated refresh token is stored when one arrives, and none
-  ever does: the worker does not rotate. A rotation whose response is lost leaves this side holding a
-  token the worker has already retired, with nothing to retry — closing that needs a replay window on
-  the worker, which is SKG-600.
+- **Rotation was half-built on purpose, and SKG-600 built the other half.** A rotated refresh token
+  is stored when one arrives, and since SKG-600 one arrives on every **successful** refresh — an
+  answer without it is refused here rather than taken, because the worker has spent the stored token
+  by then. The lost-answer case is handled on the worker rather than here: the spent token stays
+  usable until its successor is used **or `ROTATION_GRACE_SECONDS` passes**, whichever comes first,
+  and nothing on this side ends that window. Raised in review, twice: this sentence carried both the
+  missing ceiling and the "on every refresh" overstatement. This side needs nothing but the store it
+  already had.
 - Verified over the real transport rather than against the handler, which is this repo's recurring
   defect (SKG-518): a real `OPTIONS` preflight from `chrome-extension://…` for
   `Content-Type: application/json`, then pair → refresh → revoke → refresh, answering

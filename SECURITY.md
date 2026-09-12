@@ -139,8 +139,72 @@ person; redeeming it opens a session.
 | --- | --- |
 | Pairing code | 60 bits, valid 15 minutes, usable **once** |
 | Access token | HS256 identity token, 10 minutes |
-| Refresh token | 256 bits, 30 days, revocable |
+| Refresh token | 256 bits, 30 days, **rotated on every refresh**, revocable |
 | On disk | codes and refresh tokens are stored as **SHA-256 digests** |
+
+**Every refresh spends its refresh token and issues a new one** (SKG-600). A token that never
+changed was a thirty-day password: a copy taken from a browser profile stayed good for the rest of
+the month and nothing observed the theft.
+
+**Rotation makes the theft detectable. It does not cap what the thief gets**, and an earlier version
+of this section said it did. A refresh token is a bearer credential: whoever presents it is served.
+Each presentation of a spent token revokes the successor the one before it minted, so the **last**
+holder to present it keeps the live chain and every earlier one is locked out. A thief who presents
+after the reviewer takes the session, and the reviewer pairs again.
+What rotation guarantees is that the two cannot both keep the session: the loser's next refresh is
+refused, so the theft surfaces within one refresh cycle instead of lasting a month. See *the cost*
+below, and `serves whoever presents last inside the grace, until the earlier holder comes back`.
+
+What retires the spent token is its successor being **used**. That is proof the caller who was
+answered received it — not that the caller was the real client, which a bearer token cannot say —
+and it is not a timer. The timer is only a ceiling for the case with no such proof: an answer lost on the
+wire, where the holder never learnt the successor exists. It is set from how long that client waits
+before retrying, measured from the **first** rotation, and a test derives it from the extension's own
+constants rather than restating a number here.
+
+Inside that ceiling the spent token may be presented more than once. Each time, the successor nobody
+received is revoked and another is minted, so exactly one successor is live at any moment. The mark
+does not move with the retries — sliding it would turn a lost-answer allowance into an unbounded
+lease on a token that was supposed to be spent.
+
+**A refresh token presented after its successor was used revokes the whole chain.** The real client
+had moved on, so whoever still holds this one copied it. Every live token descending from it goes
+with it, and the reviewer has to pair again. That is the intended outcome — a silent theft becomes a
+visible one.
+
+**The test is the chain, not the row.** A revoked token presented while something in its chain is
+still live means two parties hold tokens from one chain, and that is the signal. A chain with nothing
+live left is an ended session and answers the same `401` without calling anything a replay.
+
+That distinction is what closes the case this section used to get wrong. A thief presenting the
+predecessor inside the grace has the client's own successor revoked under it; when the client then
+presents that successor — revoked, never rotated — the chain goes, and the thief's session goes with
+it. The earlier version answered `gone` there and left the thief refreshing for the rest of the
+thirty days while the reviewer re-paired, which is the opposite of what this document promises.
+
+The cost, deliberately taken: whoever intercepts one answer in flight can end the session whenever
+they choose. Reading a response body already implies a position from which the session can be taken
+outright, so the capability this grants an attacker is one they do not need.
+
+**Log out revokes the chain too** — ending only the token presented would leave its successor live
+for the rest of the thirty days.
+
+The reply says nothing about any of this. A replayed token and a token that never existed get the
+same `401`, for the same reason the two pairing failures do: telling a replayer that their copy was
+genuine confirms they hold the right kind of secret.
+
+The cost is stated rather than hidden, and the two cases differ:
+
+- **Inside the grace**, the successor has not been used yet and the worker cannot tell a retry from a
+  copy. Each presentation replaces the successor, so the **last** one to present holds the live chain
+  and the earlier holder finds their token revoked. A thief who presents after the reviewer takes the
+  session, and the reviewer pairs again.
+- **On a replay**, the successor has already been used, so the collision is unambiguous and the whole
+  chain goes. Both of them lose the session.
+
+In neither case does the thief end up with less than they started with — they already held a working
+credential. What changes is that the theft becomes visible within minutes instead of lasting a
+month, and that no state leaves both parties quietly sharing one session.
 
 Since SKG-599 the extension holds its half of that, and **where** matters as much as the lifetimes:
 

@@ -132,9 +132,9 @@ export default defineBackground(() => {
   browser.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
     if (changes.sites !== undefined) void sync();
-    // A pairing or a logout from the popup, and — once the worker rotates — this run's own write.
-    // That re-entry settles at once: the second run finds the token fresh, refreshes nothing and
-    // only re-arms the alarm.
+    // A pairing or a logout from the popup, and this run's own write — the worker rotates on every
+    // refresh (SKG-600), so every refresh stores a new token here. That re-entry settles at once:
+    // the second run finds the token fresh, refreshes nothing and only re-arms the alarm.
     if (changes[SESSIONS_KEY] !== undefined) void refreshSessions();
   });
   browser.permissions.onRemoved.addListener(() => void sync());

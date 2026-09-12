@@ -32,8 +32,6 @@ export type SessionIdentity = {
   email?: string;
 };
 
-export type SessionRecord = SessionIdentity & { expiresAt: number };
-
 /**
  * What a session needs to persist, and the reason it is an interface rather than a table.
  *
@@ -59,8 +57,21 @@ export type SessionStore = {
     expiresAt: number;
     now: number;
   }): Promise<SessionIdentity | undefined>;
-  /** The live session behind this refresh token, or `undefined` when it is expired or revoked. */
-  findSession(tokenHash: string, now: number): Promise<SessionRecord | undefined>;
+  /**
+   * Spends this refresh token and issues its successor, in one transaction (SKG-600).
+   *
+   * Every refresh rotates, so there is no read-only lookup beside this one: a caller that could ask
+   * "is this token live" without spending it would be a second path to keep in step with this one.
+   *
+   * The three outcomes are the whole design, and `rotateSession` in `session-sqlite.ts` carries the
+   * reasoning for each.
+   */
+  rotateSession(rotation: {
+    tokenHash: string;
+    successorHash: string;
+    now: number;
+    graceMs: number;
+  }): Promise<RotationOutcome>;
   /** `true` when this call is what revoked it. A second logout is not an error, it is a no-op. */
   revokeSession(tokenHash: string, now: number): Promise<boolean>;
   /** Drops what is expired. Called on redeem, so a worker nobody administers still stays small. */
@@ -90,6 +101,47 @@ export const ACCESS_TTL_SECONDS = 10 * 60;
 
 /** Long, because the alternative is a reviewer who re-pairs every morning and keeps the code in a file. */
 export const REFRESH_TTL_SECONDS = 30 * 24 * 60 * 60;
+
+/**
+ * How long a rotated refresh token stays usable while its successor has not been (SKG-600).
+ *
+ * **It is a ceiling, not the mechanism.** What normally retires a predecessor is its successor being
+ * used, which needs no clock at all. This bounds the one case that has none: an answer lost on the
+ * wire, so the client never learnt the successor exists and keeps retrying with what it has.
+ *
+ * The number is the extension's own worst case for that — `REFRESH_MARGIN_MS + RETRY_DELAY_MS` in
+ * `apps/extension/src/session.ts`, the margin before a token is due plus the wait after a failed
+ * attempt. `session.test.ts` reads both out of that file and checks the sum, because a constant
+ * derived from the thing it protects has to stay derived from it.
+ *
+ * The ticket asked for "a few tens of seconds". That was measured and it is wrong for this client:
+ * a lost answer is retried five minutes later, so a window that short would expire before the only
+ * retry it exists to catch.
+ */
+export const ROTATION_GRACE_SECONDS = 7 * 60;
+
+/**
+ * What that ceiling costs, now that `rotated_at` marks the first rotation and not the last.
+ *
+ * It covers **one** lost answer, exactly rather than approximately. A token spent at T and retried
+ * at T+5 min mints a successor; if that answer is lost too, the next retry at T+10 min is past the
+ * ceiling and the session ends — the reviewer pairs again. Letting the mark slide instead is what
+ * made the window unbounded, so this is the trade and not an oversight.
+ */
+
+/**
+ * What a rotation did, and the middle one is the reason this ticket exists.
+ *
+ * `reused` is a refresh token presented after its successor was already used — the predecessor was
+ * retired at that moment, so the only party who can still hold this one copied it. Every live token
+ * in its chain is revoked before this answers. The caller is told nothing about it: a reply that
+ * distinguished a leaked token from an expired one would confirm to whoever replayed it that they
+ * had the right kind of secret.
+ */
+export type RotationOutcome =
+  | { outcome: 'rotated'; identity: SessionIdentity }
+  | { outcome: 'gone' }
+  | { outcome: 'reused' };
 
 /**
  * One reason each, and that is the design rather than a gap.
@@ -202,12 +254,20 @@ export async function redeemPairing(
 }
 
 /**
- * A fresh access token for a session that is still live.
+ * A fresh access token, and a fresh refresh token to go with it (SKG-600).
  *
- * The refresh token is **not** rotated. Rotation is the stronger design, and it needs a replay
- * window the extension does not have yet: a refresh whose answer is lost to a dropped connection
- * would log the reviewer out with no way back. See the note on SKG-535 — it belongs with the
- * extension half, where a retry can be observed.
+ * **Every refresh rotates.** A refresh token that never changes is a thirty-day password: a copy
+ * taken from a browser profile stays good for the rest of that month, and nothing observes the
+ * theft.
+ *
+ * Rotating makes the theft *visible* — the copy's eventual use is the `reused` outcome. It does not
+ * cap what the copy is worth, and this comment claimed it did. The token is a bearer credential:
+ * whoever presents it first is served, so a thief who gets in before the real client keeps the chain
+ * and it is the reviewer who pairs again. What is guaranteed is that the two cannot both keep the
+ * session. Raised in review.
+ *
+ * The successor is minted here rather than in the store, so the code and the session it buys are
+ * written by one operation — the same rule `redeemPairing` follows.
  */
 export async function refreshSession(
   store: SessionStore,
@@ -215,19 +275,28 @@ export async function refreshSession(
   secret: string,
   now: number = Date.now(),
 ): Promise<
-  | { ok: true; accessToken: string; expiresIn: number; identity: SessionIdentity }
+  | { ok: true; accessToken: string; refreshToken: string; expiresIn: number; identity: SessionIdentity }
   | { ok: false; reason: SessionFailure }
 > {
-  const session = await store.findSession(await digest(refreshToken), now);
-  if (session === undefined) return { ok: false, reason: 'session-revoked-or-expired' };
+  const successor = createRefreshToken();
+  const rotation = await store.rotateSession({
+    tokenHash: await digest(refreshToken),
+    successorHash: await digest(successor),
+    now,
+    graceMs: ROTATION_GRACE_SECONDS * 1000,
+  });
 
-  const { expiresAt: _session, ...identity } = session;
+  // `gone` and `reused` answer alike on purpose, the way the two pairing failures do. Telling a
+  // caller that the token they replayed was a real one that had been rotated is telling them their
+  // copy was genuine.
+  if (rotation.outcome !== 'rotated') return { ok: false, reason: 'session-revoked-or-expired' };
 
   return {
     ok: true,
-    accessToken: await mintAccessToken(identity, secret, now),
+    accessToken: await mintAccessToken(rotation.identity, secret, now),
+    refreshToken: successor,
     expiresIn: ACCESS_TTL_SECONDS,
-    identity,
+    identity: rotation.identity,
   };
 }
 

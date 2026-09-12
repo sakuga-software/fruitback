@@ -18,6 +18,7 @@
 
 /** Who the worker says this session speaks for. Its word, from the pairing an operator created. */
 import { isSecureWorkerEndpoint } from './endpoint.ts';
+import { randomId } from './relay-transport.ts';
 
 export type SessionIdentity = {
   subject: string;
@@ -29,6 +30,18 @@ export type SessionIdentity = {
 export type StoredSession = {
   refreshToken: string;
   identity: SessionIdentity;
+  /**
+   * Which session this is, as a value the access token can carry without being one.
+   *
+   * The refresh token is the generation marker everywhere else here, and it cannot be this one: the
+   * grant lives in the area that survives nothing, and copying a credential into it would undo the
+   * split that keeps the refresh token out of it. So a fresh opaque id, minted on pairing and on
+   * every refresh. See `matches`.
+   *
+   * Optional, because an entry stored before SKG-600 has none. Two absent markers compare equal,
+   * which is the behaviour that entry already had.
+   */
+  generation?: string;
 };
 
 /** What must not. `expiresAt` is epoch milliseconds, computed here from the worker's `expiresIn`. */
@@ -36,6 +49,8 @@ export type AccessGrant = {
   accessToken: string;
   expiresAt: number;
   identity: SessionIdentity;
+  /** The session this token was minted for. See `StoredSession.generation` and `matches`. */
+  generation?: string;
 };
 
 /**
@@ -56,6 +71,8 @@ export type SessionResponse = {
 };
 
 export type SessionSeams = {
+  /** Mints a session generation. Defaulted so only a test has to care. See `StoredSession.generation`. */
+  newGeneration?: () => string;
   sessions: Area<StoredSession>;
   grants: Area<AccessGrant>;
   post(url: string, body: Record<string, unknown>): Promise<SessionResponse>;
@@ -87,6 +104,22 @@ export function isFresh(grant: AccessGrant | undefined, now: number): grant is A
   return grant !== undefined && grant.expiresAt - REFRESH_MARGIN_MS > now;
 }
 
+/**
+ * Was this access token minted for the session storage holds now?
+ *
+ * Freshness alone is not enough. The popup and the background write the same two areas from separate
+ * contexts, so a logout can land between a refresh writing the session and the same refresh writing
+ * its grant — and the grant is then an orphan over a cleared session, accepted for its remaining ten
+ * minutes because nothing looked past its clock. Revoking on the worker does not reach it. Raised in
+ * review.
+ *
+ * An entry written before this marker existed has none on either side, and two absent markers
+ * compare equal: an upgrade keeps the session it already had rather than signing the reviewer out.
+ */
+export function matches(grant: AccessGrant, session: StoredSession | undefined): boolean {
+  return session !== undefined && grant.generation === session.generation;
+}
+
 /** A code that never existed and one already spent answer the same, because the worker does. */
 export type PairFailure = 'code-spent-or-expired' | 'unavailable' | 'insecure-endpoint';
 
@@ -105,7 +138,47 @@ export type Sessions = {
   logout(endpoint: string): Promise<void>;
 };
 
-export function createSessions({ sessions, grants, post, now = Date.now }: SessionSeams): Sessions {
+export function createSessions({
+  sessions,
+  grants,
+  post,
+  now = Date.now,
+  newGeneration = () => randomId(globalThis),
+}: SessionSeams): Sessions {
+  /** Endpoint to the refresh already running for it. See `refreshOnce`. */
+  const refreshing = new Map<string, Promise<AccessResult>>();
+
+  /**
+   * One read-modify-write on storage at a time.
+   *
+   * Both areas keep **every endpoint under one key**, and a write replaces that key whole. So two
+   * refreshes for different workers each read the record, each replace it, and the later write puts
+   * the earlier one's token back — a **spent** token, under rotation. Its next refresh is then a
+   * replay: the worker revokes the chain and the reviewer pairs again.
+   *
+   * `refreshOnce` cannot cover this and is not meant to. It is per endpoint on purpose, because two
+   * workers have nothing to do with each other — which is exactly what puts their writes in the same
+   * key. Raised in review.
+   *
+   * One queue for both areas rather than one each: `forget` writes to both, and two queues would let
+   * a logout clear the session while the grant is still queued behind something else. Serialising
+   * more than strictly needed costs a storage round trip; getting it wrong costs the session.
+   *
+   * This is per context, like everything else here. What crosses contexts is the compare in
+   * `keepIfCurrent`, and `chrome.storage` gives nothing stronger to build on.
+   */
+  let queue: Promise<unknown> = Promise.resolve();
+  function serialized<T>(run: () => Promise<T>): Promise<T> {
+    const next = queue.then(run, run);
+
+    queue = next.then(
+      () => undefined,
+      () => undefined,
+    );
+
+    return next;
+  }
+
   /**
    * A request that answered, or nothing.
    *
@@ -121,17 +194,63 @@ export function createSessions({ sessions, grants, post, now = Date.now }: Sessi
   }
 
   async function keep(endpoint: string, session: StoredSession): Promise<void> {
-    const all = await sessions.read();
+    await serialized(async () => {
+      const all = await sessions.read();
 
-    await sessions.write({ ...all, [endpoint]: session });
+      await sessions.write({ ...all, [endpoint]: session });
+    });
   }
 
-  async function grant(endpoint: string, issued: Issued): Promise<AccessGrant> {
+  /**
+   * Writes the session only while `spent` is still the refresh token in storage.
+   *
+   * The compare and the write share **one** read. Checking first and then calling `keep` read
+   * storage twice and wrote a third time, so a logout landing anywhere across those three was
+   * enough to put a working credential back under a screen saying signed out. The window is now a
+   * single read-to-write gap.
+   *
+   * It cannot be closed: `chrome.storage` has no transaction, and the popup and the background are
+   * separate contexts sharing nothing else. The refresh token is its own generation marker, which is
+   * what lets them agree with nothing kept in step. Narrowed twice in review, once when rotation
+   * made this run on **every** refresh rather than on the rare one that carried a new token.
+   */
+  /**
+   * Replaces the session and mints its access token together, while `spent` is still what storage
+   * holds.
+   *
+   * **One queue entry for both writes.** Doing them as two let a logout from the popup land between,
+   * clearing both areas and then having the second write put an access token back over nothing. The
+   * grant carries the session's generation, so even a write that does land after a clear is refused
+   * on the next read rather than honoured for its remaining ten minutes. Raised in review.
+   *
+   * The compare and the session write still share one read, which is the narrowest this can be:
+   * `chrome.storage` has no transaction and the two contexts share nothing else.
+   */
+  function keepIfCurrent(
+    endpoint: string,
+    spent: string,
+    session: Omit<StoredSession, 'generation'>,
+    issued: Issued,
+  ): Promise<AccessGrant | undefined> {
+    return serialized(async () => {
+      const all = await sessions.read();
+      if (all[endpoint]?.refreshToken !== spent) return undefined;
+
+      const generation = newGeneration();
+      await sessions.write({ ...all, [endpoint]: { ...session, generation } });
+
+      return writeGrant(endpoint, issued, generation);
+    });
+  }
+
+  /** The write itself, called from inside a queue entry that has already taken its turn. */
+  async function writeGrant(endpoint: string, issued: Issued, generation: string): Promise<AccessGrant> {
     const all = await grants.read();
     const value: AccessGrant = {
       accessToken: issued.accessToken,
       expiresAt: now() + issued.expiresIn * 1000,
       identity: issued.identity,
+      generation,
     };
     await grants.write({ ...all, [endpoint]: value });
 
@@ -139,12 +258,14 @@ export function createSessions({ sessions, grants, post, now = Date.now }: Sessi
   }
 
   async function forget(endpoint: string): Promise<void> {
-    const [storedSessions, storedGrants] = await Promise.all([sessions.read(), grants.read()]);
+    await serialized(async () => {
+      const [storedSessions, storedGrants] = await Promise.all([sessions.read(), grants.read()]);
 
-    await Promise.all([
-      sessions.write(without(storedSessions, endpoint)),
-      grants.write(without(storedGrants, endpoint)),
-    ]);
+      await Promise.all([
+        sessions.write(without(storedSessions, endpoint)),
+        grants.write(without(storedGrants, endpoint)),
+      ]);
+    });
   }
 
   async function refresh(endpoint: string): Promise<AccessResult> {
@@ -168,7 +289,16 @@ export function createSessions({ sessions, grants, post, now = Date.now }: Sessi
     }
 
     const issued = parseIssued(answer.body);
-    if (answer.status !== 200 || issued === undefined) return { ok: false, reason: 'unavailable' };
+
+    // **A refresh without a successor is not a success.** Every refresh rotates since SKG-600, so a
+    // `200` carrying no `refreshToken` means the worker spent the stored token and this answer lost
+    // the replacement — a body truncated by a proxy, a route that stopped naming the field. Taking
+    // it leaves a spent token in storage and a working access token over it, and the session dies
+    // silently when the grace runs out. `unavailable` instead, so the retry runs while the
+    // predecessor is still good. `pair` asks for the same field in the same way. Raised in review.
+    if (answer.status !== 200 || issued?.refreshToken === undefined) {
+      return { ok: false, reason: 'unavailable' };
+    }
 
     // **The session may have ended while this request was in the air.** The popup and the background
     // are separate contexts holding separate `Sessions`, and they share only storage: a reviewer can
@@ -179,29 +309,62 @@ export function createSessions({ sessions, grants, post, now = Date.now }: Sessi
     // The refresh token is its own generation marker, which is what makes this work across contexts
     // with nothing to keep in step: if the one in storage is not the one this request spent, the
     // session was logged out or re-paired, and this answer is about a session that no longer exists.
-    // `chrome.storage` has no transaction, so the window is not closed, only narrowed from a network
-    // round trip to two storage operations. Raised in review.
-    if ((await sessions.read())[endpoint]?.refreshToken !== stored.refreshToken) {
-      return { ok: false, reason: 'not-paired' };
-    }
+    //
+    // The check and the write are one operation — see `keepIfCurrent`. Doing them apart left three
+    // storage operations for a logout to land between, and rotation made this path run on every
+    // refresh rather than on the rare answer that carried a new token. Raised in review, twice.
+    //
+    // What protects a lost answer is on the worker's side: the token this request spent stays usable
+    // until its successor is, so a retry with the old one lands on its feet.
+    // No write, no grant. Minting an access token for a session storage no longer holds is the whole
+    // failure this guards against, and it outlives a revoke.
+    const granted = await keepIfCurrent(
+      endpoint,
+      stored.refreshToken,
+      { refreshToken: issued.refreshToken, identity: issued.identity },
+      issued,
+    );
 
-    // The worker does not rotate refresh tokens today, and this is the half that has to exist before
-    // it can: a rotation whose response is lost leaves this side holding a token the worker has
-    // already retired, and the reviewer locked out with nothing to retry. Closing that needs a
-    // replay window on the worker — it accepts the retired token for a while — and the window is
-    // only worth what this side does with the new one. So a rotated token is stored when it arrives,
-    // and the worker half is a ticket of its own (SKG-600).
-    if (issued.refreshToken !== undefined && issued.refreshToken !== stored.refreshToken) {
-      await keep(endpoint, { refreshToken: issued.refreshToken, identity: issued.identity });
-    }
+    return granted === undefined ? { ok: false, reason: 'not-paired' } : { ok: true, grant: granted };
+  }
 
-    return { ok: true, grant: await grant(endpoint, issued) };
+  /**
+   * One refresh in flight per endpoint, shared by whoever asks while it runs.
+   *
+   * Two callers that each spend the same refresh token are a lockout, not a wasted request. The
+   * worker rotates the first into a successor and treats the second as a retry inside the grace:
+   * it revokes the first successor and mints another. Both answers then race to `keep()`, and if
+   * the first lands last the extension is left holding a token the worker has revoked. The next
+   * refresh answers `401`, the session ends, and only an operator minting a new pairing code brings
+   * the reviewer back.
+   *
+   * `background.ts` already serialises the **alarm**, which is why this was not visible: the path
+   * it does not cover is the relay, and the widget has a read and a write in flight in the ordinary
+   * case. The lock lives here rather than in the entrypoint for the reason `bridge.ts` gives — an
+   * entrypoint binds `browser` at import and no test could reach it. Raised in review.
+   *
+   * `get` and `set` must stay on either side of no `await`: `ensureAccess` reads storage before it
+   * decides, so two callers can both find the grant stale, and this map is the only thing between
+   * them.
+   */
+  function refreshOnce(endpoint: string): Promise<AccessResult> {
+    const running = refreshing.get(endpoint);
+    if (running !== undefined) return running;
+
+    const started = refresh(endpoint).finally(() => refreshing.delete(endpoint));
+    refreshing.set(endpoint, started);
+
+    return started;
   }
 
   async function ensureAccess(endpoint: string): Promise<AccessResult> {
-    const held = (await grants.read())[endpoint];
+    const [storedGrants, storedSessions] = await Promise.all([grants.read(), sessions.read()]);
+    const held = storedGrants[endpoint];
 
-    return isFresh(held, now()) ? { ok: true, grant: held } : refresh(endpoint);
+    // Fresh **and** minted for the session that is there now. See `matches`.
+    if (isFresh(held, now()) && matches(held, storedSessions[endpoint])) return { ok: true, grant: held };
+
+    return refreshOnce(endpoint);
   }
 
   return {
@@ -237,8 +400,18 @@ export function createSessions({ sessions, grants, post, now = Date.now }: Sessi
         return { ok: false, reason: refused ? 'code-spent-or-expired' : 'unavailable' };
       }
 
-      await keep(endpoint, { refreshToken: issued.refreshToken, identity: issued.identity });
-      await grant(endpoint, issued);
+      const opened: Omit<StoredSession, 'generation'> = {
+        refreshToken: issued.refreshToken,
+        identity: issued.identity,
+      };
+
+      await serialized(async () => {
+        const generation = newGeneration();
+        const all = await sessions.read();
+        await sessions.write({ ...all, [endpoint]: { ...opened, generation } });
+
+        await writeGrant(endpoint, issued, generation);
+      });
 
       return { ok: true, identity: issued.identity };
     },
@@ -307,8 +480,12 @@ type Issued = {
  * What the worker answered, parsed rather than cast.
  *
  * The same rule as every seed and every stored site: a body that is not what it claims costs this
- * request, never the extension. `refreshToken` is optional because two routes share this shape —
- * `/session/pair` mints one and `/session/refresh` does not.
+ * request, never the extension.
+ *
+ * `refreshToken` stays optional **here** while both call sites require it: `/session/pair` and
+ * `/session/refresh` each mint one since SKG-600, and each says so itself. Requiring it in the
+ * parser would put the rule one level away from the failure it prevents, and a third route that
+ * issues only an access token would have to work around it.
  */
 export function parseIssued(body: unknown): Issued | undefined {
   if (!isRecord(body)) return undefined;
@@ -345,7 +522,13 @@ export function parseStoredSession(value: unknown): StoredSession | undefined {
 
   const identity = parseIdentity(value.identity);
 
-  return identity === undefined ? undefined : { refreshToken: value.refreshToken, identity };
+  if (identity === undefined) return undefined;
+
+  return {
+    refreshToken: value.refreshToken,
+    identity,
+    ...(isNonEmptyString(value.generation) ? { generation: value.generation } : {}),
+  };
 }
 
 export function parseAccessGrant(value: unknown): AccessGrant | undefined {
@@ -354,7 +537,14 @@ export function parseAccessGrant(value: unknown): AccessGrant | undefined {
 
   const identity = parseIdentity(value.identity);
 
-  return identity === undefined ? undefined : { accessToken: value.accessToken, expiresAt: value.expiresAt, identity };
+  if (identity === undefined) return undefined;
+
+  return {
+    accessToken: value.accessToken,
+    expiresAt: value.expiresAt,
+    identity,
+    ...(isNonEmptyString(value.generation) ? { generation: value.generation } : {}),
+  };
 }
 
 /** Whoever a session belongs to, as a person reads it. */
