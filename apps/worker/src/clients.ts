@@ -69,6 +69,15 @@ const clientSchema = z.object({
    * `authenticated` requires a valid identity token, the same HS256 JWT the write path takes, and
    * answers `401` without one. It needs this client's `identitySecret`; a client asking for it
    * without one is refused at boot rather than left permanently unreadable.
+   *
+   * **This is the closest thing to a mode, and there is deliberately no `mode` field beside it**
+   * (SKG-539). A client's mode is decided in the reviewer's browser — one field on the site's entry
+   * in the extension — and the worker cannot observe it: a private-mode read and a public-mode read
+   * are the same anonymous `GET`. A field here would be a declaration nothing checks and nothing
+   * enforces, and a switch that controls nothing is worse than no switch. What the worker can say is
+   * what it actually decides, which is this one. The modes are named for a reader in
+   * `docs/modes.md`, where the difference between them is a fact about the page rather than about
+   * this map.
    */
   read: z.enum(['public', 'authenticated']).optional(),
 });
