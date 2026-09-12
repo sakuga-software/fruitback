@@ -149,9 +149,17 @@ Ship the widget and call `init` only when a reviewer with the extension opens th
 see nothing; your reviewers see their pins.
 
 ```ts
-import { init } from 'fruitback';
+import { init, type FruitbackTransport } from 'fruitback';
 
-let widget;
+// The extension puts this on the page. It is not part of the package, so your project declares it.
+declare global {
+  interface Window {
+    fruitbackExtension?: { version: number; transport: FruitbackTransport };
+  }
+}
+
+let widget: ReturnType<typeof init> | undefined;
+
 const wake = () => {
   const extension = window.fruitbackExtension;
   if (widget !== undefined || extension === undefined) return;
