@@ -443,15 +443,32 @@ describe('rotation', () => {
     );
   });
 
-  /** And a chain with nothing live left is an ended session, not a replay: it revokes nothing more. */
+  /**
+   * And a chain with nothing live left is an ended session, not a replay.
+   *
+   * Asserted on `rotateSession`'s own outcome, because `refreshSession` folds `gone` and `reused`
+   * into one `ok: false` — the caller is deliberately told nothing apart. The first version of this
+   * test checked `ok` and so passed with the discriminator removed, which is the kind of test this
+   * file is supposed to catch. Raised in review.
+   */
   it('answers a token from a chain that is entirely revoked without calling it a replay', async () => {
     const { store, token } = await opened();
     const successor = await refreshSession(store, token, SECRET);
     assert.ok(successor.ok);
     assert.equal(await revokeSession(store, successor.refreshToken), true);
 
-    assert.equal((await refreshSession(store, token, SECRET)).ok, false);
-    assert.equal((await refreshSession(store, successor.refreshToken, SECRET)).ok, false);
+    const presented = async (refreshToken: string) =>
+      (
+        await store.rotateSession({
+          tokenHash: await digest(refreshToken),
+          successorHash: await digest(createRefreshToken()),
+          now: Date.now(),
+          graceMs: ROTATION_GRACE_SECONDS * 1000,
+        })
+      ).outcome;
+
+    assert.equal(await presented(token), 'gone', 'an ended session was reported as a leak');
+    assert.equal(await presented(successor.refreshToken), 'gone');
   });
 
   it('retires the old token the moment the new one is used', async () => {
@@ -589,29 +606,42 @@ describe('rotation', () => {
   });
 
   /**
-   * A chain whose head predates `root_hash` still ends on log out.
+   * A head carries no chain name, so revoking by chain alone cannot reach it.
    *
-   * The column is NULL on every row written before migration #2, so `chainOf` reads such a row as
-   * the head of its own chain — and `revokeChain` names that head directly, because a statement
-   * filtering on `root_hash` cannot reach a row that has none. A session already open when this
-   * worker is upgraded is exactly that case, and it is the one nothing else here would cover.
+   * `redeemPairing` writes no `root_hash` — every head has NULL there, and so does every row written
+   * before migration #2 added the column. That is why `revokeChain` names the head directly instead
+   * of relying on `WHERE root_hash = ?`, and why a session open across the upgrade needs nothing
+   * special: its shape is the shape of every head.
+   *
+   * The case has to be built with care, and two earlier versions of this test did not. A head is
+   * normally retired by the ordinary path — using its successor revokes it — so in most chains it is
+   * already revoked and the naming clause never shows. What is needed is a head that is still
+   * **live**: one whose successor was minted and never used. A grace retry produces exactly that,
+   * and leaves an orphan branch as well.
+   *
+   * The first version added a hand-written `root_hash = NULL` on the head to look like an upgraded
+   * row; the head was already NULL, so it built no fixture the ordinary path does not. The second
+   * dropped that but kept a chain whose head was retired, and passed with the naming clause removed.
+   * Both raised in review — the second by running the mutation rather than trusting the rename.
    */
-  it('ends a session whose root was written before the chain had a name', async () => {
-    const { store, path, token } = await opened();
-    const first = await refreshSession(store, token, SECRET);
-    assert.ok(first.ok);
-    const second = await refreshSession(store, first.refreshToken, SECRET);
-    assert.ok(second.ok);
+  it('reaches the live head of a forked chain when the log out comes from a leaf', async () => {
+    const { store, token, at } = await opened();
+    const orphan = await refreshSession(store, token, SECRET, at);
+    assert.ok(orphan.ok);
 
-    // The upgrade case, written by hand: the head carries no chain name.
-    const database = new DatabaseSync(path);
-    database.prepare('UPDATE sessions SET root_hash = NULL WHERE predecessor_hash IS NULL').run();
-    database.close();
+    // A retry inside the grace: the head is now rotated twice and still live, because neither
+    // successor has been used to refresh.
+    const live = await refreshSession(store, token, SECRET, at + 1_000);
+    assert.ok(live.ok);
 
-    assert.equal(await revokeSession(store, second.refreshToken), true);
+    assert.equal(await revokeSession(store, live.refreshToken, at + 2_000), true);
 
-    assert.equal((await refreshSession(store, token, SECRET)).ok, false, 'the head outlived the log out');
-    assert.equal((await refreshSession(store, first.refreshToken, SECRET)).ok, false);
+    assert.equal(
+      (await refreshSession(store, token, SECRET, at + 3_000)).ok,
+      false,
+      'the live head outlived a log out from its own chain',
+    );
+    assert.equal((await refreshSession(store, orphan.refreshToken, SECRET, at + 3_000)).ok, false);
   });
 
   /** And the boolean still describes the row it was handed, so a second log out reads as nothing live. */
