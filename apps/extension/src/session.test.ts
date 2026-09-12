@@ -444,3 +444,52 @@ describe('parseIssued', () => {
     });
   });
 });
+
+/**
+ * Nothing here crosses a plain `http://` connection (SKG-596).
+ *
+ * A pairing code is spent for a refresh token worth thirty days, and a refresh spends that token
+ * again on every renewal — both readable by anyone on the path. The relay's own check was the half
+ * a review raised; this is the half nobody did, and it is the larger one. Loopback is excepted
+ * because it is the dev loop and is not on a wire.
+ *
+ * Every case asserts `remote.calls` is empty rather than only reading the refusal: what matters is
+ * that the credential was never *sent*, and a refusal returned after the request is no protection.
+ */
+describe('a session never crosses plain http', () => {
+  const INSECURE = 'http://worker.test';
+  const HELD = { [INSECURE]: { refreshToken: 'refresh.1', identity: IDENTITY } };
+
+  it('refuses to pair, and asks the worker nothing', async () => {
+    const { subject, remote, sessions } = setup({});
+
+    assert.deepEqual(await subject.pair(INSECURE, 'ABCD-EFGH-JKMN'), { ok: false, reason: 'insecure-endpoint' });
+    assert.deepEqual(remote.calls, []);
+    assert.deepEqual(await sessions.read(), {});
+  });
+
+  /** A session stored before this rule existed must not keep spending its token either. */
+  it('refuses to refresh a session it somehow already holds', async () => {
+    const { subject, remote } = setup({ sessions: HELD });
+
+    assert.deepEqual(await subject.ensureAccess(INSECURE), { ok: false, reason: 'insecure-endpoint' });
+    assert.deepEqual(remote.calls, []);
+  });
+
+  it('clears on log out without sending the token to be revoked', async () => {
+    const { subject, remote, sessions } = setup({ sessions: HELD });
+
+    await subject.logout(INSECURE);
+
+    assert.deepEqual(remote.calls, []);
+    assert.deepEqual(await sessions.read(), {});
+  });
+
+  it('still pairs against the development loop, which is not on a wire', async () => {
+    const loopback = 'http://localhost:8788';
+    const { subject, remote } = setup({ answers: [{ status: 200, body: issued({ refreshToken: 'refresh.1' }) }] });
+
+    assert.partialDeepStrictEqual(await subject.pair(loopback, 'ABCD-EFGH-JKMN'), { ok: true });
+    assert.equal(remote.calls.length, 1);
+  });
+});

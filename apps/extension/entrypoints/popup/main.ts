@@ -59,6 +59,7 @@ async function render(editing = false): Promise<void> {
 const PAIRING_PROBLEM: Record<PairFailure | 'blocked', string> = {
   'code-spent-or-expired': 'That code has been used or has expired. Ask for a new one.',
   unavailable: 'The worker did not answer. Try again.',
+  'insecure-endpoint': 'That worker is on plain http. A session must not cross it.',
   blocked: 'Fruitback needs permission to reach that worker.',
 };
 

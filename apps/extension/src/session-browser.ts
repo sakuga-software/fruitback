@@ -17,6 +17,9 @@ import {
  * `node --test`. The same split `bridge.ts` made for SKG-534.
  */
 
+/** Long enough for a slow worker on a slow connection, short enough to unwedge the refresh chain. */
+const REQUEST_TIMEOUT_MS = 20 * 1_000;
+
 export const SESSIONS_KEY = 'sessions';
 export const GRANTS_KEY = 'access';
 
@@ -87,6 +90,11 @@ async function postJson(url: string, body: Record<string, unknown>): Promise<Ses
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    // **The refresh runs inside `serialize`, which chains one promise onto the last.** A worker that
+    // accepts the connection and never answers would therefore wedge that chain, and every later
+    // refresh for every worker would stop for good — not just this one. The relay's own call is
+    // bounded for a smaller reason; this is the same fix on the half nobody raised.
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     body: JSON.stringify(body),
   });
 

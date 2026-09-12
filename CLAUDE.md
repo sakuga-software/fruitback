@@ -481,6 +481,15 @@ SKG-596; both are built. Which one an origin is in is one field on its entry, an
   the day it is written. **It detects the world on the code, not on the file** — the docstring of
   `page.content.ts` quotes `world: 'MAIN'`, so the first version guarded a file that had stopped
   reaching the page and reported a pass.
+- **No credential crosses plain `http://`** (SKG-596). `isSecureWorkerEndpoint` requires https or
+  loopback, and `pair`, `refresh` and the revoke in `logout` all ask it — in `session.ts`, not only
+  in the popup that warns first, so a session stored before the rule cannot keep spending its token
+  over the wire. `isWorkerEndpoint` is **not** tightened: it gates the private mode's mount, which
+  carries no credential.
+- **`postJson` bounds its own request, and the reason is `serialize`.** The refresh chain runs one
+  promise after the last, so a worker that accepts a connection and never answers wedges every later
+  refresh for **every** worker, not just its own. Found by looking for the other half of a review
+  finding about the relay's fetch.
 - **Only a `401` ends a session.** An outage or a `502` keeps the refresh token: throwing it away on
   a network blip logs a reviewer out of a session the worker still considers open, and the only way
   back is an operator minting a new pairing code. For the same reason a `429` on `/session/pair`

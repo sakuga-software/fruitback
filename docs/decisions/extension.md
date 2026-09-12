@@ -279,7 +279,9 @@ written by the page**. The isolated world carries the request across and decides
   only thing carrying it. Loopback is excepted because it is the dev loop and is not on a wire. The
   popup refuses the same thing earlier and louder — a team entry on plain http cannot be stored, and
   pairing is disabled on any insecure endpoint, because pairing is handed a refresh token worth
-  thirty days. `isWorkerEndpoint` is deliberately **not** tightened: it gates the private mode's
+  thirty days. The rule itself is in `session.ts`, where `pair`, `refresh` and the revoke all ask
+  it: a warning on a screen is not a rule, and a session stored before the rule existed would
+  otherwise keep spending its token in the clear. `isWorkerEndpoint` is deliberately **not** tightened: it gates the private mode's
   mount, which carries no credential, and an http staging worker that works today has nothing to
   leak. Raised in review.
 
@@ -325,3 +327,19 @@ at once getting their own.
 The same limit SKG-599 has: no browser runs on this machine. The worker's side of the origin change
 is exercised through `handleRequest`, and the relay's gates through their seams, but the announcement
 reaching a real page's `window` and a real `sender.origin` are SKG-538's to prove.
+
+### The two halves nobody raised
+
+Both of the review's findings had a twin in the session code, and the twins were worse.
+
+`postJson` had no deadline while the relay's fetch gained one. That matters more here than there:
+the refresh runs inside `serialize`, which chains one promise onto the last, so a worker that accepts
+a connection and never answers wedges **every later refresh for every worker** — not only its own,
+and not only until the next alarm. It is now bounded the same way.
+
+The https rule was raised about the relay's access token, which is the smaller half. Pairing spends
+a code for a refresh token worth thirty days and every renewal spends that token again, all over the
+same endpoint. So the rule is in `session.ts` rather than only in the popup: a warning on a screen is
+not a rule, and a session already stored would otherwise have gone on leaking.
+
+Both were found by asking what else the accepted fix should have touched, before pushing it.

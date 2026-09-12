@@ -17,6 +17,8 @@
  */
 
 /** Who the worker says this session speaks for. Its word, from the pairing an operator created. */
+import { isSecureWorkerEndpoint } from './endpoint.ts';
+
 export type SessionIdentity = {
   subject: string;
   name?: string;
@@ -86,9 +88,9 @@ export function isFresh(grant: AccessGrant | undefined, now: number): grant is A
 }
 
 /** A code that never existed and one already spent answer the same, because the worker does. */
-export type PairFailure = 'code-spent-or-expired' | 'unavailable';
+export type PairFailure = 'code-spent-or-expired' | 'unavailable' | 'insecure-endpoint';
 
-export type AccessFailure = 'not-paired' | 'session-revoked-or-expired' | 'unavailable';
+export type AccessFailure = 'not-paired' | 'session-revoked-or-expired' | 'unavailable' | 'insecure-endpoint';
 
 export type PairResult = { ok: true; identity: SessionIdentity } | { ok: false; reason: PairFailure };
 export type AccessResult = { ok: true; grant: AccessGrant } | { ok: false; reason: AccessFailure };
@@ -146,6 +148,10 @@ export function createSessions({ sessions, grants, post, now = Date.now }: Sessi
   }
 
   async function refresh(endpoint: string): Promise<AccessResult> {
+    // Checked before storage rather than after, because it is a rule about this endpoint and not
+    // about what is held for it. See `pair` for what it protects.
+    if (!isSecureWorkerEndpoint(endpoint)) return { ok: false, reason: 'insecure-endpoint' };
+
     const stored = (await sessions.read())[endpoint];
     if (stored === undefined) return { ok: false, reason: 'not-paired' };
 
@@ -208,6 +214,17 @@ export function createSessions({ sessions, grants, post, now = Date.now }: Sessi
     },
 
     async pair(endpoint, code) {
+      /**
+       * Nothing here crosses a plain `http://` connection, and this is the larger half of that rule.
+       *
+       * A pairing code is spent for a **refresh token worth thirty days**; a refresh spends that
+       * token again on every renewal. Both would be readable by anyone on the path. The popup says
+       * so earlier and louder, and this is the rule itself rather than its warning — `refresh` and
+       * the revoke below keep it too, so a session stored before the rule existed cannot leak one.
+       * Loopback is excepted: it is the dev loop and is not on a wire.
+       */
+      if (!isSecureWorkerEndpoint(endpoint)) return { ok: false, reason: 'insecure-endpoint' };
+
       const answer = await ask(`${endpoint}/session/pair`, { code });
       if (answer === undefined) return { ok: false, reason: 'unavailable' };
 
@@ -244,7 +261,11 @@ export function createSessions({ sessions, grants, post, now = Date.now }: Sessi
      */
     async logout(endpoint) {
       const stored = (await sessions.read())[endpoint];
-      if (stored !== undefined) await ask(`${endpoint}/session/revoke`, { refreshToken: stored.refreshToken });
+      // The token does not cross plain http even to be revoked. Clearing here still happens, which
+      // is the outcome the reviewer asked for and the only one this side can guarantee anyway.
+      if (stored !== undefined && isSecureWorkerEndpoint(endpoint)) {
+        await ask(`${endpoint}/session/revoke`, { refreshToken: stored.refreshToken });
+      }
 
       await forget(endpoint);
     },
