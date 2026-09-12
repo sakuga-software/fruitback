@@ -1,0 +1,446 @@
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  type AccessGrant,
+  type Area,
+  type SessionResponse,
+  type StoredSession,
+  REFRESH_MARGIN_MS,
+  RETRY_DELAY_MS,
+  createSessions,
+  nextWakeAt,
+  parseIssued,
+} from './session.ts';
+
+const ENDPOINT = 'https://worker.test';
+const IDENTITY = { subject: 'u_1', name: 'Alex' };
+const NOW = 1_700_000_000_000;
+
+/** One storage area, in memory. Two of these is the whole point: they are emptied by different events. */
+function area<T>(entries: Record<string, T> = {}): Area<T> {
+  let state: Record<string, T> = { ...entries };
+
+  return {
+    read: async () => ({ ...state }),
+    write: async (next) => {
+      state = { ...next };
+    },
+  };
+}
+
+/** A worker that answers whatever the case needs, and records what it was asked. */
+function worker(answers: (SessionResponse | Error)[]) {
+  const calls: { url: string; body: Record<string, unknown> }[] = [];
+
+  return {
+    calls,
+    post: async (url: string, body: Record<string, unknown>): Promise<SessionResponse> => {
+      calls.push({ url, body });
+      const answer = answers.shift();
+      assert.ok(answer !== undefined, `the worker was asked ${url} with no answer left to give`);
+      if (answer instanceof Error) throw answer;
+
+      return answer;
+    },
+  };
+}
+
+function issued(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return { accessToken: 'access.1', expiresIn: 600, identity: IDENTITY, ...overrides };
+}
+
+function setup(options: {
+  sessions?: Record<string, StoredSession>;
+  grants?: Record<string, AccessGrant>;
+  answers?: (SessionResponse | Error)[];
+  now?: number;
+}) {
+  const sessions = area<StoredSession>({ ...options.sessions });
+  const grants = area<AccessGrant>({ ...options.grants });
+  const remote = worker(options.answers ?? []);
+
+  return {
+    sessions,
+    grants,
+    remote,
+    subject: createSessions({ sessions, grants, post: remote.post, now: () => options.now ?? NOW }),
+  };
+}
+
+describe('pairing', () => {
+  /**
+   * The claim the whole ticket rests on, from the storage side: the two credentials are not kept
+   * together. The refresh token has to outlive the browser closing and the access token must not.
+   */
+  it('puts the refresh token and the access token in different areas', async () => {
+    const { subject, sessions, grants } = setup({
+      answers: [{ status: 200, body: issued({ refreshToken: 'refresh.1' }) }],
+    });
+
+    const result = await subject.pair(ENDPOINT, 'ABCD-EFGH-JKMN');
+
+    assert.deepEqual(result, { ok: true, identity: IDENTITY });
+    assert.deepEqual(await sessions.read(), { [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } });
+    assert.deepEqual(await grants.read(), {
+      [ENDPOINT]: { accessToken: 'access.1', expiresAt: NOW + 600_000, identity: IDENTITY },
+    });
+  });
+
+  it('stores nothing for a code the worker refused', async () => {
+    const { subject, sessions, grants } = setup({
+      answers: [{ status: 401, body: { error: 'code-spent-or-expired' } }],
+    });
+
+    assert.deepEqual(await subject.pair(ENDPOINT, 'ABCD'), { ok: false, reason: 'code-spent-or-expired' });
+    assert.deepEqual(await sessions.read(), {});
+    assert.deepEqual(await grants.read(), {});
+  });
+
+  /**
+   * A busy or broken worker is not a bad code, and saying it is sends the reviewer to an operator
+   * for a replacement they do not need — while the one in their hand is still good.
+   */
+  it('does not blame the code when the worker is the problem', async () => {
+    for (const answer of [
+      { status: 502, body: { error: 'store-unavailable' } },
+      { status: 429, body: {} },
+    ]) {
+      const { subject } = setup({ answers: [answer] });
+
+      assert.deepEqual(await subject.pair(ENDPOINT, 'ABCD'), { ok: false, reason: 'unavailable' });
+    }
+
+    const unreachable = setup({ answers: [new Error('offline')] });
+    assert.deepEqual(await unreachable.subject.pair(ENDPOINT, 'ABCD'), { ok: false, reason: 'unavailable' });
+  });
+
+  /** A `200` whose body is not what it claims is not a session. */
+  it('refuses an answer that carries no refresh token', async () => {
+    const { subject, sessions } = setup({ answers: [{ status: 200, body: issued() }] });
+
+    assert.deepEqual(await subject.pair(ENDPOINT, 'ABCD'), { ok: false, reason: 'unavailable' });
+    assert.deepEqual(await sessions.read(), {});
+  });
+});
+
+describe('keeping an access token fresh', () => {
+  it('hands back a token that is still good without asking the worker', async () => {
+    const grant = { accessToken: 'access.1', expiresAt: NOW + 9 * 60_000, identity: IDENTITY };
+    const { subject, remote } = setup({
+      sessions: { [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } },
+      grants: { [ENDPOINT]: grant },
+    });
+
+    assert.deepEqual(await subject.ensureAccess(ENDPOINT), { ok: true, grant });
+    assert.deepEqual(remote.calls, []);
+  });
+
+  /** Replaced before it expires rather than after a `401`, which is the whole reason for the margin. */
+  it('replaces a token that is inside the margin but not yet expired', async () => {
+    const { subject, remote, grants } = setup({
+      sessions: { [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } },
+      grants: {
+        [ENDPOINT]: { accessToken: 'old', expiresAt: NOW + REFRESH_MARGIN_MS - 1_000, identity: IDENTITY },
+      },
+      answers: [{ status: 200, body: issued({ accessToken: 'access.2' }) }],
+    });
+
+    const result = await subject.ensureAccess(ENDPOINT);
+
+    assert.ok(result.ok);
+    assert.equal(result.grant.accessToken, 'access.2');
+    assert.equal(remote.calls[0]?.url, `${ENDPOINT}/session/refresh`);
+    assert.equal((await grants.read())[ENDPOINT]?.accessToken, 'access.2');
+  });
+
+  it('says so rather than guessing when this worker was never paired with', async () => {
+    const { subject, remote } = setup({});
+
+    assert.deepEqual(await subject.ensureAccess(ENDPOINT), { ok: false, reason: 'not-paired' });
+    assert.deepEqual(remote.calls, []);
+  });
+
+  /**
+   * The guard that costs the most to get wrong in both directions.
+   *
+   * A refusal means the session is over and holding the token would leave a reviewer stuck behind a
+   * credential the worker has already forgotten. An outage means nothing of the sort, and throwing
+   * the token away there logs them out of a session that is still open — recoverable only with a new
+   * pairing code from an operator.
+   */
+  it('forgets the session the worker refused, and keeps the one it could not reach', async () => {
+    const refused = setup({
+      sessions: { [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } },
+      grants: { [ENDPOINT]: { accessToken: 'old', expiresAt: NOW, identity: IDENTITY } },
+      answers: [{ status: 401, body: { error: 'session-revoked-or-expired' } }],
+    });
+
+    assert.deepEqual(await refused.subject.ensureAccess(ENDPOINT), {
+      ok: false,
+      reason: 'session-revoked-or-expired',
+    });
+    assert.deepEqual(await refused.sessions.read(), {});
+    assert.deepEqual(await refused.grants.read(), {});
+
+    for (const answer of [new Error('offline'), { status: 502, body: { error: 'store-unavailable' } }]) {
+      const kept = setup({
+        sessions: { [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } },
+        answers: [answer],
+      });
+
+      assert.deepEqual(await kept.subject.ensureAccess(ENDPOINT), { ok: false, reason: 'unavailable' });
+      assert.deepEqual(await kept.sessions.read(), {
+        [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY },
+      });
+    }
+  });
+
+  /**
+   * The worker does not rotate today. This is the half that has to already work on the day it does,
+   * because a client that ignored the new token would keep sending a retired one.
+   */
+  it('stores a rotated refresh token when the worker sends one', async () => {
+    const { subject, sessions } = setup({
+      sessions: { [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } },
+      answers: [{ status: 200, body: issued({ refreshToken: 'refresh.2' }) }],
+    });
+
+    await subject.ensureAccess(ENDPOINT);
+
+    assert.deepEqual(await sessions.read(), { [ENDPOINT]: { refreshToken: 'refresh.2', identity: IDENTITY } });
+  });
+
+  it('refreshes only what is due, across several workers', async () => {
+    const other = 'https://other.test';
+    const { subject, remote } = setup({
+      sessions: {
+        [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY },
+        [other]: { refreshToken: 'refresh.2', identity: IDENTITY },
+      },
+      grants: { [other]: { accessToken: 'fresh', expiresAt: NOW + 9 * 60_000, identity: IDENTITY } },
+      answers: [{ status: 200, body: issued() }],
+    });
+
+    await subject.refreshDue();
+
+    assert.deepEqual(
+      remote.calls.map((call) => call.url),
+      [`${ENDPOINT}/session/refresh`],
+    );
+  });
+});
+
+describe('a session that ends while a refresh is in the air', () => {
+  /**
+   * A refresh that has been sent and not yet answered, so the test can end the session underneath it.
+   *
+   * Synchronised on the request being **entered**, not merely started: `ensureAccess` reads storage
+   * before it posts, and a first version that wrote before that read never reached the guard at all —
+   * it took the early `not-paired` and passed for the wrong reason.
+   */
+  function refreshInFlight(body: Record<string, unknown>) {
+    const sessions = area<StoredSession>({ [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } });
+    const grants = area<AccessGrant>();
+    let entered = (): void => {};
+    let release = (): void => {};
+    const sent = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const answered = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const subject = createSessions({
+      sessions,
+      grants,
+      now: () => NOW,
+      post: async (url) => {
+        if (url.endsWith('/session/refresh')) {
+          entered();
+          await answered;
+        }
+
+        return { status: 200, body };
+      },
+    });
+
+    return { sessions, grants, sent, release, refreshing: subject.ensureAccess(ENDPOINT) };
+  }
+
+  /**
+   * The popup and the background are separate contexts with separate `Sessions`, sharing only
+   * storage. A reviewer clicking log out while an alarm is already awaiting `/session/refresh` used
+   * to get the grant written back afterwards — a working access token in storage under a screen that
+   * says signed out, and revoking does not reach a token already minted. Raised in review.
+   */
+  it('writes nothing back after a logout cleared the session', async () => {
+    const { sessions, grants, sent, release, refreshing } = refreshInFlight(issued());
+
+    await sent;
+    await sessions.write({});
+    await grants.write({});
+    release();
+
+    assert.deepEqual(await refreshing, { ok: false, reason: 'not-paired' });
+    assert.deepEqual(await grants.read(), {});
+    assert.deepEqual(await sessions.read(), {});
+  });
+
+  /**
+   * Re-pairing while a refresh is in flight is the same shape, and the worse one: the stale answer
+   * carries its own rotated token, which would overwrite the credential the new pairing just stored.
+   */
+  it('writes nothing back after the session was replaced by a new pairing', async () => {
+    const { sessions, grants, sent, release, refreshing } = refreshInFlight(
+      issued({ refreshToken: 'rotated.by.the.stale.run' }),
+    );
+    const repaired = { refreshToken: 'refresh.2', identity: IDENTITY };
+
+    await sent;
+    await sessions.write({ [ENDPOINT]: repaired });
+    release();
+
+    assert.deepEqual(await refreshing, { ok: false, reason: 'not-paired' });
+    assert.deepEqual(await sessions.read(), { [ENDPOINT]: repaired });
+    assert.deepEqual(await grants.read(), {});
+  });
+});
+
+describe('logging out', () => {
+  /**
+   * Revoke first, clear second. The other order cannot work: the token the call needs is the one the
+   * clear has just thrown away, and what is left behind is a live credential on the worker that
+   * nobody can revoke any more.
+   */
+  it('revokes on the worker before it clears anything here', async () => {
+    const { subject, remote, sessions, grants } = setup({
+      sessions: { [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } },
+      grants: { [ENDPOINT]: { accessToken: 'access.1', expiresAt: NOW + 600_000, identity: IDENTITY } },
+      answers: [{ status: 204, body: undefined }],
+    });
+
+    await subject.logout(ENDPOINT);
+
+    assert.deepEqual(remote.calls, [{ url: `${ENDPOINT}/session/revoke`, body: { refreshToken: 'refresh.1' } }]);
+    assert.deepEqual(await sessions.read(), {});
+    assert.deepEqual(await grants.read(), {});
+  });
+
+  /** A screen that says signed out while this extension still holds a working credential is worse. */
+  it('clears here even when the worker never answered', async () => {
+    const { subject, sessions, grants } = setup({
+      sessions: { [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } },
+      grants: { [ENDPOINT]: { accessToken: 'access.1', expiresAt: NOW + 600_000, identity: IDENTITY } },
+      answers: [new Error('offline')],
+    });
+
+    await subject.logout(ENDPOINT);
+
+    assert.deepEqual(await sessions.read(), {});
+    assert.deepEqual(await grants.read(), {});
+  });
+
+  it('leaves the other workers alone', async () => {
+    const other = 'https://other.test';
+    const { subject, sessions } = setup({
+      sessions: {
+        [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY },
+        [other]: { refreshToken: 'refresh.2', identity: IDENTITY },
+      },
+      answers: [{ status: 204, body: undefined }],
+    });
+
+    await subject.logout(ENDPOINT);
+
+    assert.deepEqual(await sessions.read(), { [other]: { refreshToken: 'refresh.2', identity: IDENTITY } });
+  });
+});
+
+describe('nextWakeAt', () => {
+  it('asks for no alarm at all when nothing is paired', () => {
+    assert.equal(nextWakeAt({}, {}, NOW), undefined);
+    assert.equal(
+      nextWakeAt({}, { [ENDPOINT]: { accessToken: 'a', expiresAt: NOW, identity: IDENTITY } }, NOW),
+      undefined,
+    );
+  });
+
+  /**
+   * The alarm never asks for a time that has already passed, and the two ways of getting one are the
+   * same failure: a browser restart emptied `chrome.storage.session`, or the last refresh could not
+   * reach the worker and left the old token in place. An alarm in the past is an alarm every minute,
+   * for as long as the worker stays down. Raised in review; nothing here composed the two functions
+   * that produce it.
+   */
+  it('backs off rather than asking for an alarm that is already due', () => {
+    const session = { [ENDPOINT]: { refreshToken: 'r', identity: IDENTITY } };
+
+    assert.equal(nextWakeAt(session, {}, NOW), NOW + RETRY_DELAY_MS);
+    assert.equal(
+      nextWakeAt(session, { [ENDPOINT]: { accessToken: 'a', expiresAt: NOW - 1, identity: IDENTITY } }, NOW),
+      NOW + RETRY_DELAY_MS,
+    );
+  });
+
+  /**
+   * And the first token after a restart does not wait for that: the service worker refreshes once as
+   * it starts, which is `background.ts`'s top-level call and not this alarm.
+   */
+  it('leaves the first refresh of the day to the service worker starting up', async () => {
+    const { subject, remote } = setup({
+      sessions: { [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } },
+      answers: [{ status: 200, body: issued() }],
+    });
+
+    await subject.refreshDue();
+
+    assert.deepEqual(
+      remote.calls.map((call) => call.url),
+      [`${ENDPOINT}/session/refresh`],
+    );
+  });
+
+  it('is the earliest deadline across every worker', () => {
+    const other = 'https://other.test';
+    const due = nextWakeAt(
+      {
+        [ENDPOINT]: { refreshToken: 'r1', identity: IDENTITY },
+        [other]: { refreshToken: 'r2', identity: IDENTITY },
+      },
+      {
+        [ENDPOINT]: { accessToken: 'a1', expiresAt: NOW + 600_000, identity: IDENTITY },
+        [other]: { accessToken: 'a2', expiresAt: NOW + 300_000, identity: IDENTITY },
+      },
+      NOW,
+    );
+
+    assert.equal(due, NOW + 300_000 - REFRESH_MARGIN_MS);
+  });
+});
+
+describe('parseIssued', () => {
+  it('accepts what the worker sends', () => {
+    assert.deepEqual(parseIssued(issued({ refreshToken: 'r' })), {
+      accessToken: 'access.1',
+      expiresIn: 600,
+      identity: IDENTITY,
+      refreshToken: 'r',
+    });
+  });
+
+  /** A lifetime that is not a positive number would be turned into an `expiresAt` in the past. */
+  it('refuses a body that is not the shape it claims', () => {
+    assert.equal(parseIssued(undefined), undefined);
+    assert.equal(parseIssued(issued({ accessToken: '' })), undefined);
+    assert.equal(parseIssued(issued({ expiresIn: '600' })), undefined);
+    assert.equal(parseIssued(issued({ expiresIn: 0 })), undefined);
+    assert.equal(parseIssued(issued({ identity: { name: 'Alex' } })), undefined);
+  });
+
+  /** An identity carries one required field; the rest are what an operator happened to type. */
+  it('keeps an identity that has only a subject', () => {
+    assert.partialDeepStrictEqual(parseIssued(issued({ identity: { subject: 'u_2' } })), {
+      identity: { subject: 'u_2' },
+    });
+  });
+});

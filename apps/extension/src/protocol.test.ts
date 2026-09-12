@@ -90,4 +90,25 @@ describe('parseBridgeMessage', () => {
     assert.partialDeepStrictEqual(parsed, { kind: 'mount', clientId: 'acme' });
     assert.equal(Object.hasOwn(parsed ?? {}, 'label'), false);
   });
+  /**
+   * The channel carries a fixed set of fields and builds its answer from scratch, so a token cannot
+   * travel on it even if something upstream put one in the object (SKG-599).
+   *
+   * Pinned here because SKG-596 adds a relay message to this file, and the tempting shape for a
+   * relay is to spread the request it was given. The parser is the last place that would be noticed,
+   * and the page is listening on the other side. See `worlds.test.ts` for the other half.
+   */
+  it('carries no credential, whatever the caller put in the object', () => {
+    const parsed = parseBridgeMessage({
+      channel: CHANNEL,
+      kind: 'mount',
+      endpoint: 'https://feedback.acme.dev',
+      clientId: 'acme',
+      accessToken: 'access.1',
+      refreshToken: 'refresh.1',
+      authorization: 'Bearer access.1',
+    });
+
+    assert.deepEqual(Object.keys(parsed ?? {}).sort(), ['channel', 'clientId', 'endpoint', 'kind']);
+  });
 });

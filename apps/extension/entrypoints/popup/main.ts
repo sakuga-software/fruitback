@@ -1,7 +1,9 @@
 import { browser } from 'wxt/browser';
-import { isWorkerEndpoint, normalizeWorkerEndpoint } from '../../src/endpoint.ts';
+import { isWorkerEndpoint, normalizeWorkerEndpoint, workerOrigin } from '../../src/endpoint.ts';
 import { BRIDGE_FILE, PAGE_FILE, matchPatternFor, publicPath } from '../../src/registration.ts';
 import { type SiteConfig, readSite, writeSite } from '../../src/sites.ts';
+import { createBrowserSessions } from '../../src/session-browser.ts';
+import { type PairFailure, describeIdentity } from '../../src/session.ts';
 
 /**
  * The switch for the tab you are looking at, and the two fields that make it work (SKG-534).
@@ -38,6 +40,104 @@ async function render(): Promise<void> {
     element('p', origin, 'origin'),
     site === undefined ? form(origin) : status(origin, site),
   );
+
+  // Pairing is against the **worker**, not the site, so there is nothing to ask for until one is
+  // named. A reviewer holds one session per worker however many of its sites they have turned on.
+  if (site !== undefined) app.append(await session(site.endpoint));
+}
+
+/** What a failed pairing is, in the reporter's words. */
+const PAIRING_PROBLEM: Record<PairFailure | 'blocked', string> = {
+  'code-spent-or-expired': 'That code has been used or has expired. Ask for a new one.',
+  unavailable: 'The worker did not answer. Try again.',
+  blocked: 'Fruitback needs permission to reach that worker.',
+};
+
+/**
+ * Ask for the worker's own origin, which is not the site's.
+ *
+ * A reviewer grants the **site** they are reviewing; the worker usually lives somewhere else
+ * entirely, and nothing had asked for it. The session routes answer a `chrome-extension://` origin
+ * with CORS headers that ought to make an unprivileged `fetch` enough — measured against a real
+ * worker with a real preflight — but that was measured with `curl`, which does not enforce CORS, and
+ * no browser runs on this machine to settle it. So the permission is asked for rather than relied
+ * on: granted, the call is privileged and CORS never comes into it. Raised in review, and this is
+ * the repository's recurring defect (SKG-518) — correct logic the real caller never reaches.
+ *
+ * Retained once granted, which is what lets the background refresh and the logout revoke later, with
+ * no gesture to ask from.
+ */
+async function grantWorkerOrigin(endpoint: string): Promise<boolean> {
+  return browser.permissions.request({ origins: [matchPatternFor(workerOrigin(endpoint))] });
+}
+
+/**
+ * Paste a code, see who you are, log out (SKG-599).
+ *
+ * Deliberately thin: everything it decides lives in `src/session.ts`, where `node --test` can reach
+ * it. What is here is four elements and the two strings a person reads.
+ */
+async function session(endpoint: string): Promise<HTMLElement> {
+  const sessions = createBrowserSessions();
+  const held = (await sessions.list())[endpoint];
+  const wrapper = document.createElement('div');
+  wrapper.className = 'session';
+
+  if (held !== undefined) {
+    const out = element('button', 'Log out');
+    out.addEventListener('click', () => {
+      out.disabled = true;
+      // `logout` revokes on the worker first and clears here whatever that answers. See its comment:
+      // a screen that says signed out while this extension still holds a working credential is the
+      // one outcome worth avoiding.
+      void sessions.logout(endpoint).then(render);
+    });
+
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.append(element('span', `Paired as ${describeIdentity(held.identity)}`, 'state'), out);
+    wrapper.append(row);
+
+    return wrapper;
+  }
+
+  const code = field('Pairing code', 'ABCD-EFGH-JKMN');
+  const submit = element('button', 'Pair with this worker');
+  const problem = element('p', '', 'problem');
+
+  submit.addEventListener('click', () => {
+    const value = code.input.value.trim();
+    problem.textContent = value === '' ? 'The pairing code is required.' : '';
+    if (problem.textContent !== '') return;
+
+    // A code is spendable once. A second click while the first is in flight would spend it, then be
+    // told by the worker that it is spent — a success reported as a failure. Same rule as the
+    // widget's send button.
+    submit.disabled = true;
+
+    void (async () => {
+      // The permission request is first and nothing is awaited before it, because a host permission
+      // may only be asked for while a user gesture is being handled. Same rule as `turnOn`, for the
+      // same reason and the same trap: one storage read in front of it and no prompt ever appears.
+      const granted = await grantWorkerOrigin(endpoint);
+      const result = granted ? await sessions.pair(endpoint, value) : undefined;
+      if (result?.ok === true) {
+        void render();
+
+        return;
+      }
+
+      submit.disabled = false;
+      problem.textContent = PAIRING_PROBLEM[result === undefined ? 'blocked' : result.reason];
+    })();
+  });
+
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.append(element('span', 'Not paired with this worker', 'state'));
+  wrapper.append(row, code.label, submit, problem);
+
+  return wrapper;
 }
 
 /** No entry yet: ask for the two things `init` cannot be called without. */

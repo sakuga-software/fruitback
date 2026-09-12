@@ -121,3 +121,90 @@ is the private mode as SKG-534 built it.
   can drive, which is why that path is unit-tested and the browser run uses a build with the scripts
   declared statically.
 
+
+## The session, and the token that never goes down (SKG-599)
+
+SKG-535 built the worker half — pairing codes, access and refresh tokens, revocation, three routes
+exempt from the origin allowlist. This is the other half, and it carries the constraint that shaped
+both: an access token the host site's JavaScript can read is the worst outcome of this batch.
+
+- **Two storage areas, and the split is the decision.** The refresh token goes in
+  `chrome.storage.local`, which survives the browser closing; the access token goes in
+  `chrome.storage.session`, which does not. Both in `session` would look tidier and be worse: a
+  reviewer who pairs again every morning keeps their pairing code in a text file, which is a worse
+  place than the one the split was protecting. SKG-535's "when the lifetime suits it" is what allows
+  this.
+- **Nothing calls `setAccessLevel` on the session area, on purpose.** Its default excludes content
+  scripts, which is exactly the boundary this ticket holds. Widening it to
+  `TRUSTED_AND_UNTRUSTED_CONTEXTS` so the isolated script could read the token directly would put the
+  token one `postMessage` mistake away from the page — the isolated script asks the background to
+  make the call instead, which is the same seam SKG-596's relay needs. What *does* hold a token is
+  every trusted context: the background refreshes and the popup pairs and logs out, which is what
+  `TRUSTED_CONTEXTS` means and what the documentation now says. Raised in review, where the first
+  wording claimed the background was the only one.
+- **Pairing asks for a host permission on the worker's origin, and that is a hedge rather than a
+  proof.** `turnOn` only ever requested the *site*; a worker normally lives somewhere else entirely,
+  so nothing had asked for it. The session routes answer a `chrome-extension://` origin with CORS
+  headers that ought to make an unprivileged `fetch` enough — and that was measured against a real
+  worker with a real preflight, **with `curl`, which does not enforce CORS**. No browser runs on this
+  machine to settle it, and the failure mode if it is wrong is total: pairing simply never works,
+  with the request never arriving. So the permission is requested, and granted it makes the call
+  privileged and CORS irrelevant. Raised in review; the reviewer's stated reason was wrong (CORS is
+  precisely what would grant it) and the recommendation was right anyway.
+- **A refresh writes nothing back once the token in storage is no longer the one it spent.** The
+  popup and the background are separate contexts with separate `Sessions`, sharing only storage: a
+  reviewer can click log out — revoking, then clearing — while an alarm is already awaiting
+  `/session/refresh`. Writing the grant afterwards put a working access token back under a screen
+  saying signed out, and revocation does not reach an access token already minted. The refresh token
+  is its own generation marker, which is what makes the check work across contexts with nothing to
+  keep in step. `chrome.storage` has no transaction, so the window is narrowed from a network round
+  trip to two storage operations rather than closed. Raised in review.
+  - The first test for it passed for the wrong reason: it mutated storage before the refresh had
+    read it, so the early `not-paired` answered and the guard never ran. Synchronised on the request
+    being *entered* instead, then mutated — and removing the guard now fails both cases.
+- **The guard is an allowlist, not a denylist** (`src/worlds.test.ts`). Naming the files that must
+  stay clean passes a main-world entrypoint added next year. So the entrypoints are *discovered* —
+  every `*.content.ts` declaring `world: 'MAIN'` — their transitive relative imports are computed,
+  and none of those may be a `session*` module or name `refreshToken` / `accessToken` in code.
+  - **The detection reads the code, not the file.** `page.content.ts` opens with a paragraph about
+    why `world: 'MAIN'` is the ticket, so the first version kept the file in the list after the
+    declaration itself had changed — it then guarded a file that no longer reached the page and
+    reported three passes. Found by mutating the declaration and watching nothing fail.
+  - **All three import spellings, not only `from`.** A side-effect `import './x.ts'` and a lazy
+    `await import('./x.ts')` reach the page exactly as well, and following only one of them would
+    have made the "fails by default" promise quietly false. Raised in review; each spelling was then
+    mutated in and watched to fail.
+  - The built bundles say the same thing, which is the version that cannot be argued with:
+    `refreshToken`, `accessToken`, `/session/` and `storage.session` each appear **once in
+    `background.js` and zero times in `page.js` and `bridge.js`**.
+- **Only a `401` ends a session.** An outage, a `502` from a store nobody mounted, a laptop on a
+  train: all of those keep the refresh token. Throwing it away on a network blip logs a reviewer out
+  of a session the worker still considers open, and the only way back is an operator minting a new
+  pairing code on the container.
+- **A busy worker is not a bad code.** A `429` or a `502` on `/session/pair` answers `unavailable`
+  and not `code-spent-or-expired`, because the second sends a reviewer for a replacement code while
+  the one in their hand is still good.
+- **Log out revokes, then clears — and clears whatever the revoke answered.** The other order cannot
+  work: the token the call needs is the one the clear has just thrown away. A revoke that never
+  arrived leaves the token live on the worker until it expires, which is what the 30-day limit is
+  for, and that is the honest trade rather than a screen saying signed out over a working credential.
+- **An alarm, not a timer.** An MV3 service worker is stopped whenever the browser feels like it, so
+  a `setTimeout` dies with it. It is set at the next due moment rather than on a period: one session
+  with a ten-minute token and a two-minute margin wakes the worker every eight minutes.
+- **A failed refresh backs off, and the first version did not.** A refresh that could not reach the
+  worker leaves the grant stale, `nextWakeAt` then asked for a moment already past, the alarm was
+  clamped to a minute — and the service worker woke to fail again every minute for as long as a
+  staging endpoint stayed down. `RETRY_DELAY_MS` is the floor for any due time in the past, missing
+  token included. Nothing is lost by waiting: a browser restart, a pairing and a logout each refresh
+  directly rather than through the alarm, and the first token after a restart comes from the service
+  worker's own start-up call. Raised in review — both halves were tested and their composition was
+  not.
+- **Rotation is half-built on purpose.** A rotated refresh token is stored when one arrives, and none
+  ever does: the worker does not rotate. A rotation whose response is lost leaves this side holding a
+  token the worker has already retired, with nothing to retry — closing that needs a replay window on
+  the worker, which is SKG-600.
+- Verified over the real transport rather than against the handler, which is this repo's recurring
+  defect (SKG-518): a real `OPTIONS` preflight from `chrome-extension://…` for
+  `Content-Type: application/json`, then pair → refresh → revoke → refresh, answering
+  `204 / 200 / 200 / 204 / 401`. What is **not** verified here is `chrome.storage` itself and the
+  real world boundary — that is SKG-538, and no browser runs on this machine.

@@ -21,7 +21,9 @@ export default defineConfig({
     // `activeTab` is what lets the popup read the URL of the tab it was opened on. `tabs.query`
     // answers without it, but withholds `url` — so the popup would decide there is no origin and
     // offer nothing, on every site, forever. Raised in review, and it made a fresh install useless.
-    permissions: ['storage', 'scripting', 'activeTab'],
+    // `alarms` keeps the session's access token fresh from a service worker the browser is free
+    // to stop at any moment (SKG-599) — a `setTimeout` would die with it.
+    permissions: ['storage', 'scripting', 'activeTab', 'alarms'],
     // Requested per origin by the popup, at the moment somebody switches a site on.
     optional_host_permissions: ['*://*/*'],
     action: { default_title: 'Fruitback' },
