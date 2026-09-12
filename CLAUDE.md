@@ -655,6 +655,14 @@ and *The team mode, and the call the page cannot make*:
 - **`rotated_at` marks the first rotation, never the last.** `AND rotated_at IS NULL` on that update
   is the grace being a ceiling: rewritten on every retry it slides, and whoever holds the token
   re-presents it just inside each window for ever.
+- **An access token carries the generation of the session it was minted for** (`matches`). Fresh is
+  not enough: the popup and the background write the same two areas from separate contexts, so a
+  logout can land between a refresh writing the session and the same refresh writing its grant, and
+  the orphan was then honoured for its remaining ten minutes — which revoking on the worker does not
+  reach. The two writes are one queue entry now, and the marker is what closes what the queue only
+  narrows. It is an opaque id, never the refresh token: copying a credential into the session area
+  would undo the split that keeps it out. Absent on both sides compares equal, so an upgrade keeps
+  the session it had.
 - **Both storage areas keep every endpoint under one key, and a write replaces that key whole.** So
   every read-modify-write on them goes through one queue (`serialized`). Two refreshes for different
   workers otherwise each read the record and each replace it, and the later write puts the earlier
