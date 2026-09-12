@@ -470,14 +470,13 @@ SKG-596; both are built. Which one an origin is in is one field on its entry, an
   repository's recurring defect (SKG-518) waiting to happen, so the permission is asked for rather
   than relied on. **It must be requested before anything is awaited in the click handler**, like
   `turnOn`: a gesture is lost across an await and the prompt never appears.
-- **A refresh writes nothing back once the refresh token in storage is no longer the one it spent**,
-  and the check shares **one read** with the write (`keepIfCurrent`). Checking first and calling
-  `keep` after read storage twice and wrote a third time, so a logout landing anywhere across those
-  three put a working credential back under a screen saying signed out. No write, no grant either.
-  The popup and the background are separate contexts sharing only storage, so a logout can land while
-  an alarm is awaiting `/session/refresh` — and the answer used to put a working access token back
-  under a screen saying signed out. The token is its own generation marker; `chrome.storage` has no
-  transaction, so the window is narrowed, not closed.
+- **A refresh writes nothing back once the refresh token in storage is no longer the one it spent**
+  (`keepIfCurrent`), and no write means no grant either. The popup and the background are separate
+  contexts sharing only storage, so a logout can land while an alarm is awaiting `/session/refresh`,
+  and the answer used to put a working access token back under a screen saying signed out. The token
+  is its own generation marker for that compare. The compare and the write are **not** one operation
+  and cannot be — `chrome.storage` has no transaction — so what closes the gap is the generation the
+  grant carries, not the ordering. The window is narrowed, not closed.
 - **The guard is an allowlist**: `worlds.test.ts` *discovers* every `*.content.ts` declaring
   `world: 'MAIN'`, follows its relative imports, and refuses a `session*` module or the name
   `refreshToken` / `accessToken` anywhere in that closure. A main-world file added later is covered
