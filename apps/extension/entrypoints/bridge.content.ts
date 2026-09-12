@@ -8,6 +8,7 @@ import {
 } from '../src/protocol.ts';
 import { createApply } from '../src/bridge.ts';
 import { readSite } from '../src/sites.ts';
+import { BRIDGE_SCRIPT_FLAG } from '../src/page-api.ts';
 
 /**
  * The half that can reach the browser, in the isolated world (SKG-534, SKG-596).
@@ -29,6 +30,13 @@ export default defineContentScript({
   runAt: 'document_idle',
 
   async main() {
+    // A second copy of this file in a frame that already has one, which would apply every decision
+    // twice. See `PAGE_SCRIPT_FLAG`; this is that guard on the isolated world's own global, where
+    // no page can read or write it.
+    const world = globalThis as { [BRIDGE_SCRIPT_FLAG]?: true };
+    if (world[BRIDGE_SCRIPT_FLAG] === true) return;
+    world[BRIDGE_SCRIPT_FLAG] = true;
+
     const origin = window.location.origin;
 
     const post = (message: BridgeMessage): void => {

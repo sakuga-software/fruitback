@@ -31,8 +31,25 @@ export type FruitbackExtensionApi = {
   transport: FruitbackTransport;
 };
 
+/**
+ * Set by the main-world script on the window it has already claimed.
+ *
+ * The popup injects both content scripts into the open tab on every save, because registering one
+ * reaches the *next* page load and not this one. A tab that is already running them then gets a
+ * second copy, a second listener, and — on the next mount — a second widget beside the first. The
+ * second copy steps aside instead; the first is still correct.
+ *
+ * A page can set this and keep the widget out. It can already post an `unmount` and get the same
+ * result, so this adds nothing a page did not have.
+ */
+export const PAGE_SCRIPT_FLAG = '__fruitbackPageScript';
+
+/** The same guard for the isolated world, where it is on that world's own global. */
+export const BRIDGE_SCRIPT_FLAG = '__fruitbackBridgeScript';
+
 declare global {
   interface Window {
     fruitbackExtension?: FruitbackExtensionApi;
+    __fruitbackPageScript?: true;
   }
 }

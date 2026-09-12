@@ -5,6 +5,7 @@ import {
   EXTENSION_API_VERSION,
   EXTENSION_EVENT,
   EXTENSION_GLOBAL,
+  PAGE_SCRIPT_FLAG,
   type FruitbackExtensionApi,
 } from '../src/page-api.ts';
 
@@ -37,6 +38,10 @@ export default defineContentScript({
   runAt: 'document_idle',
 
   main() {
+    // A second copy of this file in a window that already has one. See `PAGE_SCRIPT_FLAG`.
+    if (window[PAGE_SCRIPT_FLAG] === true) return;
+    window[PAGE_SCRIPT_FLAG] = true;
+
     let widget: ReturnType<typeof init> | undefined;
     const relayListeners: ((message: BridgeMessage) => void)[] = [];
 

@@ -252,10 +252,9 @@ async function turnOn(origin: string, site: SiteConfig): Promise<void> {
  * reviewer pointed at it: the browser run that "proved" the no-reload flow had seeded storage before
  * the page loaded, which is not what a person does.
  *
- * Injecting a script that is already running costs one repeated decision. In private mode the page
- * world destroys the widget it has and mounts a new one. In team mode the fresh copy announces
- * itself again, so a site that mounts blindly on `fruitback:extension` gets a second widget — which
- * is why the snippet in `docs/install.md` checks whether it already has one.
+ * **Injecting into a tab that is already running them would add a second copy of each**, and a
+ * second main-world listener builds a second widget on the next mount. Both files refuse to run
+ * twice in one frame — see `PAGE_SCRIPT_FLAG` — so this costs nothing when it is not needed.
  */
 async function injectIntoCurrentTab(): Promise<void> {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
