@@ -329,9 +329,16 @@ connector's environment, and what a second connector with no markdown body actua
   the token it was handed` and `ends a chain from any link, including the token nobody is holding`,
   and not inheriting `root_hash` on the successor fails nine tests at once.
 - **The CORS exemption is mutation-tested.** Replacing `openCors` with the ordinary `resolveCors`
-  fails both `answers an extension origin that is on no allowlist` and `lets the preflight through`,
-  while `leaves the allowlist in force on /feedback` stays green — which is what says the exemption
-  is scoped to `/session/` rather than a hole in the gate.
+  fails both `answers an extension origin that is on no allowlist` and `lets the preflight through,
+  or the POST never happens`. What says the exemption is not a hole in the gate is
+  `leaves the allowlist in force on /feedback for sites, and admits the extension`: an ordinary site
+  origin that is on no allowlist is still refused there.
+  - Two of those three names were quoted here **truncated**, and the second was quoted with a
+    sentence that had stopped being true. The exemption was scoped to `/session/` when this was
+    written; SKG-596 widened it to every route, because the relay calls `/feedback` from the service
+    worker. The test was renamed to say so and this paragraph was not. Found while fixing a third
+    stale test name a reviewer caught on this ticket — `grep` for a quoted name is the check, and
+    nothing runs it.
 - **The rate-limit move is mutation-tested.** Putting `checkRateLimit` back below the path dispatch —
   where it sat before this ticket — fails `meters the pairing endpoint, not only /feedback`. The
   unknown-path test stays green under that mutation, because it guards a different ordering.
@@ -371,7 +378,7 @@ Inside the grace each presentation of the spent token revokes the successor the 
 minted, so it is the **last** presenter who ends up with the live chain: a thief who gets in after
 the real client takes the session and the client's own token is revoked under it. The first version
 of this paragraph said *first*, which is the opposite of what the code does. Measured, and kept as a
-test — `serves whoever presents last inside the grace, and locks the earlier holder out`. What rotation guarantees is that the two cannot both
+test — `serves whoever presents last inside the grace, until the earlier holder comes back`. What rotation guarantees is that the two cannot both
 keep the session quietly, which is a detection property and not a lifetime one.
 
 ### The ticket asked for a replay window. Two measurements said no.

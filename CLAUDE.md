@@ -638,7 +638,7 @@ and *The team mode, and the call the page cannot make*:
   minted — so the **last** presenter keeps the chain and every earlier holder is locked out. Write
   *last*, not *first*: the inverted version shipped into three documents and a test name. What is
   guaranteed is only that the two cannot both keep the session quietly.
-  `serves whoever presents last inside the grace, and locks the earlier holder out` holds it.
+  `serves whoever presents last inside the grace, until the earlier holder comes back` holds it.
 - **The successor inherits the predecessor's expiry.** Thirty days from pairing stays thirty days;
   rotation shortens what a leak is worth, it does not lengthen a session.
 - **The replay test is the chain, not the row**, and `revokeSession` ends the chain. A revoked

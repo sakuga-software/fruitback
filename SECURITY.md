@@ -153,7 +153,7 @@ holder to present it keeps the live chain and every earlier one is locked out. A
 after the reviewer takes the session, and the reviewer pairs again.
 What rotation guarantees is that the two cannot both keep the session: the loser's next refresh is
 refused, so the theft surfaces within one refresh cycle instead of lasting a month. See *the cost*
-below, and `serves whoever presents first inside the grace, and locks the other one out`.
+below, and `serves whoever presents last inside the grace, until the earlier holder comes back`.
 
 What retires the spent token is its successor being **used**. That is proof the caller who was
 answered received it — not that the caller was the real client, which a bearer token cannot say —
