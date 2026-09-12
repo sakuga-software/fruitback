@@ -196,9 +196,9 @@ both: an access token the host site's JavaScript can read is the worst outcome o
     once each read the record and each replace it, so the later write restores the earlier one's
     spent token. Under rotation that token is a replay, and its next use revokes the chain.
     `lets two workers refresh at the same time` — a test written to prove the lock was correctly
-    scoped — is what makes it reachable. Every read-modify-write now goes through one queue, both
-    areas together, because `forget` writes to both and two queues would let a logout clear the
-    session while the grant sat behind something else. Raised in review.
+    scoped — is what makes it reachable. The fix at the time was one queue over both areas, inside
+    one context. SKG-602 replaced it with one key per endpoint, which reaches the popup too, and the
+    queue is gone. Raised in review.
   - The first test for it **deadlocked the moment the fix landed**: it gated on two writes being in
     flight at once, which is precisely what the fix prevents. A test that cannot pass against correct
     code is not a test. It yields a few microtasks in the write instead — unserialised, both reads
@@ -261,6 +261,74 @@ both: an access token the host site's JavaScript can read is the worst outcome o
   `Content-Type: application/json`, then pair → refresh → revoke → refresh, answering
   `204 / 200 / 200 / 204 / 401`. What is **not** verified here is `chrome.storage` itself and the
   real world boundary — that is SKG-538, and no browser runs on this machine.
+
+## One storage key per endpoint (SKG-602)
+
+SKG-600's review found a refresh for one worker restoring another's **spent** token. The fix then was
+a queue in `session.ts`: one read-modify-write on storage at a time. That held it inside the
+background. It did not reach the popup, which builds its own `createSessions` over the same two
+areas, and the queue could not be made to — `chrome.storage` has no lock and the contexts share
+nothing else.
+
+The shape was the problem, not the ordering. Both areas kept **every endpoint under one key**, so
+every write replaced a record holding every worker. Three failures follow from that one fact:
+
+- a background refresh for worker A writes B's entry back, spent, and B's next refresh is a replay;
+- a logout in the popup is written away by a refresh that started before it — **a logout that does
+  not stick**, over a credential the worker still honours;
+- a pairing is lost the same way, while the reviewer is told it succeeded.
+
+`Area` now has `put(endpoint, value)` and `drop(endpoint)` instead of `write(everything)`, and each
+endpoint owns `fruitback:session:<endpoint>` or `fruitback:grant:<endpoint>`. `storage.set` on one
+key is atomic on its own, so a write for A cannot reach B from any context. The queue is deleted
+rather than scoped per endpoint: `refreshOnce` already orders a refresh's two writes within one
+context, and a second lock guarding what the first guards is a question for whoever reads it next.
+
+### What the shape does not fix, and what still does
+
+The compare in `keepIfCurrent` and the write after it are still two operations, and `forget` is still
+two drops. The **generation** marker is what makes a logout landing between them harmless, exactly as
+SKG-600 left it: a grant minted for a session storage no longer holds is refused on the next read.
+The whole-record write only looked atomic across the two areas — it was two `set` calls as well.
+
+### The upgrade, and the one interleaving it does not close
+
+`splitLegacyRecord` takes one `get(null)` snapshot, writes the endpoints with no key of their own,
+then removes the legacy key. The order is the guarantee: a failure between the two leaves the
+credentials readable by the next attempt rather than gone, and the way back from gone is an operator
+minting a new pairing code.
+
+**A failure keeps the gate shut.** The first version swallowed it, which released every operation
+against storage still holding the legacy record: a read then says the reviewer is paired with nobody
+while a live credential sits under the old key, and a `drop` removes a key that was never written.
+That is the quiet half of the failure. Rejecting is the loud half — the popup shows the site row with
+no session block — and the next time the context starts it tries again. Raised by the advisor.
+
+Both contexts run it at startup, which is why an endpoint that already has its own key is skipped —
+the other context may have finished first and had a refresh land since. What stays open: the other
+context can hold a snapshot, a logout can remove the new key, and the upgrade can then write the
+session back. It needs a log out inside the one storage round trip between that read and that write,
+on the first run after the upgrade only. Narrowed and stated, like everything else here.
+
+**`storage.session` is migrated too**, though the browser usually empties it before anybody notices.
+An extension updated while the browser stays open still holds the legacy grants record, and a grant
+under a key nothing reads costs one needless refresh per worker with nothing anywhere to say why.
+
+### Where the code went, and what the tests reach
+
+`session-storage.ts` holds the key rules, the `Area` factory and the upgrade, over a `StorageArea`
+seam; `session-browser.ts` is left binding `browser` and `fetch` and nothing else. That is what lets
+`node --test` drive the upgrade, the ordering and the three `await ready` gates — all three mutate to
+a failing test, and the one that guards a **spent** token needed the interleaving arranged deliberately
+before it discriminated.
+
+`does not restore a spent token when another endpoint refreshes at the same time` survives, and it
+passes for a structural reason now rather than a serialised one. It still discriminates: restoring
+the whole-record write inside `keepIfCurrent` makes it fail. Its docstring says which, because a test
+whose reason has changed reads as stale to whoever greps for the defect next.
+
+`sites.ts` keeps the whole-record write it always had. Only the popup calls `writeSite`, and there is
+one popup.
 
 ## The team mode, and the call the page cannot make (SKG-596)
 
@@ -385,10 +453,12 @@ reaching a real page's `window` and a real `sender.origin` are SKG-538's to prov
 
 Both of the review's findings had a twin in the session code, and the twins were worse.
 
-`postJson` had no deadline while the relay's fetch gained one. That matters more here than there:
-the refresh runs inside `serialize`, which chains one promise onto the last, so a worker that accepts
-a connection and never answers wedges **every later refresh for every worker** — not only its own,
-and not only until the next alarm. It is now bounded the same way.
+`postJson` had no deadline while the relay's fetch gained one. That mattered more here than there:
+the storage queue chained one promise onto the last, so a worker that accepted a connection and never
+answered wedged **every later refresh for every worker** — not only its own, and not only until the
+next alarm. It is now bounded the same way. SKG-602 removed that queue, so the hang is back to the
+one endpoint whose in-flight promise `refreshOnce` holds — still worth the deadline, no longer worth
+every worker.
 
 The https rule was raised about the relay's access token, which is the smaller half. Pairing spends
 a code for a refresh token worth thirty days and every renewal spends that token again, all over the

@@ -54,15 +54,23 @@ export type AccessGrant = {
 };
 
 /**
- * One storage area, keyed by worker endpoint.
+ * One storage area, keyed by worker endpoint, **one entry per endpoint** (SKG-602).
  *
  * A reviewer can hold a session with more than one worker — two clients, two deployments — and a
  * token is only good against the worker that minted it. The endpoint is what a site in `sites.ts`
  * already points at, so the two maps line up without a third identifier to keep in step.
+ *
+ * There is no `write(everything)`. That was the whole surface before, and it forced every caller
+ * into a read-modify-write over a record holding every worker — so a refresh for one could write
+ * another's entry away, from a context no lock of ours reaches. `put` and `drop` name the endpoint
+ * they touch, and the browser backing gives each endpoint its own key.
+ *
+ * `read` stays, because what a reviewer is paired with is a real question.
  */
 export type Area<T> = {
   read(): Promise<Record<string, T>>;
-  write(entries: Record<string, T>): Promise<void>;
+  put(endpoint: string, value: T): Promise<void>;
+  drop(endpoint: string): Promise<void>;
 };
 
 export type SessionResponse = {
@@ -149,37 +157,6 @@ export function createSessions({
   const refreshing = new Map<string, Promise<AccessResult>>();
 
   /**
-   * One read-modify-write on storage at a time.
-   *
-   * Both areas keep **every endpoint under one key**, and a write replaces that key whole. So two
-   * refreshes for different workers each read the record, each replace it, and the later write puts
-   * the earlier one's token back — a **spent** token, under rotation. Its next refresh is then a
-   * replay: the worker revokes the chain and the reviewer pairs again.
-   *
-   * `refreshOnce` cannot cover this and is not meant to. It is per endpoint on purpose, because two
-   * workers have nothing to do with each other — which is exactly what puts their writes in the same
-   * key. Raised in review.
-   *
-   * One queue for both areas rather than one each: `forget` writes to both, and two queues would let
-   * a logout clear the session while the grant is still queued behind something else. Serialising
-   * more than strictly needed costs a storage round trip; getting it wrong costs the session.
-   *
-   * This is per context, like everything else here. What crosses contexts is the compare in
-   * `keepIfCurrent`, and `chrome.storage` gives nothing stronger to build on.
-   */
-  let queue: Promise<unknown> = Promise.resolve();
-  function serialized<T>(run: () => Promise<T>): Promise<T> {
-    const next = queue.then(run, run);
-
-    queue = next.then(
-      () => undefined,
-      () => undefined,
-    );
-
-    return next;
-  }
-
-  /**
    * A request that answered, or nothing.
    *
    * Every caller has to tell "the worker refused this" from "the worker said nothing", because only
@@ -193,79 +170,64 @@ export function createSessions({
     }
   }
 
-  async function keep(endpoint: string, session: StoredSession): Promise<void> {
-    await serialized(async () => {
-      const all = await sessions.read();
-
-      await sessions.write({ ...all, [endpoint]: session });
-    });
-  }
-
-  /**
-   * Writes the session only while `spent` is still the refresh token in storage.
-   *
-   * The compare and the write share **one** read. Checking first and then calling `keep` read
-   * storage twice and wrote a third time, so a logout landing anywhere across those three was
-   * enough to put a working credential back under a screen saying signed out. The window is now a
-   * single read-to-write gap.
-   *
-   * It cannot be closed: `chrome.storage` has no transaction, and the popup and the background are
-   * separate contexts sharing nothing else. The refresh token is its own generation marker, which is
-   * what lets them agree with nothing kept in step. Narrowed twice in review, once when rotation
-   * made this run on **every** refresh rather than on the rare one that carried a new token.
-   */
   /**
    * Replaces the session and mints its access token together, while `spent` is still what storage
    * holds.
    *
-   * **One queue entry for both writes.** Doing them as two let a logout from the popup land between,
-   * clearing both areas and then having the second write put an access token back over nothing. The
-   * grant carries the session's generation, so even a write that does land after a clear is refused
-   * on the next read rather than honoured for its remaining ten minutes. Raised in review.
+   * The compare and the write are not one operation and cannot be: `chrome.storage` has no
+   * transaction, and the popup and this context share nothing else. **Which logout that catches
+   * depends on where it lands**, and only one of the two is covered:
    *
-   * The compare and the session write still share one read, which is the narrowest this can be:
-   * `chrome.storage` has no transaction and the two contexts share nothing else.
+   * - between the session write and the grant write — the grant is minted for a session storage no
+   *   longer holds, so `matches` refuses it on the next read rather than honouring its remaining ten
+   *   minutes. This is the case the **generation** marker was added for, on SKG-600.
+   * - between the compare and the session write — both writes then land and agree with each other,
+   *   so nothing here can tell them from an ordinary refresh. The session is put back and its access
+   *   token is accepted for its ten minutes. The refresh token put back is revoked on the worker,
+   *   because logging out revokes the chain, so the next refresh answers `401` and ends the session
+   *   — but that does not reach a token already minted. **SKG-603**, and it needs something ordered
+   *   in storage rather than a tighter gap here.
+   *
+   * Since SKG-602 the two writes touch only this endpoint's own keys, so nothing here can reach
+   * another worker's entry whatever else is running.
    */
-  function keepIfCurrent(
+  async function keepIfCurrent(
     endpoint: string,
     spent: string,
     session: Omit<StoredSession, 'generation'>,
     issued: Issued,
   ): Promise<AccessGrant | undefined> {
-    return serialized(async () => {
-      const all = await sessions.read();
-      if (all[endpoint]?.refreshToken !== spent) return undefined;
+    if ((await sessions.read())[endpoint]?.refreshToken !== spent) return undefined;
 
-      const generation = newGeneration();
-      await sessions.write({ ...all, [endpoint]: { ...session, generation } });
+    const generation = newGeneration();
+    await sessions.put(endpoint, { ...session, generation });
 
-      return writeGrant(endpoint, issued, generation);
-    });
+    return writeGrant(endpoint, issued, generation);
   }
 
-  /** The write itself, called from inside a queue entry that has already taken its turn. */
   async function writeGrant(endpoint: string, issued: Issued, generation: string): Promise<AccessGrant> {
-    const all = await grants.read();
     const value: AccessGrant = {
       accessToken: issued.accessToken,
       expiresAt: now() + issued.expiresIn * 1000,
       identity: issued.identity,
       generation,
     };
-    await grants.write({ ...all, [endpoint]: value });
+    await grants.put(endpoint, value);
 
     return value;
   }
 
+  /**
+   * Both credentials for one endpoint, gone.
+   *
+   * Two operations rather than one, because each area owns its own keys. So a logout can leave the
+   * session dropped and the grant still there for an instant — and if it fails between them, for
+   * longer. That grant is unusable: it carries the generation of a session no longer in storage, and
+   * `matches` refuses it. The whole-record write this replaced looked atomic across the two areas
+   * and was not either, because it was still two `set` calls.
+   */
   async function forget(endpoint: string): Promise<void> {
-    await serialized(async () => {
-      const [storedSessions, storedGrants] = await Promise.all([sessions.read(), grants.read()]);
-
-      await Promise.all([
-        sessions.write(without(storedSessions, endpoint)),
-        grants.write(without(storedGrants, endpoint)),
-      ]);
-    });
+    await Promise.all([sessions.drop(endpoint), grants.drop(endpoint)]);
   }
 
   async function refresh(endpoint: string): Promise<AccessResult> {
@@ -310,9 +272,9 @@ export function createSessions({
     // with nothing to keep in step: if the one in storage is not the one this request spent, the
     // session was logged out or re-paired, and this answer is about a session that no longer exists.
     //
-    // The check and the write are one operation — see `keepIfCurrent`. Doing them apart left three
-    // storage operations for a logout to land between, and rotation made this path run on every
-    // refresh rather than on the rare answer that carried a new token. Raised in review, twice.
+    // The check and the write are **not** one operation and cannot be — see `keepIfCurrent` for
+    // which logout that catches and which it does not. Rotation made this path run on every refresh
+    // rather than on the rare answer that carried a new token. Raised in review, three times.
     //
     // What protects a lost answer is on the worker's side: the token this request spent stays usable
     // until its successor is, so a retry with the old one lands on its feet.
@@ -333,7 +295,7 @@ export function createSessions({
    *
    * Two callers that each spend the same refresh token are a lockout, not a wasted request. The
    * worker rotates the first into a successor and treats the second as a retry inside the grace:
-   * it revokes the first successor and mints another. Both answers then race to `keep()`, and if
+   * it revokes the first successor and mints another. Both answers then race to write, and if
    * the first lands last the extension is left holding a token the worker has revoked. The next
    * refresh answers `401`, the session ends, and only an operator minting a new pairing code brings
    * the reviewer back.
@@ -405,13 +367,9 @@ export function createSessions({
         identity: issued.identity,
       };
 
-      await serialized(async () => {
-        const generation = newGeneration();
-        const all = await sessions.read();
-        await sessions.write({ ...all, [endpoint]: { ...opened, generation } });
-
-        await writeGrant(endpoint, issued, generation);
-      });
+      const generation = newGeneration();
+      await sessions.put(endpoint, { ...opened, generation });
+      await writeGrant(endpoint, issued, generation);
 
       return { ok: true, identity: issued.identity };
     },
@@ -550,10 +508,6 @@ export function parseAccessGrant(value: unknown): AccessGrant | undefined {
 /** Whoever a session belongs to, as a person reads it. */
 export function describeIdentity(identity: SessionIdentity): string {
   return identity.name ?? identity.email ?? identity.subject;
-}
-
-function without<T>(entries: Record<string, T>, key: string): Record<string, T> {
-  return Object.fromEntries(Object.entries(entries).filter(([name]) => name !== key));
 }
 
 function isNonEmptyString(value: unknown): value is string {
