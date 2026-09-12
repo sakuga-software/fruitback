@@ -460,6 +460,39 @@ true without an edit to that row.
 ### The cost, stated
 
 Inside the grace, somebody holding a stolen predecessor can rotate it and revoke the successor the
-real client received — logging the reviewer out. That is worse than nothing only if the alternative
-were safety: the thief already holds a working refresh token, and without rotation they would hold it
-silently for thirty days. Here they get at most one cycle, and the victim finds out.
+real client received — logging the reviewer out. The thief already holds a working refresh token, and
+without rotation they would hold it silently for thirty days.
+
+They do **not** get "at most one cycle" — this paragraph said so after the sentence above had already
+been corrected, which is how a claim survives being disproved: it was written twice. The thief keeps
+the chain and can go on refreshing. What the reviewer gets is the only thing rotation can give them,
+and it is not small: their own next refresh fails, so they find out. Without rotation nothing ever
+tells them.
+
+There is a case where even that does not hold, and it is open rather than solved.
+
+### The hole the grace leaves
+
+Raised by a reviewer, reproduced, and **not closed in SKG-600**.
+
+A thief copies `A`. The client refreshes `A -> B1`. The thief presents `A` inside the grace: the
+grace branch revokes `B1` and mints `B2`. The client then presents `B1`, which is revoked with
+`rotated_at` NULL — the orphan state — and that answers `gone` **without revoking the chain**. So the
+client is locked out, `B2` goes on refreshing, and nothing has recorded that two parties held one
+chain. The sentence above about the reviewer finding out is true; the sentence in `SECURITY.md` about
+a silent theft becoming a visible one is not, on this path.
+
+The orphan branch answers `gone` on purpose. A revoked token that never rotated is a credential that
+was only ever in flight, and revoking the chain when one is presented would let anyone who
+intercepted a single lost answer end the session whenever they chose. That was the reasoning when the
+case was first raised, and it is why `leaves the live branch alone when the orphan is presented`
+exists.
+
+The counter-argument is stronger than that reasoning allowed for. Intercepting a response body
+already implies a capability that subsumes the denial of service, while the current behaviour leaves
+a thief holding a live chain for the remaining thirty days with no signal to anybody. `root_hash`
+also makes the missing discriminator cheap now: *is any token in this chain still live?* Two parties
+on one chain is the leak signal; a chain that is entirely revoked is an ended session.
+
+It is left open because it is a change to what the worker treats as evidence of theft, and that is a
+decision to take deliberately rather than inside a review round.
