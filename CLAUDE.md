@@ -641,11 +641,14 @@ and *The team mode, and the call the page cannot make*:
   `serves whoever presents last inside the grace, and locks the earlier holder out` holds it.
 - **The successor inherits the predecessor's expiry.** Thirty days from pairing stays thirty days;
   rotation shortens what a leak is worth, it does not lengthen a session.
-- **Revoked *and* rotated is a signal, not a proof, and `revokeSession` ends the chain.** A log out
-  with a token whose refresh answer was lost reaches that combination with nobody having replayed
-  anything — so do not describe it as something only a replay can produce. Both readings want the
-  same act, which is what makes it safe. And a log out that revoked only the row it was handed left
-  the successor of such a token live for the rest of the thirty days, held by nobody.
+- **The replay test is the chain, not the row**, and `revokeSession` ends the chain. A revoked
+  token presented while something in its chain is still live means two parties hold one chain: that
+  is the signal, and everything goes. A chain with nothing live left is an ended session and answers
+  `gone`. The earlier test — revoked *and* rotated — missed the case where a thief has the client's
+  own successor revoked under it inside the grace, which left the thief refreshing for thirty days.
+  The trade is that intercepting one answer in flight now ends the session at will; that capability
+  already subsumes the attack. And a log out that revoked only the row it was handed left the
+  successor of a lost-answer token live, held by nobody.
 - **`rotated_at` marks the first rotation, never the last.** `AND rotated_at IS NULL` on that update
   is the grace being a ceiling: rewritten on every retry it slides, and whoever holds the token
   re-presents it just inside each window for ever.

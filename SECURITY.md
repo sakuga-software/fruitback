@@ -172,10 +172,22 @@ had moved on, so whoever still holds this one copied it. Every live token descen
 with it, and the reviewer has to pair again. That is the intended outcome — a silent theft becomes a
 visible one.
 
-It is read as a signal rather than a proof. A log out with a token whose refresh answer was lost
-reaches the same state without anyone replaying anything, and the answer is deliberately identical:
-the chain goes either way. **Log out revokes the chain too**, for the same reason — ending only the
-token presented would leave its successor live for the rest of the thirty days.
+**The test is the chain, not the row.** A revoked token presented while something in its chain is
+still live means two parties hold tokens from one chain, and that is the signal. A chain with nothing
+live left is an ended session and answers the same `401` without calling anything a replay.
+
+That distinction is what closes the case this section used to get wrong. A thief presenting the
+predecessor inside the grace has the client's own successor revoked under it; when the client then
+presents that successor — revoked, never rotated — the chain goes, and the thief's session goes with
+it. The earlier version answered `gone` there and left the thief refreshing for the rest of the
+thirty days while the reviewer re-paired, which is the opposite of what this document promises.
+
+The cost, deliberately taken: whoever intercepts one answer in flight can end the session whenever
+they choose. Reading a response body already implies a position from which the session can be taken
+outright, so the capability this grants an attacker is one they do not need.
+
+**Log out revokes the chain too** — ending only the token presented would leave its successor live
+for the rest of the thirty days.
 
 The reply says nothing about any of this. A replayed token and a token that never existed get the
 same `401`, for the same reason the two pairing failures do: telling a replayer that their copy was

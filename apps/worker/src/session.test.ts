@@ -411,14 +411,23 @@ describe('rotation', () => {
   });
 
   /**
-   * And rejecting that orphan takes nothing else with it.
+   * And presenting that orphan ends the chain, because two parties are holding one.
    *
-   * A revoked token that never rotated is `gone`, with no chain revocation: it is the answer to a
-   * credential that was only ever in flight, and whoever presents it learns nothing. Revoking the
-   * chain here instead would hand a caller who intercepted one lost answer the power to end the
-   * session whenever they chose. Raised in review, which asked for the opposite.
+   * This test asserted the opposite until a reviewer reproduced what the opposite costs: a thief
+   * presents the predecessor inside the grace, the client's own successor is revoked under it, and
+   * the client then presents a token that is revoked and never rotated. Answering `gone` there left
+   * the thief refreshing for the remaining thirty days while the reviewer, locked out, re-paired —
+   * and nothing anywhere recorded that a chain had two holders.
+   *
+   * The discriminator is now the chain rather than the row: revoked, with something still live in
+   * the same chain, is the leak signal. A chain with nothing live left is an ended session.
+   *
+   * The trade, which is the reason this was a decision and not a fix: whoever intercepts one answer
+   * in flight can end the session whenever they choose. Reading a response body already implies a
+   * position from which the session can be taken outright, so this buys detection with a capability
+   * an attacker who has it does not need.
    */
-  it('leaves the live branch alone when the orphan is presented', async () => {
+  it('ends the chain when an orphan is presented and something in it is still live', async () => {
     const { store, token } = await opened();
     const lost = await refreshSession(store, token, SECRET);
     assert.ok(lost.ok);
@@ -427,7 +436,22 @@ describe('rotation', () => {
 
     assert.equal((await refreshSession(store, lost.refreshToken, SECRET)).ok, false);
 
-    assert.ok((await refreshSession(store, kept.refreshToken, SECRET)).ok, 'the orphan took the live token with it');
+    assert.equal(
+      (await refreshSession(store, kept.refreshToken, SECRET)).ok,
+      false,
+      'the live branch outlived a second holder showing up on its chain',
+    );
+  });
+
+  /** And a chain with nothing live left is an ended session, not a replay: it revokes nothing more. */
+  it('answers a token from a chain that is entirely revoked without calling it a replay', async () => {
+    const { store, token } = await opened();
+    const successor = await refreshSession(store, token, SECRET);
+    assert.ok(successor.ok);
+    assert.equal(await revokeSession(store, successor.refreshToken), true);
+
+    assert.equal((await refreshSession(store, token, SECRET)).ok, false);
+    assert.equal((await refreshSession(store, successor.refreshToken, SECRET)).ok, false);
   });
 
   it('retires the old token the moment the new one is used', async () => {
@@ -663,11 +687,13 @@ describe('rotation', () => {
    * what the code does and of what the run printed. Raised in review, twice over: the same inversion
    * was in `SECURITY.md`, `docs/decisions/worker.md` and `CLAUDE.md`.
    *
-   * This is not the replay case, where the successor has already been used, the collision is
-   * unambiguous and both parties lose. Delete `keep` from the grace branch's `revokeChain` and this
-   * test tells you what you changed.
+   * The win is only silent until the earlier holder comes back. Their token is revoked and its chain
+   * still has a live one, so their failed refresh ends the chain and takes the winner's session with
+   * it. That is what makes the theft cost the thief something rather than only the victim.
+   *
+   * Delete `keep` from the grace branch's `revokeChain` and this test tells you what you changed.
    */
-  it('serves whoever presents last inside the grace, and locks the earlier holder out', async () => {
+  it('serves whoever presents last inside the grace, until the earlier holder comes back', async () => {
     const { store, token } = await opened();
     const held = await refreshSession(store, token, SECRET);
     assert.ok(held.ok);
@@ -680,7 +706,11 @@ describe('rotation', () => {
       false,
       'the earlier holder kept a working session, so both of them have one',
     );
-    assert.ok((await refreshSession(store, other.refreshToken, SECRET)).ok, 'the last presenter keeps the chain');
+    assert.equal(
+      (await refreshSession(store, other.refreshToken, SECRET)).ok,
+      false,
+      'the winner kept the chain after the earlier holder had surfaced on it',
+    );
   });
 
   /**

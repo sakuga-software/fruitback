@@ -198,6 +198,28 @@ function chainOf(row: { root_hash: unknown }, tokenHash: string): string {
  * descendants rather than merely costing less: that branch drops the successors nobody received
  * while the token presenting itself stays live to mint another.
  */
+/**
+ * Is any token of this chain still live?
+ *
+ * A head carries NULL in `root_hash` — every root does, and so does every row written before the
+ * column existed — so it cannot be found by chain and is asked for by name.
+ *
+ * That second clause is **defensive, and mutation testing says so**: removing it fails nothing,
+ * because no reachable state has the head as the only live row. A rotation leaves the head live
+ * beside exactly one live successor, and every branch that revokes the head revokes the chain with
+ * it. It is kept because the alternative is a predicate that is true only by an argument about
+ * reachability, three branches away from the code that would break it. `revokeChain` names the head
+ * for the same reason, and there the clause **is** load-bearing — dropping it fails
+ * `ends a chain from any link, including the token nobody is holding`.
+ */
+function chainHasLive(database: DatabaseSync, root: string): boolean {
+  const live = database
+    .prepare('SELECT 1 FROM sessions WHERE revoked_at IS NULL AND (root_hash = ? OR token_hash = ?) LIMIT 1')
+    .get(root, root);
+
+  return live !== undefined;
+}
+
 function revokeChain(database: DatabaseSync, root: string, now: number, keep?: string): void {
   database
     .prepare('UPDATE sessions SET revoked_at = ? WHERE root_hash = ? AND token_hash IS NOT ? AND revoked_at IS NULL')
@@ -229,15 +251,24 @@ function decide(
   const rotatedAt = typeof row.rotated_at === 'number' ? row.rotated_at : undefined;
 
   if (row.revoked_at !== null && row.revoked_at !== undefined) {
-    // Revoked *and* rotated is what a replay looks like: this token issued a successor, the
-    // successor was used, and that is what retired this one.
+    // A revoked token presented while its chain still holds a live one means **two parties hold
+    // tokens from one chain**, and that is the leak signal. The chain goes.
     //
-    // A logout can reach the same combination — revoking a token whose answer was lost, so it is
-    // rotated and still in storage — which is why this is a signal and not a proof. Both readings
-    // want the same act: revoke every live descendant, answer `401`, say nothing to the caller.
-    // Over-reading an ended session as a replay costs a log line; under-reading a replay costs the
-    // session. Raised in review.
-    if (rotatedAt === undefined) return { answer: { outcome: 'gone' }, commit: false };
+    // The test used to be revoked *and* rotated, which missed the case a reviewer reproduced: a
+    // thief presents the predecessor inside the grace, the client's own successor is revoked under
+    // it, and the client then presents a token that is revoked and never rotated. That answered
+    // `gone` and left the thief refreshing for the remaining thirty days with nothing recorded.
+    //
+    // Asking the chain instead is both stricter and simpler. A chain with nothing live left is an
+    // ended session — a logout, or a revocation that already happened — and answers `gone`, so this
+    // no longer reports a replay for a session that merely finished.
+    //
+    // The cost is stated rather than hidden: whoever intercepts one answer in flight can now end the
+    // session at will. Reading a response body already implies a position from which the session can
+    // be taken outright, which is why this trade was made deliberately.
+    if (!chainHasLive(database, chainOf(row, tokenHash))) {
+      return { answer: { outcome: 'gone' }, commit: false };
+    }
 
     revokeChain(database, chainOf(row, tokenHash), now);
 
@@ -371,10 +402,9 @@ export function createSqliteSessionStore(path: string): SessionStore {
      * - **`gone`** — unknown, expired, or revoked by a logout. Also a rotated token presented after
      *   the grace ran out: the client that lost the answer waited too long, and the whole chain goes
      *   with it rather than leaving a token nobody is watching.
-     * - **`reused`** — revoked *and* rotated: the successor was already used, so whoever still
-     *   holds this one copied it. A logout on a token whose answer was lost reads the same way, so
-     *   this is a signal rather than a proof — and both readings want the same act, which is why it
-     *   is safe. Every live descendant is revoked before answering.
+     * - **`reused`** — revoked, while something in the same chain is still live. Two parties hold
+     *   tokens from one chain, so one of them copied theirs. The whole chain is revoked before this
+     *   answers. A chain with nothing live left is an ended session and answers `gone` instead.
      *
      * Inside the grace a rotated token rotates **again** rather than answering with the successor it
      * already minted. The successor cannot be answered twice: only its digest is stored, which is

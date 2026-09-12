@@ -407,19 +407,19 @@ never has two live successors.
 
 ### Reuse is the signal, and the chain is the answer
 
-Revoked **and** rotated is what a replay looks like: this token issued a successor, the successor was
-used, and that is what retired this one. Whoever still holds it copied it. Every live token in the
-chain is revoked, not only the one replayed — a thief who keeps the session while the victim is
-locked out is the outcome worth preventing.
+A revoked token presented while something in its **chain** is still live: two parties hold tokens
+from one chain, so one of them copied theirs. Every live token in the chain is revoked, not only the
+one presented — a thief who keeps the session while the victim is locked out is the outcome worth
+preventing.
 
-It is a **signal and not a proof**, and the first version of this section claimed otherwise. A logout
-reaches the same combination: a refresh whose answer was lost leaves the client holding a token that
-has already rotated, and revoking it marks a row that is revoked and rotated with nobody having
-replayed anything. Raised in review.
+The test was `revoked && rotated` for two rounds, and it was wrong twice over. It read a logout as a
+replay — revoking a token whose refresh answer was lost marks exactly that combination with nobody
+having replayed anything — and it missed the case that mattered, where the token a thief leaves
+revoked under the client was never rotated at all. Asking the chain is stricter *and* simpler:
+after a logout nothing in the chain is live, so a logout stops reading as a replay on its own.
 
-What makes that safe is that both readings want the same act — revoke every live descendant, answer
-`401`, say nothing. Over-reading an ended session as a replay costs a line in an operator's log;
-under-reading a replay costs the session. So the discriminator stays, and the claim around it goes.
+Both mistakes were raised in review, one round apart. See *the hole the grace left* below for the
+second, which is the one that cost something.
 
 The same review found the defect underneath: **`revokeSession` revoked only the row it was handed.**
 After that lost answer, a logout ended the predecessor and left its successor live for the rest of
@@ -469,30 +469,33 @@ the chain and can go on refreshing. What the reviewer gets is the only thing rot
 and it is not small: their own next refresh fails, so they find out. Without rotation nothing ever
 tells them.
 
-There is a case where even that does not hold, and it is open rather than solved.
+There was a case where even that did not hold, and closing it changed what counts as evidence.
 
-### The hole the grace leaves
+### The hole the grace left, and the discriminator that closed it
 
-Raised by a reviewer, reproduced, and **not closed in SKG-600**.
+Raised by a reviewer and reproduced. A thief copies `A`; the client refreshes `A -> B1`; the thief
+presents `A` inside the grace, so `B1` is revoked and `B2` minted. The client then presents `B1` —
+revoked, `rotated_at` NULL, the orphan state — which answered `gone` **without revoking the chain**.
+The client was locked out, `B2` went on refreshing for the remaining thirty days, and nothing
+anywhere recorded that one chain had two holders. `SECURITY.md` promised the opposite.
 
-A thief copies `A`. The client refreshes `A -> B1`. The thief presents `A` inside the grace: the
-grace branch revokes `B1` and mints `B2`. The client then presents `B1`, which is revoked with
-`rotated_at` NULL — the orphan state — and that answers `gone` **without revoking the chain**. So the
-client is locked out, `B2` goes on refreshing, and nothing has recorded that two parties held one
-chain. The sentence above about the reviewer finding out is true; the sentence in `SECURITY.md` about
-a silent theft becoming a visible one is not, on this path.
+The first answer to this was that the orphan branch is deliberate: a revoked token that never rotated
+is a credential that was only ever in flight, and revoking the chain when one appears lets anyone who
+intercepted a single lost answer end the session at will.
 
-The orphan branch answers `gone` on purpose. A revoked token that never rotated is a credential that
-was only ever in flight, and revoking the chain when one is presented would let anyone who
-intercepted a single lost answer end the session whenever they chose. That was the reasoning when the
-case was first raised, and it is why `leaves the live branch alone when the orphan is presented`
-exists.
+That reasoning weighed the wrong two things. Reading a response body already implies a position from
+which the session can be taken outright, so the denial of service is a capability an attacker who has
+it does not need — while the behaviour it protected left a thief with a live chain and no signal to
+anybody.
 
-The counter-argument is stronger than that reasoning allowed for. Intercepting a response body
-already implies a capability that subsumes the denial of service, while the current behaviour leaves
-a thief holding a live chain for the remaining thirty days with no signal to anybody. `root_hash`
-also makes the missing discriminator cheap now: *is any token in this chain still live?* Two parties
-on one chain is the leak signal; a chain that is entirely revoked is an ended session.
+So the test is no longer the row's own state. **Revoked, with something still live in the same
+chain, is the leak signal**; a chain with nothing live left is an ended session and answers `gone`.
+`root_hash` is what makes that one indexed lookup rather than a walk, which is the second time this
+column paid for itself.
 
-It is left open because it is a change to what the worker treats as evidence of theft, and that is a
-decision to take deliberately rather than inside a review round.
+It is stricter and simpler than `revoked && rotated`, and it drops that predicate's awkwardness: a
+logout no longer reads as a replay, because after it nothing in the chain is live. The cost is
+written into `SECURITY.md` rather than left implicit, and the two tests that encoded the old answer
+were rewritten rather than deleted — `ends the chain when an orphan is presented and something in it
+is still live`, and `serves whoever presents last inside the grace, until the earlier holder comes
+back`.
