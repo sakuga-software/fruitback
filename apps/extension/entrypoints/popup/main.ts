@@ -1,7 +1,7 @@
 import { browser } from 'wxt/browser';
 import { isWorkerEndpoint, normalizeWorkerEndpoint, workerOrigin } from '../../src/endpoint.ts';
 import { BRIDGE_FILE, PAGE_FILE, matchPatternFor, publicPath } from '../../src/registration.ts';
-import { type SiteConfig, readSite, writeSite } from '../../src/sites.ts';
+import { type SiteConfig, type SiteMode, readSite, writeSite } from '../../src/sites.ts';
 import { createBrowserSessions } from '../../src/session-browser.ts';
 import { type PairFailure, describeIdentity } from '../../src/session.ts';
 
@@ -43,7 +43,7 @@ async function render(): Promise<void> {
 
   // Pairing is against the **worker**, not the site, so there is nothing to ask for until one is
   // named. A reviewer holds one session per worker however many of its sites they have turned on.
-  if (site !== undefined) app.append(await session(site.endpoint));
+  if (site !== undefined) app.append(await session(site));
 }
 
 /** What a failed pairing is, in the reporter's words. */
@@ -77,7 +77,8 @@ async function grantWorkerOrigin(endpoint: string): Promise<boolean> {
  * Deliberately thin: everything it decides lives in `src/session.ts`, where `node --test` can reach
  * it. What is here is four elements and the two strings a person reads.
  */
-async function session(endpoint: string): Promise<HTMLElement> {
+async function session(site: SiteConfig): Promise<HTMLElement> {
+  const endpoint = site.endpoint;
   const sessions = createBrowserSessions();
   const held = (await sessions.list())[endpoint];
   const wrapper = document.createElement('div');
@@ -134,21 +135,44 @@ async function session(endpoint: string): Promise<HTMLElement> {
 
   const row = document.createElement('div');
   row.className = 'row';
-  row.append(element('span', 'Not paired with this worker', 'state'));
+  // Said plainly in team mode, because there it is the difference between a page that shows this
+  // reviewer's pins and one that shows nothing at all: the relay refuses a call it has no session
+  // for, rather than making it without one.
+  const unpaired =
+    site.mode === 'team'
+      ? 'Not paired — this site cannot reach the worker until you do'
+      : 'Not paired with this worker';
+  row.append(element('span', unpaired, 'state'));
   wrapper.append(row, code.label, submit, problem);
 
   return wrapper;
 }
 
-/** No entry yet: ask for the two things `init` cannot be called without. */
+/**
+ * No entry yet: ask for the mode, and for what that mode cannot work without.
+ *
+ * The client id is asked for in private mode only. In team mode the site embeds its own widget and
+ * declares its own client id, and a second one stored here would be a value nothing reads.
+ */
 function form(origin: string): HTMLElement {
+  const mode = modeField();
   const endpoint = field('Worker endpoint', 'https://feedback.acme.dev');
   const clientId = field('Client id', 'acme');
   const save = element('button', 'Turn on for this site');
   const problem = element('p', '', 'problem');
 
+  const showFields = (): void => {
+    clientId.label.hidden = mode.select.value === 'team';
+  };
+  mode.select.addEventListener('change', showFields);
+  showFields();
+
   save.addEventListener('click', () => {
-    const values = { endpoint: endpoint.input.value.trim(), clientId: clientId.input.value.trim() };
+    const values = {
+      mode: mode.select.value === 'team' ? ('team' as const) : ('private' as const),
+      endpoint: endpoint.input.value.trim(),
+      clientId: clientId.input.value.trim(),
+    };
 
     // Said out loud rather than refused in silence. The bridge applies the same rule before it
     // mounts, so an endpoint that fails here would have been stored, shown as **On**, and then
@@ -156,22 +180,37 @@ function form(origin: string): HTMLElement {
     problem.textContent = complaint(values);
     if (problem.textContent !== '') return;
 
-    void turnOn(origin, values);
+    void turnOn(origin, siteFrom(values));
   });
 
   const wrapper = document.createElement('div');
-  wrapper.append(endpoint.label, clientId.label, save, problem);
+  wrapper.append(mode.label, endpoint.label, clientId.label, save, problem);
 
   return wrapper;
 }
 
-/** What is wrong with these two fields, in the reporter's words, or nothing. */
-export function complaint(values: { endpoint: string; clientId: string }): string {
+/** What is wrong with these fields, in the reporter's words, or nothing. */
+export function complaint(values: { mode: SiteMode; endpoint: string; clientId: string }): string {
   if (values.endpoint === '') return 'The worker endpoint is required.';
   if (!isWorkerEndpoint(values.endpoint)) return 'The endpoint must be a full http:// or https:// URL.';
-  if (values.clientId === '') return 'The client id is required.';
+  if (values.mode === 'private' && values.clientId === '') return 'The client id is required.';
 
   return '';
+}
+
+/**
+ * The entry these fields describe, switched on.
+ *
+ * **The endpoint is stored in both modes**, and in team mode it is not what the widget is pointed
+ * at — the site does that. It is what the relay checks the site's declaration against, so a page
+ * cannot name another worker and be handed this reviewer's token for it. See `src/relay.ts`.
+ */
+export function siteFrom(values: { mode: SiteMode; endpoint: string; clientId: string }): SiteConfig {
+  const endpoint = normalizeWorkerEndpoint(values.endpoint);
+
+  return values.mode === 'team'
+    ? { mode: 'team', endpoint, enabled: true }
+    : { mode: 'private', endpoint, clientId: values.clientId, enabled: true };
 }
 
 /**
@@ -182,11 +221,11 @@ export function complaint(values: { endpoint: string; clientId: string }): strin
  * — loses the gesture and the prompt never appears. And storing first would leave an entry that says
  * "on" for a site the background can never register, which reads as a broken extension.
  */
-async function turnOn(origin: string, values: { endpoint: string; clientId: string }): Promise<void> {
+async function turnOn(origin: string, site: SiteConfig): Promise<void> {
   const granted = await browser.permissions.request({ origins: [matchPatternFor(origin)] });
   if (!granted) return;
 
-  await writeSite(origin, { ...values, endpoint: normalizeWorkerEndpoint(values.endpoint), enabled: true });
+  await writeSite(origin, site);
   await injectIntoCurrentTab();
   await render();
 }
@@ -227,14 +266,37 @@ function status(origin: string, site: SiteConfig): HTMLElement {
       return;
     }
 
-    void turnOn(origin, { endpoint: site.endpoint, clientId: site.clientId });
+    void turnOn(origin, { ...site, enabled: true });
   });
 
   const row = document.createElement('div');
   row.className = 'row';
-  row.append(element('span', site.enabled ? `On · ${site.clientId}` : `Off · ${site.clientId}`, 'state'), toggle);
+  row.append(element('span', `${site.enabled ? 'On' : 'Off'} · ${describeSite(site)}`, 'state'), toggle);
 
   return row;
+}
+
+/** What this entry is switching, in one phrase: a client id in private mode, the mode in team. */
+function describeSite(site: SiteConfig): string {
+  return site.mode === 'team' ? "team mode · the site's own widget" : site.clientId;
+}
+
+function modeField(): { label: HTMLLabelElement; select: HTMLSelectElement } {
+  const select = document.createElement('select');
+  for (const [value, text] of [
+    ['private', 'Private · the extension mounts the widget'],
+    ['team', 'Team · the site embeds it, we relay'],
+  ]) {
+    const option = document.createElement('option');
+    option.value = value as string;
+    option.textContent = text as string;
+    select.append(option);
+  }
+
+  const wrapper = document.createElement('label');
+  wrapper.append('Mode', select);
+
+  return { label: wrapper, select };
 }
 
 function field(label: string, placeholder: string): { label: HTMLLabelElement; input: HTMLInputElement } {

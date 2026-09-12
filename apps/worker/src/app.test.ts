@@ -246,6 +246,34 @@ describe('CORS', () => {
 
     assert.equal(response.status, 201);
   });
+
+  /**
+   * The extension relays a client site's call from its own service worker (SKG-596), which sends
+   * `chrome-extension://<id>` on the POST. No operator can put that id on an allowlist — it differs
+   * between an unpacked build and a store build — and a `403` here is the whole of team mode not
+   * working, with nothing in a browser to say why.
+   *
+   * It grants exactly what the line above already grants `curl`. CORS was never what decides who may
+   * read a pin; under `read: 'authenticated'` the token still is.
+   */
+  it('serves the extension, whose origin no allowlist can name', async () => {
+    installLinearStub();
+
+    const response = await post(seedFixture(), { origin: 'chrome-extension://ekjmfoaibpceoc' });
+
+    assert.equal(response.status, 201);
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'), 'chrome-extension://ekjmfoaibpceoc');
+  });
+
+  /** A list of schemes, so everything else falls through to the allowlist rather than past it. */
+  it('refuses a scheme that only looks like an extension', async () => {
+    installLinearStub();
+
+    for (const origin of ['file://', 'null', 'chrome-extension:', 'https://chrome-extension.evil.dev']) {
+      const response = await post(seedFixture(), { origin });
+      assert.equal(response.status, 403, origin);
+    }
+  });
 });
 
 describe('guard rails', () => {

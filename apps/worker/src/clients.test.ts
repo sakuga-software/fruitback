@@ -108,6 +108,22 @@ describe('resolveClient', () => {
     assert.ok(resolved.ok);
   });
 
+  /**
+   * The extension is not a site, and its origin carries an id no operator can write down (SKG-596).
+   * The same reasoning the `origin: null` case above applies: this binds a claim to a site, and a
+   * caller that is not a site has nothing to bind.
+   */
+  it('lets the extension relay for a client whose origins it can never be on', () => {
+    const resolved = resolveClient({
+      clients: MAP,
+      clientId: 'acme',
+      origin: 'chrome-extension://ekjmfoaibpceoc',
+      fallback: FALLBACK,
+    });
+
+    assert.equal(resolved.ok, true);
+  });
+
   it('lets a client with no origins be embedded anywhere', () => {
     const resolved = resolveClient({
       clients: MAP,

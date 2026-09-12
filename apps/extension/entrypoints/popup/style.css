@@ -61,6 +61,7 @@ label {
   margin-bottom: 8px;
 }
 
+select,
 input[type='text'] {
   box-sizing: border-box;
   width: 100%;

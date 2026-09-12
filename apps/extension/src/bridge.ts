@@ -37,16 +37,7 @@ export function createApply({ readSite, post }: BridgeSeams): (force?: boolean) 
     const site = await readSite();
     if (mine !== generation) return;
 
-    const message: BridgeMessage =
-      site === undefined || !site.enabled
-        ? { channel: CHANNEL, kind: 'unmount' }
-        : {
-            channel: CHANNEL,
-            kind: 'mount',
-            endpoint: site.endpoint,
-            clientId: site.clientId,
-            ...(site.label !== undefined ? { label: site.label } : {}),
-          };
+    const message = decide(site);
 
     const signature = JSON.stringify(message);
     // `force` is for the handshake: the page world says it is listening, and it may have missed the
@@ -55,5 +46,26 @@ export function createApply({ readSite, post }: BridgeSeams): (force?: boolean) 
 
     posted = signature;
     post(message);
+  };
+}
+
+/**
+ * What this origin's entry means for the page's world.
+ *
+ * The mode is the whole difference between the two the extension serves: in `private` the widget is
+ * ours and we mount it, in `team` the widget is the site's and we only say we are here (SKG-596).
+ * Both go through the generation and unchanged-decision guards above, so team mode costs neither of
+ * them a second implementation.
+ */
+function decide(site: SiteConfig | undefined): BridgeMessage {
+  if (site === undefined || !site.enabled) return { channel: CHANNEL, kind: 'unmount' };
+  if (site.mode === 'team') return { channel: CHANNEL, kind: 'announce' };
+
+  return {
+    channel: CHANNEL,
+    kind: 'mount',
+    endpoint: site.endpoint,
+    clientId: site.clientId,
+    ...(site.label !== undefined ? { label: site.label } : {}),
   };
 }

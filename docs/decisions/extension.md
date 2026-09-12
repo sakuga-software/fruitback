@@ -208,3 +208,95 @@ both: an access token the host site's JavaScript can read is the worst outcome o
   `Content-Type: application/json`, then pair → refresh → revoke → refresh, answering
   `204 / 200 / 200 / 204 / 401`. What is **not** verified here is `chrome.storage` itself and the
   real world boundary — that is SKG-538, and no browser runs on this machine.
+
+## The team mode, and the call the page cannot make (SKG-596)
+
+Private mode injects a widget into a site that ships none. Team mode is for the team that ships its
+own: the widget is in their build, dormant, and it wakes up for a reviewer carrying the extension.
+SKG-595 had already put the seam in — `init({ transport })` — and this fills it.
+
+### The page speaks last, and it is told so
+
+`page.content.ts` was written to mount. In team mode it announces instead: it puts
+`window.fruitbackExtension = { version, transport }` on the page and fires `fruitback:extension`.
+Two ways to find one thing, because **nothing orders a content script against a site's own bundle**
+— the property serves a page that looked after the announcement, the event one that looked before.
+
+Which of the two behaviours the main world takes is decided in the isolated world, where the entry
+is readable, and travels as one more message kind on the existing channel. That was deliberate: the
+generation token and the unchanged-decision guard in `bridge.ts` already exist and already cost a
+review round each, and a mode flag read in the main world would have needed both again. The main
+world has no `chrome.*` to read a flag with, either.
+
+The announcement is idempotent — the site mounts its widget when the event fires, so a second event
+hands it a second widget. A re-posted decision therefore changes nothing, which is the same rule the
+mount has for the same reason.
+
+### The endpoint check, and the ticket bullet it contradicts
+
+The ticket says `clientId` and `endpoint` come from the site, never from the popup. The client id
+does. The endpoint cannot, and the entry keeps one.
+
+A reviewer holds a session **per worker**. If the relay sent the call wherever the page asked, a page
+on any origin the reviewer enabled could name a *different* worker they had paired with, and be
+answered with their credential for it — notes posted into another team's tracker as them, and that
+team's pins read back. The endpoint the reviewer stored for that origin is the only value in this
+system that the page did not write, so it is what the declaration is checked against.
+
+**Refused, not redirected.** Sending the call to the stored endpoint when the page named another
+would make the widget report success against a worker nobody on that page chose. A failed call is a
+state the widget already handles correctly; a lie is not.
+
+The cost is that team mode needs a popup entry, like private mode. That is smaller than it reads: a
+reviewer already has to enable the origin and grant it, or no content script runs there at all.
+
+### Everything else the relay refuses
+
+The decision lives in `src/relay.ts`, in the background, because **a content script's own input is
+written by the page**. The isolated world carries the request across and decides nothing.
+
+- The **origin** comes from the `sender` the browser reports. `sender.origin` is Chrome's and
+  `sender.url` is Firefox's; a sender with neither is refused.
+- The **path** is `/feedback`, an allowlist of one. A route the widget grows later is refused here
+  until somebody adds it, rather than the relay becoming a way to reach anything on that worker.
+- The **headers** are rebuilt name by name. `Content-Type` may come from the page and nothing else
+  may, and `Authorization` is written from the session. Spreading the page's map instead would let
+  two spellings of one header reach `fetch`, which appends rather than replaces — `a, b`.
+- **No session, no call.** This one is a decision rather than a limitation: relaying without the
+  header works perfectly on a worker left at `read: 'public'`, so the pins appear, everything looks
+  right, and the reviewer never learns they are unpaired while the mode delivers none of what it
+  promises. The popup says so at the only moment anybody looks.
+
+### What had to change on the worker, and what it gives away
+
+None of this worked at first, and nothing in the extension would have shown why: both of the
+worker's origin gates answer `403` to `chrome-extension://<id>`, which is what an MV3 service worker
+sends on a POST. SKG-535 had already measured that and exempted the three `/session/` routes; the
+relay calls `/feedback` the same way.
+
+So the exemption is now by **scheme**, in one predicate `resolveCors` and `resolveClient` both ask.
+A list of schemes rather than "anything that is not http", so `null`, `file://` and whatever a
+browser adds next fall through to the allowlist where they belong.
+
+What it gives away is what a caller with no `Origin` already has — `curl` is served today, and
+`SECURITY.md` has always said so at length. CORS was never what decides who may read a pin. The
+test that asserted the old property was rewritten rather than deleted: it now says the allowlist
+still governs sites, and admits the extension.
+
+### The timeout nobody would have noticed
+
+The transport returns a promise, and the composer disables its send button while a submit is in
+flight. A relay nobody answers therefore leaves a reviewer looking at a dead button with a written
+note inside it — and losing a written note is the one failure this widget cannot afford.
+
+`relay-transport.ts` exists so `node --test` can reach that, and the correlation around it: the
+widget reads and writes independently, so two calls are in flight in the ordinary case, and a single
+pending slot passes every in-order test and fails the reversed one. The three tests that matter are
+an answer for another id settling nobody, an answer after the timeout settling nobody, and two calls
+at once getting their own.
+
+### What is not verified here
+
+The same limit SKG-599 has: no browser runs on this machine. The worker's side of the origin change
+is exercised through `handleRequest`, and the relay's gates through their seams, but the announcement
+reaching a real page's `window` and a real `sender.origin` are SKG-538's to prove.

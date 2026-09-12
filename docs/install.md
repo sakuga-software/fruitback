@@ -141,6 +141,47 @@ inside a bundle.
 | `ignore`        | elements the pointer must skip — your own chrome, a support chat, a cookie banner    |
 | `identityToken` | a function returning a signed token, so a reporter is *verified* rather than claimed |
 | `includeEnv`    | `false` when the reporter has not agreed to send their user agent along              |
+| `transport`     | who carries the calls — the extension's, in team mode below                          |
+
+### Team mode: dormant until a reviewer arrives
+
+Ship the widget and call `init` only when a reviewer with the extension opens the page. Your users
+see nothing; your reviewers see their pins.
+
+```ts
+import { init } from 'fruitback';
+
+let widget;
+const wake = () => {
+  const extension = window.fruitbackExtension;
+  if (widget !== undefined || extension === undefined) return;
+
+  widget = init({
+    endpoint: 'https://feedback.acme.dev',
+    clientId: 'acme',
+    // Every call goes through the extension, which attaches the reviewer's session.
+    transport: extension.transport,
+  });
+};
+
+window.addEventListener('fruitback:extension', wake);
+wake();
+```
+
+Both halves are needed: the event for a page that loaded before the extension announced itself, the
+call for one that loaded after. `wake` is written so a second announcement cannot mount a second
+widget.
+
+The reviewer then turns your origin on in the extension's popup, in **Team** mode, and pairs with
+the worker. Until they pair, the extension relays nothing — see
+[the threat model](../SECURITY.md#what-the-extension-relays-and-what-it-refuses-to) for why, and for
+the five other things the relay checks first.
+
+> This mode is worth turning on only with `FRUITBACK_READ=authenticated`. Otherwise the same pins
+> are readable by anyone who can build the URL, and all it buys is a page your users do not see the
+> widget on.
+
+---
 
 ---
 

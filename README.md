@@ -47,19 +47,26 @@ The full walk-through — Linear setup, per-client routing, identified reporters
 
 <img src="docs/assets/writing-a-note.png" alt="The note popover, anchored to the element it is about" width="330">
 
-## Two ways to run it, and a third being built
+## Three ways to run it
 
-The first question a reader has is whether their reviewers need the site to ship anything. Both
+The first question a reader has is whether their reviewers need the site to ship anything. All three
 answers exist.
 
 | | **Public** | **Private** | **Team** |
 | --- | --- | --- | --- |
 | The site embeds | the widget | **nothing** | the widget, dormant |
 | Delivered as | `<script>` tag or npm | a browser extension | `<script>` tag or npm |
-| Published | **not yet** — build it from this repo | **not yet** — load it unpacked | — |
+| Published | **not yet** — build it from this repo | **not yet** — load it unpacked | **not yet** — both of the above |
 | Who sees the pins | every visitor | the reviewer who installed it | reviewers who are signed in |
 | Good for | a public "report a problem" | reviewing a client's site, invisibly | a team reviewing its own staging |
-| Built | **yes** | **yes**, MV3 on Chromium and Firefox | planned (SKG-596) |
+| Built | **yes** | **yes**, MV3 on Chromium and Firefox | **yes** |
+
+**Team mode is worth turning on only with `FRUITBACK_READ=authenticated`.** The extension announces
+itself, the site's widget wakes up, and the calls are relayed through the reviewer's session. On a
+worker left at the `public` default the same pins are readable by anyone who can build the URL, so
+what the mode buys there is a tidier page and nothing more. The four lines a site adds are in
+[docs/install.md](docs/install.md#team-mode-dormant-until-a-reviewer-arrives); what the relay
+refuses is in [SECURITY.md](SECURITY.md#what-the-extension-relays-and-what-it-refuses-to).
 
 The extension asks for **no host permission at install**: its content scripts are registered at
 runtime, per origin, when somebody switches that site on.

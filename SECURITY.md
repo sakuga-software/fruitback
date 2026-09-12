@@ -159,14 +159,53 @@ the answer.
 Pairing asks for a host permission on the **worker's** origin, which is not the site's. It is optional
 and granted per worker at the moment somebody pairs, never at install.
 
+### What the extension relays, and what it refuses to
+
+In team mode (SKG-596) the site embeds its own widget and leaves it dormant. The extension puts a
+transport on the page, and the calls it carries are made by the background service worker, which
+attaches the session token. **The token never travels on the page bridge**; what travels is the
+request and the answer.
+
+That makes the extension something that will make a call for a page, so the background refuses more
+than it accepts. It sends nothing unless all of the following are true:
+
+| | |
+| --- | --- |
+| The origin | comes from the sender the browser reports, never from the message |
+| The site | has an entry the reviewer stored, switched on, in team mode |
+| The endpoint | is the one that entry names — a page asking for another worker is **refused, not redirected** |
+| The path | is `/feedback`, the one path the widget calls |
+| The headers | are rebuilt: `Content-Type` may come from the page, `Authorization` never does |
+| The session | is open for that endpoint — with no session there is no call at all |
+
+The endpoint check is the one that matters. A reviewer holds a session per worker, so a page allowed
+to name its own endpoint could ask for a call to a *different* worker that reviewer has paired with,
+and be answered with their credential for it. Binding the endpoint to the stored entry for that
+origin is what closes it, and it is why team mode still needs an entry in the popup.
+
+Refusing when there is no session is deliberate, not an oversight. Relaying without the header would
+work on a worker left at `read: 'public'` — the pins would appear, and nothing would tell the
+reviewer they are unpaired while the mode delivered none of what it promises.
+
+**A page can ask for a relay, and that is by design**: it is the site's own widget doing the asking,
+and the two are indistinguishable from the main world. What a page gains is a call it could already
+make, against a worker its reviewer chose, with a credential it never sees.
+
 **`FRUITBACK_SESSION_PATH` is a credentials file.** Give it the same care as a key: a copy of it is
 not a set of working logins, but it is a list of who holds a session and until when. Back it up with
 `sqlite3 … ".backup"` rather than `cp`, which loses the write-ahead log.
 
-The three `/session/` routes are **exempt from `ALLOWED_ORIGINS`**, because an extension's origin
-carries an id that changes between an unpacked build and a store build. They carry no ambient
-authority — no cookie, and both credentials are secrets the caller must already hold — so the rate
-limiter is what stops the pairing endpoint being guessed at.
+**An extension origin is exempt from `ALLOWED_ORIGINS`, on every route.** The id in
+`chrome-extension://<id>` changes between an unpacked build and a store build, so no operator can
+write it down. The three `/session/` routes needed that first; since SKG-596 the relay calls
+`/feedback` from the extension's own service worker, which sends the same origin, so the exemption
+is by **scheme** — `chrome-extension:`, `moz-extension:`, `safari-web-extension:` — and by nothing
+else. Every other origin, including one that merely looks like those, still answers to the list.
+
+It grants an extension exactly what `curl` already has, and the section above says why that is not
+much: these routes carry no ambient authority, there is no cookie to ride on, and CORS was never
+what decides who may read a pin. Under `read: 'authenticated'` the token still is. What stops the
+pairing endpoint being guessed at is the rate limiter.
 
 Revoking ends the session on the worker. It **cannot** reach an access token already minted, and the
 window is the token's lifetime **plus the clock skew the verifier allows** — 10 minutes and 60
@@ -221,3 +260,6 @@ Fruitback owes its operators here is documentation, and that is tracked separate
 - **A page forging bridge messages on an origin its reviewer enabled.** Stated above, and inherent to
   the main world. Report a case where an origin nobody enabled can do it, or where a session token
   reaches the page.
+- **A team-mode page asking the extension to relay a call.** That is the mode. Report a relay that
+  reaches an endpoint the reviewer's entry for that origin does not name, a path other than
+  `/feedback`, or one made with no session behind it.
