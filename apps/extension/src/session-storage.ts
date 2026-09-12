@@ -45,7 +45,7 @@ export const LEGACY_SESSIONS_KEY = 'sessions';
 export const LEGACY_GRANTS_KEY = 'access';
 
 /**
- * One area of `chrome.storage`, as much of it as this file and `session-browser.ts` use.
+ * One area of `chrome.storage`, as much of it as this file uses.
  *
  * `get(null)` is the whole area, which is how a read finds the endpoints: a key per endpoint means
  * there is no one key left to ask for.
@@ -74,8 +74,10 @@ function endpointOf(prefix: string, key: string): string | undefined {
  * Whether a set of `storage.onChanged` keys holds a refresh token. One key per endpoint, so it is a
  * scan rather than a lookup.
  *
- * **Grants are deliberately out.** The listener watches `local`, and a grant lives in `session`; a
- * reader who later widens that listener to both areas has to widen this too.
+ * **Grants and epochs are deliberately out.** The listener watches `local`, and a grant lives in
+ * `session`; a reader who later widens that listener to both areas has to widen this too. An epoch
+ * is in `local`, but nothing writes one on its own: a pairing and a logout each write a session key
+ * in the same breath, and that is what wakes the refresh.
  */
 export function touchesARefreshToken(keys: string[]): boolean {
   return keys.some((key) => key.startsWith(SESSION_PREFIX));

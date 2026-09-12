@@ -7,13 +7,14 @@
  * that channel too. So nothing here is ever posted; the isolated content script asks the background
  * to make the call, and SKG-596 adds that relay. `worlds.test.ts` is what keeps it true.
  *
- * Written against two storage seams and one `post`, so all of it runs under `node --test`. The real
- * `browser.storage` and the real world boundary are `session-browser.ts` and SKG-538.
+ * Written against three storage seams and one `post`, so all of it runs under `node --test`. The
+ * real `browser.storage` is bound in `session-storage.ts`, and the real world boundary is SKG-538.
  *
  * **Two areas, on purpose.** The refresh token is worth weeks and goes in `local`; the access token
  * is worth ten minutes and goes in `session`, which the browser empties when it closes. Both in
  * `session` would make a reviewer pair again every morning, and somebody who has to do that keeps
- * their pairing code in a text file — a worse place than the one we were protecting.
+ * their pairing code in a text file — a worse place than the one we were protecting. The third seam
+ * is the epoch, which goes beside the session in `local` because it has to outlive what it refuses.
  */
 
 /** Who the worker says this session speaks for. Its word, from the pairing an operator created. */
