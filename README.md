@@ -72,7 +72,8 @@ answers exist, and [docs/modes.md](docs/modes.md) is the page that picks between
 | Good for | a public "report a problem" | reviewing a client's site, invisibly | a team reviewing its own staging |
 | Built | **yes** | **yes**, MV3 on Chromium and Firefox | **yes** |
 
-**Who may read is `FRUITBACK_READ`, and the mode decides who can satisfy it.** A public-mode site can
+**Who may read is `read` — `FRUITBACK_READ` worker-wide, or per client in `FRUITBACK_CLIENTS` — and
+the mode decides who can satisfy it.** A public-mode site can
 run `read: 'authenticated'` if it mints identity tokens of its own — `init({ identityToken })` is the
 seam, and the credential then lives in that site's page. **Team mode is the only one where the
 reviewer supplies it and the page never holds it**, attached in the extension's background. **Private

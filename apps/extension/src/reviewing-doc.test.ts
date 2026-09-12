@@ -85,6 +85,10 @@ describe('the guide quotes the popup this extension renders', () => {
       'Worker endpoint',
       'Client id',
       'Not paired — this site cannot reach the worker until you do',
+      // Not in `PAIRING_PROBLEM`, and the one a reviewer on an http worker actually meets: the popup
+      // disables the button before `sessions.pair` runs, so the record's own `insecure-endpoint`
+      // never reaches that screen. Raised in review.
+      'Pairing needs https (localhost excepted): a session must not cross http.',
       "team mode · the site's own widget",
     ];
 

@@ -60,6 +60,13 @@ Team mode relays every call through your session, so until you pair the site can
 
 > Not paired — this site cannot reach the worker until you do
 
+**The worker has to be holding sessions at all**, which is not the default: it needs
+`FRUITBACK_SESSION_PATH` — its own SQLite file, whatever `FRUITBACK_STORE` says — and
+`FRUITBACK_IDENTITY_SECRET`, which signs the access token. A worker with neither mints no codes, and
+the command below fails. That is the operator's side, in
+[self-hosting.md](self-hosting.md#the-worker), which lists the three `/session/` routes that exist
+only when it is set.
+
 **A pairing code is minted by an operator, on the container, never over HTTP:**
 
 ```bash
@@ -71,14 +78,21 @@ an operator typed it; the browser never asserts its own identity, which is the w
 comes from a person rather than a form.
 
 Paste it into **Pair with this worker**. The popup then reads `Paired as Alex`, with **Log out**
-beside it. If it does not:
+beside it.
+
+On a worker that is not on `https`, there is nothing to paste into: the button is disabled before you
+get that far, under
+
+> Pairing needs https (localhost excepted): a session must not cross http.
+
+Otherwise, what a failed attempt answers:
 
 | | |
 | --- | --- |
 | `That code has been used or has expired. Ask for a new one.` | Codes are single-use, and expire 15 minutes after they are minted. |
 | `The worker did not answer. Try again.` | The worker is down or unreachable — the code is still good. |
-| `That worker is on plain http. A session must not cross it.` | Use `https`, or loopback. |
 | `Fruitback needs permission to reach that worker.` | The prompt for the **worker's** origin was refused. It is not the site's. |
+| `That worker is on plain http. A session must not cross it.` | The same rule as the disabled button above, answered by `session.ts` rather than by the popup. You reach it only if something else asks for a pairing — the popup refuses first. |
 
 Pairing asks for a permission on the worker's origin, which is a different grant from the site's. It
 is asked for at the click, so nothing is awaited before the prompt — a browser drops the gesture
