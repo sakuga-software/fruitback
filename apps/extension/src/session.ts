@@ -129,6 +129,28 @@ export function createSessions({ sessions, grants, post, now = Date.now }: Sessi
     await sessions.write({ ...all, [endpoint]: session });
   }
 
+  /**
+   * Writes the session only while `spent` is still the refresh token in storage.
+   *
+   * The compare and the write share **one** read. Checking first and then calling `keep` read
+   * storage twice and wrote a third time, so a logout landing anywhere across those three was
+   * enough to put a working credential back under a screen saying signed out. The window is now a
+   * single read-to-write gap.
+   *
+   * It cannot be closed: `chrome.storage` has no transaction, and the popup and the background are
+   * separate contexts sharing nothing else. The refresh token is its own generation marker, which is
+   * what lets them agree with nothing kept in step. Narrowed twice in review, once when rotation
+   * made this run on **every** refresh rather than on the rare one that carried a new token.
+   */
+  async function keepIfCurrent(endpoint: string, spent: string, session: StoredSession): Promise<boolean> {
+    const all = await sessions.read();
+    if (all[endpoint]?.refreshToken !== spent) return false;
+
+    await sessions.write({ ...all, [endpoint]: session });
+
+    return true;
+  }
+
   async function grant(endpoint: string, issued: Issued): Promise<AccessGrant> {
     const all = await grants.read();
     const value: AccessGrant = {
@@ -191,15 +213,21 @@ export function createSessions({ sessions, grants, post, now = Date.now }: Sessi
     // The refresh token is its own generation marker, which is what makes this work across contexts
     // with nothing to keep in step: if the one in storage is not the one this request spent, the
     // session was logged out or re-paired, and this answer is about a session that no longer exists.
-    // `chrome.storage` has no transaction, so the window is not closed, only narrowed from a network
-    // round trip to two storage operations. Raised in review.
-    if ((await sessions.read())[endpoint]?.refreshToken !== stored.refreshToken) {
-      return { ok: false, reason: 'not-paired' };
-    }
-
+    //
+    // The check and the write are one operation — see `keepIfCurrent`. Doing them apart left three
+    // storage operations for a logout to land between, and rotation made this path run on every
+    // refresh rather than on the rare answer that carried a new token. Raised in review, twice.
+    //
     // What protects a lost answer is on the worker's side: the token this request spent stays usable
     // until its successor is, so a retry with the old one lands on its feet.
-    await keep(endpoint, { refreshToken: issued.refreshToken, identity: issued.identity });
+    const kept = await keepIfCurrent(endpoint, stored.refreshToken, {
+      refreshToken: issued.refreshToken,
+      identity: issued.identity,
+    });
+
+    // No write, no grant. Minting an access token for a session storage no longer holds is the whole
+    // failure this guards against, and it outlives a revoke.
+    if (!kept) return { ok: false, reason: 'not-paired' };
 
     return { ok: true, grant: await grant(endpoint, issued) };
   }

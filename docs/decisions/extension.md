@@ -162,6 +162,11 @@ both: an access token the host site's JavaScript can read is the worst outcome o
   - The first test for it passed for the wrong reason: it mutated storage before the refresh had
     read it, so the early `not-paired` answered and the guard never ran. Synchronised on the request
     being *entered* instead, then mutated — and removing the guard now fails both cases.
+  - **Narrowed again by SKG-600**, because rotation made this path run on *every* refresh rather than
+    on the rare answer that carried a new token. The compare and the write were separate — a read, a
+    read, a write — so a logout landing across any of the three was enough. `keepIfCurrent` does both
+    on one read and reports whether it wrote; nothing mints a grant when it did not. Still not
+    closed, and it cannot be: `chrome.storage` has no transaction. Raised in review.
 - **One refresh in flight per endpoint, and the race is not the one above** (SKG-600, raised in
   review). Rotation turned a duplicated refresh from a wasted request into a lockout: two callers
   spend the same token, the worker reads the second as a retry inside the grace and revokes the
