@@ -7,13 +7,33 @@
  * **Every endpoint has its own key.** One record holding all of them made every write a
  * read-modify-write, and the popup and the background do not share a lock — so a refresh for one
  * worker could write another worker's entry back, and a logout in the popup did not stick.
+ *
+ * A key per endpoint makes a write atomic per endpoint. It does not order two writes, and a logout
+ * has to beat a refresh that read storage before it. That is the epoch, and `stillOpen` is the rule
+ * it is read by (SKG-603).
  */
 
-import { type Area, parseAccessGrant, parseStoredSession } from './session.ts';
+import {
+  type Area,
+  type SessionSeams,
+  type Sessions,
+  type StoredSession,
+  createSessions,
+  parseAccessGrant,
+  parseStoredSession,
+} from './session.ts';
 
 /** The prefix of a key, per area. An endpoint is appended verbatim. */
 export const SESSION_PREFIX = 'fruitback:session:';
 export const GRANT_PREFIX = 'fruitback:grant:';
+
+/**
+ * The prefix of an endpoint's epoch, in `local` beside the session it dates (SKG-603).
+ *
+ * An opaque id, minted when a session starts and when one ends. See `StoredSession.epoch` for what
+ * it is for, and `stillOpen` for the rule that reads it.
+ */
+export const EPOCH_PREFIX = 'fruitback:epoch:';
 
 /**
  * The keys that held every endpoint at once, before SKG-602.
@@ -79,6 +99,61 @@ export function entriesOf<T>(
   return entries;
 }
 
+/** An epoch, read back. An area holds whatever an older version wrote, so this is parsed too. */
+export function parseEpoch(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+/**
+ * The sessions still open, out of the sessions storage holds (SKG-603).
+ *
+ * **A session is honoured only while it agrees with its endpoint's epoch.** `chrome.storage` has no
+ * transaction and no compare-and-set, so a write cannot be refused at the moment it lands: a logout
+ * in the popup can arrive after a refresh in the background read storage and before it writes, and
+ * both of that refresh's writes then agree with each other. What the epoch changes is who decides.
+ * The refresh stamps what it writes with the epoch it read, the logout mints a new one, and the
+ * entry is then refused by every reader instead of having to be stopped by a writer.
+ *
+ * Absent on both sides compares equal, so an entry written before this marker existed is kept. That
+ * is the rule `matches` already follows for the generation.
+ */
+export function stillOpen(
+  sessions: Record<string, StoredSession>,
+  epochs: Record<string, string>,
+): Record<string, StoredSession> {
+  const open: Record<string, StoredSession> = {};
+  for (const [endpoint, session] of Object.entries(sessions)) {
+    if (session.epoch === epochs[endpoint]) open[endpoint] = session;
+  }
+
+  return open;
+}
+
+/**
+ * The sessions area: one key per endpoint, and the epoch rule over it.
+ *
+ * The epoch is read from the **same snapshot** as the sessions, so nothing can land between the two
+ * halves of the comparison. It is where the rule is enforced rather than at the call sites, because
+ * a reader added later would otherwise see a session that was logged out.
+ */
+export function createSessionArea(of: () => StorageArea, ready: Promise<void>): Area<StoredSession> {
+  const area = createArea(of, SESSION_PREFIX, parseStoredSession, ready);
+
+  return {
+    ...area,
+    async read() {
+      await ready;
+      const snapshot = await of().get(null);
+      if (!isRecord(snapshot)) return {};
+
+      return stillOpen(
+        entriesOf(snapshot, SESSION_PREFIX, parseStoredSession),
+        entriesOf(snapshot, EPOCH_PREFIX, parseEpoch),
+      );
+    },
+  };
+}
+
 /**
  * One `Area` over `chrome.storage`, with a key per endpoint.
  *
@@ -109,6 +184,33 @@ export function createArea<T>(
       await of().remove(keyFor(prefix, endpoint));
     },
   };
+}
+
+/**
+ * A `Sessions` over two storage areas: which key holds what, and the upgrade they all wait on.
+ *
+ * The whole binding, and the only one. `session-browser.ts` calls this with `browser.storage`, and
+ * the tests call it with an area in memory — so what a test drives is the wiring that ships, rather
+ * than a second copy of it that can be right while the real one is not.
+ *
+ * The areas arrive as functions because `browser.storage.local` must be read when it is used and not
+ * when this module is imported.
+ */
+export function createStoredSessions(
+  local: () => StorageArea,
+  session: () => StorageArea,
+  post: SessionSeams['post'],
+  options: Pick<SessionSeams, 'now' | 'newGeneration' | 'newEpoch'> = {},
+): Sessions {
+  const ready = upgradeAreas(local(), session());
+
+  return createSessions({
+    sessions: createSessionArea(local, ready),
+    grants: createArea(session, GRANT_PREFIX, parseAccessGrant, ready),
+    epochs: createArea(local, EPOCH_PREFIX, parseEpoch, ready),
+    post,
+    ...options,
+  });
 }
 
 /**

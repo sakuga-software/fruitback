@@ -166,11 +166,13 @@ both: an access token the host site's JavaScript can read is the worst outcome o
     on the rare answer that carried a new token. The compare and the write were separate — a read, a
     read, a write — so a logout landing across any of the three was enough. `keepIfCurrent` does both
     on one read and reports whether it wrote; nothing mints a grant when it did not. Still not
-    closed, and it cannot be: `chrome.storage` has no transaction. Raised in review.
+    closed then, and it could not be closed by a tighter gap: `chrome.storage` has no transaction.
+    **SKG-603 closed it from the other side**, by what the write carries rather than when it lands.
+    Raised in review.
 - **One refresh in flight per endpoint, and the race is not the one above** (SKG-600, raised in
   review). Rotation turned a duplicated refresh from a wasted request into a lockout: two callers
   spend the same token, the worker reads the second as a retry inside the grace and revokes the
-  first successor, and whichever `keep()` lands last decides what the extension holds. If it is the
+  first successor, and whichever answer lands last decides what the extension holds. If it is the
   first, the extension holds a token the worker revoked; the next refresh answers `401`, the session
   ends, and only an operator minting a new pairing code brings the reviewer back.
   - The spent token stays good only **until its successor is used, or `ROTATION_GRACE_SECONDS`
@@ -287,9 +289,10 @@ context, and a second lock guarding what the first guards is a question for whoe
 ### What the shape does not fix, and what still does
 
 The compare in `keepIfCurrent` and the write after it are still two operations, and `forget` is still
-two drops. The **generation** marker is what makes a logout landing between them harmless, exactly as
-SKG-600 left it: a grant minted for a session storage no longer holds is refused on the next read.
-The whole-record write only looked atomic across the two areas — it was two `set` calls as well.
+two drops. At the time of this ticket the **generation** marker covered one of the two logouts that
+can land there — a grant minted for a session storage no longer holds is refused on the next read —
+and the other was left open and named: SKG-603, below. The whole-record write only looked atomic
+across the two areas; it was two `set` calls as well.
 
 ### The upgrade, and the one interleaving it does not close
 
@@ -329,6 +332,84 @@ whose reason has changed reads as stale to whoever greps for the defect next.
 
 `sites.ts` keeps the whole-record write it always had. Only the popup calls `writeSite`, and there is
 one popup.
+
+## A logout that lands inside a refresh (SKG-603)
+
+SKG-602 gave every endpoint its own key, which makes a write atomic **per endpoint**. It does not
+order two writers, and one interleaving was left open and named:
+
+```
+background: read storage        → refreshToken === spent ✓
+popup:      logout              → revoke on the worker, drop the session, drop the grant
+background: put(session, gen.N) ← the session is back
+background: put(grant,   gen.N) ← and the grant agrees with it
+```
+
+Both writes carry the same new generation, so `matches` accepts the grant: SKG-600's marker catches a
+logout landing *between* the two writes and cannot catch one landing *before* them. The refresh token
+put back is revoked on the worker — logging out revokes the chain — so the next refresh answers
+`401`. That does not reach the access token already minted, which stays good for its remaining ten
+minutes. A reviewer who clicked log out keeps reading pins.
+
+### The write cannot be stopped, so it is made unreadable
+
+`chrome.storage` has no transaction and no compare-and-set. Nothing in the background can refuse a
+write at the moment it lands, and a tighter gap only makes the window smaller. What can be decided is
+**what the write carries**.
+
+Each endpoint gets an epoch: `fruitback:epoch:<endpoint>`, an opaque id in `local` beside the session
+it dates. A logout mints a new one **before** it clears anything, a pairing mints one before it writes
+the session, and `keepIfCurrent` stamps what it writes with the epoch of the very read its comparison
+was made on. `stillOpen` then refuses any session that disagrees with its endpoint's epoch, so the
+three places a logout can land are all covered by one rule:
+
+- before the read — the session is gone, and the comparison already refused.
+- between the read and the write — the stamp names a run that is over; the entry lands and no reader
+  answers with it. The grant beside it has no session to match.
+- between the session write and the grant write — the same, and `matches` refuses the orphan grant
+  as well. Two refusals where SKG-600 left one.
+
+The check moved from write time, where there is no ordering, to read time, where there is no race.
+
+Three things make it hold, and each is a way it could have been got wrong:
+
+- **The stamp comes from that read and no fresher one.** A stamp read after the logout agrees with
+  storage and puts the session back. So `keepIfCurrent` reads the session itself rather than being
+  handed one, its parameter is `Omit<StoredSession, 'generation' | 'epoch'>` so a caller cannot
+  supply a stamp, and the `epochs` seam is `Pick<Area<string>, 'put'>` — a writer that could read the
+  epoch could stamp with the logout's own.
+- **The epoch is minted before the clear, not after.** The other order leaves a gap where the keys
+  are gone and the run is not yet over, and a refresh landing in it writes a session that agrees with
+  what it read.
+- **A pairing mints one too.** A logout leaves an epoch on an endpoint holding nothing, so an
+  endpoint paired again after a logout would read as signed out for ever.
+
+Absent on both sides compares equal, which is the rule `matches` already follows: a session stored
+before this marker existed is kept rather than signing the reviewer out on an update.
+
+What this does not do is remove the entry. A refresh that loses the race still writes its key, and it
+stays in storage — unreadable, and written over by the next pairing — holding the refresh token the
+logout revoked. Removing it would mean writing from a read, which is the defect this whole batch is
+about.
+
+### Two `Sessions` over one storage
+
+The case could not be written against the fake `Area`s the rest of `session.test.ts` uses: the popup
+and the background are two `createSessions` over **one** storage, and two fakes cannot reach each
+other. So `createStoredSessions` is now the single assembly — which key holds what, the upgrade, the
+areas — and `session-browser.ts` is left binding `browser.storage` and `fetch` to it. A test drives
+the wiring that ships.
+
+That is what found the first defect in this ticket. `parseStoredSession` did not carry the epoch
+through, so every session read back from real storage was stamped with nothing and refused. A fake
+`Area` answers with what a test put into it and never parses, so the whole suite stayed green while
+nothing worked: pairing, on real storage, signed the reviewer straight back out.
+
+The interleavings are arranged by holding one storage write open — the only place the two contexts
+can be ordered against each other, since they share nothing else. Ten mutations of the new rules were
+run and each fails a test, including the two that only say *when* something happens: minting the
+epoch after the clear, and reading the epoch in a second round trip instead of from the snapshot the
+session came from.
 
 ## The team mode, and the call the page cannot make (SKG-596)
 

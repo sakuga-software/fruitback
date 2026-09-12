@@ -6,42 +6,22 @@ import {
   LEGACY_GRANTS_KEY,
   LEGACY_SESSIONS_KEY,
   SESSION_PREFIX,
+  EPOCH_PREFIX,
   createArea,
+  createSessionArea,
   entriesOf,
+  stillOpen,
   keyFor,
   splitLegacyRecord,
   upgradeAreas,
   touchesARefreshToken,
 } from './session-storage.ts';
 import { type StoredSession, parseAccessGrant, parseStoredSession } from './session.ts';
+import { storage } from './session-storage.fixture.ts';
 
 const ENDPOINT = 'https://worker.test';
 const IDENTITY = { subject: 'u_1', name: 'Alex' };
 const SESSION: StoredSession = { refreshToken: 'refresh.1', identity: IDENTITY, generation: 'gen.1' };
-
-/** `chrome.storage`, in memory, recording the calls in the order they were made. */
-function storage(initial: Record<string, unknown> = {}) {
-  const state: Record<string, unknown> = { ...initial };
-  const log: string[] = [];
-
-  const area: StorageArea = {
-    get: async (keys) => {
-      log.push(`get ${keys ?? 'all'}`);
-
-      return { ...state };
-    },
-    set: async (items) => {
-      log.push(`set ${Object.keys(items).join(',')}`);
-      Object.assign(state, items);
-    },
-    remove: async (key) => {
-      log.push(`remove ${key}`);
-      delete state[key];
-    },
-  };
-
-  return { area, log, read: () => ({ ...state }) };
-}
 
 describe('one key per endpoint', () => {
   /**
@@ -318,5 +298,86 @@ describe('an upgrade that could not run', () => {
 
     assert.deepEqual(local.read(), { [keyFor(SESSION_PREFIX, ENDPOINT)]: SESSION });
     assert.deepEqual(session.read(), { [keyFor(GRANT_PREFIX, ENDPOINT)]: grant });
+  });
+});
+
+describe('the epoch that ends a run of a session', () => {
+  const OTHER = 'https://other.test';
+
+  it('keeps an entry stamped with the epoch storage holds', () => {
+    const open = { ...SESSION, epoch: 'epo.1' };
+
+    assert.deepEqual(stillOpen({ [ENDPOINT]: open }, { [ENDPOINT]: 'epo.1' }), { [ENDPOINT]: open });
+  });
+
+  /**
+   * The logout minted `epo.2` before it cleared, so the refresh that wrote this one back was reading
+   * storage from before it. Nothing could refuse the write; this is what refuses the entry.
+   */
+  it('refuses an entry stamped with the run before', () => {
+    assert.deepEqual(stillOpen({ [ENDPOINT]: { ...SESSION, epoch: 'epo.1' } }, { [ENDPOINT]: 'epo.2' }), {});
+  });
+
+  /** The first logout on an endpoint whose session was stored before this marker existed. */
+  it('refuses an entry with no stamp once the endpoint has an epoch', () => {
+    assert.deepEqual(stillOpen({ [ENDPOINT]: SESSION }, { [ENDPOINT]: 'epo.1' }), {});
+  });
+
+  /**
+   * Absent on both sides compares equal, the same rule `matches` follows for the generation: an
+   * upgrade keeps the session a reviewer already had rather than signing them out.
+   */
+  it('keeps an entry with no stamp on an endpoint with no epoch', () => {
+    assert.deepEqual(stillOpen({ [ENDPOINT]: SESSION }, {}), { [ENDPOINT]: SESSION });
+  });
+
+  it('reads each endpoint against its own epoch', () => {
+    const open = { ...SESSION, epoch: 'epo.1' };
+    const sessions = { [ENDPOINT]: open, [OTHER]: { ...SESSION, epoch: 'epo.1' } };
+
+    assert.deepEqual(stillOpen(sessions, { [ENDPOINT]: 'epo.1', [OTHER]: 'epo.2' }), { [ENDPOINT]: open });
+  });
+
+  /**
+   * **One snapshot, so nothing can land between the two halves of the comparison.** Two reads would
+   * be a window of their own: a logout between them writes the epoch this then compares against a
+   * session it read before the logout, or the other way round.
+   */
+  it('reads a session and its epoch from one round trip', async () => {
+    const held = storage({
+      [keyFor(SESSION_PREFIX, ENDPOINT)]: { ...SESSION, epoch: 'epo.1' },
+      [keyFor(EPOCH_PREFIX, ENDPOINT)]: 'epo.1',
+    });
+    const area = createSessionArea(() => held.area, Promise.resolve());
+
+    assert.deepEqual(await area.read(), { [ENDPOINT]: { ...SESSION, epoch: 'epo.1' } });
+    assert.deepEqual(held.log, ['get all']);
+  });
+
+  it('does not answer with a session the epoch beside it has ended', async () => {
+    const held = storage({
+      [keyFor(SESSION_PREFIX, ENDPOINT)]: { ...SESSION, epoch: 'epo.1' },
+      [keyFor(EPOCH_PREFIX, ENDPOINT)]: 'epo.2',
+    });
+    const area = createSessionArea(() => held.area, Promise.resolve());
+
+    assert.deepEqual(await area.read(), {});
+    // Still in storage: a write that lost the race cannot be taken back, only refused.
+    assert.ok(keyFor(SESSION_PREFIX, ENDPOINT) in held.read());
+  });
+
+  it('waits for the upgrade before it answers, like every other area', async () => {
+    let split = (): void => {};
+    const ready = new Promise<void>((resolve) => {
+      split = resolve;
+    });
+    const held = storage({ [keyFor(SESSION_PREFIX, ENDPOINT)]: SESSION });
+    const area = createSessionArea(() => held.area, ready);
+
+    const reading = area.read();
+    assert.deepEqual(held.log, []);
+
+    split();
+    assert.deepEqual(await reading, { [ENDPOINT]: SESSION });
   });
 });

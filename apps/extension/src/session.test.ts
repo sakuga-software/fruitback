@@ -4,6 +4,7 @@ import {
   type AccessGrant,
   type Area,
   type SessionResponse,
+  type SessionSeams,
   type StoredSession,
   REFRESH_MARGIN_MS,
   RETRY_DELAY_MS,
@@ -11,6 +12,15 @@ import {
   nextWakeAt,
   parseIssued,
 } from './session.ts';
+import {
+  type StorageArea,
+  EPOCH_PREFIX,
+  GRANT_PREFIX,
+  SESSION_PREFIX,
+  createStoredSessions,
+  keyFor,
+} from './session-storage.ts';
+import { storage } from './session-storage.fixture.ts';
 
 const ENDPOINT = 'https://worker.test';
 const IDENTITY = { subject: 'u_1', name: 'Alex' };
@@ -63,11 +73,13 @@ function issued(overrides: Record<string, unknown> = {}): Record<string, unknown
 function setup(options: {
   sessions?: Record<string, StoredSession>;
   grants?: Record<string, AccessGrant>;
+  epochs?: Record<string, string>;
   answers?: (SessionResponse | Error)[];
   now?: number;
 }) {
   const sessions = area<StoredSession>({ ...options.sessions });
   const grants = area<AccessGrant>({ ...options.grants });
+  const epochs = area<string>({ ...options.epochs });
   const remote = worker(options.answers ?? []);
 
   // Deterministic, so a test can assert the stored shape. Production mints a random one.
@@ -78,15 +90,25 @@ function setup(options: {
     return `gen.${minted}`;
   };
 
+  let ended = 0;
+  const newEpoch = () => {
+    ended += 1;
+
+    return `epo.${ended}`;
+  };
+
   return {
     sessions,
     grants,
+    epochs,
     remote,
     newGeneration,
     subject: createSessions({
       sessions,
       grants,
+      epochs,
       newGeneration,
+      newEpoch,
       post: remote.post,
       now: () => options.now ?? NOW,
     }),
@@ -99,7 +121,7 @@ describe('pairing', () => {
    * together. The refresh token has to outlive the browser closing and the access token must not.
    */
   it('puts the refresh token and the access token in different areas', async () => {
-    const { subject, sessions, grants } = setup({
+    const { subject, sessions, grants, epochs } = setup({
       answers: [{ status: 200, body: issued({ refreshToken: 'refresh.1' }) }],
     });
 
@@ -107,8 +129,11 @@ describe('pairing', () => {
 
     assert.deepEqual(result, { ok: true, identity: IDENTITY });
     assert.deepEqual(await sessions.read(), {
-      [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY, generation: 'gen.1' },
+      [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY, epoch: 'epo.1', generation: 'gen.1' },
     });
+    // The stamp and the epoch it names are written together, or the endpoint pairs into a session
+    // every reader refuses. See `stillOpen`.
+    assert.deepEqual(await epochs.read(), { [ENDPOINT]: 'epo.1' });
     assert.deepEqual(await grants.read(), {
       [ENDPOINT]: { accessToken: 'access.1', expiresAt: NOW + 600_000, identity: IDENTITY, generation: 'gen.1' },
     });
@@ -324,6 +349,7 @@ describe('keeping an access token fresh', () => {
     const subject = createSessions({
       sessions,
       grants: area<AccessGrant>(),
+      epochs: area<string>(),
       now: () => NOW,
       post: async (url) => ({
         status: 200,
@@ -463,6 +489,7 @@ describe('a session that ends while a refresh is in the air', () => {
     const subject = createSessions({
       sessions,
       grants,
+      epochs: area<string>(),
       now: () => NOW,
       post: async (url) => {
         if (url.endsWith('/session/refresh')) {
@@ -701,5 +728,235 @@ describe('a session never crosses plain http', () => {
 
     assert.partialDeepStrictEqual(await subject.pair(loopback, 'ABCD-EFGH-JKMN'), { ok: true });
     assert.equal(remote.calls.length, 1);
+  });
+});
+
+describe('a logout that lands inside a refresh', () => {
+  const CODE = 'ABCD-EFGH-JKMN';
+  /** Ten minutes on, so the grant a pairing wrote is stale and the next call refreshes. */
+  const LATER = NOW + 10 * 60 * 1000;
+
+  /**
+   * A worker that pairs, rotates and revokes. The interleaving is what these cases arrange, so the
+   * answers are the same every time and the order they arrive in is not the subject.
+   */
+  const post = async (url: string): Promise<SessionResponse> => {
+    if (url.endsWith('/session/pair')) return { status: 200, body: issued({ refreshToken: 'refresh.1' }) };
+    if (url.endsWith('/session/refresh')) {
+      return { status: 200, body: issued({ accessToken: 'access.2', refreshToken: 'refresh.2' }) };
+    }
+    if (url.endsWith('/session/revoke')) return { status: 200, body: {} };
+
+    throw new Error(`the worker was asked ${url}`);
+  };
+
+  /**
+   * One context's clock and its two minters, named after it.
+   *
+   * Separate counters on purpose: the popup and the background mint independently, and a stamp that
+   * matched across them by accident would hide the very comparison these cases are about.
+   */
+  function context(name: string, at: number): Pick<SessionSeams, 'now' | 'newGeneration' | 'newEpoch'> {
+    let generations = 0;
+    let epochs = 0;
+
+    return {
+      now: () => at,
+      newGeneration: () => {
+        generations += 1;
+
+        return `${name}.gen.${generations}`;
+      },
+      newEpoch: () => {
+        epochs += 1;
+
+        return `${name}.epo.${epochs}`;
+      },
+    };
+  }
+
+  /**
+   * Holds the next write of a key under `prefix` open, so the other context can act inside it.
+   *
+   * This is the whole apparatus: a storage round trip is the only place the two contexts can be
+   * interleaved, because they share nothing else. Once only — what follows the release is the
+   * ordinary path.
+   */
+  function holdingTheWriteOf(prefix: string, area: StorageArea) {
+    let reached = (): void => {};
+    let release = (): void => {};
+    const at = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    const go = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let held = false;
+
+    const holding: StorageArea = {
+      ...area,
+      async set(items) {
+        if (!held && Object.keys(items).some((key) => key.startsWith(prefix))) {
+          held = true;
+          reached();
+          await go;
+        }
+
+        await area.set(items);
+      },
+    };
+
+    return { at, area: holding, release: () => release() };
+  }
+
+  /**
+   * Two `Sessions` over one storage, which is what the popup and the background are. The background
+   * is ten minutes on, so the grant the pairing wrote is stale for it and asking for access
+   * refreshes.
+   */
+  function paired() {
+    const local = storage();
+    const session = storage();
+    const popup = createStoredSessions(
+      () => local.area,
+      () => session.area,
+      post,
+      context('pop', NOW),
+    );
+
+    return { local, session, popup };
+  }
+
+  /**
+   * The case the epoch is not about, and the one that says it broke nothing: a refresh with no
+   * logout anywhere near it has to leave a session both contexts can use.
+   *
+   * A stamp read at the wrong moment, or not carried across the write at all, refuses every
+   * ordinary refresh — and every case below would still pass.
+   */
+  it('keeps the session a refresh replaces, when nothing ends it', async () => {
+    const { local, session, popup } = paired();
+    assert.partialDeepStrictEqual(await popup.pair(ENDPOINT, CODE), { ok: true });
+
+    const background = createStoredSessions(
+      () => local.area,
+      () => session.area,
+      post,
+      context('bg', LATER),
+    );
+
+    assert.partialDeepStrictEqual(await background.ensureAccess(ENDPOINT), {
+      ok: true,
+      grant: { accessToken: 'access.2' },
+    });
+    assert.partialDeepStrictEqual(await popup.list(), { [ENDPOINT]: { refreshToken: 'refresh.2' } });
+    assert.partialDeepStrictEqual(await popup.ensureAccess(ENDPOINT), { ok: true, grant: { accessToken: 'access.2' } });
+  });
+
+  /**
+   * A logout mints an epoch for an endpoint that then holds nothing, so the pairing after it has to
+   * mint one of its own. Reading the current one instead would work; writing none at all leaves the
+   * reviewer paired into a session every read refuses, with no way back.
+   */
+  it('pairs again after a logout, into a session both contexts answer', async () => {
+    const { local, session, popup } = paired();
+    await popup.pair(ENDPOINT, CODE);
+    await popup.logout(ENDPOINT);
+
+    assert.partialDeepStrictEqual(await popup.pair(ENDPOINT, CODE), { ok: true });
+
+    const background = createStoredSessions(
+      () => local.area,
+      () => session.area,
+      post,
+      context('bg', NOW),
+    );
+    assert.partialDeepStrictEqual(await background.list(), { [ENDPOINT]: { refreshToken: 'refresh.1' } });
+    assert.partialDeepStrictEqual(await background.ensureAccess(ENDPOINT), { ok: true });
+  });
+
+  /**
+   * The order inside a logout, which is the whole of the fix: the epoch is in storage before
+   * anything is removed.
+   *
+   * Minting it after the drops leaves a gap where the keys are gone and the run is not yet over, and
+   * a refresh landing in that gap writes a session that agrees with the epoch it read — logged back
+   * in, by a write nobody could refuse.
+   */
+  it('mints the epoch before it clears anything', async () => {
+    const { local, popup } = paired();
+    await popup.pair(ENDPOINT, CODE);
+    local.log.length = 0;
+
+    await popup.logout(ENDPOINT);
+
+    const minted = local.log.indexOf(`set ${keyFor(EPOCH_PREFIX, ENDPOINT)}`);
+    const cleared = local.log.indexOf(`remove ${keyFor(SESSION_PREFIX, ENDPOINT)}`);
+    assert.ok(minted >= 0 && cleared >= 0, `neither key was written: ${local.log.join(' | ')}`);
+    assert.ok(minted < cleared, `the epoch was minted after the session was cleared: ${local.log.join(' | ')}`);
+  });
+
+  /**
+   * **SKG-603.** The logout lands between the refresh reading storage and writing it back, so both
+   * of the refresh's writes land and agree with each other: the session is back, and the access
+   * token minted for it matches. The refresh token put back is revoked on the worker, but that does
+   * not reach a token already minted — a reviewer who clicked log out could read pins for the ten
+   * minutes it had left.
+   *
+   * Nothing here stops the write. The epoch the logout minted is what makes it unreadable.
+   */
+  it('refuses the session a refresh puts back after a logout', async () => {
+    const { local, session, popup } = paired();
+    await popup.pair(ENDPOINT, CODE);
+
+    const held = holdingTheWriteOf(SESSION_PREFIX, local.area);
+    const background = createStoredSessions(
+      () => held.area,
+      () => session.area,
+      post,
+      context('bg', LATER),
+    );
+
+    const refreshing = background.ensureAccess(ENDPOINT);
+    await held.at;
+    await popup.logout(ENDPOINT);
+    held.release();
+    // The background is told it succeeded, because from where it stands it did.
+    assert.partialDeepStrictEqual(await refreshing, { ok: true });
+
+    // The write landed. What it cannot do is come back.
+    assert.ok(keyFor(SESSION_PREFIX, ENDPOINT) in local.read());
+    assert.deepEqual(await popup.list(), {});
+    assert.deepEqual(await background.list(), {});
+    assert.deepEqual(await popup.ensureAccess(ENDPOINT), { ok: false, reason: 'not-paired' });
+    assert.deepEqual(await background.ensureAccess(ENDPOINT), { ok: false, reason: 'not-paired' });
+  });
+
+  /**
+   * The other window, covered since SKG-600 and still covered: the logout lands between the session
+   * write and the grant write, so the grant is an orphan over storage that holds no session. It must
+   * not be honoured for its remaining ten minutes either.
+   */
+  it('refuses the grant a refresh writes after a logout', async () => {
+    const { local, session, popup } = paired();
+    await popup.pair(ENDPOINT, CODE);
+
+    const held = holdingTheWriteOf(GRANT_PREFIX, session.area);
+    const background = createStoredSessions(
+      () => local.area,
+      () => held.area,
+      post,
+      context('bg', LATER),
+    );
+
+    const refreshing = background.ensureAccess(ENDPOINT);
+    await held.at;
+    await popup.logout(ENDPOINT);
+    held.release();
+    await refreshing;
+
+    assert.ok(keyFor(GRANT_PREFIX, ENDPOINT) in session.read());
+    assert.deepEqual(await popup.list(), {});
+    assert.deepEqual(await popup.ensureAccess(ENDPOINT), { ok: false, reason: 'not-paired' });
   });
 });
