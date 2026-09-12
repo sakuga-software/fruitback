@@ -183,22 +183,6 @@ function chainOf(row: { root_hash: unknown }, tokenHash: string): string {
 }
 
 /**
- * Every live token of one chain, revoked — except `keep`, when the caller still needs it.
- *
- * One statement rather than a walk, and `revoked_at IS NULL` is what makes a repeat call free: the
- * rows are already marked, so nothing is written.
- *
- * The cost, measured rather than reasoned about. The walk this replaced ran at 10 microseconds a
- * link and the chain has no bound but `expires_at`: 605 ms over 60,000 rows, and a holder refreshing
- * at the rate limit reaches an order of magnitude more inside thirty days. The same chains revoke in
- * 0.6 ms and 6.4 ms now. What a walk made linear, an index makes flat. Raised in review, which also
- * pointed out that the first estimate assumed a cadence nothing enforces.
- *
- * `keep` is the grace branch's, and it is the only place root-based revocation differs from walking
- * descendants rather than merely costing less: that branch drops the successors nobody received
- * while the token presenting itself stays live to mint another.
- */
-/**
  * Is any token of this chain still live?
  *
  * A head carries NULL in `root_hash` — every root does, and so does every row written before the
@@ -220,6 +204,22 @@ function chainHasLive(database: DatabaseSync, root: string): boolean {
   return live !== undefined;
 }
 
+/**
+ * Every live token of one chain, revoked — except `keep`, when the caller still needs it.
+ *
+ * One statement rather than a walk, and `revoked_at IS NULL` is what makes a repeat call free: the
+ * rows are already marked, so nothing is written.
+ *
+ * The cost, measured rather than reasoned about. The walk this replaced ran at 10 microseconds a
+ * link and the chain has no bound but `expires_at`: 605 ms over 60,000 rows, and a holder refreshing
+ * at the rate limit reaches an order of magnitude more inside thirty days. The same chains revoke in
+ * 0.6 ms and 6.4 ms now. What a walk made linear, an index makes flat. Raised in review, which also
+ * pointed out that the first estimate assumed a cadence nothing enforces.
+ *
+ * `keep` is the grace branch's, and it is the only place root-based revocation differs from walking
+ * descendants rather than merely costing less: that branch drops the successors nobody received
+ * while the token presenting itself stays live to mint another.
+ */
 function revokeChain(database: DatabaseSync, root: string, now: number, keep?: string): void {
   database
     .prepare('UPDATE sessions SET revoked_at = ? WHERE root_hash = ? AND token_hash IS NOT ? AND revoked_at IS NULL')
