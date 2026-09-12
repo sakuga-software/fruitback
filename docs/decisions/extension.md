@@ -162,6 +162,34 @@ both: an access token the host site's JavaScript can read is the worst outcome o
   - The first test for it passed for the wrong reason: it mutated storage before the refresh had
     read it, so the early `not-paired` answered and the guard never ran. Synchronised on the request
     being *entered* instead, then mutated — and removing the guard now fails both cases.
+- **One refresh in flight per endpoint, and the race is not the one above** (SKG-600, raised in
+  review). Rotation turned a duplicated refresh from a wasted request into a lockout: two callers
+  spend the same token, the worker reads the second as a retry inside the grace and revokes the
+  first successor, and whichever `keep()` lands last decides what the extension holds. If it is the
+  first, the extension holds a token the worker revoked; the next refresh answers `401`, the session
+  ends, and only an operator minting a new pairing code brings the reviewer back.
+  - **What hid it was that half of the path was already serialised.** `background.ts` wraps
+    `refreshDue` in `serialize`, so the alarm cannot overlap itself. The relay calls `ensureAccess`
+    directly and goes nowhere near it — and the widget has a read and a write in flight in the
+    ordinary case, so two concurrent refreshes are the normal state of team mode, not a rare one.
+  - I had checked the *other* half and concluded there was no race: the popup calls `list`, `pair`
+    and `logout` only, so it never refreshes. True, and it answered a question nobody needed
+    answering. The PR body said so before the review corrected it.
+  - `refreshOnce` holds an endpoint-to-promise map with **no `await` between the `get` and the
+    `set`**. `ensureAccess` awaits `grants.read()` before deciding, so two callers can both find the
+    grant stale; the map is the only thing between them and it only works if that pair is
+    synchronous. The test starts both calls before awaiting either — `await ensureAccess()` twice
+    passes with or without the lock, which is the shape of test this one exists not to be.
+  - It lives in `session.ts` rather than the entrypoint for the reason `bridge.ts` gives: an
+    entrypoint binds `browser` at import, and no test could reach the guard there.
+- **A `200` from `/session/refresh` carrying no `refreshToken` is a failure, not a success**
+  (SKG-600, raised in review). Every refresh rotates, so an answer without a successor means the
+  worker spent the stored token and the replacement did not arrive — a truncated body, a route that
+  stopped naming the field. Accepting it stored a spent token under a working access token, and the
+  session died at the end of the grace with nothing to explain it. It answers `unavailable`, so the
+  retry runs while the predecessor is still good. `parseIssued` stays tolerant and both call sites
+  require the field: the rule belongs beside the failure it prevents, and a later route issuing only
+  an access token would otherwise have to work around it.
 - **The guard is an allowlist, not a denylist** (`src/worlds.test.ts`). Naming the files that must
   stay clean passes a main-world entrypoint added next year. So the entrypoints are *discovered* —
   every `*.content.ts` declaring `world: 'MAIN'` — their transitive relative imports are computed,
