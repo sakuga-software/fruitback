@@ -269,12 +269,13 @@ export async function splitLegacyRecord<T>(
  * since. Skipping what is already there is what makes the second run write nothing rather than put
  * an older value back.
  *
- * The window this does not close: the other context can read the legacy record, a logout can remove
- * that endpoint's new key, and the read that was already in flight can then write the session back.
- * It needs a log out inside the one storage round trip that separates the read from the write, on
- * the first run after the upgrade only. `chrome.storage` has no transaction and no compare-and-set,
- * so it is narrowed and stated rather than closed — the same limit as the generation marker in
- * `session.ts`.
+ * The window this leaves: the other context can read the legacy record, a logout can remove that
+ * endpoint's new key, and the read already in flight can then write the session back. It needs a log
+ * out inside the one storage round trip that separates the read from the write, on the first run
+ * after the upgrade only. **The epoch answers it** (SKG-603): a legacy record predates the marker, so
+ * what is written back carries none while the logout minted one, and `stillOpen` refuses the entry.
+ * What the window still costs is a pairing made inside it, which this writes the older entry back
+ * over — the endpoint then reads as signed out rather than as somebody else's session.
  */
 function migrationOf<T>(
   snapshot: Record<string, unknown>,

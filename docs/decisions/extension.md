@@ -311,7 +311,12 @@ Both contexts run it at startup, which is why an endpoint that already has its o
 the other context may have finished first and had a refresh land since. What stays open: the other
 context can hold a snapshot, a logout can remove the new key, and the upgrade can then write the
 session back. It needs a log out inside the one storage round trip between that read and that write,
-on the first run after the upgrade only. Narrowed and stated, like everything else here.
+on the first run after the upgrade only. Narrowed and stated, like everything else here — **and
+closed by SKG-603**, below, which reached it for free: a legacy record predates the epoch, so what
+the upgrade writes back carries none while the logout minted one, and no reader answers with it.
+`refuses the session an upgrade still in flight writes back after a logout` is the case. What that
+window still costs is a pairing made inside it, which the upgrade puts the older entry back over —
+the endpoint then reads as signed out, which is the side to be wrong on.
 
 **`storage.session` is migrated too**, though the browser usually empties it before anybody notices.
 An extension updated while the browser stays open still holds the legacy grants record, and a grant

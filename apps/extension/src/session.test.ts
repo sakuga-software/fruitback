@@ -876,6 +876,47 @@ describe('a logout that lands inside a refresh', () => {
   });
 
   /**
+   * The interleaving SKG-602 left open, and what the epoch does to it.
+   *
+   * The upgrade from the one legacy record writes from a snapshot, and it does not wait on itself —
+   * so a context still splitting the record can write an endpoint back after another context logged
+   * it out. That was stated as narrowed rather than closed. A legacy record predates the epoch, so
+   * what the upgrade writes carries none, and the logout minted one: the write lands and no reader
+   * answers with it. What is still lost is a **pairing** made inside that window, which the upgrade
+   * puts the older entry back over — the endpoint then reads as signed out, which is the safe side.
+   */
+  it('refuses the session an upgrade still in flight writes back after a logout', async () => {
+    const local = storage({ sessions: { [ENDPOINT]: { refreshToken: 'refresh.0', identity: IDENTITY } } });
+    const session = storage();
+
+    // Held inside its own upgrade: the snapshot is taken, the write is not in yet.
+    const held = holdingTheWriteOf(SESSION_PREFIX, local.area);
+    const background = createStoredSessions(
+      () => held.area,
+      () => session.area,
+      post,
+      context('bg', NOW),
+    );
+    await held.at;
+
+    // The other context splits the record, and the reviewer logs out.
+    const popup = createStoredSessions(
+      () => local.area,
+      () => session.area,
+      post,
+      context('pop', NOW),
+    );
+    assert.partialDeepStrictEqual(await popup.list(), { [ENDPOINT]: { refreshToken: 'refresh.0' } });
+    await popup.logout(ENDPOINT);
+
+    held.release();
+
+    assert.deepEqual(await popup.list(), {});
+    assert.deepEqual(await background.list(), {});
+    assert.ok(keyFor(SESSION_PREFIX, ENDPOINT) in local.read());
+  });
+
+  /**
    * The order inside a logout, which is the whole of the fix: the epoch is in storage before
    * anything is removed.
    *

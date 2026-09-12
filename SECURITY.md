@@ -226,9 +226,11 @@ transaction and no compare-and-set — and it no longer has to be: the session a
 one nothing answers with, and the access token minted beside it has no session to match. It stays in
 storage until the next pairing writes over it, holding the refresh token the logout revoked.
 
-The upgrade to per-endpoint keys writes from a snapshot too, and that one is narrowed rather than
-closed. It needs a logout inside the single round trip between its read and its write, on the first
-run after the upgrade only.
+The upgrade to per-endpoint keys writes from a snapshot too, and the epoch reaches that write as
+well: a legacy record predates the marker, so what the upgrade puts back carries no epoch and the
+logout minted one. What a logout cannot recover from that window is a **pairing** made inside it —
+the upgrade puts the older entry back over it, and the endpoint reads as signed out. That costs a
+pairing, never a credential somebody ended, and only on the first run after the upgrade.
 
 Neither is readable from a reviewed page. Both stay inside the extension's **trusted contexts** — the
 background service worker, which refreshes, and the popup, which pairs and logs out.
