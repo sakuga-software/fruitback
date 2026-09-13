@@ -280,6 +280,13 @@ describe('the boot diagnostic', () => {
     { label: 'non-numeric rate limit', env: { ...linearEnv, RATE_LIMIT_PER_MINUTE: 'lots' }, names: 'RATE_LIMIT' },
     { label: 'non-numeric proxy hops', env: { ...linearEnv, TRUSTED_PROXY_HOPS: 'one' }, names: 'TRUSTED_PROXY_HOPS' },
     { label: 'malformed client map', env: { ...linearEnv, FRUITBACK_CLIENTS: '{oops' }, names: 'FRUITBACK_CLIENTS' },
+    { label: 'unknown kv', env: { ...linearEnv, FRUITBACK_KV: 'memcached' }, names: 'FRUITBACK_KV' },
+    { label: 'redis with no url', env: { ...linearEnv, FRUITBACK_KV: 'redis' }, names: 'FRUITBACK_REDIS_URL' },
+    {
+      label: 'redis url with no FRUITBACK_KV',
+      env: { ...linearEnv, FRUITBACK_REDIS_URL: 'redis://kv.internal:6379' },
+      names: 'FRUITBACK_KV',
+    },
     // A short HMAC secret is a guessable one, so the schema refuses it — and until SKG-526 nothing
     // mapped that field to a name, so the answer was `missing:` followed by nothing at all.
     {

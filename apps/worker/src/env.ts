@@ -3,6 +3,8 @@ import { type ClientMap, originsFromClients, readClientMap, unreadableClients } 
 import { DEFAULT_LIMIT } from './rate-limit.ts';
 import type { StoreConfig } from './store-config.ts';
 import { readStoreConfig } from './stores.ts';
+import type { KvConfig } from './kv.ts';
+import { readKvConfig } from './kvs.ts';
 
 /**
  * Configuration comes from the process environment — Dokploy injects it, `docker compose` reads it
@@ -63,6 +65,13 @@ export type WorkerEnv = {
    * store still keeps its sessions on a disk it owns. A separate file, with its own schema.
    */
   FRUITBACK_SESSION_PATH?: string;
+  /**
+   * Where the rate limiter and the read cache keep their state: `memory` (the default) or `redis`
+   * (SKG-542). Each replica on `memory` counts on its own, so two replicas double the rate limit.
+   */
+  FRUITBACK_KV?: string;
+  /** `redis://` or `rediss://`, read only when `FRUITBACK_KV=redis`. It can carry a password. */
+  FRUITBACK_REDIS_URL?: string;
 };
 
 export const DEFAULT_PORT = 8080;
@@ -127,6 +136,8 @@ const configSchema = z.object({
    * `404`, exactly as they did before this feature existed.
    */
   sessionPath: z.string().min(1).optional(),
+  /** Validated in `kvs.ts`, like the store in `stores.ts`. */
+  kv: z.custom<KvConfig>(),
 });
 
 export type WorkerConfig = z.infer<typeof configSchema>;
@@ -142,6 +153,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   // The selected provider validates its own environment (SKG-526). The in-memory store needs none,
   // which is what removed the stand-in Linear credentials the dev loop used to be handed.
   const store = readStoreConfig(env);
+  const kv = readKvConfig(env);
   const candidate = {
     store: store.ok ? store.config : undefined,
     identitySecret: env.FRUITBACK_IDENTITY_SECRET || undefined,
@@ -162,6 +174,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     // team — which is precisely the leak the map exists to prevent.
     clients: clients.ok ? clients.clients : Number.NaN,
     sessionPath: env.FRUITBACK_SESSION_PATH || undefined,
+    kv: kv.ok ? kv.config : undefined,
   };
 
   const result = configSchema.safeParse(candidate);
@@ -170,6 +183,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   const missing = [
     ...missingFrom(result),
     ...(store.ok ? [] : store.missing),
+    ...(kv.ok ? [] : kv.missing),
     ...(clients.ok ? [] : [`FRUITBACK_CLIENTS (${clients.reason})`]),
   ];
 

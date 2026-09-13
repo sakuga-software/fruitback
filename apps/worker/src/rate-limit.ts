@@ -1,34 +1,46 @@
+import type { Kv } from './kv.ts';
+
 /** Requests per window, per client IP. Tunable through `RATE_LIMIT_PER_MINUTE`. */
 export const DEFAULT_LIMIT = 20;
-const WINDOW_MS = 60_000;
+export const WINDOW_MS = 60_000;
 
 /**
- * In-process sliding window.
+ * A sliding window, estimated from two fixed windows (SKG-542).
  *
- * On a single long-lived Node process this is a real limiter, unlike the edge equivalent. The one
- * caveat to remember: it is **per replica**. Scale the service to N containers behind Traefik and the
- * effective ceiling becomes N × the configured limit, because nothing is shared between them. Moving
- * to a shared store (Redis) is the fix if that ever matters — for one container it does not.
+ * The count lives in the `Kv`, so replicas on one Redis share one ceiling. The previous window's count
+ * is weighted by how much of it still overlaps the last minute.
  *
- * The limit is passed in per call rather than read here: it comes from the validated config
- * (`RATE_LIMIT_PER_MINUTE`, defaulting to `DEFAULT_LIMIT`), so the handler decides and this stays a
- * pure counter.
+ * - `incr` comes first and is atomic. A check before the count would let a burst of parallel requests
+ *   all read the same low count and all pass.
+ * - A refused request is counted too. A caller that keeps sending stays refused.
+ * - The estimate assumes the previous window was spread evenly. So a burst at the end of one window,
+ *   then a caller who sends at the right moments, gets `2 × limit − 1` requests through in 60
+ *   seconds: 39 for the default 20. That is the most any caller gets, and `rate-limit.test.ts` holds
+ *   it. The steady rate stays at the limit.
+ *
+ * It rejects with `KvError` when the `Kv` does not answer. The caller decides what that means.
  */
-const hits = new Map<string, number[]>();
-
-export function checkRateLimit(clientIp: string, options: { limit?: number; now?: number } = {}): boolean {
+export async function checkRateLimit(
+  kv: Kv,
+  clientIp: string,
+  options: { limit?: number; now?: number } = {},
+): Promise<boolean> {
   const { limit = DEFAULT_LIMIT, now = Date.now() } = options;
-  const window = (hits.get(clientIp) ?? []).filter((at) => now - at < WINDOW_MS);
+  const window = Math.floor(now / WINDOW_MS);
+  const overlap = 1 - (now % WINDOW_MS) / WINDOW_MS;
 
-  if (window.length >= limit) {
-    hits.set(clientIp, window);
-    return false;
-  }
+  // Two windows of expiry, so the previous count is still there for the whole current window.
+  const [current, previous] = await Promise.all([
+    kv.incr(windowKey(clientIp, window), 2 * WINDOW_MS),
+    kv.get(windowKey(clientIp, window - 1)),
+  ]);
 
-  window.push(now);
-  hits.set(clientIp, window);
+  return Number(previous ?? 0) * overlap + current <= limit;
+}
 
-  return true;
+/** JSON, because an IPv6 address contains the separator a plain join would use. */
+function windowKey(clientIp: string, window: number): string {
+  return `fruitback:rate:${JSON.stringify([clientIp, window])}`;
 }
 
 /**
@@ -61,9 +73,4 @@ export function resolveClientIp(
   if (chain.length < trustedHops) return socketAddress || 'unknown';
 
   return chain[chain.length - trustedHops] ?? socketAddress ?? 'unknown';
-}
-
-/** Test seam: the limiter keeps module-level state. */
-export function resetRateLimitState(): void {
-  hits.clear();
 }

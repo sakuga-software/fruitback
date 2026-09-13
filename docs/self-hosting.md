@@ -55,8 +55,9 @@ The read path is one Linear query, narrowed server-side by the `fruitback` label
 label and `description contains <canonical url>` — the workspace can hold any number of issues
 without the worker walking them. `contains` being a substring match, the seed's own
 `page.url` is re-checked exactly, or `/pricing` would return the pins of `/pricing?tab=annual`.
-Answers are cached in-process for 15 s: the same page opened by a room full of reviewers costs one
-call against the Linear quota, and a failed call is never cached.
+Answers are cached for 15 s: the same page opened by a room full of reviewers costs one call against
+the Linear quota, and a failed call is never cached. Where that cache lives — and the rate limiter
+with it — is `FRUITBACK_KV`, which matters as soon as there are two containers.
 
 ## Storing the seeds in SQLite
 
@@ -87,6 +88,38 @@ That is the trade, not an oversight. And with no issue tracker behind it there i
 triage UI — the pins on the page are the interface, and a note's thread lives in the `comments`
 table. A store with no web interface reports no link, and the widget renders none rather than one
 that leads back to the page you are already on.
+
+## Running more than one replica
+
+`FRUITBACK_KV` says where the rate limiter and the read cache keep their state. It is `memory` by
+default, which means **inside each container**. One container is the whole story; two are two rate
+limits, so `RATE_LIMIT_PER_MINUTE=20` becomes 40 with nothing said anywhere, and a cold page costs one
+provider call per replica.
+
+Point them at one Redis and they share both:
+
+```yaml
+services:
+  worker:
+    environment:
+      FRUITBACK_KV: redis
+      FRUITBACK_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+  redis:
+    image: redis:7-alpine
+    command: ['redis-server', '--requirepass', '${REDIS_PASSWORD}', '--save', '']
+    restart: unless-stopped
+```
+
+`--save ''` on purpose: nothing here outlives its expiry, so there is nothing to write to disk. Any
+Redis-speaking server does — Valkey included. `rediss://` for TLS.
+
+**Treat it as the worker's own memory.** Anyone who can write to that Redis can plant pins on a page
+and clear a rate limit, and a cached answer holds notes and their authors for 15 seconds. Private
+network, password, its own database.
+
+A Redis that stops answering refuses every metered call with `503`, which is `/feedback` and
+`/session/*`. `/health` never touches it, so the replicas stay in the load balancer and recover on
+their own when the Redis comes back.
 
 ## Running the published image
 

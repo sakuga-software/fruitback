@@ -95,11 +95,37 @@ and they deserve the care a database of personal data deserves.
 Tell your reporters not to type credentials into a feedback note, because the note is going to sit
 somewhere for a long time.
 
-### The rate limit is per process
+### The rate limit is per process, unless you give it a Redis
 
-`RATE_LIMIT_PER_MINUTE` (20 by default) is held in memory, per container. **Run N replicas and the
-effective ceiling is N times what you configured.** It protects your provider quota; it is not a
-defence against a determined caller, who can rotate addresses anyway.
+`RATE_LIMIT_PER_MINUTE` (20 by default) and the read cache keep their state where `FRUITBACK_KV` says
+(SKG-542):
+
+| `FRUITBACK_KV` | Where the state is | What the limit is worth |
+| --- | --- | --- |
+| `memory` — the default | in each container | **N replicas, N times the ceiling you configured** |
+| `redis` | in the Redis named by `FRUITBACK_REDIS_URL` | one ceiling, for every replica |
+
+One container is the whole story for `memory`, and that is the ordinary deployment. Two containers
+behind a load balancer double the ceiling, with nothing to see anywhere — which is what the second
+row is for.
+
+The window slides, estimated from the current minute and the one before it. A caller who sends a full
+burst at the end of a window and spaces the next ones out gets **at most 39 requests in any 60
+seconds** through, for the default limit of 20. That is `2 × limit − 1`, and `rate-limit.test.ts`
+holds the number against the code. A steady caller stays at the limit.
+
+It protects your provider quota; it is not a defence against a determined caller, who can rotate
+addresses anyway.
+
+**A Redis that does not answer refuses the metered call**, with `503 limiter-unavailable`, rather than
+letting it through. A limiter that opens during an outage is one that anybody can open, by taking the
+Redis down. `/health` is not metered and never reads the Redis, so an outage does not take every
+replica out of the load balancer at once.
+
+**Whoever can write to that Redis can plant pins and clear limits.** A cached answer holds the notes,
+their authors and the team's replies for 15 seconds, in the clear. Give it a private network, a
+password and its own database — the care you would give the worker's own memory, because that is what
+it now is.
 
 `TRUSTED_PROXY_HOPS` (1 by default, which is one Traefik) decides how the client address is read:
 `X-Forwarded-For` is appended to by each proxy, so the real address is that many entries **from the

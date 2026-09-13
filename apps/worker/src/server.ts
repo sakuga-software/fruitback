@@ -8,6 +8,8 @@ import { DEFAULT_HOST, DEFAULT_TRUSTED_PROXY_HOPS, type WorkerEnv, readConfig, r
 import { fakeLinearDeprecationNotice, fakeLinearIgnoredReason } from './store-config.ts';
 import { isDevOnlyProvider } from './stores.ts';
 import { resolveClientIp } from './rate-limit.ts';
+import type { Kv } from './kv.ts';
+import { kvFor } from './kvs.ts';
 
 /**
  * Node entry point: adapts `node:http` onto the web-standard handler in `app.ts`.
@@ -33,9 +35,11 @@ export function createFruitbackServer(env: WorkerEnv, provided?: SeedStore): Ser
    * lands. A misconfigured process has no store: it only ever answers `/health` and the diagnostic.
    */
   const store = provided ?? (config.ok ? storeFor(config.config) : undefined);
+  // One per process, like the store. `kvFor` gives the handler's fallback this same instance.
+  const kv = config.ok ? kvFor(config.config.kv) : undefined;
 
   return createServer((incoming, response) => {
-    void respond(incoming, response, env, trustedProxyHops, store);
+    void respond(incoming, response, env, trustedProxyHops, store, kv);
   });
 }
 
@@ -45,6 +49,7 @@ async function respond(
   env: WorkerEnv,
   trustedProxyHops: number,
   store: SeedStore | undefined,
+  kv: Kv | undefined,
 ): Promise<void> {
   try {
     const request = toWebRequest(incoming);
@@ -54,7 +59,7 @@ async function respond(
       trustedProxyHops,
     );
 
-    const result = await handleRequest(request, env, { clientIp, store });
+    const result = await handleRequest(request, env, { clientIp, store, kv });
     await writeWebResponse(result, response);
   } catch (error) {
     // Never leak an internal message to a client site; the details belong in the container logs.
@@ -145,7 +150,7 @@ export function startServer(env: WorkerEnv = process.env): Server {
         // thing an operator cannot tell from their own env, and naming a team here was the last
         // place the worker's own logging assumed one.
         `[fruitback] listening on ${host}:${port} · store ${store?.name ?? 'none'} · ` +
-          `origins ${config.config.allowedOrigins.join(', ')} · trusted proxy hops ${config.config.trustedProxyHops}`,
+          `origins ${config.config.allowedOrigins.join(', ')} · trusted proxy hops ${config.config.trustedProxyHops} · kv ${config.config.kv.provider}`,
       );
       // Asked of the registry rather than of a provider name spelled here, so a second dev-only
       // store (a fixture, a demo) warns without this line having to hear about it.
@@ -166,6 +171,13 @@ export function startServer(env: WorkerEnv = process.env): Server {
             'are readable by anyone who can reach this worker. Set FRUITBACK_READ=authenticated, ' +
             'or "read": "authenticated" per client, to require a token.',
         );
+      }
+
+      // Asked once, so an unreachable Redis is named at boot and not first seen as a 503.
+      if (config.config.kv.provider === 'redis') {
+        kvFor(config.config.kv)
+          .get('fruitback:boot')
+          .catch((error: Error) => console.error(`[fruitback] kv redis did not answer at boot: ${error.message}`));
       }
     } else {
       // Loud, but still serving: /health reports 503 with the same list, so the platform can see it.

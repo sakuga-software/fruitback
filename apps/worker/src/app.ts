@@ -12,6 +12,8 @@ import { type SeedStore, StoreError } from './store.ts';
 import { diagnosticCorsHeaders, openCors, resolveCors } from './cors.ts';
 import { checkRateLimit } from './rate-limit.ts';
 import { cached, invalidate } from './cache.ts';
+import { type Kv, KvError } from './kv.ts';
+import { kvFor } from './kvs.ts';
 import {
   type SessionStore,
   createPairing as openPairing,
@@ -80,6 +82,11 @@ export type RequestContext = {
   store?: SeedStore;
   /** Same reason as `store`, for the sessions (SKG-535). A suite hands over a fresh file per case. */
   sessionStore?: SessionStore;
+  /**
+   * Where the rate limiter and the read cache keep their state (SKG-542). When it is absent, the
+   * handler uses `kvFor`, which gives the one instance of this process and never a new empty one.
+   */
+  kv?: Kv;
 };
 
 export async function handleRequest(request: Request, env: WorkerEnv, context: RequestContext): Promise<Response> {
@@ -141,7 +148,22 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
   // burn the same provider quota, and `/session/pair` is a code-guessing oracle without a limit —
   // this check used to sit *below* the `404`, so a new route would have been unmetered by default.
   // An unknown path costs quota too now, which is the right answer for something being probed.
-  if (!checkRateLimit(context.clientIp, { limit: config.config.rateLimitPerMinute })) {
+  const kv = context.kv ?? kvFor(config.config.kv);
+  let allowed: boolean;
+
+  try {
+    allowed = await checkRateLimit(kv, context.clientIp, { limit: config.config.rateLimitPerMinute });
+  } catch (error) {
+    if (!(error instanceof KvError)) throw error;
+    // Refused, not let through (SKG-542). A limiter that opens whenever Redis is down is a limiter
+    // any caller can open. `/health` does not reach this line, so a Redis outage does not take the
+    // replicas out of the load balancer.
+    console.error(`[fruitback] rate limit unavailable: ${error.message}`);
+
+    return json(503, { error: 'limiter-unavailable' }, cors.headers);
+  }
+
+  if (!allowed) {
     return json(429, { error: 'rate-limited' }, cors.headers);
   }
 
@@ -165,8 +187,8 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
   const store = context.store ?? storeFor(config.config);
 
   return request.method === 'GET'
-    ? getFeedback(request, config.config, store, cors.headers)
-    : postFeedback(request, config.config, store, cors.headers);
+    ? getFeedback(request, config.config, store, kv, cors.headers)
+    : postFeedback(request, config.config, store, kv, cors.headers);
 }
 
 /**
@@ -373,6 +395,7 @@ async function getFeedback(
   request: Request,
   config: WorkerConfig,
   store: SeedStore,
+  kv: Kv,
   corsHeaders: Record<string, string>,
 ): Promise<Response> {
   const params = new URL(request.url).searchParams;
@@ -408,12 +431,12 @@ async function getFeedback(
     // the in-memory one. The client id is in the key regardless, so two clients reading the same URL
     // never share an entry even when they share a team.
     const key = JSON.stringify([store.name, store.scope(route.client), clientId ?? null, url]);
-    const issues = await cached(key, () => store.findForPage({ url, clientId }, route.client, route.policy));
+    const issues = await cached(kv, url, key, () => store.findForPage({ url, clientId }, route.client, route.policy));
 
     return json(
       200,
       { url, issues },
-      // No browser cache, deliberately. The in-process cache above is what protects the Linear
+      // No browser cache, deliberately. The read cache above is what protects the Linear
       // quota; letting the browser hold a copy too only buys one saved request per page load, and
       // costs the widget the pin it planted a second ago — it re-reads and gets served its own
       // stale copy. The E2E suite found exactly that.
@@ -446,6 +469,7 @@ async function postFeedback(
   request: Request,
   config: WorkerConfig,
   store: SeedStore,
+  kv: Kv,
   corsHeaders: Record<string, string>,
 ): Promise<Response> {
   const body = await readBoundedText(request);
@@ -494,9 +518,15 @@ async function postFeedback(
   try {
     const issue = await store.create(attributed, route.client, route.policy);
 
-    // The page just changed, so every cached answer for it is wrong. Matching on the URL covers the
-    // per-client keys too, which is what a reviewer reloading right after posting will ask for.
-    invalidate((key) => key.includes(JSON.stringify(attributed.page.url)));
+    // The page just changed, so every cached answer for it is wrong, for every client.
+    try {
+      await invalidate(kv, attributed.page.url);
+    } catch (error) {
+      if (!(error instanceof KvError)) throw error;
+      // The issue exists now. A 502 here tells the widget to retry, and the retry plants the note a
+      // second time. The cost of answering 201 is a pin that shows up one TTL late.
+      console.error(`[fruitback] cache not invalidated after a write: ${error.message}`);
+    }
 
     return json(201, { issue }, corsHeaders);
   } catch (error) {

@@ -1,6 +1,98 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveClientIp } from './rate-limit.ts';
+import { type Kv, KvError, createMemoryKv } from './kv.ts';
+import { DEFAULT_LIMIT, WINDOW_MS, checkRateLimit, resolveClientIp } from './rate-limit.ts';
+
+/** The first millisecond of a window, so each test says exactly where in the window it is. */
+const WINDOW_START = Math.ceil(1_770_000_000_000 / WINDOW_MS) * WINDOW_MS;
+const IP = '203.0.113.7';
+
+function limiter() {
+  let clock = WINDOW_START;
+  const kv = createMemoryKv({ now: () => clock });
+
+  /** `count` requests at `at`, each answered allowed or refused. */
+  async function send(at: number, count = 1, ip = IP): Promise<boolean[]> {
+    clock = at;
+    const answers: boolean[] = [];
+    for (let index = 0; index < count; index += 1) answers.push(await checkRateLimit(kv, ip, { now: at }));
+
+    return answers;
+  }
+
+  return { kv, send };
+}
+
+describe('checkRateLimit', () => {
+  it('lets the limit through and refuses the next request', async () => {
+    const answers = await limiter().send(WINDOW_START + 1_000, DEFAULT_LIMIT + 1);
+
+    assert.deepEqual(answers, [...Array.from({ length: DEFAULT_LIMIT }, () => true), false]);
+  });
+
+  it('counts each address apart', async () => {
+    const { send } = limiter();
+
+    await send(WINDOW_START + 1_000, DEFAULT_LIMIT);
+    assert.deepEqual(await send(WINDOW_START + 1_000, 1, '203.0.113.8'), [true]);
+  });
+
+  it('keeps counting across a window boundary', async () => {
+    // A plain fixed window would start again at zero here, and allow a second full burst at once.
+    const { send } = limiter();
+
+    await send(WINDOW_START + WINDOW_MS - 1, DEFAULT_LIMIT);
+    assert.deepEqual(await send(WINDOW_START + WINDOW_MS + 1), [false]);
+  });
+
+  it('serves the caller again as the previous window stops overlapping', async () => {
+    const { send } = limiter();
+
+    await send(WINDOW_START + WINDOW_MS - 1, DEFAULT_LIMIT);
+    assert.deepEqual(await send(WINDOW_START + WINDOW_MS + WINDOW_MS / 2), [true]);
+  });
+
+  it('lets through at most 2 × limit − 1 requests in 60 seconds', async () => {
+    // SECURITY.md quotes this number. The worst caller sends a full burst at the end of one window,
+    // then one request each time the weight of that burst has decayed enough to let one more in.
+    const { send } = limiter();
+    const burstAt = WINDOW_START + WINDOW_MS - 1;
+    const allowed: number[] = [];
+
+    for (const answer of await send(burstAt, DEFAULT_LIMIT)) if (answer) allowed.push(burstAt);
+
+    for (let count = 0; count < DEFAULT_LIMIT - 1; count += 1) {
+      const at = WINDOW_START + WINDOW_MS + Math.ceil(((count + 1) / DEFAULT_LIMIT) * WINDOW_MS);
+      if ((await send(at))[0]) allowed.push(at);
+    }
+
+    assert.equal(allowed.length, 2 * DEFAULT_LIMIT - 1);
+    assert.ok(allowed.at(-1)! - allowed[0]! < WINDOW_MS, 'the requests do not fit in one minute');
+    assert.deepEqual(await send(burstAt + WINDOW_MS - 1), [false], 'one more request was let through');
+  });
+
+  it('shares one ceiling between two replicas on one Kv', async () => {
+    const { kv } = limiter();
+    const now = WINDOW_START + 1_000;
+    const replicas = [kv, { ...kv }];
+    const answers: boolean[] = [];
+
+    for (let index = 0; index <= DEFAULT_LIMIT; index += 1) {
+      answers.push(await checkRateLimit(replicas[index % 2] as Kv, IP, { now }));
+    }
+
+    assert.equal(answers.filter(Boolean).length, DEFAULT_LIMIT);
+  });
+
+  it('rejects with KvError when the Kv does not answer, and decides nothing itself', async () => {
+    const down = async () => {
+      throw new KvError('Redis is down');
+    };
+    const broken: Kv = { ...createMemoryKv(), get: down, incr: down };
+
+    await assert.rejects(checkRateLimit(broken, IP), KvError);
+  });
+});
 
 /**
  * The rate limit is only as good as this function. Behind Traefik, `X-Forwarded-For` is appended to
