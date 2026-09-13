@@ -103,10 +103,13 @@ export const DEFAULT_STORE_PROVIDER = 'linear';
 /**
  * Read `FRUITBACK_STORE`, including the compatibility shim for the flag it replaces.
  *
- * `FRUITBACK_FAKE_LINEAR=1` still selects the in-memory store: it is in `apps/worker/package.json`,
- * in the CI workflow, and in the muscle memory of anyone who has run this loop. It is sugar, and it
- * loses to an explicit `FRUITBACK_STORE` — which also happens to fail towards the safe side, since
- * the dangerous direction is the in-memory store winning somewhere it was not asked for.
+ * `FRUITBACK_FAKE_LINEAR=1` still selects the in-memory store, because it is in the `.env` files and
+ * compose stacks of everyone who ran this loop before SKG-526 — **not** because anything here uses
+ * it. `dev:fake` and the E2E suite were moved to `FRUITBACK_STORE=memory` by that ticket, and this
+ * paragraph went on naming them for a round. It is sugar, and it loses to an explicit
+ * `FRUITBACK_STORE` — which also happens to fail towards the safe side, since the dangerous
+ * direction is the in-memory store winning somewhere it was not asked for. Every state it can be in
+ * says something at boot: see `fakeLinearDeprecationNotice` and `fakeLinearIgnoredReason`.
  */
 export function storeProviderFor(env: StoreEnv): string {
   const explicit = env.FRUITBACK_STORE?.trim();
@@ -140,6 +143,35 @@ function asksForFakeLinear(env: StoreEnv): boolean {
  * names only the first misleads exactly the operator who is reading it to find out why their store
  * is not the one they asked for.
  */
+/**
+ * What to say about `FRUITBACK_FAKE_LINEAR` when it did **not** get this process nowhere, or
+ * `undefined` when there is nothing to say.
+ *
+ * The other half of `fakeLinearIgnoredReason`, and the half SKG-526 asked for and did not ship
+ * (SKG-581). A deprecation warning that fires only when the flag **loses** is heard by exactly the
+ * operators who have nothing to migrate: the one who needs it is the one for whom the variable still
+ * works, and that is the common case — it is still in everybody's `.env` and compose file.
+ *
+ * Two things to say, because the flag can be set without being what decided:
+ *
+ * - it selected the in-memory store, and `FRUITBACK_STORE=memory` is what replaces it;
+ * - that store was already selected explicitly, so the flag is a line somebody can delete.
+ *
+ * The second was silent on both halves before this: `fakeLinearIgnoredReason` answers nothing when
+ * the provider **is** the memory store, and the flag decided nothing there either. Between the two,
+ * every state where the flag is set now says something, and they cannot both speak — that one
+ * answers when the provider is not the memory store, this one when it is.
+ */
+export function fakeLinearDeprecationNotice(env: StoreEnv): string | undefined {
+  if (!asksForFakeLinear(env) || storeProviderFor(env) !== MEMORY_PROVIDER) return undefined;
+
+  const explicit = env.FRUITBACK_STORE?.trim();
+
+  return explicit !== undefined && explicit !== ''
+    ? `FRUITBACK_STORE=${explicit} already selects that store, so the flag changed nothing and the line can go`
+    : 'it is what selected the in-memory store here. Set FRUITBACK_STORE=memory instead';
+}
+
 export function fakeLinearIgnoredReason(env: StoreEnv): string | undefined {
   if (!asksForFakeLinear(env) || storeProviderFor(env) === MEMORY_PROVIDER) return undefined;
 

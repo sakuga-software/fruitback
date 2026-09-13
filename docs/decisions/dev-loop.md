@@ -20,7 +20,8 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   capture, issue, pins coloured by state — runs with no API key and writes to nobody's workspace. It
   is refused under `NODE_ENV=production` (which the Dockerfile sets), `/health` answers
   `{ ok: true, store: 'memory' }`, and the boot log says so. `FRUITBACK_FAKE_LINEAR=1` is the older
-  spelling and still works — see *Which store, and who validates it* ([worker.md](worker.md)). It is
+  spelling, still works, and now says at boot that it is deprecated — see *Which store, and who
+  validates it* ([worker.md](worker.md)). It is
   **not** a mock: an issue is stored as the description `buildIssueDescription` produces and read
   back through the same `toSeedIssue` as production, so a broken round trip breaks the playground
   too.

@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { readConfig, type WorkerEnv } from './env.ts';
 import { STORE_SPECS, isDevOnlyProvider, readStoreConfig, storeProviders } from './stores.ts';
-import { fakeLinearIgnoredReason } from './store-config.ts';
+import { fakeLinearDeprecationNotice, fakeLinearIgnoredReason } from './store-config.ts';
 
 /**
  * `FRUITBACK_STORE` selects the connector, and each connector validates its own environment
@@ -150,6 +152,73 @@ describe('FRUITBACK_FAKE_LINEAR, the spelling this replaces', () => {
     // Explicit beats sugar, and it also fails towards the safe side: the dangerous direction is the
     // in-memory store winning somewhere nobody asked for it.
     assert.equal(providerOf({ ...linearEnv, FRUITBACK_STORE: 'linear', FRUITBACK_FAKE_LINEAR: '1' }), 'linear');
+  });
+
+  /**
+   * The half SKG-526 asked for and did not ship, and the reason it matters is the asymmetry: the
+   * shipped warning fires only when the flag **loses**, which is every operator with nothing to
+   * migrate. The one still relying on it heard nothing at all.
+   */
+  it('says so when the flag is what selected the memory store', () => {
+    assert.match(fakeLinearDeprecationNotice(sugar) ?? '', /FRUITBACK_STORE=memory/);
+    // And never when it lost: the other half owns those, and two lines about one flag read as two
+    // problems.
+    assert.equal(fakeLinearDeprecationNotice({ ...sugar, NODE_ENV: 'production' }), undefined);
+    assert.equal(fakeLinearDeprecationNotice({ ...sugar, FRUITBACK_STORE: 'linear' }), undefined);
+    assert.equal(fakeLinearDeprecationNotice(linearEnv), undefined);
+  });
+
+  /**
+   * The state that was silent on **both** halves: the flag is set, the explicit variable selects the
+   * same store, so nothing was ignored and nothing was decided. It is a stale line in somebody's
+   * env, and saying so is the whole point of a deprecation notice.
+   */
+  it('says the flag changed nothing when the store was already named explicitly', () => {
+    const migrated = { ...sugar, FRUITBACK_STORE: 'memory' };
+
+    assert.equal(fakeLinearIgnoredReason(migrated), undefined);
+    assert.match(fakeLinearDeprecationNotice(migrated) ?? '', /changed nothing/);
+  });
+
+  /** Neither half may stay quiet while the flag is set, and both speaking at once is the other bug. */
+  it('says exactly one thing about the flag, whatever the environment', () => {
+    const environments = [
+      sugar,
+      { ...sugar, NODE_ENV: 'production' },
+      { ...sugar, FRUITBACK_STORE: 'linear' },
+      { ...sugar, FRUITBACK_STORE: 'memory' },
+      { ...sugar, FRUITBACK_STORE: 'linear', NODE_ENV: 'production' },
+      { ...sugar, FRUITBACK_FAKE_LINEAR: 'true' },
+    ];
+
+    for (const env of environments) {
+      const spoken = [fakeLinearIgnoredReason(env), fakeLinearDeprecationNotice(env)].filter(
+        (line) => line !== undefined,
+      );
+      assert.equal(spoken.length, 1, `${JSON.stringify(env)} produced ${spoken.length} lines: ${spoken.join(' | ')}`);
+    }
+
+    // And nothing at all when the flag is not set, whatever else is going on.
+    assert.equal(fakeLinearIgnoredReason(linearEnv), undefined);
+    assert.equal(fakeLinearDeprecationNotice({ ...linearEnv, FRUITBACK_STORE: 'memory' }), undefined);
+  });
+
+  /**
+   * **The notice is worth nothing if nobody prints it**, and `server.ts` has no test of its own — it
+   * opens a socket. So the boot line is asserted on the source, the way `embed.test.ts` asserts the
+   * widget's transport: the three cases above would all stay green with the call deleted, and the
+   * warning would reach nobody. Same defect as every other correct handler the real caller never
+   * reaches.
+   */
+  it('is printed at boot by the file that has no test of its own', () => {
+    const server = readFileSync(fileURLToPath(new URL('./server.ts', import.meta.url)), 'utf8');
+
+    assert.match(server, /fakeLinearDeprecationNotice\(env\)/, 'server.ts never asks for the notice');
+    assert.match(
+      server,
+      /console\.warn\(`\[fruitback\] FRUITBACK_FAKE_LINEAR is deprecated: \$\{/,
+      'server.ts has the notice and does not warn with it',
+    );
   });
 
   it('is reported as ignored whenever it got the process nowhere', () => {
