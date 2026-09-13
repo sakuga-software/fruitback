@@ -150,8 +150,11 @@ connector's environment, and what a second connector with no markdown body actua
     leaves every case of the notice green and the warning reaching nobody — the shape of defect this
     repository keeps paying for.
   - The reason the flag is kept alive is the `.env` files and compose stacks that predate SKG-526.
-    **It is not used anywhere in this repository**, and `store-config.ts`'s own docstring said it was
-    in `apps/worker/package.json` and the CI workflow for a round after that ticket moved both.
+    **No script, package manifest or workflow here selects a store with it** — `store-config.ts`'s own
+    docstring said it was in `apps/worker/package.json` and the CI workflow for a round after that
+    ticket moved both. The tests still set it, deliberately: `stores.test.ts` covers the flag itself,
+    and `app.test.ts` covers what a container inheriting it does under `NODE_ENV=production`, which
+    an explicit `FRUITBACK_STORE=memory` cannot stand in for because it is refused outright.
 - **`/health` answers `store: '<provider>'` instead of `fakeLinear: true`**, always. Which store a
   process runs on is exactly what an operator cannot tell from a green check, and naming one provider
   in the answer was the last place the endpoint assumed there was only ever one. Compared exactly in
