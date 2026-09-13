@@ -213,11 +213,12 @@ describe('FRUITBACK_FAKE_LINEAR, the spelling this replaces', () => {
   it('is printed at boot by the file that has no test of its own', () => {
     const server = readFileSync(fileURLToPath(new URL('./server.ts', import.meta.url)), 'utf8');
 
-    assert.match(server, /fakeLinearDeprecationNotice\(env\)/, 'server.ts never asks for the notice');
+    // One pattern, and the back-reference is the point: two independent regexes would pass a boot
+    // that asks for this notice and then warns with `${flagIgnored}`. Raised in review.
     assert.match(
       server,
-      /console\.warn\(`\[fruitback\] FRUITBACK_FAKE_LINEAR is deprecated: \$\{/,
-      'server.ts has the notice and does not warn with it',
+      /const (\w+) = fakeLinearDeprecationNotice\(env\);\s*if \(\1 !== undefined\) \{\s*console\.warn\(\s*`\[fruitback\] FRUITBACK_FAKE_LINEAR is deprecated: \$\{\1\}`/,
+      'server.ts does not warn at boot with the notice it asked for',
     );
   });
 
