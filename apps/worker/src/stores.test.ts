@@ -227,7 +227,7 @@ describe('FRUITBACK_FAKE_LINEAR, the spelling this replaces', () => {
   /**
    * **The notice is worth nothing if nobody prints it**, and `server.ts` has no test of its own — it
    * opens a socket. So the boot line is asserted on the source, the way `embed.test.ts` asserts the
-   * widget's transport: the three cases above would all stay green with the call deleted, and the
+   * widget's transport: the notice's cases above would all stay green with the call deleted, and the
    * warning would reach nobody. Same defect as every other correct handler the real caller never
    * reaches.
    */
