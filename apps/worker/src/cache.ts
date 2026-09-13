@@ -47,7 +47,8 @@ export async function cached<T>(kv: Kv, page: string, key: string, load: () => P
 
   // With no version, nothing is read from the Kv or written to it: the answer cannot be filed under
   // the version a reader uses.
-  const entryKey = version === undefined ? `fruitback:unversioned:${key}` : `fruitback:read:${version}:${key}`;
+  // The page is in the key as well as the version: two pages with no version yet both read `'none'`.
+  const entryKey = `fruitback:read:${JSON.stringify([version ?? 'unversioned', page, key])}`;
   const joined = inFlight.get(entryKey);
   if (joined !== undefined) return joined as Promise<T>;
 

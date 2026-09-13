@@ -118,6 +118,39 @@ contract(
   redisUrl === undefined ? 'FRUITBACK_TEST_REDIS_URL is not set' : undefined,
 );
 
+describe('the memory Kv, bounded', () => {
+  /** A hundred entries that expire after one second, and a counter that does not. */
+  async function filled() {
+    let clock = 0;
+    const kv = createMemoryKv({ now: () => clock });
+
+    for (let index = 0; index < 100; index += 1) await kv.set(`page ${index}`, 'answer', 1_000);
+    await kv.incr('address', 600_000);
+
+    return { kv, advance: (to: number) => (clock = to) };
+  }
+
+  it('drops expired entries under a workload that only reads', async () => {
+    // A page served from the cache calls `get` and nothing else. Sweeping only on a write kept every
+    // expired entry for as long as the reads went on. Raised in review.
+    const { kv, advance } = await filled();
+
+    advance(5_000);
+    await kv.get('page 0');
+
+    assert.equal(kv.size(), 1);
+  });
+
+  it('drops expired entries under a workload that only counts a known address', async () => {
+    const { kv, advance } = await filled();
+
+    advance(5_000);
+    await kv.incr('address', 600_000);
+
+    assert.equal(kv.size(), 1);
+  });
+});
+
 describe('readKvConfig', () => {
   it('keeps the state in memory when nothing is set, as before SKG-542', () => {
     assert.deepEqual(readKvConfig({}), { ok: true, config: { provider: 'memory' } });

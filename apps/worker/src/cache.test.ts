@@ -62,6 +62,12 @@ describe('cached', () => {
     assert.equal(await cached(kv, PAGE, 'b', async () => 'second'), 'second');
   });
 
+  it('keeps two pages apart when they share a key', async () => {
+    // `app.ts` puts the URL in the key too, but `cached` takes the page on its own. Raised in review.
+    assert.equal(await cached(kv, PAGE, 'k', async () => 'pricing'), 'pricing');
+    assert.equal(await cached(kv, OTHER_PAGE, 'k', async () => 'features'), 'features');
+  });
+
   it('collapses concurrent misses into a single load', async () => {
     // Ten visitors on one replica must cost one provider call, not ten.
     const { seen, load } = counting();

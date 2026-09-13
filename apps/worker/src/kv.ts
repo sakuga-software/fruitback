@@ -23,11 +23,16 @@ export class KvError extends Error {}
 export const KV_PROVIDERS = ['memory', 'redis'] as const;
 export type KvProvider = (typeof KV_PROVIDERS)[number];
 export type KvConfig = { provider: 'memory' } | { provider: 'redis'; url: string };
-/** Expired entries are swept at most this often, on a write. Nothing is scheduled while idle. */
+/** Expired entries are swept at most this often, on any call. Nothing is scheduled while idle. */
 const SWEEP_INTERVAL_MS = 1_000;
 
 /** What this worker did before SKG-542, and still the right answer for a single container. */
-export function createMemoryKv(options: { now?: () => number } = {}): Kv {
+export type MemoryKv = Kv & {
+  /** How many entries it holds, expired ones included until the next sweep. */
+  size(): number;
+};
+
+export function createMemoryKv(options: { now?: () => number } = {}): MemoryKv {
   const now = options.now ?? Date.now;
   const entries = new Map<string, { value: string; expiresAt: number }>();
   let nextSweep = 0;
@@ -52,7 +57,11 @@ export function createMemoryKv(options: { now?: () => number } = {}): Kv {
 
   return {
     provider: 'memory',
+    size: () => entries.size,
     async get(key) {
+      // Every call sweeps, reads included. A page served from the cache only ever calls `get`.
+      sweep();
+
       return live(key)?.value;
     },
     async set(key, value, ttlMs) {
@@ -60,10 +69,10 @@ export function createMemoryKv(options: { now?: () => number } = {}): Kv {
       entries.set(key, { value, expiresAt: now() + ttlMs });
     },
     async incr(key, ttlMs) {
+      sweep();
       const entry = live(key);
 
       if (entry === undefined) {
-        sweep();
         entries.set(key, { value: '1', expiresAt: now() + ttlMs });
 
         return 1;
