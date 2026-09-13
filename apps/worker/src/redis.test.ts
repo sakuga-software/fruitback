@@ -176,6 +176,17 @@ describe('createRedisKv', () => {
     ]);
   });
 
+  it('authenticates a named user that has no password, instead of running as the default user', async () => {
+    // `redis://alice@host` used to send no AUTH at all. Raised in review.
+    const { server, kv } = await setUp((args) => (args[0] === 'GET' ? '$-1\r\n' : '+OK\r\n'), 'alice@');
+
+    assert.equal(await kv.get('k'), undefined);
+    assert.deepEqual(server.commands, [
+      ['AUTH', 'alice', ''],
+      ['GET', 'k'],
+    ]);
+  });
+
   it('does not repeat the password when Redis refuses it', async () => {
     // Some servers echo what they were sent. The message ends up in `docker logs`.
     const { kv } = await setUp(

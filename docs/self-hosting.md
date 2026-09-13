@@ -110,6 +110,10 @@ services:
     restart: unless-stopped
 ```
 
+**Generate that password as hex**, with `openssl rand -hex 32`. `REDIS_PASSWORD` goes raw to
+`--requirepass` and inside the URL, and hex is the one form that needs no encoding in either place. A
+password you did not choose has to be written twice: raw for Redis, percent-encoded in the URL.
+
 `--save ''` on purpose: nothing here outlives its expiry, so there is nothing to write to disk. Any
 Redis-speaking server does — Valkey included. `rediss://` for TLS, and the password sits in a URL, so
 percent-encode every reserved character in it — `@`, `:`, `/`, `?`, `#` and `%` among them. An unencoded

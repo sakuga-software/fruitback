@@ -105,9 +105,10 @@ export function createRedisKv(url: string, options: { timeoutMs?: number } = {})
     const handshake: Promise<Reply>[] = [];
     const { username, password, database } = target;
 
-    if (password !== '') {
-      handshake.push(connection.send(username === '' ? ['AUTH', password] : ['AUTH', username, password]));
-    }
+    // A named user is authenticated even with no password. Skipping AUTH there runs every command as
+    // the default user, which is a different set of permissions than the operator asked for.
+    if (username !== '') handshake.push(connection.send(['AUTH', username, password]));
+    else if (password !== '') handshake.push(connection.send(['AUTH', password]));
 
     if (database !== undefined) handshake.push(connection.send(['SELECT', database]));
 
