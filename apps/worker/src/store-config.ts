@@ -103,10 +103,16 @@ export const DEFAULT_STORE_PROVIDER = 'linear';
 /**
  * Read `FRUITBACK_STORE`, including the compatibility shim for the flag it replaces.
  *
- * `FRUITBACK_FAKE_LINEAR=1` still selects the in-memory store: it is in `apps/worker/package.json`,
- * in the CI workflow, and in the muscle memory of anyone who has run this loop. It is sugar, and it
- * loses to an explicit `FRUITBACK_STORE` — which also happens to fail towards the safe side, since
- * the dangerous direction is the in-memory store winning somewhere it was not asked for.
+ * `FRUITBACK_FAKE_LINEAR=1` still selects the in-memory store, because it is in the `.env` files and
+ * compose stacks of everyone who ran this loop before SKG-526 — **not** because any script, package
+ * manifest or workflow here selects a store with it. `dev:fake`, `serve:fake` and the E2E suite were moved
+ * to `FRUITBACK_STORE=memory` by that ticket, and this paragraph went on naming them for a round. The
+ * tests still set it, and deliberately: `stores.test.ts` to cover the flag itself, `app.test.ts` to
+ * cover what a container inheriting it does under `NODE_ENV=production`, which is the one thing an
+ * explicit `FRUITBACK_STORE=memory` cannot stand in for. It is sugar, and it loses to an explicit
+ * `FRUITBACK_STORE` — which also happens to fail towards the safe side, since the dangerous
+ * direction is the in-memory store winning somewhere it was not asked for. Every state it can be in
+ * says something at boot: see `fakeLinearDeprecationNotice` and `fakeLinearIgnoredReason`.
  */
 export function storeProviderFor(env: StoreEnv): string {
   const explicit = env.FRUITBACK_STORE?.trim();
@@ -149,4 +155,40 @@ export function fakeLinearIgnoredReason(env: StoreEnv): string | undefined {
   return explicit !== undefined && explicit !== ''
     ? `FRUITBACK_STORE=${explicit} was set explicitly`
     : 'this process runs with NODE_ENV=production';
+}
+
+/**
+ * What to say about `FRUITBACK_FAKE_LINEAR` when it is still doing something, or `undefined` when
+ * there is nothing to say.
+ *
+ * The other half of `fakeLinearIgnoredReason`, and the half SKG-526 asked for and did not ship
+ * (SKG-581). A deprecation warning that fires only when the flag **loses** is heard by exactly the
+ * operators who have nothing to migrate: the one who needs it is the one for whom the variable still
+ * works, and that is the common case — it is still in everybody's `.env` and compose file.
+ *
+ * Two things to say, because the flag can be set without being what decided:
+ *
+ * - it selected the in-memory store, and `FRUITBACK_STORE=memory` is what replaces it;
+ * - `FRUITBACK_STORE` was set explicitly and took precedence, so the flag is a line somebody can
+ *   delete. **Not** that the store is in use: under `NODE_ENV=production` that explicit `memory` is
+ *   refused by `readStoreConfig`, and this function is not entitled to say otherwise.
+ *
+ * The second was silent on both halves before this: `fakeLinearIgnoredReason` answers nothing when
+ * the provider **is** the memory store, and the flag decided nothing there either. Between the two,
+ * every state where the flag is set now says something, and they cannot both speak — that one
+ * answers when the provider is not the memory store, this one when it is.
+ */
+export function fakeLinearDeprecationNotice(env: StoreEnv): string | undefined {
+  if (!asksForFakeLinear(env) || storeProviderFor(env) !== MEMORY_PROVIDER) return undefined;
+
+  const explicit = env.FRUITBACK_STORE?.trim();
+
+  // **The explicit branch says nothing about what is selected**, only that the flag decided nothing.
+  // It used to read "already selects that store", which is the one claim this function is not
+  // entitled to make: with `NODE_ENV=production` the explicit `memory` is refused by
+  // `readStoreConfig`, so that line printed directly above a boot failure saying the opposite.
+  // Whether the store survives is the next line's business. Raised in review.
+  return explicit !== undefined && explicit !== ''
+    ? `FRUITBACK_STORE=${explicit} is set explicitly, so the flag changed nothing and the line can go`
+    : 'it is what selected the in-memory store here. Set FRUITBACK_STORE=memory instead';
 }

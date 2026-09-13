@@ -5,7 +5,7 @@ import { handleRequest, storeFor } from './app.ts';
 import type { SeedStore } from './store.ts';
 import { openReadClients } from './clients.ts';
 import { DEFAULT_HOST, DEFAULT_TRUSTED_PROXY_HOPS, type WorkerEnv, readConfig, readPort } from './env.ts';
-import { fakeLinearIgnoredReason } from './store-config.ts';
+import { fakeLinearDeprecationNotice, fakeLinearIgnoredReason } from './store-config.ts';
 import { isDevOnlyProvider } from './stores.ts';
 import { resolveClientIp } from './rate-limit.ts';
 
@@ -126,6 +126,15 @@ export function startServer(env: WorkerEnv = process.env): Server {
   const flagIgnored = fakeLinearIgnoredReason(env);
   if (flagIgnored !== undefined) {
     console.error(`[fruitback] FRUITBACK_FAKE_LINEAR ignored: ${flagIgnored}`);
+  }
+
+  // The other half, and the one an operator with something to migrate actually hears (SKG-581):
+  // warning only when the flag *loses* reaches everybody except the deployments still relying on it.
+  // A warning rather than an error, because nothing is wrong here — the flag worked. The two are
+  // mutually exclusive by construction, so this never doubles the line above.
+  const flagDeprecated = fakeLinearDeprecationNotice(env);
+  if (flagDeprecated !== undefined) {
+    console.warn(`[fruitback] FRUITBACK_FAKE_LINEAR is deprecated: ${flagDeprecated}`);
   }
 
   server.listen(port, host, () => {

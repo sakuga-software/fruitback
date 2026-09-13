@@ -596,6 +596,17 @@ and *The team mode, and the call the page cannot make*:
   `FRUITBACK_FAKE_LINEAR=1` is the one exception and it *degrades* rather than refusing — a flag a
   container inherited must not stop it serving production, while a provider somebody deliberately
   named must not be silently swapped.
+- **Every state the deprecated flag can be in says something at boot** (SKG-581).
+  `fakeLinearIgnoredReason` answers when the flag lost — to `NODE_ENV=production`, or to an explicit
+  `FRUITBACK_STORE`. `fakeLinearDeprecationNotice` answers when it selected the memory store, and
+  when `FRUITBACK_STORE` took precedence over it and the flag is a stale line somebody can delete —
+  **precedence, never that the store is in use**, because an explicit `memory` is still refused under
+  `NODE_ENV=production` and the notice would otherwise print one line above the boot failure that
+  says so. The two are mutually exclusive by construction, and a test pins that over every
+  environment it enumerates. **SKG-526 shipped only the first**, which reached every operator except the ones
+  still relying on the flag — the inverse of who a deprecation notice is for. `server.ts` has no test
+  of its own, so the boot line is asserted on its **source**: the notice's own cases all stay green
+  with the call deleted, and the warning then reaches nobody.
 - **`/health` answers `store: '<provider>'`**, always, and it is compared exactly in `app.test.ts`
   because the endpoint is public.
 - **A row is parsed, never trusted**, in every connector. A malformed one costs that pin; the page
