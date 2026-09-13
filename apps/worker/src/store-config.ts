@@ -169,7 +169,9 @@ export function fakeLinearIgnoredReason(env: StoreEnv): string | undefined {
  * Two things to say, because the flag can be set without being what decided:
  *
  * - it selected the in-memory store, and `FRUITBACK_STORE=memory` is what replaces it;
- * - that store was already selected explicitly, so the flag is a line somebody can delete.
+ * - `FRUITBACK_STORE` was set explicitly and took precedence, so the flag is a line somebody can
+ *   delete. **Not** that the store is in use: under `NODE_ENV=production` that explicit `memory` is
+ *   refused by `readStoreConfig`, and this function is not entitled to say otherwise.
  *
  * The second was silent on both halves before this: `fakeLinearIgnoredReason` answers nothing when
  * the provider **is** the memory store, and the flag decided nothing there either. Between the two,

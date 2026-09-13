@@ -143,8 +143,10 @@ connector's environment, and what a second connector with no markdown body actua
     inverse of who it is for: the operator who needs to hear it is the one the variable still works
     for, and that deployment booted in silence. There are now two halves and they are exhaustive —
     `fakeLinearIgnoredReason` when it got the process nowhere, `fakeLinearDeprecationNotice` when it
-    selected the memory store or when `FRUITBACK_STORE=memory` had already selected it and the line
-    is simply stale. That last state was silent on **both** halves before, because neither owned it.
+    selected the memory store or when an explicit `FRUITBACK_STORE` took precedence over it and the
+    line is simply stale. **Precedence, not use**: an explicit `memory` is refused under
+    `NODE_ENV=production`, so a notice claiming the store was selected printed directly above the
+    boot failure that refuses it. That last state was silent on **both** halves before, because neither owned it.
   - `server.ts` opens a socket and has no test, so the boot line is asserted on its **source**, the
     way `embed.test.ts` asserts the widget's transport. Without that, deleting the `console.warn`
     leaves every case of the notice green and the warning reaching nobody — the shape of defect this

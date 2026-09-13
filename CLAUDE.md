@@ -599,8 +599,10 @@ and *The team mode, and the call the page cannot make*:
 - **Every state the deprecated flag can be in says something at boot** (SKG-581).
   `fakeLinearIgnoredReason` answers when the flag lost — to `NODE_ENV=production`, or to an explicit
   `FRUITBACK_STORE`. `fakeLinearDeprecationNotice` answers when it selected the memory store, and
-  when `FRUITBACK_STORE=memory` had already selected it and the flag is a stale line somebody can
-  delete. The two are mutually exclusive by construction, and a test pins that across six
+  when `FRUITBACK_STORE` took precedence over it and the flag is a stale line somebody can delete —
+  **precedence, never that the store is in use**, because an explicit `memory` is still refused under
+  `NODE_ENV=production` and the notice would otherwise print one line above the boot failure that
+  says so. The two are mutually exclusive by construction, and a test pins that across six
   environments. **SKG-526 shipped only the first**, which reached every operator except the ones
   still relying on the flag — the inverse of who a deprecation notice is for. `server.ts` has no test
   of its own, so the boot line is asserted on its **source**: the notice's own cases all stay green
