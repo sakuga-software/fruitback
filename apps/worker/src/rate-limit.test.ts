@@ -71,6 +71,17 @@ describe('checkRateLimit', () => {
     assert.deepEqual(await send(burstAt + WINDOW_MS - 1), [false], 'one more request was let through');
   });
 
+  it('counts the requests it refused, so a caller that keeps sending stays refused', async () => {
+    // `incr` runs before the decision, because it is the only atomic step. A caller that hammers
+    // therefore weighs more in the next window than one that stopped at the limit.
+    const { send } = limiter();
+    const hammered = DEFAULT_LIMIT + 5;
+
+    await send(WINDOW_START + WINDOW_MS - 1, hammered);
+    // A tenth of the way into the next window: 25 × 0.9 is over the limit, 20 × 0.9 would not be.
+    assert.deepEqual(await send(WINDOW_START + WINDOW_MS + WINDOW_MS / 10), [false]);
+  });
+
   it('shares one ceiling between two replicas on one Kv', async () => {
     const { kv } = limiter();
     const now = WINDOW_START + 1_000;

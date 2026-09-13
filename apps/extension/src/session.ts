@@ -412,7 +412,7 @@ export function createSessions({
 
       const issued = parseIssued(answer.body);
       if (answer.status !== 200 || issued?.refreshToken === undefined) {
-        // A `429` and a `502` are not a bad code, and telling a reviewer their code is spent when
+        // A `429`, a `502` or a `503` are not a bad code, and telling a reviewer their code is spent when
         // the worker was merely busy sends them to an operator for a new one they do not need.
         const refused = answer.status === 400 || answer.status === 401;
 

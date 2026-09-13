@@ -234,7 +234,7 @@ both: an access token the host site's JavaScript can read is the worst outcome o
   train: all of those keep the refresh token. Throwing it away on a network blip logs a reviewer out
   of a session the worker still considers open, and the only way back is an operator minting a new
   pairing code on the container.
-- **A busy worker is not a bad code.** A `429` or a `502` on `/session/pair` answers `unavailable`
+- **A busy worker is not a bad code.** A `429`, a `502` or a `503` on `/session/pair` answers `unavailable`
   and not `code-spent-or-expired`, because the second sends a reviewer for a replacement code while
   the one in their hand is still good.
 - **Log out revokes, then clears — and clears whatever the revoke answered.** The other order cannot

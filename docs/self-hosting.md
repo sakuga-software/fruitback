@@ -111,7 +111,8 @@ services:
 ```
 
 `--save ''` on purpose: nothing here outlives its expiry, so there is nothing to write to disk. Any
-Redis-speaking server does — Valkey included. `rediss://` for TLS.
+Redis-speaking server does — Valkey included. `rediss://` for TLS, and the password sits in a URL, so
+percent-encode a `@`, a `:`, a `/` or a `?` in it.
 
 **Treat it as the worker's own memory.** Anyone who can write to that Redis can plant pins on a page
 and clear a rate limit, and a cached answer holds notes and their authors for 15 seconds. Private
