@@ -384,8 +384,10 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   `page.content.ts` mounts it with no `transport`, so it calls the worker through `fetchTransport`
   from the page, exactly as a public-mode site does. Two consequences to state rather than discover:
   its reporter is self-declared like any other, and a worker on `read: 'authenticated'` answers its
-  reads `401` — a reviewer then gets a page with no pins and no reason, which is SKG-605. Set `read`
-  per client when one worker serves a private-mode client and a team-mode one.
+  reads `401` — a reviewer then gets a page with no pins and no reason, which is SKG-605. **And that
+  cannot be worked around per client**: `FRUITBACK_SESSION_PATH` alongside `FRUITBACK_CLIENTS` is
+  refused at boot, so a worker holding sessions is single-tenant and its `read` is worker-wide. A
+  private-mode client beside a team-mode one is two workers, or a worker left at `public`.
 - **The guide's words are guarded against the popup's** (`reviewing-doc.test.ts`). `docs/reviewing.md`
   walks somebody through a screen by naming what is on it, and a renamed button leaves it describing
   a popup nobody has. The pairing failures and the mode labels are read **out of** `popup/main.ts`,

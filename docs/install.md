@@ -10,10 +10,10 @@ Do the worker first. The widget needs its URL.
 worker's, and every mode needs them. Step 3 is where public mode puts the widget on the page, team
 mode ships it dormant, and private mode ships nothing at all — there the extension mounts it, and the
 reviewer's side is [reviewing.md](reviewing.md). [modes.md](modes.md) is the page that picks between
-the three, and it is worth reading first: **who may read is `read`** — step 5 below — **and the mode
-decides who can satisfy it.** A public-mode site can, by minting identity tokens itself; team mode is
-the one where the reviewer supplies the credential and the page never holds it; private mode can do
-neither.
+the three, and it is worth reading first: **who may read is `read`** — `FRUITBACK_READ` in the
+worker's environment at step 2, or per client in the map at step 4 — **and the mode decides who can
+satisfy it.** A public-mode site can, by minting the identity tokens of step 5; team mode is the one
+where the reviewer supplies the credential and the page never holds it; private mode can do neither.
 
 > **The packages are not on npm yet.** Everything below describes the shape of the install; the
 > `npm i` lines will work once the first release is published. Until then, the `<script>` route works
