@@ -95,6 +95,9 @@ const configSchema = z.object({
   /**
    * Show the team's Linear replies inside the pin (SKG-502). On unless `FRUITBACK_HIDE_COMMENTS` is
    * set. A mapped client's own `showComments` overrides this.
+   *
+   * Editorial, and independent of `read` — see the field on the client for why the two stay
+   * uncoupled (SKG-539).
    */
   showComments: z.boolean(),
   /**

@@ -21,9 +21,11 @@ about to reason your way past it.
 | [worker.md](worker.md) | The worker · Who may read a pin · The team's replies · Where a seed is stored · Which store, and who validates it · SQLite, and what a second connector actually proved · The markdown codec, and the file that outlived its name · The extension's session |
 | [contract.md](contract.md) | The seed contract |
 
-Three documents one level up are the other kind: written for somebody using Fruitback rather than
-changing it — [install.md](../install.md) (the widget on a site), [self-hosting.md](../self-hosting.md)
-(the worker) and [architecture.md](../architecture.md), which sits between the two and holds the
+Five documents one level up are the other kind: written for somebody using Fruitback rather than
+changing it — [modes.md](../modes.md) (which of the three you want, and what each protects),
+[install.md](../install.md) (the widget on a site), [reviewing.md](../reviewing.md) (the reviewer's
+side: the extension, switching a site on, pairing), [self-hosting.md](../self-hosting.md) (the
+worker) and [architecture.md](../architecture.md), which sits between the two kinds and holds the
 design material the README used to carry.
 
 ## Adding to these pages

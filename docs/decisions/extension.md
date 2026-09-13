@@ -1,9 +1,11 @@
 # The extension, and the two worlds
 
 **This describes the private mode**, where the client's site embeds nothing and the extension
-injects the widget. SKG-539 since named three modes — public, private and équipe — and the team mode
+injects the widget. SKG-539 since named three modes — public, private and team — and the team mode
 turns the extension into a relay rather than an injector. Nothing below was rewritten for that; it
-is the private mode as SKG-534 built it.
+is the private mode as SKG-534 built it. What each mode does and does not protect is
+[../modes.md](../modes.md); the one thing to carry here is that **this mode holds no credential**, so
+it changes who is shown the feedback and never who may fetch it.
 
 ## The extension, and the two worlds
 

@@ -50,6 +50,12 @@ const clientSchema = z.object({
    * `read: 'authenticated'` the reader is someone this worker checked, so the comments are already
    * only reaching people entitled to them. Under `read: 'public'` it is still the only thing standing
    * between an issue thread and anyone who can load the page.
+   *
+   * **The two are not coupled, and that is the decision** (SKG-539). `authenticated` is what team
+   * mode runs on, and there the access question does not arise — but whether a reviewer should watch
+   * the team talk about their note is editorial, and it stays the operator's. Forcing this on under
+   * `authenticated` would change what a deployment already does, silently, to save a line of
+   * documentation. See `docs/modes.md`.
    */
   showComments: z.boolean().optional(),
   /**
@@ -63,6 +69,19 @@ const clientSchema = z.object({
    * `authenticated` requires a valid identity token, the same HS256 JWT the write path takes, and
    * answers `401` without one. It needs this client's `identitySecret`; a client asking for it
    * without one is refused at boot rather than left permanently unreadable.
+   *
+   * Team mode is what `authenticated` was built for, and it does not require it: the relay works
+   * against a `public` worker too, and buys a tidier page rather than a protected read. The
+   * dependency runs the other way — `authenticated` is what makes team mode worth turning on.
+   *
+   * **This is the closest thing to a mode, and there is deliberately no `mode` field beside it**
+   * (SKG-539). A client's mode is decided in the reviewer's browser — one field on the site's entry
+   * in the extension — and the worker cannot observe it: a private-mode read and a public-mode read
+   * are the same anonymous `GET`. A field here would be a declaration nothing checks and nothing
+   * enforces, and a switch that controls nothing is worse than no switch. What the worker can say is
+   * what it actually decides, which is this one. The modes are named for a reader in
+   * `docs/modes.md`, where the difference between them is a fact about the page rather than about
+   * this map.
    */
   read: z.enum(['public', 'authenticated']).optional(),
 });

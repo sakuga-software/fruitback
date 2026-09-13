@@ -119,6 +119,27 @@ Count the proxies that **append** to the header, and no others. An edge that rew
 rather than appending — Cloudflare does — is a different rule, and reading the leftmost entry is
 correct there and wrong here.
 
+### Private mode hides the pins from a visitor, and from nobody else
+
+**The widget the extension mounts in private mode carries no credential.** `page.content.ts` mounts
+it with no transport, so it calls the worker exactly as a public-mode site does, and the notes on
+that page stay readable by anyone who can build `GET /feedback?url=…&client=…`. What private mode
+changes is who is **shown** the feedback — the site embeds nothing, so a visitor sees nothing — never
+who may **fetch** it. Its reporters are self-declared for the same reason: verification comes from
+the session, and only the relay carries one.
+
+**What changes a read is `read`, not the mode**, and the mode decides who can satisfy it. A
+public-mode site can run `read: 'authenticated'` by minting identity tokens itself — `identityToken`
+is a seam on `init`, and the widget sends what it returns on reads as well as writes; the credential
+then lives in that site's own page. Team mode is the one where the **reviewer** supplies it and the
+page never holds it, attached in the extension's background. Private mode can supply neither, so
+worker-wide `authenticated` locks its widget out of its own reads.
+
+That cannot be worked around per client on a worker that serves team mode: `FRUITBACK_SESSION_PATH`
+alongside `FRUITBACK_CLIENTS` is **refused at boot**, because a session signs with the worker-wide
+key a mapped worker ignores. A worker holding sessions is single-tenant, and its `read` is
+worker-wide. See [docs/modes.md](docs/modes.md).
+
 ### The extension's page bridge can be forged by the page
 
 In private mode the widget runs in the page's own JavaScript realm, and the bridge is
