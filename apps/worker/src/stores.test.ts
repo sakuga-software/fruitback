@@ -182,6 +182,22 @@ describe('FRUITBACK_FAKE_LINEAR, the spelling this replaces', () => {
     assert.match(fakeLinearDeprecationNotice(migrated) ?? '', /changed nothing/);
   });
 
+  /**
+   * **And claims nothing about the store surviving**, because it does not always. Under
+   * `NODE_ENV=production` that explicit `memory` is refused by `readStoreConfig`, so a notice saying
+   * it "already selects that store" printed one line above a boot failure saying the opposite. What
+   * the flag did is all this line is entitled to say. Raised in review.
+   */
+  it('does not claim the explicit store is in use, because it can be refused', () => {
+    const refused = { ...sugar, FRUITBACK_STORE: 'memory', NODE_ENV: 'production' };
+    const notice = fakeLinearDeprecationNotice(refused) ?? '';
+
+    assert.match(notice, /changed nothing/);
+    assert.doesNotMatch(notice, /selects that store|in use|is running/);
+    // The boot failure is what says the store is refused, and it names the variable to fix.
+    assert.partialDeepStrictEqual(readConfig(refused as WorkerEnv), { ok: false });
+  });
+
   /** Neither half may stay quiet while the flag is set, and both speaking at once is the other bug. */
   it('says exactly one thing about the flag, whatever the environment', () => {
     const environments = [
@@ -190,6 +206,9 @@ describe('FRUITBACK_FAKE_LINEAR, the spelling this replaces', () => {
       { ...sugar, FRUITBACK_STORE: 'linear' },
       { ...sugar, FRUITBACK_STORE: 'memory' },
       { ...sugar, FRUITBACK_STORE: 'linear', NODE_ENV: 'production' },
+      // The store is selected and then refused as dev-only, which is the state the notice must not
+      // describe as a working selection. Raised in review.
+      { ...sugar, FRUITBACK_STORE: 'memory', NODE_ENV: 'production' },
       { ...sugar, FRUITBACK_FAKE_LINEAR: 'true' },
     ];
 

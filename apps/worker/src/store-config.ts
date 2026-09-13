@@ -181,7 +181,12 @@ export function fakeLinearDeprecationNotice(env: StoreEnv): string | undefined {
 
   const explicit = env.FRUITBACK_STORE?.trim();
 
+  // **The explicit branch says nothing about what is selected**, only that the flag decided nothing.
+  // It used to read "already selects that store", which is the one claim this function is not
+  // entitled to make: with `NODE_ENV=production` the explicit `memory` is refused by
+  // `readStoreConfig`, so that line printed directly above a boot failure saying the opposite.
+  // Whether the store survives is the next line's business. Raised in review.
   return explicit !== undefined && explicit !== ''
-    ? `FRUITBACK_STORE=${explicit} already selects that store, so the flag changed nothing and the line can go`
+    ? `FRUITBACK_STORE=${explicit} is set explicitly, so the flag changed nothing and the line can go`
     : 'it is what selected the in-memory store here. Set FRUITBACK_STORE=memory instead';
 }
