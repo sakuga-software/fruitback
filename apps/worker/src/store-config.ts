@@ -105,8 +105,8 @@ export const DEFAULT_STORE_PROVIDER = 'linear';
  *
  * `FRUITBACK_FAKE_LINEAR=1` still selects the in-memory store, because it is in the `.env` files and
  * compose stacks of everyone who ran this loop before SKG-526 — **not** because any script, package
- * manifest or workflow here selects a store with it. `dev:fake` and the E2E suite were moved to
- * `FRUITBACK_STORE=memory` by that ticket, and this paragraph went on naming them for a round. The
+ * manifest or workflow here selects a store with it. `dev:fake`, `serve:fake` and the E2E suite were moved
+ * to `FRUITBACK_STORE=memory` by that ticket, and this paragraph went on naming them for a round. The
  * tests still set it, and deliberately: `stores.test.ts` to cover the flag itself, `app.test.ts` to
  * cover what a container inheriting it does under `NODE_ENV=production`, which is the one thing an
  * explicit `FRUITBACK_STORE=memory` cannot stand in for. It is sugar, and it loses to an explicit

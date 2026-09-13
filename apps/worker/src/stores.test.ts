@@ -135,8 +135,10 @@ describe('FRUITBACK_FAKE_LINEAR, the spelling this replaces', () => {
   const sugar: WorkerEnv = { ALLOWED_ORIGINS: 'https://acme.test', FRUITBACK_FAKE_LINEAR: '1' };
 
   it('still selects the in-memory store', () => {
-    // It is in apps/worker/package.json, in the CI workflow, and in the muscle memory of everyone
-    // who has run this loop. Breaking it would have been a gratuitous cost of the rename.
+    // It is in the `.env` files and compose stacks of everyone who ran this loop before the rename —
+    // not in anything here: `dev:fake`, `serve:fake` and the E2E suite all moved to
+    // FRUITBACK_STORE=memory. Breaking it would have been a gratuitous cost. This comment named the
+    // package manifest and the CI workflow for three tickets after SKG-526 emptied both.
     assert.equal(providerOf(sugar), 'memory');
     assert.equal(providerOf({ ...sugar, FRUITBACK_FAKE_LINEAR: 'true' }), 'memory');
   });
