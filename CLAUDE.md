@@ -596,12 +596,15 @@ and *The team mode, and the call the page cannot make*:
   `FRUITBACK_FAKE_LINEAR=1` is the one exception and it *degrades* rather than refusing — a flag a
   container inherited must not stop it serving production, while a provider somebody deliberately
   named must not be silently swapped.
-- **Every state the deprecated flag can be in says something at boot** (SKG-581). `fakeLinearIgnoredReason`
-  answers when it lost, `fakeLinearDeprecationNotice` when it won or changed nothing, and the two are
-  mutually exclusive by construction. Warning only when it **loses** — which is what shipped — reaches
-  every operator except the ones still relying on it, which is the inverse of who a deprecation
-  notice is for. `server.ts` has no test of its own, so the boot line is asserted on its **source**:
-  all three cases stay green with the call deleted, and the warning then reaches nobody.
+- **Every state the deprecated flag can be in says something at boot** (SKG-581).
+  `fakeLinearIgnoredReason` answers when the flag lost — to `NODE_ENV=production`, or to an explicit
+  `FRUITBACK_STORE`. `fakeLinearDeprecationNotice` answers when it selected the memory store, and
+  when `FRUITBACK_STORE=memory` had already selected it and the flag is a stale line somebody can
+  delete. The two are mutually exclusive by construction, and a test pins that across six
+  environments. **SKG-526 shipped only the first**, which reached every operator except the ones
+  still relying on the flag — the inverse of who a deprecation notice is for. `server.ts` has no test
+  of its own, so the boot line is asserted on its **source**: the notice's own cases all stay green
+  with the call deleted, and the warning then reaches nobody.
 - **`/health` answers `store: '<provider>'`**, always, and it is compared exactly in `app.test.ts`
   because the endpoint is public.
 - **A row is parsed, never trusted**, in every connector. A malformed one costs that pin; the page
