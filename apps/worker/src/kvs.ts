@@ -1,5 +1,5 @@
 import { type Kv, type KvConfig, createMemoryKv } from './kv.ts';
-import { createRedisKv } from './redis.ts';
+import { createRedisKv, parseRedisUrl } from './redis.ts';
 
 export type KvConfigResult = { ok: true; config: KvConfig } | { ok: false; missing: string[] };
 
@@ -21,19 +21,9 @@ export function readKvConfig(env: Record<string, string | undefined>): KvConfigR
   }
 
   if (provider !== 'redis') return { ok: false, missing: ['FRUITBACK_KV'] };
-  if (url === undefined || !isRedisUrl(url)) return { ok: false, missing: ['FRUITBACK_REDIS_URL'] };
+  if (url === undefined || parseRedisUrl(url) === undefined) return { ok: false, missing: ['FRUITBACK_REDIS_URL'] };
 
   return { ok: true, config: { provider, url } };
-}
-
-function isRedisUrl(value: string): boolean {
-  try {
-    const { protocol, hostname } = new URL(value);
-
-    return (protocol === 'redis:' || protocol === 'rediss:') && hostname !== '';
-  } catch {
-    return false;
-  }
 }
 
 const shared = new Map<string, Kv>();

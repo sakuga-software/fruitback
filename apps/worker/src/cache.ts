@@ -36,21 +36,22 @@ const inFlight = new Map<string, Promise<unknown>>();
  * version, where no reader looks.
  */
 export async function cached<T>(kv: Kv, page: string, key: string, load: () => Promise<T>): Promise<T> {
-  let version: string;
+  let version: string | undefined;
 
   try {
     version = (await kv.get(versionKey(page))) ?? 'none';
   } catch (error) {
-    // A cache that does not answer costs quota, never a read.
-    if (error instanceof KvError) return load();
-    throw error;
+    // A cache that does not answer costs quota, never a read. Concurrent misses still share one load.
+    if (!(error instanceof KvError)) throw error;
   }
 
-  const entryKey = `fruitback:read:${version}:${key}`;
+  // With no version, nothing is read from the Kv or written to it: the answer cannot be filed under
+  // the version a reader uses.
+  const entryKey = version === undefined ? `fruitback:unversioned:${key}` : `fruitback:read:${version}:${key}`;
   const joined = inFlight.get(entryKey);
   if (joined !== undefined) return joined as Promise<T>;
 
-  const promise = readThrough(kv, entryKey, load);
+  const promise = version === undefined ? load() : readThrough(kv, entryKey, load);
   inFlight.set(entryKey, promise);
 
   const settle = () => {

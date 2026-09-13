@@ -107,6 +107,23 @@ describe('cached', () => {
 
     assert.equal(await cached(broken, PAGE, 'k', async () => 'from the store'), 'from the store');
   });
+
+  it('still collapses concurrent misses when the Kv does not answer', async () => {
+    // An outage is when the provider quota needs the single flight most. Raised in review.
+    const down = async () => {
+      throw new KvError('Redis is down');
+    };
+    const broken: Kv = { ...kv, get: down, set: down, incr: down };
+    const { seen, load } = counting();
+
+    const results = await Promise.all(Array.from({ length: 10 }, () => cached(broken, PAGE, 'k', load)));
+
+    assert.deepEqual(
+      results,
+      Array.from({ length: 10 }, () => 1),
+    );
+    assert.equal(seen.loads, 1);
+  });
 });
 
 describe('invalidate', () => {

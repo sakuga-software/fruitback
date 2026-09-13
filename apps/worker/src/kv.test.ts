@@ -89,6 +89,22 @@ function contract(name: string, connect: () => Kv, skip?: string) {
       await kv.set(k, 'not a number', 10_000);
       await assert.rejects(kv.incr(k, 10_000), KvError);
     });
+
+    it('refuses every value Redis refuses to count, and counts a negative one', async () => {
+      // Measured against redis:7. `Number()` accepts every one of these, which is how the memory
+      // store answered differently from Redis. Raised in review.
+      const kv = open();
+
+      for (const value of ['1.0', '', ' 1', '01', '+1', '-0']) {
+        const k = key();
+        await kv.set(k, value, 10_000);
+        await assert.rejects(kv.incr(k, 10_000), KvError, `counted ${JSON.stringify(value)}`);
+      }
+
+      const k = key();
+      await kv.set(k, '-5', 10_000);
+      assert.equal(await kv.incr(k, 10_000), -4);
+    });
   });
 }
 
@@ -122,6 +138,12 @@ describe('readKvConfig', () => {
       { env: { FRUITBACK_KV: 'redis' }, names: 'FRUITBACK_REDIS_URL' },
       { env: { FRUITBACK_KV: 'redis', FRUITBACK_REDIS_URL: 'http://kv.internal' }, names: 'FRUITBACK_REDIS_URL' },
       { env: { FRUITBACK_KV: 'redis', FRUITBACK_REDIS_URL: 'not a url' }, names: 'FRUITBACK_REDIS_URL' },
+      // Both used to pass the boot check and fail on every request. Raised in review.
+      {
+        env: { FRUITBACK_KV: 'redis', FRUITBACK_REDIS_URL: 'redis://kv.internal/not-a-db' },
+        names: 'FRUITBACK_REDIS_URL',
+      },
+      { env: { FRUITBACK_KV: 'redis', FRUITBACK_REDIS_URL: 'redis://:%zz@kv.internal' }, names: 'FRUITBACK_REDIS_URL' },
       // The mistake that leaves two replicas with two limits and no message anywhere.
       { env: { FRUITBACK_REDIS_URL: 'redis://kv.internal' }, names: 'FRUITBACK_KV' },
     ];

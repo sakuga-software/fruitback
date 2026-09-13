@@ -2,7 +2,43 @@ import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { type AddressInfo, type Socket, createServer } from 'node:net';
 import { KvError } from './kv.ts';
-import { type Reply, ReplyError, createRedisKv, encodeCommand, parseReply } from './redis.ts';
+import { type Reply, ReplyError, createRedisKv, encodeCommand, parseRedisUrl, parseReply } from './redis.ts';
+
+describe('parseRedisUrl', () => {
+  it('reads what the client connects with', () => {
+    assert.deepEqual(parseRedisUrl('rediss://reviewer:p%40ss@[::1]:6380/3'), {
+      host: '::1',
+      port: 6380,
+      tls: true,
+      username: 'reviewer',
+      password: 'p@ss',
+      database: '3',
+    });
+    assert.deepEqual(parseRedisUrl('redis://kv.internal/'), {
+      host: 'kv.internal',
+      port: 6379,
+      tls: false,
+      username: '',
+      password: '',
+      database: undefined,
+    });
+  });
+
+  it('refuses at boot what the client would fail on at every request', () => {
+    // The boot check and the client read the URL through this one function, so a URL cannot pass one
+    // and fail the other. Raised in review.
+    const refused = [
+      'redis://kv.internal/not-a-db',
+      'redis://kv.internal/0/1',
+      'redis://:%zz@kv.internal',
+      'http://kv.internal',
+      'redis://',
+      'not a url',
+    ];
+
+    for (const url of refused) assert.equal(parseRedisUrl(url), undefined, url);
+  });
+});
 
 describe('parseReply', () => {
   it('reads every reply type, one after another', () => {

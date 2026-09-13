@@ -1,4 +1,4 @@
-import { type Socket, connect as connectTcp } from 'node:net';
+import { type Socket, connect as connectTcp, isIP } from 'node:net';
 import { connect as connectTls } from 'node:tls';
 import { type Kv, KvError } from './kv.ts';
 
@@ -90,7 +90,11 @@ type Connection = { send(args: readonly string[]): Promise<Reply>; destroy(): vo
  * the URL, because the URL can carry a password.
  */
 export function createRedisKv(url: string, options: { timeoutMs?: number } = {}): Kv {
-  const target = new URL(url);
+  const parsed = parseRedisUrl(url);
+  // `kvs.ts` refuses such a URL at boot. The message does not quote it, because it can carry a password.
+  if (parsed === undefined) throw new KvError('FRUITBACK_REDIS_URL is not a Redis URL this client can use');
+  // A narrowed `const` loses its narrowing inside `open`, which is hoisted. This one is typed once.
+  const target: RedisTarget = parsed;
   const timeoutMs = options.timeoutMs ?? REDIS_COMMAND_TIMEOUT_MS;
   let current: { connection: Connection; ready: Promise<void> } | undefined;
 
@@ -99,15 +103,13 @@ export function createRedisKv(url: string, options: { timeoutMs?: number } = {})
       if (current?.connection === connection) current = undefined;
     });
     const handshake: Promise<Reply>[] = [];
-    const password = decodeURIComponent(target.password);
-    const username = decodeURIComponent(target.username);
+    const { username, password, database } = target;
 
     if (password !== '') {
       handshake.push(connection.send(username === '' ? ['AUTH', password] : ['AUTH', username, password]));
     }
 
-    const database = target.pathname.slice(1);
-    if (database !== '') handshake.push(connection.send(['SELECT', database]));
+    if (database !== undefined) handshake.push(connection.send(['SELECT', database]));
 
     const ready = Promise.all(handshake).then((replies) => {
       const refused = replies.find((reply) => reply instanceof ReplyError);
@@ -157,11 +159,60 @@ export function createRedisKv(url: string, options: { timeoutMs?: number } = {})
   };
 }
 
-function connect(target: URL, timeoutMs: number, onDead: () => void): Connection {
-  const host = target.hostname.replace(/^\[|\]$/g, '');
-  const port = Number(target.port || 6379);
-  const socket: Socket =
-    target.protocol === 'rediss:' ? connectTls({ host, port, servername: host }) : connectTcp({ host, port });
+export type RedisTarget = {
+  host: string;
+  port: number;
+  tls: boolean;
+  username: string;
+  password: string;
+  database: string | undefined;
+};
+
+/**
+ * The one reading of `FRUITBACK_REDIS_URL`. `kvs.ts` asks it at boot, and the client connects with
+ * what it answers.
+ *
+ * Two readings let a URL pass the boot check and then fail on every request, with `/health` green.
+ * It answers `undefined` for:
+ *
+ * - a scheme other than `redis:` or `rediss:`, or no host;
+ * - a database that is not a number;
+ * - a user or a password that does not percent-decode.
+ */
+export function parseRedisUrl(value: string): RedisTarget | undefined {
+  let url: URL;
+
+  try {
+    url = new URL(value);
+  } catch {
+    return undefined;
+  }
+
+  if ((url.protocol !== 'redis:' && url.protocol !== 'rediss:') || url.hostname === '') return undefined;
+
+  const database = url.pathname === '' || url.pathname === '/' ? undefined : url.pathname.slice(1);
+  if (database !== undefined && !/^\d+$/.test(database)) return undefined;
+
+  try {
+    return {
+      host: url.hostname.replace(/^\[|\]$/g, ''),
+      port: Number(url.port || 6379),
+      tls: url.protocol === 'rediss:',
+      username: decodeURIComponent(url.username),
+      password: decodeURIComponent(url.password),
+      database,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function connect(target: RedisTarget, timeoutMs: number, onDead: () => void): Connection {
+  const { host, port } = target;
+  // Node refuses a server name that is an IP address, so SNI is sent for a hostname only.
+  const socket: Socket = target.tls
+    ? connectTls({ host, port, ...(isIP(host) === 0 ? { servername: host } : {}) })
+    : connectTcp({ host, port });
   const pending: Pending[] = [];
   let buffer: Buffer<ArrayBufferLike> = Buffer.alloc(0);
   let dead: Error | undefined;
