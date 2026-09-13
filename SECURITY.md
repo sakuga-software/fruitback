@@ -127,6 +127,13 @@ their authors and the team's replies for 15 seconds, in the clear. Give it a pri
 password and its own database — the care you would give the worker's own memory, because that is what
 it now is.
 
+**`redis://` is plaintext, and so is everything on it**: the password `AUTH` sends, and every cached
+answer with its notes and authors. The worker accepts credentials on it on purpose. Redis ships
+without TLS, and the ordinary deployment is a container on the same private Docker network, where
+`rediss://` buys nothing. The day that path leaves a network you control, use `rediss://`. A rule that
+required TLS only when a password is set would protect the password and still send the notes in the
+clear.
+
 `TRUSTED_PROXY_HOPS` (1 by default, which is one Traefik) decides how the client address is read:
 `X-Forwarded-For` is appended to by each proxy, so the real address is that many entries **from the
 right**.

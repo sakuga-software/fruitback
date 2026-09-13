@@ -150,6 +150,9 @@ export function createRedisKv(url: string, options: { timeoutMs?: number } = {})
     async incr(key, ttlMs) {
       const reply = await command(['EVAL', INCR_WITH_EXPIRY, '1', key, String(ttlMs)]);
       if (typeof reply !== 'number') throw new KvError('Redis answered INCR with something other than a number');
+      // RESP carries a 64-bit integer and a JavaScript number is exact only to 2^53, so 2^53 + 1 reads
+      // back as 2^53. Measured. The memory store refuses at the same point, and so does this one.
+      if (!Number.isSafeInteger(reply)) throw new KvError('value is out of range');
 
       return reply;
     },

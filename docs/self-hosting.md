@@ -121,7 +121,8 @@ percent-encode every reserved character in it — `@`, `:`, `/`, `?`, `#` and `%
 
 **Treat it as the worker's own memory.** Anyone who can write to that Redis can plant pins on a page
 and clear a rate limit, and a cached answer holds notes and their authors for 15 seconds. Private
-network, password, its own database.
+network, password, its own database. And `redis://` is plaintext — the password and every
+cached answer alike — so the day the path to that Redis leaves a network you control, use `rediss://`.
 
 A Redis that stops answering refuses every metered call with `503`, which is `/feedback` and
 `/session/*`. `/health` never touches it, so the replicas stay in the load balancer and recover on

@@ -105,6 +105,16 @@ function contract(name: string, connect: () => Kv, skip?: string) {
       await kv.set(k, '-5', 10_000);
       assert.equal(await kv.incr(k, 10_000), -4);
     });
+
+    it('refuses to count past 2^53 rather than answer a wrong number', async () => {
+      // Redis holds 2^53 + 1 after this INCR, and a JavaScript number reads it back as 2^53. Raised in
+      // review.
+      const kv = open();
+      const k = key();
+
+      await kv.set(k, '9007199254740992', 10_000);
+      await assert.rejects(kv.incr(k, 10_000), KvError);
+    });
   });
 }
 
