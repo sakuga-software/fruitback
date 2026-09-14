@@ -173,3 +173,10 @@ What it took was mostly measuring, because four things the documentation said we
   and checks the file with `test -s` first, and the worker is stopped while it runs. Measured on both
   paths, with Compose and with `docker run`: a good backup gives back its pins, and a missing one
   stops the commands with every pin still there.
+- **The migration from before SKG-541 needed the same contract, and a review found two more gaps.**
+  Its `break` left the loop and fell through to the `docker compose up` after it, so a failed restore
+  still started the worker on the empty volume. And `for db in $dbs` iterates once under zsh, which
+  does not split a variable into words. The block now uses `docker compose create`, lists the files in
+  the loop, restores in one-off containers, and starts the worker only when a flag says every restore
+  succeeded. Measured in bash and zsh: with both files the pin and the pairing code came back; with
+  one missing, the worker was created and never started.

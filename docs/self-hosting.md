@@ -434,33 +434,42 @@ The old file mounted no volume, so `/data` was an anonymous volume that the imag
 file mounts the named volume there, which starts empty, and the pins and sessions then seem to be
 gone. The old volume is not deleted, but nothing mounts it.
 
-Set `dbs` to the files the old deployment used: the value of `FRUITBACK_SQLITE_PATH`, and the value of
-`FRUITBACK_SESSION_PATH` if it was set. A file outside `/data` was never on a volume, and nothing is
-left to copy. With the **old** file still in place:
+In the `for` line of both blocks below, write the files the old deployment used: the value of
+`FRUITBACK_SQLITE_PATH`, and the value of `FRUITBACK_SESSION_PATH` if it was set. A file outside
+`/data` was never on a volume, and nothing is left to copy. The list is written in the loop, not in a
+variable, because zsh does not split a variable into words. With the **old** file still in place:
 
 ```bash
-dbs="/data/fruitback.db /data/sessions.db"
-for db in $dbs; do
-  docker compose exec -T worker sqlite3 "$db" ".backup '$db.migrate'"
+for db in /data/fruitback.db /data/sessions.db; do
+  docker compose exec -T worker sqlite3 "$db" ".backup '$db.migrate'" &&
   docker compose cp "worker:$db.migrate" "./$(basename "$db").migrate"
 done
 ```
 
-Then replace the compose file, make the changes below with the **same** paths in `.env`, start it, and
-restore into the new volume:
+Then replace the compose file, and make the changes below with the **same** paths in `.env`. Restore
+into the new volume before the worker serves anything. `docker compose create` makes the container and
+the empty volume without starting it, each restore runs in a one-off container, and the worker starts
+only if every restore succeeded:
 
 ```bash
-docker compose up -d --wait
-for db in $dbs; do
+docker compose create &&
+ok=yes &&
+for db in /data/fruitback.db /data/sessions.db; do
   docker compose cp "./$(basename "$db").migrate" "worker:$db.migrate" &&
-  docker compose exec -T worker sh -c "test -s '$db.migrate' && sqlite3 '$db' \".restore '$db.migrate'\"" &&
-  docker compose exec -T worker rm -f "$db.migrate" "$db.migrate-shm" "$db.migrate-wal" || { echo "restore of $db failed, stopping"; break; }
-done
-docker compose up -d --wait --force-recreate
+  docker compose run --rm --no-deps --entrypoint sh worker -c \
+    "test -s '$db.migrate' && sqlite3 '$db' \".restore '$db.migrate'\" && rm -f '$db.migrate' '$db.migrate-shm' '$db.migrate-wal'" ||
+  { ok=no; echo "restore of $db failed: the worker stays stopped"; break; }
+done &&
+[ "$ok" = yes ] &&
+docker compose up -d --wait
 ```
 
-Tested on a stand-in for the old file, with sessions on: after the switch the pin was gone; after the
-restore and the recreate, the pin was back and the pairing code was still in `sessions.db`.
+If a restore fails, the worker is not started, and the old volume and the `.migrate` files are left
+as they were: fix the cause, then run the block again.
+
+Measured with sessions on, in bash and in zsh, on a volume that started empty: with both files, the
+pin was back and the pairing code was still in `sessions.db`. With `sessions.db.migrate` missing, the
+block stopped at that restore, and the worker was created but never started.
 
 Before the first `docker compose up` with the new file, change these lines in `.env`:
 
