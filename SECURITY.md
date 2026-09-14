@@ -119,8 +119,10 @@ no proxy, the rightmost entry is the one the caller wrote: each read that forges
 new bucket, and the limit never applies. Measured on that file: with 1, forged reads kept answering
 `200` past the limit; with 0, the same reads answered `429` once the limit was reached.
 
-**Set it too high and the limit is bypassable with one header.** Counting further left reaches the
-part of the chain a caller wrote, so anyone can mint a fresh bucket per request. Measured against
+**Set it too high behind a proxy that appends, and the limit is bypassable with one header.**
+Counting further left reaches the part of the chain a caller wrote, so anyone can mint a fresh bucket
+per request. The same happens with nothing in front, as above. Behind a proxy that replaces the header,
+a count that is too high costs a shared bucket instead: see the next paragraph. Measured against
 `resolveClientIp`, with a caller sending `1.2.3.4` through one proxy that appends `203.0.113.9`:
 
 | `TRUSTED_PROXY_HOPS` | Address used | |

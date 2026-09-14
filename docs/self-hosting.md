@@ -273,7 +273,7 @@ empty value counts as absent.
 
 | Variable | Default | What it does | When it is wrong |
 | --- | --- | --- | --- |
-| `FRUITBACK_IDENTITY_SECRET` | none: every reporter is self-declared | The HS256 key a site signs identity tokens with, 32 characters or more. Ignored when `FRUITBACK_CLIENTS` is set: each client brings its own. | Under 32 characters: refused. Changed: every token signed with the old key answers `401`. |
+| `FRUITBACK_IDENTITY_SECRET` | none: every reporter is self-declared | The HS256 key a site signs identity tokens with, 32 characters or more. Ignored when `FRUITBACK_CLIENTS` is set: each client brings its own. | Under 32 characters: refused. Changed: a write, or a read under `FRUITBACK_READ=authenticated`, that carries a token signed with the old key answers `401`. A public read does not look at the token, so it still answers. |
 | `FRUITBACK_READ` | `public` | Who may read pins: `public` or `authenticated`. A client's `read` replaces it. | A typo: refused, never defaulted to `public`. `authenticated` for a client with no key to verify its tokens: refused. That key is `FRUITBACK_IDENTITY_SECRET` for a single client, and each client's own `identitySecret` when `FRUITBACK_CLIENTS` is set. `authenticated` and a site that sends no token: reads answer `401 identity-required`, and the widget shows no pins. `public`: the boot log names the clients anyone can read, and `/health` counts them in `openRead`. |
 | `FRUITBACK_HIDE_COMMENTS` | empty: the team's replies are shown | `1` keeps the team's replies out of the pins. | Any other value, `true` included, is accepted and hides nothing (measured). |
 
@@ -383,7 +383,9 @@ seconds. `exec` runs as the `node` user, which owns `/data`, so nothing needs a 
    Keep the `ghcr.io/` line. An image that also has a local tag lists a name no registry serves, and
    on the containerd image store that name came first (measured).
 
-3. Pull and restart, then check `/health` and a read:
+3. If `FRUITBACK_IMAGE` in `.env` names a version or a digest, set it to the new one first: a pinned
+   reference does not move, and the pull below then changes nothing. With `edge`, nothing to set.
+   Pull and restart, then check `/health` and a read:
 
    ```bash
    docker compose pull
@@ -497,8 +499,10 @@ Then:
 - **Set the environment in Dokploy.** It does not read `docker-compose.yml` or `.env`. The names are
   the ones in [Every environment variable](#every-environment-variable). `LINEAR_API_KEY` belongs in
   Dokploy's environment, never in the image or the repository.
-- **`TRUSTED_PROXY_HOPS=1`** for Dokploy's Traefik alone, then [check it](#check-it). Add one for each
-  proxy in front of Dokploy, such as a CDN.
+- **`TRUSTED_PROXY_HOPS=1`** for Dokploy's Traefik alone, then [check it](#check-it). For a proxy in
+  front of Dokploy, such as a CDN, first make Dokploy's Traefik trust it
+  (`forwardedHeaders.trustedIPs`), then add one. Without the trust, Traefik replaces the header and the
+  client's address is lost at every count (measured with nginx in front of Traefik).
 - **Mount a volume at `/data`** for SQLite, or every pin goes with the next deploy.
 - **`/health` is the readiness probe.** It answers `503` while the configuration is refused, so a bad
   deploy gets no traffic. The process drains its requests on `SIGTERM`.
@@ -532,6 +536,8 @@ A pairing code is minted by a **command on the container**, never over HTTP:
 docker compose exec worker node server.mjs pair --subject alice --name "Alice Martin"
 ```
 
+With `docker run`, write `docker exec fruitback` instead of `docker compose exec worker`.
+
 Vouching for a person is not something this worker has to defend as a network surface.
 
 **The two paragraphs below describe the `linear` store.** A worker on another store does the same job
@@ -556,9 +562,11 @@ From the sources, with no container and no `.env`. The command keeps running:
 pnpm --filter @fruitback/worker dev:fake        # node --watch on the TypeScript, in-memory store
 ```
 
-The image, under the name the compose file pulls:
+The image, under the name the compose file pulls. The compose file needs `.env`, and refuses to start
+without `ALLOWED_ORIGINS`:
 
 ```bash
+cp .env.example .env                  # then set ALLOWED_ORIGINS
 docker build -f apps/worker/Dockerfile -t ghcr.io/sakuga-software/fruitback-worker:edge .
 docker compose up -d --wait
 ```
