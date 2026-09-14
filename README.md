@@ -68,7 +68,7 @@ moves on every merge.
 
 **While this repository is private, the raw files and the image are private too.** Until then,
 download the two files with the GitHub CLI, and log in to `ghcr.io` with a token that has
-`read:packages` — see [docs/self-hosting.md](docs/self-hosting.md#running-the-published-image):
+`read:packages` — see [docs/self-hosting.md](docs/self-hosting.md#before-you-start):
 
 ```bash
 gh api repos/sakuga-software/fruitback/contents/docker-compose.yml -H 'Accept: application/vnd.github.raw' > docker-compose.yml

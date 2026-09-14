@@ -14,7 +14,7 @@ about to reason your way past it.
 | [project.md](project.md) | Project · Layout |
 | [dev-loop.md](dev-loop.md) | The dev loop · The E2E suite |
 | [packaging.md](packaging.md) | The published package · Licences |
-| [image.md](image.md) | The published image |
+| [image.md](image.md) | The published image · The compose file · The self-hosting guide |
 | [widget.md](widget.md) | The widget · The host, and why everything lives in one Shadow root · The look, and the one thing a host may change · One prefix, and it is `fruitback` · The popover · Who carries the calls · The optional picture · The settings panel · The words, and the catalogs the bundle carries · Re-anchoring, and why a pin says how sure it is |
 | [icons.md](icons.md) | No emoji, and what replaced them |
 | [extension.md](extension.md) | The extension, and the two worlds |

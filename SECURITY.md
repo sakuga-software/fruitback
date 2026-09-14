@@ -110,8 +110,9 @@ It protects your provider quota; it is not a defence against a determined caller
 addresses anyway.
 
 `TRUSTED_PROXY_HOPS` (1 by default, which is one Traefik) decides how the client address is read:
-`X-Forwarded-For` is appended to by each proxy, so the real address is that many entries **from the
-right**.
+the worker takes the entry that many places **from the right** of `X-Forwarded-For`, and the socket
+peer when the chain is shorter. Set it to the number of proxies between the internet and the
+container.
 
 `docker-compose.yml` publishes the port with no proxy in front, so it sets 0 (SKG-541). With 1 and
 no proxy, the rightmost entry is the one the caller wrote: each read that forges a new address gets a
@@ -128,9 +129,14 @@ part of the chain a caller wrote, so anyone can mint a fresh bucket per request.
 | `2` — one too many | `1.2.3.4` | **what the caller sent** |
 | `0` — none | the socket peer | the proxy's own address: everyone shares one bucket |
 
-Count the proxies that **append** to the header, and no others. An edge that rewrites the header
-rather than appending — Cloudflare does — is a different rule, and reading the leftmost entry is
-correct there and wrong here.
+**Not every proxy appends** (measured on SKG-543). nginx with `$proxy_add_x_forwarded_for` keeps what
+the caller sent and appends, so the table above holds: with `2` behind it, 24 forged reads all
+answered `200`. Traefik v3.5 and Caddy 2.10 replace the header by default with the address they saw.
+Behind them a count that is too high falls back to the socket peer, so every caller shares the
+proxy's bucket instead of escaping it. A replacing proxy behind another proxy loses the client's
+address unless it trusts that proxy (Traefik: `forwardedHeaders.trustedIPs`).
+[docs/self-hosting.md](docs/self-hosting.md#behind-a-reverse-proxy) has the cases and a check an
+operator can run.
 
 ### Private mode hides the pins from a visitor, and from nobody else
 

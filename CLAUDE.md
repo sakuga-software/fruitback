@@ -695,9 +695,10 @@ and *The team mode, and the call the page cannot make*:
   both ends, invisible in between.
 - **`clientId` is client-asserted.** `origins` is what turns the claim into something checkable
   against the browser's own header. Do not describe it as authentication.
-- **`resolveClientIp` is security-relevant.** `X-Forwarded-For` is appended to by each proxy, so the
-  client IP is the entry `TRUSTED_PROXY_HOPS` from the **right**. Reading the leftmost entry makes
-  the rate limit bypassable with one header.
+- **`resolveClientIp` is security-relevant.** The client IP is the entry `TRUSTED_PROXY_HOPS` from
+  the **right** of `X-Forwarded-For`. Reading the leftmost entry makes the rate limit bypassable with
+  one header. **Do not write that each proxy appends**: nginx appends, Traefik and Caddy replace the
+  header by default (measured, SKG-543), and the self-hosting guide depends on the difference.
 
 **The extension's session**
 
@@ -863,6 +864,13 @@ And *The published image* in [docs/decisions/image.md](docs/decisions/image.md).
   `HOST` and `FRUITBACK_FAKE_LINEAR`. Each value comes from `.env`, except `PORT`, which is the literal
   `8080`; the host side reads `FRUITBACK_PORT`. `.env.example` assigns exactly what the file
   interpolates. A new variable in the worker fails the suite until both files carry it.
+- **`docs/self-hosting.md` is held to the same list** (SKG-543). Its *Every environment variable*
+  section must name exactly the worker's variables and the compose file's, one table row each, with
+  the code's defaults for `PORT`, `TRUSTED_PROXY_HOPS` and `RATE_LIMIT_PER_MINUTE`. What a wrong value
+  breaks is written from measurements on the image; re-measure a row before changing it.
+- **`/health` checks the configuration and never the store** (measured, SKG-543): a SQLite directory
+  that does not exist, or a refused Linear key, answers `200` there and `502` on the first read. Do
+  not describe `/health` as proof the worker can serve.
 - **The compose file sets `TRUSTED_PROXY_HOPS` to 0; the code defaults to 1.** The file publishes the
   port directly, and 1 there lets a forged `X-Forwarded-For` escape the rate limit (measured). Keep
   the two defaults apart in prose: `security.test.ts` pins the code's.

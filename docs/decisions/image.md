@@ -111,3 +111,51 @@ immutable.
   lines are readiness probes on a runner, not commands anybody copies, and were left alone.
 - **A shell variable wins over `.env`.** A `LINEAR_API_KEY` exported in a shell profile reached
   `docker compose config` with `.env` empty. The local run of the same check used `env -i`.
+
+## The self-hosting guide (SKG-543)
+
+The ticket turned moved material into a guide that someone who did not write the code can follow.
+What it took was mostly measuring, because four things the documentation said were not true.
+
+- **"Each proxy appends to `X-Forwarded-For`" was wrong, in five places.** Measured with the worker
+  behind each proxy on a Docker network: Traefik v3.5 and Caddy 2.10 replace the header with the
+  address they saw, so a forged `1.2.3.4` never reached the worker. nginx 1.29 with
+  `$proxy_add_x_forwarded_for` keeps it and appends. nginx in front of a default Traefik loses the
+  client's address, because Traefik overwrites nginx's header with nginx's address; with
+  `forwardedHeaders.trustedIPs` set to nginx, Traefik appends and a count of 2 is right. The sentence
+  is gone from `CLAUDE.md`, `SECURITY.md`, `install.md`, `decisions/worker.md` and the old guide. The
+  claim that the leftmost entry is correct behind Cloudflare went too: nobody measured it.
+- **A wrong count costs different things behind different proxies.** Too high behind nginx, 24
+  forged reads all answered `200`. Too high behind Traefik or Caddy, the chain is shorter than the
+  count, the worker falls back to the connection's address, and every caller shares the proxy's
+  bucket. One caller cannot tell a right count from a shared bucket: both give 20 × `200` then
+  4 × `429`. That is why the guide's check has a second step, a read from another network.
+- **`/health` checks the configuration, not the store.** A SQLite file in a directory that does not
+  exist, and a Linear key that Linear refuses, both answered `200` on `/health` and
+  `502 store-unavailable` on the first read. Documented, not changed: a probe that calls the store
+  takes the container out of routing during a store outage, when the widget needs the `502` to keep
+  the note. It is the same reason `/health` never touches the `Kv`.
+- **`install.md` showed `{"ok":true}`.** The answer carries `store`, and `openRead` when a client's
+  pins are public.
+- **Three wrong values are accepted in silence**, and the guide says so rather than this ticket
+  changing them: `PORT` that is not a number falls back to 8080; `FRUITBACK_HIDE_COMMENTS=true`
+  hides nothing, because only `1` does; and `HOST=127.0.0.1` or a `PORT` other than the published one
+  leave the container `healthy` and unreachable, because the healthcheck probes from inside.
+- **An origin with a trailing slash is accepted at boot and refuses every browser call.**
+  `ALLOWED_ORIGINS=https://staging.example.com/` answered `403 origin-not-allowed` to the origin the
+  browser sends.
+- **The sizing numbers carry their conditions.** One CPU, Apple Silicon under OrbStack, SQLite, and
+  the rate limit raised so the load tool was not refused. Reads are served from the 15-second cache,
+  so they measure the cache and the JSON. Memory stayed under 200 MiB with a 2 020-pin page.
+- **The variable reference is a test.** `compose.test.ts` compares the rows of *Every environment
+  variable* with `WorkerEnv`, every store's `envNames` and the compose file's interpolations, and
+  checks three defaults against the constants. Four mutations turn it red: a row removed, a row added,
+  and a wrong default for the rate limit and for the hop count.
+- **The guide was walked literally, by its author.** From an empty directory, under `env -i`, with the
+  image served by a local registry: compose up, the curl pin, backup, restore, the proxy check,
+  `FRUITBACK_PORT=127.0.0.1:…`, the boot log, `SIGTERM`, and the `docker run` command. The first
+  rollback test passed for the wrong reason. `{{index .RepoDigests 0}}` returned
+  `fruitback-worker@sha256:…`, a local name, and the rollback found the image still on the machine.
+  The guide now greps the registry's line, and the rollback was run again with every local copy of the
+  old image deleted: Compose pulled the noted digest, and the pin was still there. What was not done
+  is the ticket's own test, a stranger on a clean machine: the package is still private.

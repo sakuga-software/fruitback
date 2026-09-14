@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { DEFAULT_PORT, DEFAULT_TRUSTED_PROXY_HOPS } from './env.ts';
+import { DEFAULT_LIMIT } from './rate-limit.ts';
 
 /**
  * `docker-compose.yml` and `.env.example` against the variables the worker reads (SKG-541).
@@ -17,6 +19,7 @@ function read(path: string): string {
 
 const COMPOSE = read('../../../docker-compose.yml');
 const ENV_EXAMPLE = read('../../../.env.example');
+const SELF_HOSTING = read('../../../docs/self-hosting.md');
 
 /** The worker reads these, and the compose file must not pass them. */
 const NOT_PASSED: Readonly<Record<string, string>> = {
@@ -118,5 +121,33 @@ describe('.env.example', () => {
       'a variable is assigned twice',
     );
     assert.deepEqual([...assigned].sort(), interpolated.sort());
+  });
+});
+
+describe('docs/self-hosting.md', () => {
+  /** The cells of each row of the variable reference, keyed by the variable name (SKG-543). */
+  function referenceRows(): Map<string, string> {
+    const section = /^## Every environment variable\n([\s\S]*?)(?=^## )/m.exec(SELF_HOSTING)?.[1] ?? '';
+
+    return new Map(
+      [...section.matchAll(/^\| `([A-Z][A-Z0-9_]*)` \|(.*)$/gm)].map((match) => [match[1] ?? '', match[2] ?? '']),
+    );
+  }
+
+  it('names every variable the worker and the compose file read, and no other', () => {
+    const interpolated = [...COMPOSE.matchAll(/\$\{([A-Z][A-Z0-9_]*)/g)].map((match) => match[1] ?? '');
+    const expected = [...new Set([...workerVariables(), ...interpolated])].sort();
+
+    assert.ok(expected.length >= 18, `only ${expected.length} variables found`);
+    assert.deepEqual([...referenceRows().keys()].sort(), expected);
+  });
+
+  it('gives the defaults the code has', () => {
+    const rows = referenceRows();
+    const defaultOf = (name: string) => rows.get(name)?.split('|')[0] ?? '';
+
+    assert.match(defaultOf('PORT'), new RegExp(`\`${DEFAULT_PORT}\``));
+    assert.match(defaultOf('TRUSTED_PROXY_HOPS'), new RegExp(`\`${DEFAULT_TRUSTED_PROXY_HOPS}\` in the worker`));
+    assert.match(defaultOf('RATE_LIMIT_PER_MINUTE'), new RegExp(`\`${DEFAULT_LIMIT}\``));
   });
 });
