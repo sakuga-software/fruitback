@@ -13,11 +13,15 @@ accurate and incomplete in that shape.
 A plain Node HTTP process — `node:http` adapted onto a web-standard handler, no framework. It runs as
 a container: Dokploy builds the image from a GitHub push and puts Traefik in front of it on the VPS.
 
-From the sources, with no container and no `.env`. `dev:fake` keeps running, so use another terminal
-for anything else:
+From the sources, with no container and no `.env`. `dev:fake` keeps running:
 
 ```bash
 pnpm --filter @fruitback/worker dev:fake        # node --watch on the TypeScript, in-memory store
+```
+
+The bundle the image ships, in another terminal:
+
+```bash
 pnpm --filter @fruitback/worker build           # esbuild → dist/server.mjs, one file
 ```
 
