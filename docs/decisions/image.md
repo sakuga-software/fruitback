@@ -82,8 +82,9 @@ immutable.
   pairing command in `.env.example` and `reviewing.md`. SQLite is the default. Linear is
   `FRUITBACK_STORE=linear` and two keys. GitHub waits for SKG-525.
 - **`TRUSTED_PROXY_HOPS` is 0 in this file and 1 in the code.** The file publishes the port with
-  nothing in front. The old file said 1 with a published port, which is the forgeable case: measured,
-  24 reads with forged addresses all answered `200`.
+  nothing in front. The old file said 1 with a published port, which is the forgeable case: each
+  forged `X-Forwarded-For` gets a new bucket. Measured, forged reads kept answering `200` past the
+  limit with 1, and answered `429` with 0.
 - **CI plants a pin through the file.** The `image` job copies only the compose file and
   `.env.example` into an empty directory, and tags the image it built under the name the file pulls.
   Then `plant-a-pin.ts` plants and reads back, the container is recreated, and the pin is read again.

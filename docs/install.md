@@ -52,7 +52,7 @@ goes through: losing a label is a triage annoyance, losing someone's note is a b
 It is a single Node process in a container. [`.env.example`](../.env.example) lists every variable
 [`docker-compose.yml`](../docker-compose.yml) passes to it, with the reasoning next to each.
 
-The minimum:
+The minimum, with the seeds in Linear:
 
 ```bash
 FRUITBACK_STORE=linear
@@ -61,10 +61,12 @@ LINEAR_TEAM_ID=…
 ALLOWED_ORIGINS=https://staging.acme.test
 ```
 
+With SQLite, which is the default of `docker-compose.yml`, `ALLOWED_ORIGINS` is the only line to set.
+
 ### Locally
 
 ```bash
-cp .env.example .env                  # then fill LINEAR_API_KEY
+cp .env.example .env                  # then set ALLOWED_ORIGINS
 pnpm --filter @fruitback/worker dev   # node --watch, no container
 docker build -f apps/worker/Dockerfile -t ghcr.io/sakuga-software/fruitback-worker:edge .
 docker compose up -d --wait           # the image you just built

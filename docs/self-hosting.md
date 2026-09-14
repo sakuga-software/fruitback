@@ -69,9 +69,10 @@ inside the container, which matters as soon as there are two.
   seeds and, when they are on, the extension's sessions. To use Linear, set `FRUITBACK_STORE=linear`,
   `LINEAR_API_KEY` and `LINEAR_TEAM_ID` in `.env`.
 - **`TRUSTED_PROXY_HOPS` is 0, because the file publishes the port directly.** The worker's own
-  default is 1, for one Traefik. Measured on this file with 1 and no proxy in front: 24 reads, each
-  with a different forged `X-Forwarded-For`, all answered `200`. With 0, the same reads reached the
-  limit and answered `429`. To put Traefik in front, follow the three steps in the file, which set 1.
+  default is 1, for one Traefik. With 1 and no proxy in front, the address comes from the
+  `X-Forwarded-For` the caller wrote, so each forged address gets a new bucket and the limit never
+  applies. Measured on this file: with 1, forged reads kept answering `200` past the limit; with 0,
+  they answered `429`. To put Traefik in front, follow the three steps in the file, which set 1.
 - **A variable exported in your shell wins over `.env`.** Docker Compose reads the shell first, so a
   `LINEAR_API_KEY` left in a shell profile reaches the container even when `.env` leaves it empty.
 - **`.env.example` lists exactly the variables the compose file reads.** `apps/worker/src/compose.test.ts`

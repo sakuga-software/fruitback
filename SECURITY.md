@@ -113,9 +113,10 @@ addresses anyway.
 `X-Forwarded-For` is appended to by each proxy, so the real address is that many entries **from the
 right**.
 
-`docker-compose.yml` publishes the port with no proxy in front, so it sets 0 (SKG-541). Measured on
-that file with 1 instead: 24 reads, each with a different forged `X-Forwarded-For`, all answered
-`200`. With 0, the same reads reached the limit and answered `429`.
+`docker-compose.yml` publishes the port with no proxy in front, so it sets 0 (SKG-541). With 1 and
+no proxy, the rightmost entry is the one the caller wrote: each read that forges a new address gets a
+new bucket, and the limit never applies. Measured on that file: with 1, forged reads kept answering
+`200` past the limit; with 0, the same reads answered `429` once the limit was reached.
 
 **Set it too high and the limit is bypassable with one header.** Counting further left reaches the
 part of the chain a caller wrote, so anyone can mint a fresh bucket per request. Measured against

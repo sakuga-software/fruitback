@@ -161,7 +161,8 @@ jobs:
         # the machine of somebody who never cloned this repository. The compose file pulls the
         # published image. The tag below puts the image of this commit in the local daemon under that
         # exact name, so compose finds it, pulls nothing, and needs no registry login.
-        # FRUITBACK_VERSION is set here so that the tag and the reference cannot differ.
+        # FRUITBACK_VERSION is set here so that the tag and the reference cannot differ. The container of
+        # the step above still holds port 8080, so this run must use another port.
         env:
           FRUITBACK_VERSION: edge
           FRUITBACK_PORT: '8081'
