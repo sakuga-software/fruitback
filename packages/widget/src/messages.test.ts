@@ -2,7 +2,14 @@ import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { SEED_STAGES } from '@fruitback/shared';
 import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
-import { ENGLISH, type FruitbackMessages, createTranslator, directionOf, languageOf } from './messages.ts';
+import {
+  BUNDLED_CATALOGS,
+  ENGLISH,
+  type FruitbackMessages,
+  createTranslator,
+  directionOf,
+  languageOf,
+} from './messages.ts';
 import { FRENCH } from './locale-fr.ts';
 import { createCaptureHost } from './host.ts';
 import { createComposer } from './composer.ts';
@@ -112,9 +119,12 @@ describe('createTranslator', () => {
 });
 
 describe('the bundled catalog', () => {
-  it('gives the gear and the dialog it opens two different names', () => {
+  it('gives the gear and the dialog it opens two different names, in every bundled catalog', () => {
     // Two elements with one accessible name are ambiguous to a screen reader and to every E2E spec.
-    assert.notEqual(ENGLISH['settings.open'], ENGLISH['settings.dialog']);
+    for (const [tag, catalog] of Object.entries(BUNDLED_CATALOGS)) {
+      assert.notEqual(catalog['settings.open'], catalog['settings.dialog'], `${tag} gives both one name`);
+    }
+    assert.ok(Object.keys(BUNDLED_CATALOGS).length > 1, 'only one catalog is checked');
   });
 });
 

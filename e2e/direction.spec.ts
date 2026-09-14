@@ -53,9 +53,10 @@ test('in Arabic the dock and the popover move, and the pin stays on its element'
   const composer = await page.locator('[data-fruitback-composer]').boundingBox();
   expect(element).not.toBeNull();
   expect(composer, 'the popover did not open').not.toBeNull();
-  // The popover's right edge meets the element's, unless the viewport clamps it.
+  // The popover's right edge meets the element's, unless the viewport clamps it. Two pixels absorb
+  // rounding; a left-to-right placement would miss by the popover's width less the element's.
   const expectedRight = Math.max(10 + composer!.width, Math.min(element!.x + element!.width, viewport!.width - 10));
-  expect(Math.abs(composer!.x + composer!.width - expectedRight)).toBeLessThanOrEqual(1);
+  expect(Math.abs(composer!.x + composer!.width - expectedRight)).toBeLessThanOrEqual(2);
 
   await page.getByPlaceholder(ARABIC['composer.placeholder']).fill('يمين إلى يسار');
   await page.getByRole('button', { name: ARABIC['composer.send'], exact: true }).click();
