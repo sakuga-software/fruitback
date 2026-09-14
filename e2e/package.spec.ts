@@ -47,7 +47,27 @@ test('a script tag mounts the widget, with no build step on the page', async ({ 
 
   // The label came off the tag, which is the whole of the configuration a snippet carries.
   await expect(page.getByRole('button', { name: '🌱 Feedback' })).toBeVisible();
-  await expect(page.getByLabel('Ouvrir les réglages Fruitback')).toBeVisible();
+  await expect(page.getByLabel('Open Fruitback settings')).toBeVisible();
+});
+
+test('a host catalog reaches the built widget, and a key it leaves out stays English (SKG-530)', async ({ page }) => {
+  await page.goto('/?widget=off&case=script-tag-locale');
+  await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
+  await page.addScriptTag({ path: IIFE });
+  await page.evaluate(
+    (endpoint) =>
+      (globalThis as { Fruitback: { init(options: Record<string, unknown>): unknown } }).Fruitback.init({
+        endpoint,
+        clientId: 'playground',
+        locale: 'fr',
+        messages: { fr: { 'launch.label': 'Laisser un feedback', 'settings.open': 'Ouvrir les réglages Fruitback' } },
+      }),
+    WORKER_ORIGIN,
+  );
+
+  await expect(page.getByRole('button', { name: 'Laisser un feedback' })).toBeVisible();
+  await page.getByLabel('Ouvrir les réglages Fruitback').click();
+  await expect(page.getByRole('dialog', { name: 'Fruitback settings' })).toBeVisible();
 });
 
 test('the snippet plants a note and reads it back, through its own transport', async ({ page }) => {
@@ -59,8 +79,8 @@ test('the snippet plants a note and reads it back, through its own transport', a
 
   await page.getByRole('button', { name: '🌱 Feedback' }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
-  await page.getByPlaceholder("Qu'est-ce qui ne va pas ici ?").fill('Planté par le snippet');
-  await page.getByRole('button', { name: 'Planter' }).click();
+  await page.getByPlaceholder('What is wrong here?').fill('Planté par le snippet');
+  await page.getByRole('button', { name: 'Plant', exact: true }).click();
 
   // The pin appears because `init` re-read after writing, not because anything told it to.
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
@@ -81,8 +101,8 @@ test('a client-side navigation changes which pins are on screen', async ({ page 
 
   await page.getByRole('button', { name: '🌱 Feedback' }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
-  await page.getByPlaceholder("Qu'est-ce qui ne va pas ici ?").fill('Sur la page des formules');
-  await page.getByRole('button', { name: 'Planter' }).click();
+  await page.getByPlaceholder('What is wrong here?').fill('Sur la page des formules');
+  await page.getByRole('button', { name: 'Plant', exact: true }).click();
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 
   await page.getByRole('link', { name: 'Commander' }).click();
@@ -118,8 +138,8 @@ test('the documented snippet mounts on its own, from its data attributes', async
   // And it is a working widget, not just a button.
   await page.getByRole('button', { name: 'Leave feedback' }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
-  await page.getByPlaceholder("Qu'est-ce qui ne va pas ici ?").fill('Planté par le snippet du README');
-  await page.getByRole('button', { name: 'Planter' }).click();
+  await page.getByPlaceholder('What is wrong here?').fill('Planté par le snippet du README');
+  await page.getByRole('button', { name: 'Plant', exact: true }).click();
 
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 });

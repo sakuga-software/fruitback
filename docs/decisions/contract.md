@@ -34,7 +34,8 @@ first publish made it expensive.
     there is no glyph: the pin's drop shape and its stage colour carry the stage. The `≈` on an unsure
     pin stays — it is a typographic symbol and the whole warning in one character.
   - `label` was an English string in a contract, which is untranslatable by anyone downstream. The
-    widget keeps its own `stages.ts`, ready for SKG-530; each store names its own states in
+    widget keeps its own words for the stages — `stages.ts` then, the `stage.*` keys of `messages.ts`
+    since SKG-530, where they can be translated; each store names its own states in
     `stateName`, which is what `sqlite.ts` now does with a local map rather than a shared one.
 - **Doing this before the first publish cost nothing.** Removing a field from a published type is a
   major version; SKG-517 blocks SKG-521 for exactly that reason.

@@ -26,6 +26,8 @@ export { init, type CapturedScreenshot, type Fruitback, type FruitbackOptions } 
 // published surface to something nobody asked for. `package.test.ts` caught that on the first try.
 export type { FruitbackTheme, ThemeToken } from './theme.ts';
 export type { ConfigPanel } from './panel.ts';
+// `FruitbackOptions.messages` names these. `ENGLISH` stays internal for the same reason as `THEME_TOKENS`.
+export type { FruitbackMessages, MessageKey, PluralMessage } from './messages.ts';
 // `FruitbackOptions.transport` names these, so a host cannot write one without them. The default
 // `fetchTransport` stays internal: it is the behaviour a host gets by passing nothing, never
 // something to import and wrap.

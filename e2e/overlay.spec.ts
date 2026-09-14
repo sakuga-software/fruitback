@@ -63,7 +63,7 @@ test('a pin that was placed rather than recognised warns whoever opens it', asyn
   await expect(pinFor(page, 'Sur une carte')).toHaveAttribute('data-fruitback-confident', 'false');
   await badgeFor(page, 'Sur une carte').click();
   // Not "here is your feedback": "the page moved, check this one".
-  await expect(page.locator('[data-fruitback-thread]')).toContainText(/position|introuvable/i);
+  await expect(page.locator('[data-fruitback-thread]')).toContainText(/position|not found/i);
 });
 
 test('the colour of a pin is the Linear state, and nothing the widget decided', async ({ page }) => {
@@ -127,7 +127,7 @@ test('the team’s replies show up inside the pin', async ({ page }) => {
     }
 
     // The pin that got no reply says so, which is a different thing from saying nothing.
-    await expect(page.locator('.fruitback-thread-empty')).toHaveText(/Pas encore de réponse/);
+    await expect(page.locator('.fruitback-thread-empty')).toHaveText(/No reply yet/);
     await page.keyboard.press('Escape');
   }
 

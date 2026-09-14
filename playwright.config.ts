@@ -30,6 +30,8 @@ export default defineConfig({
   use: {
     baseURL: PLAYGROUND,
     ...devices['Desktop Chrome'],
+    // The widget follows the browser's language (SKG-530), and the specs find its chrome by English names.
+    locale: 'en-US',
     viewport: { width: 1440, height: 900 },
     trace: 'on-first-retry',
     video: process.env.CI ? 'off' : 'retain-on-failure',

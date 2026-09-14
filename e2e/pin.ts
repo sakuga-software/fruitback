@@ -40,10 +40,10 @@ export async function plantPin(page: Page, target: Locator, note: string): Promi
   // The launch button lives in the widget's Shadow root, which Playwright's selectors pierce. The
   // name is a pattern rather than a string because an embedder sets the label — it opened with a
   // sprout until SKG-529, and it is a mark beside the words now.
-  await page.getByRole('button', { name: /Laisser un feedback/ }).click();
+  await page.getByRole('button', { name: /Leave feedback/ }).click();
   await target.click();
-  await page.getByPlaceholder("Qu'est-ce qui ne va pas ici ?").fill(note);
-  await page.getByRole('button', { name: 'Planter' }).click();
+  await page.getByPlaceholder('What is wrong here?').fill(note);
+  await page.getByRole('button', { name: 'Plant', exact: true }).click();
 
   // Synchronised on the identifier, not on the status line. The status has two writers — this
   // harness and the widget announcing a re-resolution it decided on by itself (SKG-513) — so a

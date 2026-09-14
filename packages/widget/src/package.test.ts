@@ -228,6 +228,12 @@ describe('a consumer installing this from npm', () => {
           'const palette: FruitbackTheme = { "color-accent": "#0055ff" };',
           'export const accent: ThemeToken = "color-accent";',
           'export const mount = () => init({ endpoint: "https://w.test", clientId: "acme", theme: palette });',
+          // The message types, because `FruitbackOptions.messages` names them (SKG-530). A plural value
+          // reaches `Intl.LDMLPluralRule`, which only a consumer's own `lib` can resolve.
+          'import type { FruitbackMessages, MessageKey } from "fruitback";',
+          'const french: FruitbackMessages = { "launch.label": "Laisser un feedback", "orphans.count": { one: "{count} note", other: "{count} notes" } };',
+          'export const key: MessageKey = "settings.open";',
+          'export const mountFrench = () => init({ endpoint: "https://w.test", clientId: "acme", locale: "fr", messages: { fr: french } });',
           'export const mountScoped = () => initScoped({ endpoint: "https://w.test", clientId: "acme" });',
           'export type Payload = Seed;',
           'export type Pin = SeedIssue;',

@@ -480,3 +480,70 @@ describe('who carries the calls', () => {
     );
   });
 });
+
+describe('the language a mount speaks (SKG-530)', () => {
+  const catalog = { fr: { 'launch.label': 'Laisser un feedback', 'settings.open': 'Ouvrir les réglages Fruitback' } };
+  const shadow = (page: MountedPage) =>
+    (page.document.querySelector('[data-fruitback-host]') as HTMLElement).shadowRoot;
+
+  function pageInFrench(): MountedPage {
+    const page = mountPage('<main><button id="cta">Commander</button></main>');
+    Object.defineProperty(page.view.navigator, 'language', { value: 'fr-FR', configurable: true });
+    // The global navigator is Node's. If it also said French, a binding that read it would pass.
+    assert.notEqual(globalThis.navigator?.language, 'fr-FR');
+
+    return page;
+  }
+
+  it('reads the language of the page it is mounted on, not the global one', () => {
+    const page = pageInFrench();
+    const widget = init({
+      document: page.document,
+      endpoint: 'https://worker.test',
+      clientId: 'acme',
+      messages: catalog,
+    });
+
+    try {
+      assert.equal(shadow(page)?.querySelector('[data-fruitback-host-launch]')?.textContent, 'Laisser un feedback');
+      assert.equal(
+        shadow(page)?.querySelector('[data-fruitback-host-configure]')?.getAttribute('aria-label'),
+        'Ouvrir les réglages Fruitback',
+      );
+    } finally {
+      widget.destroy();
+    }
+  });
+
+  it('lets `locale` win over the page language, and `label` win over the catalog', () => {
+    const page = pageInFrench();
+    const widget = init({
+      document: page.document,
+      endpoint: 'https://worker.test',
+      clientId: 'acme',
+      messages: catalog,
+      locale: 'en',
+    });
+
+    try {
+      assert.equal(shadow(page)?.querySelector('[data-fruitback-host-launch]')?.textContent, 'Leave feedback');
+    } finally {
+      widget.destroy();
+    }
+
+    const labelled = pageInFrench();
+    const second = init({
+      document: labelled.document,
+      endpoint: 'https://worker.test',
+      clientId: 'acme',
+      messages: catalog,
+      label: 'Feedback',
+    });
+
+    try {
+      assert.equal(shadow(labelled)?.querySelector('[data-fruitback-host-launch]')?.textContent, 'Feedback');
+    } finally {
+      second.destroy();
+    }
+  });
+});

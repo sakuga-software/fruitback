@@ -6,6 +6,7 @@ export * from './dom.ts';
 export * from './embed.ts';
 export * from './engine.ts';
 export * from './host.ts';
+export * from './messages.ts';
 export * from './orphans.ts';
 export * from './overlay.ts';
 export * from './page.ts';

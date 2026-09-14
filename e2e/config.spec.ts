@@ -14,7 +14,7 @@ test('the settings open from the floating button and survive a reload', async ({
   await openPlayground(page, 'config');
 
   await expect(page.locator(panel)).toBeHidden();
-  await page.getByLabel('Ouvrir les réglages Fruitback').click();
+  await page.getByLabel('Open Fruitback settings').click();
   await expect(page.locator(panel)).toBeVisible();
 
   // The client id is what the worker routes on, so it is the setting worth proving persists.
@@ -23,7 +23,7 @@ test('the settings open from the floating button and survive a reload', async ({
   await client.fill('acme');
 
   await page.reload();
-  await page.getByLabel('Ouvrir les réglages Fruitback').click();
+  await page.getByLabel('Open Fruitback settings').click();
 
   await expect(page.locator('[name="client"]')).toHaveValue('acme');
 
@@ -41,7 +41,7 @@ test('hiding a stage takes its pin off the page, and showing it puts it back', a
   const stage = await page.locator('[data-fruitback-pin]').first().getAttribute('data-fruitback-stage');
   const box = page.locator(`[name="stage-${stage}"]`);
 
-  await page.getByLabel('Ouvrir les réglages Fruitback').click();
+  await page.getByLabel('Open Fruitback settings').click();
   await box.uncheck();
 
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(0);
@@ -55,7 +55,7 @@ test('the panel belongs to the widget, so the page cannot restyle it', async ({ 
   await openPlayground(page, 'config-isolation');
   await page.addStyleTag({ content: 'input { background: lime !important; border: 8px solid blue !important; }' });
 
-  await page.getByLabel('Ouvrir les réglages Fruitback').click();
+  await page.getByLabel('Open Fruitback settings').click();
   const background = await page
     .locator('[name="client"]')
     .evaluate((node) => getComputedStyle(node).backgroundColor);
@@ -68,11 +68,11 @@ test('pointing at the settings button never captures it', async ({ page }) => {
   // Shadow root, so this is the assertion that it was not forgotten.
   await openPlayground(page, 'config-ignore');
 
-  await page.getByRole('button', { name: /Laisser un feedback/ }).click();
-  await page.getByLabel('Ouvrir les réglages Fruitback').click();
+  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.getByLabel('Open Fruitback settings').click();
 
   await expect(page.locator(panel)).toBeVisible();
-  await expect(page.getByPlaceholder("Qu'est-ce qui ne va pas ici ?")).toBeHidden();
+  await expect(page.getByPlaceholder('What is wrong here?')).toBeHidden();
 });
 
 test('a stage hidden before the pins arrive is never drawn', async ({ page }) => {
@@ -81,7 +81,7 @@ test('a stage hidden before the pins arrive is never drawn', async ({ page }) =>
   await plantPin(page, button, 'Planté puis masqué au chargement');
   const stage = await page.locator('[data-fruitback-pin]').first().getAttribute('data-fruitback-stage');
 
-  await page.getByLabel('Ouvrir les réglages Fruitback').click();
+  await page.getByLabel('Open Fruitback settings').click();
   await page.locator(`[name="stage-${stage}"]`).uncheck();
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(0);
 
@@ -92,14 +92,14 @@ test('a stage hidden before the pins arrive is never drawn', async ({ page }) =>
   await expect(status(page)).toHaveText(/^1 pin$/);
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(0);
 
-  await page.getByLabel('Ouvrir les réglages Fruitback').click();
+  await page.getByLabel('Open Fruitback settings').click();
   await page.locator(`[name="stage-${stage}"]`).check();
 });
 
 test('the checkboxes are actually drawn, and the gear does not sit on the launch button', async ({ page }) => {
   // Both of these were found by looking at a recording, and neither is visible to a DOM emulator.
   await openPlayground(page, 'config-visuals');
-  await page.getByLabel('Ouvrir les réglages Fruitback').click();
+  await page.getByLabel('Open Fruitback settings').click();
 
   // `all: initial` resets `appearance` to its initial value, which is `none` — a native checkbox
   // then draws nothing while staying perfectly checkable.
@@ -109,8 +109,8 @@ test('the checkboxes are actually drawn, and the gear does not sit on the launch
 
   // The gear sits beside the launch button, whose width is the embedder's label. An offset computed
   // from the gear's own size cannot know that, and it covered the label.
-  const gear = await page.getByLabel('Ouvrir les réglages Fruitback').boundingBox();
-  const launch = await page.getByRole('button', { name: /Laisser un feedback/ }).boundingBox();
+  const gear = await page.getByLabel('Open Fruitback settings').boundingBox();
+  const launch = await page.getByRole('button', { name: /Leave feedback/ }).boundingBox();
 
   expect(gear, 'the gear should be on screen').not.toBeNull();
   expect(launch).not.toBeNull();
@@ -135,7 +135,7 @@ test('a slow read from an old endpoint never overwrites a newer one', async ({ p
     await route.continue();
   });
 
-  await page.getByLabel('Ouvrir les réglages Fruitback').click();
+  await page.getByLabel('Open Fruitback settings').click();
   const client = page.locator('[name="client"]');
 
   // Far enough apart to be two reads rather than one debounced read.

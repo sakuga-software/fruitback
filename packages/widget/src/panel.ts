@@ -1,5 +1,5 @@
 import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
-import { STAGE_LABELS } from './stages.ts';
+import { type Translator, createTranslator, languageOf } from './messages.ts';
 import { RESOLVED_STAGES, type ConfigStore } from './config.ts';
 import { createIcon } from './icons.ts';
 
@@ -24,6 +24,8 @@ export type ConfigPanelOptions = {
    */
   screenshotSupported?: boolean;
   document?: Document;
+  /** The widget's words (SKG-530). Left out: English, with dates in this document's language. */
+  translator?: Translator;
 };
 
 export type ConfigPanel = {
@@ -37,6 +39,7 @@ export type ConfigPanel = {
 export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   const document = options.document ?? options.host.ownerDocument ?? globalThis.document;
   const store = options.store;
+  const t = options.translator ?? createTranslator({ language: languageOf(document) });
 
   const style = document.createElement('style');
   style.textContent = STYLES;
@@ -46,16 +49,16 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   root.dataset.fruitbackConfig = '';
   root.hidden = true;
   root.setAttribute('role', 'dialog');
-  root.setAttribute('aria-label', 'Réglages Fruitback');
+  root.setAttribute('aria-label', t.text('settings.dialog'));
 
-  const endpoint = field(document, 'endpoint', 'Worker', 'https://…');
-  const clientId = field(document, 'client', 'Client', 'acme');
+  const endpoint = field(document, 'endpoint', t.text('settings.endpoint'), 'https://…');
+  const clientId = field(document, 'client', t.text('settings.client'), 'acme');
 
   const stages = document.createElement('div');
   stages.className = 'fruitback-config-stages';
   const stageInputs = new Map<SeedStage, HTMLInputElement>();
   for (const stage of SEED_STAGES) {
-    const { input, label } = checkbox(document, `stage-${stage}`, STAGE_LABELS[stage]);
+    const { input, label } = checkbox(document, `stage-${stage}`, t.stage(stage));
     stageInputs.set(stage, input);
     stages.append(label);
   }
@@ -63,19 +66,15 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   const { input: hideResolved, label: hideResolvedLabel } = checkbox(
     document,
     'hide-resolved',
-    'Masquer les feedbacks résolus',
+    t.text('settings.hideResolved'),
   );
 
-  const { input: screenshot, label: screenshotLabel } = checkbox(
-    document,
-    'screenshot',
-    'Joindre une image de l’élément',
-  );
+  const { input: screenshot, label: screenshotLabel } = checkbox(document, 'screenshot', t.text('settings.screenshot'));
 
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'fruitback-config-close';
-  close.setAttribute('aria-label', 'Fermer les réglages');
+  close.setAttribute('aria-label', t.text('settings.close'));
   close.append(createIcon(document, 'close'));
 
   // A div, not a header: Playwright's selectors pierce open shadow roots, so a generic tag here
@@ -85,12 +84,12 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   head.className = 'fruitback-config-head';
   const title = document.createElement('span');
   title.className = 'fruitback-config-title';
-  title.textContent = 'Réglages';
+  title.textContent = t.text('settings.title');
   head.append(title, close);
 
   const stagesTitle = document.createElement('p');
   stagesTitle.className = 'fruitback-config-legend';
-  stagesTitle.textContent = 'Pins affichés';
+  stagesTitle.textContent = t.text('settings.stages');
 
   root.append(head, endpoint.label, clientId.label, stagesTitle, stages, hideResolvedLabel);
   if (options.screenshotSupported === true) root.append(screenshotLabel);

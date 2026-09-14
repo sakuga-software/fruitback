@@ -1,5 +1,5 @@
 import { type SeedIssue } from '@fruitback/shared';
-import { STAGE_LABELS } from './stages.ts';
+import { type Translator, createTranslator, languageOf } from './messages.ts';
 import { createIcon } from './icons.ts';
 import { stageToken } from './theme.ts';
 
@@ -40,6 +40,8 @@ export type OrphanListOptions = {
   host: Element | ShadowRoot;
   /** The reporter asked to look at this note. */
   onSelect?: (issue: SeedIssue) => void;
+  /** The widget's words (SKG-530). Left out: English, with dates in this document's language. */
+  translator?: Translator;
 };
 
 /** Enough of the note to recognise it; the rest is one click away in Linear. */
@@ -47,6 +49,7 @@ const EXCERPT_MAX_LENGTH = 60;
 
 export function createOrphanList(options: OrphanListOptions): OrphanList {
   const document = options.document ?? options.host.ownerDocument ?? globalThis.document;
+  const t = options.translator ?? createTranslator({ language: languageOf(document) });
 
   const style = document.createElement('style');
   style.textContent = STYLES;
@@ -102,10 +105,9 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
         return;
       }
 
-      const plural = issues.length > 1 ? 's' : '';
-      toggleCount.textContent = `${issues.length} note${plural} détachée${plural}`;
+      toggleCount.textContent = t.plural('orphans.count', issues.length);
 
-      list.replaceChildren(...issues.map((issue) => entry(document, issue, options.onSelect)));
+      list.replaceChildren(...issues.map((issue) => entry(document, issue, t, options.onSelect)));
     },
     owns: (node) => node === root || node === style || root.contains(node),
     destroy() {
@@ -115,7 +117,12 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
   };
 }
 
-function entry(document: Document, issue: SeedIssue, onSelect?: (issue: SeedIssue) => void): HTMLElement {
+function entry(
+  document: Document,
+  issue: SeedIssue,
+  t: Translator,
+  onSelect?: (issue: SeedIssue) => void,
+): HTMLElement {
   const item = document.createElement('li');
   item.className = 'fruitback-orphans-item';
   item.dataset.fruitbackOrphan = issue.seed.id;
@@ -131,7 +138,7 @@ function entry(document: Document, issue: SeedIssue, onSelect?: (issue: SeedIssu
   button.type = 'button';
   button.className = 'fruitback-orphans-note';
   button.textContent = excerpt(issue);
-  button.setAttribute('aria-label', `${STAGE_LABELS[issue.stage]} · ${excerpt(issue)}`);
+  button.setAttribute('aria-label', t.text('orphans.entry', { stage: t.stage(issue.stage), note: excerpt(issue) }));
   button.addEventListener('click', () => onSelect?.(issue));
 
   item.append(mark, button, ...handle(document, issue));

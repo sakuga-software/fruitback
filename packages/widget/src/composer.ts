@@ -1,5 +1,6 @@
 import type { SeedReporter } from '@fruitback/shared';
 import { createIcon } from './icons.ts';
+import { type MessageKey, type Translator, createTranslator, languageOf } from './messages.ts';
 
 /**
  * The note popover: what the reporter actually writes in.
@@ -11,7 +12,7 @@ import { createIcon } from './icons.ts';
  * error that must not eat the text someone just typed, and the "harvested" beat before it closes.
  *
  * Its shape is the product's, not a framework's: a drop of fruit. That is the whole reason the pin
- * is a teardrop and the confirmation says *récolté* rather than *sent*.
+ * is a teardrop and the confirmation says *harvested* rather than *sent*.
  */
 
 /** Long enough to read the confirmation, short enough not to be in the way. */
@@ -34,6 +35,8 @@ export type ComposerOptions = {
    */
   onSubmit: (note: string, reporter?: SeedReporter) => Promise<boolean | void>;
   onClose?: () => void;
+  /** The widget's words (SKG-530). Left out: English, with dates in this document's language. */
+  translator?: Translator;
 };
 
 export type Composer = {
@@ -48,6 +51,7 @@ export type Composer = {
 export function createComposer(options: ComposerOptions): Composer {
   const document = options.document ?? globalThis.document;
   const view = document.defaultView;
+  const t = options.translator ?? createTranslator({ language: languageOf(document) });
 
   const style = document.createElement('style');
   style.textContent = STYLES;
@@ -62,16 +66,26 @@ export function createComposer(options: ComposerOptions): Composer {
 
   const field = root.querySelector('[data-fruitback-note]') as HTMLTextAreaElement;
   const send = root.querySelector('[data-fruitback-send]') as HTMLButtonElement;
-  // Prepended after the template is parsed: the seed the button plants, in the shape the page will
+  // Appended after the template is parsed: the seed the button plants, in the shape the page will
   // then show it in. Written here rather than in TEMPLATE because an SVG in an innerHTML string is
   // parsed into the HTML namespace and renders nothing (SKG-529).
-  send.prepend(createIcon(document, 'drop'));
+  send.append(createIcon(document, 'drop'), t.text('composer.send'));
   const cancel = root.querySelector('[data-fruitback-cancel]') as HTMLButtonElement;
   const status = root.querySelector('[data-fruitback-status]') as HTMLElement;
   const identify = root.querySelector('[data-fruitback-identify]') as HTMLButtonElement;
   const who = root.querySelector('[data-fruitback-who]') as HTMLElement;
   const name = root.querySelector('[data-fruitback-name]') as HTMLInputElement;
   const email = root.querySelector('[data-fruitback-email]') as HTMLInputElement;
+
+  // Set after parsing and never interpolated into TEMPLATE: a host translation is text, not markup.
+  field.placeholder = t.text('composer.placeholder');
+  field.setAttribute('aria-label', t.text('composer.label'));
+  identify.textContent = t.text('composer.identify');
+  name.placeholder = t.text('composer.namePlaceholder');
+  name.setAttribute('aria-label', t.text('composer.nameLabel'));
+  email.placeholder = t.text('composer.emailPlaceholder');
+  email.setAttribute('aria-label', t.text('composer.emailLabel'));
+  cancel.textContent = t.text('composer.cancel');
 
   let state: ComposerState = 'idle';
   let closing = 0;
@@ -89,7 +103,7 @@ export function createComposer(options: ComposerOptions): Composer {
     // no way to tell the difference.
     send.disabled = next === 'sending' || next === 'harvested';
     field.readOnly = next === 'sending';
-    status.textContent = MESSAGES[next];
+    status.textContent = next === 'idle' ? '' : t.text(STATUS[next]);
   }
 
   async function submit(): Promise<void> {
@@ -212,30 +226,24 @@ export function createComposer(options: ComposerOptions): Composer {
 const WIDTH = 320;
 const GAP = 10;
 
-const MESSAGES: Record<ComposerState, string> = {
-  idle: '',
-  sending: 'on plante…',
-  harvested: 'récolté',
-  failed: 'pas passé — le texte est gardé, réessayez',
-};
+const STATUS = {
+  sending: 'composer.sending',
+  harvested: 'composer.harvested',
+  failed: 'composer.failed',
+} as const satisfies Record<Exclude<ComposerState, 'idle'>, MessageKey>;
 
 const TEMPLATE = `
   <div class="fruitback-composer-drop" aria-hidden="true"></div>
-  <textarea data-fruitback-note rows="3" placeholder="Qu'est-ce qui ne va pas ici ?"
-            aria-label="Votre commentaire"></textarea>
-  <button type="button" data-fruitback-identify class="fruitback-composer-identify" aria-expanded="false">
-    Ajouter mon nom (facultatif)
-  </button>
+  <textarea data-fruitback-note rows="3"></textarea>
+  <button type="button" data-fruitback-identify class="fruitback-composer-identify" aria-expanded="false"></button>
   <div data-fruitback-who class="fruitback-composer-who" hidden>
-    <input data-fruitback-name type="text" name="fruitback-name" placeholder="Votre nom"
-           aria-label="Votre nom (facultatif)" autocomplete="name" />
-    <input data-fruitback-email type="email" name="fruitback-email" placeholder="vous@exemple.fr"
-           aria-label="Votre e-mail (facultatif)" autocomplete="email" />
+    <input data-fruitback-name type="text" name="fruitback-name" autocomplete="name" />
+    <input data-fruitback-email type="email" name="fruitback-email" autocomplete="email" />
   </div>
   <div class="fruitback-composer-foot">
     <span data-fruitback-status class="fruitback-composer-status" role="status" aria-live="polite"></span>
-    <button type="button" data-fruitback-cancel class="fruitback-composer-ghost">Annuler</button>
-    <button type="button" data-fruitback-send class="fruitback-composer-send">Planter</button>
+    <button type="button" data-fruitback-cancel class="fruitback-composer-ghost"></button>
+    <button type="button" data-fruitback-send class="fruitback-composer-send"></button>
   </div>
 `;
 

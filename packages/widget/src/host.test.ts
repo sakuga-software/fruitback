@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { type CaptureEngine } from './engine.ts';
 import { type CaptureHost, type CaptureTarget, createCaptureHost } from './host.ts';
 import { type MountedPage, mouseEventCtor, mountPage, pressKey } from './dom.fixture.ts';
+import { createTranslator } from './messages.ts';
 
 /**
  * The engine is faked here on purpose. happy-dom has no layout and no `elementsFromPoint`, so asking
@@ -74,7 +75,7 @@ describe('the chrome the reporter sees (SKG-529)', () => {
     mount(() => null);
     const button = launchButton();
 
-    assert.equal(button.textContent, 'Laisser un feedback');
+    assert.equal(button.textContent, 'Leave feedback');
     assert.ok(button.querySelector('svg.fruitback-icon'), 'the launch button lost its mark');
   });
 
@@ -84,11 +85,11 @@ describe('the chrome the reporter sees (SKG-529)', () => {
     mount(
       () => null,
       () => {},
-      { label: 'Leave feedback' },
+      { label: 'Feedback, please' },
     );
     const button = launchButton();
 
-    assert.equal(button.textContent, 'Leave feedback');
+    assert.equal(button.textContent, 'Feedback, please');
     assert.ok(button.querySelector('svg.fruitback-icon'), 'a custom label removed the mark');
   });
 
@@ -96,11 +97,31 @@ describe('the chrome the reporter sees (SKG-529)', () => {
     mount(() => null);
 
     host?.start();
-    assert.equal(launchButton().textContent, 'Échap pour annuler');
+    assert.equal(launchButton().textContent, 'Esc to cancel');
 
     host?.stop();
-    assert.equal(launchButton().textContent, 'Laisser un feedback');
+    assert.equal(launchButton().textContent, 'Leave feedback');
     assert.ok(launchButton().querySelector('svg.fruitback-icon'), 'stopping a capture removed the mark');
+  });
+
+  it('keeps the host label over a translated one, before and after a capture (SKG-530)', () => {
+    mount(
+      () => null,
+      () => {},
+      {
+        label: 'Feedback, please',
+        translator: createTranslator({
+          locale: 'fr',
+          messages: { fr: { 'launch.label': 'Laisser un feedback', 'launch.capturing': 'Échap pour annuler' } },
+        }),
+      },
+    );
+
+    assert.equal(launchButton().textContent, 'Feedback, please');
+    host?.start();
+    assert.equal(launchButton().textContent, 'Échap pour annuler');
+    host?.stop();
+    assert.equal(launchButton().textContent, 'Feedback, please');
   });
 
   it('gives the gear a drawing and a name, and no character', () => {
@@ -113,7 +134,7 @@ describe('the chrome the reporter sees (SKG-529)', () => {
 
     assert.ok(gear?.querySelector('svg.fruitback-icon'), 'the gear is not drawn');
     assert.equal(gear?.textContent, '', 'the gear still carries a character');
-    assert.equal(gear?.getAttribute('aria-label'), 'Ouvrir les réglages Fruitback');
+    assert.equal(gear?.getAttribute('aria-label'), 'Open Fruitback settings');
   });
 
   it('stops the reset at the edge of an SVG, or every icon renders empty', () => {

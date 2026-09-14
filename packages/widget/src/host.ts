@@ -3,6 +3,7 @@ import { isElement } from './dom.ts';
 import { type FruitbackTheme, THEME_STYLES, applyTheme } from './theme.ts';
 import { type CaptureEngine, reactGrabEngine } from './engine.ts';
 import { createIcon } from './icons.ts';
+import { type Translator, createTranslator, languageOf } from './messages.ts';
 
 /**
  * The widget's own patch of DOM, and the selection mode that runs inside it.
@@ -34,7 +35,7 @@ export type CaptureHostOptions = {
   engine?: CaptureEngine;
   /** The reporter picked an element. The note UI is the caller's business (SKG-493). */
   onSelect: (target: CaptureTarget) => void;
-  /** Label on the floating button. */
+  /** Label on the floating button. Wins over the translated one: a host's label is the host's word. */
   label?: string;
   /**
    * Adds a settings button next to the floating one, and calls this when it is pressed (SKG-503).
@@ -52,6 +53,8 @@ export type CaptureHostOptions = {
    * durations — and nothing else: `applyTheme` writes only the names `ThemeToken` enumerates.
    */
   theme?: FruitbackTheme;
+  /** The widget's words (SKG-530). Left out: English, with dates in this document's language. */
+  translator?: Translator;
 };
 
 export type CaptureHost = {
@@ -65,13 +68,12 @@ export type CaptureHost = {
   destroy(): void;
 };
 
-/** What the button says when the embedder said nothing. */
-const DEFAULT_LABEL = 'Laisser un feedback';
-
 export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   const document = options.document ?? globalThis.document;
   const engine = options.engine ?? reactGrabEngine;
   const view = document.defaultView;
+  const t = options.translator ?? createTranslator({ language: languageOf(document) });
+  const restingLabel = options.label ?? t.text('launch.label');
 
   const container = document.createElement('div');
   container.dataset.fruitbackHost = '';
@@ -98,7 +100,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   // The label lives in its own span so that setting it never removes the icon, and so the button's
   // accessible name stays exactly the label: the SVG is aria-hidden and contributes no text.
   const launchLabel = document.createElement('span');
-  launchLabel.textContent = options.label ?? DEFAULT_LABEL;
+  launchLabel.textContent = restingLabel;
   button.append(createIcon(document, 'drop'), launchLabel);
 
   // Beside the launch button rather than inside the settings panel, because the panel is what it
@@ -109,7 +111,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   configure.dataset.fruitbackHostConfigure = '';
   // Distinct from the panel's own name: two things sharing one accessible name is ambiguous to a
   // screen reader, and to anything else that finds elements by their name.
-  configure.setAttribute('aria-label', 'Ouvrir les réglages Fruitback');
+  configure.setAttribute('aria-label', t.text('settings.open'));
   configure.append(createIcon(document, 'gear'));
 
   const highlight = document.createElement('div');
@@ -194,14 +196,14 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   function start(): void {
     capturing = true;
     container.dataset.fruitbackCapturing = '';
-    launchLabel.textContent = 'Échap pour annuler';
+    launchLabel.textContent = t.text('launch.capturing');
   }
 
   function stop(): void {
     capturing = false;
     hovered = null;
     delete container.dataset.fruitbackCapturing;
-    launchLabel.textContent = options.label ?? DEFAULT_LABEL;
+    launchLabel.textContent = restingLabel;
     highlight.style.display = 'none';
   }
 
