@@ -36,7 +36,7 @@ export type FruitbackOptions = {
    */
   locale?: string;
   /**
-   * The host's own translations, by locale tag: `{ fr: { 'launch.label': 'Laisser un feedback' } }`.
+   * The host's own translations, by locale tag: `{ de: { 'launch.label': 'Feedback geben' } }`.
    *
    * The bundle carries English and French (SKG-531). For each key the widget uses the first valid
    * message in this order: the host's exact tag, the bundled exact tag, the host's primary subtag,
