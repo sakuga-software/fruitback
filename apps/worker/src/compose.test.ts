@@ -90,9 +90,11 @@ describe('docker-compose.yml', () => {
     assert.equal(composeEnvironment().get('TRUSTED_PROXY_HOPS'), '${TRUSTED_PROXY_HOPS:-0}');
   });
 
-  it('keeps its data in the volume the docker run command names', () => {
-    // Compose prefixes a volume with the project name unless the volume has a name of its own.
-    assert.match(COMPOSE, /^volumes:\n {2}fruitback-data:\n(?: {4}#.*\n)* {4}name: fruitback-data$/m);
+  it('keeps its data in a volume scoped to the Compose project', () => {
+    assert.match(COMPOSE, /^ {6}- fruitback-data:\/data$/m);
+    assert.match(COMPOSE, /^volumes:\n(?: {2}#.*\n)* {2}fruitback-data:$/m);
+    // A global name shares the data of every stack on the host, and down -v in one stack deletes it.
+    assert.doesNotMatch(COMPOSE, /^ {4}name:/m);
   });
 
   it('pulls the published image rather than building one', () => {

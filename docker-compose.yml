@@ -7,6 +7,7 @@
 #   docker compose up -d --wait
 #
 # While the repository is private, the downloads and the image need a GitHub login: see the README.
+# If your .env comes from before SKG-541, change three values first: see docs/self-hosting.md.
 # Compose does not pull an image tag that is already on the machine. To update, run this first:
 #   docker compose pull
 #
@@ -57,10 +58,10 @@ services:
       FRUITBACK_SESSION_PATH: ${FRUITBACK_SESSION_PATH:-}
 
 volumes:
+  # Compose prefixes this volume with the project name, so two stacks on one host keep separate data
+  # and `docker compose down -v` in one stack cannot delete the other's. It is therefore not the
+  # volume that `docker run -v fruitback-data:/data` opens.
   fruitback-data:
-    # Without a name, Compose prefixes the project name, and `docker run -v fruitback-data:/data`
-    # then opens a different, empty volume.
-    name: fruitback-data
 
 # networks:
 #   traefik:

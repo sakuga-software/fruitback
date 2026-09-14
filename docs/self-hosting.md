@@ -76,6 +76,9 @@ inside the container, which matters as soon as there are two.
 - **SQLite on a named volume, by default.** `fruitback-data` is mounted at `/data`, which holds the
   seeds and, when they are on, the extension's sessions. To use Linear, set `FRUITBACK_STORE=linear`,
   `LINEAR_API_KEY` and `LINEAR_TEAM_ID` in `.env`.
+- **The volume belongs to the Compose project.** Compose names it `<project>_fruitback-data`, so two
+  stacks on one host keep separate data, and `docker compose down -v` in one cannot delete the other's.
+  It is therefore not the `fruitback-data` volume that the `docker run` command below opens.
 - **`FRUITBACK_IMAGE` is a complete image reference**, so it takes a tag or a digest
   (`ghcr.io/sakuga-software/fruitback-worker@sha256:…`). **Compose does not pull a tag that is already
   on the machine**, and `edge` moves on every merge: run `docker compose pull` before
@@ -91,6 +94,22 @@ inside the container, which matters as soon as there are two.
   compares the file with `WorkerEnv` and with every store's `envNames`. A variable the worker starts
   to read fails the suite until both files carry it. Dokploy does not read the compose file, so the
   test is what keeps the two in step.
+
+### Upgrading a deployment from before SKG-541
+
+The old compose file built the image, kept no volume, read `PORT` for the host port, defaulted
+`TRUSTED_PROXY_HOPS` to 1, and passed no `FRUITBACK_STORE`, so the worker ran on Linear. An `.env`
+written for it keeps those values, and the new file reads it differently. Before the first
+`docker compose up`, change these lines in `.env`:
+
+1. **If the notes are in Linear, add `FRUITBACK_STORE=linear`.** Otherwise the worker starts on an
+   empty SQLite file, and every pin seems to be gone.
+2. **Rename `PORT` to `FRUITBACK_PORT`.** The new file ignores `PORT`, so a custom host port falls
+   back to 8080.
+3. **Set `TRUSTED_PROXY_HOPS` to the number of proxies in front.** The old template wrote 1. Keep 1
+   behind one Traefik; change it to 0 if the port is published directly, or a forged
+   `X-Forwarded-For` escapes the rate limit.
+4. **Add `FRUITBACK_IMAGE`** only to pin a version or a digest. Without it, the file pulls `edge`.
 
 ## Storing the seeds in SQLite
 
@@ -145,6 +164,10 @@ docker run -d --name fruitback -p 8080:8080 \
   -v fruitback-data:/data \
   ghcr.io/sakuga-software/fruitback-worker:edge
 ```
+
+This `fruitback-data` volume is not the one `docker-compose.yml` creates, which Compose names after its
+project. To move the data from one to the other, back it up with the `sqlite3 .backup` command above
+and restore the file into the other volume.
 
 **`edge` and not `latest`, until the first release.** The versioned tags come from a `v*` git tag, so
 before one is pushed `latest`, `1.4.2` and `1.4` resolve to nothing and asking for one gets you

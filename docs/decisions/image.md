@@ -93,5 +93,13 @@ immutable.
   `.env.example` into an empty directory, and tags the image it built under the name the file pulls.
   Then `plant-a-pin.ts` plants and reads back, the container is recreated, and the pin is read again.
   The recreate proves that the seeds are on the volume.
+- **The volume is scoped to the Compose project, and that was decided twice.** A review asked for
+  `name: fruitback-data`, so that the compose file and the `docker run` example open the same volume.
+  The next review showed the cost: a global name shares the data of every stack on the host, and
+  `docker compose down -v` in one stack deletes the other's. Losing data is worse than a documented
+  difference, so the name went back to Compose's default and `compose.test.ts` refuses a `name:`.
+- **An `.env` from before this file is read differently.** It has no `FRUITBACK_STORE`, says `PORT`
+  for the host port and `TRUSTED_PROXY_HOPS=1`. `self-hosting.md` lists the four changes, and
+  `.env.example` repeats each one beside its variable.
 - **A shell variable wins over `.env`.** A `LINEAR_API_KEY` exported in a shell profile reached
   `docker compose config` with `.env` empty. The local run of the same check used `env -i`.
