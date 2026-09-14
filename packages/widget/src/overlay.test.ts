@@ -2,6 +2,7 @@ import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
 import { type Overlay, createOverlay } from './overlay.ts';
+import { createTranslator } from './messages.ts';
 import { type MountedPage, mountPage, pressKey, setDocumentSize, setRect } from './dom.fixture.ts';
 
 const PAGE = '<main><section><button data-testid="checkout-cta">Commander</button></section></main>';
@@ -538,6 +539,53 @@ describe('the team’s replies', () => {
     (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
 
     assert.match(page.document.querySelector('.fruitback-thread-empty')?.textContent ?? '', /No reply yet/);
+  });
+});
+
+describe('the reading direction and the dates (SKG-531)', () => {
+  it('opens the thread on the pin’s start edge, and leaves the pin where it is', () => {
+    const placedBy = (translator: ReturnType<typeof createTranslator>) => {
+      const page = mountWithCta();
+      setRect(page.query('button'), { left: 600, top: 200, width: 200, height: 40 });
+      overlay = createOverlay({ document: page.document, translator });
+      overlay.render([issueOnCta()]);
+      (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+      const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
+      const thread = page.document.querySelector('[data-fruitback-thread]') as HTMLElement;
+      const placed = { pin: pin.style.left, thread: thread.style.left };
+      overlay.destroy();
+      overlay = null;
+
+      return placed;
+    };
+
+    assert.deepEqual(placedBy(createTranslator()), { pin: '600px', thread: '600px' });
+    // The pin is geometry and does not move; the thread's right edge meets the pin's (600 + 200 - 300).
+    assert.deepEqual(placedBy(createTranslator({ locale: 'he', messages: { he: { 'thread.close': 'סגור' } } })), {
+      pin: '600px',
+      thread: '500px',
+    });
+  });
+
+  it('dates a reply relative to now, with the day in its title', () => {
+    const page = mountWithCta();
+    const translator = createTranslator({ now: () => Date.parse('2026-08-02T10:00:00.000Z') });
+    overlay = createOverlay({ document: page.document, translator });
+    overlay.render([
+      issueOnCta({
+        comments: [
+          { id: 'c1', body: 'Seen.', createdAt: '2026-08-01T10:00:00.000Z', author: 'Alice' },
+          { id: 'c2', body: 'Odd date.', createdAt: 'last tuesday', author: 'Bruno' },
+        ],
+      }),
+    ]);
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+
+    const [first, second] = [...page.document.querySelectorAll('.fruitback-thread-reply-who')] as HTMLElement[];
+    assert.equal(first?.textContent, 'Alice · yesterday');
+    assert.equal(first?.title, new Date('2026-08-01T10:00:00.000Z').toLocaleDateString('en'));
+    // A date the store wrote in a shape Date cannot read is shown as it came, not as "Invalid Date".
+    assert.equal(second?.textContent, 'Bruno · last tuesday');
   });
 });
 

@@ -515,6 +515,18 @@ describe('the language a mount speaks (SKG-530)', () => {
     }
   });
 
+  it('speaks the bundled French on a French page, with no catalog passed (SKG-531)', () => {
+    const page = pageInFrench();
+    const widget = init({ document: page.document, endpoint: 'https://worker.test', clientId: 'acme' });
+
+    try {
+      assert.equal(shadow(page)?.querySelector('[data-fruitback-host-launch]')?.textContent, 'Laisser un feedback');
+      assert.equal((page.document.querySelector('[data-fruitback-host]') as HTMLElement).lang, 'fr');
+    } finally {
+      widget.destroy();
+    }
+  });
+
   it('lets `locale` win over the page language, and `label` win over the catalog', () => {
     const page = pageInFrench();
     const widget = init({

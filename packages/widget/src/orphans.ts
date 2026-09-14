@@ -195,7 +195,7 @@ const STYLES = `
     of someone else's page is how a widget ends up on top of their cookie banner or their support
     chat — and it put this drawer under the playground's toolbar the first time.
   */
-  right: 16px;
+  inset-inline-end: 16px;
   bottom: 60px;
   z-index: 2147483000;
   max-width: 300px;
@@ -241,7 +241,7 @@ const STYLES = `
   padding: 0;
   font: inherit;
   color: inherit;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 .fruitback-orphans-link {

@@ -1,5 +1,5 @@
 import { type SeedBounds, type SeedIssue } from '@fruitback/shared';
-import { type Translator, createTranslator, languageOf } from './messages.ts';
+import { type Direction, type Translator, createTranslator, languageOf } from './messages.ts';
 import { createIcon } from './icons.ts';
 import { stageToken } from './theme.ts';
 import { isElement } from './dom.ts';
@@ -149,7 +149,8 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 
   function reposition(): void {
     for (const entry of placed) place(entry);
-    if (thread !== null) positionThread(thread, placed.find((entry) => entry.pin.dataset.fruitbackOpen === '')?.pin);
+    if (thread !== null)
+      positionThread(thread, placed.find((entry) => entry.pin.dataset.fruitbackOpen === '')?.pin, t.direction);
   }
 
   function place(entry: Placed): void {
@@ -306,7 +307,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     thread = buildThread(document, entry.issue, entry.resolution, t);
     thread.querySelector('.fruitback-thread-close')?.addEventListener('click', () => closeThread());
     container.append(thread);
-    positionThread(thread, entry.pin);
+    positionThread(thread, entry.pin, t.direction);
   }
 
   function openThread(entry: Placed): void {
@@ -315,7 +316,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     thread = buildThread(document, entry.issue, entry.resolution, t);
     thread.querySelector('.fruitback-thread-close')?.addEventListener('click', () => closeThread());
     container.append(thread);
-    positionThread(thread, entry.pin);
+    positionThread(thread, entry.pin, t.direction);
     options.onSelect?.(entry.issue);
   }
 
@@ -475,15 +476,16 @@ function replies(document: Document, issue: SeedIssue, t: Translator): HTMLEleme
   list.className = 'fruitback-thread-replies';
 
   for (const comment of issue.comments) {
-    const written = new Date(comment.createdAt);
     const item = document.createElement('li');
     item.className = 'fruitback-thread-reply';
     item.append(
-      element(
+      byline(
         document,
         'span',
         'fruitback-thread-reply-who',
-        `${comment.author ?? t.text('thread.team')} · ${Number.isNaN(written.getTime()) ? comment.createdAt : t.date(written)}`,
+        comment.author ?? t.text('thread.team'),
+        comment.createdAt,
+        t,
       ),
       // `textContent`, never markup: this is Linear's markdown, written by whoever can comment on the
       // issue, rendered inside someone else's page. It is text here and nothing more.
@@ -520,7 +522,6 @@ function buildThread(document: Document, issue: SeedIssue, resolution: AnchorRes
   thread.style.setProperty('--fruitback-pin-color', stageToken(issue.stage));
 
   const reporter = issue.seed.reporter?.name ?? issue.seed.reporter?.email ?? t.text('thread.anonymous');
-  const planted = new Date(issue.seed.createdAt);
 
   thread.append(
     element(document, 'header', 'fruitback-thread-head', [
@@ -533,17 +534,12 @@ function buildThread(document: Document, issue: SeedIssue, resolution: AnchorRes
       closeButton(document, t),
     ]),
     element(document, 'p', 'fruitback-thread-note', issue.seed.note || t.text('thread.noNote')),
-    element(
-      document,
-      'p',
-      'fruitback-thread-meta',
-      `${reporter} · ${Number.isNaN(planted.getTime()) ? issue.seed.createdAt : t.date(planted)}`,
-    ),
+    byline(document, 'p', 'fruitback-thread-meta', reporter, issue.seed.createdAt, t),
     // Said out loud rather than hidden. A reader who is told the pin might be on the wrong element
     // checks; a reader who is told nothing believes it.
     ...uncertaintyNote(document, resolution, t),
     ...replies(document, issue, t),
-    ...link(document, issue),
+    ...link(document, issue, t),
   );
 
   return thread;
@@ -581,7 +577,7 @@ function closeButton(document: Document, t: Translator): HTMLElement {
  *
  * Returns an array so the caller spreads nothing when there is nowhere to go.
  */
-function link(document: Document, issue: SeedIssue): HTMLElement[] {
+function link(document: Document, issue: SeedIssue, t: Translator): HTMLElement[] {
   if (issue.url === undefined) return [];
 
   const anchor = document.createElement('a');
@@ -590,9 +586,30 @@ function link(document: Document, issue: SeedIssue): HTMLElement[] {
   anchor.target = '_blank';
   anchor.rel = 'noreferrer noopener';
   // The identifier is the handle a human searches for; where it opens is the link's own business.
-  anchor.textContent = `${issue.identifier} →`;
+  anchor.textContent = t.text('thread.link', { identifier: issue.identifier });
 
   return [anchor];
+}
+
+/**
+ * Who, and when, as a relative date (SKG-531). The absolute date goes in the title, for a reader who
+ * needs the day. A date the store wrote in a shape `Date` cannot read is shown as it came.
+ */
+function byline(
+  document: Document,
+  tag: string,
+  className: string,
+  who: string,
+  written: string,
+  t: Translator,
+): HTMLElement {
+  const date = new Date(written);
+  if (Number.isNaN(date.getTime())) return element(document, tag, className, `${who} · ${written}`);
+
+  const node = element(document, tag, className, `${who} · ${t.relative(date)}`);
+  node.title = t.date(date);
+
+  return node;
 }
 
 function element(document: Document, tag: string, className: string, content: string | HTMLElement[]): HTMLElement {
@@ -604,14 +621,18 @@ function element(document: Document, tag: string, className: string, content: st
   return node;
 }
 
-/** Below the pin when there is room for it on screen, above it when there is not. */
-function positionThread(thread: HTMLElement, pin: HTMLElement | undefined): void {
+/**
+ * Below the pin when there is room for it on screen, above it when there is not. Aligned on the pin's
+ * start edge for the reading direction; the value stays a physical left, like the pin (SKG-531).
+ */
+function positionThread(thread: HTMLElement, pin: HTMLElement | undefined, direction: Direction): void {
   if (pin === undefined) return;
 
   const view = thread.ownerDocument.defaultView;
   const left = Number.parseFloat(pin.style.left) || 0;
   const top = Number.parseFloat(pin.style.top) || 0;
   const pinHeight = Number.parseFloat(pin.style.height) || 0;
+  const pinWidth = Number.parseFloat(pin.style.width) || 0;
   const viewportWidth = view?.innerWidth ?? 0;
   const viewportHeight = view?.innerHeight ?? 0;
   const scrollY = view?.scrollY ?? 0;
@@ -620,8 +641,9 @@ function positionThread(thread: HTMLElement, pin: HTMLElement | undefined): void
   const threadHeight = thread.offsetHeight;
   const below = top + pinHeight + THREAD_GAP;
   const roomBelow = below + threadHeight <= scrollY + viewportHeight;
+  const start = direction === 'rtl' ? left + pinWidth - THREAD_WIDTH : left;
 
-  thread.style.left = `${Math.max(THREAD_GAP, Math.min(left, viewportWidth - THREAD_WIDTH - THREAD_GAP))}px`;
+  thread.style.left = `${Math.max(THREAD_GAP, Math.min(start, viewportWidth - THREAD_WIDTH - THREAD_GAP))}px`;
   thread.style.top = `${roomBelow ? below : Math.max(0, top - threadHeight - THREAD_GAP)}px`;
 }
 
@@ -745,8 +767,9 @@ const STYLES = `
 }
 .fruitback-thread-replies {
   margin: 10px 0 0;
-  padding: 0 0 0 10px;
-  border-left: 2px solid var(--fruitback-color-border);
+  padding: 0;
+  padding-inline-start: 10px;
+  border-inline-start: 2px solid var(--fruitback-color-border);
   list-style: none;
   /* A long conversation belongs in Linear, which the link below goes to. */
   max-height: 180px;

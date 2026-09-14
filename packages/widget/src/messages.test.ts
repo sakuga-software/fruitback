@@ -2,7 +2,15 @@ import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { SEED_STAGES } from '@fruitback/shared';
 import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
-import { ENGLISH, type FruitbackMessages, createTranslator, languageOf } from './messages.ts';
+import {
+  BUNDLED_CATALOGS,
+  ENGLISH,
+  type FruitbackMessages,
+  createTranslator,
+  directionOf,
+  languageOf,
+} from './messages.ts';
+import { FRENCH } from './locale-fr.ts';
 import { createCaptureHost } from './host.ts';
 import { createComposer } from './composer.ts';
 import { createConfigPanel } from './panel.ts';
@@ -37,28 +45,28 @@ describe('createTranslator', () => {
 
   it('shows English for a key left out, and ignores a key it does not know or of the wrong shape', () => {
     const messages = {
-      fr: {
-        'launch.label': 'Laisser un feedback',
+      de: {
+        'launch.label': 'Feedback geben',
         'not.a.key': 'x',
         'settings.title': 42,
-        'orphans.count': 'pas un pluriel',
+        'orphans.count': 'kein Plural',
       },
     } as unknown as Record<string, FruitbackMessages>;
-    const t = createTranslator({ locale: 'fr', messages });
+    const t = createTranslator({ locale: 'de', messages });
 
-    assert.equal(t.text('launch.label'), 'Laisser un feedback');
+    assert.equal(t.text('launch.label'), 'Feedback geben');
     assert.equal(t.text('settings.close'), 'Close settings');
     assert.equal(t.text('settings.title'), 'Settings');
     assert.equal(t.plural('orphans.count', 3), '3 detached notes');
   });
 
   it('refuses a plural message with no `other`, because some count will need it', () => {
-    const messages = { fr: { 'orphans.count': { one: '{count} note' } } } as unknown as Record<
+    const messages = { de: { 'orphans.count': { one: '{count} Notiz' } } } as unknown as Record<
       string,
       FruitbackMessages
     >;
 
-    assert.equal(createTranslator({ locale: 'fr', messages }).plural('orphans.count', 1), '1 detached note');
+    assert.equal(createTranslator({ locale: 'de', messages }).plural('orphans.count', 1), '1 detached note');
   });
 
   it('selects the plural form through Intl.PluralRules', () => {
@@ -72,8 +80,8 @@ describe('createTranslator', () => {
   });
 
   it('uses the English rules for an English fallback under another locale', () => {
-    // French puts 0 in `one`. With the French rules, the English fallback would say "0 detached note".
-    const t = createTranslator({ locale: 'fr', messages: { fr: { 'launch.label': 'Laisser un feedback' } } });
+    // Portuguese puts 0 in `one`. With the Portuguese rules, the English fallback would say "0 detached note".
+    const t = createTranslator({ locale: 'pt', messages: { pt: { 'launch.label': 'Deixar feedback' } } });
 
     assert.equal(t.plural('orphans.count', 0), '0 detached notes');
   });
@@ -111,9 +119,12 @@ describe('createTranslator', () => {
 });
 
 describe('the bundled catalog', () => {
-  it('gives the gear and the dialog it opens two different names', () => {
+  it('gives the gear and the dialog it opens two different names, in every bundled catalog', () => {
     // Two elements with one accessible name are ambiguous to a screen reader and to every E2E spec.
-    assert.notEqual(ENGLISH['settings.open'], ENGLISH['settings.dialog']);
+    for (const [tag, catalog] of Object.entries(BUNDLED_CATALOGS)) {
+      assert.notEqual(catalog['settings.open'], catalog['settings.dialog'], `${tag} gives both one name`);
+    }
+    assert.ok(Object.keys(BUNDLED_CATALOGS).length > 1, 'only one catalog is checked');
   });
 });
 
@@ -172,7 +183,11 @@ describe('every word the widget shows', () => {
     });
     setDocumentSize(page.document, 1_000, 1_000);
     setRect(page.query('button'), { left: 100, top: 200, width: 200, height: 40 });
-    const translator = createTranslator({ locale: 'en-XA', messages: { 'en-XA': pseudoCatalog() } });
+    const translator = createTranslator({
+      locale: 'en-XA',
+      messages: { 'en-XA': pseudoCatalog() },
+      now: () => Date.parse('2026-09-14T12:00:00.000Z'),
+    });
 
     const host = createCaptureHost({ document: page.document, translator, onSelect: () => {}, onConfigure: () => {} });
     cleanup.push(() => host.destroy());
@@ -278,12 +293,106 @@ describe('every word the widget shows', () => {
       'these keys never rendered, so this test does not check them',
     );
 
-    const data = ['NOTE ONE', 'NOTE TWO', 'ID-1', 'ID-2', 'ID-3', 'BODY', 'https://…', 'acme'];
+    // A relative date comes from `Intl`, not from a catalog, so it counts as data here.
+    const relativeDates = [found, detached, placedByPosition]
+      .flatMap((issue) => [issue.seed.createdAt, ...(issue.comments ?? []).map((comment) => comment.createdAt)])
+      .map((written) => translator.relative(new Date(written)));
+    const data = [...relativeDates, 'NOTE ONE', 'NOTE TWO', 'ID-1', 'ID-2', 'ID-3', 'BODY', 'https://…', 'acme'];
     const untranslated = snapshots.filter((text) => {
       const rest = data.reduce((left, value) => left.split(value).join(''), text.replace(/⟦[^⟧]+⟧/g, ''));
 
       return /\p{L}/u.test(rest);
     });
     assert.deepEqual([...new Set(untranslated)], []);
+  });
+});
+
+describe('the catalogs in the bundle (SKG-531)', () => {
+  const placeholders = (message: string) => new Set([...message.matchAll(/\{(\w+)\}/g)].map((match) => match[1]));
+
+  it('carries French, and a French browser gets it with nothing passed', () => {
+    const t = createTranslator({ language: 'fr-FR' });
+
+    assert.equal(t.lang, 'fr');
+    assert.equal(t.text('launch.label'), 'Laisser un feedback');
+    assert.equal(t.plural('orphans.count', 2), '2 notes détachées');
+  });
+
+  it('lets a host catalog win over the bundled one, key by key', () => {
+    const t = createTranslator({ language: 'fr-CA', messages: { 'fr-CA': { 'launch.label': 'Donner mon avis' } } });
+
+    assert.equal(t.text('launch.label'), 'Donner mon avis');
+    assert.equal(t.text('settings.title'), 'Réglages', 'a key the host left out comes from the bundled fr');
+    assert.equal(t.lang, 'fr-CA');
+  });
+
+  it('translates every key French has, with the placeholders English has', () => {
+    assert.deepEqual(Object.keys(FRENCH).sort(), Object.keys(ENGLISH).sort());
+
+    for (const [key, english] of Object.entries(ENGLISH)) {
+      const french = FRENCH[key as keyof typeof FRENCH];
+      const expected = placeholders(typeof english === 'string' ? english : english.other);
+      const forms = typeof french === 'string' ? [french] : Object.values(french);
+      for (const form of forms) assert.deepEqual(placeholders(form), expected, `${key}: ${form}`);
+    }
+  });
+});
+
+describe('the reading direction (SKG-531)', () => {
+  it('is right to left for the scripts that are', () => {
+    assert.deepEqual(
+      ['ar', 'he-IL', 'fa', 'ur', 'en-US', 'fr', 'zh-Hant', 'not a tag!'].map((tag) => directionOf(tag)),
+      ['rtl', 'rtl', 'rtl', 'rtl', 'ltr', 'ltr', 'ltr', 'ltr'],
+    );
+  });
+
+  it('follows the language of the words, not the language the reader asked for', () => {
+    // An Arabic reader with no Arabic catalog reads English, and English runs left to right.
+    const english = createTranslator({ language: 'ar' });
+    assert.equal(english.lang, 'en');
+    assert.equal(english.direction, 'ltr');
+
+    const arabic = createTranslator({ language: 'ar', messages: { ar: { 'launch.label': 'اترك ملاحظة' } } });
+    assert.equal(arabic.lang, 'ar');
+    assert.equal(arabic.direction, 'rtl');
+  });
+
+  it('stays English, left to right, when the host catalog supplies no usable message', () => {
+    // Every word falls back to English, so the language and the direction must follow it.
+    const broken = createTranslator({
+      language: 'ar',
+      messages: { ar: { 'launch.label': 42, 'orphans.count': { one: 'x' }, 'not.a.key': 'x' } as never },
+      now: () => 0,
+    });
+    assert.equal(broken.text('launch.label'), ENGLISH['launch.label']);
+    assert.equal(broken.lang, 'en');
+    assert.equal(broken.direction, 'ltr');
+    assert.equal(broken.relative(new Date(-86_400_000)), 'yesterday');
+  });
+});
+
+describe('dates and numbers (SKG-531)', () => {
+  const now = () => Date.parse('2026-09-14T12:00:00.000Z');
+
+  it('says when, relative to now, in the language of the words', () => {
+    const english = createTranslator({ now });
+    const french = createTranslator({ language: 'fr', now });
+
+    assert.equal(english.relative(new Date('2026-09-14T09:00:00.000Z')), '3 hours ago');
+    assert.equal(english.relative(new Date('2026-09-13T12:00:00.000Z')), 'yesterday');
+    assert.equal(english.relative(new Date('2026-09-14T11:59:59.800Z')), 'now');
+    assert.equal(english.relative(new Date('2026-06-14T12:00:00.000Z')), '3 months ago');
+    assert.equal(french.relative(new Date('2026-09-14T09:00:00.000Z')), 'il y a 3 heures');
+  });
+
+  it('formats a count with the number format of the catalog that supplied the message', () => {
+    const german = createTranslator({
+      locale: 'de',
+      messages: { de: { 'orphans.count': { one: '{count} Notiz', other: '{count} Notizen' } } },
+    });
+    assert.equal(german.plural('orphans.count', 1234), '1.234 Notizen');
+
+    // No German count in the chain, so the English message is used, with English digit grouping.
+    assert.equal(createTranslator({ locale: 'de' }).plural('orphans.count', 1234), '1,234 detached notes');
   });
 });

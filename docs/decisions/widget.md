@@ -229,26 +229,33 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   to any test that finds elements by name.
 
 
-## The words, and the one language the bundle carries (SKG-530)
+## The words, and the catalogs the bundle carries (SKG-530, SKG-531)
 
 - **`messages.ts` holds every word the widget shows, behind a key.** No i18n library ships: a record
   of strings and `Intl.PluralRules` cost a few hundred bytes, under a size guard that trips at 150 kB.
-- **English is the only catalog in the bundle, and the default.** The project is open source, so its
-  default is the language most readers share. **A French site now shows English until it passes
-  `messages`** — a visible change for every existing deployment. SKG-531 adds French.
-- **`ENGLISH` is exhaustive.** A key the code asks for and English lacks does not compile, so "show
-  English rather than the key" only ever applies to a host catalog.
+- **English is the default, and French is bundled beside it** (SKG-531). The project is open source,
+  so its default is the language most readers share. SKG-530 shipped English alone, and for that
+  release a French site showed English until it passed `messages`. A French browser now gets French
+  with nothing passed.
+- **`ENGLISH` is exhaustive, and so is every bundled catalog.** `Catalog` requires every key, so a
+  key added to English does not compile until French has it too. `messages.test.ts` also compares
+  each French message's `{placeholders}` with the English one's, which the type cannot see.
 - **A host catalog is parsed like the stored config**: field by field. An unknown key, a string where
-  a plural belongs, a plural with no `other` — each costs that entry, and English takes its place. A
+  a plural belongs, a plural with no `other` — each costs that entry, and the next catalog in the chain takes its place. A
   locale tag that `Intl` refuses is ignored: `new Intl.PluralRules('not a tag')` throws, and a typo
   must cost the translation, never the mount.
-- **Catalogs are keyed by locale tag.** The match is the exact tag, then the primary subtag, then
-  English, and `locale` wins over `navigator.language`. Keying by tag is what gives detection a use:
-  one mount carries `fr` and `de`, and the reader's browser chooses.
-- **The plural rules follow the catalog that supplied the message.** French puts 0 in `one`, so an
-  English fallback read with French rules would say "0 detached note".
-- **Dates follow the locale the reader asked for**, not the catalog: a French reader of the English
-  widget still reads `01/08/2026`.
+- **Catalogs are keyed by locale tag, and a key walks a chain.** For `fr-CA`: the host's `fr-CA`, the
+  bundled `fr-CA`, the host's `fr`, the bundled `fr`, then English. Each key takes the first catalog
+  that has it in the right shape, so a host overriding one French word keeps the bundled French for
+  the rest. `locale` wins over `navigator.language`.
+- **The plural rules and the number format follow the catalog that supplied the message.** Portuguese
+  puts 0 in `one`, so an English fallback read with Portuguese rules would say "0 detached note"; a
+  German count reads `1.234` and its English fallback `1,234`.
+- **A byline says when relative to now, in the language of the words** (`Intl.RelativeTimeFormat`,
+  SKG-531), and carries the absolute date in its `title`. The absolute date follows the locale the
+  reader asked for, not the catalog. The label is computed when the thread is drawn. No timer
+  refreshes it, but a re-resolve redraws an open thread, so "3 hours ago" can move forward then. A date the store wrote in a shape `Date` cannot read is shown as it
+  came.
 - **The language comes off the mounted document's own window**, never off `globalThis` — the realm
   rule `isElement` exists for, and `languageOf` is the one place. Node's global navigator also says
   `en-US`, so a binding that read it would pass every test expecting English. The tests set the
@@ -257,7 +264,8 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   properties afterwards and never interpolated into it. A test hands it markup and checks that nothing
   was parsed.
 - **`label` still wins over `launch.label`.** A host's label is the host's word, in any language.
-- **The factories take an optional `translator` and default to English**, because the playground
+- **The factories take an optional `translator` and default to the page's language**
+  (`languageOf(document)`), because the playground
   calls them directly. What stops a word escaping the catalog is `messages.test.ts`: it renders the
   widget in a pseudo-locale whose messages are their own keys, through the states it drives, and fails
   on any letter that is neither a key nor fixture data. It first asserts that the keys it expects did
@@ -265,11 +273,30 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
 - **The E2E suite runs with `locale: 'en-US'`.** The specs find the chrome by its English names, and
   a runner with another default language would change every name with nothing in the report to say
   why.
-- **The script tag gets detection only.** A catalog cannot travel in a `data-` attribute, and with
-  English the only catalog, detection alone changes nothing on screen. A site with no build step that
-  wants another language calls `Fruitback.init` itself.
-- **The extension mounts with no catalog**, so a reviewer's widget is English whatever their browser's
-  language. It matches the popup, which is English too.
+- **The script tag gets detection only.** A catalog cannot travel in a `data-` attribute. Detection
+  reaches the bundled catalogs, so a French browser gets French from a bare tag; any other language
+  needs `Fruitback.init`.
+- **The extension mounts with no catalog**, so a reviewer's widget follows their browser into the
+  bundled catalogs — French for a French browser — while the popup stays English.
+- **The direction comes from the language of the words**, not from the language the reader asked for.
+  An Arabic reader with no Arabic catalog reads English, left to right. `directionOf` reads the likely
+  script through `Intl.Locale.maximize`, because Firefox does not implement `getTextInfo`.
+- **Layout follows the direction; geometry never does.** `dir` and `lang` go on the host element and
+  the Shadow root inherits them. The dock, the settings panel and the detached-notes drawer sit at
+  `inset-inline-end`. The pin, its badge and every container that holds document coordinates stay
+  physical: a pin placed against an element of the page must not move when the words flip.
+- **The popover and the thread are the middle case.** Their position is computed against an element,
+  so it stays a physical `left`; the computation aligns them on the element's start edge, which is
+  its right in a right-to-left language.
+- **`direction.test.ts` reads the stylesheets**, because happy-dom resolves no logical property. A rule
+  that names a physical side must be declared geometry, geometry must name no logical property, and
+  the dock, the panel and the drawer must be at the inline end. `e2e/direction.spec.ts` mounts the
+  built widget in Arabic and checks in a browser that the dock and the popover move and the pin stays
+  on its element.
+- **The link's arrow is a message** (`thread.link`), because a right-to-left catalog points it the
+  other way.
+- **Each bundled catalog weighs on the size guard.** If the list grows, catalogs load on demand; the
+  guard is not widened.
 
 ## Re-anchoring, and why a pin says how sure it is
 

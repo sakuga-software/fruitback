@@ -73,7 +73,7 @@ Plus the licence split and the two measurements that decided how it is asserted.
 - `THIRD-PARTY-NOTICES.md` is the opposite case: npm force-includes nothing by that name, so its
   `files` entry **is** load-bearing. Dropping it was measured failing the guard.
 - The ESM build is left readable (the consumer's bundler minifies it); the IIFE is minified because it
-  lands on a page exactly as built. **93 kB gzipped**, guarded by a test that trips at 150 kB — a
+  lands on a page exactly as built. **102 kB gzipped** (measured on SKG-531), guarded by a test that trips at 150 kB — a
   tripwire for a dependency that should have been bundled out, not a budget.
 - **The README snippet is executed by the suite**, not merely quoted: `package.spec.ts` serves the
   built IIFE through `page.route` and appends the documented tag with its `data-` attributes, which
