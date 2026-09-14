@@ -113,6 +113,10 @@ addresses anyway.
 `X-Forwarded-For` is appended to by each proxy, so the real address is that many entries **from the
 right**.
 
+`docker-compose.yml` publishes the port with no proxy in front, so it sets 0 (SKG-541). Measured on
+that file with 1 instead: 24 reads, each with a different forged `X-Forwarded-For`, all answered
+`200`. With 0, the same reads reached the limit and answered `429`.
+
 **Set it too high and the limit is bypassable with one header.** Counting further left reaches the
 part of the chain a caller wrote, so anyone can mint a fresh bucket per request. Measured against
 `resolveClientIp`, with a caller sending `1.2.3.4` through one proxy that appends `203.0.113.9`:

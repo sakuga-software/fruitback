@@ -49,12 +49,13 @@ goes through: losing a label is a triage annoyance, losing someone's note is a b
 
 ## 2. The worker
 
-It is a single Node process in a container. [`.env.example`](../.env.example) lists every variable it
-reads, with the reasoning next to each.
+It is a single Node process in a container. [`.env.example`](../.env.example) lists every variable
+[`docker-compose.yml`](../docker-compose.yml) passes to it, with the reasoning next to each.
 
 The minimum:
 
 ```bash
+FRUITBACK_STORE=linear
 LINEAR_API_KEY=lin_api_…
 LINEAR_TEAM_ID=…
 ALLOWED_ORIGINS=https://staging.acme.test
@@ -65,7 +66,8 @@ ALLOWED_ORIGINS=https://staging.acme.test
 ```bash
 cp .env.example .env                  # then fill LINEAR_API_KEY
 pnpm --filter @fruitback/worker dev   # node --watch, no container
-docker compose up --build worker      # the real image
+docker build -f apps/worker/Dockerfile -t ghcr.io/sakuga-software/fruitback-worker:edge .
+docker compose up -d --wait           # the image you just built
 ```
 
 To try the whole loop with no Linear account at all, `pnpm dev` runs the worker against an in-memory

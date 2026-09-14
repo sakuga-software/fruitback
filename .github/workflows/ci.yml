@@ -150,3 +150,33 @@ jobs:
           echo "the container never became ready:"
           docker logs worker
           exit 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: From docker-compose.yml alone to a planted pin
+        # SKG-541. The directory holds only the compose file and a .env copied from .env.example, like
+        # the machine of somebody who never cloned this repository. The compose file pulls the
+        # published image. The tag below puts the image of this commit in the local daemon under that
+        # exact name, so compose finds it, pulls nothing, and needs no registry login.
+        # FRUITBACK_VERSION is set here so that the tag and the reference cannot differ.
+        env:
+          FRUITBACK_VERSION: edge
+          FRUITBACK_PORT: '8081'
+        run: |
+          docker tag fruitback-worker:ci "ghcr.io/sakuga-software/fruitback-worker:$FRUITBACK_VERSION"
+          mkdir -p "$RUNNER_TEMP/compose"
+          cp docker-compose.yml "$RUNNER_TEMP/compose/"
+          cp .env.example "$RUNNER_TEMP/compose/.env"
+          cd "$RUNNER_TEMP/compose"
+          docker compose up -d --wait
+          node "$GITHUB_WORKSPACE/apps/worker/src/plant-a-pin.ts" "http://127.0.0.1:$FRUITBACK_PORT"
+          # Recreated, not restarted: the pin must outlive the container, so it must be on the volume.
+          docker compose up -d --wait --force-recreate
+          node "$GITHUB_WORKSPACE/apps/worker/src/plant-a-pin.ts" "http://127.0.0.1:$FRUITBACK_PORT" --read
+
+      - name: Worker logs, if the compose run failed
+        if: failure()
+        run: docker compose --project-directory "$RUNNER_TEMP/compose" logs --no-color || true

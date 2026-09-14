@@ -51,6 +51,21 @@ const widget = init({ endpoint: 'https://feedback.acme.dev', clientId: 'acme' })
 > **The packages are not on npm yet.** The lines above are the shape of the install, not something
 > that resolves today. The worker image *is* published — see [docs/self-hosting.md](docs/self-hosting.md).
 
+The worker is **three commands and one line to edit**, and none of them needs a clone of this
+repository:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/sakuga-software/fruitback/main/docker-compose.yml
+curl -fsSL https://raw.githubusercontent.com/sakuga-software/fruitback/main/.env.example -o .env
+# set ALLOWED_ORIGINS in .env to the site that embeds the widget
+docker compose up -d --wait
+```
+
+It keeps the notes in SQLite on a Docker volume, with no account anywhere. CI runs this file from an
+empty directory, plants a pin, recreates the container and reads the pin back. **While this
+repository is private, the raw files and the image are private too**, so the commands need a GitHub
+token until then — see [docs/self-hosting.md](docs/self-hosting.md#running-the-published-image).
+
 The full walk-through — Linear setup, per-client routing, identified reporters — is in
 [docs/install.md](docs/install.md).
 

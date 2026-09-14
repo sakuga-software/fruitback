@@ -14,10 +14,11 @@ A plain Node HTTP process — `node:http` adapted onto a web-standard handler, n
 a container: Dokploy builds the image from a GitHub push and puts Traefik in front of it on the VPS.
 
 ```bash
-cp .env.example .env                            # then fill LINEAR_API_KEY
+cp .env.example .env                            # then set ALLOWED_ORIGINS
 pnpm --filter @fruitback/worker dev             # node --watch on the TypeScript, no container
 pnpm --filter @fruitback/worker build           # esbuild → dist/server.mjs, one file
-docker compose up --build worker                # the real image, locally
+docker build -f apps/worker/Dockerfile -t ghcr.io/sakuga-software/fruitback-worker:edge .
+docker compose up -d --wait                     # your build, under the name the compose file pulls
 ```
 
 | Route                            | Status                                                                    |
@@ -59,22 +60,33 @@ Answers are cached for 15 s: the same page opened by a room full of reviewers co
 the Linear quota, and a failed call is never cached. The cache and the rate limiter both live
 inside the container, which matters as soon as there are two.
 
+## Running it with docker compose
+
+`docker-compose.yml` pulls the published image and needs nothing else from this repository. The
+[README](../README.md#install-in-public-mode) has the three commands. What the file decides:
+
+- **SQLite on a named volume, by default.** `fruitback-data` is mounted at `/data`, which holds the
+  seeds and, when they are on, the extension's sessions. To use Linear, set `FRUITBACK_STORE=linear`,
+  `LINEAR_API_KEY` and `LINEAR_TEAM_ID` in `.env`.
+- **`TRUSTED_PROXY_HOPS` is 0, because the file publishes the port directly.** The worker's own
+  default is 1, for one Traefik. Measured on this file with 1 and no proxy in front: 24 reads, each
+  with a different forged `X-Forwarded-For`, all answered `200`. With 0, the same reads reached the
+  limit and answered `429`. To put Traefik in front, follow the three steps in the file, which set 1.
+- **A variable exported in your shell wins over `.env`.** Docker Compose reads the shell first, so a
+  `LINEAR_API_KEY` left in a shell profile reaches the container even when `.env` leaves it empty.
+- **`.env.example` lists exactly the variables the compose file reads.** `apps/worker/src/compose.test.ts`
+  compares the file with `WorkerEnv` and with every store's `envNames`. A variable the worker starts
+  to read fails the suite until both files carry it. Dokploy does not read the compose file, so the
+  test is what keeps the two in step.
+
 ## Storing the seeds in SQLite
 
 One file, `node:sqlite`, no dependency and no native module to compile. The schema is created on
 first open and migrated in place, so there is no separate command to run — a self-hoster starts one
 container, not two.
 
-```yaml
-# docker-compose.yml
-services:
-  worker:
-    environment:
-      FRUITBACK_STORE: sqlite
-      FRUITBACK_SQLITE_PATH: /data/fruitback.db
-    volumes:
-      - fruitback-data:/data
-```
+`docker-compose.yml` does this by default: `FRUITBACK_STORE=sqlite`, the file at
+`/data/fruitback.db`, and the `fruitback-data` volume mounted at `/data`.
 
 **Back it up with one line**, and do it against the running container rather than copying the file —
 a live SQLite database has a write-ahead log beside it, and `cp` catches neither consistently:

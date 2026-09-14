@@ -66,3 +66,27 @@ immutable.
   as `node` with `NODE_ENV=production`, and the smoke script passes against the real image and fails
   against the mutant. Verified by pushing to a throwaway `registry:2` on localhost.
 
+## The compose file (SKG-541)
+
+- **It pulls the image, and it is the one file a stranger downloads.** It used to build from the
+  repository, and called itself a reference to keep in step by hand with a Dokploy deployment that
+  never reads it.
+- **Drift is a test.** `compose.test.ts` reads `WorkerEnv` out of `env.ts` and every `envNames`
+  literal out of the connectors. The `worker` service must pass exactly those variables, each from
+  `.env`, except three it names with a reason: `NODE_ENV`, `HOST` and `FRUITBACK_FAKE_LINEAR`. `PORT`
+  is pinned to `8080`, and the host side reads `FRUITBACK_PORT`. `.env.example` must assign each
+  interpolated variable exactly once. Eighteen mutations, the three detectors included, turn it red.
+- **The store is a variable, not a compose profile.** The ticket asked for one profile per connector.
+  Profiles need one service per connector, and four documented commands say
+  `docker compose exec worker`: the SQLite backup in `.env.example` and `self-hosting.md`, and the
+  pairing command in `.env.example` and `reviewing.md`. SQLite is the default. Linear is
+  `FRUITBACK_STORE=linear` and two keys. GitHub waits for SKG-525.
+- **`TRUSTED_PROXY_HOPS` is 0 in this file and 1 in the code.** The file publishes the port with
+  nothing in front. The old file said 1 with a published port, which is the forgeable case: measured,
+  24 reads with forged addresses all answered `200`.
+- **CI plants a pin through the file.** The `image` job copies only the compose file and
+  `.env.example` into an empty directory, and tags the image it built under the name the file pulls.
+  Then `plant-a-pin.ts` plants and reads back, the container is recreated, and the pin is read again.
+  The recreate proves that the seeds are on the volume.
+- **A shell variable wins over `.env`.** A `LINEAR_API_KEY` exported in a shell profile reached
+  `docker compose config` with `.env` empty. The local run of the same check used `env -i`.
