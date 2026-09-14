@@ -358,15 +358,34 @@ With `FRUITBACK_SESSION_PATH` set, do the same for the sessions file, `/data/ses
 
 ### Restore it
 
+**Stop the worker, and never run `.restore` on a file you have not checked.** `sqlite3` restores a
+file that does not exist as an empty database and exits with success. Measured: a restore whose copy
+step had failed erased every pin, and the worker came back `healthy` with none. The commands below
+stop at the first step that fails, and `test -s` refuses a missing or empty file:
+
 ```bash
-docker compose cp ./fruitback-2026-09-14.db worker:/data/restore.db
-docker compose exec -T worker sqlite3 /data/fruitback.db ".restore '/data/restore.db'"
-docker compose exec -T worker rm /data/restore.db
-docker compose up -d --wait --force-recreate
+docker compose stop worker &&
+docker compose cp ./fruitback-2026-09-14.db worker:/data/restore.db &&
+docker compose run --rm --no-deps --entrypoint sh worker -c \
+  'test -s /data/restore.db && sqlite3 /data/fruitback.db ".restore /data/restore.db" && rm -f /data/restore.db /data/restore.db-shm /data/restore.db-wal' &&
+docker compose up -d --wait
 ```
 
-The recreate empties the read cache, which otherwise serves the old pins of a page for up to 15
-seconds. `exec` runs as the `node` user, which owns `/data`, so nothing needs a change of owner.
+The worker is stopped so that no request writes to the database while it is replaced, and it starts
+again with an empty read cache. If a step fails, the worker stays stopped: fix the cause, then run the
+commands again. Measured: with the backup file missing, the commands stopped at the copy, and the pins
+were all there after `docker compose up -d --wait`. The one-off container runs as the `node` user,
+which owns `/data`, so nothing needs a change of owner.
+
+With `docker run`, the same steps, with the volume and the image named (measured on both paths):
+
+```bash
+docker stop fruitback &&
+docker cp ./fruitback-2026-09-14.db fruitback:/data/restore.db &&
+docker run --rm -v fruitback-data:/data --entrypoint sh ghcr.io/sakuga-software/fruitback-worker:edge -c \
+  'test -s /data/restore.db && sqlite3 /data/fruitback.db ".restore /data/restore.db" && rm -f /data/restore.db /data/restore.db-shm /data/restore.db-wal' &&
+docker start fruitback
+```
 
 ## Upgrading and rolling back
 
@@ -383,8 +402,9 @@ seconds. `exec` runs as the `node` user, which owns `/data`, so nothing needs a 
    Keep the `ghcr.io/` line. An image that also has a local tag lists a name no registry serves, and
    on the containerd image store that name came first (measured).
 
-3. If `FRUITBACK_IMAGE` in `.env` names a version or a digest, set it to the new one first: a pinned
-   reference does not move, and the pull below then changes nothing. With `edge`, nothing to set.
+3. If `FRUITBACK_IMAGE` in `.env` names a digest, or a version such as `1.4.2`, set it to the new
+   one first: the pull below does not change a digest, and a version tag moves only when that release
+   is rebuilt. A moving tag (`edge`, `latest`, `1.4`) needs nothing set: the pull takes its new image.
    Pull and restart, then check `/health` and a read:
 
    ```bash
@@ -432,9 +452,9 @@ restore into the new volume:
 ```bash
 docker compose up -d --wait
 for db in $dbs; do
-  docker compose cp "./$(basename "$db").migrate" "worker:$db.migrate"
-  docker compose exec -T worker sqlite3 "$db" ".restore '$db.migrate'"
-  docker compose exec -T worker rm "$db.migrate"
+  docker compose cp "./$(basename "$db").migrate" "worker:$db.migrate" &&
+  docker compose exec -T worker sh -c "test -s '$db.migrate' && sqlite3 '$db' \".restore '$db.migrate'\"" &&
+  docker compose exec -T worker rm -f "$db.migrate" "$db.migrate-shm" "$db.migrate-wal" || { echo "restore of $db failed, stopping"; break; }
 done
 docker compose up -d --wait --force-recreate
 ```

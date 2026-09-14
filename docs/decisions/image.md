@@ -165,3 +165,11 @@ What it took was mostly measuring, because four things the documentation said we
   The guide now greps the registry's line, and the rollback was run again with every local copy of the
   old image deleted: Compose pulled the noted digest, and the pin was still there. What was not done
   is the ticket's own test, a stranger on a clean machine: the package is still private.
+- **`.restore` from a missing file erases the database, and reports success.** Found while answering
+  a review that asked to stop the worker during a restore. `sqlite3 /data/fruitback.db ".restore
+  /data/missing.db"` restored an empty database and exited `0`, and the worker came back `healthy`
+  with no pins. The guide's restore ran its copy step and its `.restore` as separate lines, so a
+  failed copy was one line away from that. Every documented restore now chains its steps with `&&`
+  and checks the file with `test -s` first, and the worker is stopped while it runs. Measured on both
+  paths, with Compose and with `docker run`: a good backup gives back its pins, and a missing one
+  stops the commands with every pin still there.

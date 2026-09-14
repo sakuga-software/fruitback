@@ -870,6 +870,9 @@ And *The published image* in [docs/decisions/image.md](docs/decisions/image.md).
   section must name exactly the worker's variables and the compose file's, one table row each, with
   the code's defaults for `PORT`, `TRUSTED_PROXY_HOPS` and `RATE_LIMIT_PER_MINUTE`. What a wrong value
   breaks is written from measurements on the image; re-measure a row before changing it.
+- **A documented `sqlite3 .restore` must check its file first** (SKG-543). A missing file restores as an
+  empty database and exits `0`, which erased every pin in a measurement. Chain the steps with `&&`,
+  put `test -s` before `.restore`, and stop the worker while it runs.
 - **`/health` checks the configuration and never the store** (measured, SKG-543): a SQLite directory
   that does not exist, or a refused Linear key, answers `200` there and `502` on the first read. Do
   not describe `/health` as proof the worker can serve.

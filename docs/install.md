@@ -108,8 +108,9 @@ curl 'https://feedback.acme.dev/feedback?url=https%3A%2F%2Fstaging.acme.test%2F'
 ```
 
 `store` is the store the worker runs on. `openRead` counts the clients whose pins anyone can read, and
-is absent when there are none. With `FRUITBACK_CLIENTS` set, add `&client=<id>` to the read; with
-`FRUITBACK_READ=authenticated`, the read answers `401`, which is expected.
+is absent when there are none. With `FRUITBACK_CLIENTS` set, add `&client=<id>` to the read. The read answers `401` when the
+client's policy is `authenticated` and no token is sent, which is expected. That policy is the
+client's own `read` when the client sets one, and `FRUITBACK_READ` when it does not.
 
 ---
 
