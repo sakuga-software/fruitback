@@ -122,7 +122,10 @@ What it took was mostly measuring, because four things the documentation said we
   address they saw, so a forged `1.2.3.4` never reached the worker. nginx 1.29 with
   `$proxy_add_x_forwarded_for` keeps it and appends. nginx in front of a default Traefik loses the
   client's address, because Traefik overwrites nginx's header with nginx's address; with
-  `forwardedHeaders.trustedIPs` set to nginx, Traefik appends and a count of 2 is right. The sentence
+  `forwardedHeaders.trustedIPs` set to nginx, Traefik appends and a count of 2 is right. nginx with
+  `X-Forwarded-For $remote_addr` replaces, and a count of 2 there answered 20 × `200` then 4 × `429`,
+  so the guide's snippet uses it. The first run of that measurement answered nothing: nginx resolves
+  `proxy_pass` once at start, and it started before its upstream existed. The sentence
   is gone from `CLAUDE.md`, `SECURITY.md`, `install.md`, `decisions/worker.md` and the old guide. The
   claim that the leftmost entry is correct behind Cloudflare went too: nobody measured it.
 - **A wrong count costs different things behind different proxies.** Too high behind nginx, 24

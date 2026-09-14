@@ -50,7 +50,8 @@ store is planned (SKG-525).
 
 ## Running the published image
 
-The shortest path: SQLite, nothing in front, one command.
+The shortest path: SQLite, nothing in front, one command. While the package is private, log in to
+`ghcr.io` first: see [Before you start](#before-you-start).
 
 ```bash
 docker run -d --name fruitback -p 8080:8080 \
@@ -128,9 +129,14 @@ docker compose up -d --wait
 
 A reverse proxy gives the worker its HTTPS name. When one is in front:
 
-1. **Stop publishing the port to the internet.** Remove the `ports` mapping and reach the container
-   on a Docker network, or bind it to the loopback with `FRUITBACK_PORT=127.0.0.1:8080`. A port that
-   stays public lets a caller skip the proxy and write its own `X-Forwarded-For`.
+1. **Stop publishing the port to the internet.** A port that stays public lets a caller skip the
+   proxy and write its own `X-Forwarded-For`. Which way depends on where the proxy runs:
+   - **The proxy runs on the host** (nginx or Caddy installed with the system): set
+     `FRUITBACK_PORT=127.0.0.1:8080` in `.env`. The port then answers only on the host's loopback
+     (measured), and the compose file stays as downloaded.
+   - **The proxy runs in a container** (Traefik, Dokploy): the host's loopback is not the proxy's.
+     Remove the `ports` mapping and put the worker on the proxy's network. The compose file's
+     commented Traefik block has these steps; keep your edit when you download a newer file.
 2. **Set `TRUSTED_PROXY_HOPS` to the number of proxies between the internet and the container.**
 3. **Run the check below** from a machine outside your network.
 
@@ -142,9 +148,14 @@ host, the minimal configurations are:
 location / {
   proxy_pass http://127.0.0.1:8080;
   proxy_set_header Host $host;
-  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-For $remote_addr;
 }
 ```
+
+`$remote_addr` replaces the header with the address nginx saw, so a forged value never reaches the
+worker. Many nginx examples write `$proxy_add_x_forwarded_for` instead, which keeps what the caller
+sent: with that, a count one too high lets a caller escape the rate limit. Use it only when nginx
+sits behind another proxy that it trusts.
 
 ```caddyfile
 # Caddy: TRUSTED_PROXY_HOPS=1
@@ -169,6 +180,7 @@ Measured on SKG-543: the worker behind each proxy, a caller sending `X-Forwarded
 | Traefik v3.5 | the client's address only | right | shared bucket | shared bucket |
 | Caddy 2.10 | the client's address only | right | shared bucket | shared bucket |
 | nginx 1.29, `$proxy_add_x_forwarded_for` | `1.2.3.4, <client>` | right | **bypassed: 24 × `200`** | shared bucket |
+| nginx 1.29, `$remote_addr` | the client's address only | right | shared bucket | — |
 | nginx, then Traefik | nginx's address only | shared bucket | shared bucket | shared bucket |
 | nginx, then Traefik trusting nginx | `1.2.3.4, <client>, <nginx>` | shared bucket | right | **bypassed: 24 × `200`** |
 
@@ -179,8 +191,9 @@ What to take from it:
 
 - **Traefik and Caddy replace the header** with the address they saw, so a forged value never reaches
   the worker. A count that is too high there does not open the limit; it makes everyone share one.
-- **nginx keeps what the caller sent and appends.** A count that is too high there hands the rate
-  limit to the caller.
+- **nginx does what its configuration says.** With `$proxy_add_x_forwarded_for` it keeps what the
+  caller sent and appends, and a count that is too high hands the rate limit to the caller. With
+  `$remote_addr` it replaces, like Traefik.
 - **A proxy behind another proxy must trust it**, or the client's address is lost at every count. For
   Traefik that is `--entrypoints.<name>.forwardedHeaders.trustedIPs=<address of the proxy in front>`.
   The first proxy, the one facing the internet, must trust nobody.
