@@ -94,7 +94,8 @@ works** — the read does. See [When something is wrong](#when-something-is-wron
 ## Running it with docker compose
 
 `docker-compose.yml` runs the same image with the same defaults, and reads every value from `.env`.
-It needs nothing else from this repository:
+It needs nothing else from this repository. **While the repository is private, the two `curl` lines
+answer `404`:** use the two `gh api` lines from [Before you start](#before-you-start) instead.
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/sakuga-software/fruitback/main/docker-compose.yml
