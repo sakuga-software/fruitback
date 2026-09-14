@@ -29,7 +29,7 @@ test('a typed name reaches Linear, and is stored as the claim it is', async ({ p
 
   await page.getByRole('button', { name: /Leave feedback/ }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
-  await page.getByRole('button', { name: /Ajouter mon nom/ }).click();
+  await page.getByRole('button', { name: /Add my name/ }).click();
   await page.getByLabel('Your name (optional)').fill('Alice');
   await page.getByLabel('Your email (optional)').fill('alice@acme.test');
   await page.getByPlaceholder('What is wrong here?').fill('Signé Alice');
