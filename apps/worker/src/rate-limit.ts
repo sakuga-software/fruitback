@@ -7,8 +7,8 @@ export const WINDOW_MS = 60_000;
 /**
  * A sliding window, estimated from two fixed windows (SKG-542).
  *
- * The count lives in the `Kv`, so replicas on one Redis share one ceiling. The previous window's count
- * is weighted by how much of it still overlaps the last minute.
+ * The count lives in the `Kv`, which lives in the process: N replicas allow N times the limit until a
+ * store shared between them exists (SKG-606). The previous window's count is weighted by how much of it still overlaps the last minute.
  *
  * - `incr` comes first and is atomic. A check before the count would let a burst of parallel requests
  *   all read the same low count and all pass.

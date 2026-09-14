@@ -20,8 +20,7 @@ connector's environment, and what a second connector with no markdown body actua
   returning an issue — dropping that check silently mixes two pages' pins.
 - The read cache (`cache.ts`) holds the in-flight promise **in this process** and the settled answer
   in the `Kv`, so a burst of visitors on one page costs one Linear call and N replicas cost at most N.
-  Failures are never written: an outage must not be served for the whole TTL. See *The state two
-  replicas share* below.
+  Failures are never written: an outage must not be served for the whole TTL. See *The rate limit and the cache, behind a Kv* below.
 - Failure codes are deliberate: `400` the caller's fault, `403` origin not allowed, `413` oversized
   body, `429` rate-limited, `500` misconfigured, `502` `store-unavailable` (the widget should keep the
   note and retry), `401` the read needs an identity. `/health` answers `503` when misconfigured so a
@@ -29,23 +28,21 @@ connector's environment, and what a second connector with no markdown body actua
   never a vendor — `linear-unavailable` became `store-unavailable` with SKG-522 for that reason.
 
 
-## The state two replicas share (SKG-542)
+## The rate limit and the cache, behind a Kv (SKG-542)
 
-`cache.ts` and `rate-limit.ts` each kept a `Map` in the process. Two containers behind one load
-balancer therefore had two rate limits, and the operator who started the second one was told nothing.
-That is a security property degrading silently, which is the reason this ticket came before the
-serverless adapters it also enables.
+`cache.ts` and `rate-limit.ts` each kept a `Map` of their own, reached directly. The ticket asked for
+both behind a replaceable store, because two replicas behind one load balancer have two rate limits
+and the operator who started the second one is told nothing.
 
-**The interface is `get`, `set` and `incr`, each with an expiry, and nothing else.** It is what both
-callers need and what every candidate store implements the same way. `kv.ts` holds it and the memory
-implementation, `kvs.ts` reads `FRUITBACK_KV` the way `stores.ts` reads `FRUITBACK_STORE`, and
-`redis.ts` is the connector.
+**The interface is `get`, `set` and `incr`, each with an expiry, and nothing else** — what both callers
+need, and what every candidate store implements the same way. `kv.ts` holds it and the one
+implementation this worker ships, in memory, built once per process and handed over in
+`RequestContext.kv` like the store.
 
-**Values are strings in both implementations**, the memory one included. A memory store that kept
-objects would take a value Redis cannot hold, and every test written against it would pass. The same
-lesson as the extension's fake storage area, one layer down: a double that answers differently from
-the real thing validates whatever is written next. `kv.test.ts` is therefore **one suite run twice** —
-against memory always, and against a real Redis when `FRUITBACK_TEST_REDIS_URL` is set.
+**Values are strings**, the memory store included. A store that kept objects would take a value a
+remote store cannot hold, and every test written against it would pass. `kv.test.ts` is a contract
+suite for that reason, and its integer rules were measured against redis:7: the memory store refuses
+to count exactly what Redis refuses.
 
 ### Invalidation is a version, not a scan
 
@@ -65,8 +62,8 @@ is still in flight, that load could write a stale answer under the version the n
 ### Counting first, and what the window is worth
 
 `incr` comes before the decision, because it is the only atomic step available. Reading a count and
-then writing it lets a burst of parallel requests all read the same low number and all pass — on one
-Redis, that is a bypass with no ceiling at all. The cost is that a refused request is counted too, so
+then writing it lets a burst of parallel requests all read the same low number and all pass — on a shared
+store, that is a bypass with no ceiling at all. The cost is that a refused request is counted too, so
 a caller that keeps sending stays refused.
 
 The window is **two fixed windows, weighted**: the current count plus the previous one, scaled by how
@@ -86,40 +83,35 @@ A limiter that opens when its store is unreachable is a limiter anybody can open
 the limiter is `503 limiter-unavailable`, with the CORS headers the browser needs to read it. Three
 consequences, all deliberate:
 
-- `/health` never touches the `Kv`, so a Redis outage does not take every replica out of the load
-  balancer at the same moment. It is the same rule that keeps `/health` unmetered.
+- `/health` never touches the `Kv`, so a store that stops answering does not take the container out
+  of the load balancer. It is the same rule that keeps `/health` unmetered.
 - The **cache** does the opposite: a `Kv` that does not answer costs quota, never a read.
 - A failed invalidation **after** a write also does the opposite, and that one is the subtle case. The
   issue exists by then. `502` tells the widget to keep the note and retry, and the retry plants it a
   second time — the worker cannot tell. So it answers `201` and logs, and the pin shows up one TTL
   late.
 
-### A client of our own, for one dependency we did not want
+### Redis, built and taken out
 
-`redis.ts` speaks RESP2 over `node:net`: about two hundred lines, pipelined on one connection, with no
-package added to a worker whose only third-party dependency is `zod`.
+The first version of this ticket shipped a Redis implementation: a RESP2 client over `node:net` with
+no dependency, verified against a real Redis with ACL users, and reviewed over four rounds. It was
+removed before merging, on the maintainer's decision, for two reasons:
 
-- `INCR` and `PEXPIRE` go out as **one Lua script**. As two commands, a connection dropping between
-  them leaves a counter with no expiry — and that address is then refused for ever.
-- Every command is **bounded by a timeout**, and a timeout destroys the connection. The limiter runs
-  on every request, so a socket that is accepted and never answers would otherwise stop the worker;
-  and a late reply on a pipelined connection would be handed to the next caller. Same reason the
-  extension's `postJson` bounds its own request.
-- **No error message names the URL**, because the URL carries the password. A refused `AUTH` is
-  reported as a refused handshake, and the test sends a server that echoes the password back.
-- `redis.test.ts` drives the real socket against a server it writes itself, which is enough for
-  framing, pipelining, timeouts and reconnection — and not enough for the semantics. Those are
-  `kv.test.ts` against a real Redis, which is a local run and not CI.
+- the deployment is one container behind Traefik, where the memory store is already the right
+  answer, and nothing needs a second replica;
+- nearly every defect the reviews found was in that client or in its parity with the memory store.
+  Code nobody runs in production goes on collecting those, with nobody to see them.
+
+What it learned is written up in SKG-606: the atomic `INCR` and `PEXPIRE` script, the timeout that
+destroys a pipelined connection, one URL parser for the boot check and the client, `AUTH` for a
+named user with no password, the 2^53 ceiling, and TLS as the maintainer's call. So is the option to
+measure first, Traefik's `RateLimit` middleware. The removed code is in the history of PR #46.
 
 ### What this does not do
 
 The in-flight promise stays per process, and it cannot be otherwise: a promise does not cross a
 process. Ten visitors on one replica still cost one call; ten replicas cost ten. That is the
 degradation the ticket asked to have written down rather than discovered.
-
-Nothing is shared per client or per worker in the Redis namespace beyond the `fruitback:` prefix, so
-two deployments on one Redis database share a rate limit for the same address. Give each its own
-database.
 
 ## Who may read a pin
 
@@ -321,8 +313,8 @@ database.
   checkable against the browser's own header — the trust level CORS gives, and strictly more than
   nothing. Do not describe it as authentication.
 - A malformed `FRUITBACK_CLIENTS` is refused at boot rather than ignored, and named on `/health`.
-- The rate limiter counts in the `Kv`. On `memory` — the default — that is **per replica**, so N
-  containers multiply the ceiling by N; `FRUITBACK_KV=redis` is what makes it one ceiling.
+- The rate limiter counts in the `Kv`, which lives in the process: **per replica**, so N containers
+  multiply the ceiling by N. A store the replicas share is SKG-606.
 - Tests drive `handleRequest` with plain `Request` objects against a stubbed Linear
   (`linear-stub.ts`); no container needed. The assertion that matters most is that the stored
   description parses back into the exact seed that was posted.

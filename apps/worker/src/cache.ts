@@ -11,7 +11,8 @@ import { type Kv, KvError } from './kv.ts';
  *
  * - The in-flight promise stays in this process. Concurrent misses on one replica share one load. A
  *   promise cannot cross a process, so N replicas that miss together make up to N loads.
- * - The settled answer goes to the `Kv`, for `CACHE_TTL_MS`. Every replica on one Redis reads it.
+ * - The settled answer goes to the `Kv`, for `CACHE_TTL_MS`. A store shared between replicas (SKG-606)
+ *   would serve it to all of them.
  *
  * A failure is never written, so an outage is not served for the rest of the TTL.
  */

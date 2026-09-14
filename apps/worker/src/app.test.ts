@@ -6,9 +6,8 @@ import { handleRequest } from './app.ts';
 import type { WorkerEnv } from './env.ts';
 import { installLinearStub, storedIssueFromSeed } from './linear-stub.ts';
 import { signIdentityToken } from './identity.ts';
-import { resetSharedKv } from './kvs.ts';
 import type { SeedStore } from './store.ts';
-import { type Kv, KvError, createMemoryKv } from './kv.ts';
+import { type Kv, KvError, createMemoryKv, resetSharedKv } from './kv.ts';
 import { resetCacheState } from './cache.ts';
 import { resetMemoryLinear } from './linear-memory.ts';
 
@@ -566,20 +565,20 @@ describe('cache invalidation', () => {
   });
 });
 
-/** A Kv whose calls all reject, the way a Redis that went away rejects them. */
+/** A Kv whose calls all reject, the way a store that went away rejects them. */
 function unreachableKv(): Kv {
   const down = async () => {
-    throw new KvError('Redis connection failed: connect ECONNREFUSED');
+    throw new KvError('connection failed: connect ECONNREFUSED');
   };
 
   return { ...createMemoryKv(), get: down, set: down, incr: down };
 }
 
-describe('state shared between replicas (SKG-542)', () => {
+describe('the Kv the transport hands over (SKG-542)', () => {
   const CACHED_PAGE = 'https://preview.acme.test/pricing?tab=annual';
 
   it('holds one rate limit for two replicas on one Kv', async () => {
-    // Two replicas each with their own count let 40 requests through. That is the defect SKG-542 is for.
+    // Two handlers on one `Kv` share one count. A store shared between replicas (SKG-606) relies on it.
     installLinearStub();
     const kv = createMemoryKv();
     const replicas = [{ kv }, { kv: { ...kv } }];
@@ -629,7 +628,7 @@ describe('state shared between replicas (SKG-542)', () => {
   });
 
   it('answers /health when the Kv does not', async () => {
-    // A readiness probe that depends on Redis takes every replica out at once.
+    // A readiness probe that depends on the `Kv` takes every replica out at once.
     const response = await handleRequest(new Request('https://worker.fruitback.dev/health'), env, {
       clientIp: '203.0.113.1',
       kv: unreachableKv(),
@@ -646,7 +645,7 @@ describe('state shared between replicas (SKG-542)', () => {
     const refusingWrites: Kv = {
       ...kv,
       set: async () => {
-        throw new KvError('Redis connection failed');
+        throw new KvError('connection failed');
       },
     };
 

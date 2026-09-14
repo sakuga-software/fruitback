@@ -107,7 +107,7 @@ describe('cached', () => {
 
   it('still answers the read when the Kv does not', async () => {
     const down = async () => {
-      throw new KvError('Redis is down');
+      throw new KvError('the store is down');
     };
     const broken: Kv = { ...kv, get: down, set: down, incr: down };
 
@@ -117,7 +117,7 @@ describe('cached', () => {
   it('still collapses concurrent misses when the Kv does not answer', async () => {
     // An outage is when the provider quota needs the single flight most. Raised in review.
     const down = async () => {
-      throw new KvError('Redis is down');
+      throw new KvError('the store is down');
     };
     const broken: Kv = { ...kv, get: down, set: down, incr: down };
     const { seen, load } = counting();

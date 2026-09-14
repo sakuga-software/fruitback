@@ -56,8 +56,8 @@ label and `description contains <canonical url>` — the workspace can hold any 
 without the worker walking them. `contains` being a substring match, the seed's own
 `page.url` is re-checked exactly, or `/pricing` would return the pins of `/pricing?tab=annual`.
 Answers are cached for 15 s: the same page opened by a room full of reviewers costs one call against
-the Linear quota, and a failed call is never cached. Where that cache lives — and the rate limiter
-with it — is `FRUITBACK_KV`, which matters as soon as there are two containers.
+the Linear quota, and a failed call is never cached. The cache and the rate limiter both live
+inside the container, which matters as soon as there are two.
 
 ## Storing the seeds in SQLite
 
@@ -91,43 +91,14 @@ that leads back to the page you are already on.
 
 ## Running more than one replica
 
-`FRUITBACK_KV` says where the rate limiter and the read cache keep their state. It is `memory` by
-default, which means **inside each container**. One container is the whole story; two are two rate
-limits, so `RATE_LIMIT_PER_MINUTE=20` lets 40 a minute through — and up to 78 in a burst at a window
-edge, twice the bound `SECURITY.md` gives for one — with nothing said anywhere, and a cold page costs one
-provider call per replica.
+The rate limiter and the read cache keep their state **inside each container**. One container is the
+whole story, and it is how the worker is meant to run. Two are two rate limits:
+`RATE_LIMIT_PER_MINUTE=20` lets 40 a minute through — and up to 78 in a burst at a window edge, twice
+the bound `SECURITY.md` gives for one — with nothing said anywhere, and a cold page costs one provider
+call per replica.
 
-Point them at one Redis and they share both:
-
-```yaml
-services:
-  worker:
-    environment:
-      FRUITBACK_KV: redis
-      FRUITBACK_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
-  redis:
-    image: redis:7-alpine
-    command: ['redis-server', '--requirepass', '${REDIS_PASSWORD}', '--save', '']
-    restart: unless-stopped
-```
-
-**Generate that password as hex**, with `openssl rand -hex 32`. `REDIS_PASSWORD` goes raw to
-`--requirepass` and inside the URL, and hex is the one form that needs no encoding in either place. A
-password you did not choose has to be written twice: raw for Redis, percent-encoded in the URL.
-
-`--save ''` on purpose: nothing here outlives its expiry, so there is nothing to write to disk. Any
-Redis-speaking server does — Valkey included. `rediss://` for TLS, and the password sits in a URL, so
-percent-encode every reserved character in it — `@`, `:`, `/`, `?`, `#` and `%` among them. An unencoded
-`#` starts the fragment, and the rest of the URL is lost.
-
-**Treat it as the worker's own memory.** Anyone who can write to that Redis can plant pins on a page
-and clear a rate limit, and a cached answer holds notes and their authors for 15 seconds. Private
-network, password, its own database. And `redis://` is plaintext — the password and every
-cached answer alike — so the day the path to that Redis leaves a network you control, use `rediss://`.
-
-A Redis that stops answering refuses every metered call with `503`, which is `/feedback` and
-`/session/*`. `/health` never touches it, so the replicas stay in the load balancer and recover on
-their own when the Redis comes back.
+A store the replicas share is not built. It is SKG-606, written up with what a first implementation
+learned, and waiting for a deployment that needs it.
 
 ## Running the published image
 

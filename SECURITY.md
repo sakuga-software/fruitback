@@ -95,19 +95,11 @@ and they deserve the care a database of personal data deserves.
 Tell your reporters not to type credentials into a feedback note, because the note is going to sit
 somewhere for a long time.
 
-### The rate limit is per process, unless you give it a Redis
+### The rate limit is per process
 
-`RATE_LIMIT_PER_MINUTE` (20 by default) and the read cache keep their state where `FRUITBACK_KV` says
-(SKG-542):
-
-| `FRUITBACK_KV` | Where the state is | What the limit is worth |
-| --- | --- | --- |
-| `memory` — the default | in each container | **N replicas, N times the ceiling you configured** |
-| `redis` | in the Redis named by `FRUITBACK_REDIS_URL` | one ceiling, for every replica |
-
-One container is the whole story for `memory`, and that is the ordinary deployment. Two containers
-behind a load balancer double the ceiling, with nothing to see anywhere — which is what the second
-row is for.
+`RATE_LIMIT_PER_MINUTE` (20 by default) is held in memory, per container. **Run N replicas and the
+effective ceiling is N times what you configured**, with nothing to see anywhere. One container is the
+ordinary deployment and the whole story; a store the replicas share is tracked as SKG-606.
 
 The window slides, estimated from the current minute and the one before it. A caller who sends a full
 burst at the end of a window and spaces the next ones out gets **at most 39 requests in any 60
@@ -116,23 +108,6 @@ holds the number against the code. A steady caller stays at the limit.
 
 It protects your provider quota; it is not a defence against a determined caller, who can rotate
 addresses anyway.
-
-**A Redis that does not answer refuses the metered call**, with `503 limiter-unavailable`, rather than
-letting it through. A limiter that opens during an outage is one that anybody can open, by taking the
-Redis down. `/health` is not metered and never reads the Redis, so an outage does not take every
-replica out of the load balancer at once.
-
-**Whoever can write to that Redis can plant pins and clear limits.** A cached answer holds the notes,
-their authors and the team's replies for 15 seconds, in the clear. Give it a private network, a
-password and its own database — the care you would give the worker's own memory, because that is what
-it now is.
-
-**`redis://` is plaintext, and so is everything on it**: the password `AUTH` sends, and every cached
-answer with its notes and authors. The worker accepts credentials on it on purpose. Redis ships
-without TLS, and the ordinary deployment is a container on the same private Docker network, where
-`rediss://` buys nothing. The day that path leaves a network you control, use `rediss://`. A rule that
-required TLS only when a password is set would protect the password and still send the notes in the
-clear.
 
 `TRUSTED_PROXY_HOPS` (1 by default, which is one Traefik) decides how the client address is read:
 `X-Forwarded-For` is appended to by each proxy, so the real address is that many entries **from the

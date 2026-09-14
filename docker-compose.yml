@@ -16,10 +16,6 @@ services:
       LINEAR_API_KEY: ${LINEAR_API_KEY:?set LINEAR_API_KEY}
       LINEAR_TEAM_ID: ${LINEAR_TEAM_ID:?set LINEAR_TEAM_ID}
       LINEAR_PROJECT_ID: ${LINEAR_PROJECT_ID:-}
-      # Where the rate limiter and the read cache keep their state. `memory` (the default) is per
-      # container, so two replicas are two rate limits — see docs/self-hosting.md for the Redis.
-      FRUITBACK_KV: ${FRUITBACK_KV:-memory}
-      FRUITBACK_REDIS_URL: ${FRUITBACK_REDIS_URL:-}
       # One hop = Traefik in front. Getting this wrong makes the rate limit forgeable.
       TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
       # `public` (default) or `authenticated`. Public reads answer anyone who can build the URL —

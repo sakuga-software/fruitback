@@ -12,8 +12,7 @@ import { type SeedStore, StoreError } from './store.ts';
 import { diagnosticCorsHeaders, openCors, resolveCors } from './cors.ts';
 import { checkRateLimit } from './rate-limit.ts';
 import { cached, invalidate } from './cache.ts';
-import { type Kv, KvError } from './kv.ts';
-import { kvFor } from './kvs.ts';
+import { type Kv, KvError, processKv } from './kv.ts';
 import {
   type SessionStore,
   createPairing as openPairing,
@@ -84,7 +83,7 @@ export type RequestContext = {
   sessionStore?: SessionStore;
   /**
    * Where the rate limiter and the read cache keep their state (SKG-542). When it is absent, the
-   * handler uses `kvFor`, which gives the one instance of this process and never a new empty one.
+   * handler uses `processKv`, which gives the one instance of this process and never a new empty one.
    */
   kv?: Kv;
 };
@@ -148,16 +147,15 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
   // burn the same provider quota, and `/session/pair` is a code-guessing oracle without a limit —
   // this check used to sit *below* the `404`, so a new route would have been unmetered by default.
   // An unknown path costs quota too now, which is the right answer for something being probed.
-  const kv = context.kv ?? kvFor(config.config.kv);
+  const kv = context.kv ?? processKv();
   let allowed: boolean;
 
   try {
     allowed = await checkRateLimit(kv, context.clientIp, { limit: config.config.rateLimitPerMinute });
   } catch (error) {
     if (!(error instanceof KvError)) throw error;
-    // Refused, not let through (SKG-542). A limiter that opens whenever Redis is down is a limiter
-    // any caller can open. `/health` does not reach this line, so a Redis outage does not take the
-    // replicas out of the load balancer.
+    // Refused, not let through (SKG-542). A limiter that opens whenever its `Kv` does not answer is a
+    // limiter any caller can open. `/health` does not reach this line, so it keeps answering.
     console.error(`[fruitback] rate limit unavailable: ${error.message}`);
 
     return json(503, { error: 'limiter-unavailable' }, cors.headers);

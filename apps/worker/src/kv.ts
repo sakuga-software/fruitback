@@ -1,15 +1,14 @@
 /**
- * The state the rate limiter and the read cache share between replicas (SKG-542).
+ * Where the rate limiter and the read cache keep their state (SKG-542).
  *
- * Both kept a `Map` in the process. Two containers behind one load balancer therefore doubled the
- * rate limit, and a cold page cost one provider call per replica. The interface is the smallest one
- * both callers need: a value with an expiry, and a counter with an expiry.
+ * Both kept a `Map` of their own. The interface is the smallest one both callers need: a value with an
+ * expiry, and a counter with an expiry. This process holds one memory implementation. A store shared
+ * between replicas is SKG-606, and it is one more implementation of this type.
  *
- * **Values are strings in every implementation**, the memory one included. A memory store that kept
- * objects would accept a value Redis cannot hold, and the tests would pass against it.
+ * **Values are strings, the memory store included.** A store that kept objects would accept a value a
+ * remote store cannot hold, and every test would pass against it.
  */
 export type Kv = {
-  readonly provider: KvProvider;
   get(key: string): Promise<string | undefined>;
   set(key: string, value: string, ttlMs: number): Promise<void>;
   /** Add one and return the new count. A new key starts at 1 and expires after `ttlMs`. */
@@ -20,9 +19,6 @@ export type Kv = {
 /** The shared state did not answer. Never a reason to fail a read; a reason to refuse a metered call. */
 export class KvError extends Error {}
 
-export const KV_PROVIDERS = ['memory', 'redis'] as const;
-export type KvProvider = (typeof KV_PROVIDERS)[number];
-export type KvConfig = { provider: 'memory' } | { provider: 'redis'; url: string };
 /** Expired entries are swept at most this often, on any call. Nothing is scheduled while idle. */
 const SWEEP_INTERVAL_MS = 1_000;
 
@@ -56,7 +52,6 @@ export function createMemoryKv(options: { now?: () => number } = {}): MemoryKv {
   }
 
   return {
-    provider: 'memory',
     size: () => entries.size,
     async get(key) {
       // Every call sweeps, reads included. A page served from the cache only ever calls `get`.
@@ -92,4 +87,22 @@ export function createMemoryKv(options: { now?: () => number } = {}): MemoryKv {
       entries.clear();
     },
   };
+}
+
+let shared: MemoryKv | undefined;
+
+/**
+ * The one `Kv` of this process. The transport passes it in `RequestContext.kv`, and the handler falls
+ * back to it, so a caller that passes none does not get an empty counter per request.
+ */
+export function processKv(): Kv {
+  shared ??= createMemoryKv();
+
+  return shared;
+}
+
+/** Test seam: forget every counter and every cached answer. */
+export async function resetSharedKv(): Promise<void> {
+  await shared?.close();
+  shared = undefined;
 }

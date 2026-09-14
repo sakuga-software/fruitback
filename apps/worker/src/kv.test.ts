@@ -2,20 +2,18 @@ import { after, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { type Kv, KvError, createMemoryKv } from './kv.ts';
-import { readKvConfig } from './kvs.ts';
-import { createRedisKv } from './redis.ts';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * One suite for both implementations.
+ * What every `Kv` must answer. It runs against the memory store here, and a shared store (SKG-606)
+ * must pass it too.
  *
- * Every other test runs on the memory store, so it must answer the way Redis answers. A fake that
- * answers differently passes whatever is written against it next. CI has no Redis: set
- * `FRUITBACK_TEST_REDIS_URL` to run the Redis half.
+ * Every other test runs on the memory store, so it answers the way Redis answers: its integer rules
+ * were measured against redis:7. A fake that answers differently passes whatever is written next.
  */
-function contract(name: string, connect: () => Kv, skip?: string) {
-  describe(`the ${name} Kv`, { skip }, () => {
+function contract(name: string, connect: () => Kv) {
+  describe(`the ${name} Kv`, () => {
     const opened: Kv[] = [];
     const open = () => {
       const kv = connect();
@@ -121,13 +119,6 @@ function contract(name: string, connect: () => Kv, skip?: string) {
 const memory = createMemoryKv();
 contract('memory', () => ({ ...memory, close: async () => {} }));
 
-const redisUrl = process.env.FRUITBACK_TEST_REDIS_URL;
-contract(
-  'redis',
-  () => createRedisKv(redisUrl as string),
-  redisUrl === undefined ? 'FRUITBACK_TEST_REDIS_URL is not set' : undefined,
-);
-
 describe('the memory Kv, bounded', () => {
   /** A hundred entries that expire after one second, and a counter that does not. */
   async function filled() {
@@ -158,52 +149,5 @@ describe('the memory Kv, bounded', () => {
     await kv.incr('address', 600_000);
 
     assert.equal(kv.size(), 1);
-  });
-});
-
-describe('readKvConfig', () => {
-  it('keeps the state in memory when nothing is set, as before SKG-542', () => {
-    assert.deepEqual(readKvConfig({}), { ok: true, config: { provider: 'memory' } });
-  });
-
-  it('reads the Redis URL when FRUITBACK_KV=redis', () => {
-    const env = { FRUITBACK_KV: 'redis', FRUITBACK_REDIS_URL: 'rediss://kv.internal:6380/2' };
-
-    assert.deepEqual(readKvConfig(env), {
-      ok: true,
-      config: { provider: 'redis', url: 'rediss://kv.internal:6380/2' },
-    });
-  });
-
-  it('names the variable an operator has to fix', () => {
-    const cases = [
-      { env: { FRUITBACK_KV: 'memcached' }, names: 'FRUITBACK_KV' },
-      { env: { FRUITBACK_KV: 'redis' }, names: 'FRUITBACK_REDIS_URL' },
-      { env: { FRUITBACK_KV: 'redis', FRUITBACK_REDIS_URL: 'http://kv.internal' }, names: 'FRUITBACK_REDIS_URL' },
-      { env: { FRUITBACK_KV: 'redis', FRUITBACK_REDIS_URL: 'not a url' }, names: 'FRUITBACK_REDIS_URL' },
-      // Both used to pass the boot check and fail on every request. Raised in review.
-      {
-        env: { FRUITBACK_KV: 'redis', FRUITBACK_REDIS_URL: 'redis://kv.internal/not-a-db' },
-        names: 'FRUITBACK_REDIS_URL',
-      },
-      { env: { FRUITBACK_KV: 'redis', FRUITBACK_REDIS_URL: 'redis://:%zz@kv.internal' }, names: 'FRUITBACK_REDIS_URL' },
-      // The mistake that leaves two replicas with two limits and no message anywhere.
-      { env: { FRUITBACK_REDIS_URL: 'redis://kv.internal' }, names: 'FRUITBACK_KV' },
-    ];
-
-    for (const { env, names } of cases) {
-      const result = readKvConfig(env);
-      assert.ok(!result.ok && result.missing.some((name) => name.startsWith(names)), JSON.stringify(env));
-    }
-  });
-
-  it('never quotes the URL, which can carry a password', () => {
-    for (const env of [
-      { FRUITBACK_REDIS_URL: 'redis://:hunter2-password@kv.internal' },
-      { FRUITBACK_KV: 'memory', FRUITBACK_REDIS_URL: 'redis://:hunter2-password@kv.internal' },
-    ]) {
-      const result = readKvConfig(env);
-      assert.ok(!result.ok && !result.missing.join(' ').includes('hunter2'));
-    }
   });
 });

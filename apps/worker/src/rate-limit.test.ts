@@ -97,7 +97,7 @@ describe('checkRateLimit', () => {
 
   it('rejects with KvError when the Kv does not answer, and decides nothing itself', async () => {
     const down = async () => {
-      throw new KvError('Redis is down');
+      throw new KvError('the store is down');
     };
     const broken: Kv = { ...createMemoryKv(), get: down, incr: down };
 

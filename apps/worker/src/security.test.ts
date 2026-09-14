@@ -11,7 +11,6 @@ import {
 } from './session.ts';
 import { DEFAULT_TRUSTED_PROXY_HOPS } from './env.ts';
 import { DEFAULT_LIMIT } from './rate-limit.ts';
-import { CACHE_TTL_MS } from './cache.ts';
 import { readConfig } from './env.ts';
 import { handleRequest } from './app.ts';
 
@@ -122,12 +121,6 @@ describe('SECURITY.md states what the code does', () => {
       SECURITY.includes(phrase) || SECURITY.includes(phrase.replace('\n', ' ')),
       `SECURITY.md does not say a burst gets at most ${2 * DEFAULT_LIMIT - 1} requests through`,
     );
-  });
-
-  it('quotes how long a cached answer sits in the shared store', () => {
-    const phrase = `for ${CACHE_TTL_MS / 1000} seconds, in the clear`;
-
-    assert.ok(SECURITY.includes(phrase), `SECURITY.md does not say a cached answer is readable ${phrase}`);
   });
 
   it('quotes the proxy hops this worker actually trusts', () => {

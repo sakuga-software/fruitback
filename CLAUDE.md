@@ -567,11 +567,11 @@ and *The team mode, and the call the page cannot make*:
   can find again.
 - **The `description contains` filter is a substring match**, so `/pricing` also matches
   `/pricing?tab=annual`. `fetchSeedIssues` re-checks `seed.page.url` exactly before returning.
-- **The rate limiter and the read cache keep their state in a `Kv`** (SKG-542): `memory` by default,
-  `redis` through `FRUITBACK_KV`. Two replicas on `memory` are two ceilings — the configured limit
-  multiplied by the container count — which is the security half of the ticket. `kv.ts` is the seam
-  and the memory store, `redis.ts` a dependency-free RESP client, `kvs.ts` the registry. **Values are
-  strings in both**, so a value Redis cannot hold fails against the memory one too.
+- **The rate limiter and the read cache keep their state in a `Kv`** (SKG-542), and this process
+  holds one, in memory. Two replicas are therefore two ceilings — the configured limit multiplied by
+  the container count — and the deployment is one container. A Redis implementation was built,
+  reviewed and removed before merging: it is SKG-606, with what it learned. `kv.ts` is the seam and
+  the memory store. **Values are strings**, so a value a remote store cannot hold fails here too.
 - The read cache is two layers. **The in-flight promise stays in this process**, so a burst on one
   replica costs one call and N replicas cost at most N. The settled answer goes in the `Kv` for
   `CACHE_TTL_MS`. A failure is never written: an outage must not be served for the whole TTL.
@@ -580,7 +580,7 @@ and *The team mode, and the call the page cannot make*:
   the pin was planted stores its stale answer under a version nobody will read.
 - **The limiter refuses when the `Kv` does not answer** (`503 limiter-unavailable`): a limiter that
   opens during an outage is one anybody can open. `/health` never touches the `Kv`, because a
-  readiness probe that depends on Redis takes every replica out at once. A failed invalidation after
+  readiness probe that depends on the `Kv` takes every replica out at once. A failed invalidation after
   a write is the opposite call — the issue exists, and a `502` would have the widget plant it twice.
 - Failure codes are deliberate: `400` the caller's fault, `403` origin not allowed, `413` oversized
   body, `429` rate-limited, `500` misconfigured, `502` `store-unavailable` (the widget should keep
@@ -802,7 +802,7 @@ and *The team mode, and the call the page cannot make*:
   because over there a team really is Linear's.
 
 **Deeper** — in [docs/decisions/worker.md](docs/decisions/worker.md):
-*The worker*, *The state two replicas share*, *Who may read a pin*, *The team's replies*,
+*The worker*, *The rate limit and the cache, behind a Kv*, *Who may read a pin*, *The team's replies*,
 *Where a seed is stored*,
 *Which store, and who validates it*, *SQLite, and what a second connector actually proved*,
 *The markdown codec, and the file that outlived its name*, *The extension's session*.
