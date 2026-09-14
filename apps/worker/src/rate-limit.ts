@@ -46,14 +46,14 @@ function windowKey(clientIp: string, window: number): string {
 /**
  * Work out who is calling, from the socket address and the forwarded chain.
  *
- * This is the part the platform change makes subtle. `X-Forwarded-For` is *appended* to by each
- * proxy, so the chain reads `<what the caller sent>, <peer seen by proxy 1>, …, <peer seen by the
- * last proxy>`. Everything on the **left** is caller-controlled and forgeable; only the rightmost
- * entries were written by infrastructure we control.
+ * The client address is the entry `trustedHops` from the right of `X-Forwarded-For`. A proxy that
+ * appends to the header keeps what the caller sent on the left, so the left of the chain is
+ * forgeable. If this function reads the leftmost entry, any caller gets a new rate-limit bucket per
+ * request.
  *
- * So the client IP is the entry `trustedHops` from the right. Reading the leftmost entry — the usual
- * reflex, and the correct one behind Cloudflare where the edge rewrites the header — would let any
- * caller mint a fresh rate-limit bucket per request just by sending a random header.
+ * Other proxies replace the header: Traefik and Caddy by default, and nginx with `$remote_addr`
+ * (measured, SKG-543). Behind them the chain is shorter, and a count that is too high falls back to
+ * the socket peer.
  */
 export function resolveClientIp(
   forwardedFor: string | null | undefined,

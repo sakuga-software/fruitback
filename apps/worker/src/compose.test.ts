@@ -129,9 +129,18 @@ describe('docs/self-hosting.md', () => {
   function referenceRows(): Map<string, string> {
     const section = /^## Every environment variable\n([\s\S]*?)(?=^## )/m.exec(SELF_HOSTING)?.[1] ?? '';
 
-    return new Map(
-      [...section.matchAll(/^\| `([A-Z][A-Z0-9_]*)` \|(.*)$/gm)].map((match) => [match[1] ?? '', match[2] ?? '']),
+    const rows = [...section.matchAll(/^\| `([A-Z][A-Z0-9_]*)` \|(.*)$/gm)].map(
+      (match) => [match[1] ?? '', match[2] ?? ''] as const,
     );
+    const names = rows.map(([name]) => name);
+    // A Map keeps one row per name, so a duplicated row would pass the comparison below.
+    assert.deepEqual(
+      names.filter((name, index) => names.indexOf(name) !== index),
+      [],
+      'a variable has two rows',
+    );
+
+    return new Map(rows);
   }
 
   it('names every variable the worker and the compose file read, and no other', () => {

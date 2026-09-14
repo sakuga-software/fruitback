@@ -180,7 +180,7 @@ Measured on SKG-543: the worker behind each proxy, a caller sending `X-Forwarded
 | Traefik v3.5 | the client's address only | right | shared bucket | shared bucket |
 | Caddy 2.10 | the client's address only | right | shared bucket | shared bucket |
 | nginx 1.29, `$proxy_add_x_forwarded_for` | `1.2.3.4, <client>` | right | **bypassed: 24 × `200`** | shared bucket |
-| nginx 1.29, `$remote_addr` | the client's address only | right | shared bucket | — |
+| nginx 1.29, `$remote_addr` | the client's address only | right | shared bucket | shared bucket |
 | nginx, then Traefik | nginx's address only | shared bucket | shared bucket | shared bucket |
 | nginx, then Traefik trusting nginx | `1.2.3.4, <client>, <nginx>` | shared bucket | right | **bypassed: 24 × `200`** |
 
@@ -229,7 +229,8 @@ few more reads than the limit.
 
 Grouped as in `.env.example`. *Refused* means the worker starts, logs
 `misconfigured, missing: …`, answers `/health` with `503` naming the variable, and every other route
-with `500`. An empty value counts as absent.
+with `500`. Docker then marks the container `unhealthy`, and `docker compose up --wait` fails. An
+empty value counts as absent.
 
 ### The image and the port
 
@@ -237,7 +238,7 @@ with `500`. An empty value counts as absent.
 | --- | --- | --- | --- |
 | `FRUITBACK_IMAGE` | `ghcr.io/sakuga-software/fruitback-worker:edge` | Compose only. The image, as a tag or a digest. | A tag that does not exist fails the pull. A tag already on the machine is not pulled again: run `docker compose pull`. |
 | `FRUITBACK_PORT` | `8080` | Compose only. The port on the host, or `127.0.0.1:8080` to keep it off the internet. | An `.env` from before SKG-541 says `PORT`, which the file ignores: the port falls back to 8080. |
-| `PORT` | `8080` | The port the process listens on, inside the container. Compose sets it to 8080 and does not read it from `.env`. | A value other than the published port makes the worker unreachable, and Docker still reports it `healthy`, because the healthcheck probes the same port (measured with `9000`). A value that is not a positive integer falls back to 8080 with no message. |
+| `PORT` | `8080` | The port the process listens on, inside the container. Compose sets it to 8080 and does not read it from `.env`. | A value other than the published port makes the worker unreachable, and Docker still reports it `healthy`, because the healthcheck probes the same port (measured with `9000`). With `docker run`, a value that is not a positive integer: the process listens on 8080 with no message, but the healthcheck probes the raw value, so Docker marks the container `unhealthy` (measured with `abc`). |
 | `HOST` | `0.0.0.0` | The interface the process listens on. Compose does not pass it. | `127.0.0.1` makes the worker unreachable from outside the container, and Docker still reports it `healthy` (measured). |
 | `NODE_ENV` | `production`, set by the image | What refuses the in-memory store. Compose does not pass it. | Any other value lets `FRUITBACK_STORE=memory` start, and every note dies with the container. |
 
@@ -245,7 +246,7 @@ with `500`. An empty value counts as absent.
 
 | Variable | Default | What it does | When it is wrong |
 | --- | --- | --- | --- |
-| `ALLOWED_ORIGINS` | none: required | The sites that may call the worker, comma-separated, or `*`. The `origins` of each client in `FRUITBACK_CLIENTS` join the list. | Absent: Compose does not start, and `docker run` is refused. An origin that is not exactly what the browser sends — a trailing slash, `http` for `https`, a missing port — is accepted at boot, and each call from the site answers `403 origin-not-allowed`, which the browser shows as a CORS error. A request with no `Origin`, such as `curl`, is not checked. `*` accepts every site. |
+| `ALLOWED_ORIGINS` | none: required | The sites that may call the worker, comma-separated, or `*`. The `origins` of each client in `FRUITBACK_CLIENTS` join the list. | Absent: Compose does not start. With `docker run`, the container runs and is refused: `/health` answers `503` naming it, and Docker marks it `unhealthy` (measured). An origin that is not exactly what the browser sends — a trailing slash, `http` for `https`, a missing port — is accepted at boot, and each call from the site answers `403 origin-not-allowed`, which the browser shows as a CORS error. A request with no `Origin`, such as `curl`, is not checked. `*` accepts every site. |
 | `TRUSTED_PROXY_HOPS` | `1` in the worker, `0` in `docker-compose.yml` | The number of proxies between the internet and the container. | Not a whole number from 0 up: refused. Too high or too low: see [Behind a reverse proxy](#behind-a-reverse-proxy). |
 | `RATE_LIMIT_PER_MINUTE` | `20` | Requests a minute per client address, reads and writes together, per container. `/health` is not counted. | Not a whole number above 0: refused. Too low for a team behind one office address: they share a bucket and get `429 rate-limited`. |
 
@@ -270,7 +271,7 @@ with `500`. An empty value counts as absent.
 | Variable | Default | What it does | When it is wrong |
 | --- | --- | --- | --- |
 | `FRUITBACK_IDENTITY_SECRET` | none: every reporter is self-declared | The HS256 key a site signs identity tokens with, 32 characters or more. Ignored when `FRUITBACK_CLIENTS` is set: each client brings its own. | Under 32 characters: refused. Changed: every token signed with the old key answers `401`. |
-| `FRUITBACK_READ` | `public` | Who may read pins: `public` or `authenticated`. A client's `read` replaces it. | A typo: refused, never defaulted to `public`. `authenticated` with no key: refused. `authenticated` and a site that sends no token: reads answer `401 identity-required`, and the widget shows no pins. `public`: the boot log names the clients anyone can read, and `/health` counts them in `openRead`. |
+| `FRUITBACK_READ` | `public` | Who may read pins: `public` or `authenticated`. A client's `read` replaces it. | A typo: refused, never defaulted to `public`. `authenticated` for a client with no key to verify its tokens: refused. That key is `FRUITBACK_IDENTITY_SECRET` for a single client, and each client's own `identitySecret` when `FRUITBACK_CLIENTS` is set. `authenticated` and a site that sends no token: reads answer `401 identity-required`, and the widget shows no pins. `public`: the boot log names the clients anyone can read, and `/health` counts them in `openRead`. |
 | `FRUITBACK_HIDE_COMMENTS` | empty: the team's replies are shown | `1` keeps the team's replies out of the pins. | Any other value, `true` included, is accepted and hides nothing (measured). |
 
 ### The browser extension's sessions
@@ -340,7 +341,9 @@ reports no link, and the widget renders none.
 
 Through the running container, never with `cp` on the volume: a copy of the `.db` alone misses what is
 still in the `-wal` file. With `docker run`, write `docker exec fruitback` and `docker cp fruitback:`
-instead of `docker compose exec worker` and `docker compose cp worker:`.
+instead of `docker compose exec worker` and `docker compose cp worker:`. The commands below use the
+default `FRUITBACK_SQLITE_PATH`, `/data/fruitback.db`; if you set another path, write that path
+instead, here and in the restore.
 
 ```bash
 docker compose exec -T worker sqlite3 /data/fruitback.db ".backup '/data/backup.db'"

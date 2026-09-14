@@ -106,9 +106,9 @@ describe('checkRateLimit', () => {
 });
 
 /**
- * The rate limit is only as good as this function. Behind Traefik, `X-Forwarded-For` is appended to
- * by each proxy, so the entries on the left came from the caller and are forgeable — reading the
- * leftmost one would let anybody mint a fresh bucket per request.
+ * The rate limit is only as good as this function. A proxy that appends to `X-Forwarded-For` keeps
+ * what the caller sent on the left, so the leftmost entry is forgeable. If the function reads it,
+ * anybody gets a new bucket per request.
  */
 describe('resolveClientIp', () => {
   const SOCKET = '10.0.0.5';

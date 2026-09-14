@@ -93,7 +93,8 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 
 - **`FRUITBACK_STORE=memory` swaps the real Linear for `linear-memory.ts`**, so the whole loop runs
   with no API key and writes to nobody's workspace. It is refused under `NODE_ENV=production`, and
-  `/health` answers `{ ok: true, store: 'memory' }`. It is **not** a mock: an issue is stored as the
+  `/health` answers `{ ok: true, store: 'memory', openRead: 1 }` — reads are public in the dev loop.
+  It is **not** a mock: an issue is stored as the
   description `buildIssueDescription` produces and read back through production's own `toSeedIssue`,
   so a broken round trip breaks the playground too.
 - The playground's toolbar and `fruitback.tsx` are **scaffolding, not the product**. Do not grow
@@ -697,8 +698,9 @@ and *The team mode, and the call the page cannot make*:
   against the browser's own header. Do not describe it as authentication.
 - **`resolveClientIp` is security-relevant.** The client IP is the entry `TRUSTED_PROXY_HOPS` from
   the **right** of `X-Forwarded-For`. Reading the leftmost entry makes the rate limit bypassable with
-  one header. **Do not write that each proxy appends**: nginx appends, Traefik and Caddy replace the
-  header by default (measured, SKG-543), and the self-hosting guide depends on the difference.
+  one header. **Do not write that each proxy appends**: nginx with `$proxy_add_x_forwarded_for`
+  appends, while nginx with `$remote_addr`, Traefik and Caddy replace the header (measured, SKG-543).
+  The self-hosting guide depends on the difference.
 
 **The extension's session**
 

@@ -140,10 +140,13 @@ What it took was mostly measuring, because four things the documentation said we
   the note. It is the same reason `/health` never touches the `Kv`.
 - **`install.md` showed `{"ok":true}`.** The answer carries `store`, and `openRead` when a client's
   pins are public.
-- **Three wrong values are accepted in silence**, and the guide says so rather than this ticket
-  changing them: `PORT` that is not a number falls back to 8080; `FRUITBACK_HIDE_COMMENTS=true`
-  hides nothing, because only `1` does; and `HOST=127.0.0.1` or a `PORT` other than the published one
-  leave the container `healthy` and unreachable, because the healthcheck probes from inside.
+- **Wrong values the worker accepts**, which the guide documents rather than this ticket changing
+  them: `FRUITBACK_HIDE_COMMENTS=true` hides nothing, because only `1` does; `HOST=127.0.0.1` or a
+  `PORT` other than the published one leave the container `healthy` and unreachable, because the
+  healthcheck probes from inside. `PORT=abc` is the opposite case: `readPort` falls back to 8080, but
+  the healthcheck interpolates the raw value, so the container is `unhealthy` while it serves. The
+  first version of the guide said it fell back in silence; a review found the healthcheck, and a
+  measurement confirmed it.
 - **An origin with a trailing slash is accepted at boot and refuses every browser call.**
   `ALLOWED_ORIGINS=https://staging.example.com/` answered `403 origin-not-allowed` to the origin the
   browser sends.
