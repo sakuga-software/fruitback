@@ -103,7 +103,11 @@ immutable.
   `.env.example` repeats each one beside its variable.
 - **An old SQLite deployment keeps its data in an anonymous volume.** The image declares
   `VOLUME /data`, and the old file mounted nothing there. The new named volume starts empty, so the
-  upgrade section copies the database out with `.backup` and back in with `.restore`. Tested on a
-  stand-in for the old file, before and after the restore.
+  upgrade section copies each database out with `.backup` and back in with `.restore`: the seeds,
+  and the sessions when `FRUITBACK_SESSION_PATH` was set. Tested on a stand-in for the old file with
+  sessions on: the pin and the pairing code were both back after the restore.
+- **The `docker run` example sets `TRUSTED_PROXY_HOPS=0`.** It publishes the port directly, like the
+  compose file, and without the variable the worker falls back to 1. The workflows' own `docker run`
+  lines are readiness probes on a runner, not commands anybody copies, and were left alone.
 - **A shell variable wins over `.env`.** A `LINEAR_API_KEY` exported in a shell profile reached
   `docker compose config` with `.env` empty. The local run of the same check used `env -i`.

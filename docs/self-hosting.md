@@ -108,27 +108,36 @@ written for it keeps those values, and the new file reads it differently.
 **If the old deployment kept SQLite seeds or extension sessions under `/data`, copy them out first.**
 The old file mounted no volume, so `/data` was an anonymous volume that the image declares. The new
 file mounts the named volume there, which starts empty, and the pins and sessions then seem to be
-gone. The old volume is not deleted, but nothing mounts it. With the **old** file still in place:
+gone. The old volume is not deleted, but nothing mounts it.
+
+Set `dbs` to the files the old deployment used: the value of `FRUITBACK_SQLITE_PATH`, and the value of
+`FRUITBACK_SESSION_PATH` if it was set. A file outside `/data` was never on a volume, and nothing is
+left to copy. With the **old** file still in place:
 
 ```bash
-docker compose exec worker sqlite3 /data/fruitback.db ".backup '/data/migrate.db'"
-docker compose cp worker:/data/migrate.db ./migrate.db
+dbs="/data/fruitback.db /data/sessions.db"
+for db in $dbs; do
+  docker compose exec -T worker sqlite3 "$db" ".backup '$db.migrate'"
+  docker compose cp "worker:$db.migrate" "./$(basename "$db").migrate"
+done
 ```
 
-Do the same for `/data/sessions.db` if `FRUITBACK_SESSION_PATH` is set. Then replace the compose
-file, make the changes below, start it, and restore into the new volume:
+Then replace the compose file, make the changes below with the **same** paths in `.env`, start it, and
+restore into the new volume:
 
 ```bash
 docker compose up -d --wait
-docker compose cp ./migrate.db worker:/data/migrate.db
-docker compose exec worker sqlite3 /data/fruitback.db ".restore '/data/migrate.db'"
-docker compose exec worker rm /data/migrate.db
+for db in $dbs; do
+  docker compose cp "./$(basename "$db").migrate" "worker:$db.migrate"
+  docker compose exec -T worker sqlite3 "$db" ".restore '$db.migrate'"
+  docker compose exec -T worker rm "$db.migrate"
+done
 docker compose up -d --wait --force-recreate
 ```
 
-Tested on a stand-in for the old file: the pin was gone after the switch, and it was back after the
-restore and the recreate. `exec` runs as the `node` user, which owns the new database, so the restore
-needs no change of owner.
+Tested on a stand-in for the old file, with sessions on: after the switch the pin was gone; after the
+restore and the recreate, the pin was back and the pairing code was still in `sessions.db`. `exec` runs
+as the `node` user, which owns the new files, so the restore needs no change of owner.
 
 Before the first `docker compose up` with the new file, change these lines in `.env`:
 
@@ -189,11 +198,16 @@ it succeeds.
 ```bash
 docker run -d --name fruitback -p 8080:8080 \
   -e ALLOWED_ORIGINS=https://staging.example.com \
+  -e TRUSTED_PROXY_HOPS=0 \
   -e FRUITBACK_STORE=sqlite \
   -e FRUITBACK_SQLITE_PATH=/data/fruitback.db \
   -v fruitback-data:/data \
   ghcr.io/sakuga-software/fruitback-worker:edge
 ```
+
+`TRUSTED_PROXY_HOPS=0` because this command publishes the port with nothing in front. Without it the
+worker uses its default of 1, and a forged `X-Forwarded-For` gets a new rate-limit bucket on every
+request. Behind a proxy, set the number of proxies instead.
 
 This `fruitback-data` volume is not the one `docker-compose.yml` creates, which Compose names after its
 project. To move the data from one to the other, back it up with the `sqlite3 .backup` command above
