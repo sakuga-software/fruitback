@@ -188,11 +188,12 @@ describe('every word the widget shows', () => {
       screenshotSupported: true,
     });
     cleanup.push(() => panel.destroy());
+    let answer: (planted: boolean) => void = () => {};
     const composer = createComposer({
       document: page.document,
       host: host.panel,
       translator,
-      onSubmit: async () => true,
+      onSubmit: () => new Promise<boolean>((resolve) => (answer = resolve)),
     });
     cleanup.push(() => composer.destroy());
     const overlay = createOverlay({ document: page.document, host: host.root, translator });
@@ -228,9 +229,28 @@ describe('every word the widget shows', () => {
         },
       }),
     });
-    overlay.render([found, detached]);
+    // Found by nothing but its box, so it is placed and marked unsure. No note, so the thread says so.
+    const placedByPosition = seedIssueFixture({
+      identifier: 'ID-3',
+      stateName: '',
+      comments: [],
+      seed: seedFixture({
+        id: 'sd_near',
+        note: '',
+        anchor: {
+          selector: '#renamed',
+          tag: 'button',
+          text: 'Renamed',
+          bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 },
+        },
+      }),
+    });
+    overlay.render([found, detached, placedByPosition]);
 
     const snapshots: string[] = [];
+    host.start();
+    snapshots.push(...shown(host.root));
+    host.stop();
     const badges = [...host.root.querySelectorAll('.fruitback-pin-badge')] as HTMLElement[];
     for (const badge of badges) {
       badge.click();
@@ -238,37 +258,27 @@ describe('every word the widget shows', () => {
     }
     composer.open({ left: 0, top: 0, bottom: 10, right: 10 });
     snapshots.push(...shown(host.root));
-    (composer.element.querySelector('[data-fruitback-send]') as HTMLButtonElement).click();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    const send = composer.element.querySelector('[data-fruitback-send]') as HTMLButtonElement;
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+    send.click();
+    snapshots.push(...shown(host.root));
+    answer(false);
+    await settle();
+    snapshots.push(...shown(host.root));
+    send.click();
+    answer(true);
+    await settle();
     snapshots.push(...shown(host.root));
 
     // The detector first: a walk that finds no marker would pass the check below with nothing checked.
     const markers = new Set(snapshots.flatMap((text) => [...text.matchAll(/⟦([^⟧]+)⟧/g)].map((match) => match[1])));
-    for (const key of [
-      'launch.label',
-      'settings.open',
-      'settings.dialog',
-      'settings.title',
-      'settings.screenshot',
-      'stage.ripe',
-      'composer.placeholder',
-      'composer.emailLabel',
-      'composer.send',
-      'composer.harvested',
-      'pin.label',
-      'pin.labelUncertain',
-      'thread.close',
-      'thread.anonymous',
-      'thread.noReplies',
-      'thread.team',
-      'thread.orphan',
-      'orphans.count',
-      'orphans.entry',
-    ]) {
-      assert.ok(markers.has(key), `never rendered ${key}, so this test does not reach it`);
-    }
+    assert.deepEqual(
+      Object.keys(ENGLISH).filter((key) => !markers.has(key)),
+      [],
+      'these keys never rendered, so this test does not check them',
+    );
 
-    const data = ['NOTE ONE', 'NOTE TWO', 'ID-1', 'ID-2', 'BODY', 'https://…', 'acme'];
+    const data = ['NOTE ONE', 'NOTE TWO', 'ID-1', 'ID-2', 'ID-3', 'BODY', 'https://…', 'acme'];
     const untranslated = snapshots.filter((text) => {
       const rest = data.reduce((left, value) => left.split(value).join(''), text.replace(/⟦[^⟧]+⟧/g, ''));
 
