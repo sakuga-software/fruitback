@@ -129,6 +129,7 @@ It also says how to report a vulnerability.
 | --- | --- |
 | [docs/modes.md](docs/modes.md) | The three modes, what each protects, and which one you want |
 | [docs/install.md](docs/install.md) | Putting the widget on a site, end to end |
+| [docs/translating.md](docs/translating.md) | Adding a language to the widget's bundle |
 | [docs/reviewing.md](docs/reviewing.md) | The reviewer's side: the extension, switching a site on, pairing |
 | [docs/self-hosting.md](docs/self-hosting.md) | Running the worker: the image, the tags, a deployment |
 | [docs/architecture.md](docs/architecture.md) | Why this shape, the seed contract, the layout, the commands |

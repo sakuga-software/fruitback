@@ -50,7 +50,7 @@ test('a script tag mounts the widget, with no build step on the page', async ({ 
   await expect(page.getByLabel('Open Fruitback settings')).toBeVisible();
 });
 
-test('a host catalog reaches the built widget, and a key it leaves out stays English (SKG-530)', async ({ page }) => {
+test('a host catalog reaches the built widget, over the bundled one, key by key (SKG-530, SKG-531)', async ({ page }) => {
   await page.goto('/?widget=off&case=script-tag-locale');
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await page.addScriptTag({ path: IIFE });
@@ -60,14 +60,16 @@ test('a host catalog reaches the built widget, and a key it leaves out stays Eng
         endpoint,
         clientId: 'playground',
         locale: 'fr',
-        messages: { fr: { 'launch.label': 'Laisser un feedback', 'settings.open': 'Ouvrir les réglages Fruitback' } },
+        // French is bundled since SKG-531. The host's own word wins over it, and a key the host leaves
+        // out comes from the bundled French rather than from English.
+        messages: { fr: { 'launch.label': 'Donner mon avis' } },
       }),
     WORKER_ORIGIN,
   );
 
-  await expect(page.getByRole('button', { name: 'Laisser un feedback' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Donner mon avis' })).toBeVisible();
   await page.getByLabel('Ouvrir les réglages Fruitback').click();
-  await expect(page.getByRole('dialog', { name: 'Fruitback settings' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Réglages Fruitback' })).toBeVisible();
 });
 
 test('the snippet plants a note and reads it back, through its own transport', async ({ page }) => {

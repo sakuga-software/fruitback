@@ -276,6 +276,28 @@ describe('createComposer', () => {
     assert.equal(composer.element.querySelector('b'), null);
   });
 
+  it('opens on the element’s start edge, which is its right in a right-to-left language (SKG-531)', () => {
+    const anchor = { left: 500, top: 200, bottom: 240, right: 700 };
+    const placedLeft = (translator: ReturnType<typeof createTranslator>) => {
+      const page = mountPage('<main></main>', { width: 1_000, height: 1_000 });
+      const host = page.document.createElement('div');
+      page.document.body.append(host);
+      const opened = createComposer({ document: page.document, host, onSubmit: async () => true, translator });
+      opened.open(anchor);
+      const left = opened.element.style.getPropertyValue('--fruitback-composer-left');
+      opened.destroy();
+
+      return left;
+    };
+
+    assert.equal(placedLeft(createTranslator()), '500px');
+    // 700 minus the popover's 320: its right edge sits on the element's right edge.
+    assert.equal(
+      placedLeft(createTranslator({ locale: 'ar', messages: { ar: { 'composer.send': 'ازرع' } } })),
+      '380px',
+    );
+  });
+
   it('takes its own DOM with it when destroyed', () => {
     const { host } = mount(async () => true);
 

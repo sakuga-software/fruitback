@@ -211,7 +211,7 @@ function checkbox(
 const STYLES = `
 .fruitback-panel-config {
   position: fixed;
-  right: 16px;
+  inset-inline-end: 16px;
   bottom: 68px;
   z-index: 2147483000;
   width: 280px;
@@ -279,6 +279,6 @@ const STYLES = `
   border-top: 0;
 }
 @media (max-width: 480px) {
-  .fruitback-panel-config { right: 8px; left: 8px; width: auto; }
+  .fruitback-panel-config { inset-inline: 8px; width: auto; }
 }
 `;

@@ -124,6 +124,23 @@ describe('the chrome the reporter sees (SKG-529)', () => {
     assert.equal(launchButton().textContent, 'Feedback, please');
   });
 
+  it('tells the Shadow root the language and the direction of its words (SKG-531)', () => {
+    mount(() => null);
+    const container = host?.root.host as HTMLElement;
+    assert.equal(container.dir, 'ltr');
+    assert.equal(container.lang, 'en');
+    host?.destroy();
+
+    mount(
+      () => null,
+      () => {},
+      { translator: createTranslator({ locale: 'ar', messages: { ar: { 'launch.label': 'اترك ملاحظة' } } }) },
+    );
+    const arabic = host?.root.host as HTMLElement;
+    assert.equal(arabic.dir, 'rtl');
+    assert.equal(arabic.lang, 'ar');
+  });
+
   it('gives the gear a drawing and a name, and no character', () => {
     mount(
       () => null,

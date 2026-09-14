@@ -77,6 +77,10 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
 
   const container = document.createElement('div');
   container.dataset.fruitbackHost = '';
+  // Inherited by everything in the Shadow root. The positions below are document coordinates and do
+  // not follow it (SKG-531).
+  container.dir = t.direction;
+  container.lang = t.lang;
   // Positioned at the document origin with no size of its own: children can then use document
   // coordinates directly, and nothing about it disturbs the page's layout.
   container.style.cssText = 'position:absolute;top:0;left:0;width:0;height:0;';
@@ -273,7 +277,7 @@ li { display: list-item; }
 }
 .fruitback-dock {
   position: fixed;
-  right: 16px;
+  inset-inline-end: 16px;
   bottom: 16px;
   z-index: 2147483200;
   display: flex;

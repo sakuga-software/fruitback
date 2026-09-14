@@ -145,9 +145,12 @@ export function createComposer(options: ComposerOptions): Composer {
   }
 
   /**
-   * Under the element it belongs to, flipped above when there is no room. On a narrow screen the
-   * rules below take over entirely and pin it to the bottom of the viewport, so the position set
-   * here stops mattering — which is why it is set with `style` and overridden by a media query.
+   * Under the element it belongs to, flipped above when there is no room. Aligned on the element's
+   * start edge: its left in a left-to-right language, its right otherwise. The value stays a physical
+   * left, because it is a position against the page (SKG-531).
+   *
+   * On a narrow screen the rules below take over entirely and pin it to the bottom of the viewport, so
+   * the position set here stops mattering — which is why it is set with `style` and overridden by a media query.
    */
   function place(anchor: { left: number; top: number; bottom: number; right: number }): void {
     const width = view?.innerWidth ?? 0;
@@ -156,13 +159,11 @@ export function createComposer(options: ComposerOptions): Composer {
     const own = root.getBoundingClientRect();
     const below = anchor.bottom + GAP;
     const fitsBelow = below + own.height <= scrollY + height;
+    const start = t.direction === 'rtl' ? anchor.right - WIDTH : anchor.left;
 
     // Custom properties rather than inline `left`/`top`: an inline style would beat the media query
     // below and leave the mobile sheet offset by whatever the element's position happened to be.
-    root.style.setProperty(
-      '--fruitback-composer-left',
-      `${Math.max(GAP, Math.min(anchor.left, width - WIDTH - GAP))}px`,
-    );
+    root.style.setProperty('--fruitback-composer-left', `${Math.max(GAP, Math.min(start, width - WIDTH - GAP))}px`);
     root.style.setProperty(
       '--fruitback-composer-top',
       `${fitsBelow ? below : Math.max(0, anchor.top - own.height - GAP)}px`,
@@ -276,7 +277,7 @@ const STYLES = `
 .fruitback-composer-drop {
   position: absolute;
   top: -7px;
-  left: 22px;
+  inset-inline-start: 22px;
   width: 14px;
   height: 14px;
   background: var(--fruitback-color-surface-raised);

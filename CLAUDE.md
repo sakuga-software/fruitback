@@ -154,7 +154,7 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   install, or resolve a version conflict over, a library it never asked for. Bundling makes their MIT
   notices our obligation (SKG-515), and `packages/widget/THIRD-PARTY-NOTICES.md` is how they travel.
   Phosphor is in there for the same reason by a different route: two of its paths are compiled in.
-- **93 kB gzipped, guarded by a test that trips at 150 kB** — a tripwire for a dependency that should
+- **102 kB gzipped (measured on SKG-531), guarded by a test that trips at 150 kB** — a tripwire for a dependency that should
   have been bundled out, not a budget.
 
 **Deeper** — *The published package*: [docs/decisions/packaging.md](docs/decisions/packaging.md).
@@ -331,29 +331,37 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   and the dialog `Fruitback settings`. A host catalog must keep `settings.open` and `settings.dialog` apart
   too.
 
-**The words** (SKG-530)
+**The words** (SKG-530, SKG-531)
 
-- **`messages.ts` holds every word, behind a key, and English is the only catalog in the bundle.** No
-  i18n library. A host passes `init({ locale, messages })`, with catalogs keyed by locale tag: the
-  exact tag, then the primary subtag, then English. A French site shows English until it passes one.
-- **`ENGLISH` is exhaustive, and a host catalog is parsed field by field.** A bad entry costs that
-  entry. A locale tag `Intl` refuses costs the translation, never the mount — it throws otherwise.
-- **Plural rules follow the catalog that supplied the message**; dates follow the locale the reader
-  asked for.
+- **`messages.ts` holds every word, behind a key. English and French are bundled** and maintained
+  here; English is the default. No i18n library. A host passes `init({ locale, messages })`. For
+  `fr-CA` a key comes from the host's `fr-CA`, the bundled `fr-CA`, the host's `fr`, the bundled `fr`,
+  then English.
+- **A bundled catalog is exhaustive** (`Catalog`) and keeps English's placeholders — a test compares
+  them. A host catalog is parsed field by field: a bad entry costs that entry, and a locale tag `Intl`
+  refuses costs the translation, never the mount — it throws otherwise.
+- **Plural rules and number formats follow the catalog that supplied the message.** Bylines are
+  relative dates in the language of the words, with the absolute date in `title`.
+- **Layout follows the reading direction; geometry never does.** `dir` and `lang` go on the host
+  element, from the language of the words. The dock, the panel and the drawer sit at
+  `inset-inline-end`. The pin, its badge and the document-coordinate containers stay physical, and the
+  popover and the thread keep a physical `left` computed from the element's start edge.
+  `direction.test.ts` reads the stylesheets and enforces the split; `e2e/direction.spec.ts` checks it
+  in Arabic.
 - **`languageOf(document)` reads the mounted page's navigator.** Node's global one also says `en-US`,
   so a binding that read `globalThis` passes every test that expects English.
 - **A message is text.** Set it with `textContent` or an attribute, never inside an `innerHTML`
   template — the composer sets its words after the template is parsed.
 - **`label` still wins over `launch.label`.** The factories take an optional `translator` and default
-  to English, because the playground calls them directly. `messages.test.ts` renders the widget in a
-  pseudo-locale and fails on any word that did not come from the catalog.
+  to the page's language, because the playground calls them directly. `messages.test.ts` renders the
+  widget in a pseudo-locale and fails on any word that did not come from the catalog.
 - **The E2E suite pins `locale: 'en-US'`**, because the specs find the chrome by its English names.
 
 **Deeper** — in [docs/decisions/widget.md](docs/decisions/widget.md):
 *The widget*, *The host, and why everything lives in one Shadow root*,
 *The look, and the one thing a host may change*, *One prefix, and it is `fruitback`*,
 *The popover*, *Who carries the calls*, *The optional picture*, *The settings panel*,
-*The words, and the one language the bundle carries*.
+*The words, and the catalogs the bundle carries*.
 And *No emoji, and what replaced them* in [docs/decisions/icons.md](docs/decisions/icons.md).
 
 ## Re-anchoring, and why a pin says how sure it is
