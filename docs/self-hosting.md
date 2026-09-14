@@ -449,7 +449,7 @@ Before the first `docker compose up` with the new file, change these lines in `.
 3. **Set `TRUSTED_PROXY_HOPS` to the number of proxies in front.** The old template wrote 1. Keep 1
    behind one Traefik; change it to 0 if the port is published directly, or a forged
    `X-Forwarded-For` escapes the rate limit.
-4. **Add `FRUITBACK_IMAGE`** only to pin a version or a digest. Without it, the file pulls `edge`.
+4. **Add `FRUITBACK_IMAGE`** only to choose a version or to pin a digest. Without it, the file pulls `edge`.
 
 ## Sizing, and more than one replica
 
