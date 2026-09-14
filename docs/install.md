@@ -49,23 +49,36 @@ goes through: losing a label is a triage annoyance, losing someone's note is a b
 
 ## 2. The worker
 
-It is a single Node process in a container. [`.env.example`](../.env.example) lists every variable it
-reads, with the reasoning next to each.
+It is a single Node process in a container. [`.env.example`](../.env.example) lists every variable
+[`docker-compose.yml`](../docker-compose.yml) reads, with the reasoning next to each: the worker's own,
+and the two that choose the image and the host port.
 
-The minimum:
+The minimum, with the seeds in Linear:
 
 ```bash
+FRUITBACK_STORE=linear
 LINEAR_API_KEY=lin_api_…
 LINEAR_TEAM_ID=…
 ALLOWED_ORIGINS=https://staging.acme.test
 ```
 
+With SQLite, which is the default of `docker-compose.yml`, `ALLOWED_ORIGINS` is the only line to set.
+
 ### Locally
 
+From the sources, with no container and no `.env`. The command keeps running, so use another
+terminal for anything else:
+
 ```bash
-cp .env.example .env                  # then fill LINEAR_API_KEY
-pnpm --filter @fruitback/worker dev   # node --watch, no container
-docker compose up --build worker      # the real image
+pnpm --filter @fruitback/worker dev:fake   # node --watch, in-memory store
+```
+
+In a container, with the image built from this checkout:
+
+```bash
+cp .env.example .env                  # then set ALLOWED_ORIGINS
+docker build -f apps/worker/Dockerfile -t ghcr.io/sakuga-software/fruitback-worker:edge .
+docker compose up -d --wait           # the image you just built
 ```
 
 To try the whole loop with no Linear account at all, `pnpm dev` runs the worker against an in-memory
@@ -81,7 +94,8 @@ things matter:
   names it, so a misconfigured deploy never gets traffic and `curl /health` tells you what to set.
 - **`TRUSTED_PROXY_HOPS` is how many proxies sit in front of the container** — `1` for Traefik alone.
   `X-Forwarded-For` is appended to by each proxy, so entries on the left are caller-controlled and
-  forgeable. Set it too low and the rate-limit key becomes something the caller picks.
+  forgeable. Set it too high and the rate-limit key becomes something the caller picks. Set it too low
+  and every caller shares one bucket, the proxy's.
 
 Check it before going further:
 

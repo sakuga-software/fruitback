@@ -858,6 +858,17 @@ And *The published image* in [docs/decisions/image.md](docs/decisions/image.md).
   `packages: write`, and `actions/checkout` otherwise writes it into `.git/config`.
 - **Attaching the package is not publishing it.** A new package inherits the repository's visibility;
   making it public is a manual, one-time change in the package settings.
+- **`docker-compose.yml` pulls the image, and `compose.test.ts` holds it to the worker** (SKG-541).
+  The `worker` service passes exactly `WorkerEnv` plus every store's `envNames`, except `NODE_ENV`,
+  `HOST` and `FRUITBACK_FAKE_LINEAR`. Each value comes from `.env`, except `PORT`, which is the literal
+  `8080`; the host side reads `FRUITBACK_PORT`. `.env.example` assigns exactly what the file
+  interpolates. A new variable in the worker fails the suite until both files carry it.
+- **The compose file sets `TRUSTED_PROXY_HOPS` to 0; the code defaults to 1.** The file publishes the
+  port directly, and 1 there lets a forged `X-Forwarded-For` escape the rate limit (measured). Keep
+  the two defaults apart in prose: `security.test.ts` pins the code's.
+- **CI's `image` job plants a pin through the compose file from an empty directory**, with the fresh
+  build tagged under the name the file pulls. A variable exported in the shell wins over `.env`, so
+  run the same check locally under `env -i`.
 
 **Deeper** — [docs/decisions/image.md](docs/decisions/image.md).
 

@@ -13,11 +13,24 @@ accurate and incomplete in that shape.
 A plain Node HTTP process — `node:http` adapted onto a web-standard handler, no framework. It runs as
 a container: Dokploy builds the image from a GitHub push and puts Traefik in front of it on the VPS.
 
+From the sources, with no container and no `.env`. `dev:fake` keeps running:
+
 ```bash
-cp .env.example .env                            # then fill LINEAR_API_KEY
-pnpm --filter @fruitback/worker dev             # node --watch on the TypeScript, no container
+pnpm --filter @fruitback/worker dev:fake        # node --watch on the TypeScript, in-memory store
+```
+
+The bundle the image ships, in another terminal:
+
+```bash
 pnpm --filter @fruitback/worker build           # esbuild → dist/server.mjs, one file
-docker compose up --build worker                # the real image, locally
+```
+
+In a container, with the image built from this checkout:
+
+```bash
+cp .env.example .env                            # then set ALLOWED_ORIGINS
+docker build -f apps/worker/Dockerfile -t ghcr.io/sakuga-software/fruitback-worker:edge .
+docker compose up -d --wait                     # your build, under the name the compose file pulls
 ```
 
 | Route                            | Status                                                                    |
@@ -59,22 +72,92 @@ Answers are cached for 15 s: the same page opened by a room full of reviewers co
 the Linear quota, and a failed call is never cached. The cache and the rate limiter both live
 inside the container, which matters as soon as there are two.
 
+## Running it with docker compose
+
+`docker-compose.yml` pulls the published image and needs nothing else from this repository. The
+[README](../README.md#install-in-public-mode) has the three commands. What the file decides:
+
+- **SQLite on a named volume, by default.** `fruitback-data` is mounted at `/data`, which holds the
+  seeds and, when they are on, the extension's sessions. To use Linear, set `FRUITBACK_STORE=linear`,
+  `LINEAR_API_KEY` and `LINEAR_TEAM_ID` in `.env`.
+- **The volume belongs to the Compose project.** Compose names it `<project>_fruitback-data`, so two
+  stacks on one host keep separate data, and `docker compose down -v` in one cannot delete the other's.
+  It is therefore not the `fruitback-data` volume that the `docker run` command below opens.
+- **`FRUITBACK_IMAGE` is a complete image reference**, so it takes a tag or a digest
+  (`ghcr.io/sakuga-software/fruitback-worker@sha256:…`). **Compose does not pull a tag that is already
+  on the machine**, and `edge` moves on every merge: run `docker compose pull` before
+  `docker compose up -d --wait` to update.
+- **`TRUSTED_PROXY_HOPS` is 0, because the file publishes the port directly.** The worker's own
+  default is 1, for one Traefik. With 1 and no proxy in front, the address comes from the
+  `X-Forwarded-For` the caller wrote, so each forged address gets a new bucket and the limit never
+  applies. Measured on this file: with 1, forged reads kept answering `200` past the limit; with 0,
+  they answered `429`. To put Traefik in front, follow the three steps in the file, which set 1.
+- **A variable exported in your shell wins over `.env`.** Docker Compose reads the shell first, so a
+  `LINEAR_API_KEY` left in a shell profile reaches the container even when `.env` leaves it empty.
+- **`.env.example` lists exactly the variables the compose file reads.** `apps/worker/src/compose.test.ts`
+  compares the file with `WorkerEnv` and with every store's `envNames`. A variable the worker starts
+  to read fails the suite until both files carry it. Dokploy does not read the compose file, so the
+  test is what keeps the two in step.
+
+### Upgrading a deployment from before SKG-541
+
+The old compose file built the image, kept no volume, read `PORT` for the host port, defaulted
+`TRUSTED_PROXY_HOPS` to 1, and passed no `FRUITBACK_STORE`, so the worker ran on Linear. An `.env`
+written for it keeps those values, and the new file reads it differently.
+
+**If the old deployment kept SQLite seeds or extension sessions under `/data`, copy them out first.**
+The old file mounted no volume, so `/data` was an anonymous volume that the image declares. The new
+file mounts the named volume there, which starts empty, and the pins and sessions then seem to be
+gone. The old volume is not deleted, but nothing mounts it.
+
+Set `dbs` to the files the old deployment used: the value of `FRUITBACK_SQLITE_PATH`, and the value of
+`FRUITBACK_SESSION_PATH` if it was set. A file outside `/data` was never on a volume, and nothing is
+left to copy. With the **old** file still in place:
+
+```bash
+dbs="/data/fruitback.db /data/sessions.db"
+for db in $dbs; do
+  docker compose exec -T worker sqlite3 "$db" ".backup '$db.migrate'"
+  docker compose cp "worker:$db.migrate" "./$(basename "$db").migrate"
+done
+```
+
+Then replace the compose file, make the changes below with the **same** paths in `.env`, start it, and
+restore into the new volume:
+
+```bash
+docker compose up -d --wait
+for db in $dbs; do
+  docker compose cp "./$(basename "$db").migrate" "worker:$db.migrate"
+  docker compose exec -T worker sqlite3 "$db" ".restore '$db.migrate'"
+  docker compose exec -T worker rm "$db.migrate"
+done
+docker compose up -d --wait --force-recreate
+```
+
+Tested on a stand-in for the old file, with sessions on: after the switch the pin was gone; after the
+restore and the recreate, the pin was back and the pairing code was still in `sessions.db`. `exec` runs
+as the `node` user, which owns the new files, so the restore needs no change of owner.
+
+Before the first `docker compose up` with the new file, change these lines in `.env`:
+
+1. **If the notes are in Linear, add `FRUITBACK_STORE=linear`.** Otherwise the worker starts on an
+   empty SQLite file, and every pin seems to be gone.
+2. **Rename `PORT` to `FRUITBACK_PORT`.** The new file ignores `PORT`, so a custom host port falls
+   back to 8080.
+3. **Set `TRUSTED_PROXY_HOPS` to the number of proxies in front.** The old template wrote 1. Keep 1
+   behind one Traefik; change it to 0 if the port is published directly, or a forged
+   `X-Forwarded-For` escapes the rate limit.
+4. **Add `FRUITBACK_IMAGE`** only to pin a version or a digest. Without it, the file pulls `edge`.
+
 ## Storing the seeds in SQLite
 
 One file, `node:sqlite`, no dependency and no native module to compile. The schema is created on
 first open and migrated in place, so there is no separate command to run — a self-hoster starts one
 container, not two.
 
-```yaml
-# docker-compose.yml
-services:
-  worker:
-    environment:
-      FRUITBACK_STORE: sqlite
-      FRUITBACK_SQLITE_PATH: /data/fruitback.db
-    volumes:
-      - fruitback-data:/data
-```
+`docker-compose.yml` does this by default: `FRUITBACK_STORE=sqlite`, the file at
+`/data/fruitback.db`, and the `fruitback-data` volume mounted at `/data`.
 
 **Back it up with one line**, and do it against the running container rather than copying the file —
 a live SQLite database has a write-ahead log beside it, and `cp` catches neither consistently:
@@ -115,11 +198,20 @@ it succeeds.
 ```bash
 docker run -d --name fruitback -p 8080:8080 \
   -e ALLOWED_ORIGINS=https://staging.example.com \
+  -e TRUSTED_PROXY_HOPS=0 \
   -e FRUITBACK_STORE=sqlite \
   -e FRUITBACK_SQLITE_PATH=/data/fruitback.db \
   -v fruitback-data:/data \
   ghcr.io/sakuga-software/fruitback-worker:edge
 ```
+
+`TRUSTED_PROXY_HOPS=0` because this command publishes the port with nothing in front. Without it the
+worker uses its default of 1, and a forged `X-Forwarded-For` gets a new rate-limit bucket on every
+request. Behind a proxy, set the number of proxies instead.
+
+This `fruitback-data` volume is not the one `docker-compose.yml` creates, which Compose names after its
+project. To move the data from one to the other, back it up with the `sqlite3 .backup` command above
+and restore the file into the other volume.
 
 **`edge` and not `latest`, until the first release.** The versioned tags come from a `v*` git tag, so
 before one is pushed `latest`, `1.4.2` and `1.4` resolve to nothing and asking for one gets you
@@ -195,5 +287,5 @@ variable to set. The process also drains in-flight requests on `SIGTERM` before 
 **`TRUSTED_PROXY_HOPS` deserves a second of attention.** It is how many reverse proxies sit in front
 of the container — `1` for Traefik alone. `X-Forwarded-For` is appended to by each proxy, so entries
 on the left came from the caller and are forgeable; only the rightmost ones were written by
-infrastructure you control. Set this too low and the rate-limit key becomes caller-controlled, which
-makes the limit trivially bypassable.
+infrastructure you control. Set this too high and the rate-limit key becomes caller-controlled, which
+makes the limit trivially bypassable. Set it too low and every caller shares one bucket, the proxy's.
