@@ -1,4 +1,4 @@
-import { type KeyObject, createPrivateKey, sign } from 'node:crypto';
+import { type KeyObject, createPrivateKey, sign, createHash } from 'node:crypto';
 import {
   DEFAULT_SEED_STAGE,
   FRUITBACK_LABEL,
@@ -32,6 +32,22 @@ const GITHUB_API = 'https://api.github.com';
 
 /** Strawberry, like the Linear label. GitHub wants the hex value without `#`. */
 const LABEL_COLOR = 'E53935';
+
+/** A label name that GitHub keeps as written: lowercase, no comma, and 50 characters at most. */
+const PLAIN_LABEL = /^[a-z0-9._:-]{1,50}$/;
+
+/**
+ * The name of a label on GitHub. The write and the read must both use it.
+ *
+ * GitHub compares label names without case, limits them to 50 characters, and splits the `labels`
+ * query on commas. If `Acme` and `acme` used their own names, the two clients would share one label and
+ * read each other's notes. So a name that is not a plain label becomes `fruitback:` and a hash of it.
+ */
+export function githubLabelName(name: string): string {
+  if (PLAIN_LABEL.test(name)) return name;
+
+  return `${FRUITBACK_LABEL}:${createHash('sha256').update(name).digest('hex').slice(0, 32)}`;
+}
 
 /** GitHub refuses an app JWT whose `exp` is more than ten minutes ahead. */
 const APP_JWT_LIFETIME_SECONDS = 9 * 60;
@@ -174,7 +190,7 @@ const accessTokenSchema = z.object({ token: z.string().min(1), expires_at: z.str
 
 type InstallationToken = { token: string; expiresAt: number };
 
-type TokenSource = { get(repository: string): Promise<string>; drop(repository: string): void };
+type TokenSource = { get(repository: string): Promise<string>; drop(repository: string, token: string): void };
 
 /**
  * One installation token per repository, shared by every request.
@@ -184,6 +200,7 @@ type TokenSource = { get(repository: string): Promise<string>; drop(repository: 
  */
 function createTokenSource(config: GithubConfig, now: () => number): TokenSource {
   const tokens = new Map<string, Promise<InstallationToken>>();
+  const issued = new WeakMap<Promise<InstallationToken>, string>();
 
   async function mint(repository: string): Promise<InstallationToken> {
     const jwt = signAppJwt(config.appId, config.privateKey, now());
@@ -215,9 +232,12 @@ function createTokenSource(config: GithubConfig, now: () => number): TokenSource
           tokens.set(repository, minting);
           // This handler runs before the callers that wait on the same promise. So a failed mint
           // leaves the map before any caller can see it, and the next request mints again.
-          minting.catch(() => {
-            if (tokens.get(repository) === minting) tokens.delete(repository);
-          });
+          minting.then(
+            (token) => issued.set(minting, token.token),
+            () => {
+              if (tokens.get(repository) === minting) tokens.delete(repository);
+            },
+          );
 
           return (await minting).token;
         }
@@ -227,8 +247,10 @@ function createTokenSource(config: GithubConfig, now: () => number): TokenSource
         if (tokens.get(repository) === held) tokens.delete(repository);
       }
     },
-    drop(repository) {
-      tokens.delete(repository);
+    drop(repository, token) {
+      // A 401 can arrive late, for a token that a newer mint replaced. It must not evict the new token.
+      const held = tokens.get(repository);
+      if (held !== undefined && issued.get(held) === token) tokens.delete(repository);
     },
   };
 }
@@ -271,6 +293,12 @@ const commentRowSchema = z.object({
   user: z.object({ login: z.string() }).nullable(),
 });
 
+/**
+ * Pages read after the last page that `count` predicts. `count` comes from the issue list, and a reply
+ * can arrive after it. GitHub has no newest-first order for these comments.
+ */
+const COMMENT_PAGES_AFTER_COUNT = 2;
+
 /** The pages that hold the newest `COMMENTS_PER_ISSUE` comments. GitHub sorts them oldest first. */
 function commentPages(count: number): number[] {
   const last = Math.ceil(count / COMMENTS_PER_ISSUE);
@@ -292,7 +320,7 @@ export function createGithubStore(config: GithubConfig, options: GithubStoreOpti
     } catch (error) {
       // GitHub revoked the token before its expiry, for example because the App was uninstalled.
       // The next request mints a new one instead of failing until the expiry.
-      if (error instanceof GithubResponseError && error.status === 401) tokens.drop(repository);
+      if (error instanceof GithubResponseError && error.status === 401) tokens.drop(repository, token);
       throw error;
     }
   }
@@ -314,10 +342,14 @@ export function createGithubStore(config: GithubConfig, options: GithubStoreOpti
     if (count === 0) return [];
 
     const rows: unknown[] = [];
-    for (const page of commentPages(count)) {
+    const pages = commentPages(count);
+    const last = pages.at(-1) ?? 1;
+    for (let page = pages[0] ?? 1; page <= last + COMMENT_PAGES_AFTER_COUNT; page += 1) {
       const params = new URLSearchParams({ per_page: String(COMMENTS_PER_ISSUE), page: String(page) });
       const answer = await call(repository, `/repos/${repository}/issues/${number}/comments?${params}`);
-      if (Array.isArray(answer)) rows.push(...answer);
+      const received = Array.isArray(answer) ? answer : [];
+      rows.push(...received);
+      if (page >= last && received.length < COMMENTS_PER_ISSUE) break;
     }
 
     return rows
@@ -344,9 +376,7 @@ export function createGithubStore(config: GithubConfig, options: GithubStoreOpti
         // An issue must carry every label in the list. Measured on cli/cli, 2026-09-14: `bug` gave
         // 100+ issues, `gh-codespace` 42, and `bug,gh-codespace` 22, each with both labels. The
         // client label is what keeps one client's pins off another client's site.
-        // GitHub splits this value on commas. A label with a comma, from a client ID such as
-        // `acme,staging`, stays out of the query, and `matchPage` checks it on the row.
-        labels: labels.filter((name) => !name.includes(',')).join(','),
+        labels: labels.join(','),
         state: 'all',
         sort: 'created',
         direction: 'desc',
@@ -370,7 +400,7 @@ export function createGithubStore(config: GithubConfig, options: GithubStoreOpti
 
     async create(seed: Seed, client: ClientConfig | undefined): Promise<CreatedIssue> {
       const repository = repositoryFor(config, client);
-      const labels = buildIssueLabels(seed);
+      const labels = buildIssueLabels(seed).map(githubLabelName);
 
       for (const name of labels) await ensureLabel(repository, name);
 
@@ -387,7 +417,9 @@ export function createGithubStore(config: GithubConfig, options: GithubStoreOpti
 
     async findForPage(query: SeedIssueQuery, client: ClientConfig | undefined, policy: ClientPolicy) {
       const repository = repositoryFor(config, client);
-      const labels = query.clientId ? [FRUITBACK_LABEL, clientLabelName(query.clientId)] : [FRUITBACK_LABEL];
+      const labels = (query.clientId ? [FRUITBACK_LABEL, clientLabelName(query.clientId)] : [FRUITBACK_LABEL]).map(
+        githubLabelName,
+      );
 
       const matched = (await listIssues(repository, labels)).flatMap((row) => {
         const match = matchPage(row, query.url, labels);
@@ -423,15 +455,15 @@ export function createGithubStore(config: GithubConfig, options: GithubStoreOpti
  * The issue and its seed, if the row is a seed of this page.
  *
  * The list endpoint also returns pull requests. The label filter cannot tell a page apart from
- * another, so the seed itself decides, as in the Linear store. The labels are checked again because
- * the query can leave one out.
+ * another, so the seed itself decides, as in the Linear store. The labels are checked again, without
+ * case as GitHub compares them, so the client isolation does not rest on the query alone.
  */
 function matchPage(row: unknown, canonicalUrl: string, labels: string[]): { issue: IssueRow; seed: Seed } | null {
   const issue = issueRowSchema.safeParse(row);
   if (!issue.success || issue.data.pull_request !== undefined) return null;
 
-  const carried = labelNames(issue.data);
-  if (!labels.every((name) => carried.includes(name))) return null;
+  const carried = labelNames(issue.data).map((name) => name.toLowerCase());
+  if (!labels.every((name) => carried.includes(name.toLowerCase()))) return null;
 
   const parsed = parseSeedFromDescription(issue.data.body);
   if (!parsed.ok || parsed.seed.page.url !== canonicalUrl) return null;

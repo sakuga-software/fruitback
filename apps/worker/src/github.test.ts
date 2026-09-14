@@ -4,7 +4,14 @@ import { afterEach, describe, it, mock } from 'node:test';
 import { DEFAULT_SEED_STAGE, SEED_STAGES, buildIssueDescription } from '@fruitback/shared';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { type ClientPolicy, readClientMap } from './clients.ts';
-import { GITHUB_STAGES, createGithubStore, createGithubStoreSpec, signAppJwt, stageForGithubIssue } from './github.ts';
+import {
+  GITHUB_STAGES,
+  createGithubStore,
+  createGithubStoreSpec,
+  githubLabelName,
+  signAppJwt,
+  stageForGithubIssue,
+} from './github.ts';
 import { StoreError } from './store.ts';
 
 /**
@@ -208,6 +215,43 @@ describe('the installation token', () => {
     assert.equal(calls.at(-1)?.authorization, 'Bearer ghs_ok');
   });
 
+  it('is dropped only when GitHub refuses that token, not a newer one', async () => {
+    // A 401 can land after a newer token replaced the one it refused. Found in review.
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let minted = 0;
+    const calls = fakeGithub({
+      'GET /repos/acme/site/installation': () => json(200, { id: 77 }),
+      'POST /app/installations/77/access_tokens': () => {
+        minted += 1;
+
+        return json(201, { token: `ghs_${minted}`, expires_at: `2026-09-14T1${2 + minted}:00:00Z` });
+      },
+      'GET /repos/acme/site/issues': async (call) => {
+        if (call.authorization !== 'Bearer ghs_1') return json(200, []);
+        await gate;
+
+        return json(401, { message: 'Bad credentials' });
+      },
+    });
+    let now = NOW;
+    const store = createGithubStore(CONFIG, { now: () => now });
+    const read = () => store.findForPage({ url: PAGE, clientId: 'acme' }, undefined, POLICY);
+
+    const late = read();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    now = Date.parse('2026-09-14T12:56:00Z');
+    await read();
+    release();
+    await assert.rejects(late, StoreError);
+    await read();
+
+    assert.equal(mints(calls), 2, 'the late 401 evicted the newer token');
+    assert.equal(calls.at(-1)?.authorization, 'Bearer ghs_2');
+  });
+
   it('is minted again after GitHub refuses it', async () => {
     let reads = 0;
     const calls = fakeGithub({
@@ -227,6 +271,27 @@ describe('the installation token', () => {
 
 describe('create', () => {
   const created = () => json(201, { id: 9001, number: 12, html_url: 'https://github.com/acme/site/issues/12' });
+
+  it('writes the hashed label for a client ID GitHub would change', async () => {
+    const calls = fakeGithub({
+      ...installation(),
+      'POST /repos/acme/site/labels': () => json(201, {}),
+      'POST /repos/acme/site/issues': created,
+    });
+    const store = createGithubStore(CONFIG, { now: () => NOW });
+    const seed = seedFixture({ client: { id: 'Acme', name: 'Acme' } });
+
+    await store.create(seed, undefined, POLICY);
+
+    const label = githubLabelName('fruitback:Acme');
+    assert.deepEqual(
+      apiCalls(calls)
+        .filter((call) => call.path.endsWith('/labels'))
+        .map((call) => (call.body as { name: string }).name),
+      ['fruitback', label],
+    );
+    assert.deepEqual((apiCalls(calls).at(-1)?.body as { labels: string[] }).labels, ['fruitback', label]);
+  });
 
   it('creates the two labels, then the issue with the shared codec', async () => {
     const seed = seedFixture();
@@ -355,12 +420,22 @@ describe('findForPage', () => {
     assert.deepEqual(found[0]?.seed, seed);
   });
 
-  it('keeps a comma in a client ID out of the query, and checks that label on the row', async () => {
-    // GitHub splits `labels` on commas, so `fruitback:acme,staging` in the query would ask for
-    // `fruitback:acme` and `staging`. Found in review.
+  it('gives a client ID that GitHub would change a hashed label, on the write and on the read', async () => {
+    // GitHub splits `labels` on commas, compares names without case, and stops at 50 characters.
+    // Found in review, and the case measured on cli/cli: `labels/BUG` answers the `bug` label.
+    for (const clientId of ['acme,staging', 'Acme', 'a'.repeat(45)]) {
+      const label = githubLabelName(`fruitback:${clientId}`);
+
+      assert.match(label, /^fruitback:[0-9a-f]{32}$/, clientId);
+      assert.notEqual(label, 'fruitback:acme', clientId);
+    }
+    assert.equal(githubLabelName('fruitback:acme'), 'fruitback:acme');
+    assert.equal(githubLabelName('fruitback'), 'fruitback');
+
+    const label = githubLabelName('fruitback:acme,staging');
     const { calls, issues } = readWith(
       [
-        row({ labels: [{ name: 'fruitback' }, { name: 'fruitback:acme,staging' }] }),
+        row({ labels: [{ name: 'fruitback' }, { name: label }] }),
         row({ id: 2, number: 2, labels: [{ name: 'fruitback' }, { name: 'fruitback:acme' }, { name: 'staging' }] }),
       ],
       {},
@@ -370,11 +445,28 @@ describe('findForPage', () => {
 
     const found = await issues;
 
-    assert.equal(apiCalls(calls)[0]?.query.get('labels'), 'fruitback');
+    assert.equal(apiCalls(calls)[0]?.query.get('labels'), `fruitback,${label}`);
     assert.deepEqual(
       found.map((issue) => issue.id),
       ['9001'],
     );
+  });
+
+  it('keeps the notes of Acme off acme, whose label GitHub would treat as the same', async () => {
+    const { issues } = readWith(
+      [row({ labels: [{ name: 'fruitback' }, { name: 'fruitback:acme' }] })],
+      {},
+      POLICY,
+      'Acme',
+    );
+
+    assert.deepEqual(await issues, []);
+  });
+
+  it('matches a label without case, as GitHub does', async () => {
+    const { issues } = readWith([row({ labels: [{ name: 'Fruitback' }, { name: 'FRUITBACK:ACME' }] })]);
+
+    assert.equal((await issues).length, 1);
   });
 
   it('keeps an issue without the client label off that client', async () => {
@@ -461,6 +553,38 @@ describe('findForPage', () => {
       author: 'octocat',
     });
     assert.equal('author' in (comments.at(-1) ?? {}), false, 'a comment with no user has no author');
+  });
+
+  it('reads on past the page the count predicts, for a reply that came after the list', async () => {
+    // The list said 20. Five more replies arrived before the comments were read. Found in review.
+    const { calls, issues } = readWith([row({ comments: 20 })], {
+      'GET /repos/acme/site/issues/12/comments': (call) => {
+        const page = Number(call.query.get('page'));
+        const first = (page - 1) * 20 + 1;
+        const last = Math.min(page * 20, 25);
+
+        return json(
+          200,
+          Array.from({ length: Math.max(0, last - first + 1) }, (_, index) => ({
+            id: first + index,
+            body: 'reply',
+            created_at: `2026-09-14T10:${String(first + index).padStart(2, '0')}:00Z`,
+            user: null,
+          })),
+        );
+      },
+    });
+
+    const comments = (await issues)[0]?.comments ?? [];
+
+    assert.deepEqual(
+      calls.filter((call) => call.path.endsWith('/comments')).map((call) => call.query.get('page')),
+      ['1', '2'],
+    );
+    assert.deepEqual(
+      comments.map((reply) => reply.id),
+      Array.from({ length: 20 }, (_, index) => String(6 + index)),
+    );
   });
 
   it('asks for no comment if the client hides them, and says nothing about them', async () => {

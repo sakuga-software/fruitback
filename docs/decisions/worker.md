@@ -382,9 +382,19 @@ degradation the ticket asked to have written down rather than discovered.
 - **A label that cannot be created stops the write.** `422 already_exists` is success. Any other failure
   is a `502`, so the widget keeps the note: an issue without its labels is one no read finds.
 - **Pull requests come back from the issues endpoint**, and are dropped by their `pull_request` key.
-- **GitHub splits `labels` on commas, and a client ID can hold one** (found in review). A label with a
-  comma stays out of the query, and `matchPage` checks every label the read asked for on the row
-  itself, so the isolation does not depend on the query alone.
+- **A client's label is a name GitHub keeps as written, or a hash** (found in review, in two rounds).
+  GitHub splits `labels` on commas, limits a name to 50 characters, and compares names without case:
+  measured on `cli/cli`, `labels/BUG` answers the `bug` label and `labels=BUG` counts what `bug` counts.
+  The first fix kept a comma label out of the query, which made the 1,000-issue cap global across
+  clients, and it did nothing for `Acme` and `acme`, which would have shared one label and read each
+  other's notes. `githubLabelName` is now applied on the write and on the read: a lowercase name of
+  50 characters or fewer stays, anything else becomes `fruitback:` and 32 hex characters of its
+  SHA-256. `matchPage` still checks every label on the row, without case as GitHub does.
+- **A late `401` drops only the token it refused.** Evicting whatever the map held could throw away a
+  newer token a concurrent read had just minted.
+- **The comment count is a hint.** It comes from the issue list, and a reply can arrive after it;
+  `/issues/{n}/comments` has no newest-first order, only `since`. The store reads on while the last page
+  is full, two pages at most past the count.
 - **Comment lists are fetched four at a time.** Only the pins of the page need them, but a page with
   many pins would otherwise open one request per pin at once, and GitHub's secondary rate limit
   counts concurrent requests (found in review).

@@ -666,8 +666,10 @@ and *The team mode, and the call the page cannot make*:
   `401` drops the token. The installation is found from the repository, so there is no variable for it.
 - **GitHub's `labels=a,b` is AND** (measured on `cli/cli`: 42 for one label, 22 for the pair). It is
   what keeps one client's pins off another's site, like the `and:` clause on Linear. A count at the
-  page size proves nothing: the first check compared three counts of 100. GitHub splits the value on
-  commas, so a label with a comma stays out of the query, and `matchPage` checks every label on the row.
+  page size proves nothing: the first check compared three counts of 100. GitHub also splits the value
+  on commas, caps a label at 50 characters and ignores case, so `githubLabelName` hashes any client
+  label that is not plain lowercase — on the write and the read alike — and `matchPage` rechecks every
+  label on the row.
 - **A GitHub read lists the client's issues by label and re-checks `seed.page.url`; it never
   searches.** Search is 30 requests a minute. Every page read walks the client's list, newest first,
   stopped at 1,000 issues, and the read cache is what protects the hourly budget.

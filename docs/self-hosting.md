@@ -394,7 +394,10 @@ docker start fruitback
 ## Storing the seeds in GitHub Issues
 
 Each note becomes an issue in one repository, labelled `fruitback`, and also `fruitback:<client>` when
-the note names a client. The seed is in a fenced block at the end of the body. The worker signs in as a GitHub App, never with a
+the note names a client. The seed is in a fenced block at the end of the body. GitHub compares label
+names without case and limits them to 50 characters, so a client ID with a capital letter, a comma or
+another character outside `a-z`, `0-9`, `.`, `_` and `-`, or a long one, gets `fruitback:` and a hash of
+the ID instead. The worker signs in as a GitHub App, never with a
 personal token. A personal token does not expire and reaches every repository of its owner. The token
 the worker mints expires after one hour and reaches one repository.
 
@@ -465,7 +468,8 @@ An installation token has a budget of at least 5,000 requests an hour. Every rea
 issues of the client, 100 a call, newest first, and stops at 1,000 issues: a client with more loses its
 oldest pins. Each pin of that page with replies costs one or two more calls. The read cache keeps one
 answer per page for a short time, so a busy page costs one listing per cache window, not one per
-visitor. A write costs three calls: the two labels and the issue.
+visitor. A write costs one call per label and one for the issue: two calls for a note that names no
+client, three for a note that names one.
 
 ## Upgrading and rolling back
 
