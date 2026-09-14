@@ -38,9 +38,10 @@ export type FruitbackOptions = {
   /**
    * The host's own translations, by locale tag: `{ fr: { 'launch.label': 'Laisser un feedback' } }`.
    *
-   * English is the only catalog in the bundle. The exact tag wins over its primary subtag. If a key
-   * is missing, unknown or of the wrong shape, the widget shows the English message for that key.
-   * A plural message has one string per `Intl.PluralRules` category, and `other` is required.
+   * The bundle carries English and French (SKG-531). For each key the widget uses the first valid
+   * message in this order: the host's exact tag, the bundled exact tag, the host's primary subtag,
+   * the bundled primary subtag, then English. A message that is unknown or of the wrong shape is
+   * ignored. A plural message has one string per `Intl.PluralRules` category, and `other` is required.
    *
    * `settings.open` and `settings.dialog` must stay different: they name the gear and its dialog.
    */

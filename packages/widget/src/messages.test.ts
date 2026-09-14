@@ -356,6 +356,19 @@ describe('the reading direction (SKG-531)', () => {
     assert.equal(arabic.lang, 'ar');
     assert.equal(arabic.direction, 'rtl');
   });
+
+  it('stays English, left to right, when the host catalog supplies no usable message', () => {
+    // Every word falls back to English, so the language and the direction must follow it.
+    const broken = createTranslator({
+      language: 'ar',
+      messages: { ar: { 'launch.label': 42, 'orphans.count': { one: 'x' }, 'not.a.key': 'x' } as never },
+      now: () => 0,
+    });
+    assert.equal(broken.text('launch.label'), ENGLISH['launch.label']);
+    assert.equal(broken.lang, 'en');
+    assert.equal(broken.direction, 'ltr');
+    assert.equal(broken.relative(new Date(-86_400_000)), 'yesterday');
+  });
 });
 
 describe('dates and numbers (SKG-531)', () => {

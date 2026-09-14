@@ -232,8 +232,8 @@ function catalogsFor(locale: string, messages: TranslatorOptions['messages']): L
   if (typeof messages === 'object' && messages !== null) {
     for (const [tag, catalog] of Object.entries(messages)) {
       const valid = validLocale(tag);
-      if (valid === undefined || typeof catalog !== 'object' || catalog === null) continue;
-      host.set(valid.toLowerCase(), { tag: valid, catalog: catalog as Readonly<Record<string, unknown>> });
+      if (valid === undefined || !suppliesAMessage(catalog)) continue;
+      host.set(valid.toLowerCase(), { tag: valid, catalog });
     }
   }
 
@@ -244,6 +244,19 @@ function catalogsFor(locale: string, messages: TranslatorOptions['messages']): L
   const tags = [...new Set([locale.toLowerCase(), primary.toLowerCase()])];
 
   return tags.flatMap((tag) => [host.get(tag), bundled.get(tag)]).filter((link) => link !== undefined);
+}
+
+/**
+ * The first catalog in the chain sets the language and the reading direction. A catalog with no
+ * usable message must not set them, because its reader sees English words.
+ */
+function suppliesAMessage(catalog: unknown): catalog is Readonly<Record<string, unknown>> {
+  if (typeof catalog !== 'object' || catalog === null) return false;
+  const entries = catalog as Readonly<Record<string, unknown>>;
+
+  return (Object.keys(ENGLISH) as MessageKey[]).some((key) =>
+    typeof ENGLISH[key] === 'string' ? typeof entries[key] === 'string' : isPluralMessage(entries[key]),
+  );
 }
 
 function isPluralMessage(value: unknown): value is PluralMessage {

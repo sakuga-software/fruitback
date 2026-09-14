@@ -20,6 +20,8 @@ const ARABIC = {
 };
 
 test('in Arabic the dock and the popover move, and the pin stays on its element', async ({ page }) => {
+  // The popover scales in from 96%, which moves its right edge by up to six pixels mid-animation.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   const attempt = test.info().retry;
   await page.goto(`/?widget=off&case=${attempt === 0 ? 'rtl' : `rtl-retry${attempt}`}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
@@ -49,14 +51,26 @@ test('in Arabic the dock and the popover move, and the pin stays on its element'
   await launch.click();
   await target.click();
 
-  const element = await target.boundingBox();
-  const composer = await page.locator('[data-fruitback-composer]').boundingBox();
-  expect(element).not.toBeNull();
-  expect(composer, 'the popover did not open').not.toBeNull();
-  // The popover's right edge meets the element's, unless the viewport clamps it. Two pixels absorb
-  // rounding; a left-to-right placement would miss by the popover's width less the element's.
-  const expectedRight = Math.max(10 + composer!.width, Math.min(element!.x + element!.width, viewport!.width - 10));
-  expect(Math.abs(composer!.x + composer!.width - expectedRight)).toBeLessThanOrEqual(2);
+  await expect(page.getByPlaceholder(ARABIC['composer.placeholder']), 'the popover did not open').toBeVisible();
+
+  // Polled: the popover is placed after it opens. The popover's right edge meets the element's, unless
+  // the viewport clamps it. Two pixels absorb rounding; a left-to-right placement would miss by the
+  // popover's width less the element's.
+  await expect
+    .poll(
+      async () => {
+        const [element, composer] = await Promise.all([
+          target.boundingBox(),
+          page.locator('[data-fruitback-composer]').boundingBox(),
+        ]);
+        if (element === null || composer === null) return Number.POSITIVE_INFINITY;
+        const expectedRight = Math.max(10 + composer.width, Math.min(element.x + element.width, viewport!.width - 10));
+
+        return Math.abs(composer.x + composer.width - expectedRight);
+      },
+      { message: 'the popover never met the element on its right edge' },
+    )
+    .toBeLessThanOrEqual(2);
 
   await page.getByPlaceholder(ARABIC['composer.placeholder']).fill('يمين إلى يسار');
   await page.getByRole('button', { name: ARABIC['composer.send'], exact: true }).click();
