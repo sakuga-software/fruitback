@@ -19,7 +19,8 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - **`FRUITBACK_STORE=memory` swaps the real Linear for `linear-memory.ts`**, so the whole loop —
   capture, issue, pins coloured by state — runs with no API key and writes to nobody's workspace. It
   is refused under `NODE_ENV=production` (which the Dockerfile sets), `/health` answers
-  `{ ok: true, store: 'memory' }`, and the boot log says so. `FRUITBACK_FAKE_LINEAR=1` is the older
+  `{ ok: true, store: 'memory', openRead: 1 }` (measured on `dev:fake`, SKG-543: it sets no
+  `FRUITBACK_READ`, so reads are public), and the boot log says so. `FRUITBACK_FAKE_LINEAR=1` is the older
   spelling, still works, and now says at boot that it is deprecated — see *Which store, and who
   validates it* ([worker.md](worker.md)). It is
   **not** a mock: an issue is stored as the description `buildIssueDescription` produces and read

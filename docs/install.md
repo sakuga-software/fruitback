@@ -86,23 +86,31 @@ Linear and serves the playground next to it. Nothing is written to anyone's work
 
 ### On a server
 
-Deployment is Docker behind Traefik, driven by Dokploy from a GitHub push — see
-[docs/self-hosting.md](self-hosting.md) for the application settings. Whatever you use, two
-things matter:
+[docs/self-hosting.md](self-hosting.md) is the guide: the reverse proxy, every variable, backups,
+upgrades, and what to check when something is wrong. Whatever you deploy with, two things matter:
 
-- **`/health` is a real readiness probe.** It answers `503` while a required variable is missing and
-  names it, so a misconfigured deploy never gets traffic and `curl /health` tells you what to set.
-- **`TRUSTED_PROXY_HOPS` is how many proxies sit in front of the container** — `1` for Traefik alone.
-  `X-Forwarded-For` is appended to by each proxy, so entries on the left are caller-controlled and
-  forgeable. Set it too high and the rate-limit key becomes something the caller picks. Set it too low
-  and every caller shares one bucket, the proxy's.
+- **`/health` checks the configuration, not the store.** It answers `503` and names each variable that
+  is missing or wrong. It answers `200` when the SQLite file cannot be opened or Linear refuses the
+  key: those show on the first read, as `502 store-unavailable`. So check a read as well.
+- **`TRUSTED_PROXY_HOPS` is the number of proxies in front of the container**: `0` when the port is
+  published directly, `1` behind one Traefik. Too high behind a proxy that appends to
+  `X-Forwarded-For`, and a caller escapes the rate limit with a forged header. Too low, and every
+  caller shares one bucket. [Behind a reverse proxy](self-hosting.md#behind-a-reverse-proxy) has the
+  measured cases and a check you can run.
 
-Check it before going further:
+Check both before going further:
 
 ```bash
 curl https://feedback.acme.dev/health
-# {"ok":true}
+# {"ok":true,"store":"sqlite","openRead":1}
+curl 'https://feedback.acme.dev/feedback?url=https%3A%2F%2Fstaging.acme.test%2F'
+# {"url":"https://staging.acme.test/","issues":[]}
 ```
+
+`store` is the store the worker runs on. `openRead` counts the clients whose pins anyone can read, and
+is absent when there are none. With `FRUITBACK_CLIENTS` set, add `&client=<id>` to the read. The read answers `401` when the
+client's policy is `authenticated` and no token is sent, which is expected. That policy is the
+client's own `read` when the client sets one, and `FRUITBACK_READ` when it does not.
 
 ---
 

@@ -111,3 +111,72 @@ immutable.
   lines are readiness probes on a runner, not commands anybody copies, and were left alone.
 - **A shell variable wins over `.env`.** A `LINEAR_API_KEY` exported in a shell profile reached
   `docker compose config` with `.env` empty. The local run of the same check used `env -i`.
+
+## The self-hosting guide (SKG-543)
+
+The ticket turned moved material into a guide that someone who did not write the code can follow.
+What it took was mostly measuring, because four things the documentation said were not true.
+
+- **"Each proxy appends to `X-Forwarded-For`" was wrong, in five places.** Measured with the worker
+  behind each proxy on a Docker network: Traefik v3.5 and Caddy 2.10 replace the header with the
+  address they saw, so a forged `1.2.3.4` never reached the worker. nginx 1.29 with
+  `$proxy_add_x_forwarded_for` keeps it and appends. nginx in front of a default Traefik loses the
+  client's address, because Traefik overwrites nginx's header with nginx's address; with
+  `forwardedHeaders.trustedIPs` set to nginx, Traefik appends and a count of 2 is right. nginx with
+  `X-Forwarded-For $remote_addr` replaces, and a count of 2 there answered 20 × `200` then 4 × `429`,
+  so the guide's snippet uses it. The first run of that measurement answered nothing: nginx resolves
+  `proxy_pass` once at start, and it started before its upstream existed. The sentence
+  is gone from `CLAUDE.md`, `SECURITY.md`, `install.md`, `decisions/worker.md` and the old guide. The
+  claim that the leftmost entry is correct behind Cloudflare went too: nobody measured it.
+- **A wrong count costs different things behind different proxies.** Too high behind nginx, 24
+  forged reads all answered `200`. Too high behind Traefik or Caddy, the chain is shorter than the
+  count, the worker falls back to the connection's address, and every caller shares the proxy's
+  bucket. One caller cannot tell a right count from a shared bucket: both give 20 × `200` then
+  4 × `429`. That is why the guide's check has a second step, a read from another network.
+- **`/health` checks the configuration, not the store.** A SQLite file in a directory that does not
+  exist, and a Linear key that Linear refuses, both answered `200` on `/health` and
+  `502 store-unavailable` on the first read. Documented, not changed: a probe that calls the store
+  takes the container out of routing during a store outage, when the widget needs the `502` to keep
+  the note. It is the same reason `/health` never touches the `Kv`.
+- **`install.md` showed `{"ok":true}`.** The answer carries `store`, and `openRead` when a client's
+  pins are public.
+- **Wrong values the worker accepts**, which the guide documents rather than this ticket changing
+  them: `FRUITBACK_HIDE_COMMENTS=true` hides nothing, because only `1` does; `HOST=127.0.0.1` or a
+  `PORT` other than the published one leave the container `healthy` and unreachable, because the
+  healthcheck probes from inside. `PORT=abc` is the opposite case: `readPort` falls back to 8080, but
+  the healthcheck interpolates the raw value, so the container is `unhealthy` while it serves. The
+  first version of the guide said it fell back in silence; a review found the healthcheck, and a
+  measurement confirmed it.
+- **An origin with a trailing slash is accepted at boot and refuses every browser call.**
+  `ALLOWED_ORIGINS=https://staging.example.com/` answered `403 origin-not-allowed` to the origin the
+  browser sends.
+- **The sizing numbers carry their conditions.** One CPU, Apple Silicon under OrbStack, SQLite, and
+  the rate limit raised so the load tool was not refused. Reads are served from the 15-second cache,
+  so they measure the cache and the JSON. Memory stayed under 200 MiB with a 2 020-pin page.
+- **The variable reference is a test.** `compose.test.ts` compares the rows of *Every environment
+  variable* with `WorkerEnv`, every store's `envNames` and the compose file's interpolations, and
+  checks three defaults against the constants. Four mutations turn it red: a row removed, a row added,
+  and a wrong default for the rate limit and for the hop count.
+- **The guide was walked literally, by its author.** From an empty directory, under `env -i`, with the
+  image served by a local registry: compose up, the curl pin, backup, restore, the proxy check,
+  `FRUITBACK_PORT=127.0.0.1:…`, the boot log, `SIGTERM`, and the `docker run` command. The first
+  rollback test passed for the wrong reason. `{{index .RepoDigests 0}}` returned
+  `fruitback-worker@sha256:…`, a local name, and the rollback found the image still on the machine.
+  The guide now greps the registry's line, and the rollback was run again with every local copy of the
+  old image deleted: Compose pulled the noted digest, and the pin was still there. What was not done
+  is the ticket's own test, a stranger on a clean machine: the package is still private.
+- **`.restore` from a missing file erases the database, and reports success.** Found while answering
+  a review that asked to stop the worker during a restore. `sqlite3 /data/fruitback.db ".restore
+  /data/missing.db"` restored an empty database and exited `0`, and the worker came back `healthy`
+  with no pins. The guide's restore ran its copy step and its `.restore` as separate lines, so a
+  failed copy was one line away from that. Every documented restore now chains its steps with `&&`
+  and checks the file with `test -s` first, and the worker is stopped while it runs. Measured on both
+  paths, with Compose and with `docker run`: a good backup gives back its pins, and a missing one
+  stops the commands with every pin still there.
+- **The migration from before SKG-541 needed the same contract, and a review found two more gaps.**
+  Its `break` left the loop and fell through to the `docker compose up` after it, so a failed restore
+  still started the worker on the empty volume. And `for db in $dbs` iterates once under zsh, which
+  does not split a variable into words. The block now uses `docker compose create`, lists the files in
+  the loop, restores in one-off containers, and starts the worker only when a flag says every restore
+  succeeded. Measured in bash and zsh: with both files the pin and the pairing code came back; with
+  one missing, the worker was created and never started.

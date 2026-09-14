@@ -43,8 +43,10 @@ services:
       PORT: 8080
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?set ALLOWED_ORIGINS in .env}
       # WARNING: this value must be the number of proxies in front of the container. This file
-      # publishes the port directly, so the default is 0. If it is too high, a caller writes its
-      # own address in X-Forwarded-For and gets a new rate-limit bucket on every request.
+      # publishes the port directly, so the default is 0. If it is too high behind nothing, or behind
+      # a proxy that appends to X-Forwarded-For, a caller writes its own address there and gets a new
+      # rate-limit bucket on every request. Behind Traefik or Caddy, a value that is too high puts every
+      # caller in one bucket.
       TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-0}
       RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-}
       FRUITBACK_STORE: ${FRUITBACK_STORE:-sqlite}

@@ -290,10 +290,11 @@ degradation the ticket asked to have written down rather than discovered.
 - **Verified in the container, not only in `node --test`**: boot on `FRUITBACK_STORE=sqlite`, `/health`
   answering `store: sqlite`, a seed posted and read back, the pin surviving `docker restart`, and the
   documented backup command producing a file that holds the seed.
-- **`resolveClientIp` is security-relevant.** `X-Forwarded-For` is appended to by each proxy, so the
-  left of the chain is caller-controlled and forgeable; the client IP is the entry
-  `TRUSTED_PROXY_HOPS` from the **right**. Reading the leftmost entry — correct behind Cloudflare,
-  wrong behind Traefik — makes the rate limit bypassable with one header.
+- **`resolveClientIp` is security-relevant.** The client IP is the entry `TRUSTED_PROXY_HOPS` from
+  the **right** of `X-Forwarded-For`, because the left of an appended chain is what the caller wrote.
+  Reading the leftmost entry makes the rate limit bypassable with one header. An earlier version of
+  this line said each proxy appends and that the leftmost entry is correct behind Cloudflare. Neither
+  was measured. SKG-543 measured nginx appending, and Traefik and Caddy replacing by default.
 - **`FRUITBACK_CLIENTS` makes one worker serve several client sites** (SKG-504). It maps a
   `clientId` to a team, a project and the origins that client may be embedded on. Absent, nothing
   changes: one team, one project, `client` optional on a read.
