@@ -241,7 +241,7 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   key added to English does not compile until French has it too. `messages.test.ts` also compares
   each French message's `{placeholders}` with the English one's, which the type cannot see.
 - **A host catalog is parsed like the stored config**: field by field. An unknown key, a string where
-  a plural belongs, a plural with no `other` — each costs that entry, and English takes its place. A
+  a plural belongs, a plural with no `other` — each costs that entry, and the next catalog in the chain takes its place. A
   locale tag that `Intl` refuses is ignored: `new Intl.PluralRules('not a tag')` throws, and a typo
   must cost the translation, never the mount.
 - **Catalogs are keyed by locale tag, and a key walks a chain.** For `fr-CA`: the host's `fr-CA`, the
@@ -264,7 +264,8 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   properties afterwards and never interpolated into it. A test hands it markup and checks that nothing
   was parsed.
 - **`label` still wins over `launch.label`.** A host's label is the host's word, in any language.
-- **The factories take an optional `translator` and default to English**, because the playground
+- **The factories take an optional `translator` and default to the page's language**
+  (`languageOf(document)`), because the playground
   calls them directly. What stops a word escaping the catalog is `messages.test.ts`: it renders the
   widget in a pseudo-locale whose messages are their own keys, through the states it drives, and fails
   on any letter that is neither a key nor fixture data. It first asserts that the keys it expects did

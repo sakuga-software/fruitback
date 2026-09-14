@@ -339,7 +339,8 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   then English.
 - **A bundled catalog is exhaustive** (`Catalog`) and keeps English's placeholders — a test compares
   them. A host catalog is parsed field by field: a bad entry costs that entry, and a locale tag `Intl`
-  refuses costs the translation, never the mount — it throws otherwise.
+  refuses costs the translation, never the mount: `Intl` throws on it, and `validLocale` catches that
+  and drops the catalog.
 - **Plural rules and number formats follow the catalog that supplied the message.** Bylines are
   relative dates in the language of the words, with the absolute date in `title`.
 - **Layout follows the reading direction; geometry never does.** `dir` and `lang` go on the host
