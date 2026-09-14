@@ -12,8 +12,9 @@ site gets it. To translate the widget on one site only, pass `messages` to `init
    and a test fails if one is missing or added.
 3. Give each plural message the categories your language uses, as `Intl.PluralRules` names them:
    `zero`, `one`, `two`, `few`, `many`, `other`. `other` is required.
-4. Register the catalog in `BUNDLED_CATALOGS` in `packages/widget/src/messages.ts`, under its locale
-   tag.
+4. In `packages/widget/src/messages.ts`, import the constant beside `FRENCH`
+   (`import { GERMAN } from './locale-de.ts';`), then register it in `BUNDLED_CATALOGS` under its
+   locale tag.
 5. Run `pnpm --filter @fruitback/widget test`.
 
 The type is `Catalog`, and it requires every key. When a key is added to `ENGLISH`, every bundled

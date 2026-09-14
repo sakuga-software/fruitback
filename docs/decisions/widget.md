@@ -253,8 +253,8 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   German count reads `1.234` and its English fallback `1,234`.
 - **A byline says when relative to now, in the language of the words** (`Intl.RelativeTimeFormat`,
   SKG-531), and carries the absolute date in its `title`. The absolute date follows the locale the
-  reader asked for, not the catalog. A thread is built when it opens, so "3 hours ago" is not
-  refreshed while it stays open. A date the store wrote in a shape `Date` cannot read is shown as it
+  reader asked for, not the catalog. The label is computed when the thread is drawn. No timer
+  refreshes it, but a re-resolve redraws an open thread, so "3 hours ago" can move forward then. A date the store wrote in a shape `Date` cannot read is shown as it
   came.
 - **The language comes off the mounted document's own window**, never off `globalThis` — the realm
   rule `isElement` exists for, and `languageOf` is the one place. Node's global navigator also says
