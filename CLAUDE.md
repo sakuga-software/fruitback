@@ -859,8 +859,9 @@ And *The published image* in [docs/decisions/image.md](docs/decisions/image.md).
 - **Attaching the package is not publishing it.** A new package inherits the repository's visibility;
   making it public is a manual, one-time change in the package settings.
 - **`docker-compose.yml` pulls the image, and `compose.test.ts` holds it to the worker** (SKG-541).
-  The `worker` service passes exactly `WorkerEnv` plus every store's `envNames`, each from `.env`,
-  except `NODE_ENV`, `HOST` and `FRUITBACK_FAKE_LINEAR`. `.env.example` assigns exactly what the file
+  The `worker` service passes exactly `WorkerEnv` plus every store's `envNames`, except `NODE_ENV`,
+  `HOST` and `FRUITBACK_FAKE_LINEAR`. Each value comes from `.env`, except `PORT`, which is the literal
+  `8080`; the host side reads `FRUITBACK_PORT`. `.env.example` assigns exactly what the file
   interpolates. A new variable in the worker fails the suite until both files carry it.
 - **The compose file sets `TRUSTED_PROXY_HOPS` to 0; the code defaults to 1.** The file publishes the
   port directly, and 1 there lets a forged `X-Forwarded-For` escape the rate limit (measured). Keep

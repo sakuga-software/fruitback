@@ -11,7 +11,8 @@
 # Compose does not pull an image tag that is already on the machine. To update, run this first:
 #   docker compose pull
 #
-# Every variable comes from .env, and .env.example lists exactly the variables this file reads.
+# Every value comes from .env, except PORT inside the container, which is always 8080.
+# .env.example lists exactly the variables this file reads.
 # compose.test.ts in apps/worker compares this file with the variables the worker reads, so a new
 # variable fails the test suite until it is added here and in .env.example.
 services:

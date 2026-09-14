@@ -101,5 +101,9 @@ immutable.
 - **An `.env` from before this file is read differently.** It has no `FRUITBACK_STORE`, says `PORT`
   for the host port and `TRUSTED_PROXY_HOPS=1`. `self-hosting.md` lists the four changes, and
   `.env.example` repeats each one beside its variable.
+- **An old SQLite deployment keeps its data in an anonymous volume.** The image declares
+  `VOLUME /data`, and the old file mounted nothing there. The new named volume starts empty, so the
+  upgrade section copies the database out with `.backup` and back in with `.restore`. Tested on a
+  stand-in for the old file, before and after the restore.
 - **A shell variable wins over `.env`.** A `LINEAR_API_KEY` exported in a shell profile reached
   `docker compose config` with `.env` empty. The local run of the same check used `env -i`.

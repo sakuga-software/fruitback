@@ -103,8 +103,34 @@ inside the container, which matters as soon as there are two.
 
 The old compose file built the image, kept no volume, read `PORT` for the host port, defaulted
 `TRUSTED_PROXY_HOPS` to 1, and passed no `FRUITBACK_STORE`, so the worker ran on Linear. An `.env`
-written for it keeps those values, and the new file reads it differently. Before the first
-`docker compose up`, change these lines in `.env`:
+written for it keeps those values, and the new file reads it differently.
+
+**If the old deployment kept SQLite seeds or extension sessions under `/data`, copy them out first.**
+The old file mounted no volume, so `/data` was an anonymous volume that the image declares. The new
+file mounts the named volume there, which starts empty, and the pins and sessions then seem to be
+gone. The old volume is not deleted, but nothing mounts it. With the **old** file still in place:
+
+```bash
+docker compose exec worker sqlite3 /data/fruitback.db ".backup '/data/migrate.db'"
+docker compose cp worker:/data/migrate.db ./migrate.db
+```
+
+Do the same for `/data/sessions.db` if `FRUITBACK_SESSION_PATH` is set. Then replace the compose
+file, make the changes below, start it, and restore into the new volume:
+
+```bash
+docker compose up -d --wait
+docker compose cp ./migrate.db worker:/data/migrate.db
+docker compose exec worker sqlite3 /data/fruitback.db ".restore '/data/migrate.db'"
+docker compose exec worker rm /data/migrate.db
+docker compose up -d --wait --force-recreate
+```
+
+Tested on a stand-in for the old file: the pin was gone after the switch, and it was back after the
+restore and the recreate. `exec` runs as the `node` user, which owns the new database, so the restore
+needs no change of owner.
+
+Before the first `docker compose up` with the new file, change these lines in `.env`:
 
 1. **If the notes are in Linear, add `FRUITBACK_STORE=linear`.** Otherwise the worker starts on an
    empty SQLite file, and every pin seems to be gone.

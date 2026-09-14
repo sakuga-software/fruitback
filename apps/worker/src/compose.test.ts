@@ -94,7 +94,9 @@ describe('docker-compose.yml', () => {
     assert.match(COMPOSE, /^ {6}- fruitback-data:\/data$/m);
     assert.match(COMPOSE, /^volumes:\n(?: {2}#.*\n)* {2}fruitback-data:$/m);
     // A global name shares the data of every stack on the host, and down -v in one stack deletes it.
+    // A name on the volume does that, and so does a top-level name, which fixes the project name.
     assert.doesNotMatch(COMPOSE, /^ {4}name:/m);
+    assert.doesNotMatch(COMPOSE, /^name:/m);
   });
 
   it('pulls the published image rather than building one', () => {
