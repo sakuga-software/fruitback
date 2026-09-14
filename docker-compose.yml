@@ -58,6 +58,9 @@ services:
 
 volumes:
   fruitback-data:
+    # Without a name, Compose prefixes the project name, and `docker run -v fruitback-data:/data`
+    # then opens a different, empty volume.
+    name: fruitback-data
 
 # networks:
 #   traefik:

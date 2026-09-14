@@ -13,9 +13,17 @@ accurate and incomplete in that shape.
 A plain Node HTTP process — `node:http` adapted onto a web-standard handler, no framework. It runs as
 a container: Dokploy builds the image from a GitHub push and puts Traefik in front of it on the VPS.
 
+From the sources, with no container and no `.env`. `dev:fake` keeps running, so use another terminal
+for anything else:
+
 ```bash
-pnpm --filter @fruitback/worker dev:fake        # node --watch on the TypeScript, in-memory store, no .env
+pnpm --filter @fruitback/worker dev:fake        # node --watch on the TypeScript, in-memory store
 pnpm --filter @fruitback/worker build           # esbuild → dist/server.mjs, one file
+```
+
+In a container, with the image built from this checkout:
+
+```bash
 cp .env.example .env                            # then set ALLOWED_ORIGINS
 docker build -f apps/worker/Dockerfile -t ghcr.io/sakuga-software/fruitback-worker:edge .
 docker compose up -d --wait                     # your build, under the name the compose file pulls
@@ -212,5 +220,5 @@ variable to set. The process also drains in-flight requests on `SIGTERM` before 
 **`TRUSTED_PROXY_HOPS` deserves a second of attention.** It is how many reverse proxies sit in front
 of the container — `1` for Traefik alone. `X-Forwarded-For` is appended to by each proxy, so entries
 on the left came from the caller and are forgeable; only the rightmost ones were written by
-infrastructure you control. Set this too low and the rate-limit key becomes caller-controlled, which
-makes the limit trivially bypassable.
+infrastructure you control. Set this too high and the rate-limit key becomes caller-controlled, which
+makes the limit trivially bypassable. Set it too low and every caller shares one bucket, the proxy's.

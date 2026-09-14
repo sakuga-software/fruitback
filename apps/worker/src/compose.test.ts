@@ -90,6 +90,11 @@ describe('docker-compose.yml', () => {
     assert.equal(composeEnvironment().get('TRUSTED_PROXY_HOPS'), '${TRUSTED_PROXY_HOPS:-0}');
   });
 
+  it('keeps its data in the volume the docker run command names', () => {
+    // Compose prefixes a volume with the project name unless the volume has a name of its own.
+    assert.match(COMPOSE, /^volumes:\n {2}fruitback-data:\n(?: {4}#.*\n)* {4}name: fruitback-data$/m);
+  });
+
   it('pulls the published image rather than building one', () => {
     // A complete reference, so that a digest can pin it. A variable after the colon can only be a tag.
     assert.match(COMPOSE, /^ {4}image: \$\{FRUITBACK_IMAGE:-ghcr\.io\/sakuga-software\/fruitback-worker:edge\}$/m);
