@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { type SeedIssue, canonicalizePageUrl, parseSeedFromDescription } from '@fruitback/shared';
+import { SEED_STAGES, type SeedIssue, canonicalizePageUrl, parseSeedFromDescription } from '@fruitback/shared';
 import { minimalSeedFixture, seedFixture } from '@fruitback/shared/seed.fixture';
 import { handleRequest } from './app.ts';
 import type { WorkerEnv } from './env.ts';
@@ -364,6 +364,23 @@ describe('GET /feedback', () => {
     ]);
     // The point of the whole read path: the pin comes back exactly as it was planted.
     assert.deepEqual(body.issues[0]?.seed, seed);
+  });
+
+  it('says which stages the store can report, so the panel offers only those (SKG-525)', async () => {
+    installLinearStub({ storedIssues: [] });
+    const linear = (await readBody(PAGE)) as ReadResponse & { stages?: unknown };
+    assert.deepEqual(linear.stages, [...SEED_STAGES]);
+
+    const partial: SeedStore = {
+      name: 'partial',
+      stages: ['seeded', 'ripe'],
+      scope: () => 'partial',
+      create: async () => ({ id: 'x', identifier: 'X-1' }),
+      findForPage: async () => [],
+    };
+    const response = await get(`/feedback?url=${encodeURIComponent(PAGE)}`, { store: partial });
+
+    assert.deepEqual(((await response.json()) as { stages?: unknown }).stages, ['seeded', 'ripe']);
   });
 
   it('asks Linear for the fruitback label, the client label and that exact page', async () => {

@@ -325,8 +325,8 @@ function toSeedComments(node: IssueNode): SeedComment[] | undefined {
  *
  * This is the connector's half of the status story, and it lives here rather than in
  * `@fruitback/shared` because it is Linear's vocabulary (SKG-516). The contract owns `SeedStage`;
- * every connector owns the projection onto it, and GitHub's — two states plus labels — will not
- * look like this one.
+ * every connector owns the projection onto it. GitHub's gives three stages, not five: see
+ * `stageForGithubIssue` in `github.ts` (SKG-525).
  */
 export const LINEAR_STATE_TYPES = [
   'triage',

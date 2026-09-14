@@ -174,7 +174,7 @@ degradation the ticket asked to have written down rather than discovered.
   implementations, an interface discovered by accident. `SeedStore` writes it down so SQLite
   (SKG-524) and GitHub (SKG-525) are implementations rather than new branches.
 - **`findForPage` states the intention, not the method.** Linear filters server-side with
-  `description: { contains: … }`, GitHub searches bodies, SQL does a `WHERE`, and a store with no
+  `description: { contains: … }`, GitHub lists issues by label, SQL does a `WHERE`, and a store with no
   search would walk everything. Exposing a `contains` filter on the interface would have made
   Linear's trick the contract.
 - **The old `Routing` mixed two things, and the split is the point.** `ClientPolicy` — `showComments`,
@@ -338,6 +338,56 @@ degradation the ticket asked to have written down rather than discovered.
   unnoticed for a month. No token at all is fine and stays the default.
 - `exp` is **required** in the claims — a token that never expires is a password. Signatures are
   compared in constant time, because a `===` on the base64 leaks how much of it was right.
+
+## GitHub Issues, and the stages it cannot say (SKG-525)
+
+- **The ticket's own test was the cost, and the cost was low.** `SeedStore` gained one optional field,
+  `stages`, and `app.ts`'s read path one line. Everything else is `github.ts`, one entry in
+  `STORE_SPECS`, and the configuration around it.
+- **What did not project was the vocabulary.** There are five `SeedStage` values because Linear has five
+  state types. GitHub has `open` and `closed`, plus a `state_reason` on a close. Three stages come out
+  of that honestly: `open` is `seeded`; closed `not_planned` or `duplicate` is `composted`; any other
+  close is `ripe`, a close with no reason included, because those predate `state_reason` and meant
+  done. The ticket also offered dedicated labels for `green` and `ripening`. Not taken: a label a team
+  has to remember to apply is a state the connector invents.
+- **So a store declares the stages it reports, and the panel offers only those.** `stages` travels on
+  every read, pins or none. Derived from the pins on screen instead, an empty page, or a page whose
+  pins are all open, would offer the wrong boxes. It is a read-envelope field, so `SEED_VERSION` stays
+  where it was, and `offeredStages` answers every stage for a worker from before this ticket. The
+  list is not in `ConfigStore`, which persists to `localStorage`: a stored copy would outlive a change
+  of store. A stage the reporter hid stays hidden in the config, so a worker that reports it again
+  shows the reporter's choice.
+- **A GitHub App, never a personal token.** A personal token does not expire and reaches every
+  repository of its owner. The JWT is RS256 through `node:crypto`, `iat` sixty seconds back and `exp`
+  nine minutes ahead. It buys an installation token narrowed with `repositories` to one repository,
+  cached per repository until five minutes before `expires_at`. Concurrent reads share one mint, a
+  failed mint leaves the map before any waiter sees it, and a `401` drops the token. The installation
+  is found from the repository (`GET /repos/{owner}/{repo}/installation`), so a client repository in
+  another organisation needs no variable of its own.
+- **The read lists by label; it does not search.** The search API allows 30 requests a minute and 1,000
+  results, shared by every page read of every client. Listing
+  `labels=fruitback,fruitback:<client>&state=all` spends the ordinary budget, and the exact
+  `seed.page.url` re-check does the job the re-check after `contains` does on Linear.
+- **`labels` is AND, and that is the client isolation.** Measured on `cli/cli`, 2026-09-14: `bug` alone
+  filled a page of 100, `gh-codespace` gave 42, and `bug,gh-codespace` gave 22, every row carrying
+  both. The first comparison proved nothing: three labels, three counts of 100, each one the page size.
+- **The cost of listing is stated rather than hidden.** Every page read walks the client's issues,
+  newest first, a hundred a page, stopped at ten pages; a client with more than 1,000 Fruitback issues
+  loses its oldest pins. Comments cost one or two calls for each pin of that page that has any. The
+  read cache is what stands between this and the hourly budget.
+- **Conditional requests were planned and taken out before a line was written.** A `304` costs no quota,
+  but how GitHub's ETags behave across an hourly token change was not measurable here, and a second
+  cache under `cached()` is one more thing to keep in step with the page version. It is the next lever
+  if the budget bites.
+- **A label that cannot be created stops the write.** `422 already_exists` is success. Any other failure
+  is a `502`, so the widget keeps the note: an issue without its labels is one no read finds.
+- **Pull requests come back from the issues endpoint**, and are dropped by their `pull_request` key.
+- **`constructor(readonly status: number)` stopped six test files.** Parameter properties are
+  TypeScript that Node's type stripping refuses, `tsc` accepts them, and every test file whose imports
+  reach the store registry failed to load.
+- **Not verified against a real repository.** Every call is tested against a fake GitHub built from the
+  REST documentation, API version 2022-11-28. The shapes of an issue row, a comment and
+  `state_reason` were read from a public repository with `gh api`; nothing was written anywhere.
 
 ## The markdown codec, and the file that outlived its name
 

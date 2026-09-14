@@ -221,6 +221,15 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
 - **Filtering lives in the overlay, not in the embedder.** `shouldShow` plus `refilter` redraw from
   the issues already held, so hiding a stage costs no request — and, as with SKG-513, a client's app
   is not going to re-fetch on the widget's behalf.
+- **The panel offers a box only for the stages the worker reports** (SKG-525). The list arrives with
+  each read and lives in `OfferedStages`, not in `ConfigStore`: the config store persists to
+  `localStorage`, and a stored copy of what one worker reports would outlive a change of store. A
+  stage the reporter hid stays in `hiddenStages` while no box shows it, so a worker that reports it
+  again shows the reporter's choice. The "hide resolved" shortcut disappears when no resolved stage is
+  offered, because it would control nothing.
+- **A hidden box needs its own `display: none`.** `.fruitback-config-check` sets `display: flex`, and a
+  class rule beats the browser's rule for the `hidden` attribute, so the box would stay on screen with
+  `hidden` set. happy-dom does no layout, so `panel.test.ts` reads the rule from the stylesheet.
 - **Do not use generic tags in the widget's chrome.** Playwright's selectors pierce open shadow
   roots, so a `<header>` in the panel made the page's own `header button` ambiguous for anything
   reading the composed tree. The panel uses a `div`, and the E2E specs scope to `main header button`.

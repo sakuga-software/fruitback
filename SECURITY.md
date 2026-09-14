@@ -87,13 +87,26 @@ stored as it arrived, and **where** depends on the connector:
 | --- | --- | --- |
 | `linear` | verbatim in an issue description | anyone with access to that workspace |
 | `sqlite` | `JSON.stringify(seed)` in a column of your database file | anyone who can read the file, or a backup of it |
+| `github` | verbatim in an issue body | anyone who can read that repository. **On a public repository, that is everyone.** |
 
-Either way it outlives any expiry you had in mind, which is why an identity token travels in an
+Whichever store, it outlives any expiry you had in mind, which is why an identity token travels in an
 `Authorization` header and never in the seed. On SQLite the file and its backups are the boundary,
 and they deserve the care a database of personal data deserves.
 
 Tell your reporters not to type credentials into a feedback note, because the note is going to sit
 somewhere for a long time.
+
+### The GitHub App key
+
+`FRUITBACK_GITHUB_PRIVATE_KEY` signs the tokens of the App. Whoever holds the key can mint a token for
+every repository the App is installed on, with every permission the App has. The worker narrows each
+token to one repository and one hour, but the key itself does not expire. So:
+
+- Give the App **Issues: Read and write** and nothing else, and install it only on the repositories
+  that receive notes.
+- Keep the key out of the image and out of any repository, like `LINEAR_API_KEY`.
+- If the key leaks, generate a new one, delete the old one under **Private keys** in the settings of
+  the App, and restart the worker with the new key.
 
 ### The rate limit is per process
 
@@ -379,7 +392,7 @@ squarely a vulnerability and we want to hear about it.
 
 The widget can send, from a third party's page: a hand-written note, a name, an address, the user
 agent (`includeEnv`), the page URL, and a picture of what the person was looking at. All of it lands
-in an issue tracker, and for the Linear connector that is outside your own infrastructure.
+in an issue tracker, and for the Linear and GitHub connectors that is outside your own infrastructure.
 
 That is a processing of personal data and a deployment of Fruitback has to be declared as one. What
 Fruitback owes its operators here is documentation, and that is tracked separately.

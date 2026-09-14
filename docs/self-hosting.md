@@ -43,12 +43,13 @@ gh api repos/sakuga-software/fruitback/contents/.env.example -H 'Accept: applica
 | --- | --- | --- | --- |
 | `sqlite` | one file on a Docker volume | `FRUITBACK_SQLITE_PATH`, on a volume | You want no third party. The pins on the page are the only interface. |
 | `linear` | issues in a Linear team | `LINEAR_API_KEY`, `LINEAR_TEAM_ID` | Your team already triages in Linear. |
+| `github` | issues in a GitHub repository | a GitHub App: `FRUITBACK_GITHUB_APP_ID`, `FRUITBACK_GITHUB_PRIVATE_KEY`, `FRUITBACK_GITHUB_REPOSITORY` | Your team already works in GitHub issues. The pins have three stages instead of five. |
 | `memory` | the memory of the process | nothing | Never on a server. The image refuses it. |
 
 **The worker defaults to `linear`; `docker-compose.yml` and this page default to `sqlite`.** The
 worker keeps `linear` so that a deployment from before SQLite existed still starts on the store it
-had. To get the Linear key and ids, see [install.md, step 1](install.md#1-linear). A GitHub Issues
-store is planned (SKG-525).
+had. To get the Linear key and ids, see [install.md, step 1](install.md#1-linear). To create the GitHub
+App, see [Storing the seeds in GitHub Issues](#storing-the-seeds-in-github-issues).
 
 ## Running the published image
 
@@ -257,17 +258,20 @@ empty value counts as absent.
 
 | Variable | Default | What it does | When it is wrong |
 | --- | --- | --- | --- |
-| `FRUITBACK_STORE` | `linear` in the worker, `sqlite` in `docker-compose.yml` | The store: `sqlite`, `linear` or `memory`. | Unknown: refused, `FRUITBACK_STORE (unknown store "sqlit", expected linear \| sqlite \| memory)`. `memory` in the image: refused. Left out of an `.env` from before SKG-541: Compose starts on an empty SQLite file, and the Linear pins seem gone. |
+| `FRUITBACK_STORE` | `linear` in the worker, `sqlite` in `docker-compose.yml` | The store: `sqlite`, `linear`, `github` or `memory`. | Unknown: refused, `FRUITBACK_STORE (unknown store "sqlit", expected linear \| sqlite \| github \| memory)`. `memory` in the image: refused. Left out of an `.env` from before SKG-541: Compose starts on an empty SQLite file, and the Linear pins seem gone. |
 | `FRUITBACK_SQLITE_PATH` | none; `/data/fruitback.db` in `docker-compose.yml` | The SQLite file. It is created, and its schema migrated, on the first read or write. | Absent with `sqlite`: refused. In a directory that does not exist: `/health` answers `200`, and every read and write answers `502 store-unavailable` naming the file (measured). Outside the volume: it works until the container is recreated, then every pin is gone (measured). |
 | `LINEAR_API_KEY` | none | A Linear personal API key. A secret: it never reaches a browser. | Absent with `linear`: refused, with `LINEAR_TEAM_ID`. Wrong: `/health` answers `200`, and every read and write answers `502 store-unavailable`, `Linear responded 401` (measured). |
 | `LINEAR_TEAM_ID` | none | The team that receives the issues. A client's `teamId` replaces it. | Absent with `linear`: refused. Wrong: not checked at boot; Linear refuses the call, and the worker answers `502 store-unavailable` with Linear's message. |
 | `LINEAR_PROJECT_ID` | none | The project for the issues. Optional. A client's `projectId` replaces it. | Wrong: not checked at boot. |
+| `FRUITBACK_GITHUB_APP_ID` | none | The ID of the GitHub App, or its client ID. | Absent with `github`: refused, with the two other `FRUITBACK_GITHUB_` variables. Wrong: not checked at boot; GitHub refuses the App's token, and every read and write answers `502 store-unavailable`. |
+| `FRUITBACK_GITHUB_PRIVATE_KEY` | none | The App's private key, the `.pem` file GitHub generates. A secret. On one line, write each line break as `\n`; inside double quotes, the key can keep its line breaks. Both forms reach the worker as a key it reads (measured with `docker compose config`). | Absent with `github`: refused. Not an RSA private key: refused, and the diagnostic names the variable, never the key. The key of another App: every read and write answers `502 store-unavailable`. |
+| `FRUITBACK_GITHUB_REPOSITORY` | none | The repository that receives the issues, as `owner/repo`. A client's `repository` replaces it. | Absent with `github`: refused. Not `owner/repo`: refused. A repository the App is not installed on: `/health` answers `200`, and every read and write answers `502 store-unavailable`. |
 
 ### Several client sites
 
 | Variable | Default | What it does | When it is wrong |
 | --- | --- | --- | --- |
-| `FRUITBACK_CLIENTS` | none: one client | JSON: clientId → `{ teamId?, projectId?, origins?, identitySecret?, showComments?, read? }`. | Not JSON, or a bad field: refused, with the reason. Set, every read and write must name a client: none answers `400 client-required`, an unknown one `400 unknown-client`, and a client called from a site outside its `origins` `403 origin-not-allowed-for-client` (all measured). Set with `FRUITBACK_SESSION_PATH`: refused. |
+| `FRUITBACK_CLIENTS` | none: one client | JSON: clientId → `{ teamId?, projectId?, repository?, origins?, identitySecret?, showComments?, read? }`. | Not JSON, or a bad field: refused, with the reason. Set, every read and write must name a client: none answers `400 client-required`, an unknown one `400 unknown-client`, and a client called from a site outside its `origins` `403 origin-not-allowed-for-client` (all measured). Set with `FRUITBACK_SESSION_PATH`: refused. |
 
 ### Identity and reads
 
@@ -386,6 +390,82 @@ docker run --rm -v fruitback-data:/data --entrypoint sh ghcr.io/sakuga-software/
   'test -s /data/restore.db && sqlite3 /data/fruitback.db ".restore /data/restore.db" && rm -f /data/restore.db /data/restore.db-shm /data/restore.db-wal' &&
 docker start fruitback
 ```
+
+## Storing the seeds in GitHub Issues
+
+Each note becomes an issue in one repository, labelled `fruitback` and `fruitback:<client>`, with the
+seed in a fenced block at the end of the body. The worker signs in as a GitHub App, never with a
+personal token. A personal token does not expire and reaches every repository of its owner. The token
+the worker mints expires after one hour and reaches one repository.
+
+What you give up: GitHub has two issue states, so a pin has three stages instead of five, and the
+settings panel offers only these three.
+
+| The issue | The stage of the pin |
+| --- | --- |
+| open, reopened included | `seeded` |
+| closed as completed, or closed before GitHub recorded a reason | `ripe` |
+| closed as not planned, or as a duplicate | `composted` |
+
+**On a public repository, every note is public**, with the name and the address of the reporter when
+they typed one. See [SECURITY.md](../SECURITY.md).
+
+### Create the App
+
+1. In the settings of the account or organisation that owns the repository, open **Developer
+   settings → GitHub Apps → New GitHub App**.
+2. Give it a name and a homepage URL. Clear **Webhook → Active**: the worker does not receive events.
+3. Under **Repository permissions**, set **Issues** to **Read and write**, and leave every other
+   permission at **No access**. GitHub adds **Metadata: Read-only** itself.
+4. Create the App and note its **App ID**. Under **Private keys**, click **Generate a private key**.
+   GitHub downloads a `.pem` file.
+5. Click **Install App**, choose the account, then **Only select repositories**, and select the
+   repository that receives the notes.
+
+**Issues** is the only permission the worker uses: it creates issues and their two labels, lists
+issues, and lists the comments of an issue. The App JWT finds the installation and mints the token.
+
+### Configure the worker
+
+In `.env`, the key can keep its line breaks inside double quotes:
+
+```dotenv
+FRUITBACK_STORE=github
+FRUITBACK_GITHUB_APP_ID=123456
+FRUITBACK_GITHUB_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----
+MIIEpAIBAAKCAQEA…
+-----END RSA PRIVATE KEY-----"
+FRUITBACK_GITHUB_REPOSITORY=acme/staging-site
+```
+
+Or it can be on one line, with each line break written as `\n`. This command prints that line from the
+downloaded file:
+
+```bash
+awk 'NF { printf "%s\\n", $0 }' fruitback.private-key.pem
+```
+
+With `docker run`, pass the file's content: `-e FRUITBACK_GITHUB_PRIVATE_KEY="$(cat fruitback.private-key.pem)"`.
+
+With several client sites, each client in `FRUITBACK_CLIENTS` can name its own `repository`. The App
+must be installed on that repository. The worker finds the installation from the repository, so a
+repository in another organisation needs no other variable. GitHub installs a private App only on the
+account that owns it, so for another organisation, make the App public first.
+
+### Check it
+
+`/health` answers `{"ok":true,"store":"github",…}` as soon as the three variables are valid: it checks
+the configuration and never GitHub. Plant a note from the site, then find its issue in the repository.
+If the App is not installed on the repository, or the key belongs to another App, every write answers
+`502 store-unavailable`, and a read answers the same code with the status GitHub gave.
+
+### What it costs
+
+An installation token has a budget of at least 5,000 requests an hour. Every read of a page lists the
+issues of the client, 100 a call, newest first, and stops at 1,000 issues: a client with more loses its
+oldest pins. Each pin of that page with replies costs one or two more calls. The read cache keeps one
+answer per page for a short time, so a busy page costs one listing per cache window, not one per
+visitor. A write costs three calls: the two labels and the issue.
 
 ## Upgrading and rolling back
 

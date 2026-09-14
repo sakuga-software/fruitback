@@ -1,6 +1,7 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { type ConfigPanel, createConfigPanel } from './panel.ts';
+import type { SeedStage } from '@fruitback/shared';
+import { type ConfigPanel, createConfigPanel, createOfferedStages } from './panel.ts';
 import { createConfigStore, type WidgetConfig } from './config.ts';
 import { type MountedPage, mountPage } from './dom.fixture.ts';
 
@@ -143,5 +144,73 @@ describe('createConfigPanel', () => {
 
     assert.equal(page.document.querySelector('[data-fruitback-config]'), null);
     assert.equal(page.document.querySelector('style'), null);
+  });
+});
+
+describe('the stages a store can report (SKG-525)', () => {
+  const GITHUB: SeedStage[] = ['seeded', 'ripe', 'composted'];
+
+  function mountOffering(stages: SeedStage[], defaults: WidgetConfig = DEFAULTS) {
+    const page: MountedPage = mountPage('<main></main>');
+    const store = createConfigStore({ defaults, storage: null });
+    const offered = createOfferedStages();
+    offered.set(stages);
+    panel = createConfigPanel({ host: page.document.body, store, document: page.document, stages: offered });
+
+    const input = (name: string) => page.document.querySelector(`[name="${name}"]`) as HTMLInputElement;
+    const label = (name: string) => input(name).closest('label') as HTMLLabelElement;
+
+    return { page, store, offered, input, label };
+  }
+
+  it('offers a box only for the stages the store reports', () => {
+    const { label } = mountOffering(GITHUB);
+
+    assert.equal(label('stage-green').hidden, true);
+    assert.equal(label('stage-ripening').hidden, true);
+    for (const stage of GITHUB) assert.equal(label(`stage-${stage}`).hidden, false, stage);
+    assert.equal(label('hide-resolved').hidden, false);
+  });
+
+  it('offers every stage if nothing says otherwise', () => {
+    const { page } = mount();
+
+    const hidden = [...page.document.querySelectorAll('.fruitback-config-check')].filter(
+      (element) => (element as HTMLElement).hidden,
+    );
+    assert.deepEqual(hidden, []);
+  });
+
+  it('follows a later read that reports other stages', () => {
+    const { offered, label } = mountOffering([...GITHUB]);
+
+    offered.set(['seeded']);
+
+    assert.equal(label('stage-ripe').hidden, true);
+    // The shortcut controls only resolved stages. With none to offer, it would do nothing.
+    assert.equal(label('hide-resolved').hidden, true);
+  });
+
+  it('keeps a stage the reporter hid, when the store stops reporting it', () => {
+    const { page, store, input } = mountOffering(GITHUB, { ...DEFAULTS, hiddenStages: ['green'] });
+
+    toggle(input('stage-ripe'), false, page.document);
+
+    assert.deepEqual(store.get().hiddenStages, ['green', 'ripe']);
+  });
+
+  it('ticks the shortcut from the resolved stages the store offers', () => {
+    const { input } = mountOffering(['seeded', 'ripe'], { ...DEFAULTS, hiddenStages: ['ripe'] });
+
+    assert.equal(input('hide-resolved').checked, true);
+  });
+
+  it('draws no hidden box, whatever display the class sets', () => {
+    // The class sets display:flex, which beats the browser's own rule for the hidden attribute.
+    // happy-dom does no layout, so the rule is read from the stylesheet.
+    const { page } = mount();
+    const css = [...page.document.querySelectorAll('style')].map((style) => style.textContent).join('\n');
+
+    assert.match(css, /\.fruitback-config-check\[hidden\]\s*\{\s*display:\s*none;?\s*\}/);
   });
 });

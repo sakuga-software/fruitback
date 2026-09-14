@@ -42,6 +42,24 @@ export type SeedStage = (typeof SEED_STAGES)[number];
 export const DEFAULT_SEED_STAGE: SeedStage = 'seeded';
 
 /**
+ * The stages a store can report, read from the `stages` field of the read envelope (SKG-525).
+ *
+ * A store can report only some of `SEED_STAGES`. GitHub has two issue states, not five state types.
+ * The settings panel offers a filter only for the stages in this list.
+ *
+ * Tolerant, like `parseSeed*`. If the value is absent, malformed or empty, the result is every stage:
+ * a worker from before SKG-525 sends no field, and its panel must not change. The result keeps the
+ * order of `SEED_STAGES`.
+ */
+export function offeredStages(value: unknown): SeedStage[] {
+  if (!Array.isArray(value)) return [...SEED_STAGES];
+
+  const offered = SEED_STAGES.filter((stage) => value.includes(stage));
+
+  return offered.length > 0 ? offered : [...SEED_STAGES];
+}
+
+/**
  * A reply from the team, as the widget shows it (SKG-502).
  *
  * Part of the read envelope, not of the seed. Comments live in whichever store answers — Linear, and

@@ -31,8 +31,8 @@ naming decision, not a third code path: what differs lives in the assembly layer
 
 **Status, threads, assignees and history belong to the store**, never to a second model kept in step
 with it. Every store the worker speaks to is one somebody already runs: Linear is the default and
-the richest of them, and `FRUITBACK_STORE=sqlite` is the door for a self-hoster who wants no third
-party. Fruitback does not reinvent issue tracking, and since SKG-524 it no longer requires somebody
+the richest of them, `FRUITBACK_STORE=sqlite` is the door for a self-hoster who wants no third
+party, and `FRUITBACK_STORE=github` is for a team whose issues are already on GitHub. Fruitback does not reinvent issue tracking, and since SKG-524 it no longer requires somebody
 else's account either. See [docs/architecture.md](docs/architecture.md) for the alternatives that
 were dropped.
 
@@ -326,6 +326,10 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   beats a new default for ever.
 - **Filtering lives in the overlay, not in the embedder.** `shouldShow` plus `refilter` redraw from
   the issues already held, so hiding a stage costs no request.
+- **The panel offers a box only for the stages the worker reports** (SKG-525). `OfferedStages` is kept
+  out of `ConfigStore`, because a copy in `localStorage` would outlive a change of store. A stage the
+  reporter hid stays hidden in the config. `.fruitback-config-check[hidden]` needs its own
+  `display: none`: the class sets `display: flex`, which beats the browser's rule for `hidden`.
 - **Do not use generic tags in the widget's chrome.** Playwright's selectors pierce open shadow
   roots, so a `<header>` in the panel made the page's own `header button` ambiguous.
 - **Two elements must not share one accessible name.** The gear says `Open Fruitback settings`
@@ -656,6 +660,21 @@ and *The team mode, and the call the page cannot make*:
   file rejects rather than throwing synchronously.
 - **`linear-memory.ts` keeps its name and its import of `toSeedIssue` on purpose.** That coupling is
   the feature.
+- **`github.ts` signs in as a GitHub App, never with a personal token** (SKG-525). An RS256 JWT from
+  `node:crypto` buys an installation token narrowed to **one repository**, cached per repository until
+  five minutes before it expires. Concurrent reads share one mint, a failed mint is not kept, and a
+  `401` drops the token. The installation is found from the repository, so there is no variable for it.
+- **GitHub's `labels=a,b` is AND** (measured on `cli/cli`: 42 for one label, 22 for the pair). It is
+  what keeps one client's pins off another's site, like the `and:` clause on Linear. A count at the
+  page size proves nothing: the first check compared three counts of 100.
+- **A GitHub read lists the client's issues by label and re-checks `seed.page.url`; it never
+  searches.** Search is 30 requests a minute. Every page read walks the client's list, newest first,
+  stopped at 1,000 issues, and the read cache is what protects the hourly budget.
+- **A label that cannot be created stops a GitHub write.** A read finds a seed by its labels, so an
+  issue without them is a note nobody sees again. A `502` keeps the note in the widget.
+- **No parameter properties in the worker.** `constructor(readonly status: number)` is TypeScript that
+  Node's type stripping refuses, and every test file that imports the module fails to load. `tsc`
+  accepts it.
 
 **Identity, and who may read a pin**
 
@@ -909,6 +928,11 @@ And *The published image* in [docs/decisions/image.md](docs/decisions/image.md).
   `SEED_STAGES` and `DEFAULT_SEED_STAGE` live in `shared`; `stageForLinearState` lives in
   `apps/worker/src/linear.ts`. The fallback for an unrecognised state stays in `shared` on purpose —
   an unknown state must colour the pin rather than hide someone's note.
+- **A store can report only some stages, and says which** (SKG-525). `SeedStore.stages` travels as
+  `stages` on every `GET /feedback`, with or without pins — derived from the pins on screen, an empty
+  page would offer the wrong boxes. `offeredStages` reads it tolerantly and answers every stage when
+  the field is absent. GitHub reports `seeded`, `ripe` and `composted`. A read-envelope field, so
+  `SEED_VERSION` does not move.
 - **`SEED_BLOCK_CAPTION` is free to reword.** `parseSeedFromDescription` iterates fenced blocks and
   recognises ours by parsing the JSON, and the test `finds the block by its JSON, never by the
   caption above it` is what keeps that true.

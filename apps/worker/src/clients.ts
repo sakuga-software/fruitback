@@ -22,10 +22,20 @@ import { isExtensionOrigin } from './cors.ts';
  * is refused, because the fallback in a multi-tenant deployment is the leak.
  */
 
+/**
+ * `owner/repo`, as GitHub spells it.
+ *
+ * A repository named `.` or `..` is refused. The name goes into an API path, and `new URL` removes
+ * those segments, so the request would reach another endpoint.
+ */
+export const REPOSITORY_PATTERN = /^[A-Za-z0-9-]+\/(?!\.\.?$)[A-Za-z0-9._-]+$/;
+
 const clientSchema = z.object({
   /** Where this client's issues are created and read. Falls back to `LINEAR_TEAM_ID`. */
   teamId: z.string().min(1).optional(),
   projectId: z.string().min(1).optional(),
+  /** The GitHub repository for this client's issues (SKG-525). Falls back to `FRUITBACK_GITHUB_REPOSITORY`. */
+  repository: z.string().regex(REPOSITORY_PATTERN).optional(),
   /**
    * Sites this client may be embedded on. When present, a request claiming this client from another
    * origin is refused. Cheap, and independent of whether the visitor is identified.

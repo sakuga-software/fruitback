@@ -1,4 +1,10 @@
-import { canonicalizePageUrl, type SeedIssue, type SeedReporter, type SeedScreenshot } from '@fruitback/shared';
+import {
+  canonicalizePageUrl,
+  offeredStages,
+  type SeedIssue,
+  type SeedReporter,
+  type SeedScreenshot,
+} from '@fruitback/shared';
 import { captureSeed } from './capture.ts';
 import { type WidgetConfig, createConfigStore } from './config.ts';
 import { type CaptureHost, type CaptureTarget, createCaptureHost } from './host.ts';
@@ -7,7 +13,7 @@ import { type FruitbackTransport, fetchTransport } from './transport.ts';
 import { type Composer, createComposer } from './composer.ts';
 import { type FruitbackMessages, createTranslator, languageOf } from './messages.ts';
 import { type Overlay, createOverlay } from './overlay.ts';
-import { type ConfigPanel, createConfigPanel } from './panel.ts';
+import { type ConfigPanel, type OfferedStages, createConfigPanel, createOfferedStages } from './panel.ts';
 
 /**
  * One call that mounts the whole widget on a page (SKG-505).
@@ -211,7 +217,8 @@ export function init(options: FruitbackOptions): Fruitback {
     shouldShow: (issue) => !config.get().hiddenStages.includes(issue.stage),
   });
 
-  const read = createReader(overlay, view, options);
+  const stages = createOfferedStages();
+  const read = createReader(overlay, stages, view, options);
 
   composer = createComposer({
     document,
@@ -234,6 +241,7 @@ export function init(options: FruitbackOptions): Fruitback {
     translator,
     host: host.root,
     store: config,
+    stages,
     screenshotSupported: options.captureScreenshot !== undefined,
   });
 
@@ -285,6 +293,7 @@ export function init(options: FruitbackOptions): Fruitback {
  */
 function createReader(
   overlay: Overlay,
+  stages: OfferedStages,
   view: Window & typeof globalThis,
   options: FruitbackOptions,
 ): (config: WidgetConfig) => Promise<void> {
@@ -312,10 +321,11 @@ function createReader(
       // gone". Same rule as an unreachable worker below.
       if (mine !== generation || !response.ok) return;
 
-      const { issues } = JSON.parse(response.body) as { issues: SeedIssue[] };
+      const body = JSON.parse(response.body) as { issues: SeedIssue[]; stages?: unknown };
       if (mine !== generation) return;
 
-      overlay.render(issues);
+      stages.set(offeredStages(body.stages));
+      overlay.render(body.issues);
     } catch {
       // A worker that cannot be reached leaves the pins alone. Blanking the page because a read
       // failed would lose what is already correctly on screen.

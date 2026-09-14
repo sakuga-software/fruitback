@@ -100,7 +100,7 @@ describe('selecting the store', () => {
   });
 
   it('lists the providers it can build', () => {
-    assert.deepEqual(storeProviders(), ['linear', 'sqlite', 'memory']);
+    assert.deepEqual(storeProviders(), ['linear', 'sqlite', 'github', 'memory']);
   });
 });
 

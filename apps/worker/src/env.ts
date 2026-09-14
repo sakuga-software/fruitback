@@ -11,7 +11,8 @@ import { readStoreConfig } from './stores.ts';
  */
 export type WorkerEnv = {
   /**
-   * Which store this process runs on: `linear` (the default) or `memory`. See `stores.ts`.
+   * Which store this process runs on: `linear` (the default), `sqlite`, `github` or `memory`. See
+   * `stores.ts`.
    *
    * An unknown name is refused at boot rather than defaulted, and the variables each store reads
    * are declared by that store — the three below belong to `linear.ts`, and are listed here only so
