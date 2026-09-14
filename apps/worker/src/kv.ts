@@ -76,7 +76,11 @@ export function createMemoryKv(options: { now?: () => number } = {}): MemoryKv {
       // Redis counts only a canonical integer: no `+`, no leading zero, no `-0`, no space. Measured
       // against redis:7. `Number()` accepts all of those, so it cannot be the test.
       if (!/^(0|-?[1-9]\d*)$/.test(entry.value)) throw new KvError('value is not an integer');
-      const count = Number(entry.value) + 1;
+      // The stored value is checked as well as the result: `Number()` rounds -(2^53 + 1) up to a
+      // safe integer, and the count would then come back one too high. Raised in review.
+      const previous = Number(entry.value);
+      if (!Number.isSafeInteger(previous)) throw new KvError('value is out of range');
+      const count = previous + 1;
       // Redis refuses at 2^63 and this store at 2^53. No counter gets near either.
       if (!Number.isSafeInteger(count)) throw new KvError('value is out of range');
       entry.value = String(count);

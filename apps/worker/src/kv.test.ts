@@ -113,6 +113,16 @@ function contract(name: string, connect: () => Kv) {
       await kv.set(k, '9007199254740992', 10_000);
       await assert.rejects(kv.incr(k, 10_000), KvError);
     });
+
+    it('refuses a stored count below -2^53 rather than round it', async () => {
+      // `Number()` reads -(2^53 + 1) as -2^53, and adding one gives a safe integer one too high.
+      // Raised in review.
+      const kv = open();
+      const k = key();
+
+      await kv.set(k, '-9007199254740993', 10_000);
+      await assert.rejects(kv.incr(k, 10_000), KvError);
+    });
   });
 }
 
