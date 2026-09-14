@@ -14,9 +14,9 @@ A plain Node HTTP process — `node:http` adapted onto a web-standard handler, n
 a container: Dokploy builds the image from a GitHub push and puts Traefik in front of it on the VPS.
 
 ```bash
-cp .env.example .env                            # then set ALLOWED_ORIGINS
-pnpm --filter @fruitback/worker dev             # node --watch on the TypeScript, no container
+pnpm --filter @fruitback/worker dev:fake        # node --watch on the TypeScript, in-memory store, no .env
 pnpm --filter @fruitback/worker build           # esbuild → dist/server.mjs, one file
+cp .env.example .env                            # then set ALLOWED_ORIGINS
 docker build -f apps/worker/Dockerfile -t ghcr.io/sakuga-software/fruitback-worker:edge .
 docker compose up -d --wait                     # your build, under the name the compose file pulls
 ```
@@ -68,6 +68,10 @@ inside the container, which matters as soon as there are two.
 - **SQLite on a named volume, by default.** `fruitback-data` is mounted at `/data`, which holds the
   seeds and, when they are on, the extension's sessions. To use Linear, set `FRUITBACK_STORE=linear`,
   `LINEAR_API_KEY` and `LINEAR_TEAM_ID` in `.env`.
+- **`FRUITBACK_IMAGE` is a complete image reference**, so it takes a tag or a digest
+  (`ghcr.io/sakuga-software/fruitback-worker@sha256:…`). **Compose does not pull a tag that is already
+  on the machine**, and `edge` moves on every merge: run `docker compose pull` before
+  `docker compose up -d --wait` to update.
 - **`TRUSTED_PROXY_HOPS` is 0, because the file publishes the port directly.** The worker's own
   default is 1, for one Traefik. With 1 and no proxy in front, the address comes from the
   `X-Forwarded-For` the caller wrote, so each forged address gets a new bucket and the limit never

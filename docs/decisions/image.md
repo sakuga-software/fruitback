@@ -71,6 +71,10 @@ immutable.
 - **It pulls the image, and it is the one file a stranger downloads.** It used to build from the
   repository, and called itself a reference to keep in step by hand with a Dokploy deployment that
   never reads it.
+- **`FRUITBACK_IMAGE` is a complete reference, not a tag.** A variable placed after the colon can only
+  be a tag, so the digest pin the docs recommend could not be written. Raised in review. Compose does
+  not pull a tag it already has, so an update is `docker compose pull` first; `pull_policy: always`
+  would make the CI run, which uses a local tag, try the registry.
 - **Drift is a test.** `compose.test.ts` reads `WorkerEnv` out of `env.ts` and every `envNames`
   literal out of the connectors. The `worker` service must pass exactly those variables, each from
   `.env`, except three it names with a reason: `NODE_ENV`, `HOST` and `FRUITBACK_FAKE_LINEAR`. `PORT`

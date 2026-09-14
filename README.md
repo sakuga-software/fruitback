@@ -62,9 +62,18 @@ docker compose up -d --wait
 ```
 
 It keeps the notes in SQLite on a Docker volume, with no account anywhere. CI runs this file from an
-empty directory, plants a pin, recreates the container and reads the pin back. **While this
-repository is private, the raw files and the image are private too**, so the commands need a GitHub
-token until then — see [docs/self-hosting.md](docs/self-hosting.md#running-the-published-image).
+empty directory, plants a pin, recreates the container and reads the pin back. To update, run
+`docker compose pull` first: Compose does not pull a tag that is already on the machine, and `edge`
+moves on every merge.
+
+**While this repository is private, the raw files and the image are private too.** Until then,
+download the two files with the GitHub CLI, and log in to `ghcr.io` with a token that has
+`read:packages` — see [docs/self-hosting.md](docs/self-hosting.md#running-the-published-image):
+
+```bash
+gh api repos/sakuga-software/fruitback/contents/docker-compose.yml -H 'Accept: application/vnd.github.raw' > docker-compose.yml
+gh api repos/sakuga-software/fruitback/contents/.env.example -H 'Accept: application/vnd.github.raw' > .env
+```
 
 The full walk-through — Linear setup, per-client routing, identified reporters — is in
 [docs/install.md](docs/install.md).

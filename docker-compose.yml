@@ -1,16 +1,21 @@
-# The Fruitback worker, from its published image (SKG-541). Nothing here needs this repository:
+# The Fruitback worker, from its published image (SKG-541). Nothing here needs a clone of this
+# repository:
 #
 #   curl -fsSLO https://raw.githubusercontent.com/sakuga-software/fruitback/main/docker-compose.yml
 #   curl -fsSL https://raw.githubusercontent.com/sakuga-software/fruitback/main/.env.example -o .env
 #   (set ALLOWED_ORIGINS in .env)
 #   docker compose up -d --wait
 #
+# While the repository is private, the downloads and the image need a GitHub login: see the README.
+# Compose does not pull an image tag that is already on the machine. To update, run this first:
+#   docker compose pull
+#
 # Every variable comes from .env, and .env.example lists exactly the variables this file reads.
 # compose.test.ts in apps/worker compares this file with the variables the worker reads, so a new
 # variable fails the test suite until it is added here and in .env.example.
 services:
   worker:
-    image: ghcr.io/sakuga-software/fruitback-worker:${FRUITBACK_VERSION:-edge}
+    image: ${FRUITBACK_IMAGE:-ghcr.io/sakuga-software/fruitback-worker:edge}
     restart: unless-stopped
     ports:
       # If a reverse proxy is in front, remove this mapping. See the Traefik block below.

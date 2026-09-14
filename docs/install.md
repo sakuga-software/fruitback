@@ -66,8 +66,8 @@ With SQLite, which is the default of `docker-compose.yml`, `ALLOWED_ORIGINS` is 
 ### Locally
 
 ```bash
+pnpm --filter @fruitback/worker dev:fake   # node --watch, in-memory store, no .env and no container
 cp .env.example .env                  # then set ALLOWED_ORIGINS
-pnpm --filter @fruitback/worker dev   # node --watch, no container
 docker build -f apps/worker/Dockerfile -t ghcr.io/sakuga-software/fruitback-worker:edge .
 docker compose up -d --wait           # the image you just built
 ```

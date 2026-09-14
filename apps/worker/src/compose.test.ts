@@ -28,7 +28,7 @@ const NOT_PASSED: Readonly<Record<string, string>> = {
 function workerVariables(): string[] {
   const env = read('./env.ts');
   const block = /export type WorkerEnv = \{([\s\S]*?)\n\};/.exec(env)?.[1] ?? '';
-  const own = [...block.matchAll(/^ {2}([A-Z][A-Z0-9_]*)\?:/gm)].map((match) => match[1] ?? '');
+  const own = [...block.matchAll(/^ {2}([A-Z][A-Z0-9_]*)\??:/gm)].map((match) => match[1] ?? '');
 
   const sources = readdirSync(fileURLToPath(new URL('.', import.meta.url))).filter(
     (file) => file.endsWith('.ts') && !file.endsWith('.test.ts') && !file.endsWith('.fixture.ts'),
@@ -91,7 +91,8 @@ describe('docker-compose.yml', () => {
   });
 
   it('pulls the published image rather than building one', () => {
-    assert.match(COMPOSE, /^ {4}image: ghcr\.io\/sakuga-software\/fruitback-worker:\$\{FRUITBACK_VERSION:-edge\}$/m);
+    // A complete reference, so that a digest can pin it. A variable after the colon can only be a tag.
+    assert.match(COMPOSE, /^ {4}image: \$\{FRUITBACK_IMAGE:-ghcr\.io\/sakuga-software\/fruitback-worker:edge\}$/m);
     assert.doesNotMatch(COMPOSE, /^ {4}build:/m);
   });
 });
