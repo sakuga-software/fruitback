@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
 import { type OrphanList, createOrphanList } from './orphans.ts';
 import { mountPage } from './dom.fixture.ts';
+import { createTranslator } from './messages.ts';
 
 /**
  * The list on its own. How it behaves inside the overlay is settled in `overlay.test.ts`; what is
@@ -103,7 +104,27 @@ describe('createOrphanList', () => {
     list?.update([issue('sd_1', 'Une note')]);
 
     assert.equal(page.document.querySelector('.fruitback-orphans-note')?.textContent, 'Une note');
-    assert.equal(page.document.querySelector('.fruitback-orphans-toggle')?.textContent, '1 note détachée');
+    assert.equal(page.document.querySelector('.fruitback-orphans-toggle')?.textContent, '1 detached note');
+  });
+
+  it('counts in the plural forms of the locale, not with an appended s (SKG-530)', () => {
+    // Polish has three forms where English has two, so "add an s after one" is wrong at 5 and at 22.
+    const page = mountPage('<main></main>');
+    const forms = { one: '{count} notatka', few: '{count} notatki', many: '{count} notatek', other: '{count} notatki' };
+    list = createOrphanList({
+      document: page.document,
+      host: page.document.body,
+      translator: createTranslator({ locale: 'pl', messages: { pl: { 'orphans.count': forms } } }),
+    });
+    const count = () => page.document.querySelector('.fruitback-orphans-toggle')?.textContent;
+    const issues = (n: number) => Array.from({ length: n }, (_, index) => issue(`sd_${index}`, `Note ${index}`));
+
+    list.update(issues(1));
+    assert.equal(count(), '1 notatka');
+    list.update(issues(5));
+    assert.equal(count(), '5 notatek');
+    list.update(issues(22));
+    assert.equal(count(), '22 notatki');
   });
 
   it('owns its own DOM and nothing else', () => {

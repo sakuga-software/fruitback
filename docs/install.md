@@ -147,10 +147,42 @@ inside a bundle.
 | Option          | Why you would                                                                       |
 | --------------- | ----------------------------------------------------------------------------------- |
 | `label`         | the text on the floating button                                                     |
+| `locale`        | the language to show, as a tag like `fr` or `pt-BR` — the browser's by default      |
+| `messages`      | your own words for that language — see [Another language](#another-language)       |
 | `ignore`        | elements the pointer must skip — your own chrome, a support chat, a cookie banner    |
 | `identityToken` | a function returning a signed token, so a reporter is *verified* rather than claimed |
 | `includeEnv`    | `false` when the reporter has not agreed to send their user agent along              |
 | `transport`     | who carries the calls — the extension's, in team mode below                          |
+
+### Another language
+
+The widget ships English and nothing else. It follows the browser's language, `locale` overrides it,
+and `messages` supplies the words:
+
+```ts
+init({
+  endpoint: 'https://feedback.acme.dev',
+  clientId: 'acme',
+  messages: {
+    fr: {
+      'launch.label': 'Laisser un feedback',
+      'settings.open': 'Ouvrir les réglages Fruitback',
+      'settings.dialog': 'Réglages Fruitback',
+      'orphans.count': { one: '{count} note détachée', other: '{count} notes détachées' },
+    },
+  },
+});
+```
+
+- Catalogs are keyed by locale tag. A `fr-CA` reader gets `fr-CA`, then `fr`, then English.
+- A key you leave out shows in English, never as its own name. The keys and the English they replace
+  are `ENGLISH` in `packages/widget/src/messages.ts`, and `MessageKey` is their type.
+- A count takes one string per `Intl.PluralRules` category, and `other` is required. `{count}`,
+  `{stage}` and `{note}` are replaced wherever the English message has them.
+- `settings.open` names the gear and `settings.dialog` the panel it opens. Keep them different: a
+  screen reader cannot tell two controls with one name apart.
+- `label` wins over `launch.label`.
+- A script tag cannot carry a catalog. On a site with no build step, call `Fruitback.init` yourself.
 
 ### Team mode: dormant until a reviewer arrives
 

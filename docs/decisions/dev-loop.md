@@ -66,7 +66,7 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   instance.
 - **The rule generalises past colour: assert on what you measured, not on a second measurement.**
   Anything the widget takes away by itself has the same shape — the composer clears its confirmation
-  1.1s after showing it, so waiting for `récolté` and *then* reading the Shadow root again is two
+  1.1s after showing it, so waiting for `harvested` and *then* reading the Shadow root again is two
   round trips with a deadline between them. Poll, and keep the value that satisfied the poll
   (SKG-529). Measured: the two-step form fails once 1.5s passes between the steps.
 - It has already earned its keep four times: the browser caching `GET /feedback` and serving the

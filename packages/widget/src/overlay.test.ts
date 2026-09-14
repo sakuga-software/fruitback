@@ -101,7 +101,7 @@ describe('createOverlay', () => {
     assert.match(page.document.querySelector('.fruitback-pin-badge')?.textContent ?? '', /≈/);
 
     (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
-    assert.match(page.document.querySelector('[data-fruitback-thread]')?.textContent ?? '', /par sa position/i);
+    assert.match(page.document.querySelector('[data-fruitback-thread]')?.textContent ?? '', /by its position/i);
   });
 
   it('re-measures when the page moves under it', () => {
@@ -197,7 +197,7 @@ describe('createOverlay', () => {
     const close = page.document.querySelector('.fruitback-thread-close');
     assert.ok(close?.querySelector('svg.fruitback-icon'), 'the close button is not drawn');
     assert.equal(close?.textContent, '', 'the close button still carries a character');
-    assert.equal(close?.getAttribute('aria-label'), 'Fermer');
+    assert.equal(close?.getAttribute('aria-label'), 'Close');
   });
 
   it('prefers the store’s own word when it has one', () => {
@@ -267,7 +267,7 @@ describe('createOverlay', () => {
 
     (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
 
-    assert.match(page.document.querySelector('[data-fruitback-thread]')?.textContent ?? '', /introuvable/i);
+    assert.match(page.document.querySelector('[data-fruitback-thread]')?.textContent ?? '', /not found/i);
   });
 
   it('closes the thread on Escape', () => {
@@ -520,7 +520,7 @@ describe('the team’s replies', () => {
   });
 
   it('says nothing at all when the worker did not fetch replies', () => {
-    // Absent is not empty. "Pas encore de réponse" would be a claim the widget cannot make when it
+    // Absent is not empty. "No reply yet" would be a claim the widget cannot make when it
     // was never told — a client with comments switched off would be told its team never answered.
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });
@@ -537,7 +537,7 @@ describe('the team’s replies', () => {
     overlay.render([issueOnCta({ comments: [] })]);
     (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
 
-    assert.match(page.document.querySelector('.fruitback-thread-empty')?.textContent ?? '', /Pas encore/);
+    assert.match(page.document.querySelector('.fruitback-thread-empty')?.textContent ?? '', /No reply yet/);
   });
 });
 
@@ -573,7 +573,7 @@ describe('the detached notes', () => {
 
     const drawer = page.document.querySelector('[data-fruitback-orphans]') as HTMLElement;
     assert.equal(drawer.hidden, false);
-    assert.match(drawer.querySelector('.fruitback-orphans-toggle')?.textContent ?? '', /1 note détachée/);
+    assert.match(drawer.querySelector('.fruitback-orphans-toggle')?.textContent ?? '', /1 detached note/);
     assert.match(
       drawer.querySelector('.fruitback-orphans-note')?.textContent ?? '',
       /La carte que le redesign a supprimée/,

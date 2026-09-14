@@ -47,10 +47,10 @@ describe('what the panel looks like (SKG-529)', () => {
     const { page } = mount();
     const close = page.document.querySelector('.fruitback-config-close');
 
-    assert.equal(page.document.querySelector('.fruitback-config-title')?.textContent, 'Réglages');
+    assert.equal(page.document.querySelector('.fruitback-config-title')?.textContent, 'Settings');
     assert.ok(close?.querySelector('svg.fruitback-icon'), 'the close button is not drawn');
     assert.equal(close?.textContent, '', 'the close button still carries a character');
-    assert.equal(close?.getAttribute('aria-label'), 'Fermer les réglages');
+    assert.equal(close?.getAttribute('aria-label'), 'Close settings');
   });
 });
 

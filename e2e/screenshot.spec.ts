@@ -44,16 +44,16 @@ async function mountWith(
   );
 
   // The setting is off by default; a reporter turns it on in the panel, so the test does too.
-  await page.getByLabel('Ouvrir les réglages Fruitback').click();
+  await page.getByLabel('Open Fruitback settings').click();
   await page.locator('[name="screenshot"]').check();
-  await page.getByLabel('Ouvrir les réglages Fruitback').click();
+  await page.getByLabel('Open Fruitback settings').click();
 }
 
 async function plant(page: import('@playwright/test').Page, note: string) {
   await page.getByRole('button', { name: '🌱 Feedback' }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
-  await page.getByPlaceholder("Qu'est-ce qui ne va pas ici ?").fill(note);
-  await page.getByRole('button', { name: 'Planter' }).click();
+  await page.getByPlaceholder('What is wrong here?').fill(note);
+  await page.getByRole('button', { name: 'Plant', exact: true }).click();
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 }
 
@@ -115,7 +115,7 @@ test('the setting is not offered when the host cannot take a picture', async ({ 
     WORKER_ORIGIN,
   );
 
-  await page.getByLabel('Ouvrir les réglages Fruitback').click();
+  await page.getByLabel('Open Fruitback settings').click();
 
   await expect(page.locator('[name="screenshot"]')).toHaveCount(0);
 });

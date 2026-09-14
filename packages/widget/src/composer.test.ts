@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import type { SeedReporter } from '@fruitback/shared';
 import { type Composer, createComposer } from './composer.ts';
 import { type MountedPage, keyboardEventCtor, mountPage } from './dom.fixture.ts';
+import { createTranslator } from './messages.ts';
 
 /**
  * The states, which is what this file owns. How it looks is settled in a browser (`e2e/composer`);
@@ -43,14 +44,14 @@ const sendButton = () => composer?.element.querySelector('[data-fruitback-send]'
 const statusText = () => composer?.element.querySelector('[data-fruitback-status]')?.textContent ?? '';
 
 describe('what the popover looks like (SKG-529)', () => {
-  it('draws the seed on the send button and still calls it Planter', () => {
-    // The icon is prepended after the template is parsed, because an SVG written into an innerHTML
+  it('draws the seed on the send button and still calls it Plant', () => {
+    // The icon is appended after the template is parsed, because an SVG written into an innerHTML
     // string lands in the HTML namespace and renders nothing at all. It is aria-hidden, so the
     // button's accessible name has to be the word alone.
     mount(async () => {});
 
     assert.ok(sendButton().querySelector('svg.fruitback-icon'), 'the send button lost its mark');
-    assert.equal(sendButton().textContent, 'Planter');
+    assert.equal(sendButton().textContent, 'Plant');
   });
 
   it('confirms in words, with no strawberry in front of them', async () => {
@@ -60,7 +61,7 @@ describe('what the popover looks like (SKG-529)', () => {
     sendButton().click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    assert.equal(statusText(), 'récolté');
+    assert.equal(statusText(), 'harvested');
   });
 });
 
@@ -107,13 +108,13 @@ describe('createComposer', () => {
     sendButton().click();
     await Promise.resolve();
     assert.equal(composer?.state(), 'sending');
-    assert.match(statusText(), /plante/);
+    assert.match(statusText(), /planting/);
 
     release();
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(composer?.state(), 'harvested');
     // The word the product uses, not "sent".
-    assert.match(statusText(), /récolté/);
+    assert.match(statusText(), /harvested/);
   });
 
   it('refuses to plant the same note twice', async () => {
@@ -200,7 +201,7 @@ describe('createComposer', () => {
   });
 
   it('says nothing when the reporter walked away mid-send', async () => {
-    // Cancel while the request is in flight and the response still arrives. Announcing "récolté" on
+    // Cancel while the request is in flight and the response still arrives. Announcing "harvested" on
     // a closed popover, or focusing a hidden textarea, is the kind of ghost that makes a widget feel
     // haunted.
     let release: () => void = () => {};
@@ -250,7 +251,29 @@ describe('createComposer', () => {
     const status = composer?.element.querySelector('[data-fruitback-status]');
     assert.equal(status?.getAttribute('role'), 'status');
     assert.equal(status?.getAttribute('aria-live'), 'polite');
-    assert.equal(field().getAttribute('aria-label'), 'Votre commentaire');
+    assert.equal(field().getAttribute('aria-label'), 'Your comment');
+  });
+
+  it('writes a host translation as text, never as markup (SKG-530)', () => {
+    // The template is parsed with innerHTML, so a word interpolated into it would be parsed too.
+    const page = mountPage('<main></main>');
+    const host = page.document.createElement('div');
+    page.document.body.append(host);
+    const translator = createTranslator({
+      locale: 'fr',
+      messages: {
+        fr: { 'composer.cancel': '<img src=x onerror="alert(1)">', 'composer.placeholder': '"><b>bold</b>' },
+      },
+    });
+    composer = createComposer({ document: page.document, host, onSubmit: async () => true, translator });
+
+    assert.equal(
+      composer.element.querySelector('[data-fruitback-cancel]')?.textContent,
+      '<img src=x onerror="alert(1)">',
+    );
+    assert.equal(field().placeholder, '"><b>bold</b>');
+    assert.equal(composer.element.querySelector('img'), null);
+    assert.equal(composer.element.querySelector('b'), null);
   });
 
   it('takes its own DOM with it when destroyed', () => {

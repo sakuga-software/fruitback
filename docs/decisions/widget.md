@@ -224,10 +224,52 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
 - **Do not use generic tags in the widget's chrome.** Playwright's selectors pierce open shadow
   roots, so a `<header>` in the panel made the page's own `header button` ambiguous for anything
   reading the composed tree. The panel uses a `div`, and the E2E specs scope to `main header button`.
-- **Two elements must not share one accessible name.** The gear says `Ouvrir les réglages Fruitback`
-  and the dialog `Réglages Fruitback`; giving both the same name is ambiguous to a screen reader and
+- **Two elements must not share one accessible name.** The gear says `Open Fruitback settings`
+  and the dialog `Fruitback settings`, and a host catalog must keep them apart too; giving both the same name is ambiguous to a screen reader and
   to any test that finds elements by name.
 
+
+## The words, and the one language the bundle carries (SKG-530)
+
+- **`messages.ts` holds every word the widget shows, behind a key.** No i18n library ships: a record
+  of strings and `Intl.PluralRules` cost a few hundred bytes, under a size guard that trips at 150 kB.
+- **English is the only catalog in the bundle, and the default.** The project is open source, so its
+  default is the language most readers share. **A French site now shows English until it passes
+  `messages`** — a visible change for every existing deployment. SKG-531 adds French.
+- **`ENGLISH` is exhaustive.** A key the code asks for and English lacks does not compile, so "show
+  English rather than the key" only ever applies to a host catalog.
+- **A host catalog is parsed like the stored config**: field by field. An unknown key, a string where
+  a plural belongs, a plural with no `other` — each costs that entry, and English takes its place. A
+  locale tag that `Intl` refuses is ignored: `new Intl.PluralRules('not a tag')` throws, and a typo
+  must cost the translation, never the mount.
+- **Catalogs are keyed by locale tag.** The match is the exact tag, then the primary subtag, then
+  English, and `locale` wins over `navigator.language`. Keying by tag is what gives detection a use:
+  one mount carries `fr` and `de`, and the reader's browser chooses.
+- **The plural rules follow the catalog that supplied the message.** French puts 0 in `one`, so an
+  English fallback read with French rules would say "0 detached note".
+- **Dates follow the locale the reader asked for**, not the catalog: a French reader of the English
+  widget still reads `01/08/2026`.
+- **The language comes off the mounted document's own window**, never off `globalThis` — the realm
+  rule `isElement` exists for, and `languageOf` is the one place. Node's global navigator also says
+  `en-US`, so a binding that read it would pass every test expecting English. The tests set the
+  page's navigator to French and assert the global one disagrees.
+- **A message is text.** The composer's template is parsed with `innerHTML`, so its words are set as
+  properties afterwards and never interpolated into it. A test hands it markup and checks that nothing
+  was parsed.
+- **`label` still wins over `launch.label`.** A host's label is the host's word, in any language.
+- **The factories take an optional `translator` and default to English**, because the playground
+  calls them directly. What stops a word escaping the catalog is `messages.test.ts`: it renders the
+  widget in a pseudo-locale whose messages are their own keys, through the states it drives, and fails
+  on any letter that is neither a key nor fixture data. It first asserts that the keys it expects did
+  render, or it would check nothing.
+- **The E2E suite runs with `locale: 'en-US'`.** The specs find the chrome by its English names, and
+  a runner with another default language would change every name with nothing in the report to say
+  why.
+- **The script tag gets detection only.** A catalog cannot travel in a `data-` attribute, and with
+  English the only catalog, detection alone changes nothing on screen. A site with no build step that
+  wants another language calls `Fruitback.init` itself.
+- **The extension mounts with no catalog**, so a reviewer's widget is English whatever their browser's
+  language. It matches the popup, which is English too.
 
 ## Re-anchoring, and why a pin says how sure it is
 

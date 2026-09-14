@@ -327,13 +327,33 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   the issues already held, so hiding a stage costs no request.
 - **Do not use generic tags in the widget's chrome.** Playwright's selectors pierce open shadow
   roots, so a `<header>` in the panel made the page's own `header button` ambiguous.
-- **Two elements must not share one accessible name.** The gear says `Ouvrir les réglages Fruitback`
-  and the dialog `Réglages Fruitback`.
+- **Two elements must not share one accessible name.** The gear says `Open Fruitback settings`
+  and the dialog `Fruitback settings`. A host catalog must keep `settings.open` and `settings.dialog` apart
+  too.
+
+**The words** (SKG-530)
+
+- **`messages.ts` holds every word, behind a key, and English is the only catalog in the bundle.** No
+  i18n library. A host passes `init({ locale, messages })`, with catalogs keyed by locale tag: the
+  exact tag, then the primary subtag, then English. A French site shows English until it passes one.
+- **`ENGLISH` is exhaustive, and a host catalog is parsed field by field.** A bad entry costs that
+  entry. A locale tag `Intl` refuses costs the translation, never the mount — it throws otherwise.
+- **Plural rules follow the catalog that supplied the message**; dates follow the locale the reader
+  asked for.
+- **`languageOf(document)` reads the mounted page's navigator.** Node's global one also says `en-US`,
+  so a binding that read `globalThis` passes every test that expects English.
+- **A message is text.** Set it with `textContent` or an attribute, never inside an `innerHTML`
+  template — the composer sets its words after the template is parsed.
+- **`label` still wins over `launch.label`.** The factories take an optional `translator` and default
+  to English, because the playground calls them directly. `messages.test.ts` renders the widget in a
+  pseudo-locale and fails on any word that did not come from the catalog.
+- **The E2E suite pins `locale: 'en-US'`**, because the specs find the chrome by its English names.
 
 **Deeper** — in [docs/decisions/widget.md](docs/decisions/widget.md):
 *The widget*, *The host, and why everything lives in one Shadow root*,
 *The look, and the one thing a host may change*, *One prefix, and it is `fruitback`*,
-*The popover*, *Who carries the calls*, *The optional picture*, *The settings panel*.
+*The popover*, *Who carries the calls*, *The optional picture*, *The settings panel*,
+*The words, and the one language the bundle carries*.
 And *No emoji, and what replaced them* in [docs/decisions/icons.md](docs/decisions/icons.md).
 
 ## Re-anchoring, and why a pin says how sure it is

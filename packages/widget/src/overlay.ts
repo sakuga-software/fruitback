@@ -1,5 +1,5 @@
 import { type SeedBounds, type SeedIssue } from '@fruitback/shared';
-import { STAGE_LABELS } from './stages.ts';
+import { type Translator, createTranslator, languageOf } from './messages.ts';
 import { createIcon } from './icons.ts';
 import { stageToken } from './theme.ts';
 import { isElement } from './dom.ts';
@@ -65,6 +65,8 @@ export type OverlayOptions = {
    * detect the change itself — which a client's app cannot do.
    */
   onResolve?: (resolutions: { issue: SeedIssue; strategy: AnchorResolution['strategy'] }[]) => void;
+  /** The widget's words (SKG-530). Left out: English, with dates in this document's language. */
+  translator?: Translator;
 };
 
 export type Overlay = {
@@ -96,6 +98,7 @@ type Placed = {
 export function createOverlay(options: OverlayOptions = {}): Overlay {
   const document = options.document ?? globalThis.document;
   const view = document.defaultView;
+  const t = options.translator ?? createTranslator({ language: languageOf(document) });
   const container = document.createElement('div');
   container.className = 'fruitback-overlay';
   container.dataset.fruitbackOverlay = '';
@@ -116,6 +119,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   const orphans: OrphanList = createOrphanList({
     document,
     host,
+    translator: t,
     onSelect: (issue) => {
       const entry = placed.find((candidate) => candidate.issue.seed.id === issue.seed.id);
       if (entry !== undefined) openThread(entry);
@@ -185,7 +189,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 
     for (const entry of placed) {
       entry.resolution = resolveAnchor(entry.issue.seed.anchor, { document });
-      applyResolution(entry.pin, entry.issue, entry.resolution);
+      applyResolution(entry.pin, entry.issue, entry.resolution, t);
       place(entry);
     }
 
@@ -272,7 +276,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       .filter((issue) => options.shouldShow?.(issue) ?? true)
       .map((issue) => {
         const resolution = resolveAnchor(issue.seed.anchor, { document });
-        const pin = buildPin(document, issue, resolution);
+        const pin = buildPin(document, issue, resolution, t);
         const entry = { issue, resolution, pin };
 
         pin.querySelector('.fruitback-pin-badge')?.addEventListener('click', (event) => {
@@ -299,7 +303,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   /** Re-render the open thread against a resolution that has just changed under it. */
   function reopenThread(entry: Placed): void {
     thread?.remove();
-    thread = buildThread(document, entry.issue, entry.resolution);
+    thread = buildThread(document, entry.issue, entry.resolution, t);
     thread.querySelector('.fruitback-thread-close')?.addEventListener('click', () => closeThread());
     container.append(thread);
     positionThread(thread, entry.pin);
@@ -308,7 +312,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   function openThread(entry: Placed): void {
     closeThread();
     entry.pin.dataset.fruitbackOpen = '';
-    thread = buildThread(document, entry.issue, entry.resolution);
+    thread = buildThread(document, entry.issue, entry.resolution, t);
     thread.querySelector('.fruitback-thread-close')?.addEventListener('click', () => closeThread());
     container.append(thread);
     positionThread(thread, entry.pin);
@@ -381,7 +385,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   };
 }
 
-function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolution): HTMLElement {
+function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolution, t: Translator): HTMLElement {
   const pin = document.createElement('div');
 
   pin.className = 'fruitback-pin';
@@ -395,14 +399,14 @@ function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolu
   const badge = document.createElement('button');
   badge.type = 'button';
   badge.className = 'fruitback-pin-badge';
-  badge.title = `${issue.identifier} · ${stateLabel(issue)}`;
+  badge.title = `${issue.identifier} · ${stateLabel(issue, t)}`;
   // The drop is rotated, so the glyph rides in its own span and is turned back upright.
   const glyph = document.createElement('span');
   glyph.className = 'fruitback-pin-glyph';
   badge.append(glyph);
   pin.append(badge);
 
-  applyResolution(pin, issue, resolution);
+  applyResolution(pin, issue, resolution, t);
 
   return pin;
 }
@@ -414,7 +418,7 @@ function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolu
  * follow. Written once at build time, a pin that fell from `selector` to `bounds` kept claiming it
  * had been recognised.
  */
-function applyResolution(pin: HTMLElement, issue: SeedIssue, resolution: AnchorResolution): void {
+function applyResolution(pin: HTMLElement, issue: SeedIssue, resolution: AnchorResolution, t: Translator): void {
   // Three looks, because they mean three different things: found by identity, placed by position,
   // and not found at all.
   pin.classList.toggle('fruitback-pin-uncertain', !resolution.confident);
@@ -427,7 +431,10 @@ function applyResolution(pin: HTMLElement, issue: SeedIssue, resolution: AnchorR
   // also what keeps it reachable by a screen reader and by a test looking for it by role.
   badge?.setAttribute(
     'aria-label',
-    `${STAGE_LABELS[issue.stage]} · ${summarise(issue)}${resolution.confident ? '' : ' (position approximative)'}`,
+    t.text(resolution.confident ? 'pin.label' : 'pin.labelUncertain', {
+      stage: t.stage(issue.stage),
+      note: summarise(issue),
+    }),
   );
   const glyph = pin.querySelector('.fruitback-pin-glyph');
   // Empty when the pin is sure of itself (SKG-517): the drop's shape and its stage colour say which
@@ -457,11 +464,11 @@ function summarise(issue: SeedIssue): string {
  * the widget says nothing at all, because "no replies yet" would be a claim it cannot make. An empty
  * list means it asked and there were none, which is worth saying. Anything else is the thread.
  */
-function replies(document: Document, issue: SeedIssue): HTMLElement[] {
+function replies(document: Document, issue: SeedIssue, t: Translator): HTMLElement[] {
   if (issue.comments === undefined) return [];
 
   if (issue.comments.length === 0) {
-    return [element(document, 'p', 'fruitback-thread-empty', 'Pas encore de réponse.')];
+    return [element(document, 'p', 'fruitback-thread-empty', t.text('thread.noReplies'))];
   }
 
   const list = document.createElement('ul');
@@ -476,7 +483,7 @@ function replies(document: Document, issue: SeedIssue): HTMLElement[] {
         document,
         'span',
         'fruitback-thread-reply-who',
-        `${comment.author ?? 'Équipe'} · ${Number.isNaN(written.getTime()) ? comment.createdAt : written.toLocaleDateString()}`,
+        `${comment.author ?? t.text('thread.team')} · ${Number.isNaN(written.getTime()) ? comment.createdAt : t.date(written)}`,
       ),
       // `textContent`, never markup: this is Linear's markdown, written by whoever can comment on the
       // issue, rendered inside someone else's page. It is text here and nothing more.
@@ -501,18 +508,18 @@ function replies(document: Document, issue: SeedIssue): HTMLElement[] {
  *
  * `||` and not `??`: an empty string is exactly the case being caught, and `??` would let it through.
  */
-function stateLabel(issue: SeedIssue): string {
-  return issue.stateName || STAGE_LABELS[issue.stage];
+function stateLabel(issue: SeedIssue, t: Translator): string {
+  return issue.stateName || t.stage(issue.stage);
 }
 
 /** Note, status, who said it, and the way through to Linear, which owns everything else. */
-function buildThread(document: Document, issue: SeedIssue, resolution: AnchorResolution): HTMLElement {
+function buildThread(document: Document, issue: SeedIssue, resolution: AnchorResolution, t: Translator): HTMLElement {
   const thread = document.createElement('div');
   thread.className = 'fruitback-thread';
   thread.dataset.fruitbackThread = issue.seed.id;
   thread.style.setProperty('--fruitback-pin-color', stageToken(issue.stage));
 
-  const reporter = issue.seed.reporter?.name ?? issue.seed.reporter?.email ?? 'Anonyme';
+  const reporter = issue.seed.reporter?.name ?? issue.seed.reporter?.email ?? t.text('thread.anonymous');
   const planted = new Date(issue.seed.createdAt);
 
   thread.append(
@@ -522,49 +529,42 @@ function buildThread(document: Document, issue: SeedIssue, resolution: AnchorRes
       // thread's top border through `--fruitback-pin-color`.
       //
       // See `stateLabel` for why this is not just `issue.stateName`.
-      element(document, 'span', 'fruitback-thread-stage', stateLabel(issue)),
-      closeButton(document),
+      element(document, 'span', 'fruitback-thread-stage', stateLabel(issue, t)),
+      closeButton(document, t),
     ]),
-    element(document, 'p', 'fruitback-thread-note', issue.seed.note || 'Aucune note.'),
+    element(document, 'p', 'fruitback-thread-note', issue.seed.note || t.text('thread.noNote')),
     element(
       document,
       'p',
       'fruitback-thread-meta',
-      `${reporter} · ${Number.isNaN(planted.getTime()) ? issue.seed.createdAt : planted.toLocaleDateString()}`,
+      `${reporter} · ${Number.isNaN(planted.getTime()) ? issue.seed.createdAt : t.date(planted)}`,
     ),
     // Said out loud rather than hidden. A reader who is told the pin might be on the wrong element
     // checks; a reader who is told nothing believes it.
-    ...uncertaintyNote(document, resolution),
-    ...replies(document, issue),
+    ...uncertaintyNote(document, resolution, t),
+    ...replies(document, issue, t),
     ...link(document, issue),
   );
 
   return thread;
 }
 
-function uncertaintyNote(document: Document, resolution: AnchorResolution): HTMLElement[] {
+function uncertaintyNote(document: Document, resolution: AnchorResolution, t: Translator): HTMLElement[] {
   if (resolution.element === null) {
-    return [element(document, 'p', 'fruitback-thread-orphan', 'Élément introuvable — position approximative.')];
+    return [element(document, 'p', 'fruitback-thread-orphan', t.text('thread.orphan'))];
   }
   if (!resolution.confident) {
-    return [
-      element(
-        document,
-        'p',
-        'fruitback-thread-orphan',
-        'Élément retrouvé par sa position, pas par son identité — la page a peut-être changé sous le pin.',
-      ),
-    ];
+    return [element(document, 'p', 'fruitback-thread-orphan', t.text('thread.uncertain'))];
   }
 
   return [];
 }
 
-function closeButton(document: Document): HTMLElement {
+function closeButton(document: Document, t: Translator): HTMLElement {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'fruitback-thread-close';
-  button.setAttribute('aria-label', 'Fermer');
+  button.setAttribute('aria-label', t.text('thread.close'));
   button.append(createIcon(document, 'close'));
 
   return button;

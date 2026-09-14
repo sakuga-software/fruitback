@@ -5,6 +5,7 @@ import { type CaptureHost, type CaptureTarget, createCaptureHost } from './host.
 import type { FruitbackTheme } from './theme.ts';
 import { type FruitbackTransport, fetchTransport } from './transport.ts';
 import { type Composer, createComposer } from './composer.ts';
+import { type FruitbackMessages, createTranslator, languageOf } from './messages.ts';
 import { type Overlay, createOverlay } from './overlay.ts';
 import { type ConfigPanel, createConfigPanel } from './panel.ts';
 
@@ -27,8 +28,23 @@ export type FruitbackOptions = {
   endpoint: string;
   /** Which client this site is, as the worker's map knows it. */
   clientId: string;
-  /** Shown on the floating button. */
+  /** Shown on the floating button. Wins over `launch.label` in `messages`. */
   label?: string;
+  /**
+   * The language to show, as a BCP 47 tag (SKG-530). Left out, the widget reads the browser's
+   * language. A tag that `Intl` refuses is ignored.
+   */
+  locale?: string;
+  /**
+   * The host's own translations, by locale tag: `{ fr: { 'launch.label': 'Laisser un feedback' } }`.
+   *
+   * English is the only catalog in the bundle. The exact tag wins over its primary subtag. If a key
+   * is missing, unknown or of the wrong shape, the widget shows the English message for that key.
+   * A plural message has one string per `Intl.PluralRules` category, and `other` is required.
+   *
+   * `settings.open` and `settings.dialog` must stay different: they name the gear and its dialog.
+   */
+  messages?: Readonly<Record<string, FruitbackMessages>>;
   /**
    * A short-lived JWT identifying the visitor (SKG-498). Called before every write, so a token that
    * expires mid-session is refreshed rather than rejected. Without it every reporter is
@@ -151,6 +167,11 @@ export function init(options: FruitbackOptions): Fruitback {
   }
 
   const view = document.defaultView ?? globalThis.window;
+  const translator = createTranslator({
+    locale: options.locale,
+    messages: options.messages,
+    language: languageOf(document),
+  });
 
   const config = createConfigStore({
     // `screenshot` off at the start: it is the reporter's to turn on, and an image of the page they
@@ -165,6 +186,7 @@ export function init(options: FruitbackOptions): Fruitback {
 
   const host: CaptureHost = createCaptureHost({
     document,
+    translator,
     label: options.label,
     ignore: options.ignore,
     ...(options.theme !== undefined ? { theme: options.theme } : {}),
@@ -183,6 +205,7 @@ export function init(options: FruitbackOptions): Fruitback {
 
   const overlay: Overlay = createOverlay({
     document,
+    translator,
     host: host.root,
     shouldShow: (issue) => !config.get().hiddenStages.includes(issue.stage),
   });
@@ -191,6 +214,7 @@ export function init(options: FruitbackOptions): Fruitback {
 
   composer = createComposer({
     document,
+    translator,
     host: host.panel,
     onSubmit: async (note, reporter) => {
       const planted = await plant({ note, target, reporter, config: config.get(), options });
@@ -206,6 +230,7 @@ export function init(options: FruitbackOptions): Fruitback {
 
   panel = createConfigPanel({
     document,
+    translator,
     host: host.root,
     store: config,
     screenshotSupported: options.captureScreenshot !== undefined,
