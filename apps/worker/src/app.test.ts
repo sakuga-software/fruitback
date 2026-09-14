@@ -6,8 +6,8 @@ import { handleRequest } from './app.ts';
 import type { WorkerEnv } from './env.ts';
 import { installLinearStub, storedIssueFromSeed } from './linear-stub.ts';
 import { signIdentityToken } from './identity.ts';
-import { resetRateLimitState } from './rate-limit.ts';
 import type { SeedStore } from './store.ts';
+import { type Kv, KvError, createMemoryKv, resetSharedKv } from './kv.ts';
 import { resetCacheState } from './cache.ts';
 import { resetMemoryLinear } from './linear-memory.ts';
 
@@ -28,6 +28,8 @@ type RequestOverrides = {
   clientIp?: string;
   /** Built once by the transport in production — see `RequestContext.store` (SKG-522). */
   store?: SeedStore;
+  /** Built once by the transport in production — see `RequestContext.kv` (SKG-542). */
+  kv?: Kv;
 };
 
 function post(body: unknown, init: RequestOverrides = {}) {
@@ -43,6 +45,7 @@ function post(body: unknown, init: RequestOverrides = {}) {
   return handleRequest(request, init.env ?? env, {
     clientIp: init.clientIp ?? '203.0.113.1',
     ...(init.store ? { store: init.store } : {}),
+    ...(init.kv ? { kv: init.kv } : {}),
   });
 }
 
@@ -53,11 +56,12 @@ function get(path: string, init: RequestOverrides = {}) {
   return handleRequest(new Request(`https://worker.fruitback.dev${path}`, { headers }), init.env ?? env, {
     clientIp: init.clientIp ?? '203.0.113.1',
     ...(init.store ? { store: init.store } : {}),
+    ...(init.kv ? { kv: init.kv } : {}),
   });
 }
 
-beforeEach(() => {
-  resetRateLimitState();
+beforeEach(async () => {
+  await resetSharedKv();
   resetCacheState();
 });
 
@@ -446,7 +450,7 @@ describe('GET /feedback', () => {
     assert.equal(stub.calls.length, 1);
     assert.deepEqual(await second.json(), await first.json());
     // Not a browser cache: the widget must never be served its own stale copy of a page it just
-    // planted a pin on. The in-process cache above is what protects the Linear quota.
+    // planted a pin on. The read cache in the Kv is what protects the Linear quota.
     assert.equal(second.headers.get('Cache-Control'), 'no-store');
   });
 
@@ -558,6 +562,96 @@ describe('cache invalidation', () => {
 
     const after = await get(`/feedback?url=${encodeURIComponent(seed.page.url)}`);
     assert.equal(((await after.json()) as { issues: SeedIssue[] }).issues.length, 1);
+  });
+});
+
+/** A Kv whose calls all reject, the way a store that went away rejects them. */
+function unreachableKv(): Kv {
+  const down = async () => {
+    throw new KvError('connection failed: connect ECONNREFUSED');
+  };
+
+  return { ...createMemoryKv(), get: down, set: down, incr: down };
+}
+
+describe('the Kv the transport hands over (SKG-542)', () => {
+  const CACHED_PAGE = 'https://preview.acme.test/pricing?tab=annual';
+
+  it('holds one rate limit for two replicas on one Kv', async () => {
+    // Two handlers on one `Kv` share one count. A store shared between replicas (SKG-606) relies on it.
+    installLinearStub();
+    const kv = createMemoryKv();
+    const replicas = [{ kv }, { kv: { ...kv } }];
+    const statuses: number[] = [];
+
+    for (let attempt = 0; attempt < 21; attempt += 1) {
+      statuses.push((await post(seedFixture(), { clientIp: '203.0.113.7', ...replicas[attempt % 2] })).status);
+    }
+
+    assert.equal(statuses.filter((status) => status === 201).length, 20);
+    assert.equal(statuses[20], 429);
+  });
+
+  it('counts through the Kv the transport handed it', async () => {
+    installLinearStub();
+    const kv = createMemoryKv();
+    const counted: string[] = [];
+    const recording: Kv = { ...kv, incr: (key, ttl) => (counted.push(key), kv.incr(key, ttl)) };
+
+    await post(seedFixture(), { kv: recording });
+
+    assert.equal(counted.length, 1, 'the handler counted somewhere else');
+  });
+
+  it('serves a second replica the answer the first one cached', async () => {
+    const stub = installLinearStub({ storedIssues: [storedIssueFromSeed(seedFixture())] });
+    const kv = createMemoryKv();
+
+    await get(`/feedback?url=${encodeURIComponent(CACHED_PAGE)}`, { kv });
+    // The in-flight promise is what a second process does not have. The answer it stored is.
+    resetCacheState();
+    await get(`/feedback?url=${encodeURIComponent(CACHED_PAGE)}`, { kv: { ...kv } });
+
+    assert.equal(stub.calls.length, 1);
+  });
+
+  it('refuses a metered call with 503 when the Kv does not answer, and keeps its CORS headers', async () => {
+    const stub = installLinearStub();
+    mock.method(console, 'error', () => {});
+
+    const response = await post(seedFixture(), { kv: unreachableKv() });
+
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), { error: 'limiter-unavailable' });
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'), ORIGIN);
+    assert.deepEqual(stub.calls, [], 'the call reached the store with no rate limit');
+  });
+
+  it('answers /health when the Kv does not', async () => {
+    // A readiness probe that depends on the `Kv` takes every replica out at once.
+    const response = await handleRequest(new Request('https://worker.fruitback.dev/health'), env, {
+      clientIp: '203.0.113.1',
+      kv: unreachableKv(),
+    });
+
+    assert.equal(response.status, 200);
+  });
+
+  it('answers 201 when the write lands and the cache cannot be told', async () => {
+    // A 502 tells the widget to retry, and the retry would plant the same note twice.
+    installLinearStub();
+    mock.method(console, 'error', () => {});
+    const kv = createMemoryKv();
+    const refusingWrites: Kv = {
+      ...kv,
+      set: async () => {
+        throw new KvError('connection failed');
+      },
+    };
+
+    const response = await post(seedFixture(), { kv: refusingWrites });
+
+    assert.equal(response.status, 201);
   });
 });
 

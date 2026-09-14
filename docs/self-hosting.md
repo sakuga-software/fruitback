@@ -55,8 +55,9 @@ The read path is one Linear query, narrowed server-side by the `fruitback` label
 label and `description contains <canonical url>` — the workspace can hold any number of issues
 without the worker walking them. `contains` being a substring match, the seed's own
 `page.url` is re-checked exactly, or `/pricing` would return the pins of `/pricing?tab=annual`.
-Answers are cached in-process for 15 s: the same page opened by a room full of reviewers costs one
-call against the Linear quota, and a failed call is never cached.
+Answers are cached for 15 s: the same page opened by a room full of reviewers costs one call against
+the Linear quota, and a failed call is never cached. The cache and the rate limiter both live
+inside the container, which matters as soon as there are two.
 
 ## Storing the seeds in SQLite
 
@@ -87,6 +88,17 @@ That is the trade, not an oversight. And with no issue tracker behind it there i
 triage UI — the pins on the page are the interface, and a note's thread lives in the `comments`
 table. A store with no web interface reports no link, and the widget renders none rather than one
 that leads back to the page you are already on.
+
+## Running more than one replica
+
+The rate limiter and the read cache keep their state **inside each container**. One container is the
+whole story, and it is how the worker is meant to run. Two are two rate limits:
+`RATE_LIMIT_PER_MINUTE=20` lets 40 a minute through — and up to 78 in a burst at a window edge, twice
+the bound `SECURITY.md` gives for one — with nothing said anywhere, and a cold page costs one provider
+call per replica.
+
+A store the replicas share is not built. It is SKG-606, written up with what a first implementation
+learned, and waiting for a deployment that needs it.
 
 ## Running the published image
 

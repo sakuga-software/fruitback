@@ -98,8 +98,16 @@ somewhere for a long time.
 ### The rate limit is per process
 
 `RATE_LIMIT_PER_MINUTE` (20 by default) is held in memory, per container. **Run N replicas and the
-effective ceiling is N times what you configured.** It protects your provider quota; it is not a
-defence against a determined caller, who can rotate addresses anyway.
+effective ceiling is N times what you configured**, with nothing to see anywhere. One container is the
+ordinary deployment and the whole story; a store the replicas share is tracked as SKG-606.
+
+The window slides, estimated from the current minute and the one before it. A caller who sends a full
+burst at the end of a window and spaces the next ones out gets **at most 39 requests in any 60
+seconds** through, for the default limit of 20. That is `2 × limit − 1`, and `rate-limit.test.ts`
+holds the number against the code. A steady caller stays at the limit.
+
+It protects your provider quota; it is not a defence against a determined caller, who can rotate
+addresses anyway.
 
 `TRUSTED_PROXY_HOPS` (1 by default, which is one Traefik) decides how the client address is read:
 `X-Forwarded-For` is appended to by each proxy, so the real address is that many entries **from the

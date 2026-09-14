@@ -112,6 +112,17 @@ describe('SECURITY.md states what the code does', () => {
     );
   });
 
+  it('quotes what a burst can get through the shared window', () => {
+    // The number a reader would use to size a quota. It is `2 × limit − 1`, held against the code by
+    // `rate-limit.test.ts`, so it moves with the default.
+    const phrase = `at most ${2 * DEFAULT_LIMIT - 1} requests in any 60\nseconds`;
+
+    assert.ok(
+      SECURITY.includes(phrase) || SECURITY.includes(phrase.replace('\n', ' ')),
+      `SECURITY.md does not say a burst gets at most ${2 * DEFAULT_LIMIT - 1} requests through`,
+    );
+  });
+
   it('quotes the proxy hops this worker actually trusts', () => {
     assert.ok(
       SECURITY.includes(`\`TRUSTED_PROXY_HOPS\` (${DEFAULT_TRUSTED_PROXY_HOPS} by default`),

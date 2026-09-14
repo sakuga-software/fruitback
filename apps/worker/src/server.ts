@@ -8,6 +8,7 @@ import { DEFAULT_HOST, DEFAULT_TRUSTED_PROXY_HOPS, type WorkerEnv, readConfig, r
 import { fakeLinearDeprecationNotice, fakeLinearIgnoredReason } from './store-config.ts';
 import { isDevOnlyProvider } from './stores.ts';
 import { resolveClientIp } from './rate-limit.ts';
+import { type Kv, processKv } from './kv.ts';
 
 /**
  * Node entry point: adapts `node:http` onto the web-standard handler in `app.ts`.
@@ -33,9 +34,11 @@ export function createFruitbackServer(env: WorkerEnv, provided?: SeedStore): Ser
    * lands. A misconfigured process has no store: it only ever answers `/health` and the diagnostic.
    */
   const store = provided ?? (config.ok ? storeFor(config.config) : undefined);
+  // One per process, like the store. The handler falls back to this same instance.
+  const kv = processKv();
 
   return createServer((incoming, response) => {
-    void respond(incoming, response, env, trustedProxyHops, store);
+    void respond(incoming, response, env, trustedProxyHops, store, kv);
   });
 }
 
@@ -45,6 +48,7 @@ async function respond(
   env: WorkerEnv,
   trustedProxyHops: number,
   store: SeedStore | undefined,
+  kv: Kv | undefined,
 ): Promise<void> {
   try {
     const request = toWebRequest(incoming);
@@ -54,7 +58,7 @@ async function respond(
       trustedProxyHops,
     );
 
-    const result = await handleRequest(request, env, { clientIp, store });
+    const result = await handleRequest(request, env, { clientIp, store, kv });
     await writeWebResponse(result, response);
   } catch (error) {
     // Never leak an internal message to a client site; the details belong in the container logs.
