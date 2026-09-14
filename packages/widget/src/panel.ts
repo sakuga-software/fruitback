@@ -164,7 +164,8 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   // shortcut sets the two resolved stages and leaves the others where the reporter put them.
   hideResolved.addEventListener('change', () => {
     const hidden = new Set(hiddenFromInputs());
-    for (const stage of RESOLVED_STAGES) {
+    // A stage with no box keeps the choice the reporter made for it.
+    for (const stage of RESOLVED_STAGES.filter((resolved) => offered.get().includes(resolved))) {
       if (hideResolved.checked) hidden.add(stage);
       else hidden.delete(stage);
     }

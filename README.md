@@ -121,7 +121,7 @@ asked for a Linear key — and an unknown name is refused at boot rather than qu
 | --- | --- | --- | --- |
 | `linear` *(default)* | `LINEAR_API_KEY`, `LINEAR_TEAM_ID` | anywhere the worker runs | A team already triaging in Linear. Dashboard, API, MCP and integrations come for free. |
 | `sqlite` | `FRUITBACK_SQLITE_PATH` | **a persistent filesystem only** | Self-hosting with no third party at all. One file on a volume. |
-| `github` | `FRUITBACK_GITHUB_APP_ID`, `FRUITBACK_GITHUB_PRIVATE_KEY`, `FRUITBACK_GITHUB_REPOSITORY` | anywhere the worker runs | A team whose issues are already on GitHub. Three stages instead of five: open, done, and closed as not planned. |
+| `github` | `FRUITBACK_GITHUB_APP_ID`, `FRUITBACK_GITHUB_PRIVATE_KEY`, `FRUITBACK_GITHUB_REPOSITORY` | anywhere the worker runs | A team whose issues are already on GitHub. Three stages instead of five: `seeded` while open, `ripe` when closed as completed, `composted` when closed as not planned or as a duplicate. |
 | `memory` | nothing | the dev loop | Refused under `NODE_ENV=production`. |
 
 SQLite is one file through `node:sqlite` — no dependency, no native module, and the schema migrates

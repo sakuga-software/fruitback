@@ -393,8 +393,8 @@ docker start fruitback
 
 ## Storing the seeds in GitHub Issues
 
-Each note becomes an issue in one repository, labelled `fruitback` and `fruitback:<client>`, with the
-seed in a fenced block at the end of the body. The worker signs in as a GitHub App, never with a
+Each note becomes an issue in one repository, labelled `fruitback`, and also `fruitback:<client>` when
+the note names a client. The seed is in a fenced block at the end of the body. The worker signs in as a GitHub App, never with a
 personal token. A personal token does not expire and reaches every repository of its owner. The token
 the worker mints expires after one hour and reaches one repository.
 

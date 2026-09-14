@@ -54,6 +54,12 @@ const ISSUES_MAX_PAGES = 10;
 /** Same cap as the Linear store. The thread keeps the newest comments. */
 const COMMENTS_PER_ISSUE = 20;
 
+/**
+ * Comment lists fetched at the same time. GitHub's secondary rate limit counts concurrent requests,
+ * and a page with many pins must not open one request per pin at once.
+ */
+const COMMENT_FETCHES_AT_ONCE = 4;
+
 const githubConfigSchema = z.object({
   /** The App ID, or its client ID. GitHub accepts both as `iss`. */
   appId: z.string().min(1),
@@ -237,10 +243,24 @@ const issueRowSchema = z.object({
   state_reason: z.string().nullable().optional(),
   updated_at: z.string(),
   comments: z.number(),
+  labels: z.array(z.union([z.string(), z.object({ name: z.string() })])),
   pull_request: z.unknown().optional(),
 });
 
 type IssueRow = z.infer<typeof issueRowSchema>;
+
+function labelNames(issue: IssueRow): string[] {
+  return issue.labels.map((label) => (typeof label === 'string' ? label : label.name));
+}
+
+async function mapInBatches<T, R>(items: T[], size: number, map: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = [];
+  for (let start = 0; start < items.length; start += size) {
+    results.push(...(await Promise.all(items.slice(start, start + size).map(map))));
+  }
+
+  return results;
+}
 
 const createdIssueSchema = z.object({ id: z.number(), number: z.number(), html_url: z.string().min(1) });
 
@@ -324,7 +344,9 @@ export function createGithubStore(config: GithubConfig, options: GithubStoreOpti
         // An issue must carry every label in the list. Measured on cli/cli, 2026-09-14: `bug` gave
         // 100+ issues, `gh-codespace` 42, and `bug,gh-codespace` 22, each with both labels. The
         // client label is what keeps one client's pins off another client's site.
-        labels: labels.join(','),
+        // GitHub splits this value on commas. A label with a comma, from a client ID such as
+        // `acme,staging`, stays out of the query, and `matchPage` checks it on the row.
+        labels: labels.filter((name) => !name.includes(',')).join(','),
         state: 'all',
         sort: 'created',
         direction: 'desc',
@@ -368,31 +390,29 @@ export function createGithubStore(config: GithubConfig, options: GithubStoreOpti
       const labels = query.clientId ? [FRUITBACK_LABEL, clientLabelName(query.clientId)] : [FRUITBACK_LABEL];
 
       const matched = (await listIssues(repository, labels)).flatMap((row) => {
-        const match = matchPage(row, query.url);
+        const match = matchPage(row, query.url, labels);
 
         return match === null ? [] : [match];
       });
 
       // Comments are fetched only for the issues of this page, and only if the client shows them.
-      const issues = await Promise.all(
-        matched.map(async ({ issue, seed }) => {
-          const comments = policy.showComments
-            ? await fetchComments(repository, issue.number, issue.comments)
-            : undefined;
+      const issues = await mapInBatches(matched, COMMENT_FETCHES_AT_ONCE, async ({ issue, seed }) => {
+        const comments = policy.showComments
+          ? await fetchComments(repository, issue.number, issue.comments)
+          : undefined;
 
-          return seedIssueSchema.safeParse({
-            id: String(issue.id),
-            identifier: `#${issue.number}`,
-            url: issue.html_url,
-            title: issue.title,
-            stage: stageForGithubIssue(issue.state, issue.state_reason),
-            stateName: stateNameFor(issue.state, issue.state_reason),
-            updatedAt: issue.updated_at,
-            ...(comments === undefined ? {} : { comments }),
-            seed,
-          });
-        }),
-      );
+        return seedIssueSchema.safeParse({
+          id: String(issue.id),
+          identifier: `#${issue.number}`,
+          url: issue.html_url,
+          title: issue.title,
+          stage: stageForGithubIssue(issue.state, issue.state_reason),
+          stateName: stateNameFor(issue.state, issue.state_reason),
+          updatedAt: issue.updated_at,
+          ...(comments === undefined ? {} : { comments }),
+          seed,
+        });
+      });
 
       return issues.flatMap((result): SeedIssue[] => (result.success ? [result.data] : []));
     },
@@ -403,11 +423,15 @@ export function createGithubStore(config: GithubConfig, options: GithubStoreOpti
  * The issue and its seed, if the row is a seed of this page.
  *
  * The list endpoint also returns pull requests. The label filter cannot tell a page apart from
- * another, so the seed itself decides, as in the Linear store.
+ * another, so the seed itself decides, as in the Linear store. The labels are checked again because
+ * the query can leave one out.
  */
-function matchPage(row: unknown, canonicalUrl: string): { issue: IssueRow; seed: Seed } | null {
+function matchPage(row: unknown, canonicalUrl: string, labels: string[]): { issue: IssueRow; seed: Seed } | null {
   const issue = issueRowSchema.safeParse(row);
   if (!issue.success || issue.data.pull_request !== undefined) return null;
+
+  const carried = labelNames(issue.data);
+  if (!labels.every((name) => carried.includes(name))) return null;
 
   const parsed = parseSeedFromDescription(issue.data.body);
   if (!parsed.ok || parsed.seed.page.url !== canonicalUrl) return null;

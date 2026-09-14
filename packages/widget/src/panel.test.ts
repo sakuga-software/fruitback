@@ -199,6 +199,20 @@ describe('the stages a store can report (SKG-525)', () => {
     assert.deepEqual(store.get().hiddenStages, ['green', 'ripe']);
   });
 
+  it('leaves a resolved stage the store does not offer as the reporter set it', () => {
+    // Found in review: unticking the shortcut also showed `composted` again, with no box to say so.
+    const { page, store, input } = mountOffering(['seeded', 'ripe'], {
+      ...DEFAULTS,
+      hiddenStages: ['ripe', 'composted'],
+    });
+
+    toggle(input('hide-resolved'), false, page.document);
+    assert.deepEqual(store.get().hiddenStages, ['composted']);
+
+    toggle(input('hide-resolved'), true, page.document);
+    assert.deepEqual(store.get().hiddenStages, ['ripe', 'composted']);
+  });
+
   it('ticks the shortcut from the resolved stages the store offers', () => {
     const { input } = mountOffering(['seeded', 'ripe'], { ...DEFAULTS, hiddenStages: ['ripe'] });
 

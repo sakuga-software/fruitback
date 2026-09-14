@@ -25,8 +25,8 @@ from the anchor we stored.
 ## Architecture
 
 **The diagram shows the default path, `FRUITBACK_STORE=linear`.** Since SKG-526 the third column is
-whichever connector is configured — `sqlite` writes a row in a file the worker owns, and the shape of
-the exchange does not change. This page was written when Linear was the only answer, and it is scoped
+whichever connector is configured — `sqlite` writes a row in a file the worker owns, `github` an issue
+in a repository (SKG-525), and the shape of the exchange does not change. This page was written when Linear was the only answer, and it is scoped
 here rather than rewritten: the reasoning below is still why the Linear connector looks the way it
 does.
 
@@ -62,8 +62,11 @@ database *of users*, which is what the claim was ever about.
 
 A **seed** is one piece of feedback planted on an element. **Where** it is stored is the connector's
 business: `linear` puts it as a JSON block inside the issue description, under a human-readable
-summary, and `sqlite` puts it in a column. The two decisions below are the Linear connector's, and
-they are what the markdown codec exists for.
+summary, `github` puts the same block in the issue body, and `sqlite` puts it in a column. The two
+decisions below were made for the Linear connector, and they are what the markdown codec exists for.
+The GitHub connector uses the same codec, and finds a page's seeds by label instead of by
+`description contains`: see *GitHub Issues, and the stages it cannot say* in
+[decisions/worker.md](decisions/worker.md).
 
 Two decisions worth knowing:
 

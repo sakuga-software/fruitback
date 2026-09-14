@@ -29,7 +29,7 @@ afterEach(() => {
 });
 
 type Call = { method: string; path: string; query: URLSearchParams; authorization: string | null; body: unknown };
-type Route = (call: Call) => Response;
+type Route = (call: Call) => Response | Promise<Response>;
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -79,6 +79,7 @@ function row(overrides: Record<string, unknown> = {}, seed = seedFixture()) {
     state_reason: null,
     updated_at: '2026-09-14T10:00:00Z',
     comments: 0,
+    labels: [{ name: 'fruitback' }, { name: 'fruitback:acme' }],
     ...overrides,
   };
 }
@@ -352,6 +353,69 @@ describe('findForPage', () => {
       comments: [],
     });
     assert.deepEqual(found[0]?.seed, seed);
+  });
+
+  it('keeps a comma in a client ID out of the query, and checks that label on the row', async () => {
+    // GitHub splits `labels` on commas, so `fruitback:acme,staging` in the query would ask for
+    // `fruitback:acme` and `staging`. Found in review.
+    const { calls, issues } = readWith(
+      [
+        row({ labels: [{ name: 'fruitback' }, { name: 'fruitback:acme,staging' }] }),
+        row({ id: 2, number: 2, labels: [{ name: 'fruitback' }, { name: 'fruitback:acme' }, { name: 'staging' }] }),
+      ],
+      {},
+      POLICY,
+      'acme,staging',
+    );
+
+    const found = await issues;
+
+    assert.equal(apiCalls(calls)[0]?.query.get('labels'), 'fruitback');
+    assert.deepEqual(
+      found.map((issue) => issue.id),
+      ['9001'],
+    );
+  });
+
+  it('keeps an issue without the client label off that client', async () => {
+    const { issues } = readWith([
+      row({ labels: [{ name: 'fruitback' }] }),
+      row({ id: 2, number: 2, labels: [{ name: 'fruitback' }, { name: 'fruitback:globex' }] }),
+      row({ id: 3, number: 3, labels: ['fruitback', 'fruitback:acme'] }),
+    ]);
+
+    assert.deepEqual(
+      (await issues).map((issue) => issue.id),
+      ['3'],
+    );
+  });
+
+  it('fetches the comments of a page with many pins a few at a time', async () => {
+    let inFlight = 0;
+    let most = 0;
+    const routes: Record<string, Route> = {};
+    for (let number = 1; number <= 10; number += 1) {
+      routes[`GET /repos/acme/site/issues/${number}/comments`] = async () => {
+        inFlight += 1;
+        most = Math.max(most, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        inFlight -= 1;
+
+        return json(200, [{ id: number, body: 'ok', created_at: '2026-09-14T10:00:00Z', user: null }]);
+      };
+    }
+    const rows = Array.from({ length: 10 }, (_, index) => row({ id: index + 1, number: index + 1, comments: 1 }));
+    const { issues } = readWith(rows, routes);
+
+    const found = await issues;
+
+    assert.equal(found.length, 10);
+    assert.ok(
+      found.every((issue) => issue.comments?.length === 1),
+      'a pin lost its comment',
+    );
+    assert.ok(most <= 4, `${most} comment lists were fetched at once`);
+    assert.ok(most > 1, 'the comment lists were fetched one by one');
   });
 
   it('names a closed issue by the reason it was closed', async () => {

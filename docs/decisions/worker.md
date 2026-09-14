@@ -382,6 +382,12 @@ degradation the ticket asked to have written down rather than discovered.
 - **A label that cannot be created stops the write.** `422 already_exists` is success. Any other failure
   is a `502`, so the widget keeps the note: an issue without its labels is one no read finds.
 - **Pull requests come back from the issues endpoint**, and are dropped by their `pull_request` key.
+- **GitHub splits `labels` on commas, and a client ID can hold one** (found in review). A label with a
+  comma stays out of the query, and `matchPage` checks every label the read asked for on the row
+  itself, so the isolation does not depend on the query alone.
+- **Comment lists are fetched four at a time.** Only the pins of the page need them, but a page with
+  many pins would otherwise open one request per pin at once, and GitHub's secondary rate limit
+  counts concurrent requests (found in review).
 - **`constructor(readonly status: number)` stopped six test files.** Parameter properties are
   TypeScript that Node's type stripping refuses, `tsc` accepts them, and every test file whose imports
   reach the store registry failed to load.
