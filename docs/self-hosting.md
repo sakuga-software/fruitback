@@ -457,7 +457,8 @@ account that owns it, so for another organisation, make the App public first.
 
 ### Check it
 
-`/health` answers `{"ok":true,"store":"github",…}` as soon as the three variables are valid: it checks
+`/health` answers `{"ok":true,"store":"github",…}` when the three variables and every other required variable,
+`ALLOWED_ORIGINS` included, are valid: it checks
 the configuration and never GitHub. Plant a note from the site, then find its issue in the repository.
 If the App is not installed on the repository, or the key belongs to another App, every write answers
 `502 store-unavailable`, and a read answers the same code with the status GitHub gave.

@@ -389,7 +389,10 @@ degradation the ticket asked to have written down rather than discovered.
   clients, and it did nothing for `Acme` and `acme`, which would have shared one label and read each
   other's notes. `githubLabelName` is now applied on the write and on the read: a lowercase name of
   50 characters or fewer stays, anything else becomes `fruitback:` and 32 hex characters of its
-  SHA-256. `matchPage` still checks every label on the row, without case as GitHub does.
+  SHA-256. `matchPage` still checks every label on the row, without case as GitHub does. A plain name
+  that already has the shape of a hash is hashed too, so a client ID cannot take the label of another
+  client, and `matchPage` also requires the seed to name the client it is read for (both found in
+  review). The write stores the normalized client ID in the seed, so the check drops no note of its own.
 - **A late `401` drops only the token it refused.** Evicting whatever the map held could throw away a
   newer token a concurrent read had just minted.
 - **The comment count is a hint.** It comes from the issue list, and a reply can arrive after it;

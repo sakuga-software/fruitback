@@ -36,15 +36,21 @@ const LABEL_COLOR = 'E53935';
 /** A label name that GitHub keeps as written: lowercase, no comma, and 50 characters at most. */
 const PLAIN_LABEL = /^[a-z0-9._:-]{1,50}$/;
 
+/** The shape of a generated label. A plain name with this shape is hashed too. */
+const HASHED_LABEL = /^fruitback:[0-9a-f]{32}$/;
+
 /**
  * The name of a label on GitHub. The write and the read must both use it.
  *
  * GitHub compares label names without case, limits them to 50 characters, and splits the `labels`
  * query on commas. If `Acme` and `acme` used their own names, the two clients would share one label and
  * read each other's notes. So a name that is not a plain label becomes `fruitback:` and a hash of it.
+ *
+ * A client ID can be the 32 hex characters of another client's hash. That name is hashed as well, so
+ * only the hash of a name can produce a label of that shape.
  */
 export function githubLabelName(name: string): string {
-  if (PLAIN_LABEL.test(name)) return name;
+  if (PLAIN_LABEL.test(name) && !HASHED_LABEL.test(name)) return name;
 
   return `${FRUITBACK_LABEL}:${createHash('sha256').update(name).digest('hex').slice(0, 32)}`;
 }
@@ -422,7 +428,7 @@ export function createGithubStore(config: GithubConfig, options: GithubStoreOpti
       );
 
       const matched = (await listIssues(repository, labels)).flatMap((row) => {
-        const match = matchPage(row, query.url, labels);
+        const match = matchPage(row, query.url, labels, query.clientId);
 
         return match === null ? [] : [match];
       });
@@ -458,7 +464,12 @@ export function createGithubStore(config: GithubConfig, options: GithubStoreOpti
  * another, so the seed itself decides, as in the Linear store. The labels are checked again, without
  * case as GitHub compares them, so the client isolation does not rest on the query alone.
  */
-function matchPage(row: unknown, canonicalUrl: string, labels: string[]): { issue: IssueRow; seed: Seed } | null {
+function matchPage(
+  row: unknown,
+  canonicalUrl: string,
+  labels: string[],
+  clientId: string | undefined,
+): { issue: IssueRow; seed: Seed } | null {
   const issue = issueRowSchema.safeParse(row);
   if (!issue.success || issue.data.pull_request !== undefined) return null;
 
@@ -467,6 +478,9 @@ function matchPage(row: unknown, canonicalUrl: string, labels: string[]): { issu
 
   const parsed = parseSeedFromDescription(issue.data.body);
   if (!parsed.ok || parsed.seed.page.url !== canonicalUrl) return null;
+  // The labels select the issues, and the seed confirms the client. The write path stores the
+  // normalized client ID in the seed, so the two values are equal for every note of this client.
+  if (clientId && parsed.seed.client?.id !== clientId) return null;
 
   return { issue: issue.data, seed: parsed.seed };
 }

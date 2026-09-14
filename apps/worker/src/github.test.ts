@@ -435,7 +435,7 @@ describe('findForPage', () => {
     const label = githubLabelName('fruitback:acme,staging');
     const { calls, issues } = readWith(
       [
-        row({ labels: [{ name: 'fruitback' }, { name: label }] }),
+        row({ labels: [{ name: 'fruitback' }, { name: label }] }, seedFixture({ client: { id: 'acme,staging' } })),
         row({ id: 2, number: 2, labels: [{ name: 'fruitback' }, { name: 'fruitback:acme' }, { name: 'staging' }] }),
       ],
       {},
@@ -449,6 +449,27 @@ describe('findForPage', () => {
     assert.deepEqual(
       found.map((issue) => issue.id),
       ['9001'],
+    );
+  });
+
+  it('never gives a client ID the hashed label of another client', () => {
+    // A client ID can be the 32 hex characters of another client's hash. Found in review.
+    const acme = githubLabelName('fruitback:Acme');
+    const forged = githubLabelName(`fruitback:${acme.slice('fruitback:'.length)}`);
+
+    assert.match(forged, /^fruitback:[0-9a-f]{32}$/);
+    assert.notEqual(forged, acme);
+  });
+
+  it('keeps a note off a client whose name its seed does not carry, whatever its labels say', async () => {
+    const { issues } = readWith([
+      row({}, seedFixture({ client: { id: 'globex', name: 'Globex' } })),
+      row({ id: 2, number: 2 }),
+    ]);
+
+    assert.deepEqual(
+      (await issues).map((issue) => issue.id),
+      ['2'],
     );
   });
 
