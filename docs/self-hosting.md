@@ -26,11 +26,13 @@ Where this page gives a number or an answer, it was measured on the image (SKG-5
 **While this repository is private, the files and the image need a GitHub login.** GHCR gives a new
 package the visibility of its repository, so an anonymous `docker pull` is refused until an owner
 makes the package public (*Packages → `fruitback-worker` → Package settings → Change visibility*).
-Until then, log in with a token that has `read:packages`, and download the two files with the GitHub
-CLI instead of `curl`:
+Until then, log in to `ghcr.io` with a token that has `read:packages`, log the GitHub CLI in with an
+account that can read the repository (`gh auth login`, or a `GH_TOKEN` with that access), and download
+the two files with the GitHub CLI instead of `curl`:
 
 ```bash
 echo "$GHCR_TOKEN" | docker login ghcr.io -u <github-user> --password-stdin
+gh auth login
 gh api repos/sakuga-software/fruitback/contents/docker-compose.yml -H 'Accept: application/vnd.github.raw' > docker-compose.yml
 gh api repos/sakuga-software/fruitback/contents/.env.example -H 'Accept: application/vnd.github.raw' > .env
 ```
@@ -466,8 +468,9 @@ The database held 2 020 pins in 4.8 MB. Read these numbers with three limits in 
 
 - **Reads come from the cache.** A page's answer is kept for 15 seconds, so the read rows measure the
   cache and the JSON, not the store. A cold page costs one store call per container every 15 seconds.
-- **The rate limit, not the CPU, is the ceiling.** With the default of 20, one address gets 20
-  requests a minute. A team never reaches the throughput above.
+- **For one caller, the rate limit is the ceiling, not the CPU.** With the default of 20, one address
+  gets 20 requests a minute, far below the throughput above. Many addresses together can go higher, up
+  to what one container serves.
 - **Another machine gives other numbers.** A small VPS core is slower than this one. The shape holds:
   memory stays under 200 MiB, and a page with thousands of pins is the expensive case.
 
@@ -571,7 +574,7 @@ before one is pushed `latest`, `1.4.2` and `1.4` resolve to nothing, and asking 
 
 | Tag | Moves | Published by | Use it for |
 | --- | --- | --- | --- |
-| `1.4.2` | Only if that release is rebuilt | A `v1.4.2` git tag | Production. This is the one to pin and to roll back to. |
+| `1.4.2` | Only if that release is rebuilt | A `v1.4.2` git tag | Choosing a release for production. Pin its digest, from step 2 of the upgrade, to deploy and to roll back. |
 | `1.4` | On every patch in that minor | Any `v1.4.x` git tag | Taking patches without reading a changelog. It moves — do not call it a pin. |
 | `latest` | On every release | Any `v*` git tag | A deployment that follows releases and nothing else. |
 | `edge` | Every push to `main` | A merge to `main` | Running what is not released yet. |
