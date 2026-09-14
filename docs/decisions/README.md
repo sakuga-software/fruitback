@@ -18,7 +18,7 @@ about to reason your way past it.
 | [widget.md](widget.md) | The widget · The host, and why everything lives in one Shadow root · The look, and the one thing a host may change · One prefix, and it is `fruitback` · The popover · Who carries the calls · The optional picture · The settings panel · Re-anchoring, and why a pin says how sure it is |
 | [icons.md](icons.md) | No emoji, and what replaced them |
 | [extension.md](extension.md) | The extension, and the two worlds |
-| [worker.md](worker.md) | The worker · The state two replicas share · The team's replies · Where a seed is stored · Which store, and who validates it · SQLite, and what a second connector actually proved · The markdown codec, and the file that outlived its name · The extension's session |
+| [worker.md](worker.md) | The worker · The state two replicas share · Who may read a pin · The team's replies · Where a seed is stored · Which store, and who validates it · SQLite, and what a second connector actually proved · The markdown codec, and the file that outlived its name · The extension's session |
 | [contract.md](contract.md) | The seed contract |
 
 Five documents one level up are the other kind: written for somebody using Fruitback rather than

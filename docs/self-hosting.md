@@ -93,7 +93,8 @@ that leads back to the page you are already on.
 
 `FRUITBACK_KV` says where the rate limiter and the read cache keep their state. It is `memory` by
 default, which means **inside each container**. One container is the whole story; two are two rate
-limits, so `RATE_LIMIT_PER_MINUTE=20` becomes 40 with nothing said anywhere, and a cold page costs one
+limits, so `RATE_LIMIT_PER_MINUTE=20` lets 40 a minute through — and up to 78 in a burst at a window
+edge, twice the bound `SECURITY.md` gives for one — with nothing said anywhere, and a cold page costs one
 provider call per replica.
 
 Point them at one Redis and they share both:
