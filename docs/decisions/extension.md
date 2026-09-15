@@ -468,6 +468,11 @@ another port, the resolver answers nothing and the bridge unmounts; if the resol
 scripts do not run on, the popup would say **On** over a page with no widget. A bare `*` is refused,
 because it is the permission for every site that SKG-534 refused to ask for at install.
 
+A wildcard on a single label (`*.localhost`) or an IP address is refused too. `syncRegistration` sends
+every pattern in one `registerContentScripts` call, so one pattern the browser refuses stops the
+scripts on every site, and the error is only logged. Which of these a browser refuses was not measured,
+so the conservative answer is to never store them.
+
 ### The grant, which nothing else carries
 
 Adding a rule asks for its pattern first, and awaits nothing before the request, the same rule as the

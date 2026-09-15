@@ -19,6 +19,10 @@ const WILDCARD = '*.';
  * With no scheme, `https://` is used. A wildcard is the whole first label only, and it takes no
  * port: a match pattern cannot say which ports it covers in every browser. A bare `*` is refused,
  * because it is the permission for every site that SKG-534 refused to ask for.
+ *
+ * A wildcard also needs a base with at least two labels, and no IP address. The background registers
+ * every pattern in one call, so a pattern the browser refuses stops the scripts on every site. Which
+ * of these a browser refuses was not measured, so the pattern is refused here instead.
  */
 export function parseSitePattern(input: string): string | undefined {
   const value = input.trim().replace(/\/\*?$/, '');
@@ -43,6 +47,7 @@ export function parseSitePattern(input: string): string | undefined {
 
   if (!wildcard) return url.origin;
   if (url.port !== '' || url.host !== host.toLowerCase()) return undefined;
+  if (!url.hostname.includes('.') || /^[\d.]+$/.test(url.hostname) || url.hostname.startsWith('[')) return undefined;
 
   return `${scheme}://${WILDCARD}${url.hostname}`;
 }

@@ -25,7 +25,14 @@ describe('parseSitePattern', () => {
 
   it('keeps a wildcard on the first label, lowercased', () => {
     assert.equal(parseSitePattern('https://*.Staging.Acme.dev'), 'https://*.staging.acme.dev');
-    assert.equal(parseSitePattern('http://*.localhost'), 'http://*.localhost');
+    assert.equal(parseSitePattern('http://*.acme.test'), 'http://*.acme.test');
+  });
+
+  /** One refused match pattern would stop the scripts on every site, so these never reach the background. */
+  it('refuses a wildcard on a single label or an IP address', () => {
+    for (const input of ['http://*.localhost', 'https://*.dev', 'http://*.127.0.0.1', 'http://*.[::1]']) {
+      assert.equal(parseSitePattern(input), undefined, input);
+    }
   });
 
   it('refuses what a match pattern could not say, or should not', () => {
