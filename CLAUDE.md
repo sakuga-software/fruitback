@@ -125,7 +125,7 @@ builds `dist` first, because `package.spec.ts` loads the real file.
 - **`extension.spec.ts` loads the built extension into a real Chromium** (SKG-538), and `pnpm e2e`
   builds it first. The fixture launches `channel: 'chromium'`: the headless shell Playwright uses by
   default loads no extension (measured). Automation cannot answer a host permission prompt, so it
-  loads a **copy** whose manifest declares the two local origins. The shipped manifest still asks for
+  loads a **copy** whose manifest declares the playground and both workers. The shipped manifest still asks for
   nothing at install, and the no-rule spec runs with that grant.
 - **The worker holds extension sessions during the suite** (`e2e/worker-sessions.ts`), and the team
   spec mints its code with the real `pair` command. The suite never reuses a worker already on its port: one started without

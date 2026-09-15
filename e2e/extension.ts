@@ -53,7 +53,7 @@ export const test = base.extend<{ extension: LoadedExtension }>({
 });
 
 /**
- * A copy of the built extension that holds host access to the two local origins.
+ * A copy of the built extension that holds host access to the local origins: the playground and both workers.
  *
  * A browser asks the person before it grants an optional host permission, and automation cannot
  * answer the prompt: `permissions.request` stays pending. A host permission in the manifest is

@@ -10,6 +10,7 @@ import {
   seedsOn,
   storedTokens,
   test,
+  type StoredToken,
 } from './extension.ts';
 import { WORKER_ORIGIN } from './pin.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
@@ -125,6 +126,21 @@ async function mountTheSiteWidget(page: Page, endpoint: string): Promise<void> {
   }, endpoint);
 }
 
+/**
+ * Asserts that the page can read no stored token, and no bridge message that names the header.
+ *
+ * Each document records its own messages, so call it before a reload as well as after it.
+ */
+async function expectNoCredentialReadable(page: Page, tokens: StoredToken[]): Promise<void> {
+  const readable = await readableByThePage(page);
+  const { messages, chromeStorage } = JSON.parse(readable) as { messages: string[]; chromeStorage: string };
+  expect(messages.join('\n')).toContain('relay-response');
+  for (const { value } of tokens) expect(readable).not.toContain(value);
+  // Only the messages: the widget script on the page names the header in its own code.
+  expect(messages.join('\n')).not.toMatch(/authorization/i);
+  expect(chromeStorage).toBe('undefined');
+}
+
 test('team mode: paired from the popup, the site reads and writes through the relay and never sees a token', async ({
   extension,
 }) => {
@@ -141,30 +157,24 @@ test('team mode: paired from the popup, the site reads and writes through the re
   await plantOnTheLatteCard(page, 'Team feedback', 'Planté par le mode équipe');
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 
+  const tokens = await storedTokens(extension.worker);
+  // The refresh token in `local` and the access token in `session`, or the searches below prove nothing.
+  expect([...new Set(tokens.map((token) => token.area))].sort()).toEqual(['local', 'session']);
+  await expectNoCredentialReadable(page, tokens);
+
   // This worker refuses a read with no identity, so the pin read back below came through the relay.
   expect((await readSeeds(page, AUTHENTICATED_WORKER_ORIGIN)).status).toBe(401);
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Nos formules' })).toBeVisible();
   await mountTheSiteWidget(page, AUTHENTICATED_WORKER_ORIGIN);
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
+  await expectNoCredentialReadable(page, tokens);
 
   // Every call went through the background. The page itself never called a worker.
   expect(calls).toEqual([]);
-
-  const tokens = await storedTokens(extension.worker);
-  // The refresh token in `local` and the access token in `session`, or the search below proves nothing.
-  expect([...new Set(tokens.map((token) => token.area))].sort()).toEqual(['local', 'session']);
 
   // Signed by the worker from the session: only the relay carries it.
   const access = tokens.find((token) => token.area === 'session')?.value;
   const [seed] = await seedsOn(page, AUTHENTICATED_WORKER_ORIGIN, access);
   expect(seed?.reporter).toMatchObject({ name: REVIEWER, verified: true });
-
-  const readable = await readableByThePage(page);
-  const { messages, chromeStorage } = JSON.parse(readable) as { messages: string[]; chromeStorage: string };
-  expect(messages.join('\n')).toContain('relay-response');
-  for (const { value } of tokens) expect(readable).not.toContain(value);
-  // Only the messages: the widget script on the page names the header in its own code.
-  expect(messages.join('\n')).not.toMatch(/authorization/i);
-  expect(chromeStorage).toBe('undefined');
 });

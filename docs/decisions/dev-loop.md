@@ -87,7 +87,8 @@ persistent Chromium context. Measured on Chromium 151 before the specs were writ
   inside a click, it stays pending, and `permissions.contains` stays false.
 - **A host permission in the manifest is granted at load.** A copy of the build with
   `host_permissions` for `http://localhost:5177/*` and `http://localhost:8788/*` answers `contains`
-  true for both origins and false for any other. The fixture loads that copy, so the options page and
+  true for both origins and false for any other. The fixture's copy now adds `http://localhost:8789/*` too, for
+  the team-mode worker. The fixture loads that copy, so the options page and
   the popup ask and get an answer at once. The grant alone mounts nothing: the no-rule spec has it.
 - **`registerContentScripts` does not throw for an origin the extension does not hold.** It resolved.
   `background.ts` said it throws. The comment now says what was measured, and the

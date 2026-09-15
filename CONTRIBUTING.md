@@ -61,7 +61,7 @@ pnpm e2e
 ```
 
 `pnpm e2e` builds the extension too, and `e2e/extension.spec.ts` loads it into that Chromium. It starts its own
-worker, so stop `pnpm dev` first.
+workers, so stop `pnpm dev` first.
 
 ## Before you open a pull request
 
