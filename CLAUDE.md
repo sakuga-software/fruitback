@@ -658,6 +658,11 @@ and *The team mode, and the call the page cannot make*:
 - **A row is parsed, never trusted**, in every connector. A malformed one costs that pin; the page
   keeps its other notes. `sqlite.ts`'s `insert` and `select` are `async` so a failure to open the
   file rejects rather than throwing synchronously.
+- **Every store passes `store-conformance.test.ts`** (SKG-527). The cases live in
+  `store-conformance.fixture.ts`; each store gives a subject that opens it against a double that keeps
+  what it receives. A step a store cannot do is a string reason, reported as skipped, never as passed.
+  The outage case goes through `handleRequest`, because the promise is the `502`, not the throw. The
+  store matrix in `docs/self-hosting.md` is compared with each store's `stages` and `devOnly`.
 - **`linear-memory.ts` keeps its name and its import of `toSeedIssue` on purpose.** That coupling is
   the feature.
 - **`github.ts` signs in as a GitHub App, never with a personal token** (SKG-525). An RS256 JWT from

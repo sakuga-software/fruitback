@@ -457,28 +457,6 @@ describe('a row the code did not write', () => {
       [seed.id],
     );
   });
-
-  it('colours a pin whose stage it does not recognise rather than hiding the note', async () => {
-    // The contract's own tolerance, and the reason it lives in `shared`: a stage this version does
-    // not know must not make someone's feedback disappear.
-    const path = freshPath();
-    const seed = seedFixture();
-    await createSqliteStore({ path }).create(seed, undefined, POLICY);
-    closeSqliteConnections();
-
-    const database = new DatabaseSync(path);
-    database.prepare('UPDATE seeds SET stage = ? WHERE id = 1').run('marmalade');
-    database.close();
-
-    const issues = await createSqliteStore({ path }).findForPage(
-      { url: seed.page.url, clientId: undefined },
-      undefined,
-      POLICY,
-    );
-
-    assert.equal(issues.length, 1);
-    assert.equal(issues[0]?.stage, 'seeded');
-  });
 });
 
 describe('the store spec', () => {

@@ -46,6 +46,16 @@ gh api repos/sakuga-software/fruitback/contents/.env.example -H 'Accept: applica
 | `github` | issues in a GitHub repository | a GitHub App: `FRUITBACK_GITHUB_APP_ID`, `FRUITBACK_GITHUB_PRIVATE_KEY`, `FRUITBACK_GITHUB_REPOSITORY` | Your team already works in GitHub issues. The pins have three stages instead of five. |
 | `memory` | the memory of the process | nothing | Never on a server. The image refuses it. |
 
+What each store can show on a pin. `store-conformance.test.ts` compares the stages and the last column
+with the code.
+
+| Store | Stages | What changes the stage | Replies | Runs in production |
+| --- | --- | --- | --- | --- |
+| `sqlite` | `seeded`, `green`, `ripening`, `ripe`, `composted` | An `UPDATE` of the `stage` column. Nothing in the worker changes it. | The newest 20 rows of the `comments` table. Nothing in the worker writes them. | yes |
+| `linear` | `seeded`, `green`, `ripening`, `ripe`, `composted` | The workflow state of the issue. | The newest 20 comments on the issue. | yes |
+| `github` | `seeded`, `ripe`, `composted` | Closing the issue, and the reason for the close. | The newest 20 comments on the issue. | yes |
+| `memory` | `seeded`, `green`, `ripening`, `ripe`, `composted` | Nothing. Each note gets the next state in a fixed list. | Two canned replies, on every third note. | no |
+
 **The worker defaults to `linear`; `docker-compose.yml` and this page default to `sqlite`.** The
 worker keeps `linear` so that a deployment from before SQLite existed still starts on the store it
 had. To get the Linear key and ids, see [install.md, step 1](install.md#1-linear). To create the GitHub
