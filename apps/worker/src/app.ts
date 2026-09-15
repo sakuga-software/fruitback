@@ -1,4 +1,4 @@
-import { canonicalizePageUrl, parseSeed, type SeedReporter } from '@fruitback/shared';
+import { SEED_STAGES, canonicalizePageUrl, parseSeed, type SeedReporter } from '@fruitback/shared';
 import { readBearerToken, stripClaimedVerification, verifyIdentityToken } from './identity.ts';
 import {
   type ClientPolicy,
@@ -41,8 +41,8 @@ const MAX_BODY_BYTES = 64 * 1_024;
  * It was a `Pick<typeof realLinear, 'createSeedIssue' | 'fetchSeedIssues'>` — an interface
  * discovered by accident — then a branch on a `fakeLinear` boolean with Linear's three credentials
  * read straight off the config. Both are gone: the provider was selected and validated at boot
- * (`stores.ts`), and this is only where it is built. SQLite (SKG-524) and GitHub (SKG-525) add an
- * entry to the registry and nothing here.
+ * (`stores.ts`), and this is only where it is built. SQLite (SKG-524) and GitHub (SKG-525) each
+ * added an entry to the registry and nothing here.
  *
  * A dev-only store cannot win in production: `readStoreConfig` refuses it at boot rather than
  * letting the process start.
@@ -433,7 +433,8 @@ async function getFeedback(
 
     return json(
       200,
-      { url, issues },
+      // `stages` does not depend on the page, so it is not in the cached answer.
+      { url, issues, stages: store.stages ?? SEED_STAGES },
       // No browser cache, deliberately. The read cache above is what protects the Linear
       // quota; letting the browser hold a copy too only buys one saved request per page load, and
       // costs the widget the pin it planted a second ago — it re-reads and gets served its own

@@ -245,6 +245,36 @@ describe('reading pins', () => {
     widget.destroy();
   });
 
+  it('offers in the settings only the stages the worker reports (SKG-525)', async () => {
+    const page = mountWithCta();
+    stubReads(
+      () => new Response(JSON.stringify({ issues: [], stages: ['seeded', 'ripe', 'composted'] }), { status: 200 }),
+    );
+
+    const widget = init({ document: page.document, endpoint: ENDPOINT, clientId: 'acme' });
+    await widget.refresh();
+
+    const box = (stage: string) =>
+      shadowOf(page).querySelector(`[name="stage-${stage}"]`)?.closest('label') as HTMLLabelElement;
+    assert.equal(box('green').hidden, true);
+    assert.equal(box('ripe').hidden, false);
+
+    widget.destroy();
+  });
+
+  it('offers every stage to a worker that does not say which', async () => {
+    const page = mountWithCta();
+    stubReads(() => ok([]));
+
+    const widget = init({ document: page.document, endpoint: ENDPOINT, clientId: 'acme' });
+    await widget.refresh();
+
+    const box = shadowOf(page).querySelector('[name="stage-green"]')?.closest('label') as HTMLLabelElement;
+    assert.equal(box.hidden, false);
+
+    widget.destroy();
+  });
+
   it('keeps the pins already on screen when a read comes back 401', async () => {
     // Losing what is correctly displayed is the failure this widget cannot afford. A token that
     // expired mid-session must not read as "my notes are gone" — same rule as an unreachable worker.

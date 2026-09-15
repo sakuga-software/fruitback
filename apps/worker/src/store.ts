@@ -1,4 +1,4 @@
-import type { Seed, SeedIssue } from '@fruitback/shared';
+import type { Seed, SeedIssue, SeedStage } from '@fruitback/shared';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
 
 /**
@@ -10,7 +10,7 @@ import type { ClientConfig, ClientPolicy } from './clients.ts';
  * store — SQLite (SKG-524), GitHub Issues (SKG-525) — is an implementation rather than a rewrite.
  *
  * **What is deliberately not here: how to find the seeds of a page.** Linear can filter server-side
- * with `description: { contains: <canonical url> }`, GitHub searches issue bodies, a SQL store does a
+ * with `description: { contains: <canonical url> }`, GitHub lists issues by label, a SQL store does a
  * `WHERE`, and a store with no search at all would have to walk everything. So `findForPage` states
  * the *intention* and each store picks its method. Exposing a `contains` filter would have made
  * Linear's trick the contract.
@@ -40,6 +40,13 @@ export type SeedIssueQuery = { url: string; clientId: string | undefined };
 export type SeedStore = {
   /** For `/health` and the boot log. Never for an error code — see `StoreError`. */
   readonly name: string;
+  /**
+   * The stages this store can report. Absent means every stage in `SEED_STAGES`.
+   *
+   * `GET /feedback` sends this list, and the settings panel offers a filter only for these stages
+   * (SKG-525). A filter for a stage that no pin can have does nothing.
+   */
+  readonly stages?: readonly SeedStage[];
   /**
    * What tells one tenant's answers from another's, for the read cache.
    *

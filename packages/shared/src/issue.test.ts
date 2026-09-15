@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_SEED_STAGE, FRUITBACK_LABEL, SEED_STAGES, buildIssueLabels } from './issue.ts';
+import { DEFAULT_SEED_STAGE, FRUITBACK_LABEL, SEED_STAGES, buildIssueLabels, offeredStages } from './issue.ts';
 import { minimalSeedFixture, seedFixture } from './seed.fixture.ts';
 
 describe('labels', () => {
@@ -25,5 +25,22 @@ describe('the stage vocabulary', () => {
     // this constant: this is the one place a change to it should be heard. Moving it silently
     // repaints every pin whose state a provider renamed.
     assert.equal(DEFAULT_SEED_STAGE, 'seeded');
+  });
+});
+
+describe('offeredStages (SKG-525)', () => {
+  it('keeps the stages a worker reports, in the order of the contract', () => {
+    assert.deepEqual(offeredStages(['composted', 'seeded', 'ripe']), ['seeded', 'ripe', 'composted']);
+  });
+
+  it('drops a value that is not a stage, and a repeated one', () => {
+    assert.deepEqual(offeredStages(['seeded', 'seeded', 'blue', 3]), ['seeded']);
+  });
+
+  it('offers every stage if the worker sends nothing usable', () => {
+    // A worker from before SKG-525 sends no field. Its panel must not lose a box.
+    for (const value of [undefined, null, 'seeded', [], ['blue']]) {
+      assert.deepEqual(offeredStages(value), [...SEED_STAGES], JSON.stringify(value));
+    }
   });
 });

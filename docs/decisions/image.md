@@ -84,7 +84,8 @@ immutable.
   Profiles need one service per connector, and four documented commands say
   `docker compose exec worker`: the SQLite backup in `.env.example` and `self-hosting.md`, and the
   pairing command in `.env.example` and `reviewing.md`. SQLite is the default. Linear is
-  `FRUITBACK_STORE=linear` and two keys. GitHub waits for SKG-525.
+  `FRUITBACK_STORE=linear` and two keys. GitHub is `FRUITBACK_STORE=github` and three variables
+  (SKG-525).
 - **`TRUSTED_PROXY_HOPS` is 0 in this file and 1 in the code.** The file publishes the port with
   nothing in front. The old file said 1 with a published port, which is the forgeable case: each
   forged `X-Forwarded-For` gets a new bucket. Measured, forged reads kept answering `200` past the

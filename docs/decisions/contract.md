@@ -63,7 +63,14 @@ first publish made it expensive.
   `SEED_STAGES` and `DEFAULT_SEED_STAGE` live in `shared`; `stageForLinearState` and
   `LINEAR_STATE_TYPES` moved to `apps/worker/src/linear.ts`, where Linear's vocabulary belongs.
   Naming one provider's states in the contract made every consumer of the published package depend
-  on that provider, and GitHub's projection — two states plus labels — will not resemble Linear's.
+  on that provider, and GitHub's projection did not resemble Linear's (SKG-525).
+- **A connector may report only some stages, and the read says which** (SKG-525). GitHub has two issue
+  states and a reason on a close, which gives three stages. `SeedStore.stages` is sent as `stages` on
+  every `GET /feedback`, and the settings panel offers a box only for those. It is part of the read
+  envelope, not of the seed, so `SEED_VERSION` does not move. `offeredStages` is tolerant like
+  `parseSeed*`: a missing, malformed or empty list means every stage, which is what a worker from
+  before the field sends. The vocabulary stays five stages; a connector narrows what it uses, and
+  never adds one.
 - The fallback for an unrecognised state stays in `shared` on purpose. A connector spelling
   `'seeded'` itself is how the next one comes to disagree, and an unknown state must colour the pin
   rather than hide someone's note.

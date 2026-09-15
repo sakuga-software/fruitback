@@ -23,6 +23,8 @@ export type ConfigPanelOptions = {
    * setting was left out of SKG-503 in the first place.
    */
   screenshotSupported?: boolean;
+  /** The stages to offer a filter for. If left out, the panel offers every stage. */
+  stages?: OfferedStages;
   document?: Document;
   /** The widget's words (SKG-530). Left out: English, with dates in this document's language. */
   translator?: Translator;
@@ -36,9 +38,40 @@ export type ConfigPanel = {
   destroy(): void;
 };
 
+/**
+ * The stages the worker can report, as the last read said (SKG-525).
+ *
+ * Not in `ConfigStore`: that store keeps the reporter's preferences in `localStorage`. This list
+ * comes from the worker, and a stored copy would outlive a change of store.
+ */
+export type OfferedStages = {
+  get(): readonly SeedStage[];
+  set(stages: readonly SeedStage[]): void;
+  subscribe(listener: () => void): () => void;
+};
+
+export function createOfferedStages(): OfferedStages {
+  let current: readonly SeedStage[] = SEED_STAGES;
+  const listeners = new Set<() => void>();
+
+  return {
+    get: () => current,
+    set(stages) {
+      current = [...stages];
+      for (const listener of listeners) listener();
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+
+      return () => listeners.delete(listener);
+    },
+  };
+}
+
 export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   const document = options.document ?? options.host.ownerDocument ?? globalThis.document;
   const store = options.store;
+  const offered = options.stages ?? createOfferedStages();
   const t = options.translator ?? createTranslator({ language: languageOf(document) });
 
   const style = document.createElement('style');
@@ -57,9 +90,11 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   const stages = document.createElement('div');
   stages.className = 'fruitback-config-stages';
   const stageInputs = new Map<SeedStage, HTMLInputElement>();
+  const stageLabels = new Map<SeedStage, HTMLLabelElement>();
   for (const stage of SEED_STAGES) {
     const { input, label } = checkbox(document, `stage-${stage}`, t.stage(stage));
     stageInputs.set(stage, input);
+    stageLabels.set(stage, label);
     stages.append(label);
   }
 
@@ -98,11 +133,19 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   /** The store is the truth; the inputs only ever mirror it. */
   function paint(): void {
     const config = store.get();
+    const available = offered.get();
     endpoint.input.value = config.endpoint;
     clientId.input.value = config.clientId;
 
+    // A stage that the store cannot report gets no box. If the reporter hid that stage before, it
+    // stays in the config, so a worker that reports it again shows the reporter's choice.
+    for (const [stage, label] of stageLabels) label.hidden = !available.includes(stage);
+    hideResolvedLabel.hidden = !RESOLVED_STAGES.some((stage) => available.includes(stage));
+
     for (const [stage, input] of stageInputs) input.checked = !config.hiddenStages.includes(stage);
-    hideResolved.checked = RESOLVED_STAGES.every((stage) => config.hiddenStages.includes(stage));
+    hideResolved.checked = RESOLVED_STAGES.filter((stage) => available.includes(stage)).every((stage) =>
+      config.hiddenStages.includes(stage),
+    );
     screenshot.checked = config.screenshot;
   }
 
@@ -121,7 +164,8 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   // shortcut sets the two resolved stages and leaves the others where the reporter put them.
   hideResolved.addEventListener('change', () => {
     const hidden = new Set(hiddenFromInputs());
-    for (const stage of RESOLVED_STAGES) {
+    // A stage with no box keeps the choice the reporter made for it.
+    for (const stage of RESOLVED_STAGES.filter((resolved) => offered.get().includes(resolved))) {
       if (hideResolved.checked) hidden.add(stage);
       else hidden.delete(stage);
     }
@@ -135,6 +179,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   // Painted from outside too: the config can change without this panel, and an open panel showing
   // stale values is a panel that overwrites the change on the next keystroke.
   const unsubscribe = store.subscribe(paint);
+  const unsubscribeStages = offered.subscribe(paint);
   paint();
 
   const panel: ConfigPanel = {
@@ -155,6 +200,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
     },
     destroy() {
       unsubscribe();
+      unsubscribeStages();
       root.remove();
       style.remove();
     },
@@ -256,6 +302,7 @@ const STYLES = `
 .fruitback-config-legend { margin: 12px 0 4px; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-config-stages { display: flex; flex-direction: column; gap: 2px; }
 .fruitback-config-check { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.fruitback-config-check[hidden] { display: none; }
 .fruitback-config-check input {
   /*
     all:initial in the host reset sets appearance to none, which is its initial value — so a native
