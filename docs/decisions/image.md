@@ -46,6 +46,10 @@ immutable.
   timed out. That was the first version, and it was measured hanging.
 - **Trivy runs with `ignore-unfixed`.** An Alpine CVE with no patch available reddens every release
   for something nobody can act on, and a gate that cannot be satisfied is a gate somebody deletes.
+- **Every action is pinned to a commit SHA, with its version as a comment (SKG-608).** A tag can be
+  moved to other code, and this workflow runs with `packages: write`, so a moved tag could publish the
+  image. Each SHA is the commit the tag named when it was pinned, so the pin changed no behaviour.
+  `.github/dependabot.yml` moves the SHA and the comment together; without it the pins would freeze.
 - **`org.opencontainers.image.source` is the one label with an effect** rather than a description:
   GHCR reads it to attach the package to the repository, which is what gives the package its page,
   its README and its licence. The volatile labels come from `docker/metadata-action`, which is the
