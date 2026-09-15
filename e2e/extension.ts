@@ -65,10 +65,18 @@ function copyWithLocalAccess(directory: string): string {
   if (!fs.existsSync(builtPath)) {
     throw new Error(`${BUILT_EXTENSION} is not built. Run pnpm e2e, which builds it first.`);
   }
-  // The copy gets host access, so no spec can see a shipped manifest that asks for it at install.
-  const built = JSON.parse(fs.readFileSync(builtPath, 'utf8')) as { host_permissions?: string[] };
-  if ((built.host_permissions ?? []).length > 0) {
-    throw new Error(`the built manifest asks for host access at install: ${built.host_permissions?.join(', ')}`);
+  // The copy gets host access, so no spec can see a shipped manifest that asks for it at install. A
+  // static content script asks for its matches at install too.
+  const built = JSON.parse(fs.readFileSync(builtPath, 'utf8')) as {
+    host_permissions?: string[];
+    content_scripts?: { matches?: string[] }[];
+  };
+  const installTimeHosts = [
+    ...(built.host_permissions ?? []),
+    ...(built.content_scripts ?? []).flatMap((script) => script.matches ?? []),
+  ];
+  if (installTimeHosts.length > 0) {
+    throw new Error(`the built manifest asks for host access at install: ${installTimeHosts.join(', ')}`);
   }
 
   const manifestPath = path.join(directory, 'manifest.json');
