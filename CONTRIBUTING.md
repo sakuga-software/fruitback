@@ -149,5 +149,13 @@ in the interface, and why.
 
 ## Licences
 
-The three client packages are MIT, and the worker is AGPL-3.0-only. A contribution is made under the
-licence of the package it changes.
+| | |
+| --- | --- |
+| `packages/fruitback` | MIT |
+| `packages/shared` | MIT |
+| `packages/widget` | MIT |
+| `apps/worker` | AGPL-3.0-only |
+| `apps/extension` | AGPL-3.0-only |
+| `apps/playground` | not published, under the repository's MIT licence |
+
+A contribution is made under the licence of the package it changes.

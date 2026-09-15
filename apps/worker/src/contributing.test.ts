@@ -121,6 +121,23 @@ describe('CONTRIBUTING.md', () => {
     }
   });
 
+  it('gives the licence each workspace package declares', () => {
+    const licences = section(CONTRIBUTING, 'Licences');
+    let checked = 0;
+    for (const group of ['apps', 'packages']) {
+      for (const dir of readdirSync(new URL(`../../../${group}/`, import.meta.url))) {
+        const file = `../../../${group}/${dir}/package.json`;
+        if (!existsSync(new URL(file, import.meta.url))) continue;
+        const { license } = JSON.parse(read(file)) as { license?: string };
+        if (license === undefined) continue;
+        const row = licences.split('\n').find((line) => line.startsWith(`| \`${group}/${dir}\` |`));
+        assert.ok(row?.includes(license), `the Licences section does not give ${group}/${dir} as ${license}`);
+        checked += 1;
+      }
+    }
+    assert.ok(checked >= 5, `only ${checked} declared licences found`);
+  });
+
   it('gives the ports that pnpm dev opens', () => {
     const playground = /\bport: (\d+)/.exec(read('../../playground/vite.config.ts'))?.[1];
     const worker = /\bPORT=(\d+)/.exec(
