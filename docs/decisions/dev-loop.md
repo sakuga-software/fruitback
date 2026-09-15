@@ -8,9 +8,9 @@ browser suite has already caught. The rules an agent needs before it writes a sp
 
 **`pnpm dev` starts both halves. The ports are fixed, and these are them:**
 
-| | |
-| --- | --- |
-| `http://localhost:5177` | the playground page |
+|                         |                                     |
+| ----------------------- | ----------------------------------- |
+| `http://localhost:5177` | the playground page                 |
 | `http://localhost:8788` | the worker, on its in-memory Linear |
 
 `8788` and not `8080`: 8080 is the container's port, and something is usually already sitting on it
@@ -21,19 +21,19 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   is refused under `NODE_ENV=production` (which the Dockerfile sets), `/health` answers
   `{ ok: true, store: 'memory', openRead: 1 }` (measured on `dev:fake`, SKG-543: it sets no
   `FRUITBACK_READ`, so reads are public), and the boot log says so. `FRUITBACK_FAKE_LINEAR=1` is the older
-  spelling, still works, and now says at boot that it is deprecated — see *Which store, and who
-  validates it* ([worker.md](worker.md)). It is
+  spelling, still works, and now says at boot that it is deprecated — see _Which store, and who
+  validates it_ ([worker.md](worker.md)). It is
   **not** a mock: an issue is stored as the description `buildIssueDescription` produces and read
   back through the same `toSeedIssue` as production, so a broken round trip breaks the playground
   too.
 - **The playground is a React app on purpose, and it is the only place three things are true.** The
-  widget mounts in an effect, so it arrives *after* hydration. A client-side navigation changes the
+  widget mounts in an effect, so it arrives _after_ hydration. A client-side navigation changes the
   page identity with no page load to notice it. And `source` finally has a fiber to read, which is
-  the half of a seed that says *which component* a note is about. Each of those found a real defect
+  the half of a seed that says _which component_ a note is about. Each of those found a real defect
   the moment it first ran — see below.
 - **A re-render used to be invisible to the widget**, and the playground re-resolved by hand because
   the host had caused it and therefore knew. A client's app cannot know, so SKG-513 moved that into
-  the overlay: `fruitback.tsx` now only *reports* what the widget decided, through `onResolve`. The
+  the overlay: `fruitback.tsx` now only _reports_ what the widget decided, through `onResolve`. The
   proof that the gap is really closed is that deleting the manual call left `reanchor.spec.ts` green
   — and that restoring the old overlay makes all three of its specs fail.
 - The toolbar and `fruitback.tsx` are **scaffolding, not the product** — SKG-492/493 replace the
@@ -67,11 +67,10 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   instance.
 - **The rule generalises past colour: assert on what you measured, not on a second measurement.**
   Anything the widget takes away by itself has the same shape — the composer clears its confirmation
-  1.1s after showing it, so waiting for `harvested` and *then* reading the Shadow root again is two
+  1.1s after showing it, so waiting for `harvested` and _then_ reading the Shadow root again is two
   round trips with a deadline between them. Poll, and keep the value that satisfied the poll
   (SKG-529). Measured: the two-step form fails once 1.5s passes between the steps.
 - It has already earned its keep four times: the browser caching `GET /feedback` and serving the
   widget its own stale answer right after planting a pin; `domPath` resolving cleanly onto the
   neighbouring card; React 19's `useId` format accepted as a stable id; and the fiber walk throwing on
   the `null` owner React ends every tree with, which stopped a click from planting anything at all.
-

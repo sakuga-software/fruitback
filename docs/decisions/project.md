@@ -16,8 +16,8 @@ note, and it becomes an issue carrying the CSS selector, the React component and
 Coming back to the page, they see their pins again, coloured by that issue's status.
 
 **Fruitback does not reinvent issue tracking — but it no longer requires somebody else's account.**
-That is a change, and SKG-524 made it deliberately. This file used to say *there is no Fruitback
-backend, Linear is the database*, and until the SQLite connector that was exactly true. It is not any
+That is a change, and SKG-524 made it deliberately. This file used to say _there is no Fruitback
+backend, Linear is the database_, and until the SQLite connector that was exactly true. It is not any
 more: `FRUITBACK_STORE=sqlite` puts the seeds in a file on a volume, and a self-hoster who wants no
 third party has a door.
 
@@ -30,7 +30,6 @@ dashboard, the triage, the API, the MCP server and the integrations all come for
 Deployment is **Docker on a VPS, driven by Dokploy from GitHub** — no Cloudflare, no serverless, no
 managed platform primitives. When something needs infrastructure, reach for what a single container
 behind Traefik can do.
-
 
 ## Layout
 
@@ -47,12 +46,11 @@ behind Traefik can do.
 
 - `apps/extension` (`@fruitback/extension`) — the browser extension (SKG-534): the same widget, on a
   site that embeds nothing. wxt, MV3 on Chromium **and** Firefox. Two content scripts, one per world
-  — see *The extension, and the two worlds* ([extension.md](extension.md)).
+  — see _The extension, and the two worlds_ ([extension.md](extension.md)).
 - `apps/playground` (`@fruitback/playground`) — the dev loop (SKG-511, SKG-512): a deliberately
   hostile fake client site with the widget mounted on it. **A React Router 8 + Vite app with HeroUI**
   since SKG-512, because the widget's clients are React apps and a static page could not exercise
   half of what the widget does. Not shipped, not deployed.
-
 
 ## The milestones, as the README carried them
 

@@ -1,8 +1,8 @@
 # Architecture, and the decisions under it
 
 Written for somebody changing Fruitback, or deciding whether to. It is the design half of the old
-README: the page a reader lands on answers *what is this*, and everything that answers *why is it
-shaped like that* is here (SKG-519).
+README: the page a reader lands on answers _what is this_, and everything that answers _why is it
+shaped like that_ is here (SKG-519).
 
 The per-ticket histories — the measurements, the first versions that failed, the reviews that caught
 them — are one level down, in [decisions/](decisions/).
@@ -56,7 +56,7 @@ No dashboard and no user accounts: the tracker you already run is both. The sent
 until SKG-519 said "no database, no session store" as well, and it had simply outlived itself —
 `FRUITBACK_STORE=sqlite` keeps the seeds in a file of the worker's own since SKG-524, and
 `FRUITBACK_SESSION_PATH` keeps the extension's sessions in another since SKG-535. Neither is a
-database *of users*, which is what the claim was ever about.
+database _of users_, which is what the claim was ever about.
 
 ## The seed
 
@@ -65,7 +65,7 @@ business: `linear` puts it as a JSON block inside the issue description, under a
 summary, `github` puts the same block in the issue body, and `sqlite` puts it in a column. The two
 decisions below were made for the Linear connector, and they are what the markdown codec exists for.
 The GitHub connector uses the same codec, and finds a page's seeds by label instead of by
-`description contains`: see *GitHub Issues, and the stages it cannot say* in
+`description contains`: see _GitHub Issues, and the stages it cannot say_ in
 [decisions/worker.md](decisions/worker.md).
 
 Two decisions worth knowing:
@@ -96,7 +96,7 @@ same box, and a pin that looks certain is believed.
 
 Picking the selector is the part that decides whether any of this survives a redeploy: a test id or
 an author-written id is kept, a `useId` `:r7:` and a CSS-modules class are refused, and an element
-that repeats is anchored under the nearest ancestor that *is* identifiable rather than pathed from
+that repeats is anchored under the nearest ancestor that _is_ identifiable rather than pathed from
 `<html>`.
 
 See [`packages/shared/src/seed.ts`](../packages/shared/src/seed.ts),

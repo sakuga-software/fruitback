@@ -23,24 +23,24 @@ pnpm dev
 
 `pnpm dev` starts two servers on fixed ports:
 
-| | |
-| --- | --- |
+|                         |                                                                               |
+| ----------------------- | ----------------------------------------------------------------------------- |
 | `http://localhost:5177` | the playground: a deliberately hostile fake client site with the widget on it |
-| `http://localhost:8788` | the worker, on an in-memory store |
+| `http://localhost:8788` | the worker, on an in-memory store                                             |
 
 The in-memory store needs no API key and writes to nobody's workspace. The playground is scaffolding
 for trying the widget, not the product: build features in `packages/widget`.
 
 ## Where things are
 
-| | |
-| --- | --- |
-| `packages/shared` | the seed contract, shared by the browser and the server |
-| `packages/widget` | everything that runs in the browser |
+|                      |                                                                                |
+| -------------------- | ------------------------------------------------------------------------------ |
+| `packages/shared`    | the seed contract, shared by the browser and the server                        |
+| `packages/widget`    | everything that runs in the browser                                            |
 | `packages/fruitback` | the package a client installs; it re-exports the two above and defines nothing |
-| `apps/worker` | the Node service between the widget and the store |
-| `apps/extension` | the browser extension |
-| `apps/playground` | the dev loop, never shipped |
+| `apps/worker`        | the Node service between the widget and the store                              |
+| `apps/extension`     | the browser extension                                                          |
+| `apps/playground`    | the dev loop, never shipped                                                    |
 
 ## Run the tests
 
@@ -64,15 +64,15 @@ pnpm e2e
 
 CI runs each of these as its own check on every pull request to `main`. Run them first:
 
-| Check | Locally |
-| --- | --- |
-| `lint` | `pnpm lint` |
-| `format` | `pnpm format`, and `pnpm format:fix` to rewrite the files |
-| `typecheck` | `pnpm typecheck` |
-| `test` | `pnpm test` |
-| `e2e` | `pnpm e2e` |
-| `docker image` | builds the worker image and plants a pin through `docker-compose.yml`, see [docs/self-hosting.md](docs/self-hosting.md) |
-| `zizmor` | `uvx zizmor==1.30.1 --offline .github/workflows`, the version CI runs, if you changed a workflow: it fails on an unpinned action or a permission a job does not need |
+| Check          | Locally                                                                                                                                                              |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lint`         | `pnpm lint`                                                                                                                                                          |
+| `format`       | `pnpm format`, and `pnpm format:fix` to rewrite the files                                                                                                            |
+| `typecheck`    | `pnpm typecheck`                                                                                                                                                     |
+| `test`         | `pnpm test`                                                                                                                                                          |
+| `e2e`          | `pnpm e2e`                                                                                                                                                           |
+| `docker image` | builds the worker image and plants a pin through `docker-compose.yml`, see [docs/self-hosting.md](docs/self-hosting.md)                                              |
+| `zizmor`       | `uvx zizmor==1.30.1 --offline .github/workflows`, the version CI runs, if you changed a workflow: it fails on an unpinned action or a permission a job does not need |
 
 Then:
 
@@ -157,13 +157,13 @@ in the interface, and why.
 
 ## Licences
 
-| | |
-| --- | --- |
-| `packages/fruitback` | MIT |
-| `packages/shared` | MIT |
-| `packages/widget` | MIT |
-| `apps/worker` | AGPL-3.0-only |
-| `apps/extension` | AGPL-3.0-only |
-| `apps/playground` | not published, under the repository's MIT licence |
+|                      |                                                   |
+| -------------------- | ------------------------------------------------- |
+| `packages/fruitback` | MIT                                               |
+| `packages/shared`    | MIT                                               |
+| `packages/widget`    | MIT                                               |
+| `apps/worker`        | AGPL-3.0-only                                     |
+| `apps/extension`     | AGPL-3.0-only                                     |
+| `apps/playground`    | not published, under the repository's MIT licence |
 
 A contribution is made under the licence of the package it changes.

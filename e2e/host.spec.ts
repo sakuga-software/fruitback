@@ -159,14 +159,11 @@ test('the widget cannot restyle the page either', async ({ page }) => {
   // claim is that the colour comes back to exactly what it was, not that it never moved while the
   // design system was animating its own button.
   await page.mouse.move(0, 0);
-  await expect
-    .poll(async () => cta.evaluate((node) => getComputedStyle(node).backgroundColor))
-    .toBe(before);
+  await expect.poll(async () => cta.evaluate((node) => getComputedStyle(node).backgroundColor)).toBe(before);
   // Nothing the widget draws is in the page's own tree — the dev toolbar is the playground's, and
   // deliberately outside the Shadow root, so it is excluded from the count rather than from the rule.
   const strays = await page.evaluate(() => {
-    const OURS =
-      '.fruitback-launch, .fruitback-highlight, .fruitback-pin, .fruitback-thread, [data-fruitback-pin]';
+    const OURS = '.fruitback-launch, .fruitback-highlight, .fruitback-pin, .fruitback-thread, [data-fruitback-pin]';
 
     return [...document.querySelectorAll(OURS)]
       .filter((node) => node.closest('[data-fruitback-dev]') === null)
@@ -239,13 +236,11 @@ test('the pins live in the Shadow root now, and still land on their elements', a
   // Not reachable from the page's own DOM — only through the Shadow root.
   expect(await page.evaluate(() => document.querySelectorAll('[data-fruitback-pin]').length)).toBe(0);
   expect(
-    await page.evaluate(
-      () => {
-        const host = document.querySelector('[data-fruitback-host]');
+    await page.evaluate(() => {
+      const host = document.querySelector('[data-fruitback-host]');
 
-        return host?.shadowRoot?.querySelectorAll('[data-fruitback-pin]').length;
-      },
-    ),
+      return host?.shadowRoot?.querySelectorAll('[data-fruitback-pin]').length;
+    }),
   ).toBe(1);
 });
 

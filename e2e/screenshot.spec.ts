@@ -15,10 +15,7 @@ import { WORKER_ORIGIN, openPlayground } from './pin.ts';
 const IIFE = 'packages/widget/dist/fruitback.iife.js';
 
 /** Mount the published bundle with a capture function whose behaviour the test chooses. */
-async function mountWith(
-  page: import('@playwright/test').Page,
-  capture: 'ok' | 'throws' | 'nothing' | 'urlless',
-) {
+async function mountWith(page: import('@playwright/test').Page, capture: 'ok' | 'throws' | 'nothing' | 'urlless') {
   await page.addScriptTag({ path: IIFE });
   await page.evaluate(
     ([endpoint, mode]) => {

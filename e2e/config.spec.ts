@@ -56,9 +56,7 @@ test('the panel belongs to the widget, so the page cannot restyle it', async ({ 
   await page.addStyleTag({ content: 'input { background: lime !important; border: 8px solid blue !important; }' });
 
   await page.getByLabel('Open Fruitback settings').click();
-  const background = await page
-    .locator('[name="client"]')
-    .evaluate((node) => getComputedStyle(node).backgroundColor);
+  const background = await page.locator('[name="client"]').evaluate((node) => getComputedStyle(node).backgroundColor);
 
   expect(background).not.toBe('rgb(0, 255, 0)');
 });

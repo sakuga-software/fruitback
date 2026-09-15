@@ -74,9 +74,9 @@ test('the colour of a pin is the Linear state, and nothing the widget decided', 
   await plantPin(page, page.locator('#checkout-cta'), 'Deuxième');
   await plantPin(page, page.locator('main header button'), 'Troisième');
 
-  const stages = await page.locator('[data-fruitback-pin]').evaluateAll((pins) =>
-    pins.map((pin) => (pin as HTMLElement).dataset.fruitbackStage),
-  );
+  const stages = await page
+    .locator('[data-fruitback-pin]')
+    .evaluateAll((pins) => pins.map((pin) => (pin as HTMLElement).dataset.fruitbackStage));
 
   assertDistinct(stages);
 });

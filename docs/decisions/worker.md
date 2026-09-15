@@ -20,13 +20,12 @@ connector's environment, and what a second connector with no markdown body actua
   returning an issue — dropping that check silently mixes two pages' pins.
 - The read cache (`cache.ts`) holds the in-flight promise **in this process** and the settled answer
   in the `Kv`, so a burst of visitors on one page costs one Linear call and N replicas cost at most N.
-  Failures are never written: an outage must not be served for the whole TTL. See *The rate limit and the cache, behind a Kv* below.
+  Failures are never written: an outage must not be served for the whole TTL. See _The rate limit and the cache, behind a Kv_ below.
 - Failure codes are deliberate: `400` the caller's fault, `403` origin not allowed, `413` oversized
   body, `429` rate-limited, `500` misconfigured, `502` `store-unavailable` (the widget should keep the
   note and retry), `401` the read needs an identity. `/health` answers `503` when misconfigured so a
   bad deploy is never routed to. **A code the widget reads is a promise**, so it names a role and
   never a vendor — `linear-unavailable` became `store-unavailable` with SKG-522 for that reason.
-
 
 ## The rate limit and the cache, behind a Kv (SKG-542)
 
@@ -119,8 +118,8 @@ degradation the ticket asked to have written down rather than discovered.
   team's replies were readable by any visitor of the client's site, and by `curl` — which is why
   hiding pins in the browser was never the fix. `read: 'public' | 'authenticated'` is (SKG-533), per
   client in `FRUITBACK_CLIENTS` or worker-wide via `FRUITBACK_READ`.
-- **The extension is a different problem.** It settles *visibility* — the pins leave the visitor's
-  DOM. It settles nothing about *authorisation*: the endpoint stays open and `curl` still works.
+- **The extension is a different problem.** It settles _visibility_ — the pins leave the visitor's
+  DOM. It settles nothing about _authorisation_: the endpoint stays open and `curl` still works.
   Building SKG-534 without this ticket hides the comments in the UI and leaves them in the API.
 - **`authorizeRead` runs before `cached`, and the guard is `stub.calls`, not the status code.** A
   gate moved below the cache still returns `401`, so asserting the status cannot tell the two apart
@@ -129,7 +128,7 @@ degradation the ticket asked to have written down rather than discovered.
   warm-cache test is a narrower guard: it catches a cache-hit fast path that answers before the gate.
 - **`public` stays the default, and that is compatibility rather than security.** Defaulting to
   `authenticated` would blank the pins on every upgraded worker with no error anywhere, and the
-  operator would hear about it from users. The exposure is made *sayable* instead: the boot log names
+  operator would hear about it from users. The exposure is made _sayable_ instead: the boot log names
   every client whose pins anyone can read, `/health` counts them. Loud beats silent both ways.
 - **`/health` carries a count, never the ids.** It needs no authentication either, so listing client
   ids would hand over the map the worker serves. The boot log names them, where only an operator looks.
@@ -150,7 +149,6 @@ degradation the ticket asked to have written down rather than discovered.
   other way. Capped at `COMMENTS_PER_ISSUE` — a longer thread belongs in Linear, which the pin links
   to.
 
-
 ## The team's replies
 
 - **Comments come from Linear on every read** (SKG-502), and close the loop: someone leaves a note,
@@ -165,7 +163,6 @@ degradation the ticket asked to have written down rather than discovered.
   being the editorial choice it should always have been, because the reader is someone the worker
   checked.
 
-
 ## Where a seed is stored
 
 - **`store.ts` is the interface, and it existed before it was named** (SKG-522). `app.ts` used to
@@ -178,7 +175,7 @@ degradation the ticket asked to have written down rather than discovered.
   search would walk everything. Exposing a `contains` filter on the interface would have made
   Linear's trick the contract.
 - **The old `Routing` mixed two things, and the split is the point.** `ClientPolicy` — `showComments`,
-  `identitySecret`, `read` — is what the *worker* decided, whatever store is behind it. `teamId` and
+  `identitySecret`, `read` — is what the _worker_ decided, whatever store is behind it. `teamId` and
   `projectId` went to `linear.ts`, where a team means something. `resolveClient` hands the client
   entry on whole, and **each store reads its own fields from it**.
 - **`store.scope(client)` is what took `teamId` out of the read cache key.** The worker was building
@@ -197,6 +194,7 @@ degradation the ticket asked to have written down rather than discovered.
   would have opened a SQLite connection per request the moment SKG-524 landed. Caught in review, not
   by a test, because nothing observable was wrong yet. The tests that hold it now assert the handler
   used the store it was **given**: a Linear stub left untouched is the proof it built none of its own.
+
 ## Which store, and who validates it
 
 - **`FRUITBACK_STORE` selects the connector, and each connector validates its own environment**
@@ -213,12 +211,12 @@ degradation the ticket asked to have written down rather than discovered.
 - **A store names its own environment variables.** `envNames` is required per field, so a boot
   diagnostic says `LINEAR_API_KEY` and never `apiKey` — mutation-tested, and the mutation also trips
   three older tests, which is how load-bearing that diagnostic is. `never reports a field name from
-  any store` asks it of every spec rather than of Linear.
+any store` asks it of every spec rather than of Linear.
 - **An unknown provider and a dev-only one in production are both refused, never defaulted.** A typo
   falling back to Linear would send a worker configured for SQLite to an API it has no key for; and
   feedback accepted into RAM behind a green health check is worse than a worker that will not start.
   That second guard is the one thing this ticket had to generalise without loosening.
-- **`FRUITBACK_FAKE_LINEAR=1` still works, and it *degrades* where `FRUITBACK_STORE=memory` is
+- **`FRUITBACK_FAKE_LINEAR=1` still works, and it _degrades_ where `FRUITBACK_STORE=memory` is
   refused.** The asymmetry is deliberate: a flag a container inherited must not stop it serving
   production, while a provider somebody deliberately named must not be silently swapped for another.
   So the sugar falls back to the real store and says so in the log; the explicit selection is refused
@@ -252,7 +250,7 @@ degradation the ticket asked to have written down rather than discovered.
   here, and `answers no empty diagnostic` walks every way of making the config invalid rather than the
   one that was noticed.
 - **Still Linear-shaped in one place, and left there on purpose**: `apps/worker/src/linear-memory.ts`
-  keeps its name and its import of `toSeedIssue`. See *Where a seed is stored* — that coupling is the
+  keeps its name and its import of `toSeedIssue`. See _Where a seed is stored_ — that coupling is the
   feature.
 
 ## SQLite, and what a second connector actually proved
@@ -274,7 +272,7 @@ degradation the ticket asked to have written down rather than discovered.
   many handles were opened**, not `connections.size`: the map is keyed by path, so a `connect` that
   stopped reusing overwrites the entry and leaves the size at one. Both weaker spellings were measured
   passing against the mutation before this one was written.
-- **There is nothing to project onto `SeedStage`.** The column *is* a stage, so `stageOf` only applies
+- **There is nothing to project onto `SeedStage`.** The column _is_ a stage, so `stageOf` only applies
   the contract's own tolerance — an unrecognised value colours the pin rather than hiding the note.
 - **A row is parsed, never trusted.** The file sits on a volume an operator can edit and a restore can
   be older than the code. A malformed row costs that one pin; the page keeps its other notes.
@@ -310,7 +308,7 @@ degradation the ticket asked to have written down rather than discovered.
   nothing: authorised at both ends, invisible in between. The write path normalises it into the seed
   the same way it re-canonicalises `page.url`, and for the same reason.
 - **`clientId` is client-asserted**, and SKG-498 did not change that: identity tokens say who the
-  *reporter* is, not which client the page is. `origins` is what turns the claim into something
+  _reporter_ is, not which client the page is. `origins` is what turns the claim into something
   checkable against the browser's own header — the trust level CORS gives, and strictly more than
   nothing. Do not describe it as authentication.
 - A malformed `FRUITBACK_CLIENTS` is refused at boot rather than ignored, and named on `/health`.
@@ -459,7 +457,7 @@ degradation the ticket asked to have written down rather than discovered.
   the standing proof that such a store exists. A connector picks this up; it is not required to.
 - **`pageQueryTerm` moved with it, and that is the reason it is a separate point.** The term works
   only because `buildSeedBlock` writes the canonical URL verbatim into the JSON — a property of the
-  *writer*, not of any provider. Beside the code that makes it true, it cannot drift from it.
+  _writer_, not of any provider. Beside the code that makes it true, it cannot drift from it.
 - **The round-trip test travelled with the code rather than being rewritten**, which is what the
   ticket asked for and what makes the move provable: 44 shared tests before, 44 after, and
   `parseSeedFromDescription(buildIssueDescription(seed)) === seed` is still the same assertion on the
@@ -476,13 +474,12 @@ degradation the ticket asked to have written down rather than discovered.
   **off**, so a renamed file that broke the published declarations fails there rather than in a
   consumer's build.
 
-
 ## The extension's session
 
 - **The reviewer is not a visitor who typed a name** (SKG-535). SKG-498 defined `reporter.verified`
   and left nothing able to set it on this side: a client site could mint an identity token, and the
   extension could not. A session is what finally makes that flag the worker's own word.
-- **The operator vouches, and the code carries who for.** A pairing code is minted *for* Alice, with
+- **The operator vouches, and the code carries who for.** A pairing code is minted _for_ Alice, with
   her name and address in it. The alternative — the extension supplying a name at pairing time — is
   the browser asserting an identity again, which is the hole SKG-498 was written to close. It was
   rejected for that reason and not on ergonomics.
@@ -492,7 +489,7 @@ degradation the ticket asked to have written down rather than discovered.
   (SKG-533) started accepting the extension with no change to a single line of the read path.
 - **Rotation was refused once, and then built** (SKG-600). It needs a grace for the answer that never
   arrives, and until SKG-599 there was no client half to measure that against. There is now, and the
-  measurement changed the design — see *Rotation, and the grace that is not a clock* below.
+  measurement changed the design — see _Rotation, and the grace that is not a clock_ below.
 - **No OAuth, no identity provider, no user table.** Every decision leans on "one administrator, one
   container, no third party". An authentication flow assuming an identity provider makes the project
   unselfhostable in practice, which is the one thing this store was added to avoid.
@@ -512,7 +509,7 @@ degradation the ticket asked to have written down rather than discovered.
 - **The redemption is one transaction, not one statement.** Marking the code spent and then failing
   to insert the session — a full volume, a locked file — burns the only code the reviewer has, and
   the retry answers `code-spent-or-expired`, which is true and useless. Unlike the atomicity of the
-  spend, this guard *is* observable: the test makes the insert collide on `sessions.token_hash`,
+  spend, this guard _is_ observable: the test makes the insert collide on `sessions.token_hash`,
   which is a real failure inside the transaction rather than a raced one.
 - **A row is parsed, never trusted — and SQLite narrows what can arrive.** The first version of that
   test asserted an integer `subject`, and it failed: the column has `TEXT` affinity, so `42` comes
@@ -539,11 +536,11 @@ degradation the ticket asked to have written down rather than discovered.
   rotates it, so there is no lookup beside `rotateSession`. Dropping `revoked_at IS NULL` from
   `revoke` still fails `revokes on the worker, so the refresh token stops working everywhere`, and
   dropping the chain revocation from `revokeSession` fails `ends the whole chain on log out, not only
-  the token it was handed` and `ends a chain from any link, including the token nobody is holding`,
+the token it was handed` and `ends a chain from any link, including the token nobody is holding`,
   and not inheriting `root_hash` on the successor fails nine tests at once.
 - **The CORS exemption is mutation-tested.** Replacing `openCors` with the ordinary `resolveCors`
   fails both `answers an extension origin that is on no allowlist` and `lets the preflight through,
-  or the POST never happens`. What says the exemption is not a hole in the gate is
+or the POST never happens`. What says the exemption is not a hole in the gate is
   `leaves the allowlist in force on /feedback for sites, and admits the extension`: an ordinary site
   origin that is on no allowlist is still refused there.
   - Two of those three names were quoted here **truncated**, and the second was quoted with a
@@ -590,13 +587,13 @@ reviewer read it properly. A refresh token is a bearer credential and whoever pr
 Inside the grace each presentation of the spent token revokes the successor the one before it
 minted, so it is the **last** presenter who ends up with the live chain: a thief who gets in after
 the real client takes the session and the client's own token is revoked under it. The first version
-of this paragraph said *first*, which is the opposite of what the code does. Measured, and kept as a
+of this paragraph said _first_, which is the opposite of what the code does. Measured, and kept as a
 test — `serves whoever presents last inside the grace, until the earlier holder comes back`. What rotation guarantees is that the two cannot both
 keep the session quietly, which is a detection property and not a lifetime one.
 
 ### The ticket asked for a replay window. Two measurements said no.
 
-The ask was that a rotated token stay accepted for *a few tens of seconds* and hand back **the same**
+The ask was that a rotated token stay accepted for _a few tens of seconds_ and hand back **the same**
 successor, so a client whose answer was lost lands on its feet.
 
 Neither half survived contact:
@@ -635,10 +632,10 @@ preventing.
 The test was `revoked && rotated` for two rounds, and it was wrong twice over. It read a logout as a
 replay — revoking a token whose refresh answer was lost marks exactly that combination with nobody
 having replayed anything — and it missed the case that mattered, where the token a thief leaves
-revoked under the client was never rotated at all. Asking the chain is stricter *and* simpler:
+revoked under the client was never rotated at all. Asking the chain is stricter _and_ simpler:
 after a logout nothing in the chain is live, so a logout stops reading as a replay on its own.
 
-Both mistakes were raised in review, one round apart. See *the hole the grace left* below for the
+Both mistakes were raised in review, one round apart. See _the hole the grace left_ below for the
 second, which is the one that cost something.
 
 The same review found the defect underneath: **`revokeSession` revoked only the row it was handed.**

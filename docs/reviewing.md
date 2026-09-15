@@ -32,12 +32,12 @@ run there.
 Open the page you want to review and click the extension. The popup names the origin it is about,
 and asks for three things:
 
-| Field | | |
-| --- | --- | --- |
-| **Mode** | `Private · the extension mounts the widget` | for a site that embeds nothing |
-| | `Team · the site embeds it, we relay` | for a site that ships a dormant widget |
-| **Worker endpoint** | `https://feedback.acme.dev` | your worker, not the site |
-| **Client id** | `acme` | **private mode only** — in team mode the site declares its own |
+| Field               |                                             |                                                                |
+| ------------------- | ------------------------------------------- | -------------------------------------------------------------- |
+| **Mode**            | `Private · the extension mounts the widget` | for a site that embeds nothing                                 |
+|                     | `Team · the site embeds it, we relay`       | for a site that ships a dormant widget                         |
+| **Worker endpoint** | `https://feedback.acme.dev`                 | your worker, not the site                                      |
+| **Client id**       | `acme`                                      | **private mode only** — in team mode the site declares its own |
 
 Then **Turn on for this site**. The browser asks for permission on that origin; refuse it and nothing
 runs. The row afterwards reads `On · acme` in private mode, and in team mode
@@ -87,11 +87,11 @@ get that far, under
 
 Otherwise, what a failed attempt answers:
 
-| | |
-| --- | --- |
-| `That code has been used or has expired. Ask for a new one.` | Codes are single-use, and expire 15 minutes after they are minted. |
-| `The worker did not answer. Try again.` | The worker is down or unreachable — the code is still good. |
-| `Fruitback needs permission to reach that worker.` | The prompt for the **worker's** origin was refused. It is not the site's. |
+|                                                              |                                                                                                                                                                                  |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `That code has been used or has expired. Ask for a new one.` | Codes are single-use, and expire 15 minutes after they are minted.                                                                                                               |
+| `The worker did not answer. Try again.`                      | The worker is down or unreachable — the code is still good.                                                                                                                      |
+| `Fruitback needs permission to reach that worker.`           | The prompt for the **worker's** origin was refused. It is not the site's.                                                                                                        |
 | `That worker is on plain http. A session must not cross it.` | The same rule as the disabled button above, answered by `session.ts` rather than by the popup. You reach it only if something else asks for a pairing — the popup refuses first. |
 
 Pairing asks for a permission on the worker's origin, which is a different grant from the site's. It

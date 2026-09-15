@@ -16,23 +16,23 @@ it changes who is shown the feedback and never who may fetch it.
   content script in the isolated world shares the DOM and **not** the properties page scripts put on
   it. Probed in Chromium on the playground, on the same `<button>`:
 
-  | | isolated | main |
-  | --- | --- | --- |
-  | `__reactFiber$` | absent | present |
-  | `__reactProps$` | absent | present |
+  |                                  | isolated    | main     |
+  | -------------------------------- | ----------- | -------- |
+  | `__reactFiber$`                  | absent      | present  |
+  | `__reactProps$`                  | absent      | present  |
   | `__REACT_DEVTOOLS_GLOBAL_HOOK__` | `undefined` | `object` |
-  | own properties | **0** | 2 |
+  | own properties                   | **0**       | 2        |
 
 - **Both halves of `source` are blind from the isolated world, not one.** `readReactSource` finds the
   fiber under `__reactFiber$…`; react-grab scans `__reactContainer$` / `__reactInternalInstance$` and
-  installs *itself* as `globalThis.__REACT_DEVTOOLS_GLOBAL_HOOK__`, which in the isolated world is a
+  installs _itself_ as `globalThis.__REACT_DEVTOOLS_GLOBAL_HOOK__`, which in the isolated world is a
   global React never reads. So the widget would mount, work, and quietly never say which component a
   note is about — the worst shape of failure, because nothing errors.
 - **Registered as a content script rather than injected as a `<script>` tag.** A tag pointing at an
   extension URL is evaluated in the page and **the page's CSP can refuse it**. A main-world content
   script — whether it is declared in the manifest or registered through `scripting` — is not subject
   to it. That is the CSP trap the ticket names, avoided rather than worked around. This paragraph
-  said *declared in the manifest* until review pointed at it: true of the first draft, and false from
+  said _declared in the manifest_ until review pointed at it: true of the first draft, and false from
   the moment the manifest stopped declaring anything.
 - **`packages/widget` is unchanged by this app, which is the ticket's own test.** The widget runs
   where it always ran — in the page — so the extension is a fourth assembler beside `global.ts` and
@@ -49,21 +49,21 @@ it changes who is shown the feedback and never who may fetch it.
   previous origins registered — the extension would keep running on a site just switched off. That is
   the test worth reading in `registration.test.ts`.
 - **The bridge is `window.postMessage`, and the page can forge on it.** `parseBridgeMessage` refuses
-  a *malformed* message; it cannot refuse a **well-formed** one the page wrote, because the two are
+  a _malformed_ message; it cannot refuse a **well-formed** one the page wrote, because the two are
   identical. A page can post its own `mount` and point the widget at its own worker, or post
   `unmount` and take it away. The first version of this paragraph claimed the parse defended against
   that. It does not, and claiming it was worse than the gap.
 - **That is inherent to the main world, not a flaw in the bridge, and no handoff closes it.** The
-  main world *is* the page's realm: a hostile page can patch `fetch`, `JSON.stringify` or the
+  main world _is_ the page's realm: a hostile page can patch `fetch`, `JSON.stringify` or the
   widget's own methods however the config arrived, and a nonce would have to travel on the channel
   the page reads. So it is stated rather than defended — **a reviewer grants an origin precisely
   because they trust that origin's code**, and the extension runs on no other. What is reduced is
   what is at stake: nothing secret travels there, the endpoint and client id are already in the
   client's own DOM in tag mode, and an identity token is **not sent at all**. SKG-535 keeps the token
   in the isolated world behind a relay, which is what has to keep being true.
-- **`registerContentScripts` reaches the *next* page load, never the open one.** So the popup injects
+- **`registerContentScripts` reaches the _next_ page load, never the open one.** So the popup injects
   both files into the current tab after the grant, or the reviewer switches a site on and looks at a
-  page with no dock while the popup says it is on. The browser run that first *proved* the no-reload
+  page with no dock while the popup says it is on. The browser run that first _proved_ the no-reload
   flow had seeded storage **before** the page loaded — which is not what a person does, so it was a
   green check on a path nobody walks. Raised in review.
 - **An unchanged decision is never re-posted, and that is what protects a half-written note.**
@@ -79,12 +79,12 @@ it changes who is shown the feedback and never who may fetch it.
   marks **every** host now and counts the ones that come back unmarked. Measured both ways: 0 rebuilt
   with the guard, 1 without.
 - **`init` takes a `configKey`, and that is the one widget change this app forced.** The config store
-  reads `fruitback:config` from the page's `localStorage` and lets it *override* what `init` was
+  reads `fruitback:config` from the page's `localStorage` and lets it _override_ what `init` was
   passed — correct for one widget, wrong the moment there are two. A site that embeds the widget,
   opened by a reviewer whose extension mounts its own, shares that key: one instance silently takes
   the other's `endpoint` and `clientId`, and the notes go to a worker nobody chose. The seam is not
   extension-shaped — any second instance needs it — which is why it passes the ticket's own test.
-- **A second key was half the answer, and the half that was missing is the page can write *ours*.**
+- **A second key was half the answer, and the half that was missing is the page can write _ours_.**
   The store restores its key from the page's own `localStorage`, so a page that wrote
   `fruitback:config:extension` before the widget mounted chose where the notes went. The same gap
   faces the other way with nobody hostile at all: a stored `endpoint` beats the new default for ever,
@@ -113,7 +113,7 @@ it changes who is shown the feedback and never who may fetch it.
 - **Nothing orders the two content scripts against each other**, so the main world announces itself
   with `ready` and the isolated one applies its decision again. `postMessage` delivers that back to
   the sender too, which the main world has to ignore explicitly — the type checker found that one.
-- **A site that embeds the widget *and* a reviewer who has the extension get two docks.** Measured on
+- **A site that embeds the widget _and_ a reviewer who has the extension get two docks.** Measured on
   the playground, which mounts its own: switching the extension on took the host count from 1 to 2.
   Harmless, visibly silly, and not solved here — the extension cannot tell its own host from theirs
   without the widget advertising itself, which is a widget change.
@@ -122,7 +122,6 @@ it changes who is shown the feedback and never who may fetch it.
   switching it off destroys it live. The permission prompt itself is a native dialog no automation
   can drive, which is why that path is unit-tested and the browser run uses a build with the scripts
   declared statically.
-
 
 ## The session, and the token that never goes down (SKG-599)
 
@@ -140,12 +139,12 @@ both: an access token the host site's JavaScript can read is the worst outcome o
   scripts, which is exactly the boundary this ticket holds. Widening it to
   `TRUSTED_AND_UNTRUSTED_CONTEXTS` so the isolated script could read the token directly would put the
   token one `postMessage` mistake away from the page — the isolated script asks the background to
-  make the call instead, which is the same seam SKG-596's relay needs. What *does* hold a token is
+  make the call instead, which is the same seam SKG-596's relay needs. What _does_ hold a token is
   every trusted context: the background refreshes and the popup pairs and logs out, which is what
   `TRUSTED_CONTEXTS` means and what the documentation now says. Raised in review, where the first
   wording claimed the background was the only one.
 - **Pairing asks for a host permission on the worker's origin, and that is a hedge rather than a
-  proof.** `turnOn` only ever requested the *site*; a worker normally lives somewhere else entirely,
+  proof.** `turnOn` only ever requested the _site_; a worker normally lives somewhere else entirely,
   so nothing had asked for it. The session routes answer a `chrome-extension://` origin with CORS
   headers that ought to make an unprivileged `fetch` enough — and that was measured against a real
   worker with a real preflight, **with `curl`, which does not enforce CORS**. No browser runs on this
@@ -163,8 +162,8 @@ both: an access token the host site's JavaScript can read is the worst outcome o
   trip to two storage operations rather than closed. Raised in review.
   - The first test for it passed for the wrong reason: it mutated storage before the refresh had
     read it, so the early `not-paired` answered and the guard never ran. Synchronised on the request
-    being *entered* instead, then mutated — and removing the guard now fails both cases.
-  - **Narrowed again by SKG-600**, because rotation made this path run on *every* refresh rather than
+    being _entered_ instead, then mutated — and removing the guard now fails both cases.
+  - **Narrowed again by SKG-600**, because rotation made this path run on _every_ refresh rather than
     on the rare answer that carried a new token. The compare and the write were separate — a read, a
     read, a write — so a logout landing across any of the three was enough. `keepIfCurrent` does both
     on one read and reports whether it wrote; nothing mints a grant when it did not. Still not
@@ -185,7 +184,7 @@ both: an access token the host site's JavaScript can read is the worst outcome o
     `refreshDue` in `serialize`, so the alarm cannot overlap itself. The relay calls `ensureAccess`
     directly and goes nowhere near it — and the widget has a read and a write in flight in the
     ordinary case, so two concurrent refreshes are the normal state of team mode, not a rare one.
-  - I had checked the *other* half and concluded there was no race: the popup calls `list`, `pair`
+  - I had checked the _other_ half and concluded there was no race: the popup calls `list`, `pair`
     and `logout` only, so it never refreshes. True, and it answered a question nobody needed
     answering. The PR body said so before the review corrected it.
   - `refreshOnce` holds an endpoint-to-promise map with **no `await` between the `get` and the
@@ -216,7 +215,7 @@ both: an access token the host site's JavaScript can read is the worst outcome o
   require the field: the rule belongs beside the failure it prevents, and a later route issuing only
   an access token would otherwise have to work around it.
 - **The guard is an allowlist, not a denylist** (`src/worlds.test.ts`). Naming the files that must
-  stay clean passes a main-world entrypoint added next year. So the entrypoints are *discovered* —
+  stay clean passes a main-world entrypoint added next year. So the entrypoints are _discovered_ —
   every `*.content.ts` declaring `world: 'MAIN'` — their transitive relative imports are computed,
   and none of those may be a `session*` module or name `refreshToken` / `accessToken` in code.
   - **The detection reads the code, not the file.** `page.content.ts` opens with a paragraph about
@@ -353,7 +352,7 @@ background: put(grant,   gen.N) ← and the grant agrees with it
 ```
 
 Both writes carry the same new generation, so `matches` accepts the grant: SKG-600's marker catches a
-logout landing *between* the two writes and cannot catch one landing *before* them. The refresh token
+logout landing _between_ the two writes and cannot catch one landing _before_ them. The refresh token
 put back is revoked on the worker — logging out revokes the chain — so the next refresh answers
 `401`. That does not reach the access token already minted, which stays good for its remaining ten
 minutes. A reviewer who clicked log out keeps reading pins.
@@ -420,7 +419,7 @@ and a test pins that. Raised in review, and it is the same lesson as the paragra
 
 The interleavings are arranged by holding one storage write open — the only place the two contexts
 can be ordered against each other, since they share nothing else. Thirteen mutations were run and
-each fails a test: the ten rules this ticket adds, including the two that only say *when* something
+each fails a test: the ten rules this ticket adds, including the two that only say _when_ something
 happens — minting the epoch after the clear, and reading the epoch in a second round trip instead of
 from the snapshot the session came from — plus `matches`, which still refuses a grant and a session
 that drifted apart inside one run, and the two directions of the `finally` below.
@@ -480,7 +479,7 @@ The ticket says `clientId` and `endpoint` come from the site, never from the pop
 does. The endpoint cannot, and the entry keeps one.
 
 A reviewer holds a session **per worker**. If the relay sent the call wherever the page asked, a page
-on any origin the reviewer enabled could name a *different* worker they had paired with, and be
+on any origin the reviewer enabled could name a _different_ worker they had paired with, and be
 answered with their credential for it — notes posted into another team's tracker as them, and that
 team's pins read back. The endpoint the reviewer stored for that origin is the only value in this
 system that the page did not write, so it is what the declaration is checked against.

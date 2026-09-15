@@ -28,9 +28,7 @@ test('a click plants a pin, and the worker gives it back on reload', async ({ pa
   expect(errors).toEqual([]);
 });
 
-test('the selector it picked is unique in a real engine, and skips what a redeploy would change', async ({
-  page,
-}) => {
+test('the selector it picked is unique in a real engine, and skips what a redeploy would change', async ({ page }) => {
   await openPlayground(page, 'selector');
   await plantPin(page, page.locator('#checkout-cta'), 'Le CTA devrait être plus large');
   await plantPin(page, page.locator('main header button'), 'Le menu n’est pas assez visible');
@@ -38,9 +36,7 @@ test('the selector it picked is unique in a real engine, and skips what a redepl
   const anchors = await page.evaluate(async (worker) => {
     const url = new URL(window.location.href);
     url.hash = '';
-    const response = await fetch(
-      `${worker}/feedback?url=${encodeURIComponent(url.toString())}&client=playground`,
-    );
+    const response = await fetch(`${worker}/feedback?url=${encodeURIComponent(url.toString())}&client=playground`);
     const { issues } = (await response.json()) as { issues: { seed: { anchor: { selector: string } } }[] };
 
     return issues.map((issue) => ({
@@ -72,7 +68,6 @@ test('a pin below the fold is placed in the document, not in the viewport', asyn
   await cta.scrollIntoViewIfNeeded();
   await expectPinOn(pinFor(page, 'Trop bas dans la page'), cta);
 });
-
 
 test('a note carries the component and the file it came from', async ({ page }) => {
   // The reason the playground is a React app at all: `source` is half of what makes a seed useful in

@@ -45,7 +45,7 @@ first publish made it expensive.
   parsing the JSON. The test `finds the block by its JSON, never by the caption above it` fails if
   that stops being true, which is what made dropping its emoji safe instead of hopeful.
 - **A test whose premise disappeared was rewritten, not deleted.** `redraws when a note changed
-  stage, because its emoji did` could no longer hold: nothing in the orphan entry depends on the stage
+stage, because its emoji did` could no longer hold: nothing in the orphan entry depends on the stage
   now. What it really guarded — that the signature invalidates on a stage change — is still worth
   keeping, so it asserts a **rebuilt node** instead of different text. The signature deliberately
   over-invalidates by one field, because SKG-529 decides how a stage shows up there and a signature
@@ -54,8 +54,8 @@ first publish made it expensive.
   rebuilt node.
 - **The six emoji SKG-517 left behind were SKG-529's, and there are none now.** They were standalone
   literals in the widget's own copy — the launch label, the gear, the settings title, the
-  detached-notes count, the harvested state — rather than anything the *contract* was dictating,
-  which is why SKG-517 scoped them out. See *No emoji, and what replaced them*
+  detached-notes count, the harvested state — rather than anything the _contract_ was dictating,
+  which is why SKG-517 scoped them out. See _No emoji, and what replaced them_
   ([icons.md](icons.md)). The count in this paragraph was wrong twice before it was right, so do not
   trust a number here: `icons.test.ts` asserts zero across the package, and it was measured failing
   on a planted one.
@@ -74,4 +74,3 @@ first publish made it expensive.
 - The fallback for an unrecognised state stays in `shared` on purpose. A connector spelling
   `'seeded'` itself is how the next one comes to disagree, and an unknown state must colour the pin
   rather than hide someone's note.
-
