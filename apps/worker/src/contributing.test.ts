@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -36,6 +36,21 @@ function pnpmScripts(text: string): string[] {
   return [...new Set(names)].filter((name) => !PNPM_COMMANDS.has(name)).sort();
 }
 
+/** The scripts of each workspace package, by package name. */
+function workspaceScripts(): Map<string, string[]> {
+  const scripts = new Map<string, string[]>();
+  for (const group of ['apps', 'packages']) {
+    for (const dir of readdirSync(new URL(`../../../${group}/`, import.meta.url))) {
+      const file = `../../../${group}/${dir}/package.json`;
+      if (!existsSync(new URL(file, import.meta.url))) continue;
+      const manifest = JSON.parse(read(file)) as { name: string; scripts?: Record<string, string> };
+      scripts.set(manifest.name, Object.keys(manifest.scripts ?? {}));
+    }
+  }
+
+  return scripts;
+}
+
 /** The body of one `## ` section, up to the next one. */
 function section(text: string, heading: string): string {
   const start = text.indexOf(`\n## ${heading}\n`);
@@ -57,10 +72,28 @@ describe('CONTRIBUTING.md', () => {
       cited.filter((name) => !scripts.includes(name)),
       [],
     );
+    const inTemplate = pnpmScripts(PULL_REQUEST_TEMPLATE);
+    for (const name of ['lint', 'format', 'typecheck', 'test', 'e2e']) {
+      assert.ok(inTemplate.includes(name), `the pull request template no longer names pnpm ${name}`);
+    }
     assert.deepEqual(
-      pnpmScripts(PULL_REQUEST_TEMPLATE).filter((name) => !scripts.includes(name)),
+      inTemplate.filter((name) => !scripts.includes(name)),
       [],
     );
+  });
+
+  it('runs only package scripts and test files that exist', () => {
+    const packages = workspaceScripts();
+    const filtered = [...CONTRIBUTING.matchAll(/\bpnpm --filter (\S+) ([a-z][a-z0-9:-]*)/g)];
+    const files = [...CONTRIBUTING.matchAll(/\bcd (\S+) && node --test (\S+)/g)];
+
+    assert.ok(filtered.length >= 2 && files.length >= 1, 'the detector found no command to check');
+    for (const [command, name = '', script = ''] of filtered) {
+      assert.ok(packages.get(name)?.includes(script), `${command}: no such package script`);
+    }
+    for (const [command, dir = '', file = ''] of files) {
+      assert.ok(existsSync(new URL(`../../../${dir}/${file}`, import.meta.url)), `${command}: no such file`);
+    }
   });
 
   it('gives the ports that pnpm dev opens', () => {
@@ -118,5 +151,9 @@ describe('CONTRIBUTING.md', () => {
 
     assert.ok(claude.length >= 5, 'the types were not found in CLAUDE.md');
     assert.deepEqual(types(CONTRIBUTING, 'The types are '), claude);
+
+    const format = /`type\(scope\): [^`]+`/.exec(read('../../../CLAUDE.md'))?.[0];
+    assert.ok(format !== undefined, 'the title format was not found in CLAUDE.md');
+    assert.ok(CONTRIBUTING.includes(format), `the page does not give the title format ${format}`);
   });
 });

@@ -75,7 +75,8 @@ CI runs each of these as its own check on every pull request. Run them first:
 
 Then:
 
-- **The title is a Conventional Commit**: `type(scope): what changed`. The types are `feat`, `fix`,
+- **The title is a Conventional Commit**: `type(scope): what changed (SKG-xxx)`. The key at the end is the
+  Linear ticket; leave it out when the change has none. The types are `feat`, `fix`,
   `refactor`, `chore`, `docs`, `test`, `style`, `ci`. The scope is the package — `worker`, `widget`,
   `shared`, `playground`, `extension` — and you leave it out when the change touches several. A squash
   merge keeps the title as the commit message, so the title is the part that has to be right.
@@ -102,8 +103,8 @@ None of these can be guessed from the code, and most of them have broken somethi
 - **Nothing in `packages/widget` renders an emoji.** The icons are SVG paths in `icons.ts`.
 - **One prefix, `fruitback`**: CSS custom properties are `--fruitback-*`, classes `.fruitback-*`, and
   attributes `data-fruitback-*`.
-- **Every word the widget shows lives in `messages.ts`**, in English and in French. A new message needs
-  both. [docs/translating.md](docs/translating.md) explains how to add a language.
+- **Every word the widget shows has a key in `messages.ts`.** The English text is there and the French text is
+  in `locale-fr.ts`: a new message needs both. [docs/translating.md](docs/translating.md) explains how to add a language.
 - **Comments explain why, not what.** Formatting is oxfmt and linting is oxlint: 120 columns, single
   quotes, trailing commas.
 
@@ -147,5 +148,5 @@ in the interface, and why.
 
 ## Licences
 
-The three published packages are MIT, and the worker is AGPL-3.0-only. A contribution is made under the
+The three client packages are MIT, and the worker is AGPL-3.0-only. A contribution is made under the
 licence of the package it changes.
