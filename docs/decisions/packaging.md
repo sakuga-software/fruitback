@@ -81,4 +81,3 @@ Plus the licence split and the two measurements that decided how it is asserted.
   doc that nobody runs is a snippet that stops working quietly.
 - **`pnpm e2e` builds `dist` first.** `package.spec.ts` loads the real file, and a fresh checkout has
   no build.
-

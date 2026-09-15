@@ -9,17 +9,17 @@ invariants, the traps that bite silently. Everything here is a lookup: read the 
 about to change the thing it describes, or when a rule in `CLAUDE.md` looks arbitrary and you are
 about to reason your way past it.
 
-| | |
-| --- | --- |
-| [project.md](project.md) | Project · Layout |
-| [dev-loop.md](dev-loop.md) | The dev loop · The E2E suite |
-| [packaging.md](packaging.md) | The published package · Licences |
-| [image.md](image.md) | The published image · The compose file · The self-hosting guide |
-| [widget.md](widget.md) | The widget · The host, and why everything lives in one Shadow root · The look, and the one thing a host may change · One prefix, and it is `fruitback` · The popover · Who carries the calls · The optional picture · The settings panel · The words, and the catalogs the bundle carries · Re-anchoring, and why a pin says how sure it is |
-| [icons.md](icons.md) | No emoji, and what replaced them |
-| [extension.md](extension.md) | The extension, and the two worlds |
-| [worker.md](worker.md) | The worker · The rate limit and the cache, behind a Kv · Who may read a pin · The team's replies · Where a seed is stored · Which store, and who validates it · SQLite, and what a second connector actually proved · The conformance suite, and the matrix · The markdown codec, and the file that outlived its name · The extension's session |
-| [contract.md](contract.md) | The seed contract |
+|                              |                                                                                                                                                                                                                                                                                                                                                 |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [project.md](project.md)     | Project · Layout                                                                                                                                                                                                                                                                                                                                |
+| [dev-loop.md](dev-loop.md)   | The dev loop · The E2E suite                                                                                                                                                                                                                                                                                                                    |
+| [packaging.md](packaging.md) | The published package · Licences                                                                                                                                                                                                                                                                                                                |
+| [image.md](image.md)         | The published image · The compose file · The self-hosting guide                                                                                                                                                                                                                                                                                 |
+| [widget.md](widget.md)       | The widget · The host, and why everything lives in one Shadow root · The look, and the one thing a host may change · One prefix, and it is `fruitback` · The popover · Who carries the calls · The optional picture · The settings panel · The words, and the catalogs the bundle carries · Re-anchoring, and why a pin says how sure it is     |
+| [icons.md](icons.md)         | No emoji, and what replaced them                                                                                                                                                                                                                                                                                                                |
+| [extension.md](extension.md) | The extension, and the two worlds                                                                                                                                                                                                                                                                                                               |
+| [worker.md](worker.md)       | The worker · The rate limit and the cache, behind a Kv · Who may read a pin · The team's replies · Where a seed is stored · Which store, and who validates it · SQLite, and what a second connector actually proved · The conformance suite, and the matrix · The markdown codec, and the file that outlived its name · The extension's session |
+| [contract.md](contract.md)   | The seed contract                                                                                                                                                                                                                                                                                                                               |
 
 Five documents one level up are the other kind: written for somebody using Fruitback rather than
 changing it — [modes.md](../modes.md) (which of the three you want, and what each protects),

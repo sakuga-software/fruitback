@@ -2,8 +2,8 @@
   "name": "fruitback",
   "version": "0.1.0",
   "private": true,
-  "license": "MIT",
   "description": "Visual feedback that plants annotations on a live page and grows them into issues in the tracker you already run — embedded in the site, or brought to it by a browser extension.",
+  "license": "MIT",
   "scripts": {
     "dev": "bash -c 'trap \"kill 0\" EXIT; pnpm --filter @fruitback/worker dev:fake & pnpm --filter @fruitback/playground dev; wait'",
     "e2e": "pnpm --filter @fruitback/shared build && pnpm --filter @fruitback/widget build && playwright test",
@@ -21,5 +21,8 @@
     "oxlint": "catalog:",
     "typescript": "catalog:"
   },
-  "packageManager": "pnpm@11.16.0"
+  "packageManager": "pnpm@11.16.0",
+  "nx": {
+    "includedScripts": []
+  }
 }

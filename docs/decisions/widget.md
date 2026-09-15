@@ -32,16 +32,17 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
 - **The owner chain ends in `null`, not `undefined`.** Both walks stop on either. Checking only for
   `undefined` dereferences the root, throws out of `captureSeed`, and a click silently stops planting
   anything — which is what happened the first time the widget met a real React tree.
+
 ## The host, and why everything lives in one Shadow root
 
 - `createCaptureHost` owns the widget's DOM: the floating button, the hover highlight, and — through
   `host.root` — the overlay's pins and whatever the note UI turns out to be.
 - **A Shadow root is the only version of "no style conflicts" that survives a real client site.** It
-  stops their `button { width: 100% !important }` from reshaping our toolbar *and* our rules from
+  stops their `button { width: 100% !important }` from reshaping our toolbar _and_ our rules from
   reaching their page. Neither direction is achievable with prefixed class names.
-- `:host { all: initial }` on top, because a Shadow root blocks the page's *selectors* but not its
+- `:host { all: initial }` on top, because a Shadow root blocks the page's _selectors_ but not its
   **inherited** properties — `body { font-family: Papyrus }` reaches in otherwise. The catch: `all:
-  initial` also undoes the browser's `display: none` on `<style>`, which then renders the stylesheet
+initial` also undoes the browser's `display: none` on `<style>`, which then renders the stylesheet
   as visible text in the corner of the client's page. Hence `style, script { display: none }`. Both
   are covered by E2E tests, because neither is visible to a DOM emulator.
 - **The host sits at the document origin, absolutely positioned, with no size.** The overlay places
@@ -52,9 +53,9 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   unit tests hand over a fake — happy-dom has neither `elementsFromPoint` nor layout — and a library
   change lands in one file.
 - **Hit testing has to be told to ignore us**, since react-grab traverses open shadow roots and would
-  otherwise return our own highlight box. `ignore` extends that to chrome the *page* mounts around
+  otherwise return our own highlight box. `ignore` extends that to chrome the _page_ mounts around
   the widget (the dev toolbar today, SKG-503's config panel next). Note what it does not do:
-  react-grab walks *past* a rejected candidate, so hovering our own chrome highlights whatever is
+  react-grab walks _past_ a rejected candidate, so hovering our own chrome highlights whatever is
   behind it. Harmless; capturing it would not be.
 - **Never `instanceof Element` in this package.** It reads a class off one realm, and an element from
   a same-origin iframe — which react-grab returns on purpose — belongs to another. Use `isElement`
@@ -64,16 +65,15 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
 
 - **`theme.ts` owns every colour, shadow, radius, font family and duration** (SKG-528, SKG-529). They were
   hexadecimals spread across five `STYLES` literals — `host.ts`, `overlay.ts`, `composer.ts`,
-  `panel.ts`, `orphans.ts` — plus the stage colours, which travelled in the *published contract*.
+  `panel.ts`, `orphans.ts` — plus the stage colours, which travelled in the _published contract_.
 - **Custom properties, because inheritance is what crosses the modules.** Each module injects its own
   `<style>` into the one Shadow root, so a token on `:host` reaches all of them with nobody importing
   anything. `THEME_STYLES` is concatenated ahead of `host.ts`'s reset for that reason.
-- **The prefix is `--fruitback-`, and it is the whole defence.** A custom property inherits *into* the
+- **The prefix is `--fruitback-`, and it is the whole defence.** A custom property inherits _into_ the
   Shadow root from the client's page — the root blocks their selectors, never their inherited
   properties — so a name the host also uses repaints our widget silently. `--color-text` would be
   reckless, and `--fb-` no better: it is what a Facebook SDK or somebody's flexbox utilities would
   plausibly pick.
-
 
 ## One prefix, and it is `fruitback`
 
@@ -81,7 +81,7 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   everywhere (SKG-580), including the names on the `<script>` tag the README documents.
 - **It took three goes, and the reason it landed here is worth keeping.** `--fb-` was reckless for a
   property that inherits into a Shadow root. `--fruit-` fixed that and introduced a subtler problem:
-  the repo then had `--fruit-`, `.fruit-`, *and* `data-fruitback-` on the script tag, and an
+  the repo then had `--fruit-`, `.fruit-`, _and_ `data-fruitback-` on the script tag, and an
   intermediate prefix reads as an inconsistency, not as a tier. A rule a newcomer has to be told is a
   rule that will be broken. One word is a rule nobody has to be told.
 - **The distinction it collapses was real but not worth its cost.** `data-fruitback-endpoint` sits in
@@ -103,7 +103,7 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   root would turn our class names into a contract by accident, which is what the Shadow root exists
   to prevent. `applyTheme` writes only names `THEME_TOKENS` declares and silently drops the rest, so
   a token renamed in a later version costs that override and never the mount.
-- **`public.ts` exports the theme *types* and not `THEME_TOKENS`.** The runtime array would widen the
+- **`public.ts` exports the theme _types_ and not `THEME_TOKENS`.** The runtime array would widen the
   published surface; `package.test.ts`'s `promises only what public.ts declares` caught that on the
   first attempt, which is what it is for.
 - **The base `:host` block must declare every settable token**, and the test that checks it is scoped
@@ -154,7 +154,7 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
 
 - **`transport` is a seam, and it is the same one twice** (SKG-595). The widget stays dormant when a
   host has nothing to reach the worker with, and the extension relays the calls when it does. Those
-  looked like two features; they are one question — *who carries this* — asked once.
+  looked like two features; they are one question — _who carries this_ — asked once.
 - **Plain objects, not `Request` and `Response`.** Neither survives `postMessage`, and the
   implementation this exists for lives on the other side of one. `TransportRequest` is a URL, a
   method, headers and an optional body; `TransportResponse` is `ok`, `status` and a text body.
@@ -183,7 +183,7 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   failed status identically, and swallowing it here would only hide an outage from an implementer who
   wanted to log it. Mutation-tested.
 - **One existing assertion changed, and it was asserting the mechanism.** `sends no Authorization
-  header when the host mints no token` compared `fetch`'s second argument to `undefined` — true only
+header when the host mints no token` compared `fetch`'s second argument to `undefined` — true only
   because the old code passed nothing there. Every call carries a method now, so it asserts the
   absence of the header, which is what its own comment always said it meant.
 - **`identityToken` and `transport` overlap and are left overlapping.** In the extension's mode the
@@ -236,7 +236,6 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
 - **Two elements must not share one accessible name.** The gear says `Open Fruitback settings`
   and the dialog `Fruitback settings`, and a host catalog must keep them apart too; giving both the same name is ambiguous to a screen reader and
   to any test that finds elements by name.
-
 
 ## The words, and the catalogs the bundle carries (SKG-530, SKG-531)
 
@@ -313,7 +312,7 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   **selector → testId → text → domPath → bounds**. That order is the contract's, and it puts `text`
   ahead of `domPath` deliberately.
 - **Every match must be unique and of the captured tag**, and `domPath` must additionally still be
-  roughly where the seed said it was — a structural path always resolves to *something*, and after
+  roughly where the seed said it was — a structural path always resolves to _something_, and after
   an insertion that something is the neighbour.
 - **Detached is not the same as unsure** (SKG-501). A pin found only by `bounds` is still placed,
   dashed, and marked unconfident — that is SKG-500's answer and the orphan list does not touch it.
@@ -339,10 +338,10 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   on `childList`/`subtree` re-resolves every pin, debounced, and a `ResizeObserver` on each anchored
   element catches what moves without the structure changing. Deliberately **not** `attributes`: a
   design system toggles classes on every hover, and an element that merely changed class is still
-  where it was — what must be caught is the element being *replaced*, which is always a childList
+  where it was — what must be caught is the element being _replaced_, which is always a childList
   change.
 - **`resolve()` is not `render()`.** `render` takes new data and rebuilds, which closes the thread;
-  `resolve` keeps the pins and the open thread and only updates what was *found*. A page that mutates
+  `resolve` keeps the pins and the open thread and only updates what was _found_. A page that mutates
   while someone is reading a note is the normal case on an SPA, so slamming the thread shut is not an
   option. It re-applies the confidence marks too: a pin that fell from `selector` to `bounds` used to
   keep claiming it had been recognised, because those were written once at build time.
@@ -358,4 +357,3 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   uniqueness and sibling questions cannot be answered honestly by a hand-rolled fake. Nothing outside
   `*.test.ts` and `*.fixture.ts` may import it, and `tsconfig.json` excludes both so the shipped code
   still compiles with `types: []`.
-

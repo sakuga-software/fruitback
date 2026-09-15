@@ -19,7 +19,7 @@ that keep the generated file honest.
 - **Two of the four come from Phosphor and two are ours, and the split is the rule for the next one.**
   `gear` and `close` are generic affordances a maintained set draws better than we do. `drop` and
   `dropDashed` are the pin's own silhouette — the product, not its furniture — and no set has them.
-  Reach for the set when the glyph names an action; draw it here when it *is* Fruitback.
+  Reach for the set when the glyph names an action; draw it here when it _is_ Fruitback.
 - **Iconify is a source, never a runtime.** `iconify-icon` and `@iconify/iconify` fetch their paths
   from Iconify's API on first render: a network call to a third party, from a client's page, by a
   widget whose whole argument is that it needs nobody's service. `build-icons.ts` reads the
@@ -29,7 +29,7 @@ that keep the generated file honest.
 - **Phosphor, and the reason is its filled weight.** Measured at 14px on the settings chip, every
   stroked gear tried — `lucide:settings`, `tabler:settings`, `ph:gear` — collapses into a ring with
   bumps, while the filled ones stay legible. A filled weight is only worth choosing a set for if the
-  *next* icon has one too: Phosphor ships `-fill` for 1525 of its 1527 base icons, Tabler for 1056 of
+  _next_ icon has one too: Phosphor ships `-fill` for 1525 of its 1527 base icons, Tabler for 1056 of
   5144, Lucide for none. Counted, not assumed — and the first count was wrong because it divided by
   Phosphor's six weights rather than by its base set.
 - **Paint travels as path attributes, not as CSS**, because that is how Phosphor ships its own. A
@@ -55,7 +55,7 @@ that keep the generated file honest.
   Since SVG2 a path's own geometry is a CSS property, so a bare star selector computes `d: none` and
   `stroke: none` — every icon renders as an empty box, with nothing in the console and nothing a unit
   test can see, because happy-dom draws nothing either. Measured in Chromium before the code was
-  written, and `e2e/host.spec.ts`'s *the icons are actually drawn* was measured failing against the
+  written, and `e2e/host.spec.ts`'s _the icons are actually drawn_ was measured failing against the
   bare selector.
 - **The fruit did not leave, it moved into the geometry.** `drop` is the pin's own silhouette — three
   round corners and one sharp — so the launch button plants the thing the page then shows; `dropDashed`
@@ -75,11 +75,11 @@ that keep the generated file honest.
   baseline; `→` stays on the thread's link.
 - **A host's label is still the host's word.** SKG-529 took our emoji out of the widget's chrome and
   did not start filtering theirs: `e2e/package.spec.ts` **and** `e2e/screenshot.spec.ts` both mount
-  with `label: '🌱 Feedback'` on purpose and assert it renders. What changed is the *documented*
+  with `label: '🌱 Feedback'` on purpose and assert it renders. What changed is the _documented_
   snippet, in `README.md` and `docs/install.md`, which no longer suggests one. The first version of
   this bullet named one file and called it the only one; run
   `grep -rnP "[\x{1F300}-\x{1FAFF}]" e2e` rather than trusting a number written here, which is the
-  same rule the SKG-517 emoji inventory in *The seed contract* ([contract.md](contract.md)) had to
+  same rule the SKG-517 emoji inventory in _The seed contract_ ([contract.md](contract.md)) had to
   learn twice.
 - **The guard is `icons.test.ts`'s `has none in any source file of this package`**, and it reads every
   `.ts` in the package rather than the rendered strings — a rendered check only sees the states a test
@@ -94,4 +94,3 @@ that keep the generated file honest.
   single piece of chrome has rendered, because `textContent` on a Shadow root includes the CSS of
   every `<style>` in it. It now asserts each state's own words are present, so a passing emoji check
   is a check on something. Raised in review, both halves.
-

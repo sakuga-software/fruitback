@@ -3,16 +3,16 @@
 The first question a reader has is whether their reviewers need the site to ship anything. There are
 three answers, and picking one is the only decision this page asks for.
 
-| | **Public** | **Private** | **Team** |
-| --- | --- | --- | --- |
-| The site embeds | the widget | **nothing** | the widget, **dormant** |
-| Delivered as | `<script>` tag or npm | a browser extension | `<script>` tag or npm |
-| What wakes it | nothing, it is there | the extension's popup | the extension announcing itself |
-| Who sees pins **on the page** | every visitor | the reviewer who switched the site on | reviewers who are signed in |
-| Who can fetch them, **unauthenticated** | anyone | anyone | nobody, under `authenticated` |
-| Who supplies the credential | the host's own backend, or nobody | **nobody can** | the reviewer, by pairing |
-| The reporter is | anonymous, or verified by the host's token | self-declared | **verified**, by the session |
-| Good for | a public "report a problem" | reviewing a client's site, invisibly | a team reviewing its own staging |
+|                                         | **Public**                                 | **Private**                           | **Team**                         |
+| --------------------------------------- | ------------------------------------------ | ------------------------------------- | -------------------------------- |
+| The site embeds                         | the widget                                 | **nothing**                           | the widget, **dormant**          |
+| Delivered as                            | `<script>` tag or npm                      | a browser extension                   | `<script>` tag or npm            |
+| What wakes it                           | nothing, it is there                       | the extension's popup                 | the extension announcing itself  |
+| Who sees pins **on the page**           | every visitor                              | the reviewer who switched the site on | reviewers who are signed in      |
+| Who can fetch them, **unauthenticated** | anyone                                     | anyone                                | nobody, under `authenticated`    |
+| Who supplies the credential             | the host's own backend, or nobody          | **nobody can**                        | the reviewer, by pairing         |
+| The reporter is                         | anonymous, or verified by the host's token | self-declared                         | **verified**, by the session     |
+| Good for                                | a public "report a problem"                | reviewing a client's site, invisibly  | a team reviewing its own staging |
 
 Those middle rows are the ones worth reading twice, and the next section is why.
 
@@ -67,13 +67,13 @@ mode reads as private.
 
 ## What each one needs
 
-| | Public | Private | Team |
-| --- | --- | --- | --- |
-| A worker | yes | yes | yes |
-| A `<script>` tag or `init` on the site | yes | **no** | yes, dormant |
-| The extension installed | no | yes | yes |
-| A pairing code from an operator | no | no | **yes** |
-| `FRUITBACK_READ=authenticated` | optional | it would lock the widget out | **the point** |
+|                                        | Public   | Private                      | Team          |
+| -------------------------------------- | -------- | ---------------------------- | ------------- |
+| A worker                               | yes      | yes                          | yes           |
+| A `<script>` tag or `init` on the site | yes      | **no**                       | yes, dormant  |
+| The extension installed                | no       | yes                          | yes           |
+| A pairing code from an operator        | no       | no                           | **yes**       |
+| `FRUITBACK_READ=authenticated`         | optional | it would lock the widget out | **the point** |
 
 Every mode needs the worker: it is what holds the tracker's API key, and that key cannot ship in
 client-side JavaScript. One container — [self-hosting.md](self-hosting.md).
@@ -102,9 +102,9 @@ and it stays the operator's call rather than being forced on. Nothing in the wor
 
 ## Where to go next
 
-| | |
-| --- | --- |
-| [install.md](install.md) | The site's and the operator's side: Linear, the worker, the widget, per-client routing |
-| [reviewing.md](reviewing.md) | The reviewer's side: the extension, switching a site on, pairing |
-| [self-hosting.md](self-hosting.md) | Running the worker: the image, the tags, a deployment |
-| [../SECURITY.md](../SECURITY.md) | What each boundary actually holds, and what it does not |
+|                                    |                                                                                        |
+| ---------------------------------- | -------------------------------------------------------------------------------------- |
+| [install.md](install.md)           | The site's and the operator's side: Linear, the worker, the widget, per-client routing |
+| [reviewing.md](reviewing.md)       | The reviewer's side: the extension, switching a site on, pairing                       |
+| [self-hosting.md](self-hosting.md) | Running the worker: the image, the tags, a deployment                                  |
+| [../SECURITY.md](../SECURITY.md)   | What each boundary actually holds, and what it does not                                |

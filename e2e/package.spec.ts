@@ -50,7 +50,9 @@ test('a script tag mounts the widget, with no build step on the page', async ({ 
   await expect(page.getByLabel('Open Fruitback settings')).toBeVisible();
 });
 
-test('a host catalog reaches the built widget, over the bundled one, key by key (SKG-530, SKG-531)', async ({ page }) => {
+test('a host catalog reaches the built widget, over the bundled one, key by key (SKG-530, SKG-531)', async ({
+  page,
+}) => {
   await page.goto('/?widget=off&case=script-tag-locale');
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await page.addScriptTag({ path: IIFE });

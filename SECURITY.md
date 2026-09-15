@@ -12,11 +12,11 @@ self-hoster to discover on their own that their read path is open to anyone who 
 on it — that feature is for public repositories, and the endpoint answers `404` here. Checked, not
 assumed.
 
-- **While the repository is private**, report through the repository itself, with the *Vulnerability*
+- **While the repository is private**, report through the repository itself, with the _Vulnerability_
   issue form. Everyone who can read it can already see an issue, so there is no public disclosure to
   avoid.
 - **When it becomes public**, Private Vulnerability Reporting is the channel, and enabling it is part
-  of going public. So is deleting `.github/ISSUE_TEMPLATE/security_report.yml`. Until it is on, *this section is wrong* — update it in the same change.
+  of going public. So is deleting `.github/ISSUE_TEMPLATE/security_report.yml`. Until it is on, _this section is wrong_ — update it in the same change.
 
 Please do not open a public issue for a vulnerability once the repository is public.
 
@@ -84,11 +84,11 @@ and an address are a claim by whoever was on the page, and they are stored as on
 The whole seed — note, page URL, selector, the reporter's name and address, the screenshot URL — is
 stored as it arrived, and **where** depends on the connector:
 
-| Store | Where a seed lands | Who can read it |
-| --- | --- | --- |
-| `linear` | verbatim in an issue description | anyone with access to that workspace |
-| `sqlite` | `JSON.stringify(seed)` in a column of your database file | anyone who can read the file, or a backup of it |
-| `github` | verbatim in an issue body | anyone who can read that repository. **On a public repository, that is everyone.** |
+| Store    | Where a seed lands                                       | Who can read it                                                                    |
+| -------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `linear` | verbatim in an issue description                         | anyone with access to that workspace                                               |
+| `sqlite` | `JSON.stringify(seed)` in a column of your database file | anyone who can read the file, or a backup of it                                    |
+| `github` | verbatim in an issue body                                | anyone who can read that repository. **On a public repository, that is everyone.** |
 
 Whichever store, it outlives any expiry you had in mind, which is why an identity token travels in an
 `Authorization` header and never in the seed. On SQLite the file and its backups are the boundary,
@@ -139,11 +139,11 @@ per request. The same happens with nothing in front, as above. Behind a proxy th
 a count that is too high costs a shared bucket instead: see the next paragraph. Measured against
 `resolveClientIp`, with a caller sending `1.2.3.4` through one proxy that appends `203.0.113.9`:
 
-| `TRUSTED_PROXY_HOPS` | Address used | |
-| --- | --- | --- |
-| `1` — one proxy, the truth | `203.0.113.9` | the address the proxy observed |
-| `2` — one too many | `1.2.3.4` | **what the caller sent** |
-| `0` — none | the socket peer | the proxy's own address: everyone shares one bucket |
+| `TRUSTED_PROXY_HOPS`       | Address used    |                                                     |
+| -------------------------- | --------------- | --------------------------------------------------- |
+| `1` — one proxy, the truth | `203.0.113.9`   | the address the proxy observed                      |
+| `2` — one too many         | `1.2.3.4`       | **what the caller sent**                            |
+| `0` — none                 | the socket peer | the proxy's own address: everyone shares one bucket |
 
 **Not every proxy appends** (measured on SKG-543). nginx with `$proxy_add_x_forwarded_for` keeps what
 the caller sent and appends, so the table above holds: with `2` behind it, 24 forged reads all
@@ -191,12 +191,12 @@ mode, and **an identity token is not sent at all**.
 The worker can hold sessions for the browser extension. An operator mints a pairing code for a named
 person; redeeming it opens a session.
 
-| | |
-| --- | --- |
-| Pairing code | 60 bits, valid 15 minutes, usable **once** |
-| Access token | HS256 identity token, 10 minutes |
+|               |                                                            |
+| ------------- | ---------------------------------------------------------- |
+| Pairing code  | 60 bits, valid 15 minutes, usable **once**                 |
+| Access token  | HS256 identity token, 10 minutes                           |
 | Refresh token | 256 bits, 30 days, **rotated on every refresh**, revocable |
-| On disk | codes and refresh tokens are stored as **SHA-256 digests** |
+| On disk       | codes and refresh tokens are stored as **SHA-256 digests** |
 
 **Every refresh spends its refresh token and issues a new one** (SKG-600). A token that never
 changed was a thirty-day password: a copy taken from a browser profile stayed good for the rest of
@@ -208,7 +208,7 @@ Each presentation of a spent token revokes the successor the one before it minte
 holder to present it keeps the live chain and every earlier one is locked out. A thief who presents
 after the reviewer takes the session, and the reviewer pairs again.
 What rotation guarantees is that the two cannot both keep the session: the loser's next refresh is
-refused, so the theft surfaces within one refresh cycle instead of lasting a month. See *the cost*
+refused, so the theft surfaces within one refresh cycle instead of lasting a month. See _the cost_
 below, and `serves whoever presents last inside the grace, until the earlier holder comes back`.
 
 What retires the spent token is its successor being **used**. That is proof the caller who was
@@ -264,10 +264,10 @@ month, and that no state leaves both parties quietly sharing one session.
 
 Since SKG-599 the extension holds its half of that, and **where** matters as much as the lifetimes:
 
-| | |
-| --- | --- |
+|               |                                                                                   |
+| ------------- | --------------------------------------------------------------------------------- |
 | Refresh token | `chrome.storage.local`, in the reviewer's browser profile — it survives a restart |
-| Access token | `chrome.storage.session`, which the browser empties when it closes |
+| Access token  | `chrome.storage.session`, which the browser empties when it closes                |
 
 **Each endpoint has its own storage key** (SKG-602). One key holding every worker made the popup and
 the background write over each other: a refresh could put a credential back after a logout cleared
@@ -309,18 +309,18 @@ request and the answer.
 That makes the extension something that will make a call for a page, so the background refuses more
 than it accepts. It sends nothing unless all of the following are true:
 
-| | |
-| --- | --- |
-| The origin | comes from the sender the browser reports, never from the message |
-| The site | has an entry the reviewer stored, switched on, in team mode |
+|              |                                                                                               |
+| ------------ | --------------------------------------------------------------------------------------------- |
+| The origin   | comes from the sender the browser reports, never from the message                             |
+| The site     | has an entry the reviewer stored, switched on, in team mode                                   |
 | The endpoint | is the one that entry names — a page asking for another worker is **refused, not redirected** |
-| The path | is `/feedback`, the one path the widget calls |
-| The headers | are rebuilt: `Content-Type` may come from the page, `Authorization` never does |
-| The session | is open for that endpoint — with no session there is no call at all |
-| The scheme | is `https`, or loopback. A bearer token does not cross a plain `http://` connection |
+| The path     | is `/feedback`, the one path the widget calls                                                 |
+| The headers  | are rebuilt: `Content-Type` may come from the page, `Authorization` never does                |
+| The session  | is open for that endpoint — with no session there is no call at all                           |
+| The scheme   | is `https`, or loopback. A bearer token does not cross a plain `http://` connection           |
 
 The endpoint check is the one that matters. A reviewer holds a session per worker, so a page allowed
-to name its own endpoint could ask for a call to a *different* worker that reviewer has paired with,
+to name its own endpoint could ask for a call to a _different_ worker that reviewer has paired with,
 and be answered with their credential for it. Binding the endpoint to the stored entry for that
 origin is what closes it, and it is why team mode still needs an entry in the popup.
 
@@ -405,7 +405,7 @@ Fruitback owes its operators here is documentation, and that is tracked separate
 - **Pins readable on a worker left at `read: 'public'`.** That is the documented default and the boot
   log says so. Report a case where `authenticated` still answers without a valid token.
 - **Exceeding the rate limit from several addresses.** It is quota protection, not authentication.
-  Report a bypass from *one* address, or one that works by setting a header.
+  Report a bypass from _one_ address, or one that works by setting a header.
 - **A page forging bridge messages on an origin its reviewer enabled.** Stated above, and inherent to
   the main world. Report a case where an origin nobody enabled can do it, or where a session token
   reaches the page.

@@ -49,7 +49,7 @@ const widget = init({ endpoint: 'https://feedback.acme.dev', clientId: 'acme' })
 ```
 
 > **The packages are not on npm yet.** The lines above are the shape of the install, not something
-> that resolves today. The worker image *is* published — see [docs/self-hosting.md](docs/self-hosting.md).
+> that resolves today. The worker image _is_ published — see [docs/self-hosting.md](docs/self-hosting.md).
 
 The worker is **three commands and one line to edit**, and none of them needs a clone of this
 repository:
@@ -85,16 +85,16 @@ The full walk-through — Linear setup, per-client routing, identified reporters
 The first question a reader has is whether their reviewers need the site to ship anything. All three
 answers exist, and [docs/modes.md](docs/modes.md) is the page that picks between them.
 
-| | **Public** | **Private** | **Team** |
-| --- | --- | --- | --- |
-| The site embeds | the widget | **nothing** | the widget, dormant |
-| Delivered as | `<script>` tag or npm | a browser extension | `<script>` tag or npm |
-| Published | **not yet** — build it from this repo | **not yet** — load it unpacked | **not yet** — both of the above |
-| Who is **shown** the pins | every visitor | the reviewer who switched the site on | reviewers who are signed in |
-| Who can fetch them **with no credential** | anyone | anyone | nobody, under `authenticated` |
-| Who supplies the credential | the host's backend, or nobody | **nobody can** | the reviewer, by pairing |
-| Good for | a public "report a problem" | reviewing a client's site, invisibly | a team reviewing its own staging |
-| Built | **yes** | **yes**, MV3 on Chromium and Firefox | **yes** |
+|                                           | **Public**                            | **Private**                           | **Team**                         |
+| ----------------------------------------- | ------------------------------------- | ------------------------------------- | -------------------------------- |
+| The site embeds                           | the widget                            | **nothing**                           | the widget, dormant              |
+| Delivered as                              | `<script>` tag or npm                 | a browser extension                   | `<script>` tag or npm            |
+| Published                                 | **not yet** — build it from this repo | **not yet** — load it unpacked        | **not yet** — both of the above  |
+| Who is **shown** the pins                 | every visitor                         | the reviewer who switched the site on | reviewers who are signed in      |
+| Who can fetch them **with no credential** | anyone                                | anyone                                | nobody, under `authenticated`    |
+| Who supplies the credential               | the host's backend, or nobody         | **nobody can**                        | the reviewer, by pairing         |
+| Good for                                  | a public "report a problem"           | reviewing a client's site, invisibly  | a team reviewing its own staging |
+| Built                                     | **yes**                               | **yes**, MV3 on Chromium and Firefox  | **yes**                          |
 
 **Who may read is `read` — `FRUITBACK_READ` worker-wide, or per client in `FRUITBACK_CLIENTS` — and
 the mode decides who can satisfy it.** A public-mode site can
@@ -103,7 +103,7 @@ seam, and the credential then lives in that site's page. **Team mode is the only
 reviewer supplies it and the page never holds it**, attached in the extension's background. **Private
 mode can supply nothing at all**: the widget it mounts has no token and no relay, so on an
 `authenticated` worker its reads answer `401`, and left at the `public` default its pins are readable
-by anyone who can build the URL — it changes who is *shown* the feedback, never who may *fetch* it.
+by anyone who can build the URL — it changes who is _shown_ the feedback, never who may _fetch_ it.
 [docs/modes.md](docs/modes.md) is the page that lays this out. The four lines a team-mode site adds are in
 [docs/install.md](docs/install.md#team-mode-dormant-until-a-reviewer-arrives); what the relay
 refuses is in [SECURITY.md](SECURITY.md#what-the-extension-relays-and-what-it-refuses-to).
@@ -117,12 +117,12 @@ runtime, per origin, when somebody switches that site on.
 keeps the behaviour it has. Each connector reads only its own variables — a worker on SQLite is never
 asked for a Linear key — and an unknown name is refused at boot rather than quietly defaulted.
 
-| `FRUITBACK_STORE` | Needs | Runs on | Good for |
-| --- | --- | --- | --- |
-| `linear` *(default)* | `LINEAR_API_KEY`, `LINEAR_TEAM_ID` | anywhere the worker runs | A team already triaging in Linear. Dashboard, API, MCP and integrations come for free. |
-| `sqlite` | `FRUITBACK_SQLITE_PATH` | **a persistent filesystem only** | Self-hosting with no third party at all. One file on a volume. |
-| `github` | `FRUITBACK_GITHUB_APP_ID`, `FRUITBACK_GITHUB_PRIVATE_KEY`, `FRUITBACK_GITHUB_REPOSITORY` | anywhere the worker runs | A team whose issues are already on GitHub. Three stages instead of five: `seeded` while open, `ripe` when closed as completed, `composted` when closed as not planned or as a duplicate. |
-| `memory` | nothing | the dev loop | Refused under `NODE_ENV=production`. |
+| `FRUITBACK_STORE`    | Needs                                                                                    | Runs on                          | Good for                                                                                                                                                                                 |
+| -------------------- | ---------------------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `linear` _(default)_ | `LINEAR_API_KEY`, `LINEAR_TEAM_ID`                                                       | anywhere the worker runs         | A team already triaging in Linear. Dashboard, API, MCP and integrations come for free.                                                                                                   |
+| `sqlite`             | `FRUITBACK_SQLITE_PATH`                                                                  | **a persistent filesystem only** | Self-hosting with no third party at all. One file on a volume.                                                                                                                           |
+| `github`             | `FRUITBACK_GITHUB_APP_ID`, `FRUITBACK_GITHUB_PRIVATE_KEY`, `FRUITBACK_GITHUB_REPOSITORY` | anywhere the worker runs         | A team whose issues are already on GitHub. Three stages instead of five: `seeded` while open, `ripe` when closed as completed, `composted` when closed as not planned or as a duplicate. |
+| `memory`             | nothing                                                                                  | the dev loop                     | Refused under `NODE_ENV=production`.                                                                                                                                                     |
 
 SQLite is one file through `node:sqlite` — no dependency, no native module, and the schema migrates
 itself on open, so a self-hoster starts one container rather than two. What it gives up is the
@@ -152,19 +152,19 @@ It also says how to report a vulnerability.
 
 ## Documentation
 
-| | |
-| --- | --- |
-| [docs/modes.md](docs/modes.md) | The three modes, what each protects, and which one you want |
-| [docs/install.md](docs/install.md) | Putting the widget on a site, end to end |
-| [docs/translating.md](docs/translating.md) | Adding a language to the widget's bundle |
-| [docs/reviewing.md](docs/reviewing.md) | The reviewer's side: the extension, switching a site on, pairing |
-| [docs/self-hosting.md](docs/self-hosting.md) | Running the worker: the image, the tags, a deployment |
-| [docs/architecture.md](docs/architecture.md) | Why this shape, the seed contract, the layout, the commands |
-| [docs/decisions/](docs/decisions/) | Per-subject histories: what was measured, what failed first |
-| [SECURITY.md](SECURITY.md) | The threat model, stated rather than implied |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Running the project, what must pass, the conventions, adding a connector |
-| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | The Contributor Covenant, and where to report a breach |
-| [CLAUDE.md](CLAUDE.md) | The conventions and invariants, for anyone — human or agent — writing code here |
+|                                              |                                                                                 |
+| -------------------------------------------- | ------------------------------------------------------------------------------- |
+| [docs/modes.md](docs/modes.md)               | The three modes, what each protects, and which one you want                     |
+| [docs/install.md](docs/install.md)           | Putting the widget on a site, end to end                                        |
+| [docs/translating.md](docs/translating.md)   | Adding a language to the widget's bundle                                        |
+| [docs/reviewing.md](docs/reviewing.md)       | The reviewer's side: the extension, switching a site on, pairing                |
+| [docs/self-hosting.md](docs/self-hosting.md) | Running the worker: the image, the tags, a deployment                           |
+| [docs/architecture.md](docs/architecture.md) | Why this shape, the seed contract, the layout, the commands                     |
+| [docs/decisions/](docs/decisions/)           | Per-subject histories: what was measured, what failed first                     |
+| [SECURITY.md](SECURITY.md)                   | The threat model, stated rather than implied                                    |
+| [CONTRIBUTING.md](CONTRIBUTING.md)           | Running the project, what must pass, the conventions, adding a connector        |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)     | The Contributor Covenant, and where to report a breach                          |
+| [CLAUDE.md](CLAUDE.md)                       | The conventions and invariants, for anyone — human or agent — writing code here |
 
 Work is tracked in Linear on the
 [Fruitback](https://linear.app/sakuga-software/project/fruitback-ed574263d8d6) project (team SKG).
@@ -173,10 +173,10 @@ Work is tracked in Linear on the
 
 Two licences, split where the client/server boundary is (SKG-515).
 
-| | |
-| --- | --- |
-| `packages/widget`, `packages/shared`, `packages/fruitback` | **MIT** |
-| `apps/worker` | **AGPL-3.0-only** |
+|                                                            |                   |
+| ---------------------------------------------------------- | ----------------- |
+| `packages/widget`, `packages/shared`, `packages/fruitback` | **MIT**           |
+| `apps/worker`                                              | **AGPL-3.0-only** |
 
 The three client-side packages are **MIT** because they are compiled into someone else's site: a
 copyleft licence on code that ships inside a client's own bundle is one nobody can adopt, and the

@@ -25,7 +25,7 @@ Where this page gives a number or an answer, it was measured on the image (SKG-5
 
 **While this repository is private, the files and the image need a GitHub login.** GHCR gives a new
 package the visibility of its repository, so an anonymous `docker pull` is refused until an owner
-makes the package public (*Packages → `fruitback-worker` → Package settings → Change visibility*).
+makes the package public (_Packages → `fruitback-worker` → Package settings → Change visibility_).
 Until then, log in to `ghcr.io` with a token that has `read:packages`, log the GitHub CLI in with an
 account that can read the repository (`gh auth login`, or a `GH_TOKEN` with that access), and download
 the two files with the GitHub CLI instead of `curl`:
@@ -39,22 +39,22 @@ gh api repos/sakuga-software/fruitback/contents/.env.example -H 'Accept: applica
 
 ## Choose a store
 
-| `FRUITBACK_STORE` | Where the notes live | Needs | Choose it when |
-| --- | --- | --- | --- |
-| `sqlite` | one file on a Docker volume | `FRUITBACK_SQLITE_PATH`, on a volume | You want no third party. The pins on the page are the only interface. |
-| `linear` | issues in a Linear team | `LINEAR_API_KEY`, `LINEAR_TEAM_ID` | Your team already triages in Linear. |
-| `github` | issues in a GitHub repository | a GitHub App: `FRUITBACK_GITHUB_APP_ID`, `FRUITBACK_GITHUB_PRIVATE_KEY`, `FRUITBACK_GITHUB_REPOSITORY` | Your team already works in GitHub issues. The pins have three stages instead of five. |
-| `memory` | the memory of the process | nothing | Never on a server. The image refuses it. |
+| `FRUITBACK_STORE` | Where the notes live          | Needs                                                                                                  | Choose it when                                                                        |
+| ----------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| `sqlite`          | one file on a Docker volume   | `FRUITBACK_SQLITE_PATH`, on a volume                                                                   | You want no third party. The pins on the page are the only interface.                 |
+| `linear`          | issues in a Linear team       | `LINEAR_API_KEY`, `LINEAR_TEAM_ID`                                                                     | Your team already triages in Linear.                                                  |
+| `github`          | issues in a GitHub repository | a GitHub App: `FRUITBACK_GITHUB_APP_ID`, `FRUITBACK_GITHUB_PRIVATE_KEY`, `FRUITBACK_GITHUB_REPOSITORY` | Your team already works in GitHub issues. The pins have three stages instead of five. |
+| `memory`          | the memory of the process     | nothing                                                                                                | Never on a server. The image refuses it.                                              |
 
 What each store can show on a pin. `store-conformance.test.ts` compares the stages, the reply cap in the
 Replies column and the last column with the code.
 
-| Store | Stages | What changes the stage | Replies | Runs in production |
-| --- | --- | --- | --- | --- |
-| `sqlite` | `seeded`, `green`, `ripening`, `ripe`, `composted` | An `UPDATE` of the `stage` column. Nothing in the worker changes it. | The newest 20 rows of the `comments` table. Nothing in the worker writes them. | yes |
-| `linear` | `seeded`, `green`, `ripening`, `ripe`, `composted` | The workflow state of the issue. | The newest 20 comments on the issue. | yes |
-| `github` | `seeded`, `ripe`, `composted` | Closing the issue, and the reason for the close. | The newest 20 comments on the issue. | yes |
-| `memory` | `seeded`, `green`, `ripening`, `ripe`, `composted` | Nothing. Each note gets the next state in a fixed list. | Two canned replies, on every third note. | no |
+| Store    | Stages                                             | What changes the stage                                               | Replies                                                                        | Runs in production |
+| -------- | -------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------ |
+| `sqlite` | `seeded`, `green`, `ripening`, `ripe`, `composted` | An `UPDATE` of the `stage` column. Nothing in the worker changes it. | The newest 20 rows of the `comments` table. Nothing in the worker writes them. | yes                |
+| `linear` | `seeded`, `green`, `ripening`, `ripe`, `composted` | The workflow state of the issue.                                     | The newest 20 comments on the issue.                                           | yes                |
+| `github` | `seeded`, `ripe`, `composted`                      | Closing the issue, and the reason for the close.                     | The newest 20 comments on the issue.                                           | yes                |
+| `memory` | `seeded`, `green`, `ripening`, `ripe`, `composted` | Nothing. Each note gets the next state in a fixed list.              | Two canned replies, on every third note.                                       | no                 |
 
 **The worker defaults to `linear`; `docker-compose.yml` and this page default to `sqlite`.** The
 worker keeps `linear` so that a deployment from before SQLite existed still starts on the store it
@@ -189,16 +189,16 @@ every caller then shares that proxy's bucket.
 Measured on SKG-543: the worker behind each proxy, a caller sending `X-Forwarded-For: 1.2.3.4`, then
 24 reads that each forged a different address, against the default limit of 20.
 
-| In front of the worker, default settings | The worker receives | `1` | `2` | `3` |
-| --- | --- | --- | --- | --- |
-| Traefik v3.5 | the client's address only | right | shared bucket | shared bucket |
-| Caddy 2.10 | the client's address only | right | shared bucket | shared bucket |
-| nginx 1.29, `$proxy_add_x_forwarded_for` | `1.2.3.4, <client>` | right | **bypassed: 24 × `200`** | shared bucket |
-| nginx 1.29, `$remote_addr` | the client's address only | right | shared bucket | shared bucket |
-| nginx, then Traefik | nginx's address only | shared bucket | shared bucket | shared bucket |
-| nginx, then Traefik trusting nginx | `1.2.3.4, <client>, <nginx>` | shared bucket | right | **bypassed: 24 × `200`** |
+| In front of the worker, default settings | The worker receives          | `1`           | `2`                      | `3`                      |
+| ---------------------------------------- | ---------------------------- | ------------- | ------------------------ | ------------------------ |
+| Traefik v3.5                             | the client's address only    | right         | shared bucket            | shared bucket            |
+| Caddy 2.10                               | the client's address only    | right         | shared bucket            | shared bucket            |
+| nginx 1.29, `$proxy_add_x_forwarded_for` | `1.2.3.4, <client>`          | right         | **bypassed: 24 × `200`** | shared bucket            |
+| nginx 1.29, `$remote_addr`               | the client's address only    | right         | shared bucket            | shared bucket            |
+| nginx, then Traefik                      | nginx's address only         | shared bucket | shared bucket            | shared bucket            |
+| nginx, then Traefik trusting nginx       | `1.2.3.4, <client>, <nginx>` | shared bucket | right                    | **bypassed: 24 × `200`** |
 
-*Right* and *shared bucket* both answered 20 × `200` then 4 × `429`: from one caller they look the
+_Right_ and _shared bucket_ both answered 20 × `200` then 4 × `429`: from one caller they look the
 same. Which one it is comes from the rule above, and the check below tells them apart.
 
 What to take from it:
@@ -241,62 +241,62 @@ few more reads than the limit.
 
 ## Every environment variable
 
-Grouped as in `.env.example`. *Refused* means the worker starts, logs
+Grouped as in `.env.example`. _Refused_ means the worker starts, logs
 `misconfigured, missing: …`, answers `/health` with `503` naming the variable, and every other route
 with `500`. Docker then marks the container `unhealthy`, and `docker compose up --wait` fails. An
 empty value counts as absent.
 
 ### The image and the port
 
-| Variable | Default | What it does | When it is wrong |
-| --- | --- | --- | --- |
-| `FRUITBACK_IMAGE` | `ghcr.io/sakuga-software/fruitback-worker:edge` | Compose only. The image, as a tag or a digest. | A tag that does not exist fails the pull. A tag already on the machine is not pulled again: run `docker compose pull`. |
-| `FRUITBACK_PORT` | `8080` | Compose only. The port on the host, or `127.0.0.1:8080` to keep it off the internet. | An `.env` from before SKG-541 says `PORT`, which the file ignores: the port falls back to 8080. |
-| `PORT` | `8080` | The port the process listens on, inside the container. Compose sets it to 8080 and does not read it from `.env`. | A value other than the published port makes the worker unreachable, and Docker still reports it `healthy`, because the healthcheck probes the same port (measured with `9000`). With `docker run`, a value that is not a positive integer: the process listens on 8080 with no message, but the healthcheck probes the raw value, so Docker marks the container `unhealthy` (measured with `abc`). |
-| `HOST` | `0.0.0.0` | The interface the process listens on. Compose does not pass it. | `127.0.0.1` makes the worker unreachable from outside the container, and Docker still reports it `healthy` (measured). |
-| `NODE_ENV` | `production`, set by the image | What refuses the in-memory store. Compose does not pass it. | Any other value lets `FRUITBACK_STORE=memory` start, and every note dies with the container. |
+| Variable          | Default                                         | What it does                                                                                                     | When it is wrong                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FRUITBACK_IMAGE` | `ghcr.io/sakuga-software/fruitback-worker:edge` | Compose only. The image, as a tag or a digest.                                                                   | A tag that does not exist fails the pull. A tag already on the machine is not pulled again: run `docker compose pull`.                                                                                                                                                                                                                                                                             |
+| `FRUITBACK_PORT`  | `8080`                                          | Compose only. The port on the host, or `127.0.0.1:8080` to keep it off the internet.                             | An `.env` from before SKG-541 says `PORT`, which the file ignores: the port falls back to 8080.                                                                                                                                                                                                                                                                                                    |
+| `PORT`            | `8080`                                          | The port the process listens on, inside the container. Compose sets it to 8080 and does not read it from `.env`. | A value other than the published port makes the worker unreachable, and Docker still reports it `healthy`, because the healthcheck probes the same port (measured with `9000`). With `docker run`, a value that is not a positive integer: the process listens on 8080 with no message, but the healthcheck probes the raw value, so Docker marks the container `unhealthy` (measured with `abc`). |
+| `HOST`            | `0.0.0.0`                                       | The interface the process listens on. Compose does not pass it.                                                  | `127.0.0.1` makes the worker unreachable from outside the container, and Docker still reports it `healthy` (measured).                                                                                                                                                                                                                                                                             |
+| `NODE_ENV`        | `production`, set by the image                  | What refuses the in-memory store. Compose does not pass it.                                                      | Any other value lets `FRUITBACK_STORE=memory` start, and every note dies with the container.                                                                                                                                                                                                                                                                                                       |
 
 ### Who may call the worker
 
-| Variable | Default | What it does | When it is wrong |
-| --- | --- | --- | --- |
-| `ALLOWED_ORIGINS` | none: required | The sites that may call the worker, comma-separated, or `*`. The `origins` of each client in `FRUITBACK_CLIENTS` join the list. | Absent: Compose does not start. With `docker run`, the container runs and is refused: `/health` answers `503` naming it, and Docker marks it `unhealthy` (measured). An origin that is not exactly what the browser sends — a trailing slash, `http` for `https`, a missing port — is accepted at boot, and each call from the site answers `403 origin-not-allowed`, which the browser shows as a CORS error. A request with no `Origin`, such as `curl`, is not checked. `*` accepts every site. |
-| `TRUSTED_PROXY_HOPS` | `1` in the worker, `0` in `docker-compose.yml` | The number of proxies between the internet and the container. | Not a whole number from 0 up: refused. Too high or too low: see [Behind a reverse proxy](#behind-a-reverse-proxy). |
-| `RATE_LIMIT_PER_MINUTE` | `20` | Requests a minute per client address, reads and writes together, per container. `/health` is not counted. | Not a whole number above 0: refused. Too low for a team behind one office address: they share a bucket and get `429 rate-limited`. |
+| Variable                | Default                                        | What it does                                                                                                                    | When it is wrong                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ALLOWED_ORIGINS`       | none: required                                 | The sites that may call the worker, comma-separated, or `*`. The `origins` of each client in `FRUITBACK_CLIENTS` join the list. | Absent: Compose does not start. With `docker run`, the container runs and is refused: `/health` answers `503` naming it, and Docker marks it `unhealthy` (measured). An origin that is not exactly what the browser sends — a trailing slash, `http` for `https`, a missing port — is accepted at boot, and each call from the site answers `403 origin-not-allowed`, which the browser shows as a CORS error. A request with no `Origin`, such as `curl`, is not checked. `*` accepts every site. |
+| `TRUSTED_PROXY_HOPS`    | `1` in the worker, `0` in `docker-compose.yml` | The number of proxies between the internet and the container.                                                                   | Not a whole number from 0 up: refused. Too high or too low: see [Behind a reverse proxy](#behind-a-reverse-proxy).                                                                                                                                                                                                                                                                                                                                                                                 |
+| `RATE_LIMIT_PER_MINUTE` | `20`                                           | Requests a minute per client address, reads and writes together, per container. `/health` is not counted.                       | Not a whole number above 0: refused. Too low for a team behind one office address: they share a bucket and get `429 rate-limited`.                                                                                                                                                                                                                                                                                                                                                                 |
 
 ### Where the seeds live
 
-| Variable | Default | What it does | When it is wrong |
-| --- | --- | --- | --- |
-| `FRUITBACK_STORE` | `linear` in the worker, `sqlite` in `docker-compose.yml` | The store: `sqlite`, `linear`, `github` or `memory`. | Unknown: refused, `FRUITBACK_STORE (unknown store "sqlit", expected linear \| sqlite \| github \| memory)`. `memory` in the image: refused. Left out of an `.env` from before SKG-541: Compose starts on an empty SQLite file, and the Linear pins seem gone. |
-| `FRUITBACK_SQLITE_PATH` | none; `/data/fruitback.db` in `docker-compose.yml` | The SQLite file. It is created, and its schema migrated, on the first read or write. | Absent with `sqlite`: refused. In a directory that does not exist: `/health` answers `200`, and every read and write answers `502 store-unavailable` naming the file (measured). Outside the volume: it works until the container is recreated, then every pin is gone (measured). |
-| `LINEAR_API_KEY` | none | A Linear personal API key. A secret: it never reaches a browser. | Absent with `linear`: refused, with `LINEAR_TEAM_ID`. Wrong: `/health` answers `200`, and every read and write answers `502 store-unavailable`, `Linear responded 401` (measured). |
-| `LINEAR_TEAM_ID` | none | The team that receives the issues. A client's `teamId` replaces it. | Absent with `linear`: refused. Wrong: not checked at boot; Linear refuses the call, and the worker answers `502 store-unavailable` with Linear's message. |
-| `LINEAR_PROJECT_ID` | none | The project for the issues. Optional. A client's `projectId` replaces it. | Wrong: not checked at boot. |
-| `FRUITBACK_GITHUB_APP_ID` | none | The ID of the GitHub App, or its client ID. | Absent with `github`: refused, with the two other `FRUITBACK_GITHUB_` variables. Wrong: not checked at boot; GitHub refuses the App's token, and every read and write answers `502 store-unavailable`. |
-| `FRUITBACK_GITHUB_PRIVATE_KEY` | none | The App's private key, the `.pem` file GitHub generates. A secret. On one line, write each line break as `\n`; inside double quotes, the key can keep its line breaks. Both forms reach the worker as a key it reads (measured with `docker compose config`). | Absent with `github`: refused. Not an RSA private key: refused, and the diagnostic names the variable, never the key. The key of another App: every read and write answers `502 store-unavailable`. |
-| `FRUITBACK_GITHUB_REPOSITORY` | none | The repository that receives the issues, as `owner/repo`. A client's `repository` replaces it. | Absent with `github`: refused. Not `owner/repo`: refused. A repository the App is not installed on: `/health` answers `200`, and every read and write answers `502 store-unavailable`. |
+| Variable                       | Default                                                  | What it does                                                                                                                                                                                                                                                  | When it is wrong                                                                                                                                                                                                                                                                   |
+| ------------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FRUITBACK_STORE`              | `linear` in the worker, `sqlite` in `docker-compose.yml` | The store: `sqlite`, `linear`, `github` or `memory`.                                                                                                                                                                                                          | Unknown: refused, `FRUITBACK_STORE (unknown store "sqlit", expected linear \| sqlite \| github \| memory)`. `memory` in the image: refused. Left out of an `.env` from before SKG-541: Compose starts on an empty SQLite file, and the Linear pins seem gone.                      |
+| `FRUITBACK_SQLITE_PATH`        | none; `/data/fruitback.db` in `docker-compose.yml`       | The SQLite file. It is created, and its schema migrated, on the first read or write.                                                                                                                                                                          | Absent with `sqlite`: refused. In a directory that does not exist: `/health` answers `200`, and every read and write answers `502 store-unavailable` naming the file (measured). Outside the volume: it works until the container is recreated, then every pin is gone (measured). |
+| `LINEAR_API_KEY`               | none                                                     | A Linear personal API key. A secret: it never reaches a browser.                                                                                                                                                                                              | Absent with `linear`: refused, with `LINEAR_TEAM_ID`. Wrong: `/health` answers `200`, and every read and write answers `502 store-unavailable`, `Linear responded 401` (measured).                                                                                                 |
+| `LINEAR_TEAM_ID`               | none                                                     | The team that receives the issues. A client's `teamId` replaces it.                                                                                                                                                                                           | Absent with `linear`: refused. Wrong: not checked at boot; Linear refuses the call, and the worker answers `502 store-unavailable` with Linear's message.                                                                                                                          |
+| `LINEAR_PROJECT_ID`            | none                                                     | The project for the issues. Optional. A client's `projectId` replaces it.                                                                                                                                                                                     | Wrong: not checked at boot.                                                                                                                                                                                                                                                        |
+| `FRUITBACK_GITHUB_APP_ID`      | none                                                     | The ID of the GitHub App, or its client ID.                                                                                                                                                                                                                   | Absent with `github`: refused, with the two other `FRUITBACK_GITHUB_` variables. Wrong: not checked at boot; GitHub refuses the App's token, and every read and write answers `502 store-unavailable`.                                                                             |
+| `FRUITBACK_GITHUB_PRIVATE_KEY` | none                                                     | The App's private key, the `.pem` file GitHub generates. A secret. On one line, write each line break as `\n`; inside double quotes, the key can keep its line breaks. Both forms reach the worker as a key it reads (measured with `docker compose config`). | Absent with `github`: refused. Not an RSA private key: refused, and the diagnostic names the variable, never the key. The key of another App: every read and write answers `502 store-unavailable`.                                                                                |
+| `FRUITBACK_GITHUB_REPOSITORY`  | none                                                     | The repository that receives the issues, as `owner/repo`. A client's `repository` replaces it.                                                                                                                                                                | Absent with `github`: refused. Not `owner/repo`: refused. A repository the App is not installed on: `/health` answers `200`, and every read and write answers `502 store-unavailable`.                                                                                             |
 
 ### Several client sites
 
-| Variable | Default | What it does | When it is wrong |
-| --- | --- | --- | --- |
+| Variable            | Default          | What it does                                                                                              | When it is wrong                                                                                                                                                                                                                                                                                                                 |
+| ------------------- | ---------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `FRUITBACK_CLIENTS` | none: one client | JSON: clientId → `{ teamId?, projectId?, repository?, origins?, identitySecret?, showComments?, read? }`. | Not JSON, or a bad field: refused, with the reason. Set, every read and write must name a client: none answers `400 client-required`, an unknown one `400 unknown-client`, and a client called from a site outside its `origins` `403 origin-not-allowed-for-client` (all measured). Set with `FRUITBACK_SESSION_PATH`: refused. |
 
 ### Identity and reads
 
-| Variable | Default | What it does | When it is wrong |
-| --- | --- | --- | --- |
-| `FRUITBACK_IDENTITY_SECRET` | none: every reporter is self-declared | The HS256 key a site signs identity tokens with, 32 characters or more. Ignored when `FRUITBACK_CLIENTS` is set: each client brings its own. | Under 32 characters: refused. Changed: a write, or a read under `FRUITBACK_READ=authenticated`, that carries a token signed with the old key answers `401`. A public read does not look at the token, so it still answers. |
-| `FRUITBACK_READ` | `public` | Who may read pins: `public` or `authenticated`. A client's `read` replaces it. | A typo: refused, never defaulted to `public`. `authenticated` for a client with no key to verify its tokens: refused. That key is `FRUITBACK_IDENTITY_SECRET` for a single client, and each client's own `identitySecret` when `FRUITBACK_CLIENTS` is set. `authenticated` and a site that sends no token: reads answer `401 identity-required`, and the widget shows no pins. `public`: the boot log names the clients anyone can read, and `/health` counts them in `openRead`. |
-| `FRUITBACK_HIDE_COMMENTS` | empty: the team's replies are shown | `1` keeps the team's replies out of the pins. | Any other value, `true` included, is accepted and hides nothing (measured). |
+| Variable                    | Default                               | What it does                                                                                                                                 | When it is wrong                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| --------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FRUITBACK_IDENTITY_SECRET` | none: every reporter is self-declared | The HS256 key a site signs identity tokens with, 32 characters or more. Ignored when `FRUITBACK_CLIENTS` is set: each client brings its own. | Under 32 characters: refused. Changed: a write, or a read under `FRUITBACK_READ=authenticated`, that carries a token signed with the old key answers `401`. A public read does not look at the token, so it still answers.                                                                                                                                                                                                                                                        |
+| `FRUITBACK_READ`            | `public`                              | Who may read pins: `public` or `authenticated`. A client's `read` replaces it.                                                               | A typo: refused, never defaulted to `public`. `authenticated` for a client with no key to verify its tokens: refused. That key is `FRUITBACK_IDENTITY_SECRET` for a single client, and each client's own `identitySecret` when `FRUITBACK_CLIENTS` is set. `authenticated` and a site that sends no token: reads answer `401 identity-required`, and the widget shows no pins. `public`: the boot log names the clients anyone can read, and `/health` counts them in `openRead`. |
+| `FRUITBACK_HIDE_COMMENTS`   | empty: the team's replies are shown   | `1` keeps the team's replies out of the pins.                                                                                                | Any other value, `true` included, is accepted and hides nothing (measured).                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 ### The browser extension's sessions
 
-| Variable | Default | What it does | When it is wrong |
-| --- | --- | --- | --- |
+| Variable                 | Default                                   | What it does                                                                 | When it is wrong                                                                                                                                                      |
+| ------------------------ | ----------------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `FRUITBACK_SESSION_PATH` | none: the `/session/` routes answer `404` | The SQLite file for the extension's sessions. See [The worker](#the-worker). | Without `FRUITBACK_IDENTITY_SECRET`: refused. With `FRUITBACK_CLIENTS`: refused. Outside the volume: every reviewer must pair again after the container is recreated. |
-| `FRUITBACK_FAKE_LINEAR` | none | The old spelling of `FRUITBACK_STORE=memory`. Deprecated. | In the image it is ignored, and the boot log says so. Delete the line. |
+| `FRUITBACK_FAKE_LINEAR`  | none                                      | The old spelling of `FRUITBACK_STORE=memory`. Deprecated.                    | In the image it is ignored, and the boot log says so. Delete the line.                                                                                                |
 
 ## When something is wrong
 
@@ -316,31 +316,31 @@ call Linear, and is not rate-limited. So read a page too:
 `curl 'http://localhost:8080/feedback?url=https%3A%2F%2Fstaging.example.com%2F'`. All measured on
 SKG-543:
 
-| You see | `/health` | A read | Cause |
-| --- | --- | --- | --- |
-| Compose does not start: `required variable ALLOWED_ORIGINS is missing a value` | — | — | `ALLOWED_ORIGINS` is not in `.env`. |
-| `docker compose up --wait` fails, container `unhealthy` | `503` `{"ok":false,"error":"misconfigured","missing":[…]}` | `500` with the same list | Each entry names a variable. Fix every one: they are all listed at once. |
-| Pins do not appear, the console shows a CORS error | `200` | `403 origin-not-allowed` from the site | `ALLOWED_ORIGINS` is not exactly the site's origin. |
-| Nothing is planted, the widget keeps the note | `200` | `502 store-unavailable`, with a message | The store: a SQLite directory that does not exist, a Linear key or team that is wrong. |
-| Docker says `healthy`, nothing answers from outside | unreachable | unreachable | `HOST` is not `0.0.0.0`, or `PORT` is not the published port. |
-| Every pin is gone after an update | `200` | `200`, `"issues":[]` | The SQLite file is outside the volume, or an old `.env` lost `FRUITBACK_STORE=linear`. |
-| A read answers `400 client-required` or `400 unknown-client` | `200` | `400` | `FRUITBACK_CLIENTS` is set, and the site names no client or an unknown one. |
-| A read answers `401 identity-required` | `200` | `401` | `FRUITBACK_READ=authenticated`, and the caller sent no token. |
-| Every caller gets `429` at once | `200` | `429 rate-limited` | Callers share one bucket: see [Check it](#check-it). |
+| You see                                                                        | `/health`                                                  | A read                                  | Cause                                                                                  |
+| ------------------------------------------------------------------------------ | ---------------------------------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------- |
+| Compose does not start: `required variable ALLOWED_ORIGINS is missing a value` | —                                                          | —                                       | `ALLOWED_ORIGINS` is not in `.env`.                                                    |
+| `docker compose up --wait` fails, container `unhealthy`                        | `503` `{"ok":false,"error":"misconfigured","missing":[…]}` | `500` with the same list                | Each entry names a variable. Fix every one: they are all listed at once.               |
+| Pins do not appear, the console shows a CORS error                             | `200`                                                      | `403 origin-not-allowed` from the site  | `ALLOWED_ORIGINS` is not exactly the site's origin.                                    |
+| Nothing is planted, the widget keeps the note                                  | `200`                                                      | `502 store-unavailable`, with a message | The store: a SQLite directory that does not exist, a Linear key or team that is wrong. |
+| Docker says `healthy`, nothing answers from outside                            | unreachable                                                | unreachable                             | `HOST` is not `0.0.0.0`, or `PORT` is not the published port.                          |
+| Every pin is gone after an update                                              | `200`                                                      | `200`, `"issues":[]`                    | The SQLite file is outside the volume, or an old `.env` lost `FRUITBACK_STORE=linear`. |
+| A read answers `400 client-required` or `400 unknown-client`                   | `200`                                                      | `400`                                   | `FRUITBACK_CLIENTS` is set, and the site names no client or an unknown one.            |
+| A read answers `401 identity-required`                                         | `200`                                                      | `401`                                   | `FRUITBACK_READ=authenticated`, and the caller sent no token.                          |
+| Every caller gets `429` at once                                                | `200`                                                      | `429 rate-limited`                      | Callers share one bucket: see [Check it](#check-it).                                   |
 
 The other answers the worker gives:
 
-| Code | `error` | Means |
-| --- | --- | --- |
-| `400` | `invalid-body`, `invalid-json`, `invalid-seed`, `invalid-url`, `missing-url` | The request is wrong. |
-| `401` | `identity-required`, `invalid-identity` | The read needs a token, or the token did not verify. |
-| `403` | `origin-not-allowed`, `origin-not-allowed-for-client` | The calling site is not allowed. |
-| `404`, `405` | `not-found`, `method-not-allowed` | No such route. |
-| `413` | `payload-too-large` | The body is over the limit. |
-| `429` | `rate-limited` | The address used up its requests for the minute. |
-| `500` | `misconfigured` | The configuration is refused; `/health` says why. |
-| `502` | `store-unavailable` | The store did not answer. The widget keeps the note. |
-| `503` | `limiter-unavailable` | The rate limiter's state did not answer. |
+| Code         | `error`                                                                      | Means                                                |
+| ------------ | ---------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `400`        | `invalid-body`, `invalid-json`, `invalid-seed`, `invalid-url`, `missing-url` | The request is wrong.                                |
+| `401`        | `identity-required`, `invalid-identity`                                      | The read needs a token, or the token did not verify. |
+| `403`        | `origin-not-allowed`, `origin-not-allowed-for-client`                        | The calling site is not allowed.                     |
+| `404`, `405` | `not-found`, `method-not-allowed`                                            | No such route.                                       |
+| `413`        | `payload-too-large`                                                          | The body is over the limit.                          |
+| `429`        | `rate-limited`                                                               | The address used up its requests for the minute.     |
+| `500`        | `misconfigured`                                                              | The configuration is refused; `/health` says why.    |
+| `502`        | `store-unavailable`                                                          | The store did not answer. The widget keeps the note. |
+| `503`        | `limiter-unavailable`                                                        | The rate limiter's state did not answer.             |
 
 ## Storing the seeds in SQLite
 
@@ -414,11 +414,11 @@ the worker mints expires after one hour and reaches one repository.
 What you give up: GitHub has two issue states, so a pin has three stages instead of five, and the
 settings panel offers only these three.
 
-| The issue | The stage of the pin |
-| --- | --- |
-| open, reopened included | `seeded` |
-| closed as completed, or closed before GitHub recorded a reason | `ripe` |
-| closed as not planned, or as a duplicate | `composted` |
+| The issue                                                      | The stage of the pin |
+| -------------------------------------------------------------- | -------------------- |
+| open, reopened included                                        | `seeded`             |
+| closed as completed, or closed before GitHub recorded a reason | `ripe`               |
+| closed as not planned, or as a duplicate                       | `composted`          |
 
 **On a public repository, every note is public**, with the name and the address of the reporter when
 they typed one. See [SECURITY.md](../SECURITY.md).
@@ -583,12 +583,12 @@ Before the first `docker compose up` with the new file, change these lines in `.
 the container limited to one CPU (`--cpus=1`), on SQLite, with `RATE_LIMIT_PER_MINUTE` raised to
 100 000 000 so that the load tool was not refused:
 
-| Load | Throughput | Latency (median, 99th) | Memory after |
-| --- | --- | --- | --- |
-| At rest | — | — | 24 MiB |
-| 20 000 reads of a page with 20 pins, 50 at a time | 4 417 a second | 7 ms, 52 ms | 99 MiB |
-| 2 000 writes, 10 at a time | 738 a second | 13 ms, 24 ms | — |
-| 5 000 reads of a page with 2 020 pins, a 1 MB answer, 50 at a time | 302 a second | 159 ms, 217 ms | 162 MiB |
+| Load                                                               | Throughput     | Latency (median, 99th) | Memory after |
+| ------------------------------------------------------------------ | -------------- | ---------------------- | ------------ |
+| At rest                                                            | —              | —                      | 24 MiB       |
+| 20 000 reads of a page with 20 pins, 50 at a time                  | 4 417 a second | 7 ms, 52 ms            | 99 MiB       |
+| 2 000 writes, 10 at a time                                         | 738 a second   | 13 ms, 24 ms           | —            |
+| 5 000 reads of a page with 2 020 pins, a 1 MB answer, 50 at a time | 302 a second   | 159 ms, 217 ms         | 162 MiB      |
 
 The database held 2 020 pins in 4.8 MB. Read these numbers with three limits in mind:
 
@@ -612,11 +612,11 @@ a first implementation learned.
 Dokploy is one way among others: it runs the container behind its own Traefik, which gives the worker
 its HTTPS name. Create an **Application** with either source:
 
-| Setting | From the image | From the repository |
-| --- | --- | --- |
-| Provider | Docker, `ghcr.io/sakuga-software/fruitback-worker:edge` or a digest | GitHub, this repository |
-| Build type | — | Dockerfile, path `apps/worker/Dockerfile`, build context `.` |
-| Port | `8080` | `8080` |
+| Setting    | From the image                                                      | From the repository                                          |
+| ---------- | ------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Provider   | Docker, `ghcr.io/sakuga-software/fruitback-worker:edge` or a digest | GitHub, this repository                                      |
+| Build type | —                                                                   | Dockerfile, path `apps/worker/Dockerfile`, build context `.` |
+| Port       | `8080`                                                              | `8080`                                                       |
 
 Then:
 
@@ -635,12 +635,12 @@ Then:
 
 A plain Node HTTP process — `node:http` adapted onto a web-standard handler, no framework.
 
-| Route | Status |
-| --- | --- |
-| `POST /feedback` | plants a seed in the configured store, answers `201` with the issue: `id`, `identifier`, and `url` when the store has a page to open |
-| `GET /feedback?url=…[&client=…]` | the seeds of that page: anchor, note, state, stage |
-| `OPTIONS /feedback` | CORS preflight, never reaches the store |
-| `GET /health` | `200` when the configuration is valid, `503` naming what is wrong when it is not |
+| Route                            | Status                                                                                                                               |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `POST /feedback`                 | plants a seed in the configured store, answers `201` with the issue: `id`, `identifier`, and `url` when the store has a page to open |
+| `GET /feedback?url=…[&client=…]` | the seeds of that page: anchor, note, state, stage                                                                                   |
+| `OPTIONS /feedback`              | CORS preflight, never reaches the store                                                                                              |
+| `GET /health`                    | `200` when the configuration is valid, `503` naming what is wrong when it is not                                                     |
 
 The three below exist only when `FRUITBACK_SESSION_PATH` is set, and answer `404` otherwise — a
 worker without the extension does not advertise that they are there. They are the browser
@@ -648,11 +648,11 @@ extension's session (SKG-535), and they are **exempt from `ALLOWED_ORIGINS`**: a
 carries an id that differs between an unpacked build and a store build, so an operator cannot put it
 on a list. The rate limiter is what protects them, which is why it runs above the path dispatch.
 
-| Route | Status |
-| --- | --- |
-| `POST /session/pair` | spends a pairing code, opens a session |
-| `POST /session/refresh` | a refresh token for a fresh access token |
-| `POST /session/revoke` | ends the session; `204` whether or not there was one to end |
+| Route                   | Status                                                      |
+| ----------------------- | ----------------------------------------------------------- |
+| `POST /session/pair`    | spends a pairing code, opens a session                      |
+| `POST /session/refresh` | a refresh token for a fresh access token                    |
+| `POST /session/revoke`  | ends the session; `204` whether or not there was one to end |
 
 A pairing code is minted by a **command on the container**, never over HTTP:
 
@@ -704,14 +704,14 @@ Every push to `main` publishes `ghcr.io/sakuga-software/fruitback-worker`, for `
 before one is pushed `latest`, `1.4.2` and `1.4` resolve to nothing, and asking for one gets
 `manifest unknown`. `edge` and `sha-<commit>` exist from the first merge onwards.
 
-| Tag | Moves | Published by | Use it for |
-| --- | --- | --- | --- |
-| `1.4.2` | Only if that release is rebuilt | A `v1.4.2` git tag | Choosing a release for production. Pin its digest, from step 2 of the upgrade, to deploy and to roll back. |
-| `1.4` | On every patch in that minor | Any `v1.4.x` git tag | Taking patches without reading a changelog. It moves — do not call it a pin. |
-| `latest` | On every release | Any `v*` git tag | A deployment that follows releases and nothing else. |
-| `edge` | Every push to `main` | A merge to `main` | Running what is not released yet. |
-| `sha-<commit>` | Only if that commit is rebuilt | Every publish | Naming one commit's build, in an incident or a bisect. |
-| `@sha256:…` | **Never** | Every publish | The only immutable reference. Pin this when it must not move. |
+| Tag            | Moves                           | Published by         | Use it for                                                                                                 |
+| -------------- | ------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `1.4.2`        | Only if that release is rebuilt | A `v1.4.2` git tag   | Choosing a release for production. Pin its digest, from step 2 of the upgrade, to deploy and to roll back. |
+| `1.4`          | On every patch in that minor    | Any `v1.4.x` git tag | Taking patches without reading a changelog. It moves — do not call it a pin.                               |
+| `latest`       | On every release                | Any `v*` git tag     | A deployment that follows releases and nothing else.                                                       |
+| `edge`         | Every push to `main`            | A merge to `main`    | Running what is not released yet.                                                                          |
+| `sha-<commit>` | Only if that commit is rebuilt  | Every publish        | Naming one commit's build, in an incident or a bisect.                                                     |
+| `@sha256:…`    | **Never**                       | Every publish        | The only immutable reference. Pin this when it must not move.                                              |
 
 `latest` does **not** follow `main`: a `latest` that moved on every merge would take away the one
 thing a tag is for.

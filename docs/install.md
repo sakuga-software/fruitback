@@ -166,13 +166,13 @@ inside a bundle.
 
 ### What else `init` takes
 
-| Option          | Why you would                                                                       |
-| --------------- | ----------------------------------------------------------------------------------- |
-| `label`         | the text on the floating button                                                     |
-| `locale`        | the language to show, as a tag like `fr` or `pt-BR` — the browser's by default      |
-| `messages`      | your own words for that language — see [Another language](#another-language)       |
+| Option          | Why you would                                                                        |
+| --------------- | ------------------------------------------------------------------------------------ |
+| `label`         | the text on the floating button                                                      |
+| `locale`        | the language to show, as a tag like `fr` or `pt-BR` — the browser's by default       |
+| `messages`      | your own words for that language — see [Another language](#another-language)         |
 | `ignore`        | elements the pointer must skip — your own chrome, a support chat, a cookie banner    |
-| `identityToken` | a function returning a signed token, so a reporter is *verified* rather than claimed |
+| `identityToken` | a function returning a signed token, so a reporter is _verified_ rather than claimed |
 | `includeEnv`    | `false` when the reporter has not agreed to send their user agent along              |
 | `transport`     | who carries the calls — the extension's, in team mode below                          |
 
@@ -299,7 +299,7 @@ asserted by the browser. It is the same trust level CORS gives, and strictly mor
 ## 5. Identified reporters, optionally
 
 By default a reporter is anonymous, and a name typed into the popover is stored as a **claim** —
-Linear shows it as *self-declared*. A site that already knows who its visitor is can say so properly:
+Linear shows it as _self-declared_. A site that already knows who its visitor is can say so properly:
 share a secret with the worker, mint a short-lived JWT, and hand it to the widget.
 
 ```ts

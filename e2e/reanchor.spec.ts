@@ -38,9 +38,7 @@ test('the structural path alone would have landed on the neighbouring card', asy
 
   const verdict = await page.evaluate(async (worker) => {
     const url = new URL(window.location.href);
-    const response = await fetch(
-      `${worker}/feedback?url=${encodeURIComponent(url.toString())}&client=playground`,
-    );
+    const response = await fetch(`${worker}/feedback?url=${encodeURIComponent(url.toString())}&client=playground`);
     const { issues } = (await response.json()) as {
       issues: { seed: { anchor: { selector: string; domPath?: string } } }[];
     };
@@ -77,7 +75,6 @@ test('an element that is gone never leaves a pin that claims to be sure', async 
   await expect(pin).toHaveAttribute('data-fruitback-confident', 'false');
   await expect(pin.getByRole('button')).toContainText('≈');
 });
-
 
 test('a note whose element is gone lands in the detached list, and one merely moved does not', async ({ page }) => {
   // The distinction this ticket was re-scoped around. Deleting the Latte card slides Mocha into its

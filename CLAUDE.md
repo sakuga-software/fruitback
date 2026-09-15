@@ -23,7 +23,7 @@ the page that names them for a reader, and the one thing to carry from it here: 
 `read`, and the mode decides who can satisfy it.** Public mode can run `authenticated` when the host
 mints its own tokens (`init({ identityToken })`, sent on reads since SKG-533); team mode is the only
 one where the **reviewer** supplies the credential and the page never holds it; **private mode can
-supply neither**, so it changes who is *shown* the feedback and never who may *fetch* it. Writing
+supply neither**, so it changes who is _shown_ the feedback and never who may _fetch_ it. Writing
 "only team mode protects a read" is the overclaim in the other direction, and it shipped in this
 file for one review round. The three-mode split is a
 naming decision, not a third code path: what differs lives in the assembly layer, and
@@ -40,7 +40,7 @@ were dropped.
 managed platform primitives. When something needs infrastructure, reach for what a single container
 behind Traefik can do.
 
-**Deeper** — *Project*, *Layout*, and what this file said about itself before SKG-524:
+**Deeper** — _Project_, _Layout_, and what this file said about itself before SKG-524:
 [docs/decisions/project.md](docs/decisions/project.md).
 
 ## Commands
@@ -83,9 +83,9 @@ node --test src/seed.test.ts                 # one file, from the package direct
 
 **`pnpm dev` starts both halves. The ports are fixed, and these are them:**
 
-| | |
-| --- | --- |
-| `http://localhost:5177` | the playground page |
+|                         |                                     |
+| ----------------------- | ----------------------------------- |
+| `http://localhost:5177` | the playground page                 |
 | `http://localhost:8788` | the worker, on its in-memory Linear |
 
 `8788` and not `8080`: 8080 is the container's port, and something is usually already sitting on it
@@ -98,11 +98,11 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   description `buildIssueDescription` produces and read back through production's own `toSeedIssue`,
   so a broken round trip breaks the playground too.
 - The playground's toolbar and `fruitback.tsx` are **scaffolding, not the product**. Do not grow
-  features there; grow them in `packages/widget`. `fruitback.tsx` only *reports* what the widget
+  features there; grow them in `packages/widget`. `fruitback.tsx` only _reports_ what the widget
   decided, through `onResolve` — a client's app cannot know when to re-resolve, so the widget must.
 - `apps/playground/.react-router/` is typegen, regenerated on dev and build. Ignored, not committed.
 
-**Deeper** — *The dev loop*, and why the playground is a React app:
+**Deeper** — _The dev loop_, and why the playground is a React app:
 [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
 
 ## The E2E suite
@@ -115,7 +115,7 @@ builds `dist` first, because `package.spec.ts` loads the real file.
 - Specs share one worker process, so each captures on **its own page URL** (`/?case=…`) — the seed's
   page identity is what keeps them apart. There is no reset between specs.
 - **Assert on what you measured, never on a second measurement.** Poll until a value satisfies the
-  check and keep *that* value: a computed colour read mid-transition is the interpolated one (which
+  check and keep _that_ value: a computed colour read mid-transition is the interpolated one (which
   Chromium serializes in another colour space), and the composer clears its confirmation 1.1s after
   showing it. Synchronise on the harness's status line rather than on a pin count — the old pins are
   still in the DOM while the new set is being fetched, so counting races.
@@ -123,7 +123,7 @@ builds `dist` first, because `package.spec.ts` loads the real file.
   `e2e/warm-up.ts`, a `globalSetup`; `optimizeDeps.include` is not enough on its own. Reproduce the
   CI condition with `rm -rf apps/playground/node_modules/.vite`.
 
-**Deeper** — *The E2E suite*, the `504 (Outdated Optimize Dep)` mechanism and the four defects this
+**Deeper** — _The E2E suite_, the `504 (Outdated Optimize Dep)` mechanism and the four defects this
 suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
 
 ## The published package
@@ -158,7 +158,7 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
 - **102 kB gzipped (measured on SKG-531), guarded by a test that trips at 150 kB** — a tripwire for a dependency that should
   have been bundled out, not a budget.
 
-**Deeper** — *The published package*: [docs/decisions/packaging.md](docs/decisions/packaging.md).
+**Deeper** — _The published package_: [docs/decisions/packaging.md](docs/decisions/packaging.md).
 
 ## Licences
 
@@ -173,11 +173,11 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
 - **The README snippet is read from the README and checked against the build** (`package.test.ts`,
   SKG-519). Every `data-fruitback-*` attribute the landing page tells a reader to write must be one
   the built script actually reads. Before that, the claim in this file was an overclaim: the test
-  asserted the *build* named one attribute and nothing had ever opened the file a reader copies from,
+  asserted the _build_ named one attribute and nothing had ever opened the file a reader copies from,
   so a renamed attribute left the landing page quietly wrong with a green suite. The built global is
-  separately *executed* on a real page by `e2e/package.spec.ts`.
+  separately _executed_ on a real page by `e2e/package.spec.ts`.
 
-**Deeper** — *Licences*: [docs/decisions/packaging.md](docs/decisions/packaging.md).
+**Deeper** — _Licences_: [docs/decisions/packaging.md](docs/decisions/packaging.md).
 
 ## The widget
 
@@ -208,7 +208,7 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
 - `createCaptureHost` owns the widget's DOM. **A Shadow root is the only version of "no style
   conflicts" that survives a real client site** — neither direction is achievable with prefixed class
   names.
-- `:host { all: initial }`, because a Shadow root blocks the page's *selectors* but not its
+- `:host { all: initial }`, because a Shadow root blocks the page's _selectors_ but not its
   **inherited** properties. Three consequences, all of them load-bearing:
   - `style, script { display: none }` — `all: initial` undoes the browser's own rule and renders the
     stylesheet as visible text on the client's page.
@@ -222,7 +222,7 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
 - **`engine.ts` is the whole surface we take from react-grab**: hit testing across shadow roots and
   iframes, viewport bounds, source context. Three functions behind an interface, so the unit tests
   hand over a fake — happy-dom has neither `elementsFromPoint` nor layout.
-- **Hit testing has to be told to ignore us.** `ignore` extends that to chrome the *page* mounts
+- **Hit testing has to be told to ignore us.** `ignore` extends that to chrome the _page_ mounts
   around the widget.
 - **Never `instanceof Element` in this package.** It reads a class off one realm, and an element from
   a same-origin iframe — which react-grab returns on purpose — belongs to another. Use `isElement`
@@ -232,7 +232,7 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
 
 - **`--fruitback-*` tokens, `.fruitback-*` classes, `data-fruitback-*` attributes** (SKG-580). One
   word everywhere, including on the `<script>` tag the README documents. A custom property inherits
-  *into* the Shadow root, so a name the host also uses repaints our widget silently: `--fb-` would be
+  _into_ the Shadow root, so a name the host also uses repaints our widget silently: `--fb-` would be
   what a Facebook SDK picks, and an intermediate `--fruit-` reads as an inconsistency rather than a
   tier. A rule a newcomer has to be told is a rule that will be broken.
 - **The failure mode of these renames is silent**, which is why `pnpm e2e` is the proof and the unit
@@ -247,7 +247,7 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
 - **`init({ theme })` takes tokens, never CSS.** A host that could write a stylesheet into the Shadow
   root would turn our class names into a contract by accident. `applyTheme` writes only names
   `THEME_TOKENS` declares and silently drops the rest.
-- **`public.ts` exports the theme *types* and not `THEME_TOKENS`.** The runtime array would widen the
+- **`public.ts` exports the theme _types_ and not `THEME_TOKENS`.** The runtime array would widen the
   published surface.
 - The pin's silhouette is **not** in the radius scale: `border-radius: 50% 50% 50% 0` is a shape, not
   a corner size. Spacing is still literal on purpose.
@@ -364,11 +364,11 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
 - **The E2E suite pins `locale: 'en-US'`**, because the specs find the chrome by its English names.
 
 **Deeper** — in [docs/decisions/widget.md](docs/decisions/widget.md):
-*The widget*, *The host, and why everything lives in one Shadow root*,
-*The look, and the one thing a host may change*, *One prefix, and it is `fruitback`*,
-*The popover*, *Who carries the calls*, *The optional picture*, *The settings panel*,
-*The words, and the catalogs the bundle carries*.
-And *No emoji, and what replaced them* in [docs/decisions/icons.md](docs/decisions/icons.md).
+_The widget_, _The host, and why everything lives in one Shadow root_,
+_The look, and the one thing a host may change_, _One prefix, and it is `fruitback`_,
+_The popover_, _Who carries the calls_, _The optional picture_, _The settings panel_,
+_The words, and the catalogs the bundle carries_.
+And _No emoji, and what replaced them_ in [docs/decisions/icons.md](docs/decisions/icons.md).
 
 ## Re-anchoring, and why a pin says how sure it is
 
@@ -376,7 +376,7 @@ And *No emoji, and what replaced them* in [docs/decisions/icons.md](docs/decisio
   **selector → testId → text → domPath → bounds**. That order is the contract's, and it puts `text`
   ahead of `domPath` deliberately.
 - **Every match must be unique and of the captured tag**, and `domPath` must additionally still be
-  roughly where the seed said it was — a structural path always resolves to *something*, and after an
+  roughly where the seed said it was — a structural path always resolves to _something_, and after an
   insertion that something is the neighbour.
 - **`confident` is the field that matters.** `selector`, `testId` and `text` identify an element;
   `domPath` and `bounds` only locate a spot. A pin found by position is still placed, drawn dashed
@@ -387,12 +387,12 @@ And *No emoji, and what replaced them* in [docs/decisions/icons.md](docs/decisio
   container, so **`isOurs` has to be told about it** — it was not, and rebuilding it on every resolve
   mutated the document, which scheduled another resolve. `orphans.owns` closes that loop.
 - **`resolve()` is not `render()`.** `render` takes new data and rebuilds, which closes the thread;
-  `resolve` keeps the pins and the open thread and only updates what was *found*, confidence marks
+  `resolve` keeps the pins and the open thread and only updates what was _found_, confidence marks
   included.
 - **It watches the page, because nothing announces a re-render** (SKG-513). A `MutationObserver` on
   `childList`/`subtree`, debounced, plus a `ResizeObserver` per anchored element. Deliberately **not**
   `attributes`: a design system toggles classes on every hover, and what must be caught is the element
-  being *replaced*.
+  being _replaced_.
 - **Take `MutationObserver` and `ResizeObserver` off the document's own window**, never off
   `globalThis` — the same realm rule as `isElement`. Reading the global gets Node's, which has
   neither, and the widget then watches nothing at all, silently.
@@ -441,12 +441,12 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
 - **`packages/widget` is unchanged by this app, which is the ticket's own test.** The extension is a
   fourth assembler; nothing extension-shaped leaks into the widget.
 - **The bridge is `window.postMessage`, and the page can forge on it.** `parseBridgeMessage` refuses
-  a *malformed* message and cannot refuse a **well-formed** one the page wrote. That is inherent to
+  a _malformed_ message and cannot refuse a **well-formed** one the page wrote. That is inherent to
   the main world and no handoff closes it — it is stated rather than defended, because a reviewer
   grants an origin precisely because they trust that origin's code. **Nothing secret travels there,
   and an identity token is not sent at all.** `worlds.test.ts` is what keeps that true, and
   `protocol.test.ts` pins that a parsed message carries only the four fields it declares.
-- **`registerContentScripts` reaches the *next* page load, never the open one.** The popup injects
+- **`registerContentScripts` reaches the _next_ page load, never the open one.** The popup injects
   both files into the current tab after the grant.
 - **An unchanged decision is never re-posted**, because a re-posted `mount` destroys and rebuilds the
   widget, which closes the composer and loses what the reviewer was typing. The `ready` handshake
@@ -459,7 +459,7 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
 - **The endpoint is normalized before it is stored, and a path survives it.** `embed.ts` interpolates
   `${endpoint}/feedback?url=…`, so query and fragment go, a trailing slash goes, and the **path
   stays** — a worker behind `https://example.com/fruitback` is an ordinary Traefik deployment.
-- **A site that embeds the widget *and* a reviewer who has the extension get two docks.** Known,
+- **A site that embeds the widget _and_ a reviewer who has the extension get two docks.** Known,
   harmless, and not solved here. It is the private mode's defect only: in team mode there is one
   widget and it is the site's.
 
@@ -550,7 +550,7 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
 - **A pairing mints one too, and writes it before the session it stamps.** A logout leaves an epoch
   behind on an endpoint holding nothing, so an endpoint paired again would otherwise read as signed
   out for ever. Absent on both sides compares equal, the same rule the generation follows.
-- **The guard is an allowlist**: `worlds.test.ts` *discovers* every `*.content.ts` declaring
+- **The guard is an allowlist**: `worlds.test.ts` _discovers_ every `*.content.ts` declaring
   `world: 'MAIN'`, follows its relative imports, and refuses a `session*` module or the name
   `refreshToken` / `accessToken` anywhere in that closure. A main-world file added later is covered
   the day it is written. **It detects the world on the code, not on the file** — the docstring of
@@ -581,8 +581,8 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   minute, for ever. `isFresh` is the single freshness rule the three callers share so they cannot
   drift apart.
 
-**Deeper** — *The extension, and the two worlds*, *The session, and the token that never goes down*
-and *The team mode, and the call the page cannot make*:
+**Deeper** — _The extension, and the two worlds_, _The session, and the token that never goes down_
+and _The team mode, and the call the page cannot make_:
 [docs/decisions/extension.md](docs/decisions/extension.md).
 
 ## The worker
@@ -624,7 +624,7 @@ and *The team mode, and the call the page cannot make*:
 
 **Where a seed is stored**
 
-- **`store.ts` is the interface.** `findForPage` states the *intention*, not the method — Linear
+- **`store.ts` is the interface.** `findForPage` states the _intention_, not the method — Linear
   filters by substring, SQL does a `WHERE`, and exposing a `contains` filter would have made
   Linear's trick the contract.
 - **`store.scope(client)` is what keeps the read cache key store-agnostic.** Only the store knows
@@ -639,7 +639,7 @@ and *The team mode, and the call the page cannot make*:
   `apiKey`. `store-config.ts` is the mechanism, `stores.ts` the registry; a new store is one entry in
   `STORE_SPECS`.
 - **An unknown provider and a dev-only one in production are both refused, never defaulted.**
-  `FRUITBACK_FAKE_LINEAR=1` is the one exception and it *degrades* rather than refusing — a flag a
+  `FRUITBACK_FAKE_LINEAR=1` is the one exception and it _degrades_ rather than refusing — a flag a
   container inherited must not stop it serving production, while a provider somebody deliberately
   named must not be silently swapped.
 - **Every state the deprecated flag can be in says something at boot** (SKG-581).
@@ -701,7 +701,7 @@ and *The team mode, and the call the page cannot make*:
 - A token that fails to verify is a **401**, not a downgrade to anonymous. No token at all is fine
   and stays the default.
 - **`read: 'public' | 'authenticated'`** (SKG-533), per client or worker-wide. `public` stays the
-  default — that is compatibility, not security, and the exposure is made *sayable* instead: the boot
+  default — that is compatibility, not security, and the exposure is made _sayable_ instead: the boot
   log names every client whose pins anyone can read, and `/health` **counts** them without listing
   the ids.
 - **`authorizeRead` runs before `cached`, and the guard is `stub.calls`, not the status code.** A
@@ -737,10 +737,10 @@ and *The team mode, and the call the page cannot make*:
 - **A session is credentials, and credentials are not seeds** (SKG-535). `FRUITBACK_SESSION_PATH` is
   its own SQLite file, whatever `FRUITBACK_STORE` says — a worker keeping its seeds in Linear still
   keeps its sessions on a disk it owns.
-- **Do not reuse `sqlite.ts`'s `connect` for it.** That helper applies the *seeds* migrations and
+- **Do not reuse `sqlite.ts`'s `connect` for it.** That helper applies the _seeds_ migrations and
   drives `PRAGMA user_version` with them, so a session database opened through it gets `seeds` and
   `comments` tables and two schemas fighting over one counter. `session-sqlite.ts` has its own.
-- **The operator names the person; the browser never does.** A pairing code is minted *for* someone,
+- **The operator names the person; the browser never does.** A pairing code is minted _for_ someone,
   carrying their name, and whoever redeems it gets a session that says so. An extension supplying its
   own name at pairing time is the browser asserting an identity, which is what SKG-498 closed.
 - **The access token is an ordinary identity token**, signed with the same key `identity.ts`
@@ -751,7 +751,7 @@ and *The team mode, and the call the page cannot make*:
   row just written is only there. **This is why a rotation cannot answer the same successor twice**,
   and it is what shaped SKG-600.
 - **Every refresh rotates** (SKG-600). A refresh token that never changes is a thirty-day password.
-  What retires a predecessor is its **successor being used** — proof the *token holder* received it,
+  What retires a predecessor is its **successor being used** — proof the _token holder_ received it,
   never proof of which holder, because a bearer token cannot say — not a clock.
   `ROTATION_GRACE_SECONDS` is the ceiling for an answer that was lost, measured from the **first**
   rotation, and derived from the extension's `REFRESH_MARGIN_MS + RETRY_DELAY_MS` by a test that
@@ -763,7 +763,7 @@ and *The team mode, and the call the page cannot make*:
   useful for "at most one cycle" — three places said so and none was true. Whoever presents a bearer
   token is served, and inside the grace each presentation revokes the successor the one before it
   minted — so the **last** presenter keeps the chain and every earlier holder is locked out. Write
-  *last*, not *first*: the inverted version shipped into three documents and a test name. What is
+  _last_, not _first_: the inverted version shipped into three documents and a test name. What is
   guaranteed is only that the two cannot both keep the session quietly.
   `serves whoever presents last inside the grace, until the earlier holder comes back` holds it.
 - **The successor inherits the predecessor's expiry.** Thirty days from pairing stays thirty days;
@@ -771,7 +771,7 @@ and *The team mode, and the call the page cannot make*:
 - **The replay test is the chain, not the row**, and `revokeSession` ends the chain. A revoked
   token presented while something in its chain is still live means two parties hold one chain: that
   is the signal, and everything goes. A chain with nothing live left is an ended session and answers
-  `gone`. The earlier test — revoked *and* rotated — missed the case where a thief has the client's
+  `gone`. The earlier test — revoked _and_ rotated — missed the case where a thief has the client's
   own successor revoked under it inside the grace, which left the thief refreshing for thirty days.
   The trade is that intercepting one answer in flight now ends the session at will; that capability
   already subsumes the attack. And a log out that revoked only the row it was handed left the
@@ -837,7 +837,7 @@ and *The team mode, and the call the page cannot make*:
   would need an admin credential of its own and would stay reachable for ever; a command is reachable
   by whoever already sets the secrets.
 - **An extension origin is exempt from `ALLOWED_ORIGINS`, on every route** (SKG-535, widened by
-  SKG-596). That list names client *sites*; an extension's origin carries an id that differs between
+  SKG-596). That list names client _sites_; an extension's origin carries an id that differs between
   an unpacked build and a store build, so an operator cannot put it there. Measured: an MV3 service
   worker posting JSON sends `chrome-extension://<id>` and triggers a preflight, and both answered
   `403`. The `/session/` routes needed it first; the relay then called `/feedback` the same way.
@@ -864,12 +864,12 @@ and *The team mode, and the call the page cannot make*:
   because over there a team really is Linear's.
 
 **Deeper** — in [docs/decisions/worker.md](docs/decisions/worker.md):
-*The worker*, *The rate limit and the cache, behind a Kv*, *Who may read a pin*, *The team's replies*,
-*Where a seed is stored*,
-*Which store, and who validates it*, *SQLite, and what a second connector actually proved*,
-*The conformance suite, and the matrix*, *The markdown codec, and the file that outlived its name*,
-*The extension's session*.
-And *The published image* in [docs/decisions/image.md](docs/decisions/image.md).
+_The worker_, _The rate limit and the cache, behind a Kv_, _Who may read a pin_, _The team's replies_,
+_Where a seed is stored_,
+_Which store, and who validates it_, _SQLite, and what a second connector actually proved_,
+_The conformance suite, and the matrix_, _The markdown codec, and the file that outlived its name_,
+_The extension's session_.
+And _The published image_ in [docs/decisions/image.md](docs/decisions/image.md).
 
 ## The published image
 
@@ -884,7 +884,7 @@ And *The published image* in [docs/decisions/image.md](docs/decisions/image.md).
 - **Publishing is a second workflow, not a job in `ci.yml`.** A multi-platform build cannot be loaded
   into the daemon at all, and `ci.yml`'s `image` job is the only one that runs on a **pull request**.
 - **`release-image.yml` checks every architecture it publishes, one job each, before anything is
-  pushed** — and the check asserts the image *refuses* `FRUITBACK_STORE=memory`, matching the `503`
+  pushed** — and the check asserts the image _refuses_ `FRUITBACK_STORE=memory`, matching the `503`
   and the **variable name**, never the prose beside it.
 - **Trivy runs with `ignore-unfixed`**, and its version carries the `v` (`# v0.36.0`). One tag out
   of seventy-five is unprefixed, so the wrong form looks valid until the next bump.
@@ -907,7 +907,7 @@ And *The published image* in [docs/decisions/image.md](docs/decisions/image.md).
   `HOST` and `FRUITBACK_FAKE_LINEAR`. Each value comes from `.env`, except `PORT`, which is the literal
   `8080`; the host side reads `FRUITBACK_PORT`. `.env.example` assigns exactly what the file
   interpolates. A new variable in the worker fails the suite until both files carry it.
-- **`docs/self-hosting.md` is held to the same list** (SKG-543). Its *Every environment variable*
+- **`docs/self-hosting.md` is held to the same list** (SKG-543). Its _Every environment variable_
   section must name exactly the worker's variables and the compose file's, one table row each, with
   the code's defaults for `PORT`, `TRUSTED_PROXY_HOPS` and `RATE_LIMIT_PER_MINUTE`. What a wrong value
   breaks is written from measurements on the image; re-measure a row before changing it.
@@ -957,7 +957,7 @@ And *The published image* in [docs/decisions/image.md](docs/decisions/image.md).
   `SEED_VERSION` does not move.
 - **`SEED_BLOCK_CAPTION` is free to reword.** `parseSeedFromDescription` iterates fenced blocks and
   recognises ours by parsing the JSON, and the test `finds the block by its JSON, never by the
-  caption above it` is what keeps that true.
+caption above it` is what keeps that true.
 
 **Deeper** — [docs/decisions/contract.md](docs/decisions/contract.md).
 
@@ -974,6 +974,16 @@ And *The published image* in [docs/decisions/image.md](docs/decisions/image.md).
     written here so it is read here.
 - Formatting and linting are oxfmt / oxlint (config at the root). 120 columns, single quotes,
   trailing commas.
+  - **The root is an Nx project too, named `workspace`, with `format` and `format:fix` only**
+    (SKG-584). It formats what no package owns: `e2e/`, `docs/`, the root Markdown and JSON.
+    `.oxfmtignore` gives `apps/` and `packages/` back to their own targets, and only this target
+    reads it. Do not move that list to `ignorePatterns` in `.oxfmtrc.json`: every package reads that
+    file, and its `oxfmt --check .` then finds no file at all.
+  - **`"nx": { "includedScripts": [] }` in the root `package.json` is load-bearing.** Without it,
+    Nx makes every root script a target of `workspace`. A root `test` script is `nx run-many -t test`,
+    so that target would start `nx run-many -t test` again.
+  - **`format:fix` is never cached** (`nx.json`). It writes files and declares no outputs, so a cache
+    hit on the same unformatted input replayed the log and rewrote nothing (measured).
 - **Tests run on `node:test` and `node:assert/strict`** — no test runner, no transpiler, no loader.
   `pnpm test` is `node --test 'src/**/*.test.ts'`; Node strips the types itself. Colocated as
   `*.test.ts`, fixtures in `*.fixture.ts`.
@@ -1003,7 +1013,7 @@ And *The published image* in [docs/decisions/image.md](docs/decisions/image.md).
 - **[SECURITY.md](SECURITY.md) states the threat model, and a change to any of it lands there too.**
   Every number in it — the rate-limit default, the proxy hops, the token lifetimes — is asserted
   against the code by `security.test.ts`, so a constant that moves without the file fails the suite.
-  What that test cannot check is a *property* that changed: a new route, a new thing stored in the
+  What that test cannot check is a _property_ that changed: a new route, a new thing stored in the
   clear, a guarantee tightened or dropped. Those are a hand edit, in the same commit.
 - **`CONTRIBUTING.md` carries the rules a person trips over on a first pull request** (SKG-520). It
   points at this file and does not repeat all of it. `contributing.test.ts` holds its `pnpm` scripts,

@@ -33,8 +33,7 @@
       "cache": true
     },
     "format:fix": {
-      "inputs": ["default", "{workspaceRoot}/.oxfmtrc.json"],
-      "cache": true
+      "cache": false
     }
   },
   "defaultBase": "main"

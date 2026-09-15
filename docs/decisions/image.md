@@ -29,10 +29,10 @@ immutable.
 - **`release-image.yml` checks every architecture it publishes, one job each, before anything is
   pushed.** The first version checked only the runner's own — so an arm64 failure in the base image,
   the `apk add` or the healthcheck passed every gate and shipped, **on the architecture the workflow
-  exists to serve**. Raised in review. A single-platform build *can* be loaded into the daemon, which
+  exists to serve**. Raised in review. A single-platform build _can_ be loaded into the daemon, which
   is what lets the arm64 image be started under binfmt rather than only built; only a multi-platform
   build cannot. The publish job then reads both caches and assembles.
-- **The check asserts the image *refuses* `FRUITBACK_STORE=memory`.** `NODE_ENV=production` is what
+- **The check asserts the image _refuses_ `FRUITBACK_STORE=memory`.** `NODE_ENV=production` is what
   refuses it, and a `--target` that stopped at the build stage would drop that with no other symptom.
   Mutation-tested: an image built without the `ENV` line answers `store: memory` and the step fails.
   It matches the `503` and the **variable name**, never the prose beside it — the diagnostic has to
@@ -163,8 +163,8 @@ What it took was mostly measuring, because four things the documentation said we
 - **The sizing numbers carry their conditions.** One CPU, Apple Silicon under OrbStack, SQLite, and
   the rate limit raised so the load tool was not refused. Reads are served from the 15-second cache,
   so they measure the cache and the JSON. Memory stayed under 200 MiB with a 2 020-pin page.
-- **The variable reference is a test.** `compose.test.ts` compares the rows of *Every environment
-  variable* with `WorkerEnv`, every store's `envNames` and the compose file's interpolations, and
+- **The variable reference is a test.** `compose.test.ts` compares the rows of _Every environment
+  variable_ with `WorkerEnv`, every store's `envNames` and the compose file's interpolations, and
   checks three defaults against the constants. Four mutations turn it red: a row removed, a row added,
   and a wrong default for the rate limit and for the hop count.
 - **The guide was walked literally, by its author.** From an empty directory, under `env -i`, with the
@@ -177,7 +177,7 @@ What it took was mostly measuring, because four things the documentation said we
   is the ticket's own test, a stranger on a clean machine: the package is still private.
 - **`.restore` from a missing file erases the database, and reports success.** Found while answering
   a review that asked to stop the worker during a restore. `sqlite3 /data/fruitback.db ".restore
-  /data/missing.db"` restored an empty database and exited `0`, and the worker came back `healthy`
+/data/missing.db"` restored an empty database and exited `0`, and the worker came back `healthy`
   with no pins. The guide's restore ran its copy step and its `.restore` as separate lines, so a
   failed copy was one line away from that. Every documented restore now chains its steps with `&&`
   and checks the file with `test -s` first, and the worker is stopped while it runs. Measured on both
