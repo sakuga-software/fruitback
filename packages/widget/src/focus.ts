@@ -48,8 +48,24 @@ export function holdFocus(dialog: HTMLElement, onEscape: () => void): FocusHold 
 
       return;
     }
-    if (event.key !== 'Tab') return;
+    if (event.key === 'Tab') keepTabInside(event);
+  }
 
+  /**
+   * Tab after a click on the page moved focus out of the open dialog.
+   *
+   * The page is not inert, and that Tab never reaches the dialog's own listener.
+   */
+  function onDocumentKeyDown(event: KeyboardEvent): void {
+    if (event.key !== 'Tab' || dialog.hidden || !dialog.isConnected) return;
+
+    const active = deepActiveElement(document);
+    if (active !== null && dialog.contains(active)) return;
+
+    keepTabInside(event);
+  }
+
+  function keepTabInside(event: KeyboardEvent): void {
     const items = focusables(dialog);
     const first = items[0];
     const last = items.at(-1);
@@ -59,18 +75,20 @@ export function holdFocus(dialog: HTMLElement, onEscape: () => void): FocusHold 
       return;
     }
 
+    // An element outside the cycle counts as outside the dialog: a send button disabled in flight, or the page.
     const active = deepActiveElement(document);
-    const outside = active === null || !dialog.contains(active);
-    if (event.shiftKey && (outside || active === first)) {
+    const index = items.findIndex((item) => item === active);
+    if (event.shiftKey && index <= 0) {
       event.preventDefault();
       last.focus();
-    } else if (!event.shiftKey && (outside || active === last)) {
+    } else if (!event.shiftKey && (index === -1 || index === items.length - 1)) {
       event.preventDefault();
       first.focus();
     }
   }
 
   dialog.addEventListener('keydown', onKeyDown);
+  document.addEventListener('keydown', onDocumentKeyDown, true);
 
   return {
     remember() {
@@ -86,6 +104,7 @@ export function holdFocus(dialog: HTMLElement, onEscape: () => void): FocusHold 
     },
     destroy() {
       dialog.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('keydown', onDocumentKeyDown, true);
     },
   };
 }

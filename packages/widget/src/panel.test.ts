@@ -260,6 +260,26 @@ describe('the panel as a dialog (SKG-544)', () => {
     assert.ok(page.document.activeElement === gear, 'focus did not go back to the gear');
   });
 
+  it('brings Tab back in after a click moved focus to the page, and only while open', () => {
+    const { page, input } = mount();
+    const outside = page.document.createElement('button');
+    page.document.body.append(outside);
+    panel?.open();
+    const close = page.document.querySelector('.fruitback-config-close') as HTMLButtonElement;
+
+    outside.focus();
+    assert.equal(keyOn(page, outside, 'Tab').defaultPrevented, true);
+    assert.ok(page.document.activeElement === close, 'Tab from the page left the panel behind');
+
+    outside.focus();
+    keyOn(page, outside, 'Tab', true);
+    assert.ok(page.document.activeElement === input('hide-resolved'), 'Shift+Tab from the page did not come back');
+
+    panel?.close();
+    outside.focus();
+    assert.equal(keyOn(page, outside, 'Tab').defaultPrevented, false, 'a closed panel still takes Tab');
+  });
+
   it('keeps Tab inside, in both directions', () => {
     const { page, input } = mount();
     panel?.open();

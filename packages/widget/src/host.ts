@@ -1,5 +1,6 @@
 import type { SeedSource } from '@fruitback/shared';
 import { isElement } from './dom.ts';
+import { deepActiveElement } from './focus.ts';
 import { type FruitbackTheme, THEME_STYLES, applyTheme } from './theme.ts';
 import { type CaptureEngine, reactGrabEngine } from './engine.ts';
 import { createIcon } from './icons.ts';
@@ -148,6 +149,8 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   configure.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
+    // The settings dialog must own the keys, and the capture mode takes the arrows and Enter.
+    stop();
     options.onConfigure?.();
   });
 
@@ -225,6 +228,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
       return;
     }
     if (!capturing) return;
+    if (dialogHasFocus()) return;
 
     const target = keyboardTarget(event.key);
     if (target !== undefined) {
@@ -242,6 +246,13 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
       event.stopPropagation();
       select(hovered);
     }
+  }
+
+  /** A dialog of the widget that has focus owns the keys. */
+  function dialogHasFocus(): boolean {
+    const active = deepActiveElement(document);
+
+    return active !== null && root.contains(active) && active.closest('[role="dialog"]') !== null;
   }
 
   /** The element a navigation key moves to, `null` if there is none, `undefined` for another key. */
@@ -372,6 +383,11 @@ const STYLES = `
   by looking at it; no unit test would have, since happy-dom draws nothing.
 */
 style, script { display: none; }
+/* The reset also removes the focus ring. The keyboard reaches these controls, so they must show focus (SKG-544). */
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--fruitback-color-accent);
+  outline-offset: 2px;
+}
 /*
   And it undoes the browser's display:block on every block element, so a paragraph is inline until
   something says otherwise: in the note thread the note, its byline and the "found by position"

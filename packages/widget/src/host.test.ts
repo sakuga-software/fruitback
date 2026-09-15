@@ -428,6 +428,43 @@ describe('selecting an element without a pointer (SKG-544)', () => {
     assert.equal(announced(), '');
   });
 
+  it('stops the capture mode before the settings open', () => {
+    let opened = 0;
+    mount(
+      () => null,
+      () => {},
+      { onConfigure: () => (opened += 1) },
+    );
+    host?.start();
+
+    (host?.root.querySelector('[data-fruitback-host-configure]') as HTMLElement).click();
+
+    assert.equal(opened, 1);
+    assert.equal(host?.capturing(), false, 'the capture mode still takes the arrows and Enter');
+  });
+
+  it('leaves the keys to a dialog of the widget that has focus', () => {
+    const page = mountKeyboard();
+    const dialog = page.document.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    const input = page.document.createElement('input');
+    dialog.append(input);
+    host?.root.append(dialog);
+    host?.start();
+
+    input.focus();
+
+    assert.equal(press(page, 'ArrowDown').defaultPrevented, false);
+    assert.doesNotMatch(announced(), /^main: /);
+  });
+
+  it('shows a focus ring on the controls the keyboard reaches', () => {
+    mountKeyboard();
+    const styles = host?.root.querySelector('style')?.textContent ?? '';
+
+    assert.match(styles, /button:focus-visible, a:focus-visible[^{]*\{\s*outline: 2px solid/);
+  });
+
   it('is a named landmark on the host page', () => {
     const page = mountKeyboard();
     const container = page.document.querySelector('[data-fruitback-host]');

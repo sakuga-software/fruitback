@@ -508,4 +508,42 @@ describe('the popover as a dialog (SKG-544)', () => {
 
     assert.ok(active() === elsewhere, 'the close took focus from where the reporter put it');
   });
+
+  it('wraps Tab from a focused control that left the cycle, like a send button disabled in flight', async () => {
+    mount(() => new Promise<boolean>(() => {}));
+    composer?.open(ANCHOR);
+    field().value = 'Le bouton est trop petit';
+    sendButton().focus();
+    sendButton().click();
+    await Promise.resolve();
+    assert.equal(sendButton().disabled, true);
+
+    assert.equal(keyOn(sendButton(), 'Tab').defaultPrevented, true);
+    assert.ok(active() === field(), 'Tab from the disabled send button left the popover');
+  });
+
+  it('brings Tab back in after a click moved focus to the page, in both directions', () => {
+    mount(async () => true);
+    composer?.open(ANCHOR);
+    const outside = opener();
+
+    outside.focus();
+    assert.equal(keyOn(outside, 'Tab').defaultPrevented, true);
+    assert.ok(active() === field(), 'Tab from the page left the popover behind');
+
+    outside.focus();
+    keyOn(outside, 'Tab', true);
+    assert.ok(active() === sendButton(), 'Shift+Tab from the page did not come back to the last control');
+  });
+
+  it('leaves Tab on the page alone while the popover is closed', () => {
+    mount(async () => true);
+    composer?.open(ANCHOR);
+    composer?.close();
+    const outside = opener();
+    outside.focus();
+
+    assert.equal(keyOn(outside, 'Tab').defaultPrevented, false);
+    assert.ok(active() === outside, 'a closed popover took focus');
+  });
 });

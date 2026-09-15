@@ -778,6 +778,41 @@ describe('the thread and the keyboard (SKG-544)', () => {
     assert.ok(page.document.activeElement === badge, 'focus did not go back to the badge');
   });
 
+  it('keeps focus on the pin when a render rebuilds the pins under a focused thread', () => {
+    const { page } = openOnCta();
+
+    overlay?.render([issueOnCta()]);
+
+    const badge = page.document.querySelector('.fruitback-pin-badge');
+    assert.ok(badge !== null && page.document.activeElement === badge, 'focus fell to the page');
+  });
+
+  it('keeps focus on a badge that a render replaces', () => {
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta()]);
+    const before = page.document.querySelector('.fruitback-pin-badge') as HTMLElement;
+    before.focus();
+
+    overlay.render([issueOnCta()]);
+
+    const after = page.document.querySelector('.fruitback-pin-badge');
+    assert.ok(after !== null && after !== before, 'the render did not rebuild the badge');
+    assert.ok(page.document.activeElement === after, 'focus stayed on the removed badge');
+  });
+
+  it('moves no focus on a render when the overlay did not have it', () => {
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta()]);
+    const cta = page.query('button') as HTMLButtonElement;
+    cta.focus();
+
+    overlay.render([issueOnCta()]);
+
+    assert.ok(page.document.activeElement === cta, 'the render took focus from the page');
+  });
+
   it('leaves focus on the page when a click outside closes it', () => {
     const { page } = openOnCta();
     const cta = page.query('button') as HTMLButtonElement;

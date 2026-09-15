@@ -325,6 +325,17 @@ defect of ours is a defect of theirs.
     a document listener, and one key press must close one thing.
   - Focus goes back to the element that had it before the open, if focus is still in the dialog or
     nowhere. A reporter who moved focus to the page keeps it there.
+  - A Tab from the page while the dialog is open comes back in. A click on the page moves focus out,
+    and that Tab never reaches the dialog's own listener, so a capture-phase listener on the document
+    catches it. A focused element outside the cycle, such as a send button disabled in flight, counts
+    as outside and wraps too (raised in review on PR #61).
+- The reset removes the browser's focus ring along with everything else, so `host.ts` restores one on
+  `:focus-visible` for buttons, links and fields.
+- The gear stops the capture mode before it opens the settings. The capture mode takes the arrows and
+  Enter from a document listener, so a panel opened over it would lose them. For the same reason the
+  capture mode leaves the keys to any dialog of the widget that has focus.
+- A render rebuilds the pins, and the badge that had focus, or the badge of a focused thread, is a new
+  node. Focus moves to the new badge of the same issue instead of falling to the page.
 - The popover's opener is what had focus when it opened. With the keyboard, that is the launch button,
   because the capture walk moves a highlight and never focus. With a mouse, it is whatever the click
   on the page focused.

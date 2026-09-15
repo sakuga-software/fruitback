@@ -42,7 +42,10 @@ test('a note can be planted with the keyboard alone', async ({ page }) => {
 
   await page.keyboard.type('Planté sans souris');
   await page.keyboard.press('Shift+Tab');
-  await expect(page.getByRole('button', { name: 'Plant', exact: true })).toBeFocused();
+  const plant = page.getByRole('button', { name: 'Plant', exact: true });
+  await expect(plant).toBeFocused();
+  // The reset removes the browser's focus ring, and host.ts puts one back.
+  expect(await plant.evaluate((node) => getComputedStyle(node).outlineStyle)).toBe('solid');
   await page.keyboard.press('Tab');
   await expect(field).toBeFocused();
 

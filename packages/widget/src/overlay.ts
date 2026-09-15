@@ -271,7 +271,8 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   }
 
   function draw(): void {
-    closeThread();
+    const refocus = focusedIssueId();
+    closeThread(false);
     container.replaceChildren();
 
     placed = source
@@ -295,6 +296,22 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 
     observeAnchors();
     listOrphans();
+    // The pins are new nodes, so focus on an old badge or on the thread would fall to the page.
+    if (refocus !== undefined) {
+      placed
+        .find((entry) => entry.issue.seed.id === refocus)
+        ?.pin.querySelector<HTMLElement>('.fruitback-pin-badge')
+        ?.focus();
+    }
+  }
+
+  /** The issue whose badge or open thread has focus. */
+  function focusedIssueId(): string | undefined {
+    const active = deepActiveElement(document);
+    if (active === null) return undefined;
+    if (thread !== null && thread.contains(active)) return thread.dataset.fruitbackThread;
+
+    return placed.find((entry) => entry.pin.contains(active))?.issue.seed.id;
   }
 
   /** A note is detached when nothing identified *or located* its element — resolveAnchor's last word. */
@@ -325,8 +342,8 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     options.onSelect?.(entry.issue);
   }
 
-  function closeThread(): void {
-    const focused = threadHasFocus();
+  function closeThread(restoreFocus = true): void {
+    const focused = restoreFocus && threadHasFocus();
     const opener = placed.find((entry) => entry.pin.dataset.fruitbackOpen !== undefined);
     thread?.remove();
     thread = null;
