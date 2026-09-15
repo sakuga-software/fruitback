@@ -72,7 +72,7 @@ CI runs each of these as its own check on every pull request to `main`. Run them
 | `test` | `pnpm test` |
 | `e2e` | `pnpm e2e` |
 | `docker image` | builds the worker image and plants a pin through `docker-compose.yml`, see [docs/self-hosting.md](docs/self-hosting.md) |
-| `zizmor` | `uvx zizmor --offline .github/workflows`, if you changed a workflow: it fails on an unpinned action or a permission a job does not need |
+| `zizmor` | `uvx zizmor==1.30.1 --offline .github/workflows`, the version CI runs, if you changed a workflow: it fails on an unpinned action or a permission a job does not need |
 
 Then:
 
