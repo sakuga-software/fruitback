@@ -130,7 +130,7 @@ describe('CONTRIBUTING.md', () => {
         if (!existsSync(new URL(file, import.meta.url))) continue;
         const { license } = JSON.parse(read(file)) as { license?: string };
         if (license === undefined) continue;
-        const row = licences.split('\n').find((line) => line.startsWith(`| \`${group}/${dir}\` |`));
+        const row = licences.split('\n').find((line) => line.split('|')[1]?.trim() === `\`${group}/${dir}\``);
         assert.ok(row?.includes(license), `the Licences section does not give ${group}/${dir} as ${license}`);
         checked += 1;
       }
@@ -153,7 +153,7 @@ describe('CONTRIBUTING.md', () => {
     const checks = ciChecks();
 
     const listed = [
-      ...section(CONTRIBUTING, 'Before you open a pull request').matchAll(/^\| `([a-z][a-z0-9 -]*)` \|/gm),
+      ...section(CONTRIBUTING, 'Before you open a pull request').matchAll(/^\| `([a-z][a-z0-9 -]*)` *\|/gm),
     ]
       .map((match) => match[1] ?? '')
       .sort();

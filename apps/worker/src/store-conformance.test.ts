@@ -444,14 +444,13 @@ describe('the conformance suite', () => {
  */
 describe('the store matrix in docs/self-hosting.md', () => {
   const guide = readFileSync(new URL('../../../docs/self-hosting.md', import.meta.url), 'utf8');
-  const header = '| Store | Stages | What changes the stage | Replies | Runs in production |';
-  const start = guide.indexOf(`\n${header}\n`);
-  const rows = guide
-    .slice(start + 1)
-    .split('\n\n')[0]!
-    .split('\n')
-    .slice(2)
-    .map((line) => line.split('|').map((cell) => cell.trim()))
+  const header = ['', 'Store', 'Stages', 'What changes the stage', 'Replies', 'Runs in production', ''];
+  const lines = guide.split('\n').map((line) => line.split('|').map((cell) => cell.trim()));
+  // oxfmt pads the cells to align the columns, so a row is compared cell by cell.
+  const start = lines.findIndex((cells) => cells.join('|') === header.join('|'));
+  const end = lines.findIndex((cells, index) => index > start && cells.length === 1);
+  const rows = lines
+    .slice(start + 2, end < 0 ? undefined : end)
     .map((cells) => ({ provider: /^`([^`]+)`$/.exec(cells[1] ?? '')?.[1] ?? '', cells }));
 
   it('has one row for each store, and no other', () => {
