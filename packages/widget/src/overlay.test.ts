@@ -813,6 +813,37 @@ describe('the thread and the keyboard (SKG-544)', () => {
     assert.ok(page.document.activeElement === cta, 'the render took focus from the page');
   });
 
+  it('gives focus back to the detached-note entry that opened the thread', () => {
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([
+      seedIssueFixture({
+        seed: seedFixture({
+          id: 'sd_gone',
+          note: 'Disparu',
+          anchor: {
+            selector: '#gone',
+            tag: 'textarea',
+            text: 'Disparu',
+            bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 },
+          },
+        }),
+      }),
+    ]);
+    const entry = page.document.querySelector('.fruitback-orphans-note') as HTMLButtonElement;
+    assert.ok(entry !== null, 'the note is not listed as detached');
+
+    entry.focus();
+    entry.click();
+    assert.ok(page.document.querySelector('[data-fruitback-thread]') !== null, 'the entry opened no thread');
+    pressKey(page, 'Escape');
+
+    assert.ok(
+      page.document.activeElement === entry,
+      'focus went to the pin instead of the entry that opened the thread',
+    );
+  });
+
   it('leaves focus on the page when a click outside closes it', () => {
     const { page } = openOnCta();
     const cta = page.query('button') as HTMLButtonElement;

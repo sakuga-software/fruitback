@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { deepActiveElement, focusables } from './focus.ts';
-import { mountPage } from './dom.fixture.ts';
+import { deepActiveElement, focusables, holdFocus } from './focus.ts';
+import { keyboardEventCtor, mountPage } from './dom.fixture.ts';
 
 describe('focusables', () => {
   it('keeps what Tab reaches and drops what it does not', () => {
@@ -35,5 +35,47 @@ describe('deepActiveElement', () => {
 
     assert.ok(page.document.activeElement === host, 'the document no longer answers the host');
     assert.ok(deepActiveElement(page.document) === button, 'the Shadow root was not read');
+  });
+});
+
+describe('holdFocus with two dialogs open', () => {
+  it('lets only the dialog opened last keep Tab, then gives it back', () => {
+    const page = mountPage('<main><button id="outside">Page</button></main>');
+    const dialog = (id: string) => {
+      const root = page.document.createElement('div');
+      root.setAttribute('aria-modal', 'true');
+      const button = page.document.createElement('button');
+      button.id = id;
+      root.append(button);
+      page.document.body.append(root);
+
+      return { root, button };
+    };
+    const tab = (target: Element) =>
+      target.dispatchEvent(new (keyboardEventCtor(page))('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+    const popover = dialog('in-popover');
+    const panel = dialog('in-panel');
+    // Built in the other order than they open, so the order of the listeners cannot decide for them.
+    const panelHold = holdFocus(panel.root, () => {});
+    const popoverHold = holdFocus(popover.root, () => {});
+
+    popoverHold.remember();
+    panelHold.remember();
+    popover.button.focus();
+    tab(popover.button);
+    assert.ok(page.document.activeElement === panel.button, 'the popover opened first still keeps Tab');
+
+    const outside = page.query('#outside') as HTMLButtonElement;
+    outside.focus();
+    tab(outside);
+    assert.ok(page.document.activeElement === panel.button, 'a Tab from the page went to the popover opened first');
+
+    panelHold.restore();
+    popover.button.focus();
+    tab(popover.button);
+    assert.ok(page.document.activeElement === popover.button, 'the popover did not get Tab back');
+
+    popoverHold.destroy();
+    panelHold.destroy();
   });
 });

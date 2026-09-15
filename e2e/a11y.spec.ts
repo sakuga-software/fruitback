@@ -122,6 +122,8 @@ for (const scheme of ['light', 'dark'] as const) {
     const cta = page.locator('#checkout-cta');
     const note = `Vu par axe, ${scheme}`;
     await plantPin(page, cta, note);
+    // The popover stays open in its harvested state for a moment, and each scan must see one state.
+    await expect(page.getByRole('dialog', { name: 'Leave a note' })).toBeHidden({ timeout: 5_000 });
 
     const violations: string[] = [];
     const accent: string[] = [];

@@ -329,11 +329,20 @@ defect of ours is a defect of theirs.
     and that Tab never reaches the dialog's own listener, so a capture-phase listener on the document
     catches it. A focused element outside the cycle, such as a send button disabled in flight, counts
     as outside and wraps too (raised in review on PR #61).
+  - Only the dialog opened last keeps Tab. The gear opens the panel over an open popover, and two traps
+    would move focus back and forth, so `holdFocus` keeps the open dialogs of each document in order.
+  - An Escape while focus is on the page stays the page's. A click on the page gives it focus, and the
+    host's own menus close on Escape. Proposed in review and not taken: Tab still brings focus back,
+    and Cancel still closes.
 - The reset removes the browser's focus ring along with everything else, so `host.ts` restores one on
   `:focus-visible` for buttons, links and fields.
+- The capture mode consumes an Escape only when it cancels the capture, so the page and the thread do
+  not act on the same key press. Enter on the gear, or on any control of the widget other than the
+  launch button, presses that control instead of selecting the highlighted element.
 - The gear stops the capture mode before it opens the settings. The capture mode takes the arrows and
   Enter from a document listener, so a panel opened over it would lose them. For the same reason the
   capture mode leaves the keys to any dialog of the widget that has focus.
+- The thread gives focus back to what opened it: its badge, or the entry of the detached-notes list.
 - A render rebuilds the pins, and the badge that had focus, or the badge of a focused thread, is a new
   node. Focus moves to the new badge of the same issue instead of falling to the page.
 - The popover's opener is what had focus when it opened. With the keyboard, that is the launch button,

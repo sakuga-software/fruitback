@@ -222,13 +222,18 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
    * - Enter or Space selects the highlighted element.
    */
   function onKeyDown(event: KeyboardEvent): void {
+    if (!capturing) return;
+    // A dialog of the widget that has focus owns the keys, Escape included.
+    if (dialogHasFocus()) return;
+
     if (event.key === 'Escape') {
+      // One key press cancels one thing: the page and the thread must not also act on it.
+      event.preventDefault();
+      event.stopPropagation();
       stop();
 
       return;
     }
-    if (!capturing) return;
-    if (dialogHasFocus()) return;
 
     const target = keyboardTarget(event.key);
     if (target !== undefined) {
@@ -240,12 +245,19 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
       return;
     }
 
-    if ((event.key === 'Enter' || event.key === ' ') && hovered !== null) {
+    // Enter on the gear, or on another control of the widget, presses that control.
+    if ((event.key === 'Enter' || event.key === ' ') && hovered !== null && !otherControlHasFocus()) {
       // Without this, Enter also presses the launch button that has focus, and stops the capture.
       event.preventDefault();
       event.stopPropagation();
       select(hovered);
     }
+  }
+
+  function otherControlHasFocus(): boolean {
+    const active = deepActiveElement(document);
+
+    return active !== null && active !== button && root.contains(active);
   }
 
   /** A dialog of the widget that has focus owns the keys. */

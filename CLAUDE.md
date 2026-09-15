@@ -359,11 +359,13 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   page gets no `inert`, so `holdFocus` in `focus.ts` makes the claim true: Tab stays inside, Escape
   closes and stops at the dialog, and focus goes back to what had it before the open, unless the
   reporter moved it. A capture-phase listener on the document brings a Tab from the page back in,
-  because the page is not inert. The thread is a dialog that is not modal: it takes focus and gives it
-  back to its badge, and a render moves focus to the rebuilt badge.
+  because the page is not inert. **Only the dialog opened last keeps Tab**: the gear opens the panel
+  over an open popover. The thread is a dialog that is not modal: it takes focus and gives it back to
+  what opened it, its badge or a detached-note entry, and a render moves focus to the rebuilt badge.
 - **The reset removes the focus ring too**, and `host.ts` restores one on `:focus-visible`. **The gear
   stops the capture mode**, and the capture mode leaves the keys to a dialog of the widget that has
-  focus: both take the arrows and Enter from the document.
+  focus: both take the arrows and Enter from the document. The capture mode consumes only the Escape
+  that cancels it, and Enter on a widget control other than the launch button presses that control.
 - **`document.activeElement` answers the host element for anything in the Shadow root.**
   `deepActiveElement` reads through it. A focus test that reads the document's answer passes for free.
 - **The capture mode works without a pointer.** Down and Up walk the page in document order, Left

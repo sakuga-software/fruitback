@@ -131,6 +131,8 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   let source: SeedIssue[] = [];
   let placed: Placed[] = [];
   let thread: HTMLElement | null = null;
+  /** What had focus when the thread opened: its badge, or an entry of the detached-notes list. */
+  let threadOpener: HTMLElement | null = null;
   let frame = 0;
   let resolveTimer: ReturnType<typeof setTimeout> | undefined;
   let burstStartedAt = 0;
@@ -331,7 +333,9 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   }
 
   function openThread(entry: Placed): void {
+    const active = deepActiveElement(document);
     closeThread();
+    threadOpener = active !== null && active !== document.body ? (active as HTMLElement) : null;
     entry.pin.dataset.fruitbackOpen = '';
     thread = buildThread(document, entry.issue, entry.resolution, t);
     thread.querySelector('.fruitback-thread-close')?.addEventListener('click', () => closeThread());
@@ -348,7 +352,9 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     thread?.remove();
     thread = null;
     for (const entry of placed) delete entry.pin.dataset.fruitbackOpen;
-    if (focused) opener?.pin.querySelector<HTMLElement>('.fruitback-pin-badge')?.focus();
+    const badge = opener?.pin.querySelector<HTMLElement>('.fruitback-pin-badge');
+    if (focused) (threadOpener?.isConnected === true ? threadOpener : badge)?.focus();
+    threadOpener = null;
   }
 
   function threadHasFocus(): boolean {

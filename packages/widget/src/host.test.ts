@@ -458,6 +458,66 @@ describe('selecting an element without a pointer (SKG-544)', () => {
     assert.doesNotMatch(announced(), /^main: /);
   });
 
+  it('consumes the Escape that cancels the capture, and leaves a later Escape to the page', () => {
+    const page = mountKeyboard();
+    let heard = 0;
+    page.document.body.addEventListener('keydown', () => (heard += 1));
+    const KeyboardEventCtor = keyboardEventCtor(page);
+    host?.start();
+
+    const cancel = new KeyboardEventCtor('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    page.document.body.dispatchEvent(cancel);
+    assert.equal(host?.capturing(), false);
+    assert.equal(heard, 0, 'the page also acted on the Escape that cancelled the capture');
+
+    const later = new KeyboardEventCtor('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    page.document.body.dispatchEvent(later);
+    assert.equal(heard, 1);
+    assert.equal(later.defaultPrevented, false);
+  });
+
+  it('leaves Escape to a dialog of the widget that has focus', () => {
+    const page = mountKeyboard();
+    const dialog = page.document.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    const input = page.document.createElement('input');
+    dialog.append(input);
+    host?.root.append(dialog);
+    let closed = 0;
+    dialog.addEventListener('keydown', (event) => {
+      if ((event as KeyboardEvent).key === 'Escape') closed += 1;
+    });
+    host?.start();
+    input.focus();
+
+    const KeyboardEventCtor = keyboardEventCtor(page);
+    input.dispatchEvent(new KeyboardEventCtor('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+
+    assert.equal(closed, 1, 'the dialog did not get its Escape');
+    assert.equal(host?.capturing(), true, 'one Escape closed the dialog and the capture');
+  });
+
+  it('lets Enter press the gear while an element is highlighted', async () => {
+    const page = mountPage(PAGE, { width: 1_000, height: 1_000 });
+    const targets: CaptureTarget[] = [];
+    host = createCaptureHost({
+      document: page.document,
+      engine: fakeEngine(page, () => null),
+      onSelect: (target) => targets.push(target),
+      onConfigure: () => {},
+    });
+    host.start();
+    press(page, 'ArrowDown');
+    press(page, 'ArrowDown');
+
+    (host.root.querySelector('[data-fruitback-host-configure]') as HTMLButtonElement).focus();
+    const enter = press(page, 'Enter');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(enter.defaultPrevented, false, 'Enter on the gear selected the highlighted element');
+    assert.equal(targets.length, 0);
+  });
+
   it('shows a focus ring on the controls the keyboard reaches', () => {
     mountKeyboard();
     const styles = host?.root.querySelector('style')?.textContent ?? '';
