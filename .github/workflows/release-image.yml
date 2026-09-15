@@ -9,13 +9,10 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
+# Read-only for every job. Only `publish` gets the permissions that write to the registry and sign
+# (SKG-609): `check` runs a build, QEMU and Trivy, and none of them needs to publish.
 permissions:
   contents: read
-  # The push needs `packages`. The attestations need the other two, and a missing one fails at the
-  # very end of a long build with a 403 that names nothing.
-  packages: write
-  id-token: write
-  attestations: write
 
 concurrency:
   group: release-image-${{ github.ref }}
@@ -49,9 +46,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # `actions/checkout` writes GITHUB_TOKEN into .git/config by default, where any later step
-          # in the job can read it — and this job's token carries `packages: write`. Nothing here
-          # runs a git command after the checkout; `docker/login-action` is handed the token
-          # explicitly. Raised in review.
+          # in the job can read it. Nothing here runs a git command after the checkout.
           persist-credentials: false
 
       # arm64 runs on this amd64 runner through binfmt, for the runtime stage and for `docker run`
@@ -158,6 +153,13 @@ jobs:
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    # The push needs `packages`. The attestations need the other two, and a missing one fails at the
+    # very end of a long build with a 403 that names nothing.
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
 
     steps:
       - name: Checkout code

@@ -47,7 +47,7 @@ immutable.
 - **Trivy runs with `ignore-unfixed`.** An Alpine CVE with no patch available reddens every release
   for something nobody can act on, and a gate that cannot be satisfied is a gate somebody deletes.
 - **Every action is pinned to a commit SHA, with its version as a comment (SKG-608).** A tag can be
-  moved to other code, and this workflow runs with `packages: write`, so a moved tag could publish the
+  moved to other code, and the `publish` job holds `packages: write`, so a moved tag could publish the
   image. Each SHA is the commit the tag named when it was pinned, so the pin changed no behaviour.
   `.github/dependabot.yml` moves the SHA and the comment together; without it the pins would freeze.
   Dependabot does not pin a new step that names a tag, so `workflows.test.ts` fails on one.
@@ -61,11 +61,15 @@ immutable.
   public is a manual, one-time change in the package settings, and the README says so above the
   `docker run` rather than leaving a stranger to discover it. Raised in review, twice.
 - **`persist-credentials: false` on both checkouts.** `actions/checkout` writes `GITHUB_TOKEN` into
-  `.git/config` by default, where any later step can read it — and this workflow's token carries
+  `.git/config` by default, where any later step can read it — and the `publish` job's token carries
   `packages: write`. Nothing runs a git command after the checkout, and `docker/login-action` is
   handed the token explicitly.
 - The push needs `packages: write`, the attestations need `id-token: write` **and**
   `attestations: write`. A missing one fails at the end of a long build with a 403 that names nothing.
+- **Only `publish` holds those three (SKG-609).** They were granted at workflow level, so `check` held
+  them too while it built, emulated and scanned. The workflow now grants `contents: read`, and
+  `publish` declares the rest. `ci.yml`'s `zizmor` job audits the workflows offline on every pull
+  request, so a permission widened back fails a check.
 - **The publish leg cannot be proven from a branch.** What was proven locally: both architectures
   build, the manifest list carries both plus a provenance and SBOM attestation each, the image runs
   as `node` with `NODE_ENV=production`, and the smoke script passes against the real image and fails
