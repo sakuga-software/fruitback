@@ -46,8 +46,8 @@ gh api repos/sakuga-software/fruitback/contents/.env.example -H 'Accept: applica
 | `github` | issues in a GitHub repository | a GitHub App: `FRUITBACK_GITHUB_APP_ID`, `FRUITBACK_GITHUB_PRIVATE_KEY`, `FRUITBACK_GITHUB_REPOSITORY` | Your team already works in GitHub issues. The pins have three stages instead of five. |
 | `memory` | the memory of the process | nothing | Never on a server. The image refuses it. |
 
-What each store can show on a pin. `store-conformance.test.ts` compares the stages and the last column
-with the code.
+What each store can show on a pin. `store-conformance.test.ts` compares the stages, the reply cap in the
+Replies column and the last column with the code.
 
 | Store | Stages | What changes the stage | Replies | Runs in production |
 | --- | --- | --- | --- | --- |

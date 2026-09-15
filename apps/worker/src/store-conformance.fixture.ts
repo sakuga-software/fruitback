@@ -29,8 +29,7 @@ export type ConformanceSubject = {
   /** Remove what `open` or `broken` prepared. Called after each case. */
   close(): void;
   /**
-   * The stage of a seed just written. Absent when the store picks it some other way: then the case
-   * only checks that the store declares the stage.
+   * The stage of a seed just written. Absent when the store picks it some other way.
    */
   writtenStage?: SeedStage;
   /** Give a stored seed a state that the store does not know. */
@@ -92,14 +91,12 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
       assert.deepEqual(found[0]?.seed, seed);
       assert.equal(found[0]?.id, created.id);
       assert.equal(found[0]?.identifier, created.identifier);
-      if (subject.writtenStage === undefined) {
-        assert.ok(
-          (store.stages ?? SEED_STAGES).some((stage) => stage === found[0]?.stage),
-          'a stage the store does not declare',
-        );
-      } else {
-        assert.equal(found[0]?.stage, subject.writtenStage);
-      }
+      const stage = found[0]?.stage;
+      assert.ok(
+        (store.stages ?? SEED_STAGES).some((declared) => declared === stage),
+        'a stage the store does not declare',
+      );
+      if (subject.writtenStage !== undefined) assert.equal(stage, subject.writtenStage);
     });
 
     it('keeps a page apart from the same page with a query string', async () => {
@@ -121,6 +118,17 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
 
       assert.deepEqual(await ids('acme'), ['sd_acme']);
       assert.deepEqual(await ids('globex'), ['sd_globex']);
+    });
+
+    // Only a worker without FRUITBACK_CLIENTS accepts a read that names no client.
+    it('gives a read that names no client every seed on the page', async () => {
+      await store.create(seedFor('sd_acme', PAGE, 'acme'), undefined, POLICY);
+      await store.create(seedFor('sd_nobody', PAGE, undefined), undefined, POLICY);
+      await store.create(seedFor('sd_elsewhere', PAGE_WITH_QUERY, 'acme'), undefined, POLICY);
+
+      const ids = (await find(PAGE, undefined)).map((issue) => issue.seed.id).sort();
+
+      assert.deepEqual(ids, ['sd_acme', 'sd_nobody']);
     });
 
     it('draws a state it does not know at the default stage', { skip: skipReason(subject.unknownState) }, async () => {
@@ -150,14 +158,29 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
       );
     });
 
-    it('leaves the replies out when the client hides them, and says empty when there are none', async () => {
+    it('leaves the replies out when the client hides them', { skip: skipReason(subject.reply) }, async () => {
+      const created = await store.create(seedFor('sd_hidden_replies', PAGE, 'acme'), undefined, POLICY);
+      if (typeof subject.reply === 'function') {
+        subject.reply(created, [{ body: 'hidden', createdAt: '2026-09-01T10:00:00.000Z' }]);
+      }
+
+      const [shown] = await find(PAGE, 'acme', POLICY);
+      const [hidden] = await find(PAGE, 'acme', QUIET);
+
+      assert.deepEqual(
+        shown?.comments?.map((comment) => comment.body),
+        ['hidden'],
+      );
+      assert.ok(hidden !== undefined, 'the seed was not found');
+      assert.equal('comments' in hidden, false);
+    });
+
+    it('says empty when a seed has no replies', async () => {
       await store.create(seedFor('sd_no_replies', PAGE, 'acme'), undefined, POLICY);
 
-      const [hidden] = await find(PAGE, 'acme', QUIET);
       const [shown] = await find(PAGE, 'acme', POLICY);
 
-      assert.ok(hidden !== undefined && shown !== undefined, 'the seed was not found');
-      assert.equal('comments' in hidden, false);
+      assert.ok(shown !== undefined, 'the seed was not found');
       assert.deepEqual(shown.comments, []);
     });
 

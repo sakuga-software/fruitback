@@ -102,8 +102,9 @@ async function fetchSeedIssues(query: SeedIssueQuery, policy: ClientPolicy): Pro
 
   return (
     issues
-      // Same isolation as the real filter, by the key this store actually holds.
-      .filter((issue) => issue.clientId === query.clientId)
+      // Same isolation as the real filter, by the key this store actually holds. A read that names no
+      // client gets every seed on the page, as on the other stores (SKG-527).
+      .filter((issue) => query.clientId === undefined || issue.clientId === query.clientId)
       .filter((issue) => required.every((label) => issue.labels.includes(label)))
       // `contains`, like the real filter — the exact URL check is `toSeedIssue`'s job, here as there.
       .filter((issue) => (issue.description ?? '').includes(query.url))

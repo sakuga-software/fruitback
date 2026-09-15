@@ -408,6 +408,32 @@ degradation the ticket asked to have written down rather than discovered.
   REST documentation, API version 2022-11-28. The shapes of an issue row, a comment and
   `state_reason` were read from a public repository with `gh api`; nothing was written anywhere.
 
+## The conformance suite, and the matrix (SKG-527)
+
+- **The doubles keep what they receive.** `linear-stub.ts` answers from a fixed list and records the
+  calls. A suite that writes and then reads needs a double that stores the write and applies the filter
+  of the read. So client isolation is tested where each store puts it: the label filter on Linear, the
+  labels and the seed's client on GitHub, the `client_id` column on SQLite.
+- **The outage case goes through `handleRequest`.** A connector throws `StoreError`, and `app.ts`
+  turns it into `502 store-unavailable`. A case that checks only the throw passes with the mapping
+  deleted. Measured: a rethrow on the read path, and separately on the write path, fails the case for
+  the three stores that can fail.
+- **A step can be a string.** The memory store assigns its own states, writes canned replies and has no
+  provider. `node:test` reports a reason as skipped. A step that passed with nothing checked would read
+  as conformance.
+- **The matrix test reads what the code holds**: the stages, the reply cap and whether the store runs
+  in production. The column that says what changes a stage is prose, and no test reads it.
+- **Defence in depth shows as a surviving mutation.** Removing only GitHub's client label, or only the
+  memory store's client filter, passes: each store has a second layer, the seed's client re-check or
+  the client label. Removing both fails.
+- **A read that names no client.** The memory store returned only the seeds with no client. Linear,
+  GitHub and SQLite return every seed on the page. The suite made the difference visible, and the
+  memory store now follows the other three. Only a worker without `FRUITBACK_CLIENTS` accepts such a
+  read.
+- **The ticket's matrix was wrong in three cells.** GitHub has three stages, not two. Nothing in the
+  worker writes SQLite replies or changes a SQLite stage. The Serverless column went, because the
+  deployment is Docker only.
+
 ## The markdown codec, and the file that outlived its name
 
 - **`markdown-description.ts` holds "put a seed in a markdown body and keep the issue readable"**

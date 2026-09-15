@@ -662,7 +662,8 @@ and *The team mode, and the call the page cannot make*:
   `store-conformance.fixture.ts`; each store gives a subject that opens it against a double that keeps
   what it receives. A step a store cannot do is a string reason, reported as skipped, never as passed.
   The outage case goes through `handleRequest`, because the promise is the `502`, not the throw. The
-  store matrix in `docs/self-hosting.md` is compared with each store's `stages` and `devOnly`.
+  store matrix in `docs/self-hosting.md` is compared with each store's `stages`, reply cap and `devOnly`.
+  A read that names no client gets every seed on the page, on every store.
 - **`linear-memory.ts` keeps its name and its import of `toSeedIssue` on purpose.** That coupling is
   the feature.
 - **`github.ts` signs in as a GitHub App, never with a personal token** (SKG-525). An RS256 JWT from
@@ -864,7 +865,8 @@ and *The team mode, and the call the page cannot make*:
 *The worker*, *The rate limit and the cache, behind a Kv*, *Who may read a pin*, *The team's replies*,
 *Where a seed is stored*,
 *Which store, and who validates it*, *SQLite, and what a second connector actually proved*,
-*The markdown codec, and the file that outlived its name*, *The extension's session*.
+*The conformance suite, and the matrix*, *The markdown codec, and the file that outlived its name*,
+*The extension's session*.
 And *The published image* in [docs/decisions/image.md](docs/decisions/image.md).
 
 ## The published image
