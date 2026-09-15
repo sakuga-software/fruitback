@@ -298,6 +298,37 @@ describe('createComposer', () => {
     );
   });
 
+  it('stays inside the window when the page is scrolled sideways (SKG-607)', () => {
+    const placedLeft = (
+      anchor: { left: number; top: number; bottom: number; right: number },
+      translator = createTranslator(),
+    ) => {
+      const page = mountPage('<main></main>', { width: 1_000, height: 1_000 });
+      page.view.scrollTo(1_500, 0);
+      const host = page.document.createElement('div');
+      page.document.body.append(host);
+      const opened = createComposer({ document: page.document, host, onSubmit: async () => true, translator });
+      opened.open(anchor);
+      const left = opened.element.style.getPropertyValue('--fruitback-composer-left');
+      opened.destroy();
+
+      return left;
+    };
+
+    // The element is on screen at document x 2000, so the popover opens there.
+    assert.equal(placedLeft({ left: 2_000, top: 200, bottom: 240, right: 2_100 }), '2000px');
+    // Near the right edge of the window it stops 10px short of it: 1500 + 1000 - 320 - 10.
+    assert.equal(placedLeft({ left: 2_400, top: 200, bottom: 240, right: 2_450 }), '2170px');
+    // Right to left, near the left edge of the window, it stops 10px after it: 1500 + 10.
+    assert.equal(
+      placedLeft(
+        { left: 1_520, top: 200, bottom: 240, right: 1_600 },
+        createTranslator({ locale: 'ar', messages: { ar: { 'composer.send': 'ازرع' } } }),
+      ),
+      '1510px',
+    );
+  });
+
   it('takes its own DOM with it when destroyed', () => {
     const { host } = mount(async () => true);
 
