@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, it, mock } from 'node:test';
-import { SEED_STAGES } from '@fruitback/shared';
+import { DEFAULT_SEED_STAGE, SEED_STAGES } from '@fruitback/shared';
 import { createGithubStore } from './github.ts';
 import { createMemoryStore, resetMemoryLinear } from './linear-memory.ts';
 import { type IssueNode, createLinearStore } from './linear.ts';
@@ -224,6 +224,7 @@ function freshDirectory(): string {
 const SUBJECTS: ConformanceSubject[] = [
   {
     provider: 'linear',
+    writtenStage: DEFAULT_SEED_STAGE,
     open() {
       linear = fakeLinear();
 
@@ -252,6 +253,7 @@ const SUBJECTS: ConformanceSubject[] = [
   },
   {
     provider: 'github',
+    writtenStage: DEFAULT_SEED_STAGE,
     open() {
       github = fakeGithub();
 
@@ -278,6 +280,7 @@ const SUBJECTS: ConformanceSubject[] = [
   },
   {
     provider: 'sqlite',
+    writtenStage: DEFAULT_SEED_STAGE,
     open() {
       sqlitePath = join(freshDirectory(), 'fruitback.db');
 
@@ -326,6 +329,11 @@ describe('the conformance suite', () => {
   });
 });
 
+/**
+ * The matrix is compared with the code where the code holds the answer: the stages, the reply cap and
+ * whether the store runs in production. The column that says what changes a stage is prose about each
+ * provider, and no test reads it.
+ */
 describe('the store matrix in docs/self-hosting.md', () => {
   const guide = readFileSync(new URL('../../../docs/self-hosting.md', import.meta.url), 'utf8');
   const header = '| Store | Stages | What changes the stage | Replies | Runs in production |';
@@ -357,6 +365,16 @@ describe('the store matrix in docs/self-hosting.md', () => {
         stages,
       );
       assert.equal(cells[5], isDevOnlyProvider(subject.provider) ? 'no' : 'yes');
+    });
+  }
+
+  for (const provider of ['linear', 'github', 'sqlite']) {
+    it(`gives the reply cap of ${provider}`, () => {
+      const source = readFileSync(new URL(`./${provider}.ts`, import.meta.url), 'utf8');
+      const cap = /^const COMMENTS_PER_ISSUE = (\d+);$/m.exec(source)?.[1];
+
+      assert.ok(cap !== undefined, `no COMMENTS_PER_ISSUE in ${provider}.ts`);
+      assert.match(rows.get(provider)?.[4] ?? '', new RegExp(`\\bnewest ${cap}\\b`));
     });
   }
 });

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
-import { DEFAULT_SEED_STAGE, SEED_STAGES, type Seed, canonicalizePageUrl } from '@fruitback/shared';
+import { DEFAULT_SEED_STAGE, SEED_STAGES, type Seed, type SeedStage, canonicalizePageUrl } from '@fruitback/shared';
 import { minimalSeedFixture, seedFixture } from '@fruitback/shared/seed.fixture';
 import { handleRequest } from './app.ts';
 import { resetCacheState } from './cache.ts';
@@ -28,11 +28,16 @@ export type ConformanceSubject = {
   open(): SeedStore;
   /** Remove what `open` or `broken` prepared. Called after each case. */
   close(): void;
+  /**
+   * The stage of a seed just written. Absent when the store picks it some other way: then the case
+   * only checks that the store declares the stage.
+   */
+  writtenStage?: SeedStage;
   /** Give a stored seed a state that the store does not know. */
   unknownState: ((created: CreatedIssue) => void) | string;
   /** Store replies on a seed, in the order given. */
   reply: ((created: CreatedIssue, replies: Reply[]) => void) | string;
-  /** A store whose provider fails every call. */
+  /** A store whose provider fails every call. It replaces the double that `open` prepared. */
   broken: (() => SeedStore) | string;
 };
 
@@ -87,10 +92,14 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
       assert.deepEqual(found[0]?.seed, seed);
       assert.equal(found[0]?.id, created.id);
       assert.equal(found[0]?.identifier, created.identifier);
-      assert.ok(
-        (store.stages ?? SEED_STAGES).includes(found[0]?.stage ?? 'unknown'),
-        'a stage the store does not declare',
-      );
+      if (subject.writtenStage === undefined) {
+        assert.ok(
+          (store.stages ?? SEED_STAGES).some((stage) => stage === found[0]?.stage),
+          'a stage the store does not declare',
+        );
+      } else {
+        assert.equal(found[0]?.stage, subject.writtenStage);
+      }
     });
 
     it('keeps a page apart from the same page with a query string', async () => {
