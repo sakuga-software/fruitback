@@ -49,6 +49,22 @@ function referencesIn(file: string, source: string): Reference[] {
   return references;
 }
 
+/**
+ * The `uses` a workflow declares where GitHub reads them: on a job, for a reusable workflow, and on a
+ * step. Counted from the structure, so a reference the visitor missed shows as a difference.
+ */
+function declaredUses(source: string): string[] {
+  const workflow = parseDocument(source).toJS() as {
+    jobs?: Record<string, { uses?: unknown; steps?: { uses?: unknown }[] }>;
+  };
+
+  return Object.values(workflow.jobs ?? {}).flatMap((job) =>
+    [job.uses, ...(job.steps ?? []).map((step) => step.uses)].filter(
+      (uses): uses is string => typeof uses === 'string',
+    ),
+  );
+}
+
 /** Every `uses` in the workflows. A local action has no tag to move. */
 function actionReferences(): Reference[] {
   return readdirSync(WORKFLOWS)
@@ -60,8 +76,13 @@ function actionReferences(): Reference[] {
 describe('the GitHub workflows', () => {
   it('pin every action to a commit SHA, with its version as a comment', () => {
     const references = actionReferences();
+    const declared = readdirSync(WORKFLOWS)
+      .filter((file) => /\.ya?ml$/.test(file))
+      .flatMap((file) => declaredUses(readFileSync(new URL(file, WORKFLOWS), 'utf8')))
+      .filter((uses) => !uses.startsWith('./'));
 
-    assert.ok(references.length >= 20, `only ${references.length} action references found`);
+    assert.ok(declared.length > 0, 'the workflows declare no action, so this test reads nothing');
+    assert.deepEqual(references.map((reference) => reference.value).sort(), declared.sort());
     assert.deepEqual(
       references
         .filter((reference) => !PINNED.test(reference.value) || !VERSION_COMMENT.test(reference.rest))

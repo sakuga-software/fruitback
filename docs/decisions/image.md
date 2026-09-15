@@ -46,7 +46,8 @@ immutable.
   timed out. That was the first version, and it was measured hanging.
 - **Trivy runs with `ignore-unfixed`.** An Alpine CVE with no patch available reddens every release
   for something nobody can act on, and a gate that cannot be satisfied is a gate somebody deletes.
-- **Every action is pinned to a commit SHA, with its version as a comment (SKG-608).** A tag can be
+- **Every action that is not a local `./` action is pinned to a commit SHA, with its version as a comment
+  (SKG-608).** A tag can be
   moved to other code, and this workflow runs with `packages: write`, so a moved tag could publish the
   image. Each SHA is the commit the tag named when it was pinned, so the pin changed no behaviour.
   `.github/dependabot.yml` moves the SHA and the comment together; without it the pins would freeze.

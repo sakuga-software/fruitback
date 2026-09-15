@@ -888,7 +888,7 @@ And *The published image* in [docs/decisions/image.md](docs/decisions/image.md).
   and the **variable name**, never the prose beside it.
 - **Trivy runs with `ignore-unfixed`**, and its version carries the `v` (`# v0.36.0`). One tag out
   of seventy-five is unprefixed, so the wrong form looks valid until the next bump.
-- **Every `uses:` is pinned to a 40-character commit SHA, with its version as a trailing comment**
+- **Every non-local `uses:` is pinned to a 40-character commit SHA, with its version as a trailing comment**
   (SKG-608). A tag can move to other code, and `release-image.yml` runs with `packages: write`.
   `.github/dependabot.yml` moves an existing pin, SHA and comment together. It does not pin a new step:
   `workflows.test.ts` fails on any `uses:` that is not a SHA followed by its version.

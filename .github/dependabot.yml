@@ -1,4 +1,4 @@
-# Every `uses:` in .github/workflows is pinned to a commit SHA, with its version as a comment
+# Every `uses:` in .github/workflows that is not a local ./ action is pinned to a commit SHA, with its version as a comment
 # (SKG-608). A tag can move to other code, and a SHA cannot. Dependabot reads the comment, so it
 # updates the SHA and the comment together. Without this file the pins would never move.
 # Dependabot does not pin a new step: apps/worker/src/workflows.test.ts fails on a bare tag.
