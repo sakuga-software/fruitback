@@ -468,6 +468,13 @@ another port, the resolver answers nothing and the bridge unmounts; if the resol
 scripts do not run on, the popup would say **On** over a page with no widget. A bare `*` is refused,
 because it is the permission for every site that SKG-534 refused to ask for at install.
 
+The grant and the registration are wider than the resolver. `https://*.staging.acme.dev/*` names no
+port, and a match pattern with no port covers every port, so the browser grants access to, and runs
+the scripts on, `pr-12.staging.acme.dev:8443` too; the bridge then unmounts there. Putting `:443` in the
+pattern would narrow the grant to what the resolver covers. It was not done, because whether each
+browser accepts a port in a match pattern was not measured, and the background registers every
+pattern in one call: one pattern the browser refuses stops the scripts on every site. Raised in review.
+
 A wildcard on a single label (`*.localhost`, or `*.localhost.` with its root dot) or an IP address is
 refused too. `syncRegistration` sends
 every pattern in one `registerContentScripts` call, so one pattern the browser refuses stops the

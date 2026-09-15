@@ -59,9 +59,9 @@ export function parseSitePattern(input: string): string | undefined {
  * Whether a pattern covers an origin.
  *
  * `*.staging.acme.dev` covers `staging.acme.dev` too, as it does in a match pattern. A wildcard
- * covers the default port only. If a browser registers the scripts on another port as well, this
- * answers no there and the widget does not mount. The opposite error would show a site as on where
- * nothing runs.
+ * covers the default port only. The browser registers the scripts on every port, because the match
+ * pattern names none (see docs/decisions/extension.md). On another port this answers no, and the
+ * widget does not mount. The opposite error would show a site as on where nothing runs.
  */
 export function coversOrigin(pattern: string, origin: string): boolean {
   if (!pattern.includes(`://${WILDCARD}`)) return pattern === origin;

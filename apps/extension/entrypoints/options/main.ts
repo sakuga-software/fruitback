@@ -2,7 +2,8 @@ import { browser } from 'wxt/browser';
 import { matchPatternFor } from '../../src/registration.ts';
 import { NO_ACCESS_PROBLEM, STORE_PROBLEM, createEditor, latestOnly } from '../../src/site-editor.ts';
 import { parseSitePattern } from '../../src/site-patterns.ts';
-import { type TabScripting, injectIntoOpenTabs } from '../../src/tab-injection.ts';
+import { injectIntoOpenTabs } from '../../src/tab-injection.ts';
+import { browserTabScripting as scripting } from '../../src/tab-scripting-browser.ts';
 import { type SitesImport, exportSites, importSites } from '../../src/site-transfer.ts';
 import { type SiteConfig, type SiteMode, readAll, removeSite, writeSite, writeSites } from '../../src/sites.ts';
 
@@ -23,12 +24,13 @@ const IMPORT_PROBLEM: Record<Extract<SitesImport, { ok: false }>['reason'], stri
 /** What the list shows now. The add form checks for a duplicate here, because a storage read loses the click. */
 let current: Record<string, SiteConfig> = {};
 
-const scripting: TabScripting = {
-  query: (matchPattern) => browser.tabs.query({ url: matchPattern }),
-  execute: async (tabId, file, world) => {
-    await browser.scripting.executeScript({ target: { tabId }, files: [file], world });
-  },
-};
+/**
+ * The controls that read `current`, disabled until the first list is drawn.
+ *
+ * Before that, `current` is empty: an add would miss an existing rule and replace it, and an export
+ * would download a file with no rules.
+ */
+const needsList: HTMLButtonElement[] = [];
 
 const editor = createEditor({
   request: (pattern) => browser.permissions.request({ origins: [matchPatternFor(pattern)] }),
@@ -81,6 +83,7 @@ async function renderList(): Promise<void> {
 
   if (!isLatest()) return;
   current = sites;
+  for (const control of needsList) control.disabled = false;
   list.replaceChildren(
     patterns.length === 0
       ? element('p', 'No rules yet. Add one below, or turn a site on from the toolbar.', 'state')
@@ -164,6 +167,8 @@ function addForm(): HTMLElement {
         if (text === '') for (const input of [sites.input, endpoint.input, clientId.input]) input.value = '';
       });
   });
+  add.disabled = true;
+  needsList.push(add);
   const problem = element('p', '', 'problem');
 
   const showFields = (): void => {
@@ -187,6 +192,8 @@ function transfer(): HTMLElement {
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1_000);
   });
+  exporter.disabled = true;
+  needsList.push(exporter);
 
   const input = document.createElement('input');
   input.type = 'file';
@@ -215,6 +222,11 @@ function transfer(): HTMLElement {
         result.textContent = STORE_PROBLEM;
 
         return;
+      }
+      // An imported rule can already hold its grant, from before it was removed. Its open tabs get the
+      // scripts now; a tab without a grant is not returned by the query, so it costs nothing.
+      for (const [pattern, site] of Object.entries(parsed.sites)) {
+        if (site.enabled) await injectIntoOpenTabs(scripting, pattern);
       }
       const count = Object.keys(parsed.sites).length;
       const skipped =

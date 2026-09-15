@@ -111,7 +111,8 @@ A rule names the sites it covers:
 | `https://acme.dev`           | that origin only                                                  |
 | `https://*.staging.acme.dev` | `staging.acme.dev` and every subdomain of it, on the default port |
 
-A host with no scheme is read as `https://`. A wildcard needs a domain with a dot and no IP address, so
+The access the browser grants for a wildcard covers every port of those hosts; the widget mounts only
+on the default port, and unmounts on any other. A host with no scheme is read as `https://`. A wildcard needs a domain with a dot and no IP address, so
 `*.localhost` is refused: add each local origin on its own. When two rules cover a site, the rule for the exact origin
 wins, then the longest wildcard. So one preview can go to another client, or be switched off, under a
 rule for all of them. **A site that no rule covers mounts nothing**: there is no default client.

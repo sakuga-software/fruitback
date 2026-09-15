@@ -1,10 +1,12 @@
 import { browser } from 'wxt/browser';
 import { isSecureWorkerEndpoint, workerOrigin } from '../../src/endpoint.ts';
-import { BRIDGE_FILE, PAGE_FILE, matchPatternFor, publicPath } from '../../src/registration.ts';
-import { STORE_PROBLEM } from '../../src/site-editor.ts';
+import { matchPatternFor } from '../../src/registration.ts';
+import { NO_ACCESS_PROBLEM, STORE_PROBLEM } from '../../src/site-editor.ts';
 import { complaint, siteFrom } from '../../src/site-form.ts';
 import { type ResolvedSite, isWildcardPattern } from '../../src/site-patterns.ts';
 import { type SiteConfig, type SiteMode, findSite, writeSite } from '../../src/sites.ts';
+import { injectIntoOpenTabs } from '../../src/tab-injection.ts';
+import { browserTabScripting } from '../../src/tab-scripting-browser.ts';
 import { createBrowserSessions } from '../../src/session-browser.ts';
 import { type PairFailure, describeIdentity } from '../../src/session.ts';
 
@@ -248,7 +250,7 @@ function form(origin: string, found?: ResolvedSite): HTMLElement {
       return;
     }
 
-    void turnOn(pattern, next).catch(failed(problem));
+    void turnOn(pattern, next).then(refused(problem), failed(problem));
   });
 
   const wrapper = document.createElement('div');
@@ -264,41 +266,20 @@ function form(origin: string, found?: ResolvedSite): HTMLElement {
  * be asked for while a user gesture is being handled, so anything awaited before it — a storage read
  * — loses the gesture and the prompt never appears. And storing first would leave an entry that says
  * "on" for a site the background can never register, which reads as a broken extension.
+ *
+ * Answers whether access was granted, so a refusal is said on the screen.
  */
-async function turnOn(pattern: string, site: SiteConfig): Promise<void> {
+async function turnOn(pattern: string, site: SiteConfig): Promise<boolean> {
   const granted = await browser.permissions.request({ origins: [matchPatternFor(pattern)] });
-  if (!granted) return;
+  if (!granted) return false;
 
   await writeSite(pattern, site);
-  await injectIntoCurrentTab();
+  // `registerContentScripts` only reaches future page loads. Every tab already open on the pattern
+  // gets the scripts now, this one included, and both files refuse to run twice in one frame.
+  await injectIntoOpenTabs(browserTabScripting, pattern);
   await render();
-}
 
-/**
- * Put the scripts into the page that is open right now.
- *
- * `registerContentScripts` only reaches **future** page loads, so without this the tab the reviewer
- * is looking at stays bare until they navigate — while the popup says the site is on. That is the
- * gap between a switch and what the switch appears to promise, and it was measured only because a
- * reviewer pointed at it: the browser run that "proved" the no-reload flow had seeded storage before
- * the page loaded, which is not what a person does.
- *
- * **Injecting into a tab that is already running them would add a second copy of each**, and a
- * second main-world listener builds a second widget on the next mount. Both files refuse to run
- * twice in one frame — see `PAGE_SCRIPT_FLAG` — so this costs nothing when it is not needed.
- */
-async function injectIntoCurrentTab(): Promise<void> {
-  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-  if (tab?.id === undefined) return;
-
-  try {
-    await browser.scripting.executeScript({ target: { tabId: tab.id }, files: [publicPath(PAGE_FILE)], world: 'MAIN' });
-    await browser.scripting.executeScript({ target: { tabId: tab.id }, files: [publicPath(BRIDGE_FILE)] });
-  } catch {
-    // A page the browser will not let anything be injected into — its own error pages, another
-    // extension's. The registration still stands for the next load, so this costs the immediate
-    // appearance and nothing else.
-  }
+  return true;
 }
 
 /** Configured: the switch, and what it is switching. */
@@ -316,7 +297,7 @@ function status({ pattern, site }: ResolvedSite): HTMLElement {
       return;
     }
 
-    void turnOn(pattern, { ...site, enabled: true }).catch(failed(problem));
+    void turnOn(pattern, { ...site, enabled: true }).then(refused(problem), failed(problem));
   });
 
   const change = element('button', 'Change');
@@ -334,6 +315,13 @@ function status({ pattern, site }: ResolvedSite): HTMLElement {
   wrapper.append(row, problem);
 
   return wrapper;
+}
+
+/** A turn-on the reviewer refused: nothing was stored, and the screen says why. */
+function refused(problem: HTMLElement): (granted: boolean) => void {
+  return (granted) => {
+    if (!granted) problem.textContent = NO_ACCESS_PROBLEM;
+  };
 }
 
 /**

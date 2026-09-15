@@ -419,7 +419,9 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   exact origin wins, then the longest wildcard. The bridge, the relay and the popup all reach it
   through `readSite`, and `sites-storage.test.ts` proves `readSite` resolves a wildcard. A reader that
   indexed the map by origin would mount the widget and then have the relay refuse its calls.
-- **A wildcard covers the default port only**, and its base host too, as a match pattern does. It needs
+- **A wildcard covers the default port only**, and its base host too, as a match pattern does. The
+  grant and the registration (`https://*.host/*`) cover every port; the pattern carries no port because
+  whether each browser accepts one was not measured, and one refused pattern stops every site. It needs
   a base of at least two labels and no IP address: every pattern is registered in one call, so a pattern
   that the browser refuses would stop the scripts on every site. If a browser registers the scripts on
   another port, the bridge unmounts there. The opposite error shows a site as on where nothing runs.
