@@ -982,6 +982,8 @@ caption above it` is what keeps that true.
   - **`"nx": { "includedScripts": [] }` in the root `package.json` is load-bearing.** Without it,
     Nx makes every root script a target of `workspace`. A root `test` script is `nx run-many -t test`,
     so that target would start `nx run-many -t test` again.
+  - **`format:fix` is never cached** (`nx.json`). It writes files and declares no outputs, so a cache
+    hit on the same unformatted input replayed the log and rewrote nothing (measured).
 - **Tests run on `node:test` and `node:assert/strict`** — no test runner, no transpiler, no loader.
   `pnpm test` is `node --test 'src/**/*.test.ts'`; Node strips the types itself. Colocated as
   `*.test.ts`, fixtures in `*.fixture.ts`.
