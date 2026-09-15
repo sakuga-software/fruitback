@@ -890,8 +890,8 @@ And *The published image* in [docs/decisions/image.md](docs/decisions/image.md).
   of seventy-five is unprefixed, so the wrong form looks valid until the next bump.
 - **Every `uses:` is pinned to a 40-character commit SHA, with its version as a trailing comment**
   (SKG-608). A tag can move to other code, and `release-image.yml` runs with `packages: write`.
-  `.github/dependabot.yml` updates the SHA and the comment together, so a new step is pinned the same
-  way, never to a bare tag.
+  `.github/dependabot.yml` moves an existing pin, SHA and comment together. It does not pin a new step:
+  `workflows.test.ts` fails on any `uses:` that is not a SHA followed by its version.
 - **`persist-credentials: false` on both checkouts** — this workflow's token carries
   `packages: write`, and `actions/checkout` otherwise writes it into `.git/config`.
 - **Attaching the package is not publishing it.** A new package inherits the repository's visibility;

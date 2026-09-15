@@ -50,6 +50,7 @@ immutable.
   moved to other code, and this workflow runs with `packages: write`, so a moved tag could publish the
   image. Each SHA is the commit the tag named when it was pinned, so the pin changed no behaviour.
   `.github/dependabot.yml` moves the SHA and the comment together; without it the pins would freeze.
+  Dependabot does not pin a new step that names a tag, so `workflows.test.ts` fails on one.
 - **`org.opencontainers.image.source` is the one label with an effect** rather than a description:
   GHCR reads it to attach the package to the repository, which is what gives the package its page,
   its README and its licence. The volatile labels come from `docker/metadata-action`, which is the
