@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createPrivateKey, generateKeyPairSync } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -12,7 +12,7 @@ import { createMemoryStore, resetMemoryLinear } from './linear-memory.ts';
 import { COMMENTS_PER_ISSUE as LINEAR_REPLY_CAP, type IssueNode, createLinearStore } from './linear.ts';
 import { COMMENTS_PER_ISSUE as SQLITE_REPLY_CAP, closeSqliteConnections, createSqliteStore } from './sqlite.ts';
 import type { CreatedIssue, SeedStore } from './store.ts';
-import { type ConformanceSubject, describeStoreConformance } from './store-conformance.fixture.ts';
+import { type ConformanceSubject, describeStoreConformance, repliesNewestFirst } from './store-conformance.fixture.ts';
 import { isDevOnlyProvider, storeProviders } from './stores.ts';
 
 /**
@@ -22,12 +22,6 @@ import { isDevOnlyProvider, storeProviders } from './stores.ts';
 
 const POLICY: ClientPolicy = { showComments: true, identitySecret: undefined, read: 'public' };
 
-/** Two replies, the newer first, so a store that keeps the stored order returns them newest first. */
-const TWO_REPLIES = [
-  { body: 'second', createdAt: '2026-09-02T10:00:00.000Z' },
-  { body: 'first', createdAt: '2026-09-01T10:00:00.000Z' },
-];
-
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
@@ -35,9 +29,17 @@ function json(status: number, body: unknown): Response {
 /**
  * Linear, as far as the Linear store uses it. It keeps the labels and the issues it receives, and
  * applies the filter of `FruitbackIssues`: the team, every label, and a substring of the description.
+ * A label belongs to one team, as on Linear, and an issue refuses a label of another team.
  */
 function fakeLinear(): { node(id: string): IssueNode } {
-  const labels = new Map<string, string>();
+  const labels = new Map<string, Map<string, string>>();
+  let labelCount = 0;
+  const labelsOf = (teamId: string) => {
+    const known = labels.get(teamId) ?? new Map<string, string>();
+    labels.set(teamId, known);
+
+    return known;
+  };
   const issues: { teamId: string; labelIds: string[]; node: IssueNode }[] = [];
 
   mock.method(globalThis, 'fetch', async (_url: unknown, init: { body: string }) => {
@@ -45,8 +47,9 @@ function fakeLinear(): { node(id: string): IssueNode } {
     const operation = /Fruitback\w+/.exec(query)?.[0];
 
     if (operation === 'FruitbackLabels') {
+      const known = labelsOf(String(variables.teamId));
       const nodes = (variables.names as string[]).flatMap((name) => {
-        const id = labels.get(name);
+        const id = known.get(name);
 
         return id === undefined ? [] : [{ id, name }];
       });
@@ -55,15 +58,20 @@ function fakeLinear(): { node(id: string): IssueNode } {
     }
 
     if (operation === 'FruitbackCreateLabel') {
-      const { name } = variables.input as { name: string };
-      const id = `label_${labels.size + 1}`;
-      labels.set(name, id);
+      const { name, teamId } = variables.input as { name: string; teamId: string };
+      labelCount += 1;
+      const id = `label_${labelCount}`;
+      labelsOf(teamId).set(name, id);
 
       return json(200, { data: { issueLabelCreate: { issueLabel: { id, name } } } });
     }
 
     if (operation === 'FruitbackCreateIssue') {
       const input = variables.input as { teamId: string; title: string; description: string; labelIds: string[] };
+      const teamLabelIds = [...labelsOf(input.teamId).values()];
+      if (!input.labelIds.every((id) => teamLabelIds.includes(id))) {
+        return json(200, { errors: [{ message: 'a label of another team' }] });
+      }
       const number = issues.length + 1;
       const issue = {
         id: `issue_${number}`,
@@ -92,7 +100,7 @@ function fakeLinear(): { node(id: string): IssueNode } {
         and: { labels: { some: { name: { eq: string } } } }[];
         description: { contains: string };
       };
-      const required = filter.and.map((clause) => labels.get(clause.labels.some.name.eq));
+      const required = filter.and.map((clause) => labelsOf(filter.team.id.eq).get(clause.labels.some.name.eq));
       const nodes = issues
         .filter((issue) => issue.teamId === filter.team.id.eq)
         .filter((issue) => required.every((id) => id !== undefined && issue.labelIds.includes(id)))
@@ -134,8 +142,8 @@ type GithubIssue = {
 
 /**
  * GitHub, as far as the GitHub store uses it, for any repository. It keeps the labels and the issues
- * it receives, per repository. A list filter needs every label, without case. Comments come back in
- * the order they were stored, so the order the store returns is its own.
+ * it receives, per repository. A list filter needs every label, without case. Comments come back
+ * oldest first, as GitHub sorts them, because the store picks its pages from that order.
  */
 function fakeGithub(): { issue(id: string): GithubIssue } {
   const labels = new Map<string, Set<string>>();
@@ -205,7 +213,9 @@ function fakeGithub(): { issue(id: string): GithubIssue } {
     if (comments) {
       const issue = inRepository.find((candidate) => candidate.number === Number(comments[1]));
 
-      return issue === undefined ? json(404, { message: 'Not Found' }) : json(200, onPage(issue.replies));
+      return issue === undefined
+        ? json(404, { message: 'Not Found' })
+        : json(200, onPage([...issue.replies].sort((left, right) => left.created_at.localeCompare(right.created_at))));
     }
 
     return json(404, { message: 'Not Found' });
@@ -239,7 +249,17 @@ function networkDown(): void {
   });
 }
 
-/** Write a seed, then store two replies on it. */
+/** Every call to the provider answers `200` with a page that is not JSON, as a proxy in front of it can. */
+function unreadableAnswers(): void {
+  mock.restoreAll();
+  mock.method(
+    globalThis,
+    'fetch',
+    async () => new Response('<html>maintenance</html>', { status: 200, headers: { 'Content-Type': 'text/html' } }),
+  );
+}
+
+/** Write a seed, then store replies on it. */
 async function writeWithReplies(
   store: SeedStore,
   seed: Parameters<SeedStore['create']>[0],
@@ -278,10 +298,10 @@ const SUBJECTS: ConformanceSubject[] = [
     unknownState(created) {
       linear!.node(created.id).state = { name: 'Marmalade', type: 'marmalade' };
     },
-    plantReplies: (store, seed) =>
+    plantReplies: (store, seed, count) =>
       writeWithReplies(store, seed, (created) => {
         linear!.node(created.id).comments = {
-          nodes: TWO_REPLIES.map((reply, index) => ({
+          nodes: repliesNewestFirst(count).map((reply, index) => ({
             id: `comment_${index}`,
             body: reply.body,
             createdAt: reply.createdAt,
@@ -296,6 +316,11 @@ const SUBJECTS: ConformanceSubject[] = [
     },
     unreachable() {
       networkDown();
+
+      return createLinearStore(LINEAR_CONFIG);
+    },
+    garbled() {
+      unreadableAnswers();
 
       return createLinearStore(LINEAR_CONFIG);
     },
@@ -314,9 +339,9 @@ const SUBJECTS: ConformanceSubject[] = [
     unknownState(created) {
       github!.issue(created.id).state = 'marmalade';
     },
-    plantReplies: (store, seed) =>
+    plantReplies: (store, seed, count) =>
       writeWithReplies(store, seed, (created) => {
-        github!.issue(created.id).replies = TWO_REPLIES.map((reply, index) => ({
+        github!.issue(created.id).replies = repliesNewestFirst(count).map((reply, index) => ({
           id: 100 + index,
           body: reply.body,
           created_at: reply.createdAt,
@@ -330,6 +355,11 @@ const SUBJECTS: ConformanceSubject[] = [
     },
     unreachable() {
       networkDown();
+
+      return createGithubStore(GITHUB_CONFIG);
+    },
+    garbled() {
+      unreadableAnswers();
 
       return createGithubStore(GITHUB_CONFIG);
     },
@@ -356,16 +386,23 @@ const SUBJECTS: ConformanceSubject[] = [
       database.prepare('UPDATE seeds SET stage = ? WHERE id = ?').run('marmalade', Number(created.id));
       database.close();
     },
-    plantReplies: (store, seed) =>
+    plantReplies: (store, seed, count) =>
       writeWithReplies(store, seed, (created) => {
         closeSqliteConnections();
         const database = new DatabaseSync(sqlitePath);
         const insert = database.prepare('INSERT INTO comments (seed_id, author, body, created_at) VALUES (?, ?, ?, ?)');
-        for (const reply of TWO_REPLIES) insert.run(Number(created.id), 'Alice', reply.body, reply.createdAt);
+        for (const reply of repliesNewestFirst(count))
+          insert.run(Number(created.id), 'Alice', reply.body, reply.createdAt);
         database.close();
       }),
     broken: () => createSqliteStore({ path: join(freshDirectory(), 'missing', 'fruitback.db') }),
     unreachable: 'the file is on a local disk, so there is no network to lose',
+    garbled() {
+      const path = join(freshDirectory(), 'fruitback.db');
+      writeFileSync(path, 'not a database');
+
+      return createSqliteStore({ path });
+    },
   },
   {
     provider: 'memory',
@@ -388,6 +425,7 @@ const SUBJECTS: ConformanceSubject[] = [
     },
     broken: 'the dev store keeps the notes in the process, so no provider can fail',
     unreachable: 'the dev store keeps the notes in the process, so there is no network to lose',
+    garbled: 'the dev store keeps the notes in the process, so there is no answer to read',
   },
 ];
 

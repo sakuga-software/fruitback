@@ -19,6 +19,18 @@ import { type CreatedIssue, type SeedStore, StoreError } from './store.ts';
  * reported as skipped with that reason, never as passed.
  */
 
+export type Reply = { body: string; createdAt: string };
+
+/** Reply `minute`, written that many minutes after the first one. */
+function replyAt(minute: number): Reply {
+  return { body: `reply ${minute}`, createdAt: new Date(Date.UTC(2026, 8, 1, 10, minute)).toISOString() };
+}
+
+/** `count` replies a minute apart, the newest first. */
+export function repliesNewestFirst(count: number): Reply[] {
+  return Array.from({ length: count }, (_, index) => replyAt(count - 1 - index));
+}
+
 export type ConformanceSubject = {
   /** The `provider` of the store's entry in `STORE_SPECS`. */
   provider: string;
@@ -28,18 +40,23 @@ export type ConformanceSubject = {
   close(): void;
   /** The stage of a seed just written. Absent when the store picks it some other way. */
   writtenStage?: SeedStage;
-  /** The most replies a read returns on one seed. The store matrix in `docs/self-hosting.md` gives it. */
+  /** The most replies a read returns on one seed. A case writes more, and `docs/self-hosting.md` gives it. */
   replyCap: number | string;
   /** A client configuration that sends the client's seeds to another tenant than the worker's own. */
   otherTenant: ClientConfig | string;
   /** Give a stored seed a state that the store does not know. */
   unknownState: ((created: CreatedIssue) => void) | string;
-  /** Write the seed with at least two replies, stored newest first. */
-  plantReplies(store: SeedStore, seed: Seed): Promise<void>;
+  /**
+   * Write the seed with the replies of `repliesNewestFirst(count)`. A store that writes its own replies
+   * can write another number, but at least two, stored newest first.
+   */
+  plantReplies(store: SeedStore, seed: Seed, count: number): Promise<void>;
   /** A store whose provider answers every call with an error. It replaces the double of `open`. */
   broken: (() => SeedStore) | string;
   /** A store whose provider cannot be reached, so every call rejects. It replaces the double of `open`. */
   unreachable: (() => SeedStore) | string;
+  /** A store whose provider answers with something it cannot read. It replaces the double of `open`. */
+  garbled: (() => SeedStore) | string;
 };
 
 const POLICY: ClientPolicy = { showComments: true, identitySecret: undefined, read: 'public' };
@@ -170,16 +187,16 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
       async () => {
         if (typeof subject.otherTenant === 'string') return;
         const tenant = subject.otherTenant;
+        // The default tenant is written first, as on a worker that already served it: its labels
+        // exist, and a store that looks them up in the wrong tenant finds them.
+        await store.create(seedFor('sd_default_tenant', PAGE, 'acme'), undefined, POLICY);
         await store.create(seedFor('sd_other_tenant', PAGE, 'acme'), tenant, POLICY);
 
-        const inTenant = await store.findForPage({ url: PAGE, clientId: 'acme' }, tenant, POLICY);
-        const inDefault = await store.findForPage({ url: PAGE, clientId: 'acme' }, undefined, POLICY);
+        const ids = async (client: typeof tenant | undefined) =>
+          (await store.findForPage({ url: PAGE, clientId: 'acme' }, client, POLICY)).map((issue) => issue.seed.id);
 
-        assert.deepEqual(
-          inTenant.map((issue) => issue.seed.id),
-          ['sd_other_tenant'],
-        );
-        assert.deepEqual(inDefault, []);
+        assert.deepEqual(await ids(tenant), ['sd_other_tenant']);
+        assert.deepEqual(await ids(undefined), ['sd_default_tenant']);
         assert.notEqual(store.scope(tenant), store.scope(undefined));
       },
     );
@@ -195,7 +212,7 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
     });
 
     it('returns the replies oldest first', async () => {
-      await subject.plantReplies(store, seedFor('sd_replies', PAGE, 'acme'));
+      await subject.plantReplies(store, seedFor('sd_replies', PAGE, 'acme'), 2);
 
       const times = (await find(PAGE, 'acme'))[0]?.comments?.map((comment) => comment.createdAt) ?? [];
 
@@ -205,7 +222,7 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
     });
 
     it('leaves the replies out when the client hides them', async () => {
-      await subject.plantReplies(store, seedFor('sd_hidden_replies', PAGE, 'acme'));
+      await subject.plantReplies(store, seedFor('sd_hidden_replies', PAGE, 'acme'), 2);
 
       const [shown] = await find(PAGE, 'acme', POLICY);
       const [hidden] = await find(PAGE, 'acme', QUIET);
@@ -213,6 +230,20 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
       assert.ok((shown?.comments?.length ?? 0) > 0, 'the seed has no replies to hide');
       assert.ok(hidden !== undefined, 'the seed was not found');
       assert.equal('comments' in hidden, false);
+    });
+
+    it('returns the newest replies up to its cap', { skip: skipReason(subject.replyCap) }, async () => {
+      if (typeof subject.replyCap !== 'number') return;
+      const cap = subject.replyCap;
+      await subject.plantReplies(store, seedFor('sd_long_thread', PAGE, 'acme'), cap + 2);
+
+      const bodies = (await find(PAGE, 'acme'))[0]?.comments?.map((comment) => comment.body) ?? [];
+
+      // The two oldest replies, at minutes 0 and 1, are the ones left out.
+      assert.deepEqual(
+        bodies,
+        Array.from({ length: cap }, (_, index) => `reply ${index + 2}`),
+      );
     });
 
     it('says empty when a seed has no replies', async () => {
@@ -237,6 +268,14 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
       { skip: skipReason(subject.unreachable) },
       async () => {
         if (typeof subject.unreachable === 'function') await assertStoreUnavailable(subject.unreachable());
+      },
+    );
+
+    it(
+      'reports an answer it cannot read as store-unavailable, never as a 500',
+      { skip: skipReason(subject.garbled) },
+      async () => {
+        if (typeof subject.garbled === 'function') await assertStoreUnavailable(subject.garbled());
       },
     );
   });

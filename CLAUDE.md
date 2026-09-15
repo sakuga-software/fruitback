@@ -665,7 +665,7 @@ and *The team mode, and the call the page cannot make*:
   store matrix in `docs/self-hosting.md` is compared with each store's `stages`, reply cap and `devOnly`.
   On a worker without `FRUITBACK_CLIENTS`, a read that names no client gets every seed on the page, on
   every store. A store that routes by client is tested with a second tenant, and a remote store with a
-  rejected `fetch` as well as an error status.
+  rejected `fetch` and an unreadable body as well as an error status.
 - **`linear-memory.ts` keeps its name and its import of `toSeedIssue` on purpose.** That coupling is
   the feature.
 - **`github.ts` signs in as a GitHub App, never with a personal token** (SKG-525). An RS256 JWT from

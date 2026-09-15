@@ -145,8 +145,9 @@ contribution we expect most often.
 6. Add your store to `apps/worker/src/store-conformance.test.ts`, the suite every store passes: a seed
    read back unchanged, a page kept apart from the same page with a query string, one client kept from
    another, a client routed to the tenant its configuration names, an unknown state drawn as `seeded`,
-   replies oldest first, and an error or an unreachable provider answered as `502 store-unavailable`. A
-   remote store runs against a double of the service that keeps what it receives.
+   replies oldest first and capped, and an error, an unreadable answer or an unreachable provider
+   answered as `502 store-unavailable`. A remote store runs against a double of the service that keeps
+   what it receives.
 7. Add a row to the two store tables of [docs/self-hosting.md](docs/self-hosting.md), and to the store
    table of [SECURITY.md](SECURITY.md): where a seed lands, and who can read it there.
 

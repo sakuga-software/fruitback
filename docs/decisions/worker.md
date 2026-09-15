@@ -411,9 +411,11 @@ degradation the ticket asked to have written down rather than discovered.
 ## The conformance suite, and the matrix (SKG-527)
 
 - **The doubles keep what they receive.** `linear-stub.ts` answers from a fixed list and records the
-  calls. A suite that writes and then reads needs a double that stores the write and applies the filter
-  of the read. So client isolation is tested where each store puts it: the label filter on Linear, the
-  labels and the seed's client on GitHub, the `client_id` column on SQLite.
+  calls, so it cannot serve a suite that writes and then reads. `fakeLinear` and `fakeGithub` in
+  `store-conformance.test.ts` store the write and apply the filter of the read. A Linear label belongs
+  to one team, and GitHub serves comments oldest first, as the real services do. So client isolation is
+  tested where each store puts it: the label filter on Linear, the labels and the seed's client on
+  GitHub, the `client_id` column on SQLite.
 - **The outage case goes through `handleRequest`.** A connector throws `StoreError`, and `app.ts`
   turns it into `502 store-unavailable`. A case that checks only the throw passes with the mapping
   deleted. Measured: a rethrow on the read path, and separately on the write path, fails the case for
@@ -422,13 +424,15 @@ degradation the ticket asked to have written down rather than discovered.
   provider. `node:test` reports a reason as skipped. A step that passed with nothing checked would read
   as conformance.
 - **The matrix test reads what the code holds**: the stages, the reply cap and whether the store runs
-  in production. The reply cap comes from each subject, which imports the connector's own
-  `COMMENTS_PER_ISSUE`, so a new store cannot leave its row unchecked. The column that says what changes
-  a stage is prose, and no test reads it.
+  in production. The reply cap of Linear, GitHub and SQLite comes from each subject, which imports the
+  connector's own `COMMENTS_PER_ISSUE`, and a case writes two replies more than the cap. The Replies cell
+  of the memory row is prose: the test checks only that it claims no cap. The column that says what
+  changes a stage is prose too, and no test reads it.
 - **An outage has two shapes, and the Linear store handled one.** The first version of the suite only
   answered `500`. A `fetch` that rejects, which is what a lost network gives, escaped `linear.ts` as a
   plain error and reached the transport as a `500`. GitHub already wrapped it. `graphql` now turns a
-  rejected `fetch` and an unreadable body into `StoreError`, and the suite runs both shapes.
+  rejected `fetch` and an unreadable body into `StoreError`, and the suite runs all three shapes: an
+  error status, a rejected `fetch` and a body that is not JSON.
 - **Routing is part of the promise.** Linear and GitHub send a client with its own `teamId` or
   `repository` elsewhere, and `scope` must say so for the read cache. The suite writes and reads a
   client in a second tenant and checks that the default tenant does not see it. SQLite and the memory
