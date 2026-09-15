@@ -48,7 +48,10 @@ export type ScriptRegistrar = {
   unregisterContentScripts(filter: { ids: string[] }): Promise<void>;
 };
 
-/** `https://acme.dev` → `https://acme.dev/*`, which is the shape both APIs want. */
+/**
+ * `https://acme.dev` → `https://acme.dev/*`, which is the shape both APIs want. A stored wildcard
+ * gives a valid match pattern the same way: `https://*.acme.dev` → `https://*.acme.dev/*`.
+ */
 export function matchPatternFor(origin: string): string {
   return `${origin}/*`;
 }

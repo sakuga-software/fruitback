@@ -73,6 +73,23 @@ cannot make a visitor's browser do something privileged. It is emphatically **no
 direct caller reads nothing. Under the public default, `curl` reads every note on a page, and closing
 that is `FRUITBACK_READ=authenticated`, not CORS.
 
+**The extension's site rules are the same claim, made by the reviewer's browser** (SKG-536). A rule
+maps an origin, or a wildcard such as `https://*.staging.acme.dev`, to a worker and a mode, and it can
+be imported from a file somebody sent. In private mode the rule holds the client id the widget
+asserts; in team mode it holds none, and the site's own widget asserts its client id. Either way the
+client id is still a claim. What the worker checks differs by mode:
+
+- **Private mode**: the widget calls from the page, so the worker compares the page's **exact** origin
+  with that client's `origins`. A wildcard in a browser does not widen that list.
+- **Team mode**: the relay calls from the extension's origin, which the worker exempts from `origins`
+  (see [What the extension relays](#what-the-extension-relays-and-what-it-refuses-to)). The binding
+  is the extension's own: a page gets a relayed call only if a rule covers its origin, and only to the
+  endpoint that rule names. **A wildcard team rule lets every page it covers spend the reviewer's
+  session** on that endpoint, so a reviewer who writes `https://*.staging.acme.dev` trusts every
+  subdomain under it, as they trust one origin when they turn one on.
+  A rules file holds no session and no host
+  permission, so an imported rule runs nowhere until the reviewer grants its pattern in their browser.
+
 ### `reporter.verified` is the worker's word
 
 Anything a browser posts carrying `verified` has it stripped before storage, whatever else it says.
@@ -312,7 +329,7 @@ than it accepts. It sends nothing unless all of the following are true:
 |              |                                                                                               |
 | ------------ | --------------------------------------------------------------------------------------------- |
 | The origin   | comes from the sender the browser reports, never from the message                             |
-| The site     | has an entry the reviewer stored, switched on, in team mode                                   |
+| The site     | has an entry the reviewer stored, switched on, in team mode — or a wildcard entry covering it |
 | The endpoint | is the one that entry names — a page asking for another worker is **refused, not redirected** |
 | The path     | is `/feedback`, the one path the widget calls                                                 |
 | The headers  | are rebuilt: `Content-Type` may come from the page, `Authorization` never does                |

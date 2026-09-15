@@ -441,6 +441,84 @@ until the next refresh answered `401`; now it reads as signed out at once, which
 of the two. Closing it means versioning the key rather than stamping the value, which is a second
 storage-shape change and its own ticket: **SKG-604**. Raised in review.
 
+## The options page, and what a wildcard covers (SKG-536)
+
+The popup edits the entry for its own tab. The options page lists every entry, adds one for a pattern,
+grants access, and reads and writes a rules file.
+
+### A pattern as the key, not a second store
+
+An entry's key was an exact origin. It is now a pattern: that origin, or `https://*.host`. The other
+design was a second store of rules that resolve _to_ an entry. It was not taken, because two stores
+answer one question and a reader has to ask both in the right order. With one store, every key written
+before SKG-536 is already a valid pattern, so there is no upgrade and `parseSite` does not change.
+
+`resolveSite` is the one lookup. The exact origin wins, then the longest wildcard, so one preview can
+be switched off or sent to another client under a rule for all of them. The bridge, the relay and the
+popup call it through `readSite`. `site-patterns.test.ts` covers the resolver, and
+`sites-storage.test.ts` covers `readSite` over a storage area, because a reader that indexed the map
+by origin passes every resolver test.
+
+### What a wildcard covers
+
+`*.staging.acme.dev` covers `staging.acme.dev` too, and so does the match pattern that the background
+registers. A wildcard takes no port and covers the default one. How each browser matches a port
+in a match pattern was not measured here, and the two ways to be wrong are not equal: if the scripts run on
+another port, the resolver answers nothing and the bridge unmounts; if the resolver covered a port the
+scripts do not run on, the popup would say **On** over a page with no widget. A bare `*` is refused,
+because it is the permission for every site that SKG-534 refused to ask for at install.
+
+The grant and the registration are wider than the resolver. `https://*.staging.acme.dev/*` names no
+port, and a match pattern with no port covers every port, so the browser grants access to, and runs
+the scripts on, `pr-12.staging.acme.dev:8443` too; the bridge then unmounts there. Putting `:443` in the
+pattern would narrow the grant to what the resolver covers. It was not done, because whether each
+browser accepts a port in a match pattern was not measured, and the background registers every
+pattern in one call: one pattern the browser refuses stops the scripts on every site. Raised in review.
+
+A wildcard on a single label (`*.localhost`, or `*.localhost.` with its root dot) or an IP address is
+refused too. `syncRegistration` sends
+every pattern in one `registerContentScripts` call, so one pattern the browser refuses stops the
+scripts on every site, and the error is only logged. Which of these a browser refuses was not measured,
+so the conservative answer is to never store them.
+
+### One writer for the map
+
+The popup and the options page both change the map, and a change reads the whole map and then replaces
+it. They share no lock, so two changes close together could each drop the other's entry, or bring a
+removed rule back. Raised in review by two reviewers. Both pages now send the change to the background
+as a runtime message, and `createSiteOwner` applies one change at a time; `sites-storage.test.ts`
+sends three at once and keeps all three. A change the background did not store rejects in the page.
+
+The other fix, one storage key per pattern, was not taken. A key per pattern leaves no single key to
+read, so a reader lists the whole `local` area with `get(null)`. The bridge is a reader, and it runs in
+a content script; the refresh token is in `local` (SKG-599), and a content script must not read it.
+
+A content script can send a runtime message too, and its input is written by the page. So the
+background checks the sender's URL against the extension's own root (`isExtensionPage`): a page must
+not be able to add a rule for itself.
+
+### The grant, which nothing else carries
+
+Adding a rule asks for its pattern first, and awaits nothing before the request, the same rule as the
+popup's `turnOn`. The duplicate check reads the list the page already holds rather than storage, for
+the same reason. A rules file holds patterns, modes, endpoints and client ids, and no session and no
+grant. So an imported entry shows **No access in this browser** until **Grant access** is pressed.
+A grant writes no storage, so the background listens to `permissions.onAdded` as well as `onRemoved`.
+A registration reaches only the next page load, so a rule added, switched on or granted on the options
+page is also injected into the tabs already open on it (`injectIntoOpenTabs`), as the popup does for
+its own tab. Raised in review.
+Without it, an imported rule granted from the options page stays unregistered until the browser
+restarts.
+
+### What was left out
+
+The ticket asks for `chrome.storage.sync`. A host permission does not travel with a synced rule, so a
+second browser would show the rule and run nothing; and moving the rules out of `local` is the kind of
+storage change SKG-602 needed an ordered upgrade for. It is SKG-611.
+
+No browser runs on this machine. The page, the grant prompt for a wildcard and the download are built
+and type-checked, not seen. SKG-538 is where a real extension runs under Playwright.
+
 ## The team mode, and the call the page cannot make (SKG-596)
 
 Private mode injects a widget into a site that ships none. Team mode is for the team that ships its

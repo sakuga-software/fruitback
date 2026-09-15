@@ -1,5 +1,7 @@
 import { browser } from 'wxt/browser';
-import { readAll, readSite } from '../src/sites.ts';
+import { readAll, readSite, replaceAll } from '../src/sites.ts';
+import { createSiteOwner, isExtensionPage, parseSiteMutation } from '../src/site-writes.ts';
+import { parseSitePattern } from '../src/site-patterns.ts';
 import { matchPatternFor, serialize, syncRegistration } from '../src/registration.ts';
 import { createBrowserSessions } from '../src/session-browser.ts';
 import { touchesARefreshToken } from '../src/session-storage.ts';
@@ -46,17 +48,18 @@ export default defineBackground(() => {
   const sync = serialize(async (): Promise<void> => {
     try {
       const sites = await readAll();
+      // A key that is not a pattern covers nothing in `resolveSite`, so it registers nothing here.
       const wanted = Object.entries(sites)
-        .filter(([, site]) => site.enabled)
-        .map(([origin]) => origin);
+        .filter(([pattern, site]) => site.enabled && parseSitePattern(pattern) === pattern)
+        .map(([pattern]) => pattern);
 
       // A permission the reviewer granted once can be revoked in the browser's own settings, without
       // this extension hearing about it in any way it could act on. Registering a script for an
       // origin we no longer hold throws, so the grant is checked rather than assumed.
-      const granted: string[] = [];
-      for (const origin of wanted) {
-        if (await browser.permissions.contains({ origins: [matchPatternFor(origin)] })) granted.push(origin);
-      }
+      const held = await Promise.all(
+        wanted.map((pattern) => browser.permissions.contains({ origins: [matchPatternFor(pattern)] })),
+      );
+      const granted = wanted.filter((_, index) => held[index]);
 
       await syncRegistration(browser.scripting, granted);
     } catch (error) {
@@ -108,7 +111,27 @@ export default defineBackground(() => {
    */
   const relay = createRelay({ readSite, ensureAccess: (endpoint) => sessions.ensureAccess(endpoint), send });
 
+  /** The only writer of the sites map, so a change from the popup and one from the options page cannot drop each other (SKG-536). */
+  const ownSites = createSiteOwner({ read: readAll, replace: replaceAll });
+  const extensionRoot = browser.runtime.getURL('/popup.html').replace(/popup\.html$/, '');
+
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    const mutation = parseSiteMutation(message);
+    if (mutation !== undefined) {
+      // A content script can send this too, and a page must not add a rule for itself.
+      if (!isExtensionPage(sender, browser.runtime.id, extensionRoot)) return false;
+
+      void ownSites(mutation).then(
+        () => sendResponse({ ok: true }),
+        (error: unknown) => {
+          console.error('[fruitback] could not store a site change', error);
+          sendResponse({ ok: false });
+        },
+      );
+
+      return true;
+    }
+
     const parsed = parseBridgeMessage(message);
     if (parsed?.kind !== 'relay-request') return false;
 
@@ -140,6 +163,8 @@ export default defineBackground(() => {
     if (touchesARefreshToken(Object.keys(changes))) void refreshSessions();
   });
   browser.permissions.onRemoved.addListener(() => void sync());
+  // The options page grants access to an entry that is already stored, so no storage change follows.
+  browser.permissions.onAdded.addListener(() => void sync());
   browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === SESSION_ALARM) void refreshSessions();
   });

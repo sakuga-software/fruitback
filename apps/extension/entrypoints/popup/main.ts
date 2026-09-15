@@ -1,15 +1,21 @@
 import { browser } from 'wxt/browser';
-import { isSecureWorkerEndpoint, isWorkerEndpoint, normalizeWorkerEndpoint, workerOrigin } from '../../src/endpoint.ts';
-import { BRIDGE_FILE, PAGE_FILE, matchPatternFor, publicPath } from '../../src/registration.ts';
-import { type SiteConfig, type SiteMode, readSite, writeSite } from '../../src/sites.ts';
+import { isSecureWorkerEndpoint, workerOrigin } from '../../src/endpoint.ts';
+import { matchPatternFor } from '../../src/registration.ts';
+import { NO_ACCESS_PROBLEM, STORE_PROBLEM } from '../../src/site-editor.ts';
+import { complaint, siteFrom } from '../../src/site-form.ts';
+import { type ResolvedSite, isWildcardPattern } from '../../src/site-patterns.ts';
+import { type SiteConfig, type SiteMode, findSite, writeSite } from '../../src/sites.ts';
+import { injectIntoOpenTabs } from '../../src/tab-injection.ts';
+import { browserTabScripting } from '../../src/tab-scripting-browser.ts';
 import { createBrowserSessions } from '../../src/session-browser.ts';
 import { type PairFailure, describeIdentity } from '../../src/session.ts';
 
 /**
  * The switch for the tab you are looking at, and the two fields that make it work (SKG-534).
  *
- * Deliberately not the editor for every site — that is SKG-536, which owns the options page. This is
- * the one question a reviewer asks from the toolbar: is Fruitback on here, and against which worker.
+ * Deliberately not the editor for every site: that is the options page (SKG-536). This is the one
+ * question a reviewer asks from the toolbar: is Fruitback on here, which rule says so, and against
+ * which worker.
  *
  * There is no framework in this popup on purpose. It is four elements, it opens and closes in under
  * a second, and a bundle for it would be larger than everything it renders.
@@ -33,7 +39,8 @@ void render();
  *
  * Without it there is no way to change one. An entry is written once and then only switched on and
  * off, so an origin turned on before SKG-596 could never be moved to team mode — which is every
- * origin a reviewer already uses. The real editor is SKG-536; this is the one path out.
+ * origin a reviewer already uses. The options page edits every entry; this is the path from the
+ * toolbar.
  */
 async function render(editing = false): Promise<void> {
   if (app === null) return;
@@ -49,19 +56,32 @@ async function render(editing = false): Promise<void> {
     return;
   }
 
-  const site = await readSite(origin);
-
-  const open = site === undefined || editing;
+  const found = await findSite(origin);
+  const open = found === undefined || editing;
 
   app.replaceChildren(
     element('h1', 'Fruitback'),
     element('p', origin, 'origin'),
-    open ? form(origin, site) : status(origin, site),
+    // SKG-536: why the widget does or does not appear here must be answerable from the toolbar.
+    element('p', found === undefined ? NO_RULE : `Rule: ${found.pattern}`, 'rule'),
+    open || found === undefined ? form(origin, found) : status(found),
   );
 
   // Pairing is against the **worker**, not the site, so there is nothing to ask for until one is
   // named. A reviewer holds one session per worker however many of its sites they have turned on.
-  if (site !== undefined && !open) app.append(await session(site));
+  if (found !== undefined && !open) app.append(await session(found.site));
+
+  app.append(optionsButton());
+}
+
+const NO_RULE = 'No rule covers this origin, so Fruitback does nothing here.';
+
+/** Every entry, wildcards and the rules file included, on the options page (SKG-536). */
+function optionsButton(): HTMLElement {
+  const button = element('button', 'All sites and rules', 'secondary');
+  button.addEventListener('click', () => void browser.runtime.openOptionsPage());
+
+  return button;
 }
 
 /** What a failed pairing is, in the reporter's words. */
@@ -186,7 +206,10 @@ async function session(site: SiteConfig): Promise<HTMLElement> {
  * The client id is asked for in private mode only. In team mode the site embeds its own widget and
  * declares its own client id, and a second one stored here would be a value nothing reads.
  */
-function form(origin: string, site?: SiteConfig): HTMLElement {
+function form(origin: string, found?: ResolvedSite): HTMLElement {
+  const site = found?.site;
+  // A wildcard entry is saved under its own pattern, so the change reaches every site it covers.
+  const pattern = found?.pattern ?? origin;
   const mode = modeField(site?.mode ?? 'private');
   const endpoint = field('Worker endpoint', 'https://feedback.acme.dev');
   const clientId = field('Client id', 'acme');
@@ -222,12 +245,12 @@ function form(origin: string, site?: SiteConfig): HTMLElement {
     // permission and injects both scripts into the open tab, neither of which belongs to saving an
     // entry nobody has switched on. Raised in review.
     if (!next.enabled) {
-      void writeSite(origin, next).then(() => render());
+      void writeSite(pattern, next).then(() => render(), failed(problem));
 
       return;
     }
 
-    void turnOn(origin, next);
+    void turnOn(pattern, next).then(refused(problem), failed(problem));
   });
 
   const wrapper = document.createElement('div');
@@ -236,90 +259,45 @@ function form(origin: string, site?: SiteConfig): HTMLElement {
   return wrapper;
 }
 
-/** What is wrong with these fields, in the reporter's words, or nothing. */
-export function complaint(values: { mode: SiteMode; endpoint: string; clientId: string }): string {
-  if (values.endpoint === '') return 'The worker endpoint is required.';
-  if (!isWorkerEndpoint(values.endpoint)) return 'The endpoint must be a full http:// or https:// URL.';
-  if (values.mode === 'private' && values.clientId === '') return 'The client id is required.';
-  // Team mode cannot work without a session, and a session may not be opened over plain http — so
-  // this entry would be stored, shown as **On**, and refuse every call. Say it here instead.
-  if (values.mode === 'team' && !isSecureWorkerEndpoint(values.endpoint)) {
-    return 'A team-mode worker must be on https (localhost excepted).';
-  }
-
-  return '';
-}
-
 /**
- * The entry these fields describe, switched on.
- *
- * **The endpoint is stored in both modes**, and in team mode it is not what the widget is pointed
- * at — the site does that. It is what the relay checks the site's declaration against, so a page
- * cannot name another worker and be handed this reviewer's token for it. See `src/relay.ts`.
- */
-export function siteFrom(values: { mode: SiteMode; endpoint: string; clientId: string }, enabled: boolean): SiteConfig {
-  const endpoint = normalizeWorkerEndpoint(values.endpoint);
-
-  return values.mode === 'team'
-    ? { mode: 'team', endpoint, enabled }
-    : { mode: 'private', endpoint, clientId: values.clientId, enabled };
-}
-
-/**
- * Ask for this origin, then store it.
+ * Ask for this pattern, then store it. For a wildcard, the browser asks for every site it covers.
  *
  * **The request has to come first, and it has to come from this click.** A host permission may only
  * be asked for while a user gesture is being handled, so anything awaited before it — a storage read
  * — loses the gesture and the prompt never appears. And storing first would leave an entry that says
  * "on" for a site the background can never register, which reads as a broken extension.
+ *
+ * Answers whether access was granted, so a refusal is said on the screen.
  */
-async function turnOn(origin: string, site: SiteConfig): Promise<void> {
-  const granted = await browser.permissions.request({ origins: [matchPatternFor(origin)] });
-  if (!granted) return;
+async function turnOn(pattern: string, site: SiteConfig): Promise<boolean> {
+  const granted = await browser.permissions.request({ origins: [matchPatternFor(pattern)] });
+  if (!granted) return false;
 
-  await writeSite(origin, site);
-  await injectIntoCurrentTab();
+  await writeSite(pattern, site);
+  // `registerContentScripts` only reaches future page loads. Every tab already open on the pattern
+  // gets the scripts now, this one included, and both files refuse to run twice in one frame.
+  await injectIntoOpenTabs(browserTabScripting, pattern);
   await render();
-}
 
-/**
- * Put the scripts into the page that is open right now.
- *
- * `registerContentScripts` only reaches **future** page loads, so without this the tab the reviewer
- * is looking at stays bare until they navigate — while the popup says the site is on. That is the
- * gap between a switch and what the switch appears to promise, and it was measured only because a
- * reviewer pointed at it: the browser run that "proved" the no-reload flow had seeded storage before
- * the page loaded, which is not what a person does.
- *
- * **Injecting into a tab that is already running them would add a second copy of each**, and a
- * second main-world listener builds a second widget on the next mount. Both files refuse to run
- * twice in one frame — see `PAGE_SCRIPT_FLAG` — so this costs nothing when it is not needed.
- */
-async function injectIntoCurrentTab(): Promise<void> {
-  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-  if (tab?.id === undefined) return;
-
-  try {
-    await browser.scripting.executeScript({ target: { tabId: tab.id }, files: [publicPath(PAGE_FILE)], world: 'MAIN' });
-    await browser.scripting.executeScript({ target: { tabId: tab.id }, files: [publicPath(BRIDGE_FILE)] });
-  } catch {
-    // A page the browser will not let anything be injected into — its own error pages, another
-    // extension's. The registration still stands for the next load, so this costs the immediate
-    // appearance and nothing else.
-  }
+  return true;
 }
 
 /** Configured: the switch, and what it is switching. */
-function status(origin: string, site: SiteConfig): HTMLElement {
-  const toggle = element('button', site.enabled ? 'Turn off here' : 'Turn on here');
+function status({ pattern, site }: ResolvedSite): HTMLElement {
+  // A wildcard entry switches every site it covers, so the button must not say "here".
+  const wide = isWildcardPattern(pattern);
+  const off = wide ? 'Turn off for every site this rule covers' : 'Turn off here';
+  const on = wide ? 'Turn on for every site this rule covers' : 'Turn on here';
+  const toggle = element('button', site.enabled ? off : on);
+  const problem = element('p', '', 'problem');
   toggle.addEventListener('click', () => {
     if (site.enabled) {
-      void writeSite(origin, { ...site, enabled: false }).then(() => render());
+      void writeSite(pattern, { ...site, enabled: false }).then(() => render(), failed(problem));
 
       return;
     }
 
-    void turnOn(origin, { ...site, enabled: true });
+    void turnOn(pattern, { ...site, enabled: true }).then(refused(problem), failed(problem));
   });
 
   const change = element('button', 'Change');
@@ -333,7 +311,30 @@ function status(origin: string, site: SiteConfig): HTMLElement {
   row.className = 'row';
   row.append(element('span', `${site.enabled ? 'On' : 'Off'} · ${describeSite(site)}`, 'state'), buttons);
 
-  return row;
+  const wrapper = document.createElement('div');
+  wrapper.append(row, problem);
+
+  return wrapper;
+}
+
+/** A turn-on the reviewer refused: nothing was stored, and the screen says why. */
+function refused(problem: HTMLElement): (granted: boolean) => void {
+  return (granted) => {
+    if (!granted) problem.textContent = NO_ACCESS_PROBLEM;
+  };
+}
+
+/**
+ * A change the background did not confirm, said on the screen and in the console.
+ *
+ * A click is fire-and-forget, so a rejection that is not handled here is reported nowhere. The change
+ * can still be stored when only the answer was lost, so the words do not say it was not saved.
+ */
+function failed(problem: HTMLElement): (error: unknown) => void {
+  return (error) => {
+    console.error('[fruitback] a site change was not confirmed', error);
+    problem.textContent = STORE_PROBLEM;
+  };
 }
 
 /** What this entry is switching, in one phrase: a client id in private mode, the mode in team. */

@@ -414,6 +414,30 @@ they were named for a reader — [docs/modes.md](docs/modes.md) and
 [docs/reviewing.md](docs/reviewing.md). Which one an origin is in is one field on its entry, and **an
 entry with no `mode` reads as private** — that is every entry a reviewer's browser already holds.
 
+- **An entry's key is a pattern, and `resolveSite` is the only lookup** (SKG-536). A key is an exact
+  origin or `https://*.host`; every key written before is an exact origin, so nothing is upgraded. The
+  exact origin wins, then the longest wildcard. The bridge, the relay and the popup all reach it
+  through `readSite`, and `sites-storage.test.ts` proves `readSite` resolves a wildcard. A reader that
+  indexed the map by origin would mount the widget and then have the relay refuse its calls.
+- **A wildcard covers the default port only**, and its base host too, as a match pattern does. The
+  grant and the registration (`https://*.host/*`) cover every port; the pattern carries no port because
+  whether each browser accepts one was not measured, and one refused pattern stops every site. It needs
+  a base of at least two labels and no IP address: every pattern is registered in one call, so a pattern
+  that the browser refuses would stop the scripts on every site. If a browser registers the scripts on
+  another port, the bridge unmounts there. The opposite error shows a site as on where nothing runs.
+- **Only the background writes the sites map.** The popup and the options page send the change as a
+  runtime message; `createSiteOwner` applies one at a time, because each change reads the whole map and
+  replaces it, and the two pages share no lock. `isExtensionPage` refuses the message from a content
+  script, whose URL is the page's. One key per pattern was not taken: a reader would have to list the
+  whole `local` area, and the bridge, a content script, must not read the refresh token stored there.
+- **A rules file holds no credential and no grant.** An imported entry runs nowhere until the options
+  page's **Grant access** is pressed, and `permissions.onAdded` is what re-syncs the registration,
+  because a grant writes no storage. The worker's `origins` stays an exact list, but it applies to
+  private mode only: the relay calls from the extension origin, which the worker exempts. **A wildcard
+  team rule lends the reviewer's session to every page it covers**, and SECURITY.md says so.
+- **The rules stay in `chrome.storage.local`.** The ticket asked for `sync`; a host permission does
+  not travel with a synced rule, and moving the key is a storage-shape change. That is SKG-611.
+
 - **The private-mode widget carries no credential**, and nothing about the mode is access control.
   `page.content.ts` mounts it with no `transport`, so it calls the worker through `fetchTransport`
   from the page, exactly as a public-mode site does. Two consequences to state rather than discover:

@@ -1,12 +1,16 @@
 import { browser } from 'wxt/browser';
+import { type ResolvedSite, resolveSite } from './site-patterns.ts';
 
 /**
  * Which worker answers for which origin, in which mode, and whether this origin is switched on.
  *
- * One entry per origin, because that is the unit a reviewer thinks in — "review acme's staging" —
- * and it is also what the worker checks the client id against (`origins` in `FRUITBACK_CLIENTS`).
- * The full editor for this map is SKG-536; what is here is the store and the per-origin switch the
- * popup needs, and nothing more.
+ * One entry per pattern (SKG-536): an exact origin, or a host wildcard such as
+ * `https://*.staging.acme.dev`. `site-patterns.ts` says which entry answers for an origin, and every
+ * reader asks it through `readSite`. The popup switches the entry for its tab, and the options page
+ * edits all of them.
+ *
+ * A pattern is a convenience for the reviewer and grants nothing on the worker. The worker still
+ * compares the page's exact origin with `origins` in `FRUITBACK_CLIENTS`.
  *
  * Parsed on the way out, never trusted: `chrome.storage` survives an upgrade, so a shape written by
  * an older version has to cost that entry rather than the extension.
@@ -32,10 +36,14 @@ export type SiteConfig = { endpoint: string; enabled: boolean } & (
 
 const KEY = 'sites';
 
+/** The entry that answers for this origin, whether it names the origin or covers it with a wildcard. */
 export async function readSite(origin: string): Promise<SiteConfig | undefined> {
-  const sites = await readAll();
+  return (await findSite(origin))?.site;
+}
 
-  return sites[origin];
+/** The same entry, with the pattern it is stored under. The popup names that pattern. */
+export async function findSite(origin: string): Promise<ResolvedSite | undefined> {
+  return resolveSite(await readAll(), origin);
 }
 
 export async function readAll(): Promise<Record<string, SiteConfig>> {
@@ -52,10 +60,38 @@ export async function readAll(): Promise<Record<string, SiteConfig>> {
   return sites;
 }
 
-export async function writeSite(origin: string, site: SiteConfig): Promise<void> {
-  const sites = await readAll();
+/** `pattern` must come from `parseSitePattern`. A key in another spelling covers nothing. */
+export async function writeSite(pattern: string, site: SiteConfig): Promise<void> {
+  await writeSites({ [pattern]: site });
+}
 
-  await browser.storage.local.set({ [KEY]: { ...sites, [origin]: site } });
+/** Adds or replaces these entries and keeps the others. An import writes all of its entries at once. */
+export async function writeSites(entries: Record<string, SiteConfig>): Promise<void> {
+  await mutate({ kind: 'write', entries });
+}
+
+export async function removeSite(pattern: string): Promise<void> {
+  await mutate({ kind: 'remove', pattern });
+}
+
+/** The channel of a change to the map. The background is the only context that applies one. */
+export const SITE_MUTATION = 'fruitback:site-mutation';
+
+export type SiteMutation = { kind: 'write'; entries: Record<string, SiteConfig> } | { kind: 'remove'; pattern: string };
+
+/**
+ * Sends the change to the background, which applies one change at a time (`site-writes.ts`).
+ *
+ * Rejects when the background did not store it, so a page does not report a rule that is not there.
+ */
+async function mutate(mutation: SiteMutation): Promise<void> {
+  const answer: unknown = await browser.runtime.sendMessage({ channel: SITE_MUTATION, mutation });
+  if (!isRecord(answer) || answer.ok !== true) throw new Error('the background did not store the site change');
+}
+
+/** The background's write of the whole map. Nothing else calls it: see `createSiteOwner`. */
+export async function replaceAll(sites: Record<string, SiteConfig>): Promise<void> {
+  await browser.storage.local.set({ [KEY]: sites });
 }
 
 /**
