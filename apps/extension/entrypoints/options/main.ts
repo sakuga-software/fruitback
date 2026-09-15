@@ -1,6 +1,6 @@
 import { browser } from 'wxt/browser';
 import { matchPatternFor } from '../../src/registration.ts';
-import { createEditor, latestOnly } from '../../src/site-editor.ts';
+import { STORE_PROBLEM, createEditor, latestOnly } from '../../src/site-editor.ts';
 import { parseSitePattern } from '../../src/site-patterns.ts';
 import { type SitesImport, exportSites, importSites } from '../../src/site-transfer.ts';
 import { type SiteConfig, type SiteMode, readAll, removeSite, writeSite, writeSites } from '../../src/sites.ts';
@@ -31,6 +31,8 @@ const beginRender = latestOnly();
 
 const app = document.querySelector('#app');
 const list = document.createElement('div');
+/** Where a change made from a row reports that it was not confirmed. */
+const notice = element('p', '', 'problem');
 
 if (app !== null) {
   app.append(
@@ -40,6 +42,7 @@ if (app !== null) {
       'A rule says which worker, and which client, a site belongs to. A site that no rule covers mounts nothing.',
     ),
     list,
+    notice,
     addForm(),
     transfer(),
   );
@@ -84,12 +87,12 @@ async function row(pattern: string, site: SiteConfig): Promise<HTMLElement> {
 
   const buttons = document.createElement('span');
   buttons.className = 'buttons';
-  if (!granted) buttons.append(button('Grant access', () => void grant(pattern)));
+  if (!granted) buttons.append(button('Grant access', () => attempt(grant(pattern))));
   buttons.append(
     site.enabled
-      ? button('Turn off', () => void writeSite(pattern, { ...site, enabled: false }))
-      : button('Turn on', () => void editor.switchOn(pattern, site)),
-    button('Remove', () => void removeSite(pattern), 'secondary'),
+      ? button('Turn off', () => attempt(writeSite(pattern, { ...site, enabled: false })))
+      : button('Turn on', () => attempt(editor.switchOn(pattern, site))),
+    button('Remove', () => attempt(removeSite(pattern)), 'secondary'),
   );
 
   const item = document.createElement('li');
@@ -105,6 +108,19 @@ async function row(pattern: string, site: SiteConfig): Promise<HTMLElement> {
 
 async function grant(pattern: string): Promise<void> {
   await browser.permissions.request({ origins: [matchPatternFor(pattern)] });
+}
+
+/**
+ * Runs a row's change and reports a rejection under the list.
+ *
+ * A click is fire-and-forget, so a rejection that is not handled here is reported nowhere.
+ */
+function attempt(change: Promise<unknown>): void {
+  notice.textContent = '';
+  change.catch((error: unknown) => {
+    console.error('[fruitback] a site change was not confirmed', error);
+    notice.textContent = STORE_PROBLEM;
+  });
 }
 
 function addForm(): HTMLElement {
@@ -169,7 +185,14 @@ function transfer(): HTMLElement {
         return;
       }
 
-      await writeSites(parsed.sites);
+      try {
+        await writeSites(parsed.sites);
+      } catch (error) {
+        console.error('[fruitback] the import was not confirmed', error);
+        result.textContent = STORE_PROBLEM;
+
+        return;
+      }
       const count = Object.keys(parsed.sites).length;
       const skipped =
         parsed.skipped.length > 0 ? ` Skipped, because they are not valid: ${parsed.skipped.join(', ')}.` : '';

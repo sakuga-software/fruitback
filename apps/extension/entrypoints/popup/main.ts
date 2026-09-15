@@ -1,6 +1,7 @@
 import { browser } from 'wxt/browser';
 import { isSecureWorkerEndpoint, workerOrigin } from '../../src/endpoint.ts';
 import { BRIDGE_FILE, PAGE_FILE, matchPatternFor, publicPath } from '../../src/registration.ts';
+import { STORE_PROBLEM } from '../../src/site-editor.ts';
 import { complaint, siteFrom } from '../../src/site-form.ts';
 import { type ResolvedSite, isWildcardPattern } from '../../src/site-patterns.ts';
 import { type SiteConfig, type SiteMode, findSite, writeSite } from '../../src/sites.ts';
@@ -242,12 +243,12 @@ function form(origin: string, found?: ResolvedSite): HTMLElement {
     // permission and injects both scripts into the open tab, neither of which belongs to saving an
     // entry nobody has switched on. Raised in review.
     if (!next.enabled) {
-      void writeSite(pattern, next).then(() => render());
+      void writeSite(pattern, next).then(() => render(), failed(problem));
 
       return;
     }
 
-    void turnOn(pattern, next);
+    void turnOn(pattern, next).catch(failed(problem));
   });
 
   const wrapper = document.createElement('div');
@@ -307,14 +308,15 @@ function status({ pattern, site }: ResolvedSite): HTMLElement {
   const off = wide ? 'Turn off for every site this rule covers' : 'Turn off here';
   const on = wide ? 'Turn on for every site this rule covers' : 'Turn on here';
   const toggle = element('button', site.enabled ? off : on);
+  const problem = element('p', '', 'problem');
   toggle.addEventListener('click', () => {
     if (site.enabled) {
-      void writeSite(pattern, { ...site, enabled: false }).then(() => render());
+      void writeSite(pattern, { ...site, enabled: false }).then(() => render(), failed(problem));
 
       return;
     }
 
-    void turnOn(pattern, { ...site, enabled: true });
+    void turnOn(pattern, { ...site, enabled: true }).catch(failed(problem));
   });
 
   const change = element('button', 'Change');
@@ -328,7 +330,23 @@ function status({ pattern, site }: ResolvedSite): HTMLElement {
   row.className = 'row';
   row.append(element('span', `${site.enabled ? 'On' : 'Off'} · ${describeSite(site)}`, 'state'), buttons);
 
-  return row;
+  const wrapper = document.createElement('div');
+  wrapper.append(row, problem);
+
+  return wrapper;
+}
+
+/**
+ * A change the background did not confirm, said on the screen and in the console.
+ *
+ * A click is fire-and-forget, so a rejection that is not handled here is reported nowhere. The change
+ * can still be stored when only the answer was lost, so the words do not say it was not saved.
+ */
+function failed(problem: HTMLElement): (error: unknown) => void {
+  return (error) => {
+    console.error('[fruitback] a site change was not confirmed', error);
+    problem.textContent = STORE_PROBLEM;
+  };
 }
 
 /** What this entry is switching, in one phrase: a client id in private mode, the mode in team. */

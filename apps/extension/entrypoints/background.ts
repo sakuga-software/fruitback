@@ -56,10 +56,10 @@ export default defineBackground(() => {
       // A permission the reviewer granted once can be revoked in the browser's own settings, without
       // this extension hearing about it in any way it could act on. Registering a script for an
       // origin we no longer hold throws, so the grant is checked rather than assumed.
-      const granted: string[] = [];
-      for (const pattern of wanted) {
-        if (await browser.permissions.contains({ origins: [matchPatternFor(pattern)] })) granted.push(pattern);
-      }
+      const held = await Promise.all(
+        wanted.map((pattern) => browser.permissions.contains({ origins: [matchPatternFor(pattern)] })),
+      );
+      const granted = wanted.filter((_, index) => held[index]);
 
       await syncRegistration(browser.scripting, granted);
     } catch (error) {

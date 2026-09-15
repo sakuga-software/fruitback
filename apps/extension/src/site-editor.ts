@@ -17,6 +17,9 @@ import type { SiteConfig } from './sites.ts';
 export const DUPLICATE_PROBLEM = 'A rule for that pattern already exists. Remove it first.';
 export const NO_ACCESS_PROBLEM = 'Fruitback needs access to those sites to run there. Nothing was saved.';
 
+/** A change the background did not confirm. It can still be stored if only the answer was lost. */
+export const STORE_PROBLEM = 'Fruitback could not confirm that change. Check the list, then try again.';
+
 export type EditorSeams = {
   request: (pattern: string) => Promise<boolean>;
   write: (pattern: string, site: SiteConfig) => Promise<void>;
@@ -40,7 +43,11 @@ export function createEditor({ request, write, current }: EditorSeams): {
 
       return request(pattern).then(async (granted) => {
         if (!granted) return NO_ACCESS_PROBLEM;
-        await write(pattern, siteFrom(fields, true));
+        try {
+          await write(pattern, siteFrom(fields, true));
+        } catch {
+          return STORE_PROBLEM;
+        }
 
         return '';
       });

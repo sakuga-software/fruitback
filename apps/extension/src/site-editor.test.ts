@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { DUPLICATE_PROBLEM, NO_ACCESS_PROBLEM, createEditor, latestOnly } from './site-editor.ts';
+import { DUPLICATE_PROBLEM, NO_ACCESS_PROBLEM, STORE_PROBLEM, createEditor, latestOnly } from './site-editor.ts';
 import { PATTERN_PROBLEM } from './site-form.ts';
 import type { SiteConfig } from './sites.ts';
 
@@ -40,6 +40,19 @@ describe('createEditor', () => {
     assert.deepEqual(page.writes, [
       ['https://*.staging.acme.dev', { mode: 'private', endpoint: 'https://w.test', clientId: 'acme', enabled: true }],
     ]);
+  });
+
+  /** The background can refuse or fail a change, and the page must say so rather than clear the form. */
+  it('answers a problem when the write is not confirmed', async () => {
+    const page = createEditor({
+      request: async () => true,
+      write: async () => {
+        throw new Error('the background did not store the site change');
+      },
+      current: () => ({}),
+    });
+
+    assert.equal(await page.add(fields), STORE_PROBLEM);
   });
 
   it('stores nothing when the grant is refused', async () => {
