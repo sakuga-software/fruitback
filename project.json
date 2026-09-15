@@ -1,0 +1,12 @@
+{
+  "name": "workspace",
+  "$schema": "node_modules/nx/schemas/project-schema.json",
+  "targets": {
+    "format": {
+      "command": "oxfmt --check . --ignore-path .gitignore --ignore-path .oxfmtignore"
+    },
+    "format:fix": {
+      "command": "oxfmt . --ignore-path .gitignore --ignore-path .oxfmtignore"
+    }
+  }
+}

@@ -974,6 +974,14 @@ And *The published image* in [docs/decisions/image.md](docs/decisions/image.md).
     written here so it is read here.
 - Formatting and linting are oxfmt / oxlint (config at the root). 120 columns, single quotes,
   trailing commas.
+  - **The root is an Nx project too, named `workspace`, with `format` and `format:fix` only**
+    (SKG-584). It formats what no package owns: `e2e/`, `docs/`, the root Markdown and JSON.
+    `.oxfmtignore` gives `apps/` and `packages/` back to their own targets, and only this target
+    reads it. Do not move that list to `ignorePatterns` in `.oxfmtrc.json`: every package reads that
+    file, and its `oxfmt --check .` then finds no file at all.
+  - **`"nx": { "includedScripts": [] }` in the root `package.json` is load-bearing.** Without it,
+    Nx makes every root script a target of `workspace`. A root `test` script is `nx run-many -t test`,
+    so that target would start `nx run-many -t test` again.
 - **Tests run on `node:test` and `node:assert/strict`** — no test runner, no transpiler, no loader.
   `pnpm test` is `node --test 'src/**/*.test.ts'`; Node strips the types itself. Colocated as
   `*.test.ts`, fixtures in `*.fixture.ts`.
