@@ -43,7 +43,9 @@ export default defineConfig({
       // leave its child behind on CI.
       command: 'pnpm --filter @fruitback/worker serve:fake',
       url: `${WORKER}/health`,
-      reuseExistingServer: !process.env.CI,
+      // Never reused. A worker already on this port was started without the env below, so it reads
+      // another session file than the `pair` command writes, and its rate limit trips mid-suite.
+      reuseExistingServer: false,
       env: {
         ALLOWED_ORIGINS: PLAYGROUND,
         // Every request comes from the same loopback address, so the production ceiling of 20/min

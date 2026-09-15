@@ -128,8 +128,8 @@ builds `dist` first, because `package.spec.ts` loads the real file.
   loads a **copy** whose manifest declares the two local origins. The shipped manifest still asks for
   nothing at install, and the no-rule spec runs with that grant.
 - **The worker holds extension sessions during the suite** (`e2e/worker-sessions.ts`), and the team
-  spec mints its code with the real `pair` command. A worker you started yourself without those two
-  variables fails that spec, because `reuseExistingServer` takes it as it is.
+  spec mints its code with the real `pair` command. The suite never reuses a worker already on its port: one started without
+  that env reads another session file. Stop `pnpm dev` before `pnpm e2e`.
 - **An absence needs a control.** The no-rule spec then adds the rule and sees the widget; the token
   search fails unless it finds a token in both storage areas. A spec that counts zero proves nothing alone.
 

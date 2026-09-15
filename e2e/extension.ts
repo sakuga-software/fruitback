@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { type BrowserContext, type Page, type Worker, test as base, chromium, expect } from '@playwright/test';
 import { WORKER_ORIGIN } from './pin.ts';
@@ -27,7 +28,10 @@ export type LoadedExtension = { context: BrowserContext; worker: Worker; id: str
 export const test = base.extend<{ extension: LoadedExtension }>({
   extension: async ({}, use, testInfo) => {
     const directory = copyWithLocalAccess(testInfo.outputPath('extension'));
-    const context = await chromium.launchPersistentContext(testInfo.outputPath('profile'), {
+    // Not under test-results: CI uploads that folder when the job fails, and after a pairing the profile
+    // holds a refresh token.
+    const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'fruitback-e2e-profile-'));
+    const context = await chromium.launchPersistentContext(profile, {
       // The full Chromium in its new headless mode. The headless shell, which Playwright uses by
       // default, loads no extension.
       channel: 'chromium',
@@ -43,6 +47,7 @@ export const test = base.extend<{ extension: LoadedExtension }>({
       await use({ context, worker, id: new URL(worker.url()).host });
     } finally {
       await context.close();
+      fs.rmSync(profile, { recursive: true, force: true });
     }
   },
 });
@@ -56,11 +61,17 @@ export const test = base.extend<{ extension: LoadedExtension }>({
  * copy changes. The shipped manifest still asks for no host at install.
  */
 function copyWithLocalAccess(directory: string): string {
-  const manifestPath = path.join(directory, 'manifest.json');
-  if (!fs.existsSync(path.join(BUILT_EXTENSION, 'manifest.json'))) {
+  const builtPath = path.join(BUILT_EXTENSION, 'manifest.json');
+  if (!fs.existsSync(builtPath)) {
     throw new Error(`${BUILT_EXTENSION} is not built. Run pnpm e2e, which builds it first.`);
   }
+  // The copy gets host access, so no spec can see a shipped manifest that asks for it at install.
+  const built = JSON.parse(fs.readFileSync(builtPath, 'utf8')) as { host_permissions?: string[] };
+  if ((built.host_permissions ?? []).length > 0) {
+    throw new Error(`the built manifest asks for host access at install: ${built.host_permissions?.join(', ')}`);
+  }
 
+  const manifestPath = path.join(directory, 'manifest.json');
   fs.cpSync(BUILT_EXTENSION, directory, { recursive: true });
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
   manifest.host_permissions = [`${PLAYGROUND_ORIGIN}/*`, `${WORKER_ORIGIN}/*`];

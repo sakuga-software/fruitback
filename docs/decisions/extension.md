@@ -516,9 +516,10 @@ The ticket asks for `chrome.storage.sync`. A host permission does not travel wit
 second browser would show the rule and run nothing; and moving the rules out of `local` is the kind of
 storage change SKG-602 needed an ordered upgrade for. It is SKG-611.
 
-No browser runs on this machine. The page, the grant prompt for a wildcard and the download are built
-and type-checked, not seen. SKG-538 is where a real extension runs under Playwright: since then,
-`e2e/extension.spec.ts` adds its rules through this page.
+No browser ran on this machine when this shipped: the page, the grant prompt for a wildcard and the
+download were built and type-checked, not seen. Since SKG-538, `e2e/extension.spec.ts` drives this page
+in a real Chromium and adds its rules through it. The prompt and the download are still not exercised:
+automation cannot answer the prompt, and the fixture declares its hosts instead.
 
 ## The team mode, and the call the page cannot make (SKG-596)
 
