@@ -118,9 +118,10 @@ widget depends on it. Treat a change there as breaking until you have shown it i
   from what is stored.
 - **If the shape of a seed changes, bump `SEED_VERSION`.** Readers accept older versions and refuse
   newer ones, instead of silently dropping the fields they do not know.
-- **A field of the read answer is not a field of the seed.** `comments`, `url` and `stages` come with
-  `GET /feedback` and are not stored in the seed, so they do not change `SEED_VERSION` — but an older
-  widget must still work without them, and a newer one with an older worker.
+- **A field of the read answer is not a field of the seed.** `GET /feedback` adds `url` and `stages` to the
+  answer, and `url` and `comments` to each issue. They are not stored in the seed, so they do not change
+  `SEED_VERSION` — but an older widget must still work without them, and a newer one with an older worker.
+  `seed.page.url` is not one of them: it is part of the seed.
 - **The parsers never throw.** A seed is read back from an issue description a person can edit, so
   `parseSeed*` returns `{ ok: false, reason }`.
 

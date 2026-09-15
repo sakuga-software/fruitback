@@ -51,6 +51,28 @@ function workspaceScripts(): Map<string, string[]> {
   return scripts;
 }
 
+/** The name of each check `ci.yml` reports on a pull request. A job with no `name` reports its id. */
+function ciChecks(): string[] {
+  const ci = read('../../../.github/workflows/ci.yml');
+  assert.match(ci, /^ {2}pull_request:/m, 'ci.yml no longer runs on pull requests');
+  assert.ok(ci.includes('\njobs:\n'), 'ci.yml has no jobs');
+
+  const jobs: { id: string; name?: string }[] = [];
+  for (const line of ci.slice(ci.indexOf('\njobs:\n')).split('\n')) {
+    const id = /^ {2}([\w-]+):\s*$/.exec(line)?.[1];
+    if (id !== undefined) jobs.push({ id });
+    const name = /^ {4}name: (.+)$/.exec(line)?.[1];
+    const job = jobs.at(-1);
+    if (name !== undefined && job !== undefined) job.name = name.trim().replace(/^['"]|['"]$/g, '');
+  }
+  const targets = (/target: \[([^\]]+)\]/.exec(ci)?.[1] ?? '')
+    .split(',')
+    .map((target) => target.trim())
+    .filter((target) => target !== '');
+
+  return jobs.flatMap((job) => (job.name?.includes('${{') ? targets : [job.name ?? job.id])).sort();
+}
+
 /** The body of one `## ` section, up to the next one. */
 function section(text: string, heading: string): string {
   const start = text.indexOf(`\n## ${heading}\n`);
@@ -73,8 +95,11 @@ describe('CONTRIBUTING.md', () => {
       [],
     );
     const inTemplate = pnpmScripts(PULL_REQUEST_TEMPLATE);
-    for (const name of ['lint', 'format', 'typecheck', 'test', 'e2e']) {
-      assert.ok(inTemplate.includes(name), `the pull request template no longer names pnpm ${name}`);
+    for (const check of ciChecks()) {
+      assert.ok(
+        PULL_REQUEST_TEMPLATE.includes(`\`pnpm ${check}\``) || PULL_REQUEST_TEMPLATE.includes(`\`${check}\``),
+        `the pull request template does not name the ${check} check`,
+      );
     }
     assert.deepEqual(
       inTemplate.filter((name) => !scripts.includes(name)),
@@ -108,18 +133,7 @@ describe('CONTRIBUTING.md', () => {
   });
 
   it('lists exactly the checks CI runs on a pull request', () => {
-    const ci = read('../../../.github/workflows/ci.yml');
-    assert.match(ci, /^ {2}pull_request:/m, 'ci.yml no longer runs on pull requests');
-
-    const matrix = /target: \[([^\]]+)\]/.exec(ci)?.[1] ?? '';
-    const targets = matrix
-      .split(',')
-      .map((target) => target.trim())
-      .filter((target) => target !== '');
-    const named = [...ci.matchAll(/^ {4}name: (.+)$/gm)]
-      .map((match) => (match[1] ?? '').trim().replace(/^['"]|['"]$/g, ''))
-      .filter((name) => !name.includes('${{'));
-    const checks = [...targets, ...named].sort();
+    const checks = ciChecks();
 
     const listed = [
       ...section(CONTRIBUTING, 'Before you open a pull request').matchAll(/^\| `([a-z][a-z0-9 -]*)` \|/gm),

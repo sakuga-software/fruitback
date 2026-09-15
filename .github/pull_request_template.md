@@ -11,5 +11,6 @@
 
 - [ ] `pnpm lint`, `pnpm format`, `pnpm typecheck` and `pnpm test` pass
 - [ ] `pnpm e2e` passes
+- [ ] The `docker image` check passes in CI: it builds the worker image and plants a pin through `docker-compose.yml`
 
 <!-- What you checked by hand, and what you could not check. "Not checked in a browser, because …" is a useful line. -->
