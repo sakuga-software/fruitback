@@ -105,8 +105,8 @@ What the specs rest on:
   spec opens it behind the site with `tabs.create({ active: false })`.
 - **The two searches read different things.** `addScriptTag({ path })` puts the widget code in the
   DOM, and that code names the `Authorization` header. So the header search reads the bridge
-  messages only. The token search reads everything the page can reach, and fails if fewer than two
-  tokens are stored.
+  messages only. The token search reads everything the page can reach, and fails unless it finds a
+  stored token in both `local` and `session`.
 - **A select inside a label takes the chosen option into its name**, so the options page's mode field
   is found by `/^Mode/`.
 

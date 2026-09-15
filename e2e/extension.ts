@@ -149,20 +149,23 @@ export async function seedsOn(page: Page): Promise<StoredSeed[]> {
   return issues.map((issue) => issue.seed);
 }
 
+export type StoredToken = { area: 'local' | 'session'; value: string };
+
 /** Every string the extension stores under a key named like a token, in its sessions and its grants. */
-export async function storedTokens(worker: Worker): Promise<string[]> {
+export async function storedTokens(worker: Worker): Promise<StoredToken[]> {
   return worker.evaluate(async () => {
-    const areas = { ...(await chrome.storage.local.get(null)), ...(await chrome.storage.session.get(null)) };
-    const tokens: string[] = [];
-    const walk = (value: unknown): void => {
+    const tokens: StoredToken[] = [];
+    const walk = (area: StoredToken['area'], value: unknown): void => {
       if (typeof value !== 'object' || value === null) return;
       for (const [key, inner] of Object.entries(value)) {
-        if (typeof inner === 'string' && /token/i.test(key)) tokens.push(inner);
-        else walk(inner);
+        if (typeof inner === 'string' && /token/i.test(key)) tokens.push({ area, value: inner });
+        else walk(area, inner);
       }
     };
-    for (const [key, value] of Object.entries(areas)) {
-      if (key.startsWith('fruitback:session:') || key.startsWith('fruitback:grant:')) walk(value);
+    for (const area of ['local', 'session'] as const) {
+      for (const [key, value] of Object.entries(await chrome.storage[area].get(null))) {
+        if (key.startsWith('fruitback:session:') || key.startsWith('fruitback:grant:')) walk(area, value);
+      }
     }
 
     return tokens;

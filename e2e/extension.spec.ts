@@ -150,12 +150,12 @@ test('team mode: paired from the popup, the site writes through the relay and ne
   expect(calls).toEqual([]);
 
   const tokens = await storedTokens(extension.worker);
-  // A refresh token and an access token, or the search below proves nothing.
-  expect(tokens.length).toBeGreaterThanOrEqual(2);
+  // The refresh token in `local` and the access token in `session`, or the search below proves nothing.
+  expect([...new Set(tokens.map((token) => token.area))].sort()).toEqual(['local', 'session']);
   const readable = await readableByThePage(page);
   const { messages, chromeStorage } = JSON.parse(readable) as { messages: string[]; chromeStorage: string };
   expect(messages.join('\n')).toContain('relay-response');
-  for (const token of tokens) expect(readable).not.toContain(token);
+  for (const { value } of tokens) expect(readable).not.toContain(value);
   // Only the messages: the widget script on the page names the header in its own code.
   expect(messages.join('\n')).not.toMatch(/authorization/i);
   expect(chromeStorage).toBe('undefined');

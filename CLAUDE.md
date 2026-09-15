@@ -131,7 +131,7 @@ builds `dist` first, because `package.spec.ts` loads the real file.
   spec mints its code with the real `pair` command. A worker you started yourself without those two
   variables fails that spec, because `reuseExistingServer` takes it as it is.
 - **An absence needs a control.** The no-rule spec then adds the rule and sees the widget; the token
-  search fails if it finds fewer than two stored tokens. A spec that counts zero proves nothing alone.
+  search fails unless it finds a token in both storage areas. A spec that counts zero proves nothing alone.
 
 **Deeper** — _The E2E suite_, the `504 (Outdated Optimize Dep)` mechanism and the four defects this
 suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
