@@ -364,8 +364,9 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   what opened it, its badge or a detached-note entry, and a render moves focus to the rebuilt badge.
 - **The reset removes the focus ring too**, and `host.ts` restores one on `:focus-visible`. **The gear
   stops the capture mode**, and the capture mode leaves the keys to a dialog of the widget that has
-  focus: both take the arrows and Enter from the document. The capture mode consumes only the Escape
-  that cancels it, and Enter on a widget control other than the launch button presses that control.
+  focus: both take the arrows and Enter from the document. While no widget dialog has focus, the
+  capture mode consumes the arrow keys, and it consumes Escape only when Escape cancels the capture.
+  Enter on a widget control other than the launch button presses that control.
 - **`document.activeElement` answers the host element for anything in the Shadow root.**
   `deepActiveElement` reads through it. A focus test that reads the document's answer passes for free.
 - **The capture mode works without a pointer.** Down and Up walk the page in document order, Left
@@ -416,7 +417,8 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
 **Deeper** — in [docs/decisions/widget.md](docs/decisions/widget.md):
 _The widget_, _The host, and why everything lives in one Shadow root_,
 _The look, and the one thing a host may change_, _One prefix, and it is `fruitback`_,
-_The popover_, _Who carries the calls_, _The optional picture_, _The settings panel_, _The keyboard, the screen reader and the contrast_,
+_The popover_, _Who carries the calls_, _The optional picture_, _The settings panel_,
+_The keyboard, the screen reader and the contrast_,
 _The words, and the catalogs the bundle carries_.
 And _No emoji, and what replaced them_ in [docs/decisions/icons.md](docs/decisions/icons.md).
 

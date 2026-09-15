@@ -31,6 +31,8 @@ export type OrphanList = {
    * the page changing, re-resolves, redraws the list, and goes round again.
    */
   owns(node: Node): boolean;
+  /** The button of the note's entry, or `undefined` if the note is not in the list. */
+  entry(id: string): HTMLElement | undefined;
   destroy(): void;
 };
 
@@ -125,6 +127,10 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
       list.replaceChildren(...issues.map((issue) => entry(document, issue, t, options.onSelect)));
     },
     owns: (node) => node === root || node === style || root.contains(node) || announcer.contains(node),
+    entry: (id) =>
+      [...list.children]
+        .find((item) => (item as HTMLElement).dataset.fruitbackOrphan === id)
+        ?.querySelector<HTMLElement>('.fruitback-orphans-note') ?? undefined,
     destroy() {
       announcer.remove();
       root.remove();

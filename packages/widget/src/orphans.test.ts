@@ -127,6 +127,16 @@ describe('createOrphanList', () => {
     assert.equal(count(), '22 notatki');
   });
 
+  it('finds the entry of a listed note, and nothing for another', () => {
+    const page = mount();
+    list?.update([issue('sd_1', 'Une note'), issue('sd_2', 'Une autre')]);
+
+    const entry = list?.entry('sd_2');
+    assert.ok(entry !== undefined && entry.textContent === 'Une autre', 'the entry of sd_2 was not found');
+    assert.ok(entry === page.document.querySelectorAll('.fruitback-orphans-note')[1], 'another entry was returned');
+    assert.equal(list?.entry('sd_unknown'), undefined);
+  });
+
   it('owns its own DOM and nothing else', () => {
     const page = mount();
     list?.update([issue('sd_1', 'Une note')]);

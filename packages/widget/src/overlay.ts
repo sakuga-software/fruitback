@@ -273,7 +273,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   }
 
   function draw(): void {
-    const refocus = focusedIssueId();
+    const refocus = focusedTarget();
     closeThread(false);
     container.replaceChildren();
 
@@ -298,22 +298,38 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 
     observeAnchors();
     listOrphans();
-    // The pins are new nodes, so focus on an old badge or on the thread would fall to the page.
+    // The pins, and the entries of a list that changed, are new nodes: focus on an old one would fall to the page.
     if (refocus !== undefined) {
-      placed
-        .find((entry) => entry.issue.seed.id === refocus)
-        ?.pin.querySelector<HTMLElement>('.fruitback-pin-badge')
-        ?.focus();
+      const badge = placed
+        .find((entry) => entry.issue.seed.id === refocus.id)
+        ?.pin.querySelector<HTMLElement>('.fruitback-pin-badge');
+      (refocus.inList ? (orphans.entry(refocus.id) ?? badge) : badge)?.focus();
     }
   }
 
-  /** The issue whose badge or open thread has focus. */
-  function focusedIssueId(): string | undefined {
+  /**
+   * The issue that had focus, and where: its badge, or its entry in the detached-notes list.
+   *
+   * A focused thread counts as the element that opened it.
+   */
+  function focusedTarget(): { id: string; inList: boolean } | undefined {
     const active = deepActiveElement(document);
     if (active === null) return undefined;
-    if (thread !== null && thread.contains(active)) return thread.dataset.fruitbackThread;
 
-    return placed.find((entry) => entry.pin.contains(active))?.issue.seed.id;
+    if (thread !== null && thread.contains(active)) {
+      const id = thread.dataset.fruitbackThread;
+
+      return id === undefined ? undefined : { id, inList: threadOpener !== null && orphans.owns(threadOpener) };
+    }
+    if (orphans.owns(active)) {
+      const id = active.closest<HTMLElement>('[data-fruitback-orphan]')?.dataset.fruitbackOrphan;
+
+      return id === undefined ? undefined : { id, inList: true };
+    }
+
+    const entry = placed.find((candidate) => candidate.pin.contains(active));
+
+    return entry === undefined ? undefined : { id: entry.issue.seed.id, inList: false };
   }
 
   /** A note is detached when nothing identified *or located* its element — resolveAnchor's last word. */

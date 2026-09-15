@@ -844,6 +844,38 @@ describe('the thread and the keyboard (SKG-544)', () => {
     );
   });
 
+  it('keeps focus on the detached-note entry across a render, for its thread and for the entry itself', () => {
+    const page = mountWithCta();
+    const detached = (id: string, note: string) =>
+      seedIssueFixture({
+        seed: seedFixture({
+          id,
+          note,
+          anchor: {
+            selector: `#${id}`,
+            tag: 'textarea',
+            text: note,
+            bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 },
+          },
+        }),
+      });
+    const entryFor = (note: string) =>
+      [...page.document.querySelectorAll('.fruitback-orphans-note')].find((node) => node.textContent === note);
+    overlay = createOverlay({ document: page.document });
+    overlay.render([detached('sd_gone', 'Disparu')]);
+
+    const opener = entryFor('Disparu') as HTMLButtonElement;
+    opener.focus();
+    opener.click();
+    overlay.render([detached('sd_gone', 'Disparu')]);
+    assert.ok(page.document.activeElement === entryFor('Disparu'), 'a render under the thread moved focus to the pin');
+
+    overlay.render([detached('sd_gone', 'Disparu'), detached('sd_other', 'Autre')]);
+    const rebuilt = entryFor('Disparu');
+    assert.ok(rebuilt !== undefined && rebuilt !== opener, 'the list was not rebuilt, so this checks nothing');
+    assert.ok(page.document.activeElement === rebuilt, 'a rebuilt list dropped the focus of its entry');
+  });
+
   it('leaves focus on the page when a click outside closes it', () => {
     const { page } = openOnCta();
     const cta = page.query('button') as HTMLButtonElement;
