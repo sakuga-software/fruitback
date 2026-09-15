@@ -986,6 +986,10 @@ And *The published image* in [docs/decisions/image.md](docs/decisions/image.md).
   against the code by `security.test.ts`, so a constant that moves without the file fails the suite.
   What that test cannot check is a *property* that changed: a new route, a new thing stored in the
   clear, a guarantee tightened or dropped. Those are a hand edit, in the same commit.
+- **`CONTRIBUTING.md` carries the rules a person trips over on a first pull request** (SKG-520). It
+  points at this file and does not repeat all of it. `contributing.test.ts` holds its `pnpm` scripts,
+  ports, Node and pnpm versions, CI checks and commit types to their sources. A new convention that an
+  outside contributor cannot guess belongs there too, in one sentence.
 - Work is tracked in Linear on the
   [Fruitback](https://linear.app/sakuga-software/project/fruitback-ed574263d8d6) project (team SKG).
   Reference tickets as `SKG-xxx` in commits.

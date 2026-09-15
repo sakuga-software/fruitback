@@ -1,0 +1,58 @@
+name: New connector
+description: Propose a store for the seeds, beside Linear, SQLite and GitHub Issues.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A connector implements `SeedStore` from `apps/worker/src/store.ts`. CONTRIBUTING.md lists what a connector pull request must contain. The questions below are the ones that decided the shape of the existing connectors.
+  - type: input
+    id: store
+    attributes:
+      label: The store
+      description: The service or the database, with a link to its API documentation.
+    validations:
+      required: true
+  - type: textarea
+    id: find
+    attributes:
+      label: How it finds the seeds of one page
+      description: A server-side filter, a search, a query, or a walk through everything. The connector compares `seed.page.url` exactly after that, so say how close the filter gets.
+    validations:
+      required: true
+  - type: textarea
+    id: stages
+    attributes:
+      label: Which stages it can report
+      description: The widget knows five stages (seeded, green, ripening, ripe, composted). Say how the states of the store map to them. A store that reports fewer declares them in `stages`.
+    validations:
+      required: true
+  - type: textarea
+    id: comments
+    attributes:
+      label: The team's replies
+      description: Can the store return comments on a seed, oldest first?
+  - type: textarea
+    id: credentials
+    attributes:
+      label: Credentials
+      description: What the operator sets, what it can reach, and when it expires. Name the environment variables.
+    validations:
+      required: true
+  - type: textarea
+    id: exposure
+    attributes:
+      label: Where a seed lands, and who can read it there
+      description: A seed holds the note, the page URL and the reporter's name and address. This row goes into the store table of SECURITY.md.
+    validations:
+      required: true
+  - type: textarea
+    id: limits
+    attributes:
+      label: Rate limits and runtime needs
+      description: The request budget, and whether it needs a persistent filesystem.
+  - type: checkboxes
+    id: willing
+    attributes:
+      label: Your part
+      options:
+        - label: I would like to write this connector myself.

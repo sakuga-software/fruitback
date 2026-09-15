@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a vulnerability
+    url: https://github.com/sakuga-software/fruitback/blob/main/SECURITY.md
+    about: Read SECURITY.md before you report a vulnerability. It says which channel to use.
