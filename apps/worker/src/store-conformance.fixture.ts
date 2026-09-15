@@ -121,6 +121,7 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
 
     beforeEach(() => {
       store = subject.open();
+      assert.equal(store.name, subject.provider, 'the subject opened another store');
     });
 
     afterEach(() => {

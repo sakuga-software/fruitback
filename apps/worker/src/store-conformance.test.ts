@@ -452,7 +452,7 @@ describe('the store matrix in docs/self-hosting.md', () => {
     .split('\n')
     .slice(2)
     .map((line) => line.split('|').map((cell) => cell.trim()))
-    .map((cells) => ({ provider: /^`(\w+)`$/.exec(cells[1] ?? '')?.[1] ?? '', cells }));
+    .map((cells) => ({ provider: /^`([^`]+)`$/.exec(cells[1] ?? '')?.[1] ?? '', cells }));
 
   it('has one row for each store, and no other', () => {
     assert.ok(start >= 0, 'the store matrix was not found');
