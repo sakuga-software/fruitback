@@ -359,7 +359,13 @@ const STYLES = `
   since SVG2, so all:initial erases the drawing. Every icon renders as an empty box, with no error
   anywhere. Measured in Chromium before this was written (SKG-529).
 */
-*:not(svg, svg *) { all: initial; box-sizing: border-box; font-family: var(--fruitback-font-sans); }
+*:not(svg, svg *) { all: initial; box-sizing: border-box; color: inherit; font: inherit; letter-spacing: inherit; }
+/*
+  all:initial also stops inheritance. Without the three inherit values above, an element with no colour
+  rule of its own is black at 16px: the launch label on a chip, and the thread and the panel on a dark
+  surface, where axe measured 1.2 to 1 (SKG-544). The host gives the first values to inherit.
+*/
+:host { color: var(--fruitback-color-text); font: 14px/1.45 var(--fruitback-font-sans); }
 /*
   all:initial is thorough enough to undo the browser's own display:none on a style element, which
   then renders the stylesheet as a column of visible text in the corner of the client's page. Found

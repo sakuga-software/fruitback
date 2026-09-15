@@ -221,7 +221,7 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   conflicts" that survives a real client site** — neither direction is achievable with prefixed class
   names.
 - `:host { all: initial }`, because a Shadow root blocks the page's _selectors_ but not its
-  **inherited** properties. Three consequences, all of them load-bearing:
+  **inherited** properties. Four consequences, all of them load-bearing:
   - `style, script { display: none }` — `all: initial` undoes the browser's own rule and renders the
     stylesheet as visible text on the client's page.
   - `display` is restored at the reset in `host.ts` — every block element is otherwise inline, and
@@ -229,6 +229,10 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   - the reset is `*:not(svg, svg *)`. Since SVG2 a path's geometry is a CSS property, so a bare star
     computes `d: none` and every icon renders as an empty box, with nothing in the console and
     nothing a unit test can see.
+  - the reset declares `color`, `font` and `letter-spacing` as `inherit`, and `:host` gives the first
+    values. `all: initial` stops inheritance too: an element with no rule of its own painted black at
+    16px, and the panel and the thread were 1.2:1 on the dark surface until axe measured them (SKG-544).
+    `contrast.test.ts` compares tokens and cannot see it.
 - **The host sits at the document origin, absolutely positioned, with no size.** The overlay places
   pins in document coordinates; move or offset the host and every pin moves with it.
 - **`engine.ts` is the whole surface we take from react-grab**: hit testing across shadow roots and
@@ -343,7 +347,8 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   reporter hid stays hidden in the config. `.fruitback-config-check[hidden]` needs its own
   `display: none`: the class sets `display: flex`, which beats the browser's rule for `hidden`.
 - **Do not use generic tags in the widget's chrome.** Playwright's selectors pierce open shadow
-  roots, so a `<header>` in the panel made the page's own `header button` ambiguous.
+  roots, so a `<header>` in the panel made the page's own `header button` ambiguous. And inside the
+  widget's region landmark a `<header>` is a banner, which axe refuses (SKG-544).
 - **Two elements must not share one accessible name.** The gear says `Open Fruitback settings`
   and the dialog `Fruitback settings`. A host catalog must keep `settings.open` and `settings.dialog` apart
   too.
@@ -370,8 +375,10 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   the widget in the middle of the host's content, and the landmark says what it is.
 - **`contrast.test.ts` measures every pair a module paints, in both schemes, against a list of known
   failures**: the accent, the stage colours and the dark warning wait for a design decision. A pin
-  sits on the host's page, so no test can promise its contrast. `e2e/a11y.spec.ts` runs axe-core,
-  scoped to `[data-fruitback-host]`.
+  sits on the host's page, so no test can promise its contrast. `e2e/a11y.spec.ts` runs axe-core in
+  both schemes, scoped to `[data-fruitback-host]`, with animations off. It lets through the accent
+  only, and a control fails when the accent passes. It found what the token test cannot: text that the
+  reset painted black.
 
 **The words** (SKG-530, SKG-531)
 

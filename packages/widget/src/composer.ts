@@ -341,7 +341,7 @@ const STYLES = `
   border: 0;
   border-radius: var(--fruitback-radius-pill);
   padding: 8px 14px;
-  font: 600 13px/1 inherit;
+  font: 600 13px/1 var(--fruitback-font-sans);
   cursor: pointer;
 }
 .fruitback-composer-ghost { background: transparent; color: var(--fruitback-color-text-muted); }

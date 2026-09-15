@@ -44,7 +44,9 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   **inherited** properties — `body { font-family: Papyrus }` reaches in otherwise. The catch: `all:
 initial` also undoes the browser's `display: none` on `<style>`, which then renders the stylesheet
   as visible text in the corner of the client's page. Hence `style, script { display: none }`. Both
-  are covered by E2E tests, because neither is visible to a DOM emulator.
+  are covered by E2E tests, because neither is visible to a DOM emulator. The reset on every element
+  inside stops inheritance too, so it declares `color` and `font` as `inherit` (SKG-544, in _The
+  keyboard, the screen reader and the contrast_).
 - **The host sits at the document origin, absolutely positioned, with no size.** The overlay places
   pins in document coordinates, and absolute positions resolve against the nearest positioned
   ancestor — move or offset the host and every pin moves with it.
@@ -393,6 +395,29 @@ The dark scheme keeps `#7cb342` for `color-success`, which measures 6.29 there. 
 3:1 because the field's background is the surface around it, so the border is the only thing that
 shows where to type. The popover's textarea moved from `color-border` to `color-border-strong` for the
 same reason.
+
+**What the token arithmetic did not see.** The first axe run in the dark scheme found text painted
+black on `#1c1917`, at 1.2:1: the thread's state and note, the panel's title, its two fields and every
+checkbox label. In the light scheme the launch label was black at 16px and weight 400, under a button
+that declares white at 13px and 600; black on the accent passed, black on the chip of the capture mode
+measured 2.04. The cause is the reset: `all: initial` sets `color` to its initial value, black, and
+`font-size` to 16px, so an element with no rule of its own inherits nothing from its parent. The reset
+now declares `color`, `font` and `letter-spacing` as `inherit`, and `:host` gives the first values.
+`contrast.test.ts` compares tokens, and the painted colour was not a token, so only a measurement in a
+browser could find this.
+
+Two more findings from the same run:
+
+- `font: 600 13px/1 inherit` on the popover's buttons was not a valid declaration, because `inherit`
+  cannot be a family inside the shorthand. The browser dropped it, and Cancel and Plant were 16px.
+- The thread's `<header>` became a banner inside the widget's region landmark, which axe refuses
+  (`landmark-banner-is-top-level`). It is a `div` now.
+
+After the fix, axe reports the accent only: the launch label and Plant, white on `#e53935`, at 4.22,
+and the thread link at 4.22 in the light scheme and 4.13 in the dark. The spec lets those through and
+fails if none is found, so the filter goes when the accent changes. The scan emulates
+`prefers-reduced-motion`: the popover opens with an opacity animation, and axe measured the text of a
+popover still fading in.
 
 The accent and the stage colours are the product's identity, and they were left for a decision rather
 than changed here. `contrast.test.ts` lists their failures exactly, so a fix removes an entry and a new
