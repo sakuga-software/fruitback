@@ -100,7 +100,8 @@ None of these can be guessed from the code, and most of them have broken somethi
 - **No backticks inside the CSS template literals of the widget** (`STYLES`, `THEME_STYLES`). A backtick
   in a comment there closes the string: the module stops parsing, or the stylesheet silently loses its
   end.
-- **Nothing in `packages/widget` renders an emoji.** The icons are SVG paths in `icons.ts`.
+- **The widget draws no emoji of its own.** Its icons are SVG paths in `icons.ts`. A `label` the host passes is
+  the host's text, and it can hold an emoji.
 - **One prefix, `fruitback`**: CSS custom properties are `--fruitback-*`, classes `.fruitback-*`, and
   attributes `data-fruitback-*`.
 - **Every word the widget shows has a key in `messages.ts`.** The English text is there and the French text is

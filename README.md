@@ -176,7 +176,7 @@ Two licences, split where the client/server boundary is (SKG-515).
 | | |
 | --- | --- |
 | `packages/widget`, `packages/shared`, `packages/fruitback` | **MIT** |
-| `apps/worker`, `apps/extension` | **AGPL-3.0-only** |
+| `apps/worker` | **AGPL-3.0-only** |
 
 The three client-side packages are **MIT** because they are compiled into someone else's site: a
 copyleft licence on code that ships inside a client's own bundle is one nobody can adopt, and the
