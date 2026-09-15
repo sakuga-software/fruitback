@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
+import { isScalar, parseDocument, visit } from 'yaml';
 
 /**
  * Every action a workflow uses is pinned to a commit SHA, with its version as a comment (SKG-608).
  *
  * A tag can move to other code, and `release-image.yml` runs with `packages: write`. Dependabot moves
  * a pin that exists, but it does not pin a new step, so this test is what holds the rule.
+ *
+ * The workflows are parsed as YAML, never matched line by line: `uses : x`, a quoted key, a flow
+ * mapping and a value on the next line are all the same key to GitHub.
  *
  * It lives beside `compose.test.ts`, which also reads files outside this package, because the root has
  * no `test` target.
@@ -17,28 +21,40 @@ const WORKFLOWS = new URL('../../../.github/workflows/', import.meta.url);
 /** `owner/repo@<40 hex>`, or the same for an action in a subdirectory of its repository. */
 const PINNED = /^[\w.-]+\/[\w./-]+@[0-9a-f]{40}$/;
 
-/** The version comment that must end a line with a pinned action. */
+/** The version comment that must follow a pinned action on its line. */
 const VERSION_COMMENT = /# v\d+(\.\d+){0,2}\s*$/;
 
-/**
- * Every `uses:` value in the workflows, with its line. A key at the start of a step and a key inside a
- * flow mapping such as `- { uses: owner/repo@v1 }` both count. A local action has no tag to move.
- */
-function actionReferences(): { where: string; value: string; line: string }[] {
+type Reference = { where: string; value: string; rest: string };
+
+/** Every `uses` value in one workflow, with the text that follows it on its line. */
+function referencesIn(file: string, source: string): Reference[] {
+  const document = parseDocument(source);
+  assert.deepEqual(document.errors, [], `${file} is not valid YAML`);
+  const references: Reference[] = [];
+
+  visit(document, {
+    Pair(_, pair) {
+      if (!isScalar(pair.key) || pair.key.value !== 'uses') return;
+      assert.ok(isScalar(pair.value) && typeof pair.value.value === 'string', `${file}: a uses that is not a string`);
+      const end = pair.value.range?.[1] ?? 0;
+      const lineEnd = source.indexOf('\n', end);
+      references.push({
+        where: `${file}:${source.slice(0, end).split('\n').length}`,
+        value: pair.value.value,
+        rest: source.slice(end, lineEnd < 0 ? undefined : lineEnd),
+      });
+    },
+  });
+
+  return references;
+}
+
+/** Every `uses` in the workflows. A local action has no tag to move. */
+function actionReferences(): Reference[] {
   return readdirSync(WORKFLOWS)
     .filter((file) => /\.ya?ml$/.test(file))
-    .flatMap((file) =>
-      readFileSync(new URL(file, WORKFLOWS), 'utf8')
-        .split('\n')
-        .flatMap((line, index) =>
-          /^\s*#/.test(line)
-            ? []
-            : [...line.matchAll(/(?:^|[\s{,])uses:\s*['"]?([^\s'",}]+)/g)]
-                .map((match) => match[1] ?? '')
-                .filter((value) => !value.startsWith('./'))
-                .map((value) => ({ where: `${file}:${index + 1}`, value, line })),
-        ),
-    );
+    .flatMap((file) => referencesIn(file, readFileSync(new URL(file, WORKFLOWS), 'utf8')))
+    .filter((reference) => !reference.value.startsWith('./'));
 }
 
 describe('the GitHub workflows', () => {
@@ -48,7 +64,7 @@ describe('the GitHub workflows', () => {
     assert.ok(references.length >= 20, `only ${references.length} action references found`);
     assert.deepEqual(
       references
-        .filter((reference) => !PINNED.test(reference.value) || !VERSION_COMMENT.test(reference.line))
+        .filter((reference) => !PINNED.test(reference.value) || !VERSION_COMMENT.test(reference.rest))
         .map((reference) => reference.where),
       [],
     );
