@@ -9,17 +9,35 @@ import { storage } from './session-storage.fixture.ts';
  * looked up the exact origin would pass every resolver test and still refuse a wildcard site.
  *
  * `wxt/browser` reads `globalThis.chrome` when it is imported, so the global is set before the import.
+ * A write goes to the background as a runtime message, and the fake runtime answers it the way
+ * `background.ts` does.
  */
 
 const fake = storage();
-(globalThis as { chrome?: unknown }).chrome = { runtime: {}, storage: { local: fake.area } };
-const { findSite, readAll, readSite, removeSite, writeSite, writeSites } = await import('./sites.ts');
+let answer: 'apply' | 'refuse' = 'apply';
+(globalThis as { chrome?: unknown }).chrome = {
+  runtime: {
+    id: 'fruitback',
+    sendMessage: async (message: unknown) => {
+      const mutation = parseSiteMutation(message);
+      if (mutation === undefined || answer === 'refuse') return undefined;
+      await own(mutation);
+
+      return { ok: true };
+    },
+  },
+  storage: { local: fake.area },
+};
+const { findSite, readAll, readSite, removeSite, replaceAll, writeSite, writeSites } = await import('./sites.ts');
+const { createSiteOwner, parseSiteMutation } = await import('./site-writes.ts');
+const own = createSiteOwner({ read: readAll, replace: replaceAll });
 
 const acme = { mode: 'private', endpoint: 'https://worker.test', clientId: 'acme', enabled: true } as const;
 const globex = { mode: 'team', endpoint: 'https://worker.test', enabled: true } as const;
 
 describe('sites.ts over storage', () => {
   beforeEach(async () => {
+    answer = 'apply';
     await fake.area.remove('sites');
   });
 
@@ -60,5 +78,25 @@ describe('sites.ts over storage', () => {
     await removeSite('https://acme.dev');
 
     assert.deepEqual(await readAll(), { 'https://globex.dev': globex });
+  });
+
+  /** The popup and the options page share no lock. Each change reads the map and replaces it. */
+  it('keeps both of two changes made at the same time', async () => {
+    await writeSite('https://old.dev', acme);
+
+    await Promise.all([
+      writeSite('https://acme.dev', acme),
+      writeSite('https://globex.dev', globex),
+      removeSite('https://old.dev'),
+    ]);
+
+    assert.deepEqual(await readAll(), { 'https://acme.dev': acme, 'https://globex.dev': globex });
+  });
+
+  it('rejects a change the background did not store', async () => {
+    answer = 'refuse';
+
+    await assert.rejects(writeSite('https://acme.dev', acme));
+    assert.deepEqual(await readAll(), {});
   });
 });

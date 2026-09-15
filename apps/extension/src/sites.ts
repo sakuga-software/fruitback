@@ -67,14 +67,30 @@ export async function writeSite(pattern: string, site: SiteConfig): Promise<void
 
 /** Adds or replaces these entries and keeps the others. An import writes all of its entries at once. */
 export async function writeSites(entries: Record<string, SiteConfig>): Promise<void> {
-  const sites = await readAll();
-
-  await browser.storage.local.set({ [KEY]: { ...sites, ...entries } });
+  await mutate({ kind: 'write', entries });
 }
 
 export async function removeSite(pattern: string): Promise<void> {
-  const { [pattern]: _removed, ...sites } = await readAll();
+  await mutate({ kind: 'remove', pattern });
+}
 
+/** The channel of a change to the map. The background is the only context that applies one. */
+export const SITE_MUTATION = 'fruitback:site-mutation';
+
+export type SiteMutation = { kind: 'write'; entries: Record<string, SiteConfig> } | { kind: 'remove'; pattern: string };
+
+/**
+ * Sends the change to the background, which applies one change at a time (`site-writes.ts`).
+ *
+ * Rejects when the background did not store it, so a page does not report a rule that is not there.
+ */
+async function mutate(mutation: SiteMutation): Promise<void> {
+  const answer: unknown = await browser.runtime.sendMessage({ channel: SITE_MUTATION, mutation });
+  if (!isRecord(answer) || answer.ok !== true) throw new Error('the background did not store the site change');
+}
+
+/** The background's write of the whole map. Nothing else calls it: see `createSiteOwner`. */
+export async function replaceAll(sites: Record<string, SiteConfig>): Promise<void> {
   await browser.storage.local.set({ [KEY]: sites });
 }
 

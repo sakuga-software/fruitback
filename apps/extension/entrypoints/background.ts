@@ -1,5 +1,6 @@
 import { browser } from 'wxt/browser';
-import { readAll, readSite } from '../src/sites.ts';
+import { readAll, readSite, replaceAll } from '../src/sites.ts';
+import { createSiteOwner, isExtensionPage, parseSiteMutation } from '../src/site-writes.ts';
 import { parseSitePattern } from '../src/site-patterns.ts';
 import { matchPatternFor, serialize, syncRegistration } from '../src/registration.ts';
 import { createBrowserSessions } from '../src/session-browser.ts';
@@ -110,7 +111,27 @@ export default defineBackground(() => {
    */
   const relay = createRelay({ readSite, ensureAccess: (endpoint) => sessions.ensureAccess(endpoint), send });
 
+  /** The only writer of the sites map, so a change from the popup and one from the options page cannot drop each other (SKG-536). */
+  const ownSites = createSiteOwner({ read: readAll, replace: replaceAll });
+  const extensionRoot = browser.runtime.getURL('/popup.html').replace(/popup\.html$/, '');
+
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    const mutation = parseSiteMutation(message);
+    if (mutation !== undefined) {
+      // A content script can send this too, and a page must not add a rule for itself.
+      if (!isExtensionPage(sender, browser.runtime.id, extensionRoot)) return false;
+
+      void ownSites(mutation).then(
+        () => sendResponse({ ok: true }),
+        (error: unknown) => {
+          console.error('[fruitback] could not store a site change', error);
+          sendResponse({ ok: false });
+        },
+      );
+
+      return true;
+    }
+
     const parsed = parseBridgeMessage(message);
     if (parsed?.kind !== 'relay-request') return false;
 

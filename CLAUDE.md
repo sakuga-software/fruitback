@@ -423,6 +423,11 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   a base of at least two labels and no IP address: every pattern is registered in one call, so a pattern
   that the browser refuses would stop the scripts on every site. If a browser registers the scripts on
   another port, the bridge unmounts there. The opposite error shows a site as on where nothing runs.
+- **Only the background writes the sites map.** The popup and the options page send the change as a
+  runtime message; `createSiteOwner` applies one at a time, because each change reads the whole map and
+  replaces it, and the two pages share no lock. `isExtensionPage` refuses the message from a content
+  script, whose URL is the page's. One key per pattern was not taken: a reader would have to list the
+  whole `local` area, and the bridge, a content script, must not read the refresh token stored there.
 - **A rules file holds no credential and no grant.** An imported entry runs nowhere until the options
   page's **Grant access** is pressed, and `permissions.onAdded` is what re-syncs the registration,
   because a grant writes no storage. The worker's `origins` stays an exact list: a wildcard in the

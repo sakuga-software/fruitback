@@ -474,6 +474,22 @@ every pattern in one `registerContentScripts` call, so one pattern the browser r
 scripts on every site, and the error is only logged. Which of these a browser refuses was not measured,
 so the conservative answer is to never store them.
 
+### One writer for the map
+
+The popup and the options page both change the map, and a change reads the whole map and then replaces
+it. They share no lock, so two changes close together could each drop the other's entry, or bring a
+removed rule back. Raised in review by two reviewers. Both pages now send the change to the background
+as a runtime message, and `createSiteOwner` applies one change at a time; `sites-storage.test.ts`
+sends three at once and keeps all three. A change the background did not store rejects in the page.
+
+The other fix, one storage key per pattern, was not taken. A key per pattern leaves no single key to
+read, so a reader lists the whole `local` area with `get(null)`. The bridge is a reader, and it runs in
+a content script; the refresh token is in `local` (SKG-599), and a content script must not read it.
+
+A content script can send a runtime message too, and its input is written by the page. So the
+background checks the sender's URL against the extension's own root (`isExtensionPage`): a page must
+not be able to add a rule for itself.
+
 ### The grant, which nothing else carries
 
 Adding a rule asks for its pattern first, and awaits nothing before the request, the same rule as the
