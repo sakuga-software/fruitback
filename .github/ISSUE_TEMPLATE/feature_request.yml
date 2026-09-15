@@ -1,0 +1,28 @@
+name: Feature request
+description: Something Fruitback does not do yet.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do, and what stops you today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you propose
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried or considered instead
+  - type: dropdown
+    id: part
+    attributes:
+      label: Which part
+      options:
+        - The widget on a page
+        - The worker
+        - The browser extension
+        - Self-hosting
+        - The documentation

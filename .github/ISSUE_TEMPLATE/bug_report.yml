@@ -1,0 +1,63 @@
+name: Bug report
+description: The widget, the worker or the extension does not do what it should.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting it. A vulnerability does not go here: read SECURITY.md first.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to reproduce it
+      description: The smallest set of steps. A page or a snippet that shows it is worth more than a description.
+    validations:
+      required: true
+  - type: dropdown
+    id: part
+    attributes:
+      label: Which part
+      options:
+        - The widget on a page
+        - The worker
+        - The browser extension
+        - The published image or docker-compose.yml
+        - The documentation
+    validations:
+      required: true
+  - type: dropdown
+    id: store
+    attributes:
+      label: Which store the worker runs on
+      options:
+        - linear
+        - sqlite
+        - github
+        - memory
+        - Not relevant
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The package version, the image tag or digest, or the commit.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Browser and system
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Remove every API key, private key and token first.
+      render: text

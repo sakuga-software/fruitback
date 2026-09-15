@@ -162,6 +162,8 @@ It also says how to report a vulnerability.
 | [docs/architecture.md](docs/architecture.md) | Why this shape, the seed contract, the layout, the commands |
 | [docs/decisions/](docs/decisions/) | Per-subject histories: what was measured, what failed first |
 | [SECURITY.md](SECURITY.md) | The threat model, stated rather than implied |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Running the project, what must pass, the conventions, adding a connector |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | The Contributor Covenant, and where to report a breach |
 | [CLAUDE.md](CLAUDE.md) | The conventions and invariants, for anyone — human or agent — writing code here |
 
 Work is tracked in Linear on the

@@ -1,0 +1,31 @@
+name: Vulnerability, while the repository is private
+description: Only while this repository is private. Read SECURITY.md first.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Use this form only while the repository is private.** Everyone who can read the repository can already see an issue, so a report here discloses nothing new. When the repository is public, do not use this form: follow SECURITY.md, which names the private channel.
+  - type: textarea
+    id: what
+    attributes:
+      label: What is exposed
+      description: The route, the file or the stored value, and what a caller can read or change.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to reach it
+      description: The smallest set of steps. Remove every real API key, private key and token.
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Who is affected
+      description: The mode, the store and the settings under which it applies, for example `read`.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The commit, the image tag or digest.

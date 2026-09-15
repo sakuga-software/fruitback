@@ -12,10 +12,11 @@ self-hoster to discover on their own that their read path is open to anyone who 
 on it — that feature is for public repositories, and the endpoint answers `404` here. Checked, not
 assumed.
 
-- **While the repository is private**, report through the repository itself. Everyone who can read
-  it can already see an issue, so there is no public disclosure to avoid.
+- **While the repository is private**, report through the repository itself, with the *Vulnerability*
+  issue form. Everyone who can read it can already see an issue, so there is no public disclosure to
+  avoid.
 - **When it becomes public**, Private Vulnerability Reporting is the channel, and enabling it is part
-  of going public. Until it is on, *this section is wrong* — update it in the same change.
+  of going public. So is deleting `.github/ISSUE_TEMPLATE/security_report.yml`. Until it is on, *this section is wrong* — update it in the same change.
 
 Please do not open a public issue for a vulnerability once the repository is public.
 
