@@ -52,26 +52,33 @@ export function linearRoutingFor(config: LinearConfig, client: ClientConfig | un
 }
 
 async function graphql<T>(config: LinearConfig, query: string, variables: Record<string, unknown>): Promise<T> {
-  const response = await fetch(LINEAR_GRAPHQL_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      // Personal API keys go in `Authorization` raw — no `Bearer` prefix (that is for OAuth tokens).
-      Authorization: config.apiKey,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ query, variables }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(LINEAR_GRAPHQL_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        // Personal API keys go in `Authorization` raw — no `Bearer` prefix (that is for OAuth tokens).
+        Authorization: config.apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query, variables }),
+    });
+  } catch {
+    // A network failure is a store failure, so the widget keeps the note (SKG-527). A plain error
+    // here reached the transport as a 500.
+    throw new StoreError('Linear could not be reached');
+  }
 
   if (!response.ok) {
     throw new StoreError(`Linear responded ${response.status}`);
   }
 
-  const payload = (await response.json()) as { data?: T; errors?: { message: string }[] };
+  const payload = (await response.json().catch(() => null)) as { data?: T; errors?: { message: string }[] } | null;
 
-  if (payload.errors?.length) {
+  if (payload?.errors?.length) {
     throw new StoreError(payload.errors.map((error) => error.message).join('; '));
   }
-  if (!payload.data) {
+  if (!payload?.data) {
     throw new StoreError('Linear returned no data');
   }
 
@@ -237,7 +244,7 @@ function optionalComments(comments: SeedComment[] | undefined): { comments?: See
  * unbounded comment list is a payload nobody asked for and a Linear bill somebody pays. A thread
  * longer than this belongs in Linear, which the pin links to.
  */
-const COMMENTS_PER_ISSUE = 20;
+export const COMMENTS_PER_ISSUE = 20;
 
 /**
  * Stop walking after this many pages. A page with 500 pins is not a page the widget can render

@@ -142,8 +142,14 @@ contribution we expect most often.
    then offers only those.
 5. When the service fails, throw `StoreError`: the worker answers `502 store-unavailable`, and the widget
    keeps the note. Parse every row the service returns; never trust it.
-6. Test against a double of the service, and add your store to the store table of
-   [SECURITY.md](SECURITY.md): where a seed lands, and who can read it there.
+6. Add your store to `apps/worker/src/store-conformance.test.ts`, the suite every store passes: a seed
+   read back unchanged, a page kept apart from the same page with a query string, one client kept from
+   another, a client routed to the tenant its configuration names, an unknown state drawn as `seeded`,
+   replies oldest first and capped, and an error, an unreadable answer or an unreachable provider
+   answered as `502 store-unavailable`. A remote store runs against a double of the service that keeps
+   what it receives.
+7. Add a row to the two store tables of [docs/self-hosting.md](docs/self-hosting.md), and to the store
+   table of [SECURITY.md](SECURITY.md): where a seed lands, and who can read it there.
 
 [docs/decisions/worker.md](docs/decisions/worker.md) says what the SQLite and GitHub connectors changed
 in the interface, and why.

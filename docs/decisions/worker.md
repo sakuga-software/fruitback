@@ -408,6 +408,46 @@ degradation the ticket asked to have written down rather than discovered.
   REST documentation, API version 2022-11-28. The shapes of an issue row, a comment and
   `state_reason` were read from a public repository with `gh api`; nothing was written anywhere.
 
+## The conformance suite, and the matrix (SKG-527)
+
+- **The doubles keep what they receive.** `linear-stub.ts` answers from a fixed list and records the
+  calls, so it cannot serve a suite that writes and then reads. `fakeLinear` and `fakeGithub` in
+  `store-conformance.test.ts` store the write and apply the filter of the read. A Linear label belongs
+  to one team, and GitHub serves comments oldest first, as the real services do. So client isolation is
+  tested where each store puts it: the label filter on Linear, the labels and the seed's client on
+  GitHub, the `client_id` column on SQLite.
+- **The outage case goes through `handleRequest`.** A connector throws `StoreError`, and `app.ts`
+  turns it into `502 store-unavailable`. A case that checks only the throw passes with the mapping
+  deleted. Measured: a rethrow on the read path, and separately on the write path, fails the case for
+  the three stores that can fail.
+- **A step can be a string.** The memory store assigns its own states, writes canned replies and has no
+  provider. `node:test` reports a reason as skipped. A step that passed with nothing checked would read
+  as conformance.
+- **The matrix test reads what the code holds**: the stages, the reply cap and whether the store runs
+  in production. The reply cap of Linear, GitHub and SQLite comes from each subject, which imports the
+  connector's own `COMMENTS_PER_ISSUE`, and a case writes two replies more than the cap. The Replies cell
+  of the memory row is prose: the test checks only that it claims no cap. The column that says what
+  changes a stage is prose too, and no test reads it.
+- **An outage has two shapes, and the Linear store handled one.** The first version of the suite only
+  answered `500`. A `fetch` that rejects, which is what a lost network gives, escaped `linear.ts` as a
+  plain error and reached the transport as a `500`. GitHub already wrapped it. `graphql` now turns a
+  rejected `fetch` and an unreadable body into `StoreError`, and the suite runs all three shapes: an
+  error status, a rejected `fetch` and a body that is not JSON.
+- **Routing is part of the promise.** Linear and GitHub send a client with its own `teamId` or
+  `repository` elsewhere, and `scope` must say so for the read cache. The suite writes and reads a
+  client in a second tenant and checks that the default tenant does not see it. SQLite and the memory
+  store have one tenant, and say so.
+- **Defence in depth shows as a surviving mutation.** Removing only GitHub's client label, or only the
+  memory store's client filter, passes: each store has a second layer, the seed's client re-check or
+  the client label. Removing both fails.
+- **A read that names no client.** The memory store returned only the seeds with no client. Linear,
+  GitHub and SQLite return every seed on the page. The suite made the difference visible, and the
+  memory store now follows the other three. Only a worker without `FRUITBACK_CLIENTS` accepts such a
+  read.
+- **The ticket's matrix was wrong in three cells.** GitHub has three stages, not two. Nothing in the
+  worker writes SQLite replies or changes a SQLite stage. The Serverless column went, because the
+  deployment is Docker only.
+
 ## The markdown codec, and the file that outlived its name
 
 - **`markdown-description.ts` holds "put a seed in a markdown body and keep the issue readable"**

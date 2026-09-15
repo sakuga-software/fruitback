@@ -82,7 +82,7 @@ const MIGRATIONS: readonly string[] = [
 ];
 
 /** How many replies travel with a pin. A longer thread belongs wherever the team actually talks. */
-const COMMENTS_PER_ISSUE = 20;
+export const COMMENTS_PER_ISSUE = 20;
 
 /**
  * One connection per file, for the lifetime of the process.

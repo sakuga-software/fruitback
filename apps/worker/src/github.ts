@@ -74,7 +74,7 @@ const ISSUES_PAGE_SIZE = 100;
 const ISSUES_MAX_PAGES = 10;
 
 /** Same cap as the Linear store. The thread keeps the newest comments. */
-const COMMENTS_PER_ISSUE = 20;
+export const COMMENTS_PER_ISSUE = 20;
 
 /**
  * Comment lists fetched at the same time. GitHub's secondary rate limit counts concurrent requests,
