@@ -6,10 +6,12 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, it, mock } from 'node:test';
 import { DEFAULT_SEED_STAGE, SEED_STAGES } from '@fruitback/shared';
-import { createGithubStore } from './github.ts';
+import type { ClientPolicy } from './clients.ts';
+import { COMMENTS_PER_ISSUE as GITHUB_REPLY_CAP, createGithubStore } from './github.ts';
 import { createMemoryStore, resetMemoryLinear } from './linear-memory.ts';
-import { type IssueNode, createLinearStore } from './linear.ts';
-import { closeSqliteConnections, createSqliteStore } from './sqlite.ts';
+import { COMMENTS_PER_ISSUE as LINEAR_REPLY_CAP, type IssueNode, createLinearStore } from './linear.ts';
+import { COMMENTS_PER_ISSUE as SQLITE_REPLY_CAP, closeSqliteConnections, createSqliteStore } from './sqlite.ts';
+import type { CreatedIssue, SeedStore } from './store.ts';
 import { type ConformanceSubject, describeStoreConformance } from './store-conformance.fixture.ts';
 import { isDevOnlyProvider, storeProviders } from './stores.ts';
 
@@ -17,6 +19,14 @@ import { isDevOnlyProvider, storeProviders } from './stores.ts';
  * Each store against the conformance suite (SKG-527). A new store adds a subject here, and a row to the
  * store matrix in `docs/self-hosting.md`.
  */
+
+const POLICY: ClientPolicy = { showComments: true, identitySecret: undefined, read: 'public' };
+
+/** Two replies, the newer first, so a store that keeps the stored order returns them newest first. */
+const TWO_REPLIES = [
+  { body: 'second', createdAt: '2026-09-02T10:00:00.000Z' },
+  { body: 'first', createdAt: '2026-09-01T10:00:00.000Z' },
+];
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -109,6 +119,7 @@ function fakeLinear(): { node(id: string): IssueNode } {
 }
 
 type GithubIssue = {
+  repository: string;
   id: number;
   number: number;
   html_url: string;
@@ -122,41 +133,51 @@ type GithubIssue = {
 };
 
 /**
- * GitHub, as far as the GitHub store uses it, for the repository `acme/site`. It keeps the labels and
- * the issues it receives. A list filter needs every label, without case. Comments come back in the
- * order they were stored, so the order the store returns is its own.
+ * GitHub, as far as the GitHub store uses it, for any repository. It keeps the labels and the issues
+ * it receives, per repository. A list filter needs every label, without case. Comments come back in
+ * the order they were stored, so the order the store returns is its own.
  */
 function fakeGithub(): { issue(id: string): GithubIssue } {
-  const labels = new Set<string>();
+  const labels = new Map<string, Set<string>>();
   const issues: GithubIssue[] = [];
 
   mock.method(globalThis, 'fetch', async (input: string, init: RequestInit = {}) => {
     const url = new URL(input);
-    const route = `${init.method ?? 'GET'} ${url.pathname}`;
+    const method = init.method ?? 'GET';
     const body = typeof init.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : {};
     const page = Number(url.searchParams.get('page') ?? '1');
     const perPage = Number(url.searchParams.get('per_page') ?? '30');
     const onPage = <T>(rows: T[]) => rows.slice((page - 1) * perPage, page * perPage);
 
-    if (route === 'GET /repos/acme/site/installation') return json(200, { id: 77 });
-    if (route === 'POST /app/installations/77/access_tokens') {
+    if (method === 'POST' && url.pathname === '/app/installations/77/access_tokens') {
       return json(201, { token: 'ghs_conformance', expires_at: '2999-01-01T00:00:00Z' });
     }
 
-    if (route === 'POST /repos/acme/site/labels') {
+    const scoped = /^\/repos\/([^/]+\/[^/]+)(\/.*)$/.exec(url.pathname);
+    if (scoped === null) return json(404, { message: 'Not Found' });
+    const [, repository = '', path = ''] = scoped;
+    const route = `${method} ${path}`;
+    const inRepository = issues.filter((issue) => issue.repository === repository);
+
+    if (route === 'GET /installation') return json(200, { id: 77 });
+
+    if (route === 'POST /labels') {
+      const known = labels.get(repository) ?? new Set<string>();
+      labels.set(repository, known);
       const name = String(body.name).toLowerCase();
-      if (labels.has(name)) return json(422, { errors: [{ code: 'already_exists' }] });
-      labels.add(name);
+      if (known.has(name)) return json(422, { errors: [{ code: 'already_exists' }] });
+      known.add(name);
 
       return json(201, { name: body.name });
     }
 
-    if (route === 'POST /repos/acme/site/issues') {
-      const number = issues.length + 1;
+    if (route === 'POST /issues') {
+      const number = inRepository.length + 1;
       const issue: GithubIssue = {
-        id: 9000 + number,
+        repository,
+        id: 9000 + issues.length + 1,
         number,
-        html_url: `https://github.com/acme/site/issues/${number}`,
+        html_url: `https://github.com/${repository}/issues/${number}`,
         title: String(body.title),
         body: String(body.body),
         state: 'open',
@@ -170,19 +191,19 @@ function fakeGithub(): { issue(id: string): GithubIssue } {
       return json(201, { id: issue.id, number: issue.number, html_url: issue.html_url });
     }
 
-    if (route === 'GET /repos/acme/site/issues') {
+    if (route === 'GET /issues') {
       const required = (url.searchParams.get('labels') ?? '').split(',').map((name) => name.toLowerCase());
-      const rows = issues
+      const rows = inRepository
         .filter((issue) => required.every((name) => issue.labels.some((label) => label.name.toLowerCase() === name)))
         .sort((left, right) => right.number - left.number)
-        .map(({ replies, ...row }) => ({ ...row, comments: replies.length }));
+        .map(({ repository: _repository, replies, ...row }) => ({ ...row, comments: replies.length }));
 
       return json(200, onPage(rows));
     }
 
-    const comments = /^GET \/repos\/acme\/site\/issues\/(\d+)\/comments$/.exec(route);
+    const comments = /^GET \/issues\/(\d+)\/comments$/.exec(route);
     if (comments) {
-      const issue = issues.find((candidate) => candidate.number === Number(comments[1]));
+      const issue = inRepository.find((candidate) => candidate.number === Number(comments[1]));
 
       return issue === undefined ? json(404, { message: 'Not Found' }) : json(200, onPage(issue.replies));
     }
@@ -204,9 +225,27 @@ const GITHUB_KEY = createPrivateKey(
   generateKeyPairSync('rsa', { modulusLength: 2048, privateKeyEncoding: { type: 'pkcs1', format: 'pem' } }).privateKey,
 );
 
-/** Every provider answers `500` to every call. */
-function outage(): void {
+/** Every call to the provider answers `500`. */
+function providerErrors(): void {
+  mock.restoreAll();
   mock.method(globalThis, 'fetch', async () => json(500, { message: 'down for maintenance' }));
+}
+
+/** Every call to the provider rejects, as `fetch` does when the network is down. */
+function networkDown(): void {
+  mock.restoreAll();
+  mock.method(globalThis, 'fetch', async () => {
+    throw new TypeError('fetch failed');
+  });
+}
+
+/** Write a seed, then store two replies on it. */
+async function writeWithReplies(
+  store: SeedStore,
+  seed: Parameters<SeedStore['create']>[0],
+  reply: (created: CreatedIssue) => void,
+): Promise<void> {
+  reply(await store.create(seed, undefined, POLICY));
 }
 
 let linear: ReturnType<typeof fakeLinear> | undefined;
@@ -221,66 +260,85 @@ function freshDirectory(): string {
   return directory;
 }
 
+const LINEAR_CONFIG = { apiKey: 'lin_api_test', teamId: 'team_1' };
+const GITHUB_CONFIG = { appId: '12345', privateKey: GITHUB_KEY, repository: 'acme/site' };
+
 const SUBJECTS: ConformanceSubject[] = [
   {
     provider: 'linear',
     writtenStage: DEFAULT_SEED_STAGE,
+    replyCap: LINEAR_REPLY_CAP,
+    otherTenant: { teamId: 'team_2' },
     open() {
       linear = fakeLinear();
 
-      return createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1' });
+      return createLinearStore(LINEAR_CONFIG);
     },
     close: () => mock.restoreAll(),
     unknownState(created) {
       linear!.node(created.id).state = { name: 'Marmalade', type: 'marmalade' };
     },
-    reply(created, replies) {
-      linear!.node(created.id).comments = {
-        nodes: replies.map((reply, index) => ({
-          id: `comment_${index}`,
-          body: reply.body,
-          createdAt: reply.createdAt,
-          user: { name: 'Alice' },
-        })),
-      };
-    },
+    plantReplies: (store, seed) =>
+      writeWithReplies(store, seed, (created) => {
+        linear!.node(created.id).comments = {
+          nodes: TWO_REPLIES.map((reply, index) => ({
+            id: `comment_${index}`,
+            body: reply.body,
+            createdAt: reply.createdAt,
+            user: { name: 'Alice' },
+          })),
+        };
+      }),
     broken() {
-      mock.restoreAll();
-      outage();
+      providerErrors();
 
-      return createLinearStore({ apiKey: 'lin_api_test', teamId: 'team_1' });
+      return createLinearStore(LINEAR_CONFIG);
+    },
+    unreachable() {
+      networkDown();
+
+      return createLinearStore(LINEAR_CONFIG);
     },
   },
   {
     provider: 'github',
     writtenStage: DEFAULT_SEED_STAGE,
+    replyCap: GITHUB_REPLY_CAP,
+    otherTenant: { repository: 'acme/other' },
     open() {
       github = fakeGithub();
 
-      return createGithubStore({ appId: '12345', privateKey: GITHUB_KEY, repository: 'acme/site' });
+      return createGithubStore(GITHUB_CONFIG);
     },
     close: () => mock.restoreAll(),
     unknownState(created) {
       github!.issue(created.id).state = 'marmalade';
     },
-    reply(created, replies) {
-      github!.issue(created.id).replies = replies.map((reply, index) => ({
-        id: 100 + index,
-        body: reply.body,
-        created_at: reply.createdAt,
-        user: { login: 'alice' },
-      }));
-    },
+    plantReplies: (store, seed) =>
+      writeWithReplies(store, seed, (created) => {
+        github!.issue(created.id).replies = TWO_REPLIES.map((reply, index) => ({
+          id: 100 + index,
+          body: reply.body,
+          created_at: reply.createdAt,
+          user: { login: 'alice' },
+        }));
+      }),
     broken() {
-      mock.restoreAll();
-      outage();
+      providerErrors();
 
-      return createGithubStore({ appId: '12345', privateKey: GITHUB_KEY, repository: 'acme/site' });
+      return createGithubStore(GITHUB_CONFIG);
+    },
+    unreachable() {
+      networkDown();
+
+      return createGithubStore(GITHUB_CONFIG);
     },
   },
   {
     provider: 'sqlite',
     writtenStage: DEFAULT_SEED_STAGE,
+    replyCap: SQLITE_REPLY_CAP,
+    otherTenant: 'one file holds the seeds of every client, so there is no other tenant',
     open() {
       sqlitePath = join(freshDirectory(), 'fruitback.db');
 
@@ -298,17 +356,21 @@ const SUBJECTS: ConformanceSubject[] = [
       database.prepare('UPDATE seeds SET stage = ? WHERE id = ?').run('marmalade', Number(created.id));
       database.close();
     },
-    reply(created, replies) {
-      closeSqliteConnections();
-      const database = new DatabaseSync(sqlitePath);
-      const insert = database.prepare('INSERT INTO comments (seed_id, author, body, created_at) VALUES (?, ?, ?, ?)');
-      for (const reply of replies) insert.run(Number(created.id), 'Alice', reply.body, reply.createdAt);
-      database.close();
-    },
+    plantReplies: (store, seed) =>
+      writeWithReplies(store, seed, (created) => {
+        closeSqliteConnections();
+        const database = new DatabaseSync(sqlitePath);
+        const insert = database.prepare('INSERT INTO comments (seed_id, author, body, created_at) VALUES (?, ?, ?, ?)');
+        for (const reply of TWO_REPLIES) insert.run(Number(created.id), 'Alice', reply.body, reply.createdAt);
+        database.close();
+      }),
     broken: () => createSqliteStore({ path: join(freshDirectory(), 'missing', 'fruitback.db') }),
+    unreachable: 'the file is on a local disk, so there is no network to lose',
   },
   {
     provider: 'memory',
+    replyCap: 'the dev store writes two canned replies and no more',
+    otherTenant: 'one list in the process holds the seeds of every client, so there is no other tenant',
     open() {
       resetMemoryLinear();
 
@@ -316,8 +378,16 @@ const SUBJECTS: ConformanceSubject[] = [
     },
     close: () => resetMemoryLinear(),
     unknownState: 'the dev store gives each note a state from its own list',
-    reply: 'the dev store writes its own replies, on every third note',
+    async plantReplies(store, seed) {
+      // The dev store writes two replies, newest first, on every third note.
+      for (const filler of [1, 2]) {
+        const page = { ...seed.page, url: `${seed.page.url}?filler=${filler}` };
+        await store.create({ ...seed, id: `${seed.id}_${filler}`, page }, undefined, POLICY);
+      }
+      await store.create(seed, undefined, POLICY);
+    },
     broken: 'the dev store keeps the notes in the process, so no provider can fail',
+    unreachable: 'the dev store keeps the notes in the process, so there is no network to lose',
   },
 ];
 
@@ -338,43 +408,36 @@ describe('the store matrix in docs/self-hosting.md', () => {
   const guide = readFileSync(new URL('../../../docs/self-hosting.md', import.meta.url), 'utf8');
   const header = '| Store | Stages | What changes the stage | Replies | Runs in production |';
   const start = guide.indexOf(`\n${header}\n`);
-  const rows = new Map(
-    guide
-      .slice(start + 1)
-      .split('\n\n')[0]!
-      .split('\n')
-      .slice(2)
-      .map((line) => line.split('|').map((cell) => cell.trim()))
-      .map((cells) => [/^`(\w+)`$/.exec(cells[1] ?? '')?.[1] ?? '', cells] as const),
-  );
+  const rows = guide
+    .slice(start + 1)
+    .split('\n\n')[0]!
+    .split('\n')
+    .slice(2)
+    .map((line) => line.split('|').map((cell) => cell.trim()))
+    .map((cells) => ({ provider: /^`(\w+)`$/.exec(cells[1] ?? '')?.[1] ?? '', cells }));
 
   it('has one row for each store, and no other', () => {
     assert.ok(start >= 0, 'the store matrix was not found');
-    assert.deepEqual([...rows.keys()].sort(), storeProviders().sort());
+    assert.deepEqual(rows.map((row) => row.provider).sort(), storeProviders().sort());
   });
 
   for (const subject of SUBJECTS) {
-    it(`gives the stages and the production answer of ${subject.provider}`, () => {
+    it(`gives the stages, the reply cap and the production answer of ${subject.provider}`, () => {
       const store = subject.open();
       const stages = [...(store.stages ?? SEED_STAGES)];
       subject.close();
-      const cells = rows.get(subject.provider) ?? [];
+      const cells = rows.find((row) => row.provider === subject.provider)?.cells ?? [];
 
       assert.deepEqual(
         [...(cells[2] ?? '').matchAll(/`(\w+)`/g)].map((match) => match[1]),
         stages,
       );
+      if (typeof subject.replyCap === 'number') {
+        assert.match(cells[4] ?? '', new RegExp(`\\bnewest ${subject.replyCap}\\b`));
+      } else {
+        assert.doesNotMatch(cells[4] ?? '', /\bnewest\b/);
+      }
       assert.equal(cells[5], isDevOnlyProvider(subject.provider) ? 'no' : 'yes');
-    });
-  }
-
-  for (const provider of ['linear', 'github', 'sqlite']) {
-    it(`gives the reply cap of ${provider}`, () => {
-      const source = readFileSync(new URL(`./${provider}.ts`, import.meta.url), 'utf8');
-      const cap = /^const COMMENTS_PER_ISSUE = (\d+);$/m.exec(source)?.[1];
-
-      assert.ok(cap !== undefined, `no COMMENTS_PER_ISSUE in ${provider}.ts`);
-      assert.match(rows.get(provider)?.[4] ?? '', new RegExp(`\\bnewest ${cap}\\b`));
     });
   }
 });

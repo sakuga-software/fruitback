@@ -4,7 +4,7 @@ import { DEFAULT_SEED_STAGE, SEED_STAGES, type Seed, type SeedStage, canonicaliz
 import { minimalSeedFixture, seedFixture } from '@fruitback/shared/seed.fixture';
 import { handleRequest } from './app.ts';
 import { resetCacheState } from './cache.ts';
-import type { ClientPolicy } from './clients.ts';
+import type { ClientConfig, ClientPolicy } from './clients.ts';
 import type { WorkerEnv } from './env.ts';
 import { createMemoryKv } from './kv.ts';
 import { type CreatedIssue, type SeedStore, StoreError } from './store.ts';
@@ -19,25 +19,27 @@ import { type CreatedIssue, type SeedStore, StoreError } from './store.ts';
  * reported as skipped with that reason, never as passed.
  */
 
-export type Reply = { body: string; createdAt: string };
-
 export type ConformanceSubject = {
   /** The `provider` of the store's entry in `STORE_SPECS`. */
   provider: string;
   /** Prepare an empty store and its double. Called before each case. */
   open(): SeedStore;
-  /** Remove what `open` or `broken` prepared. Called after each case. */
+  /** Remove what `open`, `broken` or `unreachable` prepared. Called after each case. */
   close(): void;
-  /**
-   * The stage of a seed just written. Absent when the store picks it some other way.
-   */
+  /** The stage of a seed just written. Absent when the store picks it some other way. */
   writtenStage?: SeedStage;
+  /** The most replies a read returns on one seed. The store matrix in `docs/self-hosting.md` gives it. */
+  replyCap: number | string;
+  /** A client configuration that sends the client's seeds to another tenant than the worker's own. */
+  otherTenant: ClientConfig | string;
   /** Give a stored seed a state that the store does not know. */
   unknownState: ((created: CreatedIssue) => void) | string;
-  /** Store replies on a seed, in the order given. */
-  reply: ((created: CreatedIssue, replies: Reply[]) => void) | string;
-  /** A store whose provider fails every call. It replaces the double that `open` prepared. */
+  /** Write the seed with at least two replies, stored newest first. */
+  plantReplies(store: SeedStore, seed: Seed): Promise<void>;
+  /** A store whose provider answers every call with an error. It replaces the double of `open`. */
   broken: (() => SeedStore) | string;
+  /** A store whose provider cannot be reached, so every call rejects. It replaces the double of `open`. */
+  unreachable: (() => SeedStore) | string;
 };
 
 const POLICY: ClientPolicy = { showComments: true, identitySecret: undefined, read: 'public' };
@@ -63,6 +65,37 @@ function seedFor(id: string, url: string, client: string | undefined): Seed {
 
 function skipReason(step: unknown): string | false {
   return typeof step === 'string' ? step : false;
+}
+
+/** The store rejects with `StoreError`, and the worker answers `502 store-unavailable` on both routes. */
+async function assertStoreUnavailable(failing: SeedStore): Promise<void> {
+  const seed = seedFor('sd_outage', PAGE, 'acme');
+
+  await assert.rejects(failing.create(seed, undefined, POLICY), StoreError);
+  await assert.rejects(failing.findForPage({ url: PAGE, clientId: 'acme' }, undefined, POLICY), StoreError);
+
+  const context = () => ({ clientIp: '203.0.113.1', store: failing, kv: createMemoryKv() });
+  const write = await handleRequest(
+    new Request('https://worker.fruitback.dev/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: ORIGIN },
+      body: JSON.stringify(seed),
+    }),
+    ENV,
+    context(),
+  );
+  const read = await handleRequest(
+    new Request(`https://worker.fruitback.dev/feedback?url=${encodeURIComponent(PAGE)}&client=acme`, {
+      headers: { Origin: ORIGIN },
+    }),
+    ENV,
+    context(),
+  );
+
+  for (const response of [write, read]) {
+    assert.equal(response.status, 502);
+    assert.equal(((await response.json()) as { error?: string }).error, 'store-unavailable');
+  }
 }
 
 export function describeStoreConformance(subject: ConformanceSubject): void {
@@ -131,6 +164,26 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
       assert.deepEqual(ids, ['sd_acme', 'sd_nobody']);
     });
 
+    it(
+      'writes and reads a client in the tenant its configuration names',
+      { skip: skipReason(subject.otherTenant) },
+      async () => {
+        if (typeof subject.otherTenant === 'string') return;
+        const tenant = subject.otherTenant;
+        await store.create(seedFor('sd_other_tenant', PAGE, 'acme'), tenant, POLICY);
+
+        const inTenant = await store.findForPage({ url: PAGE, clientId: 'acme' }, tenant, POLICY);
+        const inDefault = await store.findForPage({ url: PAGE, clientId: 'acme' }, undefined, POLICY);
+
+        assert.deepEqual(
+          inTenant.map((issue) => issue.seed.id),
+          ['sd_other_tenant'],
+        );
+        assert.deepEqual(inDefault, []);
+        assert.notEqual(store.scope(tenant), store.scope(undefined));
+      },
+    );
+
     it('draws a state it does not know at the default stage', { skip: skipReason(subject.unknownState) }, async () => {
       const created = await store.create(seedFor('sd_unknown_state', PAGE, 'acme'), undefined, POLICY);
       if (typeof subject.unknownState === 'function') subject.unknownState(created);
@@ -141,36 +194,23 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
       assert.equal(found[0]?.stage, DEFAULT_SEED_STAGE);
     });
 
-    it('returns the replies oldest first', { skip: skipReason(subject.reply) }, async () => {
-      const created = await store.create(seedFor('sd_replies', PAGE, 'acme'), undefined, POLICY);
-      if (typeof subject.reply === 'function') {
-        subject.reply(created, [
-          { body: 'second', createdAt: '2026-09-02T10:00:00.000Z' },
-          { body: 'first', createdAt: '2026-09-01T10:00:00.000Z' },
-        ]);
-      }
+    it('returns the replies oldest first', async () => {
+      await subject.plantReplies(store, seedFor('sd_replies', PAGE, 'acme'));
 
-      const found = await find(PAGE, 'acme');
+      const times = (await find(PAGE, 'acme'))[0]?.comments?.map((comment) => comment.createdAt) ?? [];
 
-      assert.deepEqual(
-        found[0]?.comments?.map((comment) => comment.body),
-        ['first', 'second'],
-      );
+      assert.ok(times.length >= 2, 'the seed has fewer than two replies');
+      assert.deepEqual(times, [...times].sort());
+      assert.notEqual(times[0], times.at(-1));
     });
 
-    it('leaves the replies out when the client hides them', { skip: skipReason(subject.reply) }, async () => {
-      const created = await store.create(seedFor('sd_hidden_replies', PAGE, 'acme'), undefined, POLICY);
-      if (typeof subject.reply === 'function') {
-        subject.reply(created, [{ body: 'hidden', createdAt: '2026-09-01T10:00:00.000Z' }]);
-      }
+    it('leaves the replies out when the client hides them', async () => {
+      await subject.plantReplies(store, seedFor('sd_hidden_replies', PAGE, 'acme'));
 
       const [shown] = await find(PAGE, 'acme', POLICY);
       const [hidden] = await find(PAGE, 'acme', QUIET);
 
-      assert.deepEqual(
-        shown?.comments?.map((comment) => comment.body),
-        ['hidden'],
-      );
+      assert.ok((shown?.comments?.length ?? 0) > 0, 'the seed has no replies to hide');
       assert.ok(hidden !== undefined, 'the seed was not found');
       assert.equal('comments' in hidden, false);
     });
@@ -185,38 +225,18 @@ export function describeStoreConformance(subject: ConformanceSubject): void {
     });
 
     it(
-      'reports a provider failure as store-unavailable, never as a 500',
+      'reports a provider error as store-unavailable, never as a 500',
       { skip: skipReason(subject.broken) },
       async () => {
-        if (typeof subject.broken !== 'function') return;
-        const failing = subject.broken();
-        const seed = seedFor('sd_outage', PAGE, 'acme');
+        if (typeof subject.broken === 'function') await assertStoreUnavailable(subject.broken());
+      },
+    );
 
-        await assert.rejects(failing.create(seed, undefined, POLICY), StoreError);
-        await assert.rejects(failing.findForPage({ url: PAGE, clientId: 'acme' }, undefined, POLICY), StoreError);
-
-        const context = () => ({ clientIp: '203.0.113.1', store: failing, kv: createMemoryKv() });
-        const write = await handleRequest(
-          new Request('https://worker.fruitback.dev/feedback', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Origin: ORIGIN },
-            body: JSON.stringify(seed),
-          }),
-          ENV,
-          context(),
-        );
-        const read = await handleRequest(
-          new Request(`https://worker.fruitback.dev/feedback?url=${encodeURIComponent(PAGE)}&client=acme`, {
-            headers: { Origin: ORIGIN },
-          }),
-          ENV,
-          context(),
-        );
-
-        for (const response of [write, read]) {
-          assert.equal(response.status, 502);
-          assert.equal(((await response.json()) as { error?: string }).error, 'store-unavailable');
-        }
+    it(
+      'reports an unreachable provider as store-unavailable, never as a 500',
+      { skip: skipReason(subject.unreachable) },
+      async () => {
+        if (typeof subject.unreachable === 'function') await assertStoreUnavailable(subject.unreachable());
       },
     );
   });
