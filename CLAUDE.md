@@ -889,11 +889,17 @@ And *The published image* in [docs/decisions/image.md](docs/decisions/image.md).
 - **Trivy runs with `ignore-unfixed`**, and its version carries the `v` (`# v0.36.0`). One tag out
   of seventy-five is unprefixed, so the wrong form looks valid until the next bump.
 - **Every `uses:` is pinned to a 40-character commit SHA, with its version as a trailing comment**
-  (SKG-608). A tag can move to other code, and `release-image.yml` runs with `packages: write`.
+  (SKG-608). A tag can move to other code, and the `publish` job of `release-image.yml` holds
+  `packages: write`.
   `.github/dependabot.yml` moves an existing pin, SHA and comment together. It does not pin a new step:
   `workflows.test.ts` fails on any `uses:` that is not a SHA followed by its version.
-- **`persist-credentials: false` on both checkouts** — this workflow's token carries
-  `packages: write`, and `actions/checkout` otherwise writes it into `.git/config`.
+- **`persist-credentials: false` on every checkout** — `actions/checkout` otherwise writes the token
+  into `.git/config`, where any later step reads it.
+- **Only the `publish` job holds the write permissions** (SKG-609). The workflow grants
+  `contents: read`, and `packages`, `id-token` and `attestations` are declared on `publish` alone, so
+  `check` builds, emulates and scans with a token that cannot publish. `ci.yml`'s `zizmor` job audits
+  the workflows offline on every pull request and fails on any finding: a permission widened back or
+  an unpinned action is a red check, not a review comment.
 - **Attaching the package is not publishing it.** A new package inherits the repository's visibility;
   making it public is a manual, one-time change in the package settings.
 - **`docker-compose.yml` pulls the image, and `compose.test.ts` holds it to the worker** (SKG-541).

@@ -190,3 +190,30 @@ jobs:
       - name: Worker logs, if the compose run failed
         if: failure()
         run: docker compose --project-directory "$RUNNER_TEMP/compose" logs --no-color || true
+
+  zizmor:
+    # The workflows hold the token that publishes the image, so they are audited like code (SKG-609).
+    # Offline: the audits that call the GitHub API do not run, so the result depends on the files alone.
+    name: zizmor
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      # The action pulls the zizmor image by the digest it lists for this exact version.
+      - name: Audit the workflows
+        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          version: 1.30.1
+          inputs: .github/workflows
+          online-audits: false
+          # The action passes `token` to zizmor, and it defaults to the job's GITHUB_TOKEN. The audits
+          # here are offline, so no token is needed. An empty value is refused ("GitHub token cannot be
+          # empty"), so this placeholder is what keeps the real token out of the audit container.
+          token: unused-offline
+          advanced-security: false
+          annotations: true
