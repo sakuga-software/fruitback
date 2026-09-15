@@ -117,6 +117,24 @@ describe('createEditor', () => {
   });
 });
 
+describe('createEditor.switchOn', () => {
+  it('answers false, and stores nothing, when the browser rejects the request', async () => {
+    const page = createEditor({
+      activate: async () => assert.fail('activated a rule that was not switched on'),
+      request: async () => {
+        throw new Error('Only permissions specified in the manifest may be requested.');
+      },
+      write: async () => assert.fail('wrote without a grant'),
+      current: () => ({}),
+    });
+
+    assert.equal(
+      await page.switchOn('https://acme.dev', { mode: 'team', endpoint: 'https://w.test', enabled: false }),
+      false,
+    );
+  });
+});
+
 describe('latestOnly', () => {
   it('tells an older render that a newer one started', () => {
     const begin = latestOnly();

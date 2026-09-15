@@ -61,13 +61,17 @@ export function createEditor({ request, write, current, activate }: EditorSeams)
     },
 
     switchOn(pattern, site) {
-      return request(pattern).then(async (granted) => {
-        if (!granted) return false;
-        await write(pattern, { ...site, enabled: true });
-        await activate(pattern);
+      return request(pattern).then(
+        async (granted) => {
+          if (!granted) return false;
+          await write(pattern, { ...site, enabled: true });
+          await activate(pattern);
 
-        return true;
-      });
+          return true;
+        },
+        // A request the browser rejects is a refusal too: nothing was stored, so it is not a failed write.
+        () => false,
+      );
     },
   };
 }
