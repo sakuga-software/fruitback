@@ -129,7 +129,9 @@ builds `dist` first, because `package.spec.ts` loads the real file.
   nothing at install, and the no-rule spec runs with that grant.
 - **The worker holds extension sessions during the suite** (`e2e/worker-sessions.ts`), and the team
   spec mints its code with the real `pair` command. The suite never reuses a worker already on its port: one started without
-  that env reads another session file. Stop `pnpm dev` before `pnpm e2e`.
+  that env holds no session store, or not that one. Stop `pnpm dev` before `pnpm e2e`. The team spec
+  pairs with a **second worker on `8789`, with `FRUITBACK_READ=authenticated`**: on `public` a pin read
+  back proves nothing about the relay, because the page could read it with no credential.
 - **An absence needs a control.** The no-rule spec then adds the rule and sees the widget; the token
   search fails unless it finds a token in both storage areas. A spec that counts zero proves nothing alone.
 

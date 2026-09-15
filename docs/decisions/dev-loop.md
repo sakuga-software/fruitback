@@ -101,6 +101,10 @@ What the specs rest on:
 - **Team mode needs a site that ships a dormant widget**, and the playground has none. The spec
   mounts the built IIFE as such a site does: on `fruitback:extension`, with
   `window.fruitbackExtension.transport`.
+- **Team mode runs against a second worker, on `8789` with `FRUITBACK_READ=authenticated`.** On the
+  suite's `public` worker the reload would show the pin even if the relay sent no `Authorization` on a
+  read, so the spec first asserts an anonymous read of that page answers `401`. Both workers share the
+  session file, so the `pair` command needs no port.
 - **The popup acts on the active tab of its window.** In a tab of its own it describes itself, so the
   spec opens it behind the site with `tabs.create({ active: false })`.
 - **The two searches read different things.** `addScriptTag({ path })` puts the widget code in the
@@ -112,13 +116,14 @@ What the specs rest on:
 
 Each guard was run against a mutant, and each mutant failed a check:
 
-| Mutant                                                    | Failed on                       |
-| --------------------------------------------------------- | ------------------------------- |
-| `registration.ts` registers the page script in `ISOLATED` | the stored seed has no `source` |
-| a stored token written to the page's `localStorage`       | the token search                |
-| the site's widget mounted with no `transport`             | `reporter` is not `verified`    |
-| the rule added before the no-rule assertions              | a widget host on the page       |
-| `page.content.ts` declares `world: 'ISOLATED'`            | `worlds.test.ts`, not the spec  |
+| Mutant                                                    | Failed on                           |
+| --------------------------------------------------------- | ----------------------------------- |
+| `registration.ts` registers the page script in `ISOLATED` | the stored seed has no `source`     |
+| a stored token written to the page's `localStorage`       | the token search                    |
+| the site's widget mounted with no `transport`             | `reporter` is not `verified`        |
+| `relay.ts` sends no `Authorization` on a GET              | the pin read back through the relay |
+| the rule added before the no-rule assertions              | a widget host on the page           |
+| `page.content.ts` declares `world: 'ISOLATED'`            | `worlds.test.ts`, not the spec      |
 
 The spec passed on the last one, and that is not a weak spec. A script registered at runtime takes its
 world from `registerContentScripts`, so the `world` in the entrypoint does not reach the browser.

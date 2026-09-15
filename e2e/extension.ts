@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { type BrowserContext, type Page, type Worker, test as base, chromium, expect } from '@playwright/test';
 import { WORKER_ORIGIN } from './pin.ts';
-import { WORKER_SESSION_ENV } from './worker-sessions.ts';
+import { AUTHENTICATED_WORKER_ORIGIN, WORKER_SESSION_ENV } from './worker-sessions.ts';
 
 /**
  * The extension, loaded into a real Chromium, against the playground as an ordinary site (SKG-538).
@@ -74,7 +74,7 @@ function copyWithLocalAccess(directory: string): string {
   const manifestPath = path.join(directory, 'manifest.json');
   fs.cpSync(BUILT_EXTENSION, directory, { recursive: true });
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
-  manifest.host_permissions = [`${PLAYGROUND_ORIGIN}/*`, `${WORKER_ORIGIN}/*`];
+  manifest.host_permissions = [`${PLAYGROUND_ORIGIN}/*`, `${WORKER_ORIGIN}/*`, `${AUTHENTICATED_WORKER_ORIGIN}/*`];
   fs.writeFileSync(manifestPath, JSON.stringify(manifest));
 
   return directory;
@@ -94,14 +94,14 @@ export async function openBareSite(page: Page, testCase: string): Promise<void> 
 /** A rule for the playground origin, added through the options page, and registered by the background. */
 export async function addRule(
   extension: LoadedExtension,
-  rule: { mode: 'private'; clientId: string } | { mode: 'team' },
+  rule: { endpoint: string } & ({ mode: 'private'; clientId: string } | { mode: 'team' }),
 ): Promise<void> {
   const options = await extension.context.newPage();
   await options.goto(`chrome-extension://${extension.id}/options.html`);
   await options.getByLabel('Sites', { exact: true }).fill(PLAYGROUND_ORIGIN);
   // The name of a select in a label includes the chosen option, so it only starts with the label.
   await options.getByLabel(/^Mode/).selectOption(rule.mode);
-  await options.getByLabel('Worker endpoint', { exact: true }).fill(WORKER_ORIGIN);
+  await options.getByLabel('Worker endpoint', { exact: true }).fill(rule.endpoint);
   if (rule.mode === 'private') await options.getByLabel('Client id', { exact: true }).fill(rule.clientId);
   await options.getByRole('button', { name: 'Add rule' }).click();
   await expect(options.locator('.rules li').filter({ hasText: PLAYGROUND_ORIGIN })).toContainText('Access granted');
@@ -152,9 +152,16 @@ export async function pairFromPopup(extension: LoadedExtension, site: Page, code
 
 type StoredSeed = { note: string; source?: Record<string, unknown>; reporter?: Record<string, unknown> };
 
-/** The seeds the worker stored for a page, read from this process so the page makes no call of its own. */
-export async function seedsOn(page: Page): Promise<StoredSeed[]> {
-  const response = await fetch(`${WORKER_ORIGIN}/feedback?url=${encodeURIComponent(page.url())}&client=playground`);
+/** A read of the seeds of a page, from this process, so the page makes no call of its own. */
+export function readSeeds(page: Page, origin: string, accessToken?: string): Promise<Response> {
+  return fetch(`${origin}/feedback?url=${encodeURIComponent(page.url())}&client=playground`, {
+    headers: accessToken === undefined ? {} : { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+export async function seedsOn(page: Page, origin = WORKER_ORIGIN, accessToken?: string): Promise<StoredSeed[]> {
+  const response = await readSeeds(page, origin, accessToken);
+  expect(response.status).toBe(200);
   const { issues } = (await response.json()) as { issues: { seed: StoredSeed }[] };
 
   return issues.map((issue) => issue.seed);

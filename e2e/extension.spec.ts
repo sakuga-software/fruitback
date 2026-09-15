@@ -4,6 +4,7 @@ import {
   mintPairingCode,
   openBareSite,
   pairFromPopup,
+  readSeeds,
   readableByThePage,
   recordPageMessages,
   seedsOn,
@@ -11,6 +12,7 @@ import {
   test,
 } from './extension.ts';
 import { WORKER_ORIGIN } from './pin.ts';
+import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 /**
  * The extension across its worlds (SKG-538): what a site gets with it, without it, and what its page
@@ -20,11 +22,13 @@ import { WORKER_ORIGIN } from './pin.ts';
 const IIFE = 'packages/widget/dist/fruitback.iife.js';
 const REVIEWER = 'E2E Reviewer';
 
-/** The requests a page sends to the worker, counted from the moment this is called. */
+/** The requests a page sends to either worker, counted from the moment this is called. */
 function workerCalls(page: Page): string[] {
   const calls: string[] = [];
   page.on('request', (request) => {
-    if (request.url().startsWith(WORKER_ORIGIN)) calls.push(request.url());
+    if ([WORKER_ORIGIN, AUTHENTICATED_WORKER_ORIGIN].some((origin) => request.url().startsWith(origin))) {
+      calls.push(request.url());
+    }
   });
 
   return calls;
@@ -70,14 +74,14 @@ test('an origin with no rule mounts nothing, until a rule covers it', async ({ e
   expect(calls).toEqual([]);
   expect(await page.evaluate(() => '__fruitbackPageScript' in window || 'fruitbackExtension' in window)).toBe(false);
 
-  await addRule(extension, { mode: 'private', clientId: 'playground' });
+  await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
   await page.reload();
 
   await expect(page.getByRole('button', { name: /Leave feedback/ })).toBeVisible();
 });
 
 test('private mode: the mounted widget reads the component, and the pin comes back', async ({ extension }) => {
-  await addRule(extension, { mode: 'private', clientId: 'playground' });
+  await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
   const page = await extension.context.newPage();
   await openBareSite(page, 'ext-private');
 
@@ -95,7 +99,7 @@ test('private mode: the mounted widget reads the component, and the pin comes ba
 });
 
 /** What a team-mode site ships: a dormant widget that mounts when the extension announces itself. */
-async function mountTheSiteWidget(page: Page): Promise<void> {
+async function mountTheSiteWidget(page: Page, endpoint: string): Promise<void> {
   await page.addScriptTag({ path: IIFE });
   await page.evaluate((endpoint) => {
     type Mounted = { destroy(): void };
@@ -118,18 +122,18 @@ async function mountTheSiteWidget(page: Page): Promise<void> {
     // The extension can announce before or after this runs, so the site does both.
     window.addEventListener('fruitback:extension', follow);
     follow();
-  }, WORKER_ORIGIN);
+  }, endpoint);
 }
 
-test('team mode: paired from the popup, the site writes through the relay and never sees a token', async ({
+test('team mode: paired from the popup, the site reads and writes through the relay and never sees a token', async ({
   extension,
 }) => {
   await recordPageMessages(extension.context);
-  await addRule(extension, { mode: 'team' });
+  await addRule(extension, { mode: 'team', endpoint: AUTHENTICATED_WORKER_ORIGIN });
   const page = await extension.context.newPage();
   const calls = workerCalls(page);
   await openBareSite(page, 'ext-team');
-  await mountTheSiteWidget(page);
+  await mountTheSiteWidget(page, AUTHENTICATED_WORKER_ORIGIN);
   await expect(page.getByRole('button', { name: 'Team feedback' })).toBeVisible();
 
   await pairFromPopup(extension, page, mintPairingCode(REVIEWER), REVIEWER);
@@ -137,21 +141,25 @@ test('team mode: paired from the popup, the site writes through the relay and ne
   await plantOnTheLatteCard(page, 'Team feedback', 'Planté par le mode équipe');
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 
-  // Signed by the worker from the session: only the relay carries it.
-  const [seed] = await seedsOn(page);
-  expect(seed?.reporter).toMatchObject({ name: REVIEWER, verified: true });
-
+  // This worker refuses a read with no identity, so the pin read back below came through the relay.
+  expect((await readSeeds(page, AUTHENTICATED_WORKER_ORIGIN)).status).toBe(401);
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Nos formules' })).toBeVisible();
-  await mountTheSiteWidget(page);
+  await mountTheSiteWidget(page, AUTHENTICATED_WORKER_ORIGIN);
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 
-  // Every call went through the background. The page itself never called the worker.
+  // Every call went through the background. The page itself never called a worker.
   expect(calls).toEqual([]);
 
   const tokens = await storedTokens(extension.worker);
   // The refresh token in `local` and the access token in `session`, or the search below proves nothing.
   expect([...new Set(tokens.map((token) => token.area))].sort()).toEqual(['local', 'session']);
+
+  // Signed by the worker from the session: only the relay carries it.
+  const access = tokens.find((token) => token.area === 'session')?.value;
+  const [seed] = await seedsOn(page, AUTHENTICATED_WORKER_ORIGIN, access);
+  expect(seed?.reporter).toMatchObject({ name: REVIEWER, verified: true });
+
   const readable = await readableByThePage(page);
   const { messages, chromeStorage } = JSON.parse(readable) as { messages: string[]; chromeStorage: string };
   expect(messages.join('\n')).toContain('relay-response');
