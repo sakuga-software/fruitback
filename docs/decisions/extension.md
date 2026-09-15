@@ -497,6 +497,9 @@ popup's `turnOn`. The duplicate check reads the list the page already holds rath
 the same reason. A rules file holds patterns, modes, endpoints and client ids, and no session and no
 grant. So an imported entry shows **No access in this browser** until **Grant access** is pressed.
 A grant writes no storage, so the background listens to `permissions.onAdded` as well as `onRemoved`.
+A registration reaches only the next page load, so a rule added, switched on or granted on the options
+page is also injected into the tabs already open on it (`injectIntoOpenTabs`), as the popup does for
+its own tab. Raised in review.
 Without it, an imported rule granted from the options page stays unregistered until the browser
 restarts.
 

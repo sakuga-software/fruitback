@@ -24,11 +24,13 @@ export type EditorSeams = {
   request: (pattern: string) => Promise<boolean>;
   write: (pattern: string, site: SiteConfig) => Promise<void>;
   current: () => Record<string, SiteConfig>;
+  /** Called after a rule is stored switched on: the tabs already open on it get the scripts. */
+  activate: (pattern: string) => Promise<void>;
 };
 
 export type RuleFields = SiteFields & { sites: string };
 
-export function createEditor({ request, write, current }: EditorSeams): {
+export function createEditor({ request, write, current, activate }: EditorSeams): {
   add: (fields: RuleFields) => Promise<string>;
   switchOn: (pattern: string, site: SiteConfig) => Promise<boolean>;
 } {
@@ -41,23 +43,30 @@ export function createEditor({ request, write, current }: EditorSeams): {
       const problem = complaint(fields);
       if (problem !== '') return Promise.resolve(problem);
 
-      return request(pattern).then(async (granted) => {
-        if (!granted) return NO_ACCESS_PROBLEM;
-        try {
-          await write(pattern, siteFrom(fields, true));
-        } catch {
-          return STORE_PROBLEM;
-        }
+      return request(pattern).then(
+        async (granted) => {
+          if (!granted) return NO_ACCESS_PROBLEM;
+          try {
+            await write(pattern, siteFrom(fields, true));
+          } catch {
+            return STORE_PROBLEM;
+          }
+          await activate(pattern);
 
-        return '';
-      });
+          return '';
+        },
+        // A request the browser rejects rather than refuses. Nothing was stored either way.
+        () => NO_ACCESS_PROBLEM,
+      );
     },
 
     switchOn(pattern, site) {
       return request(pattern).then(async (granted) => {
-        if (granted) await write(pattern, { ...site, enabled: true });
+        if (!granted) return false;
+        await write(pattern, { ...site, enabled: true });
+        await activate(pattern);
 
-        return granted;
+        return true;
       });
     },
   };

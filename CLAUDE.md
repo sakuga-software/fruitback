@@ -430,8 +430,9 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   whole `local` area, and the bridge, a content script, must not read the refresh token stored there.
 - **A rules file holds no credential and no grant.** An imported entry runs nowhere until the options
   page's **Grant access** is pressed, and `permissions.onAdded` is what re-syncs the registration,
-  because a grant writes no storage. The worker's `origins` stays an exact list: a wildcard in the
-  browser widens nothing there.
+  because a grant writes no storage. The worker's `origins` stays an exact list, but it applies to
+  private mode only: the relay calls from the extension origin, which the worker exempts. **A wildcard
+  team rule lends the reviewer's session to every page it covers**, and SECURITY.md says so.
 - **The rules stay in `chrome.storage.local`.** The ticket asked for `sync`; a host permission does
   not travel with a synced rule, and moving the key is a storage-shape change. That is SKG-611.
 

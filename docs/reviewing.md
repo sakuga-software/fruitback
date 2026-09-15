@@ -120,9 +120,14 @@ rule for all of them. **A site that no rule covers mounts nothing**: there is no
 refuse. On a site a wildcard covers, the popup's switch reads `Turn off for every site this rule covers`,
 because that is what it does.
 
+**In team mode, a wildcard rule lends your session to every page it covers.** The relay spends your
+session for any page a team rule covers, so `https://*.staging.acme.dev` trusts every subdomain under it.
+Use one origin when that is all you mean.
+
 **A wildcard is a convenience in your browser, and grants nothing on the worker.** The worker compares
 each page's exact origin with the `origins` of its client, so `pr-12.staging.acme.dev` has to be listed
-there too, or its notes are refused.
+there too, or its notes are refused. That check applies in private mode, where the widget calls from the
+page; in team mode the call comes from the extension, which the worker does not hold to `origins`.
 
 ### Share rules with a team
 

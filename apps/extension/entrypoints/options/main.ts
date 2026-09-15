@@ -2,6 +2,7 @@ import { browser } from 'wxt/browser';
 import { matchPatternFor } from '../../src/registration.ts';
 import { STORE_PROBLEM, createEditor, latestOnly } from '../../src/site-editor.ts';
 import { parseSitePattern } from '../../src/site-patterns.ts';
+import { type TabScripting, injectIntoOpenTabs } from '../../src/tab-injection.ts';
 import { type SitesImport, exportSites, importSites } from '../../src/site-transfer.ts';
 import { type SiteConfig, type SiteMode, readAll, removeSite, writeSite, writeSites } from '../../src/sites.ts';
 
@@ -22,10 +23,18 @@ const IMPORT_PROBLEM: Record<Extract<SitesImport, { ok: false }>['reason'], stri
 /** What the list shows now. The add form checks for a duplicate here, because a storage read loses the click. */
 let current: Record<string, SiteConfig> = {};
 
+const scripting: TabScripting = {
+  query: (matchPattern) => browser.tabs.query({ url: matchPattern }),
+  execute: async (tabId, file, world) => {
+    await browser.scripting.executeScript({ target: { tabId }, files: [file], world });
+  },
+};
+
 const editor = createEditor({
   request: (pattern) => browser.permissions.request({ origins: [matchPatternFor(pattern)] }),
   write: writeSite,
   current: () => current,
+  activate: (pattern) => injectIntoOpenTabs(scripting, pattern),
 });
 const beginRender = latestOnly();
 
@@ -87,7 +96,7 @@ async function row(pattern: string, site: SiteConfig): Promise<HTMLElement> {
 
   const buttons = document.createElement('span');
   buttons.className = 'buttons';
-  if (!granted) buttons.append(button('Grant access', () => attempt(grant(pattern))));
+  if (!granted) buttons.append(button('Grant access', () => attempt(grant(pattern, site))));
   buttons.append(
     site.enabled
       ? button('Turn off', () => attempt(writeSite(pattern, { ...site, enabled: false })))
@@ -106,8 +115,11 @@ async function row(pattern: string, site: SiteConfig): Promise<HTMLElement> {
   return item;
 }
 
-async function grant(pattern: string): Promise<void> {
-  await browser.permissions.request({ origins: [matchPatternFor(pattern)] });
+/** An enabled rule that just got its grant runs in the tabs already open on it, as a new rule does. */
+async function grant(pattern: string, site: SiteConfig): Promise<void> {
+  if ((await browser.permissions.request({ origins: [matchPatternFor(pattern)] })) && site.enabled) {
+    await injectIntoOpenTabs(scripting, pattern);
+  }
 }
 
 /**

@@ -7,7 +7,11 @@ import type { SiteConfig } from './sites.ts';
 function editor(granted: boolean, current: Record<string, SiteConfig> = {}) {
   const requests: string[] = [];
   const writes: [string, SiteConfig][] = [];
+  const activated: string[] = [];
   const seams = createEditor({
+    activate: async (pattern) => {
+      activated.push(pattern);
+    },
     request: async (pattern) => {
       requests.push(pattern);
 
@@ -19,7 +23,7 @@ function editor(granted: boolean, current: Record<string, SiteConfig> = {}) {
     current: () => current,
   });
 
-  return { ...seams, requests, writes };
+  return { ...seams, requests, writes, activated };
 }
 
 const fields = { sites: '*.staging.acme.dev', mode: 'private' as const, endpoint: 'https://w.test/', clientId: 'acme' };
@@ -33,18 +37,33 @@ describe('createEditor', () => {
     assert.deepEqual(page.requests, ['https://*.staging.acme.dev']);
   });
 
-  it('stores the rule after the grant, as the widget will call it', async () => {
+  it('stores the rule after the grant, as the widget will call it, then activates the open tabs', async () => {
     const page = editor(true);
 
     assert.equal(await page.add(fields), '');
     assert.deepEqual(page.writes, [
       ['https://*.staging.acme.dev', { mode: 'private', endpoint: 'https://w.test', clientId: 'acme', enabled: true }],
     ]);
+    assert.deepEqual(page.activated, ['https://*.staging.acme.dev']);
+  });
+
+  it('answers a problem, and stores nothing, when the browser rejects the request', async () => {
+    const page = createEditor({
+      activate: async () => assert.fail('activated a rule that was not stored'),
+      request: async () => {
+        throw new Error('Only permissions specified in the manifest may be requested.');
+      },
+      write: async () => assert.fail('wrote without a grant'),
+      current: () => ({}),
+    });
+
+    assert.equal(await page.add(fields), NO_ACCESS_PROBLEM);
   });
 
   /** The background can refuse or fail a change, and the page must say so rather than clear the form. */
   it('answers a problem when the write is not confirmed', async () => {
     const page = createEditor({
+      activate: async () => assert.fail('activated a rule that was not stored'),
       request: async () => true,
       write: async () => {
         throw new Error('the background did not store the site change');
@@ -60,6 +79,7 @@ describe('createEditor', () => {
 
     assert.equal(await page.add(fields), NO_ACCESS_PROBLEM);
     assert.deepEqual(page.writes, []);
+    assert.deepEqual(page.activated, []);
   });
 
   it('refuses a bad pattern, a duplicate or a bad field without asking the browser', async () => {
@@ -89,9 +109,11 @@ describe('createEditor', () => {
     assert.deepEqual(refused.requests, ['https://acme.dev']);
     assert.equal(await refusal, false);
     assert.deepEqual(refused.writes, []);
+    assert.deepEqual(refused.activated, []);
 
     assert.equal(await granted.switchOn('https://acme.dev', site), true);
     assert.deepEqual(granted.writes, [['https://acme.dev', { ...site, enabled: true }]]);
+    assert.deepEqual(granted.activated, ['https://acme.dev']);
   });
 });
 
