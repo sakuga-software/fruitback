@@ -54,8 +54,8 @@ export default defineBackground(() => {
         .map(([pattern]) => pattern);
 
       // A permission the reviewer granted once can be revoked in the browser's own settings, without
-      // this extension hearing about it in any way it could act on. Registering a script for an
-      // origin we no longer hold throws, so the grant is checked rather than assumed.
+      // this extension hearing about it in any way it could act on. Chromium registers a script for
+      // an origin we do not hold and says nothing (measured, SKG-538), so the grant is checked here.
       const held = await Promise.all(
         wanted.map((pattern) => browser.permissions.contains({ origins: [matchPatternFor(pattern)] })),
       );

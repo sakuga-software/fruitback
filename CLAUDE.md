@@ -122,6 +122,18 @@ builds `dist` first, because `package.spec.ts` loads the real file.
 - **A cold Vite cache is the difference between your machine and CI.** The guarantee is
   `e2e/warm-up.ts`, a `globalSetup`; `optimizeDeps.include` is not enough on its own. Reproduce the
   CI condition with `rm -rf apps/playground/node_modules/.vite`.
+- **`extension.spec.ts` loads the built extension into a real Chromium** (SKG-538), and `pnpm e2e`
+  builds it first. The fixture launches `channel: 'chromium'`: the headless shell Playwright uses by
+  default loads no extension (measured). Automation cannot answer a host permission prompt, so it
+  loads a **copy** whose manifest declares the playground and both workers. The shipped manifest still asks for
+  nothing at install, and the no-rule spec runs with that grant.
+- **The worker holds extension sessions during the suite** (`e2e/worker-sessions.ts`), and the team
+  spec mints its code with the real `pair` command. The suite never reuses a worker already on its port: one started without
+  that env holds no session store, or not that one. Stop `pnpm dev` before `pnpm e2e`. The team spec
+  pairs with a **second worker on `8789`, with `FRUITBACK_READ=authenticated`**: on `public` a pin read
+  back proves nothing about the relay, because the page could read it with no credential.
+- **An absence needs a control.** The no-rule spec then adds the rule and sees the widget; the token
+  search fails unless it finds a token in both storage areas. A spec that counts zero proves nothing alone.
 
 **Deeper** — _The E2E suite_, the `504 (Outdated Optimize Dep)` mechanism and the four defects this
 suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).

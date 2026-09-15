@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { AUTHENTICATED_WORKER_ORIGIN, WORKER_SESSION_ENV } from './e2e/worker-sessions.ts';
 
 /**
  * The E2E suite (SKG-511).
@@ -42,13 +43,35 @@ export default defineConfig({
       // leave its child behind on CI.
       command: 'pnpm --filter @fruitback/worker serve:fake',
       url: `${WORKER}/health`,
-      reuseExistingServer: !process.env.CI,
+      // Never reused. A worker already on this port was started without the env below: it holds no
+      // session store, or not the one the `pair` command writes to, and its rate limit trips mid-suite.
+      reuseExistingServer: false,
       env: {
         ALLOWED_ORIGINS: PLAYGROUND,
         // Every request comes from the same loopback address, so the production ceiling of 20/min
         // would be hit mid-suite and report itself as a mystery 429.
         RATE_LIMIT_PER_MINUTE: '2000',
         TRUSTED_PROXY_HOPS: '0',
+        // The team-mode spec pairs the extension, and the `pair` command reads the same two values.
+        ...WORKER_SESSION_ENV,
+      },
+    },
+    {
+      // The team mode's worker. On `read: 'public'` a pin read back proves nothing about the relay,
+      // because the page could read it with no credential. It shares the session file, so one
+      // pairing code works on both workers.
+      command: 'node src/main.ts',
+      cwd: 'apps/worker',
+      url: `${AUTHENTICATED_WORKER_ORIGIN}/health`,
+      reuseExistingServer: false,
+      env: {
+        FRUITBACK_STORE: 'memory',
+        PORT: new URL(AUTHENTICATED_WORKER_ORIGIN).port,
+        FRUITBACK_READ: 'authenticated',
+        ALLOWED_ORIGINS: PLAYGROUND,
+        RATE_LIMIT_PER_MINUTE: '2000',
+        TRUSTED_PROXY_HOPS: '0',
+        ...WORKER_SESSION_ENV,
       },
     },
     {

@@ -201,7 +201,9 @@ widget at its own worker, or take it away.
 
 That is inherent to the main world and no handshake closes it. What is reduced is what is at stake:
 nothing secret travels there, the endpoint and client id are already in the client's own DOM in tag
-mode, and **an identity token is not sent at all**.
+mode, and **an identity token is not sent at all**. `apps/extension/src/worlds.test.ts` holds that for the imports of
+the main-world scripts. `e2e/extension.spec.ts` holds it in a real browser: after a pairing and a
+relayed write, no stored token appears in anything the page's JavaScript can read.
 
 ### What a session protects, and what it does not
 
