@@ -6,7 +6,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "bash -c 'trap \"kill 0\" EXIT; pnpm --filter @fruitback/worker dev:fake & pnpm --filter @fruitback/playground dev; wait'",
-    "e2e": "pnpm --filter @fruitback/shared build && pnpm --filter @fruitback/widget build && playwright test",
+    "e2e": "pnpm --filter @fruitback/shared build && pnpm --filter @fruitback/widget build && pnpm --filter @fruitback/extension build && playwright test",
     "e2e:ui": "playwright test --ui",
     "lint": "nx run-many -t lint",
     "format": "nx run-many -t format",

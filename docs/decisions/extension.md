@@ -517,7 +517,8 @@ second browser would show the rule and run nothing; and moving the rules out of 
 storage change SKG-602 needed an ordered upgrade for. It is SKG-611.
 
 No browser runs on this machine. The page, the grant prompt for a wildcard and the download are built
-and type-checked, not seen. SKG-538 is where a real extension runs under Playwright.
+and type-checked, not seen. SKG-538 is where a real extension runs under Playwright: since then,
+`e2e/extension.spec.ts` adds its rules through this page.
 
 ## The team mode, and the call the page cannot make (SKG-596)
 

@@ -74,3 +74,52 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   widget its own stale answer right after planting a pin; `domPath` resolving cleanly onto the
   neighbouring card; React 19's `useId` format accepted as a stable id; and the fiber walk throwing on
   the `null` owner React ends every tree with, which stopped a click from planting anything at all.
+
+## The extension under Playwright (SKG-538)
+
+`e2e/extension.spec.ts` loads `apps/extension/.output/chrome-mv3`, which `pnpm e2e` now builds, into a
+persistent Chromium context. Measured on Chromium 151 before the specs were written:
+
+- **The headless shell loads no extension.** With `--load-extension`, no service worker started in 10
+  seconds. The full Chromium in its new headless mode (`channel: 'chromium'`) started one at once.
+- **A permission prompt cannot be answered from automation.** `permissions.request` from the service
+  worker rejects with `This function must be called during a user gesture`. From an extension page,
+  inside a click, it stays pending, and `permissions.contains` stays false.
+- **A host permission in the manifest is granted at load.** A copy of the build with
+  `host_permissions` for `http://localhost:5177/*` and `http://localhost:8788/*` answers `contains`
+  true for both origins and false for any other. The fixture loads that copy, so the options page and
+  the popup ask and get an answer at once. The grant alone mounts nothing: the no-rule spec has it.
+- **`registerContentScripts` does not throw for an origin the extension does not hold.** It resolved.
+  `background.ts` said it throws. The comment now says what was measured, and the
+  `permissions.contains` check stays.
+
+What the specs rest on:
+
+- **The site is `/?case=…&widget=off`**, the playground without its own widget. The parameters are in
+  canonical order, so the stored seeds are read with the raw URL. They are read from Node, so the
+  page's own requests to the worker can be counted.
+- **Team mode needs a site that ships a dormant widget**, and the playground has none. The spec
+  mounts the built IIFE as such a site does: on `fruitback:extension`, with
+  `window.fruitbackExtension.transport`.
+- **The popup acts on the active tab of its window.** In a tab of its own it describes itself, so the
+  spec opens it behind the site with `tabs.create({ active: false })`.
+- **The two searches read different things.** `addScriptTag({ path })` puts the widget code in the
+  DOM, and that code names the `Authorization` header. So the header search reads the bridge
+  messages only. The token search reads everything the page can reach, and fails if fewer than two
+  tokens are stored.
+- **A select inside a label takes the chosen option into its name**, so the options page's mode field
+  is found by `/^Mode/`.
+
+Each guard was run against a mutant, and each mutant failed a check:
+
+| Mutant                                                    | Failed on                       |
+| --------------------------------------------------------- | ------------------------------- |
+| `registration.ts` registers the page script in `ISOLATED` | the stored seed has no `source` |
+| a stored token written to the page's `localStorage`       | the token search                |
+| the site's widget mounted with no `transport`             | `reporter` is not `verified`    |
+| the rule added before the no-rule assertions              | a widget host on the page       |
+| `page.content.ts` declares `world: 'ISOLATED'`            | `worlds.test.ts`, not the spec  |
+
+The spec passed on the last one, and that is not a weak spec. A script registered at runtime takes its
+world from `registerContentScripts`, so the `world` in the entrypoint does not reach the browser.
+`worlds.test.ts` finds the main-world files by that declaration, so it is the check that fails.

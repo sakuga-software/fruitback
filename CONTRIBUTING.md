@@ -60,6 +60,8 @@ pnpm exec playwright install chromium   # once
 pnpm e2e
 ```
 
+`pnpm e2e` builds the extension too, and `e2e/extension.spec.ts` loads it into that Chromium.
+
 ## Before you open a pull request
 
 CI runs each of these as its own check on every pull request to `main`. Run them first:

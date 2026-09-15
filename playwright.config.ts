@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { WORKER_SESSION_ENV } from './e2e/worker-sessions.ts';
 
 /**
  * The E2E suite (SKG-511).
@@ -49,6 +50,8 @@ export default defineConfig({
         // would be hit mid-suite and report itself as a mystery 429.
         RATE_LIMIT_PER_MINUTE: '2000',
         TRUSTED_PROXY_HOPS: '0',
+        // The team-mode spec pairs the extension, and the `pair` command reads the same two values.
+        ...WORKER_SESSION_ENV,
       },
     },
     {
