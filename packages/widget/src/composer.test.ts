@@ -398,3 +398,114 @@ describe('saying who you are, or not', () => {
     assert.equal(seen[0] && 'verified' in seen[0], false);
   });
 });
+
+describe('the popover as a dialog (SKG-544)', () => {
+  function keyOn(target: Element, key: string, shiftKey = false): KeyboardEvent {
+    const KeyboardEventCtor = keyboardEventCtor(mounted as MountedPage);
+    const event = new KeyboardEventCtor('keydown', { key, shiftKey, bubbles: true, cancelable: true });
+    target.dispatchEvent(event);
+
+    return event;
+  }
+
+  const active = () => (mounted as MountedPage).document.activeElement;
+  const cancelButton = () => composer?.element.querySelector('[data-fruitback-cancel]') as HTMLButtonElement;
+
+  function opener(): HTMLButtonElement {
+    const { document } = mounted as MountedPage;
+    const button = document.createElement('button');
+    document.body.append(button);
+
+    return button;
+  }
+
+  it('is a modal dialog, with a name that is not the name of its field', () => {
+    mount(async () => true);
+
+    assert.equal(composer?.element.getAttribute('role'), 'dialog');
+    assert.equal(composer?.element.getAttribute('aria-modal'), 'true');
+    assert.equal(composer?.element.getAttribute('aria-label'), 'Leave a note');
+    assert.notEqual(composer?.element.getAttribute('aria-label'), field().getAttribute('aria-label'));
+  });
+
+  it('keeps Tab inside, in both directions', () => {
+    mount(async () => true);
+    composer?.open(ANCHOR);
+
+    sendButton().focus();
+    assert.equal(keyOn(sendButton(), 'Tab').defaultPrevented, true);
+    assert.ok(active() === field(), 'Tab on the last control did not go back to the first');
+
+    assert.equal(keyOn(field(), 'Tab', true).defaultPrevented, true);
+    assert.ok(active() === sendButton(), 'Shift+Tab on the first control did not go to the last');
+  });
+
+  it('leaves Tab to the browser between two controls inside', () => {
+    mount(async () => true);
+    composer?.open(ANCHOR);
+
+    assert.equal(keyOn(field(), 'Tab').defaultPrevented, false);
+  });
+
+  it('does not count the send button while it is disabled', async () => {
+    mount(() => new Promise<boolean>(() => {}));
+    composer?.open(ANCHOR);
+    field().value = 'Le bouton est trop petit';
+    sendButton().click();
+    await Promise.resolve();
+    assert.equal(sendButton().disabled, true);
+
+    cancelButton().focus();
+    keyOn(cancelButton(), 'Tab');
+
+    assert.ok(active() === field(), 'the disabled send button is still in the cycle');
+  });
+
+  it('closes on Escape from any control, and the Escape goes no further', () => {
+    mount(async () => true);
+    let heard = 0;
+    (mounted as MountedPage).document.addEventListener('keydown', () => (heard += 1));
+    composer?.open(ANCHOR);
+
+    keyOn(cancelButton(), 'Escape');
+
+    assert.equal(composer?.element.hidden, true);
+    assert.equal(heard, 0, 'the thread or the capture mode would close on the same key press');
+  });
+
+  it('gives focus back to what had it before it opened', () => {
+    mount(async () => true);
+    const launch = opener();
+    launch.focus();
+
+    composer?.open(ANCHOR);
+    assert.ok(active() === field(), 'the note field has no focus after the open');
+    press('Escape');
+
+    assert.ok(active() === launch, 'focus did not go back to the opener');
+  });
+
+  it('gives focus back after Cancel too', () => {
+    mount(async () => true);
+    const launch = opener();
+    launch.focus();
+    composer?.open(ANCHOR);
+
+    cancelButton().click();
+
+    assert.ok(active() === launch, 'focus did not go back to the opener');
+  });
+
+  it('leaves focus where the reporter moved it', () => {
+    mount(async () => true);
+    const launch = opener();
+    launch.focus();
+    composer?.open(ANCHOR);
+    const elsewhere = opener();
+    elsewhere.focus();
+
+    composer?.close();
+
+    assert.ok(active() === elsewhere, 'the close took focus from where the reporter put it');
+  });
+});

@@ -1,6 +1,7 @@
 import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
 import { type Translator, createTranslator, languageOf } from './messages.ts';
 import { RESOLVED_STAGES, type ConfigStore } from './config.ts';
+import { holdFocus } from './focus.ts';
 import { createIcon } from './icons.ts';
 
 /**
@@ -82,6 +83,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   root.dataset.fruitbackConfig = '';
   root.hidden = true;
   root.setAttribute('role', 'dialog');
+  root.setAttribute('aria-modal', 'true');
   root.setAttribute('aria-label', t.text('settings.dialog'));
 
   const endpoint = field(document, 'endpoint', t.text('settings.endpoint'), 'https://…');
@@ -129,6 +131,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   root.append(head, endpoint.label, clientId.label, stagesTitle, stages, hideResolvedLabel);
   if (options.screenshotSupported === true) root.append(screenshotLabel);
   options.host.append(style, root);
+  const focus = holdFocus(root, () => panel.close());
 
   /** The store is the truth; the inputs only ever mirror it. */
   function paint(): void {
@@ -185,11 +188,13 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   const panel: ConfigPanel = {
     open() {
       paint();
+      focus.remember();
       root.hidden = false;
       endpoint.input.focus();
     },
     close() {
       root.hidden = true;
+      focus.restore();
     },
     toggle() {
       if (root.hidden) panel.open();
@@ -201,6 +206,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
     destroy() {
       unsubscribe();
       unsubscribeStages();
+      focus.destroy();
       root.remove();
       style.remove();
     },

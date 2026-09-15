@@ -2,7 +2,7 @@ import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { type CaptureEngine } from './engine.ts';
 import { type CaptureHost, type CaptureTarget, createCaptureHost } from './host.ts';
-import { type MountedPage, mouseEventCtor, mountPage, pressKey } from './dom.fixture.ts';
+import { type MountedPage, keyboardEventCtor, mouseEventCtor, mountPage, pressKey } from './dom.fixture.ts';
 import { createTranslator } from './messages.ts';
 
 /**
@@ -36,6 +36,7 @@ function fakeEngine(page: MountedPage, under: () => Element | null): CaptureEngi
 
       return element;
     },
+    grabbable: () => true,
     boundsOf: () => ({ left: 10, top: 20, width: 100, height: 30 }),
     sourceOf: async () => ({ component: 'CheckoutCta', file: 'src/cta.tsx', line: 12 }),
   };
@@ -292,5 +293,146 @@ describe('createCaptureHost', () => {
     assert.equal(page.document.querySelector('[data-fruitback-host]'), null);
     // The listener is gone too, so the page is not left with a widget that swallows clicks.
     assert.equal(pageSawIt, true);
+  });
+});
+
+describe('selecting an element without a pointer (SKG-544)', () => {
+  function mountKeyboard(
+    options: {
+      grabbable?: (element: Element) => boolean;
+      onSelect?: (target: CaptureTarget) => void;
+      translator?: ReturnType<typeof createTranslator>;
+    } = {},
+  ): MountedPage {
+    const page = mountPage(PAGE, { width: 1_000, height: 1_000 });
+    const engine = { ...fakeEngine(page, () => null), grabbable: options.grabbable ?? (() => true) };
+    host = createCaptureHost({
+      document: page.document,
+      engine,
+      onSelect: options.onSelect ?? (() => {}),
+      ...(options.translator !== undefined ? { translator: options.translator } : {}),
+    });
+
+    return page;
+  }
+
+  function press(page: MountedPage, key: string): KeyboardEvent {
+    const KeyboardEventCtor = keyboardEventCtor(page);
+    const event = new KeyboardEventCtor('keydown', { key, bubbles: true, cancelable: true });
+    page.document.dispatchEvent(event);
+
+    return event;
+  }
+
+  const announced = () => host?.root.querySelector('[data-fruitback-announcer]')?.textContent ?? '';
+
+  it('walks the page in document order, and never onto the widget', () => {
+    const page = mountKeyboard();
+    host?.start();
+
+    assert.equal(press(page, 'ArrowDown').defaultPrevented, true, 'the page scrolls under the reporter');
+    assert.match(announced(), /^main: /);
+    press(page, 'ArrowDown');
+    assert.equal(announced(), 'button: Commander');
+    press(page, 'ArrowDown');
+    assert.equal(announced(), 'p: Du texte');
+    press(page, 'ArrowDown');
+    assert.equal(announced(), 'p: Du texte', 'the walk went past the page');
+    press(page, 'ArrowUp');
+    assert.equal(announced(), 'button: Commander');
+
+    const highlight = host?.root.querySelector('[data-fruitback-host-highlight]') as HTMLElement;
+    assert.equal(highlight.style.display, 'block');
+  });
+
+  it('goes up to the parent and down to the first child', () => {
+    const page = mountKeyboard();
+    host?.start();
+    press(page, 'ArrowDown');
+    press(page, 'ArrowDown');
+
+    press(page, 'ArrowLeft');
+    assert.match(announced(), /^main: /);
+    press(page, 'ArrowRight');
+    assert.equal(announced(), 'button: Commander');
+  });
+
+  it('swaps the parent and child keys in a right-to-left language', () => {
+    const translator = createTranslator({ locale: 'ar', messages: { ar: { 'launch.label': 'اترك ملاحظة' } } });
+    assert.equal(translator.direction, 'rtl');
+    const page = mountKeyboard({ translator });
+    host?.start();
+    press(page, 'ArrowDown');
+    press(page, 'ArrowDown');
+
+    press(page, 'ArrowRight');
+    assert.match(announced(), /^main: /);
+    press(page, 'ArrowLeft');
+    assert.equal(announced(), 'button: Commander');
+  });
+
+  it('skips what the engine cannot grab', () => {
+    const page = mountKeyboard({ grabbable: (element) => element.tagName !== 'MAIN' });
+    host?.start();
+
+    press(page, 'ArrowDown');
+
+    assert.equal(announced(), 'button: Commander');
+  });
+
+  it('selects the highlighted element on Enter or Space, as a click does', async () => {
+    for (const key of ['Enter', ' ']) {
+      const targets: CaptureTarget[] = [];
+      const page = mountKeyboard({ onSelect: (target) => targets.push(target) });
+      host?.start();
+      press(page, 'ArrowDown');
+      press(page, 'ArrowDown');
+
+      assert.equal(press(page, key).defaultPrevented, true, `${JSON.stringify(key)} also reaches the launch button`);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      assert.equal(targets[0]?.element.id, 'cta');
+      assert.equal(host?.capturing(), false);
+      host?.destroy();
+      host = null;
+    }
+  });
+
+  it('leaves Enter to the launch button while nothing is highlighted', () => {
+    const page = mountKeyboard();
+    host?.start();
+
+    assert.equal(press(page, 'Enter').defaultPrevented, false);
+    assert.equal(host?.capturing(), true);
+  });
+
+  it('leaves the arrow keys to the page while the mode is off', () => {
+    const page = mountKeyboard();
+
+    assert.equal(press(page, 'ArrowDown').defaultPrevented, false);
+    assert.equal(announced(), '');
+  });
+
+  it('says how to use the mode, says when an element has no text, and goes quiet on stop', () => {
+    const page = mountKeyboard();
+    page.query('p').textContent = '';
+
+    host?.start();
+    assert.match(announced(), /arrow keys/);
+    press(page, 'ArrowDown');
+    press(page, 'ArrowDown');
+    press(page, 'ArrowDown');
+    assert.equal(announced(), 'p, no text');
+
+    host?.stop();
+    assert.equal(announced(), '');
+  });
+
+  it('is a named landmark on the host page', () => {
+    const page = mountKeyboard();
+    const container = page.document.querySelector('[data-fruitback-host]');
+
+    assert.equal(container?.getAttribute('role'), 'region');
+    assert.equal(container?.getAttribute('aria-label'), 'Fruitback feedback');
   });
 });

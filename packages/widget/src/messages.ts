@@ -14,7 +14,8 @@ import { FRENCH } from './locale-fr.ts';
  *   and the next catalog in the chain takes its place. It never costs the mount.
  * - A message is text. The widget writes it with `textContent` or an attribute, never as markup.
  * - `settings.open` and `settings.dialog` must stay different: they are the accessible names of the
- *   gear and of the dialog it opens.
+ *   gear and of the dialog it opens. The same applies to `widget.label`, `launch.label`,
+ *   `composer.dialog` and `composer.label` (SKG-544).
  * - Each bundled catalog weighs on the size guard. If the list grows, load them lazily; do not widen
  *   the guard.
  */
@@ -25,6 +26,10 @@ export type PluralMessage = { readonly [Category in Intl.LDMLPluralRule]?: strin
 export const ENGLISH = {
   'launch.label': 'Leave feedback',
   'launch.capturing': 'Esc to cancel',
+  'widget.label': 'Fruitback feedback',
+  'capture.instructions': 'Point at an element, or move with the arrow keys and press Enter.',
+  'capture.element': '{tag}: {text}',
+  'capture.elementEmpty': '{tag}, no text',
 
   'settings.open': 'Open Fruitback settings',
   'settings.dialog': 'Fruitback settings',
@@ -38,6 +43,7 @@ export const ENGLISH = {
 
   'composer.placeholder': 'What is wrong here?',
   'composer.label': 'Your comment',
+  'composer.dialog': 'Leave a note',
   'composer.identify': 'Add my name (optional)',
   'composer.namePlaceholder': 'Your name',
   'composer.nameLabel': 'Your name (optional)',
@@ -53,6 +59,7 @@ export const ENGLISH = {
   'pin.labelUncertain': '{stage} · {note} (approximate position)',
 
   'thread.close': 'Close',
+  'thread.dialog': 'Feedback {identifier}',
   'thread.noNote': 'No note.',
   'thread.noReplies': 'No reply yet.',
   'thread.team': 'Team',

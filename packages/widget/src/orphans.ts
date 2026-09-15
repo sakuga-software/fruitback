@@ -80,10 +80,20 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
   });
 
   root.append(toggle, list);
-  options.host.append(style, root);
+
+  // A sibling of the root, because the root is hidden while the list is empty (SKG-544).
+  // A live region inside a hidden element announces nothing.
+  const announcer = document.createElement('div');
+  announcer.className = 'fruitback-orphans-announcer';
+  announcer.dataset.fruitbackOrphansAnnouncer = '';
+  announcer.setAttribute('role', 'status');
+  announcer.setAttribute('aria-live', 'polite');
+
+  options.host.append(style, root, announcer);
 
   /** What is on screen, so an unchanged set costs no DOM writes at all. */
   let drawn = '';
+  let count = 0;
 
   return {
     update(issues) {
@@ -94,6 +104,11 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
       const next = issues.map((issue) => `${issue.seed.id}:${issue.stage}`).join('|');
       if (next === drawn) return;
       drawn = next;
+
+      // Only an increase is news. A note that is found again, or a stage change, is not.
+      if (issues.length > count) announcer.textContent = t.plural('orphans.count', issues.length);
+      if (issues.length === 0) announcer.textContent = '';
+      count = issues.length;
 
       root.hidden = issues.length === 0;
       if (issues.length === 0) {
@@ -109,8 +124,9 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
 
       list.replaceChildren(...issues.map((issue) => entry(document, issue, t, options.onSelect)));
     },
-    owns: (node) => node === root || node === style || root.contains(node),
+    owns: (node) => node === root || node === style || root.contains(node) || announcer.contains(node),
     destroy() {
+      announcer.remove();
       root.remove();
       style.remove();
     },
@@ -203,6 +219,14 @@ const STYLES = `
   color: var(--fruitback-color-text);
 }
 .fruitback-orphans[hidden] { display: none; }
+.fruitback-orphans-announcer {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 /* Chip last in the DOM order it reads in, list above it on screen. */
 .fruitback-orphans { display: flex; flex-direction: column-reverse; align-items: flex-end; }
 .fruitback-orphans-toggle {

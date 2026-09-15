@@ -81,6 +81,9 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   // not follow it (SKG-531).
   container.dir = t.direction;
   container.lang = t.lang;
+  // A named landmark: a screen reader meets the widget in the middle of the host's content (SKG-544).
+  container.setAttribute('role', 'region');
+  container.setAttribute('aria-label', t.text('widget.label'));
   // Positioned at the document origin with no size of its own: children can then use document
   // coordinates directly, and nothing about it disturbs the page's layout.
   container.style.cssText = 'position:absolute;top:0;left:0;width:0;height:0;';
@@ -134,7 +137,13 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   if (options.onConfigure !== undefined) dock.append(configure);
   dock.append(button);
 
-  root.append(style, dock, highlight, panel);
+  const announcer = document.createElement('div');
+  announcer.className = 'fruitback-announcer';
+  announcer.dataset.fruitbackAnnouncer = '';
+  announcer.setAttribute('role', 'status');
+  announcer.setAttribute('aria-live', 'polite');
+
+  root.append(style, dock, highlight, panel, announcer);
 
   configure.addEventListener('click', (event) => {
     event.preventDefault();
@@ -149,10 +158,15 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   const isOurs = (element: Element) =>
     element === container || root.contains(element) || options.ignore?.(element) === true;
 
+  const isCandidate = (element: Element) => !isOurs(element) && engine.grabbable(element);
+
   function onMove(event: MouseEvent): void {
     if (!capturing) return;
 
-    const element = engine.elementAt(event.clientX, event.clientY, isOurs);
+    show(engine.elementAt(event.clientX, event.clientY, isOurs));
+  }
+
+  function show(element: Element | null): void {
     hovered = element;
 
     if (element === null) {
@@ -183,6 +197,10 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     const element = engine.elementAt(event.clientX, event.clientY, isOurs) ?? hovered;
     if (element === null) return;
 
+    select(element);
+  }
+
+  function select(element: Element): void {
     stop();
     // A seed with no `source` is a perfectly good seed, so a rejecting engine costs the metadata and
     // nothing else. Without the catch, a swapped-in engine that throws would drop the capture on the
@@ -193,14 +211,79 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
       .then((source) => options.onSelect({ element, source }));
   }
 
+  /**
+   * The capture mode without a pointer (SKG-544).
+   *
+   * - Down and Up move to the next or previous element in document order.
+   * - Left moves to the parent and Right to the first child. The two keys swap in a right-to-left language.
+   * - Enter or Space selects the highlighted element.
+   */
   function onKeyDown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') stop();
+    if (event.key === 'Escape') {
+      stop();
+
+      return;
+    }
+    if (!capturing) return;
+
+    const target = keyboardTarget(event.key);
+    if (target !== undefined) {
+      // The page must not scroll under the reporter.
+      event.preventDefault();
+      event.stopPropagation();
+      if (target !== null) point(target);
+
+      return;
+    }
+
+    if ((event.key === 'Enter' || event.key === ' ') && hovered !== null) {
+      // Without this, Enter also presses the launch button that has focus, and stops the capture.
+      event.preventDefault();
+      event.stopPropagation();
+      select(hovered);
+    }
+  }
+
+  /** The element a navigation key moves to, `null` if there is none, `undefined` for another key. */
+  function keyboardTarget(key: string): Element | null | undefined {
+    const body = document.body;
+    const [toParent, toChild] = t.direction === 'rtl' ? ['ArrowRight', 'ArrowLeft'] : ['ArrowLeft', 'ArrowRight'];
+    const next = (element: Element) => following(element, body);
+    const previous = (element: Element) => preceding(element, body);
+    const parent = (element: Element) => (element.parentElement === body ? null : element.parentElement);
+
+    if (key === 'ArrowDown') return search(hovered === null ? body.firstElementChild : next(hovered), next);
+    if (key === 'ArrowUp') {
+      return hovered === null ? search(body.firstElementChild, next) : search(previous(hovered), previous);
+    }
+    if (key === toParent) return hovered === null ? null : search(parent(hovered), parent);
+    if (key === toChild) return hovered === null ? null : search(hovered.firstElementChild, next, hovered);
+
+    return undefined;
+  }
+
+  function search(start: Element | null, step: (element: Element) => Element | null, inside?: Element): Element | null {
+    for (let node = start; node !== null; node = step(node)) {
+      if (inside !== undefined && !inside.contains(node)) return null;
+      if (isCandidate(node)) return node;
+    }
+
+    return null;
+  }
+
+  function point(element: Element): void {
+    if (typeof (element as HTMLElement).scrollIntoView === 'function') {
+      element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+    show(element);
+    announcer.textContent = describe(element, t);
   }
 
   function start(): void {
     capturing = true;
     container.dataset.fruitbackCapturing = '';
     launchLabel.textContent = t.text('launch.capturing');
+    announcer.textContent = t.text('capture.instructions');
   }
 
   function stop(): void {
@@ -209,6 +292,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     delete container.dataset.fruitbackCapturing;
     launchLabel.textContent = restingLabel;
     highlight.style.display = 'none';
+    announcer.textContent = '';
   }
 
   button.addEventListener('click', () => (capturing ? stop() : start()));
@@ -230,6 +314,37 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
       container.remove();
     },
   };
+}
+
+/** The next element in document order, inside `root`. */
+function following(element: Element, root: Element): Element | null {
+  if (element.firstElementChild !== null) return element.firstElementChild;
+
+  for (let node: Element | null = element; node !== null && node !== root; node = node.parentElement) {
+    if (node.nextElementSibling !== null) return node.nextElementSibling;
+  }
+
+  return null;
+}
+
+/** The previous element in document order, inside `root`. */
+function preceding(element: Element, root: Element): Element | null {
+  const sibling = element.previousElementSibling;
+  if (sibling === null) return element.parentElement === root ? null : element.parentElement;
+
+  let node = sibling;
+  while (node.lastElementChild !== null) node = node.lastElementChild;
+
+  return node;
+}
+
+/** What a screen reader says about the element under the keyboard cursor. */
+function describe(element: Element, t: Translator): string {
+  const tag = element.tagName.toLowerCase();
+  const text = (element.getAttribute('aria-label') ?? element.textContent ?? '').replace(/\s+/g, ' ').trim();
+  if (text === '') return t.text('capture.elementEmpty', { tag });
+
+  return t.text('capture.element', { tag, text: text.length > 80 ? `${text.slice(0, 79)}…` : text });
 }
 
 /**
@@ -322,5 +437,13 @@ li { display: list-item; }
   border-radius: var(--fruitback-radius-sm);
 }
 .fruitback-panel { position: absolute; top: 0; left: 0; }
+.fruitback-announcer {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 :host([data-fruitback-capturing]) .fruitback-launch { background: var(--fruitback-color-chip); }
 `;

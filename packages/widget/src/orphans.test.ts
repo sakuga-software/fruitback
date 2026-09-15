@@ -143,3 +143,39 @@ describe('createOrphanList', () => {
     assert.match(page.document.querySelector('.fruitback-orphans-note')?.textContent ?? '', /</);
   });
 });
+
+describe('announcing detached notes (SKG-544)', () => {
+  const announced = (page: ReturnType<typeof mount>) =>
+    page.document.querySelector('[data-fruitback-orphans-announcer]')?.textContent ?? '';
+
+  it('announces detached notes when more of them appear', () => {
+    const page = mount();
+
+    list?.update([issue('sd_1', 'Une note')]);
+    assert.equal(announced(page), '1 detached note');
+
+    list?.update([issue('sd_1', 'Une note'), issue('sd_2', 'Une autre')]);
+    assert.equal(announced(page), '2 detached notes');
+  });
+
+  it('announces nothing new when a note is found again', () => {
+    const page = mount();
+    list?.update([issue('sd_1', 'Une note'), issue('sd_2', 'Une autre')]);
+
+    list?.update([issue('sd_1', 'Une note')]);
+
+    assert.equal(announced(page), '2 detached notes');
+  });
+
+  it('goes quiet when the list empties, and owns the region it speaks through', () => {
+    const page = mount();
+    list?.update([issue('sd_1', 'Une note')]);
+
+    list?.update([]);
+
+    assert.equal(announced(page), '');
+    const region = page.document.querySelector('[data-fruitback-orphans-announcer]');
+    assert.equal(region?.getAttribute('role'), 'status');
+    assert.equal(list?.owns(region as Node), true, 'the overlay would take a new announcement for a page change');
+  });
+});

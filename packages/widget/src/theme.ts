@@ -20,9 +20,9 @@ import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
  * its script-tag attributes `data-fruitback-*`, so two prefixes coexisted with no rule saying which
  * belonged where. SKG-580 settled on the whole word for all of it: tokens, classes and attributes.
  *
- * **No rendered colour changes here.** Every colour below is the hexadecimal that was already in the
- * stylesheets, so the E2E specs that read a pin's computed colour are the proof. Choosing different
- * values is SKG-529's job; this is the layer that makes it one edit instead of five.
+ * **SKG-528 changed no rendered colour.** Every colour was the hexadecimal already in the
+ * stylesheets. SKG-544 then changed three values for contrast: `color-border-strong`,
+ * `color-text-subtle` and `color-success`. `contrast.test.ts` measures every pair a module paints.
  *
  * One thing does move, by 4 pixels: the thread's shadow was `0 10px 34px rgba(0, 0, 0, 0.18)` and the
  * panel's `0 10px 30px rgb(0 0 0 / 18%)` — the same intention spelled twice. They are one token now.
@@ -138,12 +138,12 @@ export const THEME_STYLES = `
   --fruitback-color-surface: #fff;
   --fruitback-color-surface-raised: #fffdf9;
   --fruitback-color-border: #e7e5e4;
-  --fruitback-color-border-strong: #d6d3d1;
+  --fruitback-color-border-strong: #8f8883;
   --fruitback-color-text: #1c1917;
   --fruitback-color-text-muted: #78716c;
-  --fruitback-color-text-subtle: #a8a29e;
+  --fruitback-color-text-subtle: #7a736e;
   --fruitback-color-chip: #44403c;
-  --fruitback-color-success: #7cb342;
+  --fruitback-color-success: #4e7d2a;
   --fruitback-color-warning: #8d6e63;
 
   /* Ripening, not a rainbow. Same five values the contract used to carry. */
@@ -181,11 +181,12 @@ export const THEME_STYLES = `
     --fruitback-color-surface: #1c1917;
     --fruitback-color-surface-raised: #262220;
     --fruitback-color-border: #3a3532;
-    --fruitback-color-border-strong: #4a4441;
+    --fruitback-color-border-strong: #7a736e;
     --fruitback-color-text: #f5f5f4;
     --fruitback-color-text-muted: #a8a29e;
-    --fruitback-color-text-subtle: #78716c;
+    --fruitback-color-text-subtle: #8f8883;
     --fruitback-color-chip: #57534e;
+    --fruitback-color-success: #7cb342;
     --fruitback-shadow-sm: 0 3px 10px rgba(0, 0, 0, 0.55);
     --fruitback-shadow-md: 0 4px 18px rgba(0, 0, 0, 0.6);
     --fruitback-shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.5);

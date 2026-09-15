@@ -228,3 +228,51 @@ describe('the stages a store can report (SKG-525)', () => {
     assert.match(css, /\.fruitback-config-check\[hidden\]\s*\{\s*display:\s*none;?\s*\}/);
   });
 });
+
+describe('the panel as a dialog (SKG-544)', () => {
+  function keyOn(page: MountedPage, target: Element, key: string, shiftKey = false): KeyboardEvent {
+    const KeyboardEventCtor = (page.view as unknown as { KeyboardEvent: typeof KeyboardEvent }).KeyboardEvent;
+    const event = new KeyboardEventCtor('keydown', { key, shiftKey, bubbles: true, cancelable: true });
+    target.dispatchEvent(event);
+
+    return event;
+  }
+
+  it('is a modal dialog', () => {
+    const { page } = mount();
+    const root = page.document.querySelector('[data-fruitback-config]');
+
+    assert.equal(root?.getAttribute('role'), 'dialog');
+    assert.equal(root?.getAttribute('aria-modal'), 'true');
+  });
+
+  it('closes on Escape and gives focus back to what opened it', () => {
+    const { page, input } = mount();
+    const gear = page.document.createElement('button');
+    page.document.body.append(gear);
+    gear.focus();
+
+    panel?.open();
+    assert.ok(page.document.activeElement === input('endpoint'), 'the endpoint has no focus after the open');
+    keyOn(page, input('endpoint'), 'Escape');
+
+    assert.equal(panel?.isOpen, false);
+    assert.ok(page.document.activeElement === gear, 'focus did not go back to the gear');
+  });
+
+  it('keeps Tab inside, in both directions', () => {
+    const { page, input } = mount();
+    panel?.open();
+    const close = page.document.querySelector('.fruitback-config-close') as HTMLButtonElement;
+
+    close.focus();
+    keyOn(page, close, 'Tab', true);
+    assert.ok(
+      page.document.activeElement === input('hide-resolved'),
+      'Shift+Tab on the first control did not go to the last',
+    );
+
+    keyOn(page, input('hide-resolved'), 'Tab');
+    assert.ok(page.document.activeElement === close, 'Tab on the last control did not go back to the first');
+  });
+});

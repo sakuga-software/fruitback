@@ -748,3 +748,44 @@ describe('the detached list is the widget’s own DOM', () => {
     assert.equal(resolves, 0);
   });
 });
+
+describe('the thread and the keyboard (SKG-544)', () => {
+  function openOnCta(): { page: MountedPage; badge: HTMLElement } {
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta()]);
+    const badge = page.document.querySelector('.fruitback-pin-badge') as HTMLElement;
+    badge.click();
+
+    return { page, badge };
+  }
+
+  it('opens as a named dialog, with focus on its close button', () => {
+    const { page } = openOnCta();
+    const thread = page.document.querySelector('[data-fruitback-thread]');
+
+    assert.equal(thread?.getAttribute('role'), 'dialog');
+    assert.match(thread?.getAttribute('aria-label') ?? '', /^Feedback \S+/);
+    assert.ok(page.document.activeElement?.classList.contains('fruitback-thread-close'));
+  });
+
+  it('gives focus back to the badge on Escape', () => {
+    const { page, badge } = openOnCta();
+
+    pressKey(page, 'Escape');
+
+    assert.ok(page.document.querySelector('[data-fruitback-thread]') === null, 'the thread is still open');
+    assert.ok(page.document.activeElement === badge, 'focus did not go back to the badge');
+  });
+
+  it('leaves focus on the page when a click outside closes it', () => {
+    const { page } = openOnCta();
+    const cta = page.query('button') as HTMLButtonElement;
+
+    cta.focus();
+    cta.click();
+
+    assert.ok(page.document.querySelector('[data-fruitback-thread]') === null, 'the thread is still open');
+    assert.ok(page.document.activeElement === cta, 'the close took focus from the page');
+  });
+});

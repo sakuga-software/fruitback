@@ -348,6 +348,31 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   and the dialog `Fruitback settings`. A host catalog must keep `settings.open` and `settings.dialog` apart
   too.
 
+**The keyboard and the screen reader** (SKG-544)
+
+- **The popover and the panel are modal dialogs, and `aria-modal` ships only with the trap.** The
+  page gets no `inert`, so `holdFocus` in `focus.ts` makes the claim true: Tab stays inside, Escape
+  closes and stops at the dialog, and focus goes back to what had it before the open, unless the
+  reporter moved it. The thread is a dialog that is not modal: it takes focus and gives it back to
+  its badge.
+- **`document.activeElement` answers the host element for anything in the Shadow root.**
+  `deepActiveElement` reads through it. A focus test that reads the document's answer passes for free.
+- **The capture mode works without a pointer.** Down and Up walk the page in document order, Left
+  goes to the parent and Right to the first child, and the two swap in a right-to-left language.
+  Enter or Space selects. `CaptureEngine.grabbable` filters the walk, and `isOurs` still applies.
+  **Enter is taken only while an element is highlighted**: otherwise it presses the launch button,
+  which is how a keyboard stops the mode. The walk stays in the light DOM of the document; the
+  pointer also reaches shadow roots and iframes.
+- **A live region inside a hidden element announces nothing.** The host has its own announcer. The
+  announcer for detached notes is a sibling of the list's root, which hides while empty, and `owns`
+  must include it: otherwise its new text reads as a page change and schedules a resolve.
+- **The host container is a landmark**, `role="region"` named by `widget.label`. A screen reader meets
+  the widget in the middle of the host's content, and the landmark says what it is.
+- **`contrast.test.ts` measures every pair a module paints, in both schemes, against a list of known
+  failures**: the accent, the stage colours and the dark warning wait for a design decision. A pin
+  sits on the host's page, so no test can promise its contrast. `e2e/a11y.spec.ts` runs axe-core,
+  scoped to `[data-fruitback-host]`.
+
 **The words** (SKG-530, SKG-531)
 
 - **`messages.ts` holds every word, behind a key. English and French are bundled** and maintained
@@ -378,7 +403,7 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
 **Deeper** — in [docs/decisions/widget.md](docs/decisions/widget.md):
 _The widget_, _The host, and why everything lives in one Shadow root_,
 _The look, and the one thing a host may change_, _One prefix, and it is `fruitback`_,
-_The popover_, _Who carries the calls_, _The optional picture_, _The settings panel_,
+_The popover_, _Who carries the calls_, _The optional picture_, _The settings panel_, _The keyboard, the screen reader and the contrast_,
 _The words, and the catalogs the bundle carries_.
 And _No emoji, and what replaced them_ in [docs/decisions/icons.md](docs/decisions/icons.md).
 
