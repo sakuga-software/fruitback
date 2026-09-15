@@ -1,6 +1,6 @@
 import { browser } from 'wxt/browser';
 import { matchPatternFor } from '../../src/registration.ts';
-import { STORE_PROBLEM, createEditor, latestOnly } from '../../src/site-editor.ts';
+import { NO_ACCESS_PROBLEM, STORE_PROBLEM, createEditor, latestOnly } from '../../src/site-editor.ts';
 import { parseSitePattern } from '../../src/site-patterns.ts';
 import { type TabScripting, injectIntoOpenTabs } from '../../src/tab-injection.ts';
 import { type SitesImport, exportSites, importSites } from '../../src/site-transfer.ts';
@@ -115,24 +115,35 @@ async function row(pattern: string, site: SiteConfig): Promise<HTMLElement> {
   return item;
 }
 
-/** An enabled rule that just got its grant runs in the tabs already open on it, as a new rule does. */
-async function grant(pattern: string, site: SiteConfig): Promise<void> {
-  if ((await browser.permissions.request({ origins: [matchPatternFor(pattern)] })) && site.enabled) {
-    await injectIntoOpenTabs(scripting, pattern);
-  }
+/**
+ * An enabled rule that just got its grant runs in the tabs already open on it, as a new rule does.
+ *
+ * Answers whether the grant was given, so a refusal is reported like a failure.
+ */
+async function grant(pattern: string, site: SiteConfig): Promise<boolean> {
+  const granted = await browser.permissions.request({ origins: [matchPatternFor(pattern)] });
+  if (granted && site.enabled) await injectIntoOpenTabs(scripting, pattern);
+
+  return granted;
 }
 
 /**
- * Runs a row's change and reports a rejection under the list.
+ * Runs a row's change and reports what did not happen under the list.
  *
- * A click is fire-and-forget, so a rejection that is not handled here is reported nowhere.
+ * A click is fire-and-forget, so a rejection that is not handled here is reported nowhere. A change
+ * that asks for access answers `false` when the reviewer refuses it, and that is said too.
  */
-function attempt(change: Promise<unknown>): void {
+function attempt(change: Promise<boolean | void>): void {
   notice.textContent = '';
-  change.catch((error: unknown) => {
-    console.error('[fruitback] a site change was not confirmed', error);
-    notice.textContent = STORE_PROBLEM;
-  });
+  change.then(
+    (done) => {
+      if (done === false) notice.textContent = NO_ACCESS_PROBLEM;
+    },
+    (error: unknown) => {
+      console.error('[fruitback] a site change was not confirmed', error);
+      notice.textContent = STORE_PROBLEM;
+    },
+  );
 }
 
 function addForm(): HTMLElement {
