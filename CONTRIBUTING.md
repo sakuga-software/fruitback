@@ -47,7 +47,7 @@ for trying the widget, not the product: build features in `packages/widget`.
 Tests use `node:test` and `node:assert/strict`, with no test runner and no transpiler.
 
 ```bash
-pnpm test                                    # every package
+pnpm test                                    # every package that has a test script
 pnpm --filter @fruitback/widget test         # one package
 pnpm --filter @fruitback/widget test:watch   # one package, again after each change
 cd packages/widget && node --test src/panel.test.ts   # one file
@@ -62,7 +62,7 @@ pnpm e2e
 
 ## Before you open a pull request
 
-CI runs each of these as its own check on every pull request. Run them first:
+CI runs each of these as its own check on every pull request to `main`. Run them first:
 
 | Check | Locally |
 | --- | --- |
