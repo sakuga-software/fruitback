@@ -1,6 +1,6 @@
 import { browser } from 'wxt/browser';
 import { matchPatternFor } from '../../src/registration.ts';
-import { PATTERN_PROBLEM, complaint, siteFrom } from '../../src/site-form.ts';
+import { createEditor, latestOnly } from '../../src/site-editor.ts';
 import { parseSitePattern } from '../../src/site-patterns.ts';
 import { type SitesImport, exportSites, importSites } from '../../src/site-transfer.ts';
 import { type SiteConfig, type SiteMode, readAll, removeSite, writeSite, writeSites } from '../../src/sites.ts';
@@ -8,11 +8,9 @@ import { type SiteConfig, type SiteMode, readAll, removeSite, writeSite, writeSi
 /**
  * Every site entry, wildcards included, and the rules file a team hands around (SKG-536).
  *
- * What an entry covers is decided in `site-patterns.ts`, what a valid one is in `site-form.ts`, and
- * what a file holds in `site-transfer.ts`. This page builds the elements.
- *
- * A host permission may only be asked for while a click is handled. So each button that switches an
- * entry on asks first and awaits nothing before the request, as the popup's `turnOn` does.
+ * What an entry covers is decided in `site-patterns.ts`, what a valid one is in `site-form.ts`, what a
+ * button does in `site-editor.ts`, and what a file holds in `site-transfer.ts`. This page builds the
+ * elements.
  */
 
 const IMPORT_PROBLEM: Record<Extract<SitesImport, { ok: false }>['reason'], string> = {
@@ -23,6 +21,13 @@ const IMPORT_PROBLEM: Record<Extract<SitesImport, { ok: false }>['reason'], stri
 
 /** What the list shows now. The add form checks for a duplicate here, because a storage read loses the click. */
 let current: Record<string, SiteConfig> = {};
+
+const editor = createEditor({
+  request: (pattern) => browser.permissions.request({ origins: [matchPatternFor(pattern)] }),
+  write: writeSite,
+  current: () => current,
+});
+const beginRender = latestOnly();
 
 const app = document.querySelector('#app');
 const list = document.createElement('div');
@@ -49,17 +54,11 @@ browser.permissions.onAdded.addListener(() => void renderList());
 browser.permissions.onRemoved.addListener(() => void renderList());
 
 async function renderList(): Promise<void> {
+  const isLatest = beginRender();
   const sites = await readAll();
-  current = sites;
   const patterns = Object.keys(sites)
     .filter((pattern) => parseSitePattern(pattern) === pattern)
     .sort();
-
-  if (patterns.length === 0) {
-    list.replaceChildren(element('p', 'No rules yet. Add one below, or turn a site on from the toolbar.', 'state'));
-
-    return;
-  }
 
   const rows = document.createElement('ul');
   rows.className = 'rules';
@@ -67,7 +66,14 @@ async function renderList(): Promise<void> {
     const site = sites[pattern];
     if (site !== undefined) rows.append(await row(pattern, site));
   }
-  list.replaceChildren(rows);
+
+  if (!isLatest()) return;
+  current = sites;
+  list.replaceChildren(
+    patterns.length === 0
+      ? element('p', 'No rules yet. Add one below, or turn a site on from the toolbar.', 'state')
+      : rows,
+  );
 }
 
 async function row(pattern: string, site: SiteConfig): Promise<HTMLElement> {
@@ -82,7 +88,7 @@ async function row(pattern: string, site: SiteConfig): Promise<HTMLElement> {
   buttons.append(
     site.enabled
       ? button('Turn off', () => void writeSite(pattern, { ...site, enabled: false }))
-      : button('Turn on', () => void switchOn(pattern, site)),
+      : button('Turn on', () => void editor.switchOn(pattern, site)),
     button('Remove', () => void removeSite(pattern), 'secondary'),
   );
 
@@ -101,44 +107,23 @@ async function grant(pattern: string): Promise<void> {
   await browser.permissions.request({ origins: [matchPatternFor(pattern)] });
 }
 
-async function switchOn(pattern: string, site: SiteConfig): Promise<void> {
-  if (await browser.permissions.request({ origins: [matchPatternFor(pattern)] })) {
-    await writeSite(pattern, { ...site, enabled: true });
-  }
-}
-
 function addForm(): HTMLElement {
   const sites = field('Sites', 'https://*.staging.acme.dev');
   const mode = modeField();
   const endpoint = field('Worker endpoint', 'https://feedback.acme.dev');
   const clientId = field('Client id', 'acme');
   const add = button('Add rule', () => {
-    const pattern = parseSitePattern(sites.input.value);
-    const values = {
-      mode: mode.select.value === 'team' ? ('team' as const) : ('private' as const),
-      endpoint: endpoint.input.value.trim(),
-      clientId: clientId.input.value.trim(),
-    };
-
-    if (pattern === undefined) {
-      problem.textContent = PATTERN_PROBLEM;
-
-      return;
-    }
-    problem.textContent =
-      current[pattern] === undefined ? complaint(values) : 'A rule for that pattern already exists. Remove it first.';
-    if (problem.textContent !== '') return;
-
-    void (async () => {
-      if (!(await browser.permissions.request({ origins: [matchPatternFor(pattern)] }))) {
-        problem.textContent = 'Fruitback needs access to those sites to run there. Nothing was saved.';
-
-        return;
-      }
-
-      await writeSite(pattern, siteFrom(values, true));
-      for (const input of [sites.input, endpoint.input, clientId.input]) input.value = '';
-    })();
+    void editor
+      .add({
+        sites: sites.input.value,
+        mode: mode.select.value === 'team' ? 'team' : 'private',
+        endpoint: endpoint.input.value.trim(),
+        clientId: clientId.input.value.trim(),
+      })
+      .then((text) => {
+        problem.textContent = text;
+        if (text === '') for (const input of [sites.input, endpoint.input, clientId.input]) input.value = '';
+      });
   });
   const problem = element('p', '', 'problem');
 
@@ -187,7 +172,7 @@ function transfer(): HTMLElement {
       await writeSites(parsed.sites);
       const count = Object.keys(parsed.sites).length;
       const skipped =
-        parsed.skipped.length > 0 ? ` Skipped, because they do not parse: ${parsed.skipped.join(', ')}.` : '';
+        parsed.skipped.length > 0 ? ` Skipped, because they are not valid: ${parsed.skipped.join(', ')}.` : '';
       result.textContent = `Imported ${count} ${count === 1 ? 'rule' : 'rules'}.${skipped}`;
     })();
   });

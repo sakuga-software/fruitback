@@ -30,7 +30,14 @@ describe('parseSitePattern', () => {
 
   /** One refused match pattern would stop the scripts on every site, so these never reach the background. */
   it('refuses a wildcard on a single label or an IP address', () => {
-    for (const input of ['http://*.localhost', 'https://*.dev', 'http://*.127.0.0.1', 'http://*.[::1]']) {
+    for (const input of [
+      'http://*.localhost',
+      'https://*.dev',
+      'http://*.localhost.',
+      'https://*.dev.',
+      'http://*.127.0.0.1',
+      'http://*.[::1]',
+    ]) {
       assert.equal(parseSitePattern(input), undefined, input);
     }
   });

@@ -49,6 +49,40 @@ describe('exportSites and importSites', () => {
     assert.deepEqual(Object.keys(result.sites), ['https://*.staging.acme.dev']);
   });
 
+  /** The widget calls `${endpoint}/feedback`, so a query or a trailing slash would break every call. */
+  it('stores an endpoint as the widget calls it', () => {
+    const result = importSites(
+      file({
+        sites: { 'https://acme.dev': { mode: 'team', endpoint: 'https://w.test/fruitback/?tenant=1', enabled: true } },
+      }),
+    );
+
+    assert.deepEqual(result, {
+      ok: true,
+      sites: { 'https://acme.dev': { mode: 'team', endpoint: 'https://w.test/fruitback', enabled: true } },
+      skipped: [],
+    });
+  });
+
+  /** The same checks as the popup and the options page, so a file cannot store what neither editor would. */
+  it('skips an entry either editor would refuse', () => {
+    const result = importSites(
+      file({
+        sites: {
+          'https://a.dev': { mode: 'private', endpoint: 'javascript:alert(1)', clientId: 'acme' },
+          'https://b.dev': { mode: 'team', endpoint: 'http://feedback.acme.dev' },
+          'https://c.dev': { mode: 'team', endpoint: 'https://feedback.acme.dev' },
+        },
+      }),
+    );
+
+    assert.deepEqual(result, {
+      ok: true,
+      sites: { 'https://c.dev': { mode: 'team', endpoint: 'https://feedback.acme.dev', enabled: true } },
+      skipped: ['https://a.dev', 'https://b.dev'],
+    });
+  });
+
   /** A file written by hand from an old popup entry: no mode, a client id. It reads as private mode. */
   it('reads an entry with no mode as private, like the store does', () => {
     const result = importSites(

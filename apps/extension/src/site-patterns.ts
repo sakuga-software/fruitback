@@ -47,7 +47,10 @@ export function parseSitePattern(input: string): string | undefined {
 
   if (!wildcard) return url.origin;
   if (url.port !== '' || url.host !== host.toLowerCase()) return undefined;
-  if (!url.hostname.includes('.') || /^[\d.]+$/.test(url.hostname) || url.hostname.startsWith('[')) return undefined;
+  const labels = url.hostname.split('.');
+  if (labels.length < 2 || labels.includes('') || /^[\d.]+$/.test(url.hostname) || url.hostname.startsWith('[')) {
+    return undefined;
+  }
 
   return `${scheme}://${WILDCARD}${url.hostname}`;
 }

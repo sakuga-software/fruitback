@@ -100,8 +100,8 @@ otherwise and no prompt ever appears.
 
 ## 4. Many sites, from the options page
 
-The popup switches the site you are on, and names the rule that covers it. On a site no rule covers it
-says `No rule covers this origin, so Fruitback does nothing here.` **All sites and rules** opens the
+The popup switches the site you are on, and names the rule that covers it. On a site that no rule covers, the
+popup says `No rule covers this origin, so Fruitback does nothing here.` **All sites and rules** opens the
 options page, which lists every rule and adds new ones.
 
 A rule names the sites it covers:

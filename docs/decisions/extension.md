@@ -461,14 +461,15 @@ by origin passes every resolver test.
 
 ### What a wildcard covers
 
-`*.staging.acme.dev` covers `staging.acme.dev` too, which is what the match pattern the background
-registers does. A wildcard takes no port and covers the default one. How each browser matches a port
+`*.staging.acme.dev` covers `staging.acme.dev` too, and so does the match pattern that the background
+registers. A wildcard takes no port and covers the default one. How each browser matches a port
 in a match pattern was not measured here, and the two ways to be wrong are not equal: if the scripts run on
 another port, the resolver answers nothing and the bridge unmounts; if the resolver covered a port the
 scripts do not run on, the popup would say **On** over a page with no widget. A bare `*` is refused,
 because it is the permission for every site that SKG-534 refused to ask for at install.
 
-A wildcard on a single label (`*.localhost`) or an IP address is refused too. `syncRegistration` sends
+A wildcard on a single label (`*.localhost`, or `*.localhost.` with its root dot) or an IP address is
+refused too. `syncRegistration` sends
 every pattern in one `registerContentScripts` call, so one pattern the browser refuses stops the
 scripts on every site, and the error is only logged. Which of these a browser refuses was not measured,
 so the conservative answer is to never store them.

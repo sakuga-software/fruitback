@@ -1,3 +1,5 @@
+import { normalizeWorkerEndpoint } from './endpoint.ts';
+import { complaint } from './site-form.ts';
 import { parseSitePattern } from './site-patterns.ts';
 import { type SiteConfig, parseSite } from './sites.ts';
 
@@ -25,7 +27,9 @@ export function exportSites(sites: Record<string, SiteConfig>): string {
 }
 
 /**
- * Parsed like the store: an entry that does not parse is skipped and named, and the others are kept.
+ * Parsed like the store, then checked like the two editors: an entry that fails either is skipped and
+ * named, and the others are kept. An endpoint is stored as the widget calls it, so a file that says
+ * `https://worker.test/?tenant=1` does not produce a rule shown as **On** that calls a broken URL.
  *
  * A newer version is refused as a whole. Its entries could carry a field this version drops, and a
  * reviewer would then run a configuration that is not the one their team sent.
@@ -51,8 +55,16 @@ export function importSites(text: string): SitesImport {
   for (const [key, value] of Object.entries(document.sites)) {
     const pattern = parseSitePattern(key);
     const site = parseSite(value);
-    if (pattern === undefined || site === undefined) skipped.push(key);
-    else sites[pattern] = site;
+    const fields = site && {
+      mode: site.mode,
+      endpoint: site.endpoint,
+      clientId: site.mode === 'private' ? site.clientId : '',
+    };
+    if (pattern === undefined || site === undefined || fields === undefined || complaint(fields) !== '') {
+      skipped.push(key);
+    } else {
+      sites[pattern] = { ...site, endpoint: normalizeWorkerEndpoint(site.endpoint) };
+    }
   }
 
   return { ok: true, sites, skipped };

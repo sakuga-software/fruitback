@@ -420,10 +420,9 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   through `readSite`, and `sites-storage.test.ts` proves `readSite` resolves a wildcard. A reader that
   indexed the map by origin would mount the widget and then have the relay refuse its calls.
 - **A wildcard covers the default port only**, and its base host too, as a match pattern does. It needs
-  a base with a dot and no IP address: every pattern is registered in one call, so one the browser
-  refuses would stop the scripts on every site. If a
-  browser registers the scripts on another port, the bridge unmounts there. The opposite error shows a
-  site as on where nothing runs.
+  a base of at least two labels and no IP address: every pattern is registered in one call, so a pattern
+  that the browser refuses would stop the scripts on every site. If a browser registers the scripts on
+  another port, the bridge unmounts there. The opposite error shows a site as on where nothing runs.
 - **A rules file holds no credential and no grant.** An imported entry runs nowhere until the options
   page's **Grant access** is pressed, and `permissions.onAdded` is what re-syncs the registration,
   because a grant writes no storage. The worker's `origins` stays an exact list: a wildcard in the
