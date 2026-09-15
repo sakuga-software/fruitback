@@ -414,6 +414,21 @@ they were named for a reader — [docs/modes.md](docs/modes.md) and
 [docs/reviewing.md](docs/reviewing.md). Which one an origin is in is one field on its entry, and **an
 entry with no `mode` reads as private** — that is every entry a reviewer's browser already holds.
 
+- **An entry's key is a pattern, and `resolveSite` is the only lookup** (SKG-536). A key is an exact
+  origin or `https://*.host`; every key written before is an exact origin, so nothing is upgraded. The
+  exact origin wins, then the longest wildcard. The bridge, the relay and the popup all reach it
+  through `readSite`, and `sites-storage.test.ts` proves `readSite` resolves a wildcard. A reader that
+  indexed the map by origin would mount the widget and then have the relay refuse its calls.
+- **A wildcard covers the default port only**, and its base host too, as a match pattern does. If a
+  browser registers the scripts on another port, the bridge unmounts there. The opposite error shows a
+  site as on where nothing runs.
+- **A rules file holds no credential and no grant.** An imported entry runs nowhere until the options
+  page's **Grant access** is pressed, and `permissions.onAdded` is what re-syncs the registration,
+  because a grant writes no storage. The worker's `origins` stays an exact list: a wildcard in the
+  browser widens nothing there.
+- **The rules stay in `chrome.storage.local`.** The ticket asked for `sync`; a host permission does
+  not travel with a synced rule, and moving the key is a storage-shape change. That is SKG-611.
+
 - **The private-mode widget carries no credential**, and nothing about the mode is access control.
   `page.content.ts` mounts it with no `transport`, so it calls the worker through `fetchTransport`
   from the page, exactly as a public-mode site does. Two consequences to state rather than discover:

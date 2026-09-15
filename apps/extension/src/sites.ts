@@ -1,12 +1,16 @@
 import { browser } from 'wxt/browser';
+import { type ResolvedSite, resolveSite } from './site-patterns.ts';
 
 /**
  * Which worker answers for which origin, in which mode, and whether this origin is switched on.
  *
- * One entry per origin, because that is the unit a reviewer thinks in — "review acme's staging" —
- * and it is also what the worker checks the client id against (`origins` in `FRUITBACK_CLIENTS`).
- * The full editor for this map is SKG-536; what is here is the store and the per-origin switch the
- * popup needs, and nothing more.
+ * One entry per pattern (SKG-536): an exact origin, or a host wildcard such as
+ * `https://*.staging.acme.dev`. `site-patterns.ts` says which entry answers for an origin, and every
+ * reader asks it through `readSite`. The popup switches the entry for its tab, and the options page
+ * edits all of them.
+ *
+ * A pattern is a convenience for the reviewer and grants nothing on the worker. The worker still
+ * compares the page's exact origin with `origins` in `FRUITBACK_CLIENTS`.
  *
  * Parsed on the way out, never trusted: `chrome.storage` survives an upgrade, so a shape written by
  * an older version has to cost that entry rather than the extension.
@@ -32,10 +36,14 @@ export type SiteConfig = { endpoint: string; enabled: boolean } & (
 
 const KEY = 'sites';
 
+/** The entry that answers for this origin, whether it names the origin or covers it with a wildcard. */
 export async function readSite(origin: string): Promise<SiteConfig | undefined> {
-  const sites = await readAll();
+  return (await findSite(origin))?.site;
+}
 
-  return sites[origin];
+/** The same entry, with the pattern it is stored under. The popup names that pattern. */
+export async function findSite(origin: string): Promise<ResolvedSite | undefined> {
+  return resolveSite(await readAll(), origin);
 }
 
 export async function readAll(): Promise<Record<string, SiteConfig>> {
@@ -52,10 +60,22 @@ export async function readAll(): Promise<Record<string, SiteConfig>> {
   return sites;
 }
 
-export async function writeSite(origin: string, site: SiteConfig): Promise<void> {
+/** `pattern` must come from `parseSitePattern`. A key in another spelling covers nothing. */
+export async function writeSite(pattern: string, site: SiteConfig): Promise<void> {
+  await writeSites({ [pattern]: site });
+}
+
+/** Adds or replaces these entries and keeps the others. An import writes all of its entries at once. */
+export async function writeSites(entries: Record<string, SiteConfig>): Promise<void> {
   const sites = await readAll();
 
-  await browser.storage.local.set({ [KEY]: { ...sites, [origin]: site } });
+  await browser.storage.local.set({ [KEY]: { ...sites, ...entries } });
+}
+
+export async function removeSite(pattern: string): Promise<void> {
+  const { [pattern]: _removed, ...sites } = await readAll();
+
+  await browser.storage.local.set({ [KEY]: sites });
 }
 
 /**

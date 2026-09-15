@@ -22,6 +22,7 @@ import { fileURLToPath } from 'node:url';
 describe('the guide quotes the popup this extension renders', () => {
   const read = (path: string): string => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8');
   const popup = read('../entrypoints/popup/main.ts');
+  const optionsPage = read('../entrypoints/options/main.ts');
   const guide = read('../../../docs/reviewing.md');
 
   /** Every value of `PAIRING_PROBLEM`, by its `key: 'message'` shape. */
@@ -90,10 +91,23 @@ describe('the guide quotes the popup this extension renders', () => {
       // never reaches that screen. Raised in review.
       'Pairing needs https (localhost excepted): a session must not cross http.',
       "team mode · the site's own widget",
+      'No rule covers this origin, so Fruitback does nothing here.',
+      'Turn off for every site this rule covers',
+      'All sites and rules',
     ];
 
     for (const control of controls) {
       assert.ok(popup.includes(control), `the popup no longer renders: ${control}`);
+      assert.ok(guide.includes(control), `docs/reviewing.md no longer names: ${control}`);
+    }
+  });
+
+  /** The same walk-through, on the options page (SKG-536). */
+  it('names the options page controls it walks somebody through', () => {
+    const controls = ['Add rule', 'Grant access', 'No access in this browser', 'Export rules', 'Import a rules file'];
+
+    for (const control of controls) {
+      assert.ok(optionsPage.includes(control), `the options page no longer renders: ${control}`);
       assert.ok(guide.includes(control), `docs/reviewing.md no longer names: ${control}`);
     }
   });

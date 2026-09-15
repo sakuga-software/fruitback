@@ -1,5 +1,6 @@
 import { browser } from 'wxt/browser';
 import { readAll, readSite } from '../src/sites.ts';
+import { parseSitePattern } from '../src/site-patterns.ts';
 import { matchPatternFor, serialize, syncRegistration } from '../src/registration.ts';
 import { createBrowserSessions } from '../src/session-browser.ts';
 import { touchesARefreshToken } from '../src/session-storage.ts';
@@ -46,16 +47,17 @@ export default defineBackground(() => {
   const sync = serialize(async (): Promise<void> => {
     try {
       const sites = await readAll();
+      // A key that is not a pattern covers nothing in `resolveSite`, so it registers nothing here.
       const wanted = Object.entries(sites)
-        .filter(([, site]) => site.enabled)
-        .map(([origin]) => origin);
+        .filter(([pattern, site]) => site.enabled && parseSitePattern(pattern) === pattern)
+        .map(([pattern]) => pattern);
 
       // A permission the reviewer granted once can be revoked in the browser's own settings, without
       // this extension hearing about it in any way it could act on. Registering a script for an
       // origin we no longer hold throws, so the grant is checked rather than assumed.
       const granted: string[] = [];
-      for (const origin of wanted) {
-        if (await browser.permissions.contains({ origins: [matchPatternFor(origin)] })) granted.push(origin);
+      for (const pattern of wanted) {
+        if (await browser.permissions.contains({ origins: [matchPatternFor(pattern)] })) granted.push(pattern);
       }
 
       await syncRegistration(browser.scripting, granted);
@@ -140,6 +142,8 @@ export default defineBackground(() => {
     if (touchesARefreshToken(Object.keys(changes))) void refreshSessions();
   });
   browser.permissions.onRemoved.addListener(() => void sync());
+  // The options page grants access to an entry that is already stored, so no storage change follows.
+  browser.permissions.onAdded.addListener(() => void sync());
   browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === SESSION_ALARM) void refreshSessions();
   });

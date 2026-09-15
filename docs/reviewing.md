@@ -98,6 +98,42 @@ Pairing asks for a permission on the worker's origin, which is a different grant
 is asked for at the click, so nothing is awaited before the prompt — a browser drops the gesture
 otherwise and no prompt ever appears.
 
+## 4. Many sites, from the options page
+
+The popup switches the site you are on, and names the rule that covers it. On a site no rule covers it
+says `No rule covers this origin, so Fruitback does nothing here.` **All sites and rules** opens the
+options page, which lists every rule and adds new ones.
+
+A rule names the sites it covers:
+
+| Sites                        | covers                                                            |
+| ---------------------------- | ----------------------------------------------------------------- |
+| `https://acme.dev`           | that origin only                                                  |
+| `https://*.staging.acme.dev` | `staging.acme.dev` and every subdomain of it, on the default port |
+
+A host with no scheme is read as `https://`. When two rules cover a site, the rule for the exact origin
+wins, then the longest wildcard. So one preview can go to another client, or be switched off, under a
+rule for all of them. **A site that no rule covers mounts nothing**: there is no default client.
+
+**Add rule** asks the browser for access to every site the pattern covers, and stores nothing if you
+refuse. On a site a wildcard covers, the popup's switch reads `Turn off for every site this rule covers`,
+because that is what it does.
+
+**A wildcard is a convenience in your browser, and grants nothing on the worker.** The worker compares
+each page's exact origin with the `origins` of its client, so `pr-12.staging.acme.dev` has to be listed
+there too, or its notes are refused.
+
+### Share rules with a team
+
+**Export rules** downloads `fruitback-sites.json`, and **Import a rules file** reads one. A rule in the
+file replaces the rule with the same pattern, and the other rules stay. An entry that does not parse is
+skipped, and the page names it.
+
+The file holds patterns, modes, endpoints and client ids. It holds no session and no access, so an
+imported rule reads `No access in this browser` until you press **Grant access**, and a team-mode worker
+still needs you to pair. The rules stay in the browser that holds them: they do not sync to your other
+browsers yet (SKG-611).
+
 ## What log out does, and what it cannot undo
 
 **Log out** revokes the session on the worker first, then clears both tokens here. The refresh token

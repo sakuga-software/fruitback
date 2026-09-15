@@ -73,6 +73,13 @@ cannot make a visitor's browser do something privileged. It is emphatically **no
 direct caller reads nothing. Under the public default, `curl` reads every note on a page, and closing
 that is `FRUITBACK_READ=authenticated`, not CORS.
 
+**The extension's site rules are the same claim, made by the reviewer's browser** (SKG-536). A rule
+maps an origin, or a wildcard such as `https://*.staging.acme.dev`, to a worker and a client id, and
+it can be imported from a file somebody sent. It is a convenience and grants nothing: the widget still
+asserts that client id, and the worker still compares the page's **exact** origin with that client's
+`origins`. A wildcard in a browser does not widen that list. A rules file holds no session and no host
+permission, so an imported rule runs nowhere until the reviewer grants its pattern in their browser.
+
 ### `reporter.verified` is the worker's word
 
 Anything a browser posts carrying `verified` has it stripped before storage, whatever else it says.
