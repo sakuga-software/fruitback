@@ -155,6 +155,7 @@ export function createComposer(options: ComposerOptions): Composer {
   function place(anchor: { left: number; top: number; bottom: number; right: number }): void {
     const width = view?.innerWidth ?? 0;
     const height = view?.innerHeight ?? 0;
+    const scrollX = view?.scrollX ?? 0;
     const scrollY = view?.scrollY ?? 0;
     const own = root.getBoundingClientRect();
     const below = anchor.bottom + GAP;
@@ -163,7 +164,11 @@ export function createComposer(options: ComposerOptions): Composer {
 
     // Custom properties rather than inline `left`/`top`: an inline style would beat the media query
     // below and leave the mobile sheet offset by whatever the element's position happened to be.
-    root.style.setProperty('--fruitback-composer-left', `${Math.max(GAP, Math.min(start, width - WIDTH - GAP))}px`);
+    // `start` is in document coordinates, so the window it must stay inside starts at `scrollX` (SKG-607).
+    root.style.setProperty(
+      '--fruitback-composer-left',
+      `${Math.max(scrollX + GAP, Math.min(start, scrollX + width - WIDTH - GAP))}px`,
+    );
     root.style.setProperty(
       '--fruitback-composer-top',
       `${fitsBelow ? below : Math.max(0, anchor.top - own.height - GAP)}px`,

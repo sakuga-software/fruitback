@@ -156,3 +156,37 @@ test('a reply is not drawn as a bullet point', async ({ page }) => {
 
   throw new Error('no issue came back with replies in three attempts');
 });
+
+test('the popover and the thread open inside the window on a page scrolled sideways (SKG-607)', async ({ page }) => {
+  // The popover scales in from 96%, which moves its edges by a few pixels mid-animation.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openPlayground(page, 'scrolled-sideways');
+  // A page wider than the window, with the element far to the right of the first screen.
+  await page.addStyleTag({ content: '#checkout-cta { position: relative; left: 2200px; }' });
+  const target = page.locator('#checkout-cta');
+  await target.scrollIntoViewIfNeeded();
+  expect(await page.evaluate(() => window.scrollX), 'the page did not scroll sideways').toBeGreaterThan(0);
+
+  const viewport = page.viewportSize();
+  expect(viewport).not.toBeNull();
+  const insideWindow = async (locator: import('@playwright/test').Locator) => {
+    const box = await locator.boundingBox();
+
+    return box !== null && box.x >= 0 && box.x + box.width <= viewport!.width;
+  };
+
+  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await target.click();
+  const composer = page.locator('[data-fruitback-composer]');
+  await expect(page.getByPlaceholder('What is wrong here?')).toBeVisible();
+  await expect.poll(() => insideWindow(composer), { message: 'the popover opened outside the window' }).toBe(true);
+
+  await page.getByPlaceholder('What is wrong here?').fill('Sur une page qui défile de côté');
+  await page.getByRole('button', { name: 'Plant', exact: true }).click();
+  await expect(composer).toBeHidden({ timeout: 5_000 });
+
+  await badgeFor(page, 'Sur une page qui défile de côté').click();
+  const thread = page.locator('[data-fruitback-thread]');
+  await expect(thread).toBeVisible();
+  await expect.poll(() => insideWindow(thread), { message: 'the thread opened outside the window' }).toBe(true);
+});

@@ -635,6 +635,7 @@ function positionThread(thread: HTMLElement, pin: HTMLElement | undefined, direc
   const pinWidth = Number.parseFloat(pin.style.width) || 0;
   const viewportWidth = view?.innerWidth ?? 0;
   const viewportHeight = view?.innerHeight ?? 0;
+  const scrollX = view?.scrollX ?? 0;
   const scrollY = view?.scrollY ?? 0;
 
   // Measured after insertion, so this is the height the thread actually took.
@@ -643,7 +644,8 @@ function positionThread(thread: HTMLElement, pin: HTMLElement | undefined, direc
   const roomBelow = below + threadHeight <= scrollY + viewportHeight;
   const start = direction === 'rtl' ? left + pinWidth - THREAD_WIDTH : left;
 
-  thread.style.left = `${Math.max(THREAD_GAP, Math.min(start, viewportWidth - THREAD_WIDTH - THREAD_GAP))}px`;
+  // The pin's left is in document coordinates, so the window it must stay inside starts at `scrollX` (SKG-607).
+  thread.style.left = `${Math.max(scrollX + THREAD_GAP, Math.min(start, scrollX + viewportWidth - THREAD_WIDTH - THREAD_GAP))}px`;
   thread.style.top = `${roomBelow ? below : Math.max(0, top - threadHeight - THREAD_GAP)}px`;
 }
 

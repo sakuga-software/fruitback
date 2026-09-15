@@ -567,6 +567,34 @@ describe('the reading direction and the dates (SKG-531)', () => {
     });
   });
 
+  it('opens the thread inside the window when the page is scrolled sideways (SKG-607)', () => {
+    const placedBy = (viewportLeft: number, translator = createTranslator()) => {
+      const page = mountWithCta();
+      page.view.scrollTo(1_500, 0);
+      setRect(page.query('button'), { left: viewportLeft, top: 200, width: 200, height: 40 });
+      overlay = createOverlay({ document: page.document, translator });
+      overlay.render([issueOnCta()]);
+      (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+      const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
+      const thread = page.document.querySelector('[data-fruitback-thread]') as HTMLElement;
+      const placed = { pin: pin.style.left, thread: thread.style.left };
+      overlay.destroy();
+      overlay = null;
+
+      return placed;
+    };
+
+    // On screen at document x 2000, the thread opens beside its pin.
+    assert.deepEqual(placedBy(500), { pin: '2000px', thread: '2000px' });
+    // Near the right edge of the window it stops 8px short of it: 1500 + 1000 - 300 - 8.
+    assert.deepEqual(placedBy(900), { pin: '2400px', thread: '2192px' });
+    // Right to left, near the left edge of the window, it stops 8px after it: 1500 + 8.
+    assert.deepEqual(placedBy(0, createTranslator({ locale: 'he', messages: { he: { 'thread.close': 'סגור' } } })), {
+      pin: '1500px',
+      thread: '1508px',
+    });
+  });
+
   it('dates a reply relative to now, with the day in its title', () => {
     const page = mountWithCta();
     const translator = createTranslator({ now: () => Date.parse('2026-08-02T10:00:00.000Z') });
