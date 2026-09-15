@@ -748,3 +748,142 @@ describe('the detached list is the widget’s own DOM', () => {
     assert.equal(resolves, 0);
   });
 });
+
+describe('the thread and the keyboard (SKG-544)', () => {
+  function openOnCta(): { page: MountedPage; badge: HTMLElement } {
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta()]);
+    const badge = page.document.querySelector('.fruitback-pin-badge') as HTMLElement;
+    badge.click();
+
+    return { page, badge };
+  }
+
+  it('opens as a named dialog, with focus on its close button', () => {
+    const { page } = openOnCta();
+    const thread = page.document.querySelector('[data-fruitback-thread]');
+
+    assert.equal(thread?.getAttribute('role'), 'dialog');
+    assert.match(thread?.getAttribute('aria-label') ?? '', /^Feedback \S+/);
+    assert.ok(page.document.activeElement?.classList.contains('fruitback-thread-close'));
+  });
+
+  it('gives focus back to the badge on Escape', () => {
+    const { page, badge } = openOnCta();
+
+    pressKey(page, 'Escape');
+
+    assert.ok(page.document.querySelector('[data-fruitback-thread]') === null, 'the thread is still open');
+    assert.ok(page.document.activeElement === badge, 'focus did not go back to the badge');
+  });
+
+  it('keeps focus on the pin when a render rebuilds the pins under a focused thread', () => {
+    const { page } = openOnCta();
+
+    overlay?.render([issueOnCta()]);
+
+    const badge = page.document.querySelector('.fruitback-pin-badge');
+    assert.ok(badge !== null && page.document.activeElement === badge, 'focus fell to the page');
+  });
+
+  it('keeps focus on a badge that a render replaces', () => {
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta()]);
+    const before = page.document.querySelector('.fruitback-pin-badge') as HTMLElement;
+    before.focus();
+
+    overlay.render([issueOnCta()]);
+
+    const after = page.document.querySelector('.fruitback-pin-badge');
+    assert.ok(after !== null && after !== before, 'the render did not rebuild the badge');
+    assert.ok(page.document.activeElement === after, 'focus stayed on the removed badge');
+  });
+
+  it('moves no focus on a render when the overlay did not have it', () => {
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta()]);
+    const cta = page.query('button') as HTMLButtonElement;
+    cta.focus();
+
+    overlay.render([issueOnCta()]);
+
+    assert.ok(page.document.activeElement === cta, 'the render took focus from the page');
+  });
+
+  it('gives focus back to the detached-note entry that opened the thread', () => {
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([
+      seedIssueFixture({
+        seed: seedFixture({
+          id: 'sd_gone',
+          note: 'Disparu',
+          anchor: {
+            selector: '#gone',
+            tag: 'textarea',
+            text: 'Disparu',
+            bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 },
+          },
+        }),
+      }),
+    ]);
+    const entry = page.document.querySelector('.fruitback-orphans-note') as HTMLButtonElement;
+    assert.ok(entry !== null, 'the note is not listed as detached');
+
+    entry.focus();
+    entry.click();
+    assert.ok(page.document.querySelector('[data-fruitback-thread]') !== null, 'the entry opened no thread');
+    pressKey(page, 'Escape');
+
+    assert.ok(
+      page.document.activeElement === entry,
+      'focus went to the pin instead of the entry that opened the thread',
+    );
+  });
+
+  it('keeps focus on the detached-note entry across a render, for its thread and for the entry itself', () => {
+    const page = mountWithCta();
+    const detached = (id: string, note: string) =>
+      seedIssueFixture({
+        seed: seedFixture({
+          id,
+          note,
+          anchor: {
+            selector: `#${id}`,
+            tag: 'textarea',
+            text: note,
+            bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 },
+          },
+        }),
+      });
+    const entryFor = (note: string) =>
+      [...page.document.querySelectorAll('.fruitback-orphans-note')].find((node) => node.textContent === note);
+    overlay = createOverlay({ document: page.document });
+    overlay.render([detached('sd_gone', 'Disparu')]);
+
+    const opener = entryFor('Disparu') as HTMLButtonElement;
+    opener.focus();
+    opener.click();
+    overlay.render([detached('sd_gone', 'Disparu')]);
+    assert.ok(page.document.activeElement === entryFor('Disparu'), 'a render under the thread moved focus to the pin');
+
+    overlay.render([detached('sd_gone', 'Disparu'), detached('sd_other', 'Autre')]);
+    const rebuilt = entryFor('Disparu');
+    assert.ok(rebuilt !== undefined && rebuilt !== opener, 'the list was not rebuilt, so this checks nothing');
+    assert.ok(page.document.activeElement === rebuilt, 'a rebuilt list dropped the focus of its entry');
+  });
+
+  it('leaves focus on the page when a click outside closes it', () => {
+    const { page } = openOnCta();
+    const cta = page.query('button') as HTMLButtonElement;
+
+    cta.focus();
+    cta.click();
+
+    assert.ok(page.document.querySelector('[data-fruitback-thread]') === null, 'the thread is still open');
+    assert.ok(page.document.activeElement === cta, 'the close took focus from the page');
+  });
+});

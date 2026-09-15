@@ -16,7 +16,7 @@ import { createComposer } from './composer.ts';
 import { createConfigPanel } from './panel.ts';
 import { createConfigStore } from './config.ts';
 import { createOverlay } from './overlay.ts';
-import { mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
+import { mountPage, pressKey, setDocumentSize, setRect } from './dom.fixture.ts';
 
 describe('createTranslator', () => {
   it('speaks English when nobody asked for anything', () => {
@@ -126,6 +126,21 @@ describe('the bundled catalog', () => {
     }
     assert.ok(Object.keys(BUNDLED_CATALOGS).length > 1, 'only one catalog is checked');
   });
+
+  it('gives every named part of the widget a name of its own, in every bundled catalog (SKG-544)', () => {
+    const named = [
+      'widget.label',
+      'launch.label',
+      'settings.open',
+      'settings.dialog',
+      'composer.dialog',
+      'composer.label',
+    ] as const;
+    for (const [tag, catalog] of Object.entries(BUNDLED_CATALOGS)) {
+      const names = named.map((key) => catalog[key]);
+      assert.equal(new Set(names).size, names.length, `${tag} gives two parts one name: ${names.join(' | ')}`);
+    }
+  });
 });
 
 describe('languageOf', () => {
@@ -162,7 +177,8 @@ describe('every word the widget shows', () => {
   /** Text nodes and the attributes a reader or a screen reader gets, everywhere but in a stylesheet. */
   function shown(root: ShadowRoot): string[] {
     const found: string[] = [];
-    for (const element of root.querySelectorAll('*')) {
+    // The host element too: it carries the name of the landmark.
+    for (const element of [root.host, ...root.querySelectorAll('*')]) {
       if (element.tagName === 'STYLE') continue;
       for (const node of element.childNodes) {
         if (node.nodeType === 3 && (node.textContent ?? '').trim() !== '') found.push(node.textContent ?? '');
@@ -177,7 +193,7 @@ describe('every word the widget shows', () => {
   }
 
   it('comes from the catalog, in every part of the widget', async () => {
-    const page = mountPage('<main><button data-testid="cta">Commander</button></main>', {
+    const page = mountPage('<main><button data-testid="cta">Commander</button><i></i></main>', {
       width: 1_000,
       height: 1_000,
     });
@@ -189,7 +205,18 @@ describe('every word the widget shows', () => {
       now: () => Date.parse('2026-09-14T12:00:00.000Z'),
     });
 
-    const host = createCaptureHost({ document: page.document, translator, onSelect: () => {}, onConfigure: () => {} });
+    const host = createCaptureHost({
+      document: page.document,
+      translator,
+      onSelect: () => {},
+      onConfigure: () => {},
+      engine: {
+        elementAt: () => null,
+        grabbable: () => true,
+        boundsOf: () => ({ left: 0, top: 0, width: 0, height: 0 }),
+        sourceOf: async () => undefined,
+      },
+    });
     cleanup.push(() => host.destroy());
     const store = createConfigStore({
       defaults: { endpoint: 'https://worker.test', clientId: 'acme', hiddenStages: [], screenshot: false },
@@ -264,6 +291,12 @@ describe('every word the widget shows', () => {
 
     const snapshots: string[] = [];
     host.start();
+    snapshots.push(...shown(host.root));
+    // The keyboard cursor: onto the main element, then the button, then the empty element.
+    pressKey(page, 'ArrowDown');
+    snapshots.push(...shown(host.root));
+    pressKey(page, 'ArrowDown');
+    pressKey(page, 'ArrowDown');
     snapshots.push(...shown(host.root));
     host.stop();
     const badges = [...host.root.querySelectorAll('.fruitback-pin-badge')] as HTMLElement[];

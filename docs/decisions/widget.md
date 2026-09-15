@@ -44,7 +44,9 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   **inherited** properties — `body { font-family: Papyrus }` reaches in otherwise. The catch: `all:
 initial` also undoes the browser's `display: none` on `<style>`, which then renders the stylesheet
   as visible text in the corner of the client's page. Hence `style, script { display: none }`. Both
-  are covered by E2E tests, because neither is visible to a DOM emulator.
+  are covered by E2E tests, because neither is visible to a DOM emulator. The reset on every element
+  inside stops inheritance too, so it declares `color` and `font` as `inherit` (SKG-544, in _The
+  keyboard, the screen reader and the contrast_).
 - **The host sits at the document origin, absolutely positioned, with no size.** The overlay places
   pins in document coordinates, and absolute positions resolve against the nearest positioned
   ancestor — move or offset the host and every pin moves with it.
@@ -305,6 +307,144 @@ header when the host mints no token` compared `fetch`'s second argument to `unde
   other way.
 - **Each bundled catalog weighs on the size guard.** If the list grows, catalogs load on demand; the
   guard is not widened.
+
+## The keyboard, the screen reader and the contrast (SKG-544)
+
+The widget lays itself over somebody else's page, which may have been audited. An accessibility
+defect of ours is a defect of theirs.
+
+**The dialogs.**
+
+- The popover and the settings panel are `role="dialog"` with `aria-modal="true"`. `aria-modal` tells
+  a screen reader that the rest of the page is out of reach, and the widget makes nothing `inert`, so
+  the attribute ships with the trap and never alone. `holdFocus` in `focus.ts` holds the three
+  behaviours:
+  - Tab and Shift+Tab wrap inside the dialog, over the controls that are not disabled and not in a
+    hidden subtree. The send button in flight is disabled, so it leaves the cycle.
+  - Escape closes, and stops at the dialog. The thread and the capture mode also close on Escape from
+    a document listener, and one key press must close one thing.
+  - Focus goes back to the element that had it before the open, if focus is still in the dialog or
+    nowhere. A reporter who moved focus to the page keeps it there.
+  - A Tab from the page while the dialog is open comes back in. A click on the page moves focus out,
+    and that Tab never reaches the dialog's own listener, so a capture-phase listener on the document
+    catches it. A focused element outside the cycle, such as a send button disabled in flight, counts
+    as outside and wraps too (raised in review on PR #61).
+  - Only the dialog opened last keeps Tab. The gear opens the panel over an open popover, and two traps
+    would move focus back and forth, so `holdFocus` keeps the open dialogs of each document in order.
+  - An Escape while focus is on the page stays the page's. A click on the page gives it focus, and the
+    host's own menus close on Escape. Proposed in review and not taken: Tab still brings focus back,
+    and Cancel still closes.
+- The reset removes the browser's focus ring along with everything else, so `host.ts` restores one on
+  `:focus-visible` for buttons, links and fields.
+- While no widget dialog has focus, the capture mode consumes the arrow keys. It consumes an Escape
+  only when it cancels the capture, so the page and the thread do not act on the same key press.
+  Enter on the gear, or on any control of the widget other than the launch button, presses that
+  control instead of selecting the highlighted element.
+- The gear stops the capture mode before it opens the settings. The capture mode takes the arrows and
+  Enter from a document listener, so a panel opened over it would lose them. For the same reason the
+  capture mode leaves the keys to any dialog of the widget that has focus.
+- The thread gives focus back to what opened it: its badge, or the entry of the detached-notes list.
+  A render keeps that distinction, and moves focus to the rebuilt entry or badge of the same issue.
+- A render rebuilds the pins, and the badge that had focus, or the badge of a focused thread, is a new
+  node. Focus moves to the new badge of the same issue instead of falling to the page.
+- The popover's opener is what had focus when it opened. With the keyboard, that is the launch button,
+  because the capture walk moves a highlight and never focus. With a mouse, it is whatever the click
+  on the page focused.
+- The panel's name is `settings.dialog`, the popover's is `composer.dialog`. `messages.test.ts` holds
+  every named part of the widget to a name of its own, in each bundled catalog.
+- The thread is a dialog that is not modal. It opens with focus on its close button, because it is
+  the last child of the overlay and far from its badge in the tab order, and it gives focus back to
+  the badge on Escape or Close. A click outside closes it and leaves focus where the click put it.
+- **`document.activeElement` is the host element** for a node focused inside the Shadow root.
+  `deepActiveElement` reads through the root. happy-dom implements `ShadowRoot.activeElement`
+  (measured), so the unit tests can check the real thing.
+
+**The capture mode without a pointer.** The ticket called this the real hole: a keyboard could not
+plant a note, because selection was a hit test at the pointer.
+
+- Tab cannot do it: most elements a note is about, a paragraph or a card, are not focusable. The walk
+  is an inspector cursor instead. Down and Up go to the next and previous element in document order,
+  Left to the parent, Right to the first child; the two swap in a right-to-left language. Enter or
+  Space selects, through the same path as a click.
+- `CaptureEngine.grabbable` is the filter, and react-grab's `isElementGrabbable` is behind it: the
+  element the pointer can land on is the element the keyboard can stop on. `isOurs` still applies, so
+  the walk never lands on the widget or on chrome the page told it to ignore.
+- The arrows are taken with `preventDefault` while the mode is on, or the page scrolls under the
+  reporter. Enter and Space are taken only while an element is highlighted. Before that, Enter
+  presses the launch button that has focus, which stops the mode.
+- The cursor scrolls its element into view and the host's live region names it: the tag, then the
+  text or the `aria-label`, cut at 80 characters. Starting the mode announces how to use it.
+- The walk stays in the light DOM of the document. The pointer's hit test also enters open shadow
+  roots and same-origin iframes; the keyboard walk does not.
+
+**What is announced without a focus move.** The popover's status was already a polite live region, for
+planting, harvested and failed. The host adds one for the capture mode. The detached-notes list adds
+one for its count, and announces only an increase. That region is a sibling of the list's root: the
+root is hidden while the list is empty, and a live region in a hidden element announces nothing.
+`owns` includes it, or the overlay reads its new text as a page change and resolves again.
+
+**Where a screen reader meets the widget.** The ticket left this open. The widget mounts at the end of
+`body`, so a screen reader reads it after the host's content, with no warning. The choice is a named
+landmark: the host container is `role="region"` with `aria-label` from `widget.label`, so the widget is
+listed with the page's landmarks and says what it is. Hiding it until activation was not taken: the
+launch button is the activation, and it has to be reachable.
+
+A pin lets clicks through, and only its badge is a control: a `button` whose `aria-label` carries the
+stage and the note. The pin itself has no role, so a screen reader reads one button per note and
+nothing for the frame around the element.
+
+**Contrast**, measured with the WCAG 2.2 formula on the default tokens:
+
+| Pair                                        | Where                          | Light        | Dark |
+| ------------------------------------------- | ------------------------------ | ------------ | ---- |
+| `on-accent` on `accent`                     | launch and send labels         | 4.23         | 4.23 |
+| `accent` on `surface-raised`                | failed status                  | 4.16         | 3.73 |
+| `accent` on `surface`                       | thread and detached-note links | 4.23         | 4.14 |
+| `warning` on `surface`                      | approximate-position warning   | 4.62         | 3.78 |
+| `on-stage` on seeded, green, ripening, ripe | the `≈` on an approximate pin  | 2.28 to 4.23 | same |
+
+Text needs 4.5:1. Three values changed, because the old ones failed and nothing else paints with them:
+
+| Token                        | Was              | Is        | Now measures             |
+| ---------------------------- | ---------------- | --------- | ------------------------ |
+| `color-text-subtle`, light   | `#a8a29e` (2.52) | `#7a736e` | 4.66 on `surface`        |
+| `color-text-subtle`, dark    | `#78716c` (3.65) | `#8f8883` | 5.01 on `surface`        |
+| `color-success`, light       | `#7cb342` (2.47) | `#4e7d2a` | 4.82 on `surface-raised` |
+| `color-border-strong`, light | `#d6d3d1` (1.49) | `#8f8883` | 3.49 on `surface`        |
+| `color-border-strong`, dark  | `#4a4441` (1.83) | `#7a736e` | 3.75 on `surface`        |
+
+The dark scheme keeps `#7cb342` for `color-success`, which measures 6.29 there. A field's border needs
+3:1 because the field's background is the surface around it, so the border is the only thing that
+shows where to type. The popover's textarea moved from `color-border` to `color-border-strong` for the
+same reason.
+
+**What the token arithmetic did not see.** The first axe run in the dark scheme found text painted
+black on `#1c1917`, at 1.2:1: the thread's state and note, the panel's title, its two fields and every
+checkbox label. In the light scheme the launch label was black at 16px and weight 400, under a button
+that declares white at 13px and 600; black on the accent passed, black on the chip of the capture mode
+measured 2.04. The cause is the reset: `all: initial` sets `color` to its initial value, black, and
+`font-size` to 16px, so an element with no rule of its own inherits nothing from its parent. The reset
+now declares `color`, `font` and `letter-spacing` as `inherit`, and `:host` gives the first values.
+`contrast.test.ts` compares tokens, and the painted colour was not a token, so only a measurement in a
+browser could find this.
+
+Two more findings from the same run:
+
+- `font: 600 13px/1 inherit` on the popover's buttons was not a valid declaration, because `inherit`
+  cannot be a family inside the shorthand. The browser dropped it, and Cancel and Plant were 16px.
+- The thread's `<header>` became a banner inside the widget's region landmark, which axe refuses
+  (`landmark-banner-is-top-level`). It is a `div` now.
+
+After the fix, axe reports the accent only: the launch label and Plant, white on `#e53935`, at 4.22,
+and the thread link at 4.22 in the light scheme and 4.13 in the dark. The spec lets those through and
+fails if none is found, so the filter goes when the accent changes. The scan emulates
+`prefers-reduced-motion`: the popover opens with an opacity animation, and axe measured the text of a
+popover still fading in.
+
+The accent and the stage colours are the product's identity, and they were left for a decision rather
+than changed here. `contrast.test.ts` lists their failures exactly, so a fix removes an entry and a new
+failure has to be added on purpose. A pin sits on the host's page, and no test here can promise its
+contrast.
 
 ## Re-anchoring, and why a pin says how sure it is
 

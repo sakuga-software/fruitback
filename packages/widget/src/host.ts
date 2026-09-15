@@ -1,5 +1,6 @@
 import type { SeedSource } from '@fruitback/shared';
 import { isElement } from './dom.ts';
+import { deepActiveElement } from './focus.ts';
 import { type FruitbackTheme, THEME_STYLES, applyTheme } from './theme.ts';
 import { type CaptureEngine, reactGrabEngine } from './engine.ts';
 import { createIcon } from './icons.ts';
@@ -81,6 +82,9 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   // not follow it (SKG-531).
   container.dir = t.direction;
   container.lang = t.lang;
+  // A named landmark: a screen reader meets the widget in the middle of the host's content (SKG-544).
+  container.setAttribute('role', 'region');
+  container.setAttribute('aria-label', t.text('widget.label'));
   // Positioned at the document origin with no size of its own: children can then use document
   // coordinates directly, and nothing about it disturbs the page's layout.
   container.style.cssText = 'position:absolute;top:0;left:0;width:0;height:0;';
@@ -134,11 +138,19 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   if (options.onConfigure !== undefined) dock.append(configure);
   dock.append(button);
 
-  root.append(style, dock, highlight, panel);
+  const announcer = document.createElement('div');
+  announcer.className = 'fruitback-announcer';
+  announcer.dataset.fruitbackAnnouncer = '';
+  announcer.setAttribute('role', 'status');
+  announcer.setAttribute('aria-live', 'polite');
+
+  root.append(style, dock, highlight, panel, announcer);
 
   configure.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
+    // The settings dialog must own the keys, and the capture mode takes the arrows and Enter.
+    stop();
     options.onConfigure?.();
   });
 
@@ -149,10 +161,15 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   const isOurs = (element: Element) =>
     element === container || root.contains(element) || options.ignore?.(element) === true;
 
+  const isCandidate = (element: Element) => !isOurs(element) && engine.grabbable(element);
+
   function onMove(event: MouseEvent): void {
     if (!capturing) return;
 
-    const element = engine.elementAt(event.clientX, event.clientY, isOurs);
+    show(engine.elementAt(event.clientX, event.clientY, isOurs));
+  }
+
+  function show(element: Element | null): void {
     hovered = element;
 
     if (element === null) {
@@ -183,6 +200,10 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     const element = engine.elementAt(event.clientX, event.clientY, isOurs) ?? hovered;
     if (element === null) return;
 
+    select(element);
+  }
+
+  function select(element: Element): void {
     stop();
     // A seed with no `source` is a perfectly good seed, so a rejecting engine costs the metadata and
     // nothing else. Without the catch, a swapped-in engine that throws would drop the capture on the
@@ -193,14 +214,99 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
       .then((source) => options.onSelect({ element, source }));
   }
 
+  /**
+   * The capture mode without a pointer (SKG-544).
+   *
+   * - Down and Up move to the next or previous element in document order.
+   * - Left moves to the parent and Right to the first child. The two keys swap in a right-to-left language.
+   * - Enter or Space selects the highlighted element.
+   */
   function onKeyDown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') stop();
+    if (!capturing) return;
+    // A dialog of the widget that has focus owns the keys, Escape included.
+    if (dialogHasFocus()) return;
+
+    if (event.key === 'Escape') {
+      // One key press cancels one thing: the page and the thread must not also act on it.
+      event.preventDefault();
+      event.stopPropagation();
+      stop();
+
+      return;
+    }
+
+    const target = keyboardTarget(event.key);
+    if (target !== undefined) {
+      // The page must not scroll under the reporter.
+      event.preventDefault();
+      event.stopPropagation();
+      if (target !== null) point(target);
+
+      return;
+    }
+
+    // Enter on the gear, or on another control of the widget, presses that control.
+    if ((event.key === 'Enter' || event.key === ' ') && hovered !== null && !otherControlHasFocus()) {
+      // Without this, Enter also presses the launch button that has focus, and stops the capture.
+      event.preventDefault();
+      event.stopPropagation();
+      select(hovered);
+    }
+  }
+
+  function otherControlHasFocus(): boolean {
+    const active = deepActiveElement(document);
+
+    return active !== null && active !== button && root.contains(active);
+  }
+
+  /** A dialog of the widget that has focus owns the keys. */
+  function dialogHasFocus(): boolean {
+    const active = deepActiveElement(document);
+
+    return active !== null && root.contains(active) && active.closest('[role="dialog"]') !== null;
+  }
+
+  /** The element a navigation key moves to, `null` if there is none, `undefined` for another key. */
+  function keyboardTarget(key: string): Element | null | undefined {
+    const body = document.body;
+    const [toParent, toChild] = t.direction === 'rtl' ? ['ArrowRight', 'ArrowLeft'] : ['ArrowLeft', 'ArrowRight'];
+    const next = (element: Element) => following(element, body);
+    const previous = (element: Element) => preceding(element, body);
+    const parent = (element: Element) => (element.parentElement === body ? null : element.parentElement);
+
+    if (key === 'ArrowDown') return search(hovered === null ? body.firstElementChild : next(hovered), next);
+    if (key === 'ArrowUp') {
+      return hovered === null ? search(body.firstElementChild, next) : search(previous(hovered), previous);
+    }
+    if (key === toParent) return hovered === null ? null : search(parent(hovered), parent);
+    if (key === toChild) return hovered === null ? null : search(hovered.firstElementChild, next, hovered);
+
+    return undefined;
+  }
+
+  function search(start: Element | null, step: (element: Element) => Element | null, inside?: Element): Element | null {
+    for (let node = start; node !== null; node = step(node)) {
+      if (inside !== undefined && !inside.contains(node)) return null;
+      if (isCandidate(node)) return node;
+    }
+
+    return null;
+  }
+
+  function point(element: Element): void {
+    if (typeof (element as HTMLElement).scrollIntoView === 'function') {
+      element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+    show(element);
+    announcer.textContent = describe(element, t);
   }
 
   function start(): void {
     capturing = true;
     container.dataset.fruitbackCapturing = '';
     launchLabel.textContent = t.text('launch.capturing');
+    announcer.textContent = t.text('capture.instructions');
   }
 
   function stop(): void {
@@ -209,6 +315,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     delete container.dataset.fruitbackCapturing;
     launchLabel.textContent = restingLabel;
     highlight.style.display = 'none';
+    announcer.textContent = '';
   }
 
   button.addEventListener('click', () => (capturing ? stop() : start()));
@@ -232,6 +339,37 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   };
 }
 
+/** The next element in document order, inside `root`. */
+function following(element: Element, root: Element): Element | null {
+  if (element.firstElementChild !== null) return element.firstElementChild;
+
+  for (let node: Element | null = element; node !== null && node !== root; node = node.parentElement) {
+    if (node.nextElementSibling !== null) return node.nextElementSibling;
+  }
+
+  return null;
+}
+
+/** The previous element in document order, inside `root`. */
+function preceding(element: Element, root: Element): Element | null {
+  const sibling = element.previousElementSibling;
+  if (sibling === null) return element.parentElement === root ? null : element.parentElement;
+
+  let node = sibling;
+  while (node.lastElementChild !== null) node = node.lastElementChild;
+
+  return node;
+}
+
+/** What a screen reader says about the element under the keyboard cursor. */
+function describe(element: Element, t: Translator): string {
+  const tag = element.tagName.toLowerCase();
+  const text = (element.getAttribute('aria-label') ?? element.textContent ?? '').replace(/\s+/g, ' ').trim();
+  if (text === '') return t.text('capture.elementEmpty', { tag });
+
+  return t.text('capture.element', { tag, text: text.length > 80 ? `${text.slice(0, 79)}…` : text });
+}
+
 /**
  * `all: initial` on every element, because a Shadow root stops the page's *selectors* but not its
  * inherited properties: `body { font-family: Papyrus }` reaches in here otherwise.
@@ -244,13 +382,24 @@ const STYLES = `
   since SVG2, so all:initial erases the drawing. Every icon renders as an empty box, with no error
   anywhere. Measured in Chromium before this was written (SKG-529).
 */
-*:not(svg, svg *) { all: initial; box-sizing: border-box; font-family: var(--fruitback-font-sans); }
+*:not(svg, svg *) { all: initial; box-sizing: border-box; color: inherit; font: inherit; letter-spacing: inherit; }
+/*
+  all:initial also stops inheritance. Without the three inherit values above, an element with no colour
+  rule of its own is black at 16px: the launch label on a chip, and the thread and the panel on a dark
+  surface, where axe measured 1.2 to 1 (SKG-544). The host gives the first values to inherit.
+*/
+:host { color: var(--fruitback-color-text); font: 14px/1.45 var(--fruitback-font-sans); }
 /*
   all:initial is thorough enough to undo the browser's own display:none on a style element, which
   then renders the stylesheet as a column of visible text in the corner of the client's page. Found
   by looking at it; no unit test would have, since happy-dom draws nothing.
 */
 style, script { display: none; }
+/* The reset also removes the focus ring. The keyboard reaches these controls, so they must show focus (SKG-544). */
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--fruitback-color-accent);
+  outline-offset: 2px;
+}
 /*
   And it undoes the browser's display:block on every block element, so a paragraph is inline until
   something says otherwise: in the note thread the note, its byline and the "found by position"
@@ -322,5 +471,13 @@ li { display: list-item; }
   border-radius: var(--fruitback-radius-sm);
 }
 .fruitback-panel { position: absolute; top: 0; left: 0; }
+.fruitback-announcer {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 :host([data-fruitback-capturing]) .fruitback-launch { background: var(--fruitback-color-chip); }
 `;

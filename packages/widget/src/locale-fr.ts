@@ -9,6 +9,10 @@ import type { Catalog } from './messages.ts';
 export const FRENCH: Catalog = {
   'launch.label': 'Laisser un feedback',
   'launch.capturing': 'Échap pour annuler',
+  'widget.label': 'Feedback Fruitback',
+  'capture.instructions': 'Pointez un élément, ou déplacez-vous avec les flèches puis appuyez sur Entrée.',
+  'capture.element': '{tag} : {text}',
+  'capture.elementEmpty': '{tag}, sans texte',
 
   'settings.open': 'Ouvrir les réglages Fruitback',
   'settings.dialog': 'Réglages Fruitback',
@@ -22,6 +26,7 @@ export const FRENCH: Catalog = {
 
   'composer.placeholder': "Qu'est-ce qui ne va pas ici ?",
   'composer.label': 'Votre commentaire',
+  'composer.dialog': 'Laisser une note',
   'composer.identify': 'Ajouter mon nom (facultatif)',
   'composer.namePlaceholder': 'Votre nom',
   'composer.nameLabel': 'Votre nom (facultatif)',
@@ -37,6 +42,7 @@ export const FRENCH: Catalog = {
   'pin.labelUncertain': '{stage} · {note} (position approximative)',
 
   'thread.close': 'Fermer',
+  'thread.dialog': 'Feedback {identifier}',
   'thread.noNote': 'Aucune note.',
   'thread.noReplies': 'Pas encore de réponse.',
   'thread.team': 'Équipe',

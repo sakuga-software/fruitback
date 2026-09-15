@@ -3,6 +3,7 @@ import { type Direction, type Translator, createTranslator, languageOf } from '.
 import { createIcon } from './icons.ts';
 import { stageToken } from './theme.ts';
 import { isElement } from './dom.ts';
+import { deepActiveElement } from './focus.ts';
 import { createOrphanList, type OrphanList } from './orphans.ts';
 import { type AnchorResolution, resolveAnchor } from './resolve.ts';
 
@@ -130,6 +131,8 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   let source: SeedIssue[] = [];
   let placed: Placed[] = [];
   let thread: HTMLElement | null = null;
+  /** What had focus when the thread opened: its badge, or an entry of the detached-notes list. */
+  let threadOpener: HTMLElement | null = null;
   let frame = 0;
   let resolveTimer: ReturnType<typeof setTimeout> | undefined;
   let burstStartedAt = 0;
@@ -270,7 +273,8 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   }
 
   function draw(): void {
-    closeThread();
+    const refocus = focusedTarget();
+    closeThread(false);
     container.replaceChildren();
 
     placed = source
@@ -294,6 +298,38 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 
     observeAnchors();
     listOrphans();
+    // The pins, and the entries of a list that changed, are new nodes: focus on an old one would fall to the page.
+    if (refocus !== undefined) {
+      const badge = placed
+        .find((entry) => entry.issue.seed.id === refocus.id)
+        ?.pin.querySelector<HTMLElement>('.fruitback-pin-badge');
+      (refocus.inList ? (orphans.entry(refocus.id) ?? badge) : badge)?.focus();
+    }
+  }
+
+  /**
+   * The issue that had focus, and where: its badge, or its entry in the detached-notes list.
+   *
+   * A focused thread counts as the element that opened it.
+   */
+  function focusedTarget(): { id: string; inList: boolean } | undefined {
+    const active = deepActiveElement(document);
+    if (active === null) return undefined;
+
+    if (thread !== null && thread.contains(active)) {
+      const id = thread.dataset.fruitbackThread;
+
+      return id === undefined ? undefined : { id, inList: threadOpener !== null && orphans.owns(threadOpener) };
+    }
+    if (orphans.owns(active)) {
+      const id = active.closest<HTMLElement>('[data-fruitback-orphan]')?.dataset.fruitbackOrphan;
+
+      return id === undefined ? undefined : { id, inList: true };
+    }
+
+    const entry = placed.find((candidate) => candidate.pin.contains(active));
+
+    return entry === undefined ? undefined : { id: entry.issue.seed.id, inList: false };
   }
 
   /** A note is detached when nothing identified *or located* its element — resolveAnchor's last word. */
@@ -303,27 +339,44 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 
   /** Re-render the open thread against a resolution that has just changed under it. */
   function reopenThread(entry: Placed): void {
+    const focused = threadHasFocus();
     thread?.remove();
     thread = buildThread(document, entry.issue, entry.resolution, t);
     thread.querySelector('.fruitback-thread-close')?.addEventListener('click', () => closeThread());
     container.append(thread);
     positionThread(thread, entry.pin, t.direction);
+    if (focused) thread.querySelector<HTMLElement>('.fruitback-thread-close')?.focus();
   }
 
   function openThread(entry: Placed): void {
+    const active = deepActiveElement(document);
     closeThread();
+    threadOpener = active !== null && active !== document.body ? (active as HTMLElement) : null;
     entry.pin.dataset.fruitbackOpen = '';
     thread = buildThread(document, entry.issue, entry.resolution, t);
     thread.querySelector('.fruitback-thread-close')?.addEventListener('click', () => closeThread());
     container.append(thread);
     positionThread(thread, entry.pin, t.direction);
+    // The thread is the last child of the container, far from its badge in the tab order.
+    thread.querySelector<HTMLElement>('.fruitback-thread-close')?.focus();
     options.onSelect?.(entry.issue);
   }
 
-  function closeThread(): void {
+  function closeThread(restoreFocus = true): void {
+    const focused = restoreFocus && threadHasFocus();
+    const opener = placed.find((entry) => entry.pin.dataset.fruitbackOpen !== undefined);
     thread?.remove();
     thread = null;
     for (const entry of placed) delete entry.pin.dataset.fruitbackOpen;
+    const badge = opener?.pin.querySelector<HTMLElement>('.fruitback-pin-badge');
+    if (focused) (threadOpener?.isConnected === true ? threadOpener : badge)?.focus();
+    threadOpener = null;
+  }
+
+  function threadHasFocus(): boolean {
+    const active = deepActiveElement(document);
+
+    return thread !== null && active !== null && thread.contains(active);
   }
 
   function onDocumentClick(event: Event): void {
@@ -519,12 +572,15 @@ function buildThread(document: Document, issue: SeedIssue, resolution: AnchorRes
   const thread = document.createElement('div');
   thread.className = 'fruitback-thread';
   thread.dataset.fruitbackThread = issue.seed.id;
+  thread.setAttribute('role', 'dialog');
+  thread.setAttribute('aria-label', t.text('thread.dialog', { identifier: issue.identifier }));
   thread.style.setProperty('--fruitback-pin-color', stageToken(issue.stage));
 
   const reporter = issue.seed.reporter?.name ?? issue.seed.reporter?.email ?? t.text('thread.anonymous');
 
   thread.append(
-    element(document, 'header', 'fruitback-thread-head', [
+    // A div, not a header: inside the widget's region landmark a header is a banner (SKG-544).
+    element(document, 'div', 'fruitback-thread-head', [
       // The store's own word for the state, with no glyph in front of it. `stateName` is what the
       // store said — Linear's "In Progress", SQLite's own — and the stage colour is already on the
       // thread's top border through `--fruitback-pin-color`.

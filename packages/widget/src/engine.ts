@@ -19,6 +19,8 @@ import { getElementBounds, getElementContext, getElementAtPoint, isElementGrabba
 export type CaptureEngine = {
   /** The element a pointer at these viewport coordinates is really pointing at. */
   elementAt(clientX: number, clientY: number, reject: (element: Element) => boolean): Element | null;
+  /** Whether the keyboard cursor of the capture mode can stop on this element (SKG-544). */
+  grabbable(element: Element): boolean;
   /** Viewport bounds, correct through transformed iframes. */
   boundsOf(element: Element): { left: number; top: number; width: number; height: number };
   /** Component and source file behind the element, when the build kept them. */
@@ -32,6 +34,8 @@ export const reactGrabEngine: CaptureEngine = {
       // overlays; `reject` is how the host keeps the pointer from landing on the widget itself.
       filter: (candidate) => isElementGrabbable(candidate) && !reject(candidate),
     }),
+
+  grabbable: (element) => isElementGrabbable(element),
 
   boundsOf: (element) => {
     // react-grab returns `x`/`y` (plus a border radius we do not use); the widget speaks in

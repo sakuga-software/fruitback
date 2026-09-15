@@ -1,4 +1,5 @@
 import type { SeedReporter } from '@fruitback/shared';
+import { holdFocus } from './focus.ts';
 import { createIcon } from './icons.ts';
 import { type MessageKey, type Translator, createTranslator, languageOf } from './messages.ts';
 
@@ -61,8 +62,12 @@ export function createComposer(options: ComposerOptions): Composer {
   root.dataset.fruitbackComposer = '';
   root.hidden = true;
   root.innerHTML = TEMPLATE;
+  root.setAttribute('role', 'dialog');
+  root.setAttribute('aria-modal', 'true');
+  root.setAttribute('aria-label', t.text('composer.dialog'));
 
   options.host.append(style, root);
+  const focus = holdFocus(root, close);
 
   const field = root.querySelector('[data-fruitback-note]') as HTMLTextAreaElement;
   const send = root.querySelector('[data-fruitback-send]') as HTMLButtonElement;
@@ -139,6 +144,7 @@ export function createComposer(options: ComposerOptions): Composer {
     session += 1;
     field.value = '';
     setState('idle');
+    focus.remember();
     root.hidden = false;
     place(anchor);
     field.focus();
@@ -195,6 +201,7 @@ export function createComposer(options: ComposerOptions): Composer {
     session += 1;
     root.hidden = true;
     setState('idle');
+    focus.restore();
     options.onClose?.();
   }
 
@@ -211,7 +218,6 @@ export function createComposer(options: ComposerOptions): Composer {
     const key = event as KeyboardEvent;
     // ⌘/Ctrl+Enter sends, because a plain Enter belongs to the note.
     if (key.key === 'Enter' && (key.metaKey || key.ctrlKey)) void submit();
-    if (key.key === 'Escape') close();
   });
 
   setState('idle');
@@ -223,6 +229,7 @@ export function createComposer(options: ComposerOptions): Composer {
     element: root,
     destroy() {
       if (closing !== 0) view?.clearTimeout(closing);
+      focus.destroy();
       root.remove();
       style.remove();
     },
@@ -293,7 +300,7 @@ const STYLES = `
 .fruitback-composer textarea {
   display: block;
   width: 100%;
-  border: 1px solid var(--fruitback-color-border);
+  border: 1px solid var(--fruitback-color-border-strong);
   border-radius: var(--fruitback-radius-md);
   padding: 10px 12px;
   font: inherit;
@@ -334,7 +341,7 @@ const STYLES = `
   border: 0;
   border-radius: var(--fruitback-radius-pill);
   padding: 8px 14px;
-  font: 600 13px/1 inherit;
+  font: 600 13px/1 var(--fruitback-font-sans);
   cursor: pointer;
 }
 .fruitback-composer-ghost { background: transparent; color: var(--fruitback-color-text-muted); }
