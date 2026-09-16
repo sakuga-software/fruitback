@@ -81,10 +81,10 @@ that keep the generated file honest.
   `grep -rnP "[\x{1F300}-\x{1FAFF}]" e2e` rather than trusting a number written here, which is the
   same rule the SKG-517 emoji inventory in _The seed contract_ ([contract.md](contract.md)) had to
   learn twice.
-- **The guard is `icons.test.ts`'s `has none in any source file of this package`**, and it reads every
+- **The guard is `icons.test.ts`'s test:`has none in any source file of this package`**, and it reads every
   `.ts` in the package rather than the rendered strings — a rendered check only sees the states a test
   reaches, and each of the removed emoji sat on a path some test did not run. `e2e/host.spec.ts`'s
-  `no emoji survives anywhere in the widget chrome` is the other half: it **drives** the widget
+  test:`no emoji survives anywhere in the widget chrome (SKG-529)` is the other half: it **drives** the widget
   through the dock, the settings panel, the open composer, the confirmation and the detached drawer,
   reading the composed Shadow root after each, because a popover that has closed leaves nothing to
   read. Both were measured failing on a planted emoji — the E2E one on `MESSAGES.harvested`

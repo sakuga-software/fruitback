@@ -63,7 +63,7 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - **Assert on colours by polling, not by reading once.** A design system animates its own colours,
   and a computed style read mid-transition is the interpolated value — which Chromium serializes in a
   different colour space (`oklab(…)` where the resting declaration says `oklch(…)`). The same colour,
-  a different string. `e2e/host.spec.ts`'s `the widget cannot restyle the page either` is the
+  a different string. `e2e/host.spec.ts`'s test:`the widget cannot restyle the page either` is the
   instance.
 - **The rule generalises past colour: assert on what you measured, not on a second measurement.**
   Anything the widget takes away by itself has the same shape — the composer clears its confirmation

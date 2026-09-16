@@ -106,7 +106,7 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   to prevent. `applyTheme` writes only names `THEME_TOKENS` declares and silently drops the rest, so
   a token renamed in a later version costs that override and never the mount.
 - **`public.ts` exports the theme _types_ and not `THEME_TOKENS`.** The runtime array would widen the
-  published surface; `package.test.ts`'s `promises only what public.ts declares` caught that on the
+  published surface; `package.test.ts`'s test:``promises only what `public.ts` declares`` caught that on the
   first attempt, which is what it is for.
 - **The base `:host` block must declare every settable token**, and the test that checks it is scoped
   to that block. Searching the whole stylesheet passed a mutation that deleted a declaration, because
@@ -184,7 +184,7 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
 - **`fetchTransport` does not catch.** A worker nobody can reach rejects, `embed.ts` treats that and a
   failed status identically, and swallowing it here would only hide an outage from an implementer who
   wanted to log it. Mutation-tested.
-- **One existing assertion changed, and it was asserting the mechanism.** `sends no Authorization
+- **One existing assertion changed, and it was asserting the mechanism.** test:`sends no Authorization
 header when the host mints no token` compared `fetch`'s second argument to `undefined` — true only
   because the old code passed nothing there. Every call carries a method now, so it asserts the
   absence of the header, which is what its own comment always said it meant.

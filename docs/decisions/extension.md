@@ -198,7 +198,7 @@ both: an access token the host site's JavaScript can read is the worst outcome o
     hold every endpoint under one key, and a write replaces that key whole; two workers refreshing at
     once each read the record and each replace it, so the later write restores the earlier one's
     spent token. Under rotation that token is a replay, and its next use revokes the chain.
-    `lets two workers refresh at the same time` — a test written to prove the lock was correctly
+    test:`lets two workers refresh at the same time` — a test written to prove the lock was correctly
     scoped — is what makes it reachable. The fix at the time was one queue over both areas, inside
     one context. SKG-602 replaced it with one key per endpoint, which reaches the popup too, and the
     queue is gone. Raised in review.
@@ -315,7 +315,7 @@ session back. It needs a log out inside the one storage round trip between that 
 on the first run after the upgrade only. Narrowed and stated, like everything else here — **and
 closed by SKG-603**, below, which reached it for free: a legacy record predates the epoch, so what
 the upgrade writes back carries none while the logout minted one, and no reader answers with it.
-`refuses the session an upgrade still in flight writes back after a logout` is the case. What that
+test:`refuses the session an upgrade still in flight writes back after a logout` is the case. What that
 window still costs is a pairing made inside it, which the upgrade puts the older entry back over —
 the endpoint then reads as signed out, which is the side to be wrong on.
 
@@ -331,7 +331,7 @@ seam; `session-browser.ts` is left binding `browser` and `fetch` and nothing els
 a failing test, and the one that guards a **spent** token needed the interleaving arranged deliberately
 before it discriminated.
 
-`does not restore a spent token when another endpoint refreshes at the same time` survives, and it
+test:`does not restore a spent token when another endpoint refreshes at the same time` survives, and it
 passes for a structural reason now rather than a serialised one. It still discriminates: restoring
 the whole-record write inside `keepIfCurrent` makes it fail. Its docstring says which, because a test
 whose reason has changed reads as stale to whoever greps for the defect next.

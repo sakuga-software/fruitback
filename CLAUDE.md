@@ -157,7 +157,7 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   points at a `dist` that is not there — a failure that lands in a consumer's build and nowhere here.
 - **`rewriteRelativeImportExtensions` rewrites the JavaScript and not the declarations.** Both builds
   therefore post-process their `.d.ts` and then assert no `.ts` extension survived.
-- **The guard that matters is `package.test.ts`'s `type-checks an import with no special tsconfig`.**
+- **The guard that matters is `package.test.ts`'s test:`type-checks an import with no special tsconfig`.**
   It deletes every `dist`, packs all three, asserts each tarball contains one, installs them into a
   scratch project and type-checks an import from **each** package, with `skipLibCheck` **off**. Every
   clause is there because something without it shipped green. **Read the file after editing this
@@ -841,7 +841,7 @@ and _The team mode, and the call the page cannot make_:
   minted — so the **last** presenter keeps the chain and every earlier holder is locked out. Write
   _last_, not _first_: the inverted version shipped into three documents and a test name. What is
   guaranteed is only that the two cannot both keep the session quietly.
-  `serves whoever presents last inside the grace, until the earlier holder comes back` holds it.
+  test:`serves whoever presents last inside the grace, until the earlier holder comes back` holds it.
 - **The successor inherits the predecessor's expiry.** Thirty days from pairing stays thirty days;
   rotation shortens what a leak is worth, it does not lengthen a session.
 - **The replay test is the chain, not the row**, and `revokeSession` ends the chain. A revoked
@@ -1010,7 +1010,7 @@ And _The published image_ in [docs/decisions/image.md](docs/decisions/image.md).
   `reporter`, `env`, `screenshot`.
 - **The round-trip is the invariant**: `parseSeedFromDescription(buildIssueDescription(seed))` must
   return exactly `seed`. Two rules protect it — **no schema default values**, and no field the widget
-  cannot rebuild from what is stored. The test `adds no field the caller did not provide` is there
+  cannot rebuild from what is stored. test:`adds no field the caller did not provide` is there
   because a default is the easy way to break this silently.
 - **Bump `SEED_VERSION` when the payload shape changes** — it is `2` since SKG-498. Readers accept
   older versions and refuse newer ones (`unsupported-version`) rather than silently dropping fields.
@@ -1032,8 +1032,8 @@ And _The published image_ in [docs/decisions/image.md](docs/decisions/image.md).
   the field is absent. GitHub reports `seeded`, `ripe` and `composted`. A read-envelope field, so
   `SEED_VERSION` does not move.
 - **`SEED_BLOCK_CAPTION` is free to reword.** `parseSeedFromDescription` iterates fenced blocks and
-  recognises ours by parsing the JSON, and the test `finds the block by its JSON, never by the
-caption above it` is what keeps that true.
+  recognises ours by parsing the JSON, and test:`finds the block by its JSON, never by
+the caption above it (SKG-517)` is what keeps that true.
 
 **Deeper** — [docs/decisions/contract.md](docs/decisions/contract.md).
 
@@ -1091,6 +1091,22 @@ caption above it` is what keeps that true.
   against the code by `security.test.ts`, so a constant that moves without the file fails the suite.
   What that test cannot check is a _property_ that changed: a new route, a new thing stored in the
   clear, a guarantee tightened or dropped. Those are a hand edit, in the same commit.
+- **A document that names a test marks the citation** (SKG-601). `test:` before the backticked name,
+  and `gone-test:` for a name the prose says is gone on purpose:
+
+  ```md
+  test:`the name, copied from the test exactly`
+  gone-test:`the name of a test a sentence says is gone`
+  ```
+
+  `cited-tests.test.ts` reads every `it(` and `test(` name in the repository and fails on a `test:`
+  citation that matches none, and on a `gone-test:` one that matches a live test. **A truncated
+  citation still greps**, which is how five names drifted with nothing to see, one of them around a
+  sentence the rename had disproved. The marker is what makes the check possible at all: matching
+  every backticked span reports sixteen false positives on these documents. A name that holds a
+  backtick is cited between double backticks, and a name may wrap across lines — both sides are
+  compared with the whitespace flattened. An example inside a fenced block is not a citation.
+
 - **`CONTRIBUTING.md` carries the rules a person trips over on a first pull request** (SKG-520). It
   points at this file and does not repeat all of it. `contributing.test.ts` holds its `pnpm` scripts,
   ports, Node and pnpm versions, CI checks and commit types to their sources. A new convention that an
