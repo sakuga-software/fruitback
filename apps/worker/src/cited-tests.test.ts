@@ -104,9 +104,12 @@ export function namesIn(source: string): string[] {
     const declaration = lineStart ? /^(?:it|test)\(\s*(['"`])/.exec(source.slice(index, index + 32)) : null;
     lineStart = false;
     if (declaration !== null) {
+      const quote = declaration[1] as string;
       const from = index + declaration[0].length;
-      const to = closingQuote(source, from, declaration[1] as string);
-      names.push(flat(source.slice(from, to).replace(/\\(.)/g, '$1')));
+      const to = closingQuote(source, from, quote);
+      const written = source.slice(from, to);
+      // An interpolated name exists only at run time, so no citation can name it.
+      if (!(quote === '`' && interpolates(written))) names.push(flat(decodeEscapes(written)));
       index = to + 1;
       previous = ')';
       continue;
@@ -133,6 +136,33 @@ export function namesIn(source: string): string[] {
   }
 
   return names;
+}
+
+/** A template literal such as `case ${value}` builds its name at run time. */
+function interpolates(written: string): boolean {
+  return /(?:^|[^\\])(?:\\\\)*\$\{/.test(written);
+}
+
+const SINGLE_ESCAPES: Record<string, string> = { n: '\n', t: '\t', r: '\r', b: '\b', f: '\f', v: '\v', '0': '\0' };
+
+/**
+ * The name the runtime sees, with escapes decoded as JavaScript decodes them.
+ *
+ * Dropping the backslash is not enough: `'line\\nbreak'` is a line break at run time, and flattened
+ * it is `line break`, not `linenbreak` (raised in review on PR #62).
+ */
+function decodeEscapes(written: string): string {
+  return written.replace(
+    /\\(?:x([0-9a-fA-F]{2})|u\{([0-9a-fA-F]+)\}|u([0-9a-fA-F]{4})|(\r\n|\n)|([\s\S]))/g,
+    (_escape: string, hex?: string, codePoint?: string, unit?: string, continuation?: string, other?: string) => {
+      if (hex !== undefined) return String.fromCharCode(Number.parseInt(hex, 16));
+      if (codePoint !== undefined) return String.fromCodePoint(Number.parseInt(codePoint, 16));
+      if (unit !== undefined) return String.fromCharCode(Number.parseInt(unit, 16));
+      if (continuation !== undefined) return '';
+
+      return SINGLE_ESCAPES[other ?? ''] ?? other ?? '';
+    },
+  );
 }
 
 /** A slash starts a regex literal after an operator, an opening bracket, or a keyword that takes a value. */
@@ -260,6 +290,10 @@ it('a name after a string that holds a backtick', () => {});
 const quotes = /['"\`]/g;
 it('a name after a regex literal that holds quotes', () => {});
 it('the page\\'s own name', () => {});
+it('line\\nbreak', () => {});
+it('caf\\u00e9', () => {});
+test(\`a static template name\`, () => {});
+test(\`case \${value}\`, () => {});
 `;
 
     assert.deepEqual(namesIn(source), [
@@ -269,6 +303,9 @@ it('the page\\'s own name', () => {});
       'a name after a string that holds a backtick',
       'a name after a regex literal that holds quotes',
       "the page's own name",
+      'line break',
+      'café',
+      'a static template name',
     ]);
   });
 });
