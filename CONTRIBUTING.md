@@ -110,6 +110,9 @@ None of these can be guessed from the code, and most of them have broken somethi
   attributes `data-fruitback-*`.
 - **Every word the widget shows has a key in `messages.ts`.** The English text is there and the French text is
   in `locale-fr.ts`: a new message needs both. [docs/translating.md](docs/translating.md) explains how to add a language.
+- **Prose that names a test marks the citation**: `test:` before the backticked name, so
+  `cited-tests.test.ts` can check that the test still exists. Use `gone-test:` for a name a sentence
+  says is gone on purpose.
 - **Comments explain why, not what.** Formatting is oxfmt and linting is oxlint: 120 columns, single
   quotes, trailing commas.
 

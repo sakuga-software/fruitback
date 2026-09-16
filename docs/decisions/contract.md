@@ -13,7 +13,7 @@ first publish made it expensive.
 - **The round-trip is the invariant**: `parseSeedFromDescription(buildIssueDescription(seed))` must
   return exactly `seed`. Two rules protect it — **no schema default values**, and no field the
   widget cannot rebuild from what is stored. Adding a default is the easy way to break this
-  silently; the test `adds no field the caller did not provide` is there to catch it.
+  silently; test:`adds no field the caller did not provide` is there to catch it.
 - **Bump `SEED_VERSION`** when the payload shape changes — it is `2` since SKG-498 added
   `reporter.verified`. Readers accept older versions and refuse
   newer ones (`unsupported-version`) rather than silently dropping fields.
@@ -42,9 +42,10 @@ first publish made it expensive.
 - **`SEED_BLOCK_CAPTION` is free to reword, and that is now asserted rather than believed.** It is
   written into every issue description, so whether the parser depends on it decides whether it can
   ever change. It does not — `parseSeedFromDescription` iterates fenced blocks and recognises ours by
-  parsing the JSON. The test `finds the block by its JSON, never by the caption above it` fails if
+  parsing the JSON. The test
+  test:`finds the block by its JSON, never by the caption above it (SKG-517)` fails if
   that stops being true, which is what made dropping its emoji safe instead of hopeful.
-- **A test whose premise disappeared was rewritten, not deleted.** `redraws when a note changed
+- **A test whose premise disappeared was rewritten, not deleted.** gone-test:`redraws when a note changed
 stage, because its emoji did` could no longer hold: nothing in the orphan entry depends on the stage
   now. What it really guarded — that the signature invalidates on a stage change — is still worth
   keeping, so it asserts a **rebuilt node** instead of different text. The signature deliberately

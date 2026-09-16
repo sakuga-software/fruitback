@@ -210,7 +210,7 @@ degradation the ticket asked to have written down rather than discovered.
   `linear.ts` import each other. A new store is one entry in `STORE_SPECS`.
 - **A store names its own environment variables.** `envNames` is required per field, so a boot
   diagnostic says `LINEAR_API_KEY` and never `apiKey` — mutation-tested, and the mutation also trips
-  three older tests, which is how load-bearing that diagnostic is. `never reports a field name from
+  three older tests, which is how load-bearing that diagnostic is. test:`never reports a field name from
 any store` asks it of every spec rather than of Linear.
 - **An unknown provider and a dev-only one in production are both refused, never defaulted.** A typo
   falling back to Linear would send a worker configured for SQLite to an API it has no key for; and
@@ -247,7 +247,7 @@ any store` asks it of every spec rather than of Linear.
   down.
 - **A short `FRUITBACK_IDENTITY_SECRET` used to answer `missing:` and then nothing.** The field failed
   the schema, matched no entry in `NAMES_BY_FIELD`, and the list came back empty. Fixed in passing
-  here, and `answers no empty diagnostic` walks every way of making the config invalid rather than the
+  here, and test:`answers no empty diagnostic` walks every way of making the config invalid rather than the
   one that was noticed.
 - **Still Linear-shaped in one place, and left there on purpose**: `apps/worker/src/linear-memory.ts`
   keeps its name and its import of `toSeedIssue`. See _Where a seed is stored_ — that coupling is the
@@ -469,7 +469,7 @@ any store` asks it of every spec rather than of Linear.
 - **Nothing outside the package had to change**, because every consumer imports through the
   `@fruitback/shared` barrel rather than from a file. That is the property that made the rename cost
   one line in `index.ts`, and it is worth not losing.
-- The guard that proves it is `package.test.ts`'s `type-checks an import with no special tsconfig`:
+- The guard that proves it is `package.test.ts`'s test:`type-checks an import with no special tsconfig`:
   it deletes every `dist`, packs all three packages and type-checks an import with `skipLibCheck`
   **off**, so a renamed file that broke the published declarations fails there rather than in a
   consumer's build.
@@ -534,14 +534,14 @@ any store` asks it of every spec rather than of Linear.
 
 - **Revocation is mutation-tested.** `findSession` is gone since SKG-600 — every read of a session
   rotates it, so there is no lookup beside `rotateSession`. Dropping `revoked_at IS NULL` from
-  `revoke` still fails `revokes on the worker, so the refresh token stops working everywhere`, and
-  dropping the chain revocation from `revokeSession` fails `ends the whole chain on log out, not only
-the token it was handed` and `ends a chain from any link, including the token nobody is holding`,
+  `revoke` still fails test:`revokes on the worker, so the refresh token stops working everywhere`, and
+  dropping the chain revocation from `revokeSession` fails test:`ends the whole chain on log out, not only
+the token it was handed` and test:`ends a chain from any link, including the token nobody is holding`,
   and not inheriting `root_hash` on the successor fails nine tests at once.
 - **The CORS exemption is mutation-tested.** Replacing `openCors` with the ordinary `resolveCors`
-  fails both `answers an extension origin that is on no allowlist` and `lets the preflight through,
+  fails both test:`answers an extension origin that is on no allowlist` and test:`lets the preflight through,
 or the POST never happens`. What says the exemption is not a hole in the gate is
-  `leaves the allowlist in force on /feedback for sites, and admits the extension`: an ordinary site
+  test:`leaves the allowlist in force on /feedback for sites, and admits the extension`: an ordinary site
   origin that is on no allowlist is still refused there.
   - Two of those three names were quoted here **truncated**, and the second was quoted with a
     sentence that had stopped being true. The exemption was scoped to `/session/` when this was
@@ -550,7 +550,7 @@ or the POST never happens`. What says the exemption is not a hole in the gate is
     stale test name a reviewer caught on this ticket — `grep` for a quoted name is the check, and
     nothing runs it.
 - **The rate-limit move is mutation-tested.** Putting `checkRateLimit` back below the path dispatch —
-  where it sat before this ticket — fails `meters the pairing endpoint, not only /feedback`. The
+  where it sat before this ticket — fails test:`meters the pairing endpoint, not only /feedback`. The
   unknown-path test stays green under that mutation, because it guards a different ordering.
 - **Nothing in this process can prove the redeem is atomic.** `redeemPairing` marks the code spent in
   one `UPDATE ... WHERE redeemed_at IS NULL` and acts on `changes === 1`, which is right for two
@@ -588,7 +588,7 @@ Inside the grace each presentation of the spent token revokes the successor the 
 minted, so it is the **last** presenter who ends up with the live chain: a thief who gets in after
 the real client takes the session and the client's own token is revoked under it. The first version
 of this paragraph said _first_, which is the opposite of what the code does. Measured, and kept as a
-test — `serves whoever presents last inside the grace, until the earlier holder comes back`. What rotation guarantees is that the two cannot both
+test — test:`serves whoever presents last inside the grace, until the earlier holder comes back`. What rotation guarantees is that the two cannot both
 keep the session quietly, which is a detection property and not a lifetime one.
 
 ### The ticket asked for a replay window. Two measurements said no.
@@ -660,7 +660,7 @@ spinning inside a transaction — a statement cannot loop.
 
 One place differs in behaviour rather than in cost. The grace branch drops the successors nobody
 received **while the token presenting itself stays live**, so it passes that token as `keep`. Removing
-it failed no test at all until `takes a third presentation inside the ceiling, not just a second` was
+it failed no test at all until test:`takes a third presentation inside the ceiling, not just a second` was
 written — the ceiling allowing more than one retry was a property this file promised and nothing
 held.
 
@@ -713,6 +713,6 @@ column paid for itself.
 It is stricter and simpler than `revoked && rotated`, and it drops that predicate's awkwardness: a
 logout no longer reads as a replay, because after it nothing in the chain is live. The cost is
 written into `SECURITY.md` rather than left implicit, and the two tests that encoded the old answer
-were rewritten rather than deleted — `ends the chain when an orphan is presented and something in it
-is still live`, and `serves whoever presents last inside the grace, until the earlier holder comes
+were rewritten rather than deleted — test:`ends the chain when an orphan is presented and something in it
+is still live`, and test:`serves whoever presents last inside the grace, until the earlier holder comes
 back`.

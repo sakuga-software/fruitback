@@ -35,7 +35,7 @@ Plus the licence split and the two measurements that decided how it is asserted.
   tarball ships `src` and nothing else, while `publishConfig` points at a `dist` that is not there.
   That is the same defect as the paragraph above, arriving a different way — first as `TS5097`, then
   as an unresolvable module.
-- **The guard that matters is `type-checks an import with no special tsconfig`**: it deletes every
+- **The guard that matters is test:`type-checks an import with no special tsconfig`**: it deletes every
   `dist`, packs all three, asserts each tarball actually contains one, installs them into a scratch
   project and type-checks an import **from `fruitback` and from both scoped packages**, with
   `skipLibCheck` **off**. Every clause is there because something without it shipped green — building
