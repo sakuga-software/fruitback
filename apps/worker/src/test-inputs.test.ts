@@ -42,7 +42,7 @@ const TEMPLATED_READS = 5;
  */
 const JOINED_READS = 9;
 
-type Project = { root: string; name: string; inputs: string[]; dependencies: string[] };
+type Project = { root: string; name: string; inputs: string[]; declared: boolean; dependencies: string[] };
 
 function projects(): Project[] {
   const found: Project[] = [];
@@ -61,6 +61,7 @@ function projects(): Project[] {
         root: `${group}/${directory}`,
         name: manifest.name,
         inputs: manifest.nx?.targets?.test?.inputs ?? NX.targetDefaults.test.inputs,
+        declared: manifest.nx?.targets?.test?.inputs !== undefined,
         dependencies: Object.keys({ ...manifest.dependencies, ...manifest.devDependencies }),
       });
     }
@@ -165,6 +166,21 @@ describe('what a test reads, against what Nx hashes for it (SKG-610)', () => {
       JOINED_READS,
       `a read joined from segments is checked by nobody; these are the ones today:\n${joined.join('\n')}`,
     );
+  });
+
+  it('starts every declared input list with the defaults it replaces', () => {
+    // A declared list replaces targetDefaults.test.inputs. Without default, a change to the project's
+    // own code comes back from the cache; without ^production, a change to a dependency does.
+    const declared = all.filter((project) => project.declared);
+    const incomplete = declared
+      .filter((project) => project.inputs[0] !== 'default' || project.inputs[1] !== '^production')
+      .map((project) => `${project.root}: ${project.inputs.slice(0, 2).join(', ')}`);
+
+    assert.ok(
+      declared.length >= 3,
+      `only ${declared.length} projects declare inputs — the manifest read stopped matching`,
+    );
+    assert.deepEqual(incomplete, [], 'these lists replace the defaults and drop one of them');
   });
 
   it('declares every file a test reads as an input of its test target', () => {
