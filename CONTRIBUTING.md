@@ -113,6 +113,9 @@ None of these can be guessed from the code, and most of them have broken somethi
 - **Prose that names a test marks the citation**: `test:` before the backticked name, so
   `cited-tests.test.ts` can check that the test still exists. Use `gone-test:` for a name a sentence
   says is gone on purpose.
+- **A test that reads a file outside its package declares it** in that package's
+  `nx.targets.test.inputs`, and the list starts with `default` and `^production`. Otherwise `pnpm test`
+  can replay a cached pass after that file changed. `test-inputs.test.ts` checks it.
 - **Comments explain why, not what.** Formatting is oxfmt and linting is oxlint: 120 columns, single
   quotes, trailing commas.
 

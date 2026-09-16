@@ -51,5 +51,18 @@
     "oxlint": "catalog:",
     "react-grab": "catalog:",
     "typescript": "catalog:"
+  },
+  "nx": {
+    "targets": {
+      "test": {
+        "inputs": [
+          "default",
+          "^production",
+          "{workspaceRoot}/README.md",
+          "{workspaceRoot}/LICENSE",
+          "{workspaceRoot}/packages/fruitback/**/*"
+        ]
+      }
+    }
   }
 }
