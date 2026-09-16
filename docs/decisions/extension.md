@@ -316,8 +316,8 @@ on the first run after the upgrade only. Narrowed and stated, like everything el
 closed by SKG-603**, below, which reached it for free: a legacy record predates the epoch, so what
 the upgrade writes back carries none while the logout minted one, and no reader answers with it.
 test:`refuses the session an upgrade still in flight writes back after a logout` is the case. What that
-window still costs is a pairing made inside it, which the upgrade puts the older entry back over —
-the endpoint then reads as signed out, which is the side to be wrong on.
+window still cost was a pairing made inside it, which the upgrade put the older entry back over. The
+endpoint then read as signed out. SKG-604, below, closes that too.
 
 **`storage.session` is migrated too**, though the browser usually empties it before anybody notices.
 An extension updated while the browser stays open still holds the legacy grants record, and a grant
@@ -393,10 +393,9 @@ Three things make it hold, and each is a way it could have been got wrong:
 Absent on both sides compares equal, which is the rule `matches` already follows: a session stored
 before this marker existed is kept rather than signing the reviewer out on an update.
 
-What this does not do is remove the entry. A refresh that loses the race still writes its key, and it
-stays in storage — unreadable, and written over by the next pairing — holding the refresh token the
-logout revoked. Removing it would mean writing from a read, which is the defect this whole batch is
-about.
+What this did not do is remove the entry. A refresh that lost the race still wrote its key, and it
+stayed in storage, unreadable, until the next pairing wrote over it. SKG-604 removes it, and says why
+that removal is safe where a write from a read is not.
 
 ### Two `Sessions` over one storage
 
@@ -432,14 +431,88 @@ the worker had already been told to revoke — a fresh grant, still readable, un
 signed out. The drops are in a `finally` and the rejection still reaches the caller; that logout is
 then back to what it was before this ticket, which is the side to degrade to. Raised in review.
 
-**A pairing made inside a refresh's window is still lost**, and this ticket does not close it. A
+**A pairing made inside a refresh's window was still lost**, and this ticket did not close it. A
 refresh reads, the reviewer logs out and pairs again, and the refresh's write lands over the new
-pairing stamped with the run before it — so `stillOpen` hides an endpoint somebody just paired. It
-needs a whole pairing round trip inside the two storage operations that separate the read from the
-write. Before this ticket the same write put a **spent** token back and the endpoint read as paired
-until the next refresh answered `401`; now it reads as signed out at once, which is the more honest
-of the two. Closing it means versioning the key rather than stamping the value, which is a second
-storage-shape change and its own ticket: **SKG-604**. Raised in review.
+pairing stamped with the run before it — so `stillOpen` hid an endpoint somebody had just paired.
+Before this ticket the same write put a **spent** token back and the endpoint read as paired until
+the next refresh answered `401`; after it, the endpoint read as signed out at once. Closing it meant
+versioning the key rather than stamping the value: **SKG-604**, below. Raised in review.
+
+## A key per run of a session (SKG-604)
+
+SKG-603 stamps what a refresh writes with the run it read, so a write that loses the race to a logout
+is refused. That covered the credential and not the key. A logout and a new pairing inside the
+refresh's window put the new session under the one key the endpoint had, and the refresh then wrote
+its refused entry over it.
+
+### The key names the run
+
+A session key is now `fruitback:session-run:<epoch>:<endpoint>`. `put` writes the run its value's
+epoch names, so a refresh writes the run it read. A pairing made since has its own epoch and its own
+key, and the refresh's write lands beside it.
+
+- **The epoch is encoded with `encodeURIComponent`**, which never writes a colon, so the first colon
+  after the prefix ends it. The endpoint is the rest of the key, colons included. The epoch minted in
+  production is hex and holds no colon, but the key does not depend on that.
+- **A session with no epoch has an empty segment.** That is every session stored before SKG-603, and
+  absent still compares equal to absent.
+- **A value whose epoch is not the one its key names is dropped.** Nothing here writes one.
+
+The grant keeps one key per endpoint. A refresh that lost the race still writes its grant over the
+pairing's grant, and `matches` refuses it: the generation is the refresh's, not the pairing's. That
+costs the pairing one refresh, and
+test:`keeps a pairing made while a refresh is in the air` asserts that refresh.
+
+### What a write removes, and why that removal is safe
+
+A key per run leaves the key of every run that is over in storage, and each holds a refresh token.
+Nothing wrote over it any more, so **`put` removes the runs of its endpoint that are over, after it
+writes.** The snapshot it measures against is taken after its own write. A refresh that lost the race
+therefore sees the epoch the logout minted, and removes its own key.
+
+SKG-603 said a removal from a read is the defect this batch is about. A write from a read puts back a
+value the read took before something changed. This removal takes away a run that its snapshot already
+shows as over, and two facts make that safe:
+
+- **An epoch never comes back.** Each one is minted fresh, so a run that is over in one snapshot is
+  over in every later one, and no reader answers with it.
+- **A run written after the snapshot is not in it.** The removal names keys, and a pairing made since
+  has a key the snapshot does not hold.
+
+A logout's `drop` removes every run of the endpoint. The upgrade removes nothing but the keys it moves,
+so an entry it writes back to a run that is over stays until the next write for that endpoint.
+
+### A refused refresh ends only what it spent
+
+Found by looking for the other half of the ticket. A refresh that answers `401` called `forget`, which
+mints an epoch. The logout that revoked its token is usually the reason for that `401`, and a pairing
+made after the logout was then ended by the epoch, as surely as by the write the ticket names.
+
+`endSpent` mints nothing. `SessionArea.end` removes the run the refresh read, and only while that run
+still holds the token it spent: a rotation in the other context writes the same run with a new token,
+and that session is not the one the worker refused. The grant goes unless it belongs to a session
+storage still holds. A mint here would refuse a later write from a refresh of the same chain, and the
+worker has already refused that chain, so whatever such a write holds answers `401` on the next
+refresh.
+
+### The upgrade
+
+`upgradeSessions` runs the SKG-602 split, then `moveToRunKeys`: each `fruitback:session:<endpoint>`
+entry moves to the run its own epoch names, the writes land before the removals, and a run that
+already has its key is left alone. The window it leaves is the one `migrationOf` states, on the first
+run after the upgrade only. A pairing made inside the SKG-602 window is kept now as well, because the
+entry the split writes back names the run with no epoch:
+test:`keeps a pairing made while an upgrade in flight writes back`.
+
+### What the tests reach
+
+The three windows are driven with two `Sessions` over one storage: a refresh that writes, a refresh the
+worker refuses, and an upgrade that writes back. Twelve mutants each fail a test: an epoch left out of
+the key, a `401` that mints an epoch, an `end` that ignores the token, a `put` that removes nothing or
+removes against its own epoch, a `drop` that keeps other runs, a move that overwrites a run or removes
+before it writes, no second upgrade, a grant always or never dropped, and a key epoch left unchecked.
+The first of them stops the helper that holds a write open, so its tests fail on the timeout of the
+test rather than on an assertion.
 
 ## The options page, and what a wildcard covers (SKG-536)
 

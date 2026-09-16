@@ -190,7 +190,8 @@ export async function storedTokens(worker: Worker): Promise<StoredToken[]> {
     };
     for (const area of ['local', 'session'] as const) {
       for (const [key, value] of Object.entries(await chrome.storage[area].get(null))) {
-        if (key.startsWith('fruitback:session:') || key.startsWith('fruitback:grant:')) walk(area, value);
+        // The prefix without its colon, so a session key per endpoint and one per run (SKG-604) both match.
+        if (key.startsWith('fruitback:session') || key.startsWith('fruitback:grant:')) walk(area, value);
       }
     }
 
