@@ -86,6 +86,18 @@ export type Area<T> = {
   drop(endpoint: string): Promise<void>;
 };
 
+/**
+ * The sessions area, which also knows which run of a session each entry belongs to (SKG-604).
+ *
+ * `put` writes the run its value's epoch names, and `drop` removes every run of the endpoint.
+ * `end` removes one run, and only while it still holds the refresh token `spent` holds: a refresh
+ * that the worker refused ends the session it spent, and not a pairing or a rotation written after
+ * it.
+ */
+export type SessionArea = Area<StoredSession> & {
+  end(endpoint: string, spent: StoredSession): Promise<void>;
+};
+
 export type SessionResponse = {
   status: number;
   body: unknown;
@@ -102,7 +114,7 @@ export type SessionSeams = {
   newGeneration?: () => string;
   /** Mints an epoch, the same way and for the same reason. See `StoredSession.epoch`. */
   newEpoch?: () => string;
-  sessions: Area<StoredSession>;
+  sessions: SessionArea;
   grants: Area<AccessGrant>;
   epochs: Epochs;
   post(url: string, body: Record<string, unknown>): Promise<SessionResponse>;
@@ -219,7 +231,10 @@ export function createSessions({
    * the session back.
    *
    * Since SKG-602 the two writes touch only this endpoint's own keys, so nothing here can reach
-   * another worker's entry whatever else is running.
+   * another worker's entry whatever else is running. Since SKG-604 the session write touches only
+   * the run it read, so it cannot reach a pairing made after that read either. The grant has one key
+   * per endpoint and can still land over that pairing's grant. `matches` refuses it, and the next
+   * call refreshes the pairing's own session.
    */
   async function keepIfCurrent(
     endpoint: string,
@@ -273,10 +288,9 @@ export function createSessions({
    * them, for longer. That grant is unusable: it carries the generation of a session no longer in
    * storage, and `matches` refuses it.
    *
-   * What this does not remove is the entry a refused write leaves behind: a refresh that lost this
-   * race still writes its session key, stamped with the epoch before. `stillOpen` keeps it out of
-   * every read, and the next pairing writes over it. The refresh token in it is the one the revoke
-   * above ended.
+   * A refresh that lost this race still writes its session key, stamped with the epoch before.
+   * `stillOpen` keeps it out of every read, and that write removes its own key after it lands,
+   * because its snapshot holds the new epoch. See `createSessionArea`.
    */
   async function forget(endpoint: string): Promise<void> {
     try {
@@ -284,6 +298,24 @@ export function createSessions({
     } finally {
       await Promise.all([sessions.drop(endpoint), grants.drop(endpoint)]);
     }
+  }
+
+  /**
+   * The session a refused refresh spent, gone, and its grant too unless the grant belongs to a
+   * session storage still holds.
+   *
+   * **No epoch is minted here, which is the difference from `forget`** (SKG-604). A logout and a new
+   * pairing in the other context can land while this refresh is in the air, and a new epoch would
+   * end that pairing. What a mint would refuse is a write from a refresh of the same chain, and the
+   * worker has refused that chain: whatever such a write holds, the next refresh answers `401` for
+   * it too.
+   */
+  async function endSpent(endpoint: string, spent: StoredSession): Promise<void> {
+    await sessions.end(endpoint, spent);
+
+    const [held, storedGrants] = await Promise.all([sessions.read(), grants.read()]);
+    const grant = storedGrants[endpoint];
+    if (grant !== undefined && !matches(grant, held[endpoint])) await grants.drop(endpoint);
   }
 
   async function refresh(endpoint: string): Promise<AccessResult> {
@@ -301,7 +333,7 @@ export function createSessions({
     // a train: all of those keep the refresh token, because throwing it away logs the reviewer out
     // of something the worker still considers open, and only a new pairing code brings them back.
     if (answer.status === 401) {
-      await forget(endpoint);
+      await endSpent(endpoint, stored);
 
       return { ok: false, reason: 'session-revoked-or-expired' };
     }

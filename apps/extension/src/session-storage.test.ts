@@ -5,15 +5,20 @@ import {
   GRANT_PREFIX,
   LEGACY_GRANTS_KEY,
   LEGACY_SESSIONS_KEY,
-  SESSION_PREFIX,
+  ENDPOINT_SESSION_PREFIX,
   EPOCH_PREFIX,
-  createArea,
+  RUN_PREFIX,
   createSessionArea,
   entriesOf,
   stillOpen,
   keyFor,
+  moveToRunKeys,
+  runKeyFor,
+  runOf,
+  runsOf,
   splitLegacyRecord,
   upgradeAreas,
+  upgradeSessions,
   touchesARefreshToken,
 } from './session-storage.ts';
 import { type StoredSession, parseAccessGrant, parseStoredSession } from './session.ts';
@@ -23,44 +28,64 @@ const ENDPOINT = 'https://worker.test';
 const IDENTITY = { subject: 'u_1', name: 'Alex' };
 const SESSION: StoredSession = { refreshToken: 'refresh.1', identity: IDENTITY, generation: 'gen.1' };
 
-describe('one key per endpoint', () => {
+describe('one key per run of an endpoint', () => {
   /**
    * The endpoint is a URL a reviewer typed, and a colon is legal in a path.
    *
-   * The key is the prefix with the endpoint appended, so the endpoint has to be recovered by the
-   * prefix's length. Splitting on the separator truncates this one, and the entry is then filed
-   * under a worker nobody is paired with.
+   * The endpoint is the rest of the key after the epoch. Splitting on the separator truncates this
+   * one, and the entry is then filed under a worker nobody is paired with.
    */
   it('round-trips an endpoint that contains the separator', () => {
     const awkward = 'https://a.test/x:session:y';
-    const snapshot = { [keyFor(SESSION_PREFIX, awkward)]: SESSION };
 
-    assert.deepEqual(entriesOf(snapshot, SESSION_PREFIX, parseStoredSession), { [awkward]: SESSION });
+    assert.deepEqual(runOf(runKeyFor(awkward, 'epo.1')), {
+      key: runKeyFor(awkward, 'epo.1'),
+      endpoint: awkward,
+      epoch: 'epo.1',
+    });
   });
 
-  it('reads only its own prefix, and not the other things the area holds', () => {
+  /** The epoch is minted here and holds no colon today. The key does not depend on that. */
+  it('round-trips an epoch that contains the separator, and a session with no epoch', () => {
+    assert.partialDeepStrictEqual(runOf(runKeyFor(ENDPOINT, 'a:b')), { endpoint: ENDPOINT, epoch: 'a:b' });
+    assert.partialDeepStrictEqual(runOf(runKeyFor(ENDPOINT, undefined)), { endpoint: ENDPOINT, epoch: undefined });
+    assert.notEqual(runKeyFor(ENDPOINT, 'epo.1'), runKeyFor(ENDPOINT, 'epo.2'));
+  });
+
+  it('reads only session keys, and not the other things the area holds', () => {
     const snapshot = {
       sites: { 'https://site.test': { enabled: true } },
       [LEGACY_SESSIONS_KEY]: { [ENDPOINT]: SESSION },
-      [keyFor(SESSION_PREFIX, ENDPOINT)]: SESSION,
+      [keyFor(ENDPOINT_SESSION_PREFIX, ENDPOINT)]: SESSION,
+      [runKeyFor(ENDPOINT, undefined)]: SESSION,
       [keyFor(GRANT_PREFIX, ENDPOINT)]: { accessToken: 'a', expiresAt: 1, identity: IDENTITY },
+      [`${RUN_PREFIX}%E0%A4%A:${ENDPOINT}`]: SESSION,
     };
 
-    assert.deepEqual(entriesOf(snapshot, SESSION_PREFIX, parseStoredSession), { [ENDPOINT]: SESSION });
+    assert.deepEqual(runsOf(snapshot), [
+      { key: runKeyFor(ENDPOINT, undefined), endpoint: ENDPOINT, epoch: undefined, session: SESSION },
+    ]);
   });
 
   it('drops an entry that does not parse rather than the whole area', () => {
     const snapshot = {
-      [keyFor(SESSION_PREFIX, ENDPOINT)]: SESSION,
-      [keyFor(SESSION_PREFIX, 'https://broken.test')]: { identity: IDENTITY },
+      [runKeyFor(ENDPOINT, undefined)]: SESSION,
+      [runKeyFor('https://broken.test', undefined)]: { identity: IDENTITY },
     };
 
-    assert.deepEqual(entriesOf(snapshot, SESSION_PREFIX, parseStoredSession), { [ENDPOINT]: SESSION });
+    assert.deepEqual(
+      runsOf(snapshot).map((run) => run.endpoint),
+      [ENDPOINT],
+    );
+  });
+
+  it('drops an entry whose epoch is not the one its key names', () => {
+    assert.deepEqual(runsOf({ [runKeyFor(ENDPOINT, 'epo.1')]: { ...SESSION, epoch: 'epo.2' } }), []);
   });
 
   it('tells a refresh token from every other key the area changes', () => {
-    assert.equal(touchesARefreshToken([keyFor(SESSION_PREFIX, ENDPOINT)]), true);
-    assert.equal(touchesARefreshToken(['sites', LEGACY_SESSIONS_KEY]), false);
+    assert.equal(touchesARefreshToken([runKeyFor(ENDPOINT, 'epo.1')]), true);
+    assert.equal(touchesARefreshToken(['sites', LEGACY_SESSIONS_KEY, keyFor(EPOCH_PREFIX, ENDPOINT)]), false);
     assert.equal(touchesARefreshToken([keyFor(GRANT_PREFIX, ENDPOINT)]), false);
   });
 });
@@ -72,15 +97,15 @@ describe('the upgrade from one record to one key per endpoint', () => {
       [LEGACY_SESSIONS_KEY]: { [ENDPOINT]: SESSION, [other]: { ...SESSION, refreshToken: 'other.1' } },
     });
 
-    await splitLegacyRecord(store.area, LEGACY_SESSIONS_KEY, SESSION_PREFIX, parseStoredSession);
+    await splitLegacyRecord(store.area, LEGACY_SESSIONS_KEY, ENDPOINT_SESSION_PREFIX, parseStoredSession);
 
     assert.deepEqual(store.read(), {
-      [keyFor(SESSION_PREFIX, ENDPOINT)]: SESSION,
-      [keyFor(SESSION_PREFIX, other)]: { ...SESSION, refreshToken: 'other.1' },
+      [keyFor(ENDPOINT_SESSION_PREFIX, ENDPOINT)]: SESSION,
+      [keyFor(ENDPOINT_SESSION_PREFIX, other)]: { ...SESSION, refreshToken: 'other.1' },
     });
     assert.deepEqual(store.log, [
       'get all',
-      `set ${keyFor(SESSION_PREFIX, ENDPOINT)},${keyFor(SESSION_PREFIX, other)}`,
+      `set ${keyFor(ENDPOINT_SESSION_PREFIX, ENDPOINT)},${keyFor(ENDPOINT_SESSION_PREFIX, other)}`,
       `remove ${LEGACY_SESSIONS_KEY}`,
     ]);
   });
@@ -93,7 +118,7 @@ describe('the upgrade from one record to one key per endpoint', () => {
     const store = storage({ [LEGACY_SESSIONS_KEY]: { [ENDPOINT]: SESSION } });
     const failing: StorageArea = { ...store.area, set: async () => Promise.reject(new Error('quota')) };
 
-    await assert.rejects(splitLegacyRecord(failing, LEGACY_SESSIONS_KEY, SESSION_PREFIX, parseStoredSession));
+    await assert.rejects(splitLegacyRecord(failing, LEGACY_SESSIONS_KEY, ENDPOINT_SESSION_PREFIX, parseStoredSession));
 
     assert.deepEqual(store.read(), { [LEGACY_SESSIONS_KEY]: { [ENDPOINT]: SESSION } });
   });
@@ -108,12 +133,12 @@ describe('the upgrade from one record to one key per endpoint', () => {
     const fresher = { ...SESSION, refreshToken: 'refresh.2', generation: 'gen.2' };
     const store = storage({
       [LEGACY_SESSIONS_KEY]: { [ENDPOINT]: SESSION },
-      [keyFor(SESSION_PREFIX, ENDPOINT)]: fresher,
+      [keyFor(ENDPOINT_SESSION_PREFIX, ENDPOINT)]: fresher,
     });
 
-    await splitLegacyRecord(store.area, LEGACY_SESSIONS_KEY, SESSION_PREFIX, parseStoredSession);
+    await splitLegacyRecord(store.area, LEGACY_SESSIONS_KEY, ENDPOINT_SESSION_PREFIX, parseStoredSession);
 
-    assert.deepEqual(store.read(), { [keyFor(SESSION_PREFIX, ENDPOINT)]: fresher });
+    assert.deepEqual(store.read(), { [keyFor(ENDPOINT_SESSION_PREFIX, ENDPOINT)]: fresher });
     assert.deepEqual(store.log, ['get all', `remove ${LEGACY_SESSIONS_KEY}`]);
   });
 
@@ -158,21 +183,21 @@ describe('the upgrade from one record to one key per endpoint', () => {
       },
     };
 
-    const first = splitLegacyRecord(area, LEGACY_SESSIONS_KEY, SESSION_PREFIX, parseStoredSession);
+    const first = splitLegacyRecord(area, LEGACY_SESSIONS_KEY, ENDPOINT_SESSION_PREFIX, parseStoredSession);
     await written;
-    await store.area.set({ [keyFor(SESSION_PREFIX, ENDPOINT)]: fresher });
+    await store.area.set({ [keyFor(ENDPOINT_SESSION_PREFIX, ENDPOINT)]: fresher });
 
-    await splitLegacyRecord(area, LEGACY_SESSIONS_KEY, SESSION_PREFIX, parseStoredSession);
+    await splitLegacyRecord(area, LEGACY_SESSIONS_KEY, ENDPOINT_SESSION_PREFIX, parseStoredSession);
     release();
     await first;
 
-    assert.deepEqual(store.read(), { [keyFor(SESSION_PREFIX, ENDPOINT)]: fresher });
+    assert.deepEqual(store.read(), { [keyFor(ENDPOINT_SESSION_PREFIX, ENDPOINT)]: fresher });
   });
 
   it('writes nothing and reads nothing twice once the legacy record is gone', async () => {
-    const store = storage({ [keyFor(SESSION_PREFIX, ENDPOINT)]: SESSION });
+    const store = storage({ [keyFor(ENDPOINT_SESSION_PREFIX, ENDPOINT)]: SESSION });
 
-    await splitLegacyRecord(store.area, LEGACY_SESSIONS_KEY, SESSION_PREFIX, parseStoredSession);
+    await splitLegacyRecord(store.area, LEGACY_SESSIONS_KEY, ENDPOINT_SESSION_PREFIX, parseStoredSession);
 
     assert.deepEqual(store.log, ['get all']);
   });
@@ -180,7 +205,7 @@ describe('the upgrade from one record to one key per endpoint', () => {
   it('removes a legacy record that holds nothing usable', async () => {
     const store = storage({ [LEGACY_SESSIONS_KEY]: { [ENDPOINT]: { identity: IDENTITY } } });
 
-    await splitLegacyRecord(store.area, LEGACY_SESSIONS_KEY, SESSION_PREFIX, parseStoredSession);
+    await splitLegacyRecord(store.area, LEGACY_SESSIONS_KEY, ENDPOINT_SESSION_PREFIX, parseStoredSession);
 
     assert.deepEqual(store.read(), {});
     assert.deepEqual(store.log, ['get all', `remove ${LEGACY_SESSIONS_KEY}`]);
@@ -201,9 +226,72 @@ describe('the upgrade from one record to one key per endpoint', () => {
   });
 });
 
+describe('the second upgrade, from a key per endpoint to a key per run', () => {
+  it('moves each entry to the run its own epoch names, and then removes the old key', async () => {
+    const other = 'https://other.test';
+    const stamped = { ...SESSION, epoch: 'epo.1' };
+    const store = storage({
+      [keyFor(ENDPOINT_SESSION_PREFIX, ENDPOINT)]: SESSION,
+      [keyFor(ENDPOINT_SESSION_PREFIX, other)]: stamped,
+    });
+
+    await moveToRunKeys(store.area);
+
+    assert.deepEqual(store.read(), {
+      [runKeyFor(ENDPOINT, undefined)]: SESSION,
+      [runKeyFor(other, 'epo.1')]: stamped,
+    });
+    assert.deepEqual(store.log, [
+      'get all',
+      `set ${runKeyFor(ENDPOINT, undefined)},${runKeyFor(other, 'epo.1')}`,
+      `remove ${keyFor(ENDPOINT_SESSION_PREFIX, ENDPOINT)}`,
+      `remove ${keyFor(ENDPOINT_SESSION_PREFIX, other)}`,
+    ]);
+  });
+
+  /** The same guarantee as the first upgrade: a failed write leaves the credentials where they were. */
+  it('keeps the old key when the write fails', async () => {
+    const store = storage({ [keyFor(ENDPOINT_SESSION_PREFIX, ENDPOINT)]: SESSION });
+    const failing: StorageArea = { ...store.area, set: async () => Promise.reject(new Error('quota')) };
+
+    await assert.rejects(moveToRunKeys(failing));
+
+    assert.deepEqual(store.read(), { [keyFor(ENDPOINT_SESSION_PREFIX, ENDPOINT)]: SESSION });
+  });
+
+  /** The other context upgraded first, and a refresh has written the run since. */
+  it('leaves a run that already has its key alone', async () => {
+    const fresher = { ...SESSION, refreshToken: 'refresh.2', generation: 'gen.2' };
+    const store = storage({
+      [keyFor(ENDPOINT_SESSION_PREFIX, ENDPOINT)]: SESSION,
+      [runKeyFor(ENDPOINT, undefined)]: fresher,
+    });
+
+    await moveToRunKeys(store.area);
+
+    assert.deepEqual(store.read(), { [runKeyFor(ENDPOINT, undefined)]: fresher });
+  });
+
+  it('writes nothing once there is no old key', async () => {
+    const store = storage({ [runKeyFor(ENDPOINT, undefined)]: SESSION });
+
+    await moveToRunKeys(store.area);
+
+    assert.deepEqual(store.log, ['get all']);
+  });
+
+  it('takes the legacy record all the way to a key per run', async () => {
+    const store = storage({ [LEGACY_SESSIONS_KEY]: { [ENDPOINT]: SESSION } });
+
+    await upgradeSessions(store.area);
+
+    assert.deepEqual(store.read(), { [runKeyFor(ENDPOINT, undefined)]: SESSION });
+  });
+});
+
 describe('an area waits for its own upgrade', () => {
   /**
-   * The defect this ticket is named after, on the one run where it is reachable.
+   * The defect SKG-602 is named after, on the one run where it is reachable.
    *
    * A reviewer logs out while the upgrade is still in flight. Without the wait, the drop removes a
    * key that is not written yet and the upgrade then writes the session back from the legacy record
@@ -212,8 +300,8 @@ describe('an area waits for its own upgrade', () => {
    */
   it('does not let a logout land before the legacy record is split', async () => {
     const store = storage({ [LEGACY_SESSIONS_KEY]: { [ENDPOINT]: SESSION } });
-    const ready = splitLegacyRecord(store.area, LEGACY_SESSIONS_KEY, SESSION_PREFIX, parseStoredSession);
-    const sessions = createArea(() => store.area, SESSION_PREFIX, parseStoredSession, ready);
+    const ready = upgradeSessions(store.area);
+    const sessions = createSessionArea(() => store.area, ready);
 
     await Promise.all([sessions.drop(ENDPOINT), ready]);
 
@@ -221,15 +309,15 @@ describe('an area waits for its own upgrade', () => {
     assert.deepEqual(await sessions.read(), {});
   });
 
-  it('writes and reads one endpoint at a time, by its own key', async () => {
+  it('writes and reads one run at a time, by its own key', async () => {
     const store = storage();
-    const sessions = createArea(() => store.area, SESSION_PREFIX, parseStoredSession, Promise.resolve());
+    const sessions = createSessionArea(() => store.area, Promise.resolve());
 
     await sessions.put(ENDPOINT, SESSION);
 
-    assert.deepEqual(store.read(), { [keyFor(SESSION_PREFIX, ENDPOINT)]: SESSION });
+    assert.deepEqual(store.read(), { [runKeyFor(ENDPOINT, undefined)]: SESSION });
     assert.deepEqual(await sessions.read(), { [ENDPOINT]: SESSION });
-    assert.deepEqual(store.log, ['set ' + keyFor(SESSION_PREFIX, ENDPOINT), 'get all']);
+    assert.deepEqual(store.log, [`set ${runKeyFor(ENDPOINT, undefined)}`, 'get all', 'get all']);
   });
 
   /**
@@ -243,12 +331,12 @@ describe('an area waits for its own upgrade', () => {
   it('does not let a refresh land before the legacy record is split', async () => {
     const fresher = { ...SESSION, refreshToken: 'refresh.2', generation: 'gen.2' };
     const store = storage({ [LEGACY_SESSIONS_KEY]: { [ENDPOINT]: SESSION } });
-    const ready = splitLegacyRecord(store.area, LEGACY_SESSIONS_KEY, SESSION_PREFIX, parseStoredSession);
-    const sessions = createArea(() => store.area, SESSION_PREFIX, parseStoredSession, ready);
+    const ready = upgradeSessions(store.area);
+    const sessions = createSessionArea(() => store.area, ready);
 
     await Promise.all([sessions.put(ENDPOINT, fresher), ready]);
 
-    assert.deepEqual(store.read(), { [keyFor(SESSION_PREFIX, ENDPOINT)]: fresher });
+    assert.deepEqual(store.read(), { [runKeyFor(ENDPOINT, undefined)]: fresher });
   });
 
   /**
@@ -259,8 +347,8 @@ describe('an area waits for its own upgrade', () => {
    */
   it('answers with the sessions the legacy record held, upgrade or not', async () => {
     const store = storage({ [LEGACY_SESSIONS_KEY]: { [ENDPOINT]: SESSION } });
-    const ready = splitLegacyRecord(store.area, LEGACY_SESSIONS_KEY, SESSION_PREFIX, parseStoredSession);
-    const sessions = createArea(() => store.area, SESSION_PREFIX, parseStoredSession, ready);
+    const ready = upgradeSessions(store.area);
+    const sessions = createSessionArea(() => store.area, ready);
 
     const [entries] = await Promise.all([sessions.read(), ready]);
 
@@ -281,7 +369,7 @@ describe('an upgrade that could not run', () => {
     const store = storage({ [LEGACY_SESSIONS_KEY]: { [ENDPOINT]: SESSION } });
     const broken: StorageArea = { ...store.area, get: async () => Promise.reject(new Error('unreadable')) };
     const ready = upgradeAreas(broken, storage().area);
-    const sessions = createArea(() => broken, SESSION_PREFIX, parseStoredSession, ready);
+    const sessions = createSessionArea(() => broken, ready);
 
     await assert.rejects(ready);
     await assert.rejects(sessions.read());
@@ -296,7 +384,7 @@ describe('an upgrade that could not run', () => {
 
     await upgradeAreas(local.area, session.area);
 
-    assert.deepEqual(local.read(), { [keyFor(SESSION_PREFIX, ENDPOINT)]: SESSION });
+    assert.deepEqual(local.read(), { [runKeyFor(ENDPOINT, undefined)]: SESSION });
     assert.deepEqual(session.read(), { [keyFor(GRANT_PREFIX, ENDPOINT)]: grant });
   });
 });
@@ -308,14 +396,14 @@ describe('the storage the tests run against', () => {
    * that starts to would land on.
    */
   it('answers a keyed read with that key and nothing else', async () => {
-    const held = storage({ [keyFor(SESSION_PREFIX, ENDPOINT)]: SESSION, sites: {} });
+    const held = storage({ [runKeyFor(ENDPOINT, undefined)]: SESSION, sites: {} });
 
-    assert.deepEqual(await held.area.get(keyFor(SESSION_PREFIX, ENDPOINT)), {
-      [keyFor(SESSION_PREFIX, ENDPOINT)]: SESSION,
+    assert.deepEqual(await held.area.get(runKeyFor(ENDPOINT, undefined)), {
+      [runKeyFor(ENDPOINT, undefined)]: SESSION,
     });
     assert.deepEqual(await held.area.get('nothing is under this'), {});
     assert.deepEqual(Object.keys((await held.area.get(null)) as Record<string, unknown>).sort(), [
-      keyFor(SESSION_PREFIX, ENDPOINT),
+      runKeyFor(ENDPOINT, undefined),
       'sites',
     ]);
   });
@@ -324,10 +412,14 @@ describe('the storage the tests run against', () => {
 describe('the epoch that ends a run of a session', () => {
   const OTHER = 'https://other.test';
 
+  function run(endpoint: string, session: StoredSession) {
+    return { key: runKeyFor(endpoint, session.epoch), endpoint, epoch: session.epoch, session };
+  }
+
   it('keeps an entry stamped with the epoch storage holds', () => {
     const open = { ...SESSION, epoch: 'epo.1' };
 
-    assert.deepEqual(stillOpen({ [ENDPOINT]: open }, { [ENDPOINT]: 'epo.1' }), { [ENDPOINT]: open });
+    assert.deepEqual(stillOpen([run(ENDPOINT, open)], { [ENDPOINT]: 'epo.1' }), { [ENDPOINT]: open });
   });
 
   /**
@@ -335,12 +427,12 @@ describe('the epoch that ends a run of a session', () => {
    * storage from before it. Nothing could refuse the write; this is what refuses the entry.
    */
   it('refuses an entry stamped with the run before', () => {
-    assert.deepEqual(stillOpen({ [ENDPOINT]: { ...SESSION, epoch: 'epo.1' } }, { [ENDPOINT]: 'epo.2' }), {});
+    assert.deepEqual(stillOpen([run(ENDPOINT, { ...SESSION, epoch: 'epo.1' })], { [ENDPOINT]: 'epo.2' }), {});
   });
 
   /** The first logout on an endpoint whose session was stored before this marker existed. */
   it('refuses an entry with no stamp once the endpoint has an epoch', () => {
-    assert.deepEqual(stillOpen({ [ENDPOINT]: SESSION }, { [ENDPOINT]: 'epo.1' }), {});
+    assert.deepEqual(stillOpen([run(ENDPOINT, SESSION)], { [ENDPOINT]: 'epo.1' }), {});
   });
 
   /**
@@ -348,14 +440,22 @@ describe('the epoch that ends a run of a session', () => {
    * upgrade keeps the session a reviewer already had rather than signing them out.
    */
   it('keeps an entry with no stamp on an endpoint with no epoch', () => {
-    assert.deepEqual(stillOpen({ [ENDPOINT]: SESSION }, {}), { [ENDPOINT]: SESSION });
+    assert.deepEqual(stillOpen([run(ENDPOINT, SESSION)], {}), { [ENDPOINT]: SESSION });
   });
 
   it('reads each endpoint against its own epoch', () => {
     const open = { ...SESSION, epoch: 'epo.1' };
-    const sessions = { [ENDPOINT]: open, [OTHER]: { ...SESSION, epoch: 'epo.1' } };
+    const runs = [run(ENDPOINT, open), run(OTHER, { ...SESSION, epoch: 'epo.1' })];
 
-    assert.deepEqual(stillOpen(sessions, { [ENDPOINT]: 'epo.1', [OTHER]: 'epo.2' }), { [ENDPOINT]: open });
+    assert.deepEqual(stillOpen(runs, { [ENDPOINT]: 'epo.1', [OTHER]: 'epo.2' }), { [ENDPOINT]: open });
+  });
+
+  /** Two runs of one endpoint in storage: the one that is over does not hide the one that is open. */
+  it('answers with the open run beside one that is over', () => {
+    const open = { ...SESSION, refreshToken: 'refresh.9', epoch: 'epo.3' };
+    const runs = [run(ENDPOINT, open), run(ENDPOINT, { ...SESSION, epoch: 'epo.1' })];
+
+    assert.deepEqual(stillOpen(runs, { [ENDPOINT]: 'epo.3' }), { [ENDPOINT]: open });
   });
 
   /**
@@ -365,7 +465,7 @@ describe('the epoch that ends a run of a session', () => {
    */
   it('reads a session and its epoch from one round trip', async () => {
     const held = storage({
-      [keyFor(SESSION_PREFIX, ENDPOINT)]: { ...SESSION, epoch: 'epo.1' },
+      [runKeyFor(ENDPOINT, 'epo.1')]: { ...SESSION, epoch: 'epo.1' },
       [keyFor(EPOCH_PREFIX, ENDPOINT)]: 'epo.1',
     });
     const area = createSessionArea(() => held.area, Promise.resolve());
@@ -376,14 +476,12 @@ describe('the epoch that ends a run of a session', () => {
 
   it('does not answer with a session the epoch beside it has ended', async () => {
     const held = storage({
-      [keyFor(SESSION_PREFIX, ENDPOINT)]: { ...SESSION, epoch: 'epo.1' },
+      [runKeyFor(ENDPOINT, 'epo.1')]: { ...SESSION, epoch: 'epo.1' },
       [keyFor(EPOCH_PREFIX, ENDPOINT)]: 'epo.2',
     });
     const area = createSessionArea(() => held.area, Promise.resolve());
 
     assert.deepEqual(await area.read(), {});
-    // Still in storage: a write that lost the race cannot be taken back, only refused.
-    assert.ok(keyFor(SESSION_PREFIX, ENDPOINT) in held.read());
   });
 
   it('waits for the upgrade before it answers, like every other area', async () => {
@@ -391,7 +489,7 @@ describe('the epoch that ends a run of a session', () => {
     const ready = new Promise<void>((resolve) => {
       split = resolve;
     });
-    const held = storage({ [keyFor(SESSION_PREFIX, ENDPOINT)]: SESSION });
+    const held = storage({ [runKeyFor(ENDPOINT, undefined)]: SESSION });
     const area = createSessionArea(() => held.area, ready);
 
     const reading = area.read();
@@ -399,5 +497,75 @@ describe('the epoch that ends a run of a session', () => {
 
     split();
     assert.deepEqual(await reading, { [ENDPOINT]: SESSION });
+  });
+});
+
+describe('what the sessions area removes (SKG-604)', () => {
+  const OTHER = 'https://other.test';
+  const OVER = { ...SESSION, refreshToken: 'refresh.1', epoch: 'epo.1' };
+  const OPEN = { ...SESSION, refreshToken: 'refresh.9', epoch: 'epo.3' };
+
+  /**
+   * A write removes the runs of its endpoint that its snapshot says are over. Nothing else reads
+   * those keys again, and each holds a refresh token.
+   */
+  it('removes the runs that are over after a write, and nothing else', async () => {
+    const elsewhere = { ...SESSION, epoch: 'epo.1' };
+    const held = storage({
+      [runKeyFor(ENDPOINT, 'epo.1')]: OVER,
+      [runKeyFor(OTHER, 'epo.1')]: elsewhere,
+      [keyFor(EPOCH_PREFIX, ENDPOINT)]: 'epo.3',
+      [keyFor(EPOCH_PREFIX, OTHER)]: 'epo.1',
+    });
+    const area = createSessionArea(() => held.area, Promise.resolve());
+
+    await area.put(ENDPOINT, OPEN);
+
+    assert.deepEqual(held.read(), {
+      [runKeyFor(ENDPOINT, 'epo.3')]: OPEN,
+      [runKeyFor(OTHER, 'epo.1')]: elsewhere,
+      [keyFor(EPOCH_PREFIX, ENDPOINT)]: 'epo.3',
+      [keyFor(EPOCH_PREFIX, OTHER)]: 'epo.1',
+    });
+  });
+
+  /**
+   * The write that lost the race: it writes a run that is over, beside the run that is open. The
+   * open run stays, and the write removes its own key.
+   */
+  it('removes its own key when the run it writes is over, and keeps the open one', async () => {
+    const held = storage({ [runKeyFor(ENDPOINT, 'epo.3')]: OPEN, [keyFor(EPOCH_PREFIX, ENDPOINT)]: 'epo.3' });
+    const area = createSessionArea(() => held.area, Promise.resolve());
+
+    await area.put(ENDPOINT, OVER);
+
+    assert.deepEqual(held.read(), { [runKeyFor(ENDPOINT, 'epo.3')]: OPEN, [keyFor(EPOCH_PREFIX, ENDPOINT)]: 'epo.3' });
+  });
+
+  it('drops every run of one endpoint on a logout, and the other endpoints keep theirs', async () => {
+    const elsewhere = { ...SESSION, epoch: 'epo.1' };
+    const held = storage({
+      [runKeyFor(ENDPOINT, 'epo.1')]: OVER,
+      [runKeyFor(ENDPOINT, 'epo.3')]: OPEN,
+      [runKeyFor(OTHER, 'epo.1')]: elsewhere,
+    });
+    const area = createSessionArea(() => held.area, Promise.resolve());
+
+    await area.drop(ENDPOINT);
+
+    assert.deepEqual(held.read(), { [runKeyFor(OTHER, 'epo.1')]: elsewhere });
+  });
+
+  /** A refused refresh ends the run it spent. A rotation written since is not that session. */
+  it('ends a run only while it holds the token that was spent', async () => {
+    const rotated = { ...OVER, refreshToken: 'refresh.2' };
+    const held = storage({ [runKeyFor(ENDPOINT, 'epo.1')]: rotated, [runKeyFor(ENDPOINT, 'epo.3')]: OPEN });
+    const area = createSessionArea(() => held.area, Promise.resolve());
+
+    await area.end(ENDPOINT, OVER);
+    assert.deepEqual(held.read(), { [runKeyFor(ENDPOINT, 'epo.1')]: rotated, [runKeyFor(ENDPOINT, 'epo.3')]: OPEN });
+
+    await area.end(ENDPOINT, rotated);
+    assert.deepEqual(held.read(), { [runKeyFor(ENDPOINT, 'epo.3')]: OPEN });
   });
 });

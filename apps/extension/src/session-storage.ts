@@ -11,10 +11,15 @@
  * A key per endpoint makes a write atomic per endpoint. It does not order two writes, and a logout
  * has to beat a refresh that read storage before it. That is the epoch, and `stillOpen` is the rule
  * it is read by (SKG-603).
+ *
+ * **A session key names its epoch too** (SKG-604). A refresh writes the run of the session it read,
+ * so a write that lost the race to a logout and a new pairing lands beside the new pairing, never
+ * over it.
  */
 
 import {
   type Area,
+  type SessionArea,
   type SessionSeams,
   type Sessions,
   type StoredSession,
@@ -24,8 +29,23 @@ import {
 } from './session.ts';
 
 /** The prefix of a key, per area. An endpoint is appended verbatim. */
-export const SESSION_PREFIX = 'fruitback:session:';
 export const GRANT_PREFIX = 'fruitback:grant:';
+
+/**
+ * The prefix of a session key: `fruitback:session-run:<epoch>:<endpoint>` (SKG-604).
+ *
+ * The epoch is encoded with `encodeURIComponent`, which never writes a colon, so the first colon
+ * after the prefix ends it. The endpoint is the rest of the key, colons included. A session with no
+ * epoch has an empty segment.
+ */
+export const RUN_PREFIX = 'fruitback:session-run:';
+
+/**
+ * The prefix of a session key from SKG-602 to SKG-604: the endpoint and no epoch.
+ *
+ * Only `moveToRunKeys` reads one, and it removes it.
+ */
+export const ENDPOINT_SESSION_PREFIX = 'fruitback:session:';
 
 /**
  * The prefix of an endpoint's epoch, in `local` beside the session it dates (SKG-603).
@@ -60,6 +80,37 @@ export function keyFor(prefix: string, endpoint: string): string {
   return prefix + endpoint;
 }
 
+/** The key of one run of an endpoint's session. See `RUN_PREFIX`. */
+export function runKeyFor(endpoint: string, epoch: string | undefined): string {
+  return `${RUN_PREFIX}${encodeURIComponent(epoch ?? '')}:${endpoint}`;
+}
+
+/** A session key, read back: the endpoint and the epoch it names. */
+export type RunKey = { key: string; endpoint: string; epoch: string | undefined };
+
+/** The run a key names, or `undefined` when the key is not a session key or its epoch does not decode. */
+export function runOf(key: string): RunKey | undefined {
+  if (!key.startsWith(RUN_PREFIX)) return undefined;
+
+  const rest = key.slice(RUN_PREFIX.length);
+  const end = rest.indexOf(':');
+  if (end < 0) return undefined;
+
+  let epoch: string;
+  try {
+    epoch = decodeURIComponent(rest.slice(0, end));
+  } catch {
+    return undefined;
+  }
+
+  return { key, endpoint: rest.slice(end + 1), epoch: epoch === '' ? undefined : epoch };
+}
+
+/** Every session key in a snapshot, whatever its value holds. */
+export function runKeysOf(snapshot: Record<string, unknown>): RunKey[] {
+  return Object.keys(snapshot).flatMap((key) => runOf(key) ?? []);
+}
+
 /**
  * The endpoint a key names, or `undefined` when the key belongs to something else.
  *
@@ -80,7 +131,7 @@ function endpointOf(prefix: string, key: string): string | undefined {
  * in the same breath, and that is what wakes the refresh.
  */
 export function touchesARefreshToken(keys: string[]): boolean {
-  return keys.some((key) => key.startsWith(SESSION_PREFIX));
+  return keys.some((key) => key.startsWith(RUN_PREFIX));
 }
 
 /** Every endpoint the snapshot holds under `prefix`, parsed. An entry that fails to parse is dropped. */
@@ -106,6 +157,22 @@ export function parseEpoch(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
+/** A session as storage holds it: the run its key names, and the value under that key. */
+export type Run = RunKey & { session: StoredSession };
+
+/**
+ * Every session in a snapshot, parsed. A value that does not parse is dropped, and so is a value
+ * whose epoch is not the one its key names: nothing here writes one, so the entry was changed by
+ * something else.
+ */
+export function runsOf(snapshot: Record<string, unknown>): Run[] {
+  return runKeysOf(snapshot).flatMap((run) => {
+    const session = parseStoredSession(snapshot[run.key]);
+
+    return session !== undefined && session.epoch === run.epoch ? [{ ...run, session }] : [];
+  });
+}
+
 /**
  * The sessions still open, out of the sessions storage holds (SKG-603).
  *
@@ -119,39 +186,70 @@ export function parseEpoch(value: unknown): string | undefined {
  * Absent on both sides compares equal, so an entry written before this marker existed is kept. That
  * is the rule `matches` already follows for the generation.
  */
-export function stillOpen(
-  sessions: Record<string, StoredSession>,
-  epochs: Record<string, string>,
-): Record<string, StoredSession> {
+export function stillOpen(runs: Run[], epochs: Record<string, string>): Record<string, StoredSession> {
   const open: Record<string, StoredSession> = {};
-  for (const [endpoint, session] of Object.entries(sessions)) {
-    if (session.epoch === epochs[endpoint]) open[endpoint] = session;
+  for (const { endpoint, epoch, session } of runs) {
+    if (epoch === epochs[endpoint]) open[endpoint] = session;
   }
 
   return open;
 }
 
 /**
- * The sessions area: one key per endpoint, and the epoch rule over it.
+ * The sessions area: one key per run of an endpoint's session, and the epoch rule over it.
  *
  * The epoch is read from the **same snapshot** as the sessions, so nothing can land between the two
  * halves of the comparison. It is where the rule is enforced rather than at the call sites, because
  * a reader added later would otherwise see a session that was logged out.
+ *
+ * **A write removes the runs that are over, after it lands** (SKG-604). A refresh that lost the race
+ * to a logout writes a run that is over, and nothing reads that key again. The removal is measured
+ * against the epoch in its own snapshot, and an epoch never comes back, so it cannot remove a run
+ * that is still open or one written after that snapshot. A write that lost the race sees the new
+ * epoch in that snapshot, so it removes its own key.
  */
-export function createSessionArea(of: () => StorageArea, ready: Promise<void>): Area<StoredSession> {
-  const area = createArea(of, SESSION_PREFIX, parseStoredSession, ready);
+export function createSessionArea(of: () => StorageArea, ready: Promise<void>): SessionArea {
+  async function snapshot(): Promise<Record<string, unknown>> {
+    await ready;
+    const taken = await of().get(null);
+
+    return isRecord(taken) ? taken : {};
+  }
+
+  async function removeEach(keys: string[]): Promise<void> {
+    for (const key of keys) await of().remove(key);
+  }
 
   return {
-    ...area,
     async read() {
-      await ready;
-      const snapshot = await of().get(null);
-      if (!isRecord(snapshot)) return {};
+      const taken = await snapshot();
 
-      return stillOpen(
-        entriesOf(snapshot, SESSION_PREFIX, parseStoredSession),
-        entriesOf(snapshot, EPOCH_PREFIX, parseEpoch),
+      return stillOpen(runsOf(taken), entriesOf(taken, EPOCH_PREFIX, parseEpoch));
+    },
+    async put(endpoint, value) {
+      await ready;
+      await of().set({ [runKeyFor(endpoint, value.epoch)]: value });
+
+      const taken = await snapshot();
+      const current = entriesOf(taken, EPOCH_PREFIX, parseEpoch)[endpoint];
+      await removeEach(
+        runKeysOf(taken)
+          .filter((run) => run.endpoint === endpoint && run.epoch !== current)
+          .map((run) => run.key),
       );
+    },
+    async drop(endpoint) {
+      const taken = await snapshot();
+      await removeEach(
+        runKeysOf(taken)
+          .filter((run) => run.endpoint === endpoint)
+          .map((run) => run.key),
+      );
+    },
+    async end(endpoint, spent) {
+      const key = runKeyFor(endpoint, spent.epoch);
+      const held = parseStoredSession((await snapshot())[key]);
+      if (held?.refreshToken === spent.refreshToken) await of().remove(key);
     },
   };
 }
@@ -226,7 +324,7 @@ export function createStoredSessions(
  */
 export function upgradeAreas(local: StorageArea, session: StorageArea): Promise<void> {
   const upgrade = Promise.all([
-    splitLegacyRecord(local, LEGACY_SESSIONS_KEY, SESSION_PREFIX, parseStoredSession),
+    upgradeSessions(local),
     splitLegacyRecord(session, LEGACY_GRANTS_KEY, GRANT_PREFIX, parseAccessGrant),
   ]).then(() => undefined);
 
@@ -235,6 +333,44 @@ export function upgradeAreas(local: StorageArea, session: StorageArea): Promise<
   upgrade.catch(() => undefined);
 
   return upgrade;
+}
+
+/**
+ * The upgrade of the sessions area, in the order the shapes were written: the legacy record to a key
+ * per endpoint, then a key per endpoint to a key per run.
+ */
+export async function upgradeSessions(local: StorageArea): Promise<void> {
+  await splitLegacyRecord(local, LEGACY_SESSIONS_KEY, ENDPOINT_SESSION_PREFIX, parseStoredSession);
+  await moveToRunKeys(local);
+}
+
+/**
+ * The upgrade from a key per endpoint to a key per run (SKG-604).
+ *
+ * Each entry moves to the run its own epoch names. **A run that already has its key is left
+ * alone**: the other context upgraded first, and a refresh can have written a newer value there
+ * since. The writes land before the removals, for the reason `splitLegacyRecord` gives.
+ *
+ * The window this leaves is the one `migrationOf` states: a snapshot taken before the other context
+ * wrote the same run. It needs a refresh inside one storage round trip, on the first run after the
+ * upgrade only. An entry this moves to a run that is over stays in storage and no reader answers
+ * with it. The next write for that endpoint removes it.
+ */
+export async function moveToRunKeys(of: StorageArea): Promise<void> {
+  const snapshot = await of.get(null);
+  if (!isRecord(snapshot)) return;
+
+  const moved = Object.keys(snapshot).filter((key) => key.startsWith(ENDPOINT_SESSION_PREFIX));
+  if (moved.length === 0) return;
+
+  const write: Record<string, unknown> = {};
+  for (const [endpoint, value] of Object.entries(entriesOf(snapshot, ENDPOINT_SESSION_PREFIX, parseStoredSession))) {
+    const key = runKeyFor(endpoint, value.epoch);
+    if (!(key in snapshot)) write[key] = value;
+  }
+
+  if (Object.keys(write).length > 0) await of.set(write);
+  for (const key of moved) await of.remove(key);
 }
 
 /**
@@ -276,8 +412,8 @@ export async function splitLegacyRecord<T>(
  * out inside the one storage round trip that separates the read from the write, on the first run
  * after the upgrade only. **The epoch answers it** (SKG-603): a legacy record predates the marker, so
  * what is written back carries none while the logout minted one, and `stillOpen` refuses the entry.
- * What the window still costs is a pairing made inside it, which this writes the older entry back
- * over — the endpoint then reads as signed out rather than as somebody else's session.
+ * A pairing made inside the window is kept since SKG-604: the entry written back names a run with no
+ * epoch, and the pairing's key names its own.
  */
 function migrationOf<T>(
   snapshot: Record<string, unknown>,

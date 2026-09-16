@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   type AccessGrant,
   type Area,
+  type SessionArea,
   type SessionResponse,
   type SessionSeams,
   type StoredSession,
@@ -14,11 +15,13 @@ import {
 } from './session.ts';
 import {
   type StorageArea,
+  ENDPOINT_SESSION_PREFIX,
   EPOCH_PREFIX,
   GRANT_PREFIX,
-  SESSION_PREFIX,
+  RUN_PREFIX,
   createStoredSessions,
   keyFor,
+  runKeyFor,
 } from './session-storage.ts';
 import { storage } from './session-storage.fixture.ts';
 
@@ -45,6 +48,24 @@ function area<T>(entries: Record<string, T> = {}): Area<T> & { set(next: Record<
     },
     set: (next) => {
       state = { ...next };
+    },
+  };
+}
+
+/**
+ * The sessions area, in memory. `end` removes the entry only while it holds the token that was spent,
+ * as the storage-backed one does.
+ */
+function sessionArea(entries: Record<string, StoredSession> = {}): SessionArea & {
+  set(next: Record<string, StoredSession>): void;
+} {
+  const backing = area<StoredSession>(entries);
+
+  return {
+    ...backing,
+    async end(endpoint, spent) {
+      const held = (await backing.read())[endpoint];
+      if (held?.refreshToken === spent.refreshToken && held.epoch === spent.epoch) await backing.drop(endpoint);
     },
   };
 }
@@ -77,7 +98,7 @@ function setup(options: {
   answers?: (SessionResponse | Error)[];
   now?: number;
 }) {
-  const sessions = area<StoredSession>({ ...options.sessions });
+  const sessions = sessionArea({ ...options.sessions });
   const grants = area<AccessGrant>({ ...options.grants });
   const epochs = area<string>({ ...options.epochs });
   const remote = worker(options.answers ?? []);
@@ -332,13 +353,14 @@ describe('keeping an access token fresh', () => {
    */
   it('does not restore a spent token when another endpoint refreshes at the same time', async () => {
     const other = 'https://other.test';
-    const backing = area<StoredSession>({
+    const backing = sessionArea({
       [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY },
       [other]: { refreshToken: 'other.1', identity: IDENTITY },
     });
-    const sessions: Area<StoredSession> = {
+    const sessions: SessionArea = {
       read: backing.read,
       drop: backing.drop,
+      end: backing.end,
       async put(endpoint, value) {
         for (let tick = 0; tick < 4; tick += 1) await Promise.resolve();
 
@@ -475,7 +497,7 @@ describe('a session that ends while a refresh is in the air', () => {
    * it took the early `not-paired` and passed for the wrong reason.
    */
   function refreshInFlight(body: Record<string, unknown>) {
-    const sessions = area<StoredSession>({ [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } });
+    const sessions = sessionArea({ [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } });
     const grants = area<AccessGrant>();
     let entered = (): void => {};
     let release = (): void => {};
@@ -554,7 +576,7 @@ describe('logging out', () => {
    * side to degrade to. Raised in review.
    */
   it('clears both areas even when the epoch cannot be written', async () => {
-    const sessions = area<StoredSession>({ [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } });
+    const sessions = sessionArea({ [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } });
     const grants = area<AccessGrant>({
       [ENDPOINT]: { accessToken: 'access.1', expiresAt: NOW + 600_000, identity: IDENTITY },
     });
@@ -922,7 +944,7 @@ describe('a logout that lands inside a refresh', () => {
     const session = storage();
 
     // Held inside its own upgrade: the snapshot is taken, the write is not in yet.
-    const held = holdingTheWriteOf(SESSION_PREFIX, local.area);
+    const held = holdingTheWriteOf(ENDPOINT_SESSION_PREFIX, local.area);
     const background = createStoredSessions(
       () => held.area,
       () => session.area,
@@ -945,7 +967,7 @@ describe('a logout that lands inside a refresh', () => {
 
     assert.deepEqual(await popup.list(), {});
     assert.deepEqual(await background.list(), {});
-    assert.ok(keyFor(SESSION_PREFIX, ENDPOINT) in local.read());
+    assert.ok(runKeyFor(ENDPOINT, undefined) in local.read());
   });
 
   /**
@@ -964,7 +986,7 @@ describe('a logout that lands inside a refresh', () => {
     await popup.logout(ENDPOINT);
 
     const minted = local.log.indexOf(`set ${keyFor(EPOCH_PREFIX, ENDPOINT)}`);
-    const cleared = local.log.indexOf(`remove ${keyFor(SESSION_PREFIX, ENDPOINT)}`);
+    const cleared = local.log.indexOf(`remove ${runKeyFor(ENDPOINT, 'pop.epo.1')}`);
     assert.ok(minted >= 0 && cleared >= 0, `neither key was written: ${local.log.join(' | ')}`);
     assert.ok(minted < cleared, `the epoch was minted after the session was cleared: ${local.log.join(' | ')}`);
   });
@@ -982,7 +1004,7 @@ describe('a logout that lands inside a refresh', () => {
     const { local, session, popup } = paired();
     await popup.pair(ENDPOINT, CODE);
 
-    const held = holdingTheWriteOf(SESSION_PREFIX, local.area);
+    const held = holdingTheWriteOf(RUN_PREFIX, local.area);
     const background = createStoredSessions(
       () => held.area,
       () => session.area,
@@ -997,8 +1019,10 @@ describe('a logout that lands inside a refresh', () => {
     // The background is told it succeeded, because from where it stands it did.
     assert.partialDeepStrictEqual(await refreshing, { ok: true });
 
-    // The write landed. What it cannot do is come back.
-    assert.ok(keyFor(SESSION_PREFIX, ENDPOINT) in local.read());
+    // The write landed, and then removed its own key: its snapshot held the epoch the logout minted.
+    const stale = runKeyFor(ENDPOINT, 'pop.epo.1');
+    assert.ok(local.log.lastIndexOf(`remove ${stale}`) > local.log.lastIndexOf(`set ${stale}`));
+    assert.ok(!(stale in local.read()));
     assert.deepEqual(await popup.list(), {});
     assert.deepEqual(await background.list(), {});
     assert.deepEqual(await popup.ensureAccess(ENDPOINT), { ok: false, reason: 'not-paired' });
@@ -1031,5 +1055,165 @@ describe('a logout that lands inside a refresh', () => {
     assert.ok(keyFor(GRANT_PREFIX, ENDPOINT) in session.read());
     assert.deepEqual(await popup.list(), {});
     assert.deepEqual(await popup.ensureAccess(ENDPOINT), { ok: false, reason: 'not-paired' });
+  });
+
+  /**
+   * **SKG-604.** The reviewer logs out and pairs again while a refresh in the other context holds
+   * an answer for the session before. That refresh writes the run it read, which is no longer the
+   * run of the endpoint: before, it wrote the one key the endpoint had, over the new pairing, and
+   * `stillOpen` then hid a session somebody had just paired.
+   *
+   * Its grant still lands over the pairing's grant, because a grant has one key per endpoint. That
+   * costs one refresh, and the last assertion is that refresh.
+   */
+  it('keeps a pairing made while a refresh is in the air', async () => {
+    const { local, session, popup } = paired();
+    await popup.pair(ENDPOINT, CODE);
+
+    const held = holdingTheWriteOf(RUN_PREFIX, local.area);
+    const background = createStoredSessions(
+      () => held.area,
+      () => session.area,
+      post,
+      context('bg', LATER),
+    );
+
+    const refreshing = background.ensureAccess(ENDPOINT);
+    await held.at;
+    await popup.logout(ENDPOINT);
+    assert.partialDeepStrictEqual(await popup.pair(ENDPOINT, CODE), { ok: true });
+    held.release();
+    await refreshing;
+
+    const repaired = { [ENDPOINT]: { refreshToken: 'refresh.1', epoch: 'pop.epo.3' } };
+    assert.partialDeepStrictEqual(await popup.list(), repaired);
+    assert.partialDeepStrictEqual(await background.list(), repaired);
+    assert.deepEqual(
+      Object.keys(local.read()).filter((key) => key.startsWith(RUN_PREFIX)),
+      [runKeyFor(ENDPOINT, 'pop.epo.3')],
+    );
+    assert.partialDeepStrictEqual(await popup.ensureAccess(ENDPOINT), { ok: true, grant: { accessToken: 'access.2' } });
+  });
+
+  /**
+   * The other half of the same window: the worker refuses the refresh in the air, because the
+   * logout revoked the token it spent. Ending the session there minted an epoch, and a new epoch
+   * ends the pairing made meanwhile as surely as the write above did.
+   */
+  it('keeps a pairing made while a refused refresh is in the air', async () => {
+    const { local, session, popup } = paired();
+    await popup.pair(ENDPOINT, CODE);
+
+    let entered = (): void => {};
+    let answer = (): void => {};
+    const sent = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const refused = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    const background = createStoredSessions(
+      () => local.area,
+      () => session.area,
+      async (url) => {
+        assert.ok(url.endsWith('/session/refresh'), `the background was asked ${url}`);
+        entered();
+        await refused;
+
+        return { status: 401, body: { error: 'session-revoked-or-expired' } };
+      },
+      context('bg', LATER),
+    );
+
+    const refreshing = background.ensureAccess(ENDPOINT);
+    await sent;
+    await popup.logout(ENDPOINT);
+    assert.partialDeepStrictEqual(await popup.pair(ENDPOINT, CODE), { ok: true });
+    answer();
+
+    assert.deepEqual(await refreshing, { ok: false, reason: 'session-revoked-or-expired' });
+    const repaired = { [ENDPOINT]: { refreshToken: 'refresh.1', epoch: 'pop.epo.3' } };
+    assert.partialDeepStrictEqual(await popup.list(), repaired);
+    assert.partialDeepStrictEqual(await background.list(), repaired);
+    assert.partialDeepStrictEqual(await popup.ensureAccess(ENDPOINT), { ok: true, grant: { accessToken: 'access.1' } });
+  });
+
+  /**
+   * A refused refresh ends the session it spent, and only while storage still holds that token. A
+   * rotation in the other context writes the same run with a new token, and that session is not the
+   * one the worker refused.
+   */
+  it('keeps the run a refused refresh did not spend', async () => {
+    const { local, session, popup } = paired();
+    await popup.pair(ENDPOINT, CODE);
+
+    let entered = (): void => {};
+    let answer = (): void => {};
+    const sent = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const refused = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    const background = createStoredSessions(
+      () => local.area,
+      () => session.area,
+      async () => {
+        entered();
+        await refused;
+
+        return { status: 401, body: { error: 'session-revoked-or-expired' } };
+      },
+      context('bg', LATER),
+    );
+    const other = createStoredSessions(
+      () => local.area,
+      () => session.area,
+      post,
+      context('other', LATER),
+    );
+
+    const refreshing = background.ensureAccess(ENDPOINT);
+    await sent;
+    assert.partialDeepStrictEqual(await other.ensureAccess(ENDPOINT), { ok: true });
+    answer();
+    await refreshing;
+
+    assert.partialDeepStrictEqual(await popup.list(), {
+      [ENDPOINT]: { refreshToken: 'refresh.2', epoch: 'pop.epo.1' },
+    });
+  });
+
+  /**
+   * The window SKG-602's upgrade leaves, with a pairing inside it. The upgrade writes the legacy
+   * entry back from its snapshot, and that entry names the run with no epoch. The pairing names its
+   * own, so the write lands beside it.
+   */
+  it('keeps a pairing made while an upgrade in flight writes back', async () => {
+    const local = storage({ sessions: { [ENDPOINT]: { refreshToken: 'refresh.0', identity: IDENTITY } } });
+    const session = storage();
+
+    const held = holdingTheWriteOf(ENDPOINT_SESSION_PREFIX, local.area);
+    const background = createStoredSessions(
+      () => held.area,
+      () => session.area,
+      post,
+      context('bg', NOW),
+    );
+    await held.at;
+
+    const popup = createStoredSessions(
+      () => local.area,
+      () => session.area,
+      post,
+      context('pop', NOW),
+    );
+    await popup.logout(ENDPOINT);
+    assert.partialDeepStrictEqual(await popup.pair(ENDPOINT, CODE), { ok: true });
+    held.release();
+
+    const repaired = { [ENDPOINT]: { refreshToken: 'refresh.1', epoch: 'pop.epo.2' } };
+    assert.partialDeepStrictEqual(await background.list(), repaired);
+    assert.partialDeepStrictEqual(await popup.list(), repaired);
   });
 });

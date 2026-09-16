@@ -619,7 +619,8 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   in `keepIfCurrent` are **not** one operation and cannot be — `chrome.storage` has no transaction —
   so what covers the gap is what the write **carries**: the epoch of the very read the compare was
   made on. A logout landing anywhere around those lines leaves the endpoint logged out. Nothing
-  refuses the write itself; the entry lands, unreadable, until the next pairing writes over it.
+  refuses the write itself. The entry lands, unreadable, under the key of its own run, and removes
+  that key after it lands (SKG-604).
   **The stamp must come from that read and from no fresher one**, which is why `keepIfCurrent` reads
   the session itself and why the `epochs` seam has `put` and no `read` — a writer that could read the
   epoch could stamp with the logout's own.
@@ -865,21 +866,30 @@ and _The team mode, and the call the page cannot make_:
   keeps the session it had. Since SKG-603 that case is refused twice — the session the grant names is
   itself stamped with a run that is over — and what the generation still holds on its own is a grant
   and a session that drifted apart **inside** one run, which a partial write leaves behind.
-- **One storage key per endpoint, in both areas** (SKG-602). `fruitback:session:<endpoint>` and
-  `fruitback:grant:<endpoint>`, joined by `fruitback:epoch:<endpoint>` beside the session it dates
-  (SKG-603), and `Area` has `put`/`drop` rather than a whole-record `write`. One
+- **One storage key per endpoint, in both areas** (SKG-602). `fruitback:grant:<endpoint>`, joined by
+  `fruitback:epoch:<endpoint>` beside the session it dates (SKG-603), and `Area` has `put`/`drop`
+  rather than a whole-record `write`. One
   key holding every endpoint made every write a read-modify-write, and the popup and the background
   do not share a lock: two refreshes each read the record and each replaced it, so the later write
   put the earlier one's **spent** token back — a replay, so the worker revokes the chain and the
   reviewer pairs again. A logout in the popup was written away the same way. `refreshOnce` is per
   endpoint and cannot cover this; it is what makes two workers refresh in parallel in the first
   place. A queue in `session.ts` held it inside one context only, and it is gone.
-- **The key is the prefix with the endpoint appended, and the endpoint is recovered by `slice`.** An
-  endpoint is a URL a reviewer typed, so `https://a.test/x:session:y` is legal and splitting on the
-  separator files the entry under a worker nobody is paired with.
+- **A session key names its run too** (SKG-604): `fruitback:session-run:<epoch>:<endpoint>`. A
+  refresh writes the run it read, so a logout and a new pairing inside its window keep the pairing.
+  `put` removes the runs of its endpoint that its snapshot shows as over. That is safe because an
+  epoch never comes back and a key written after the snapshot is not in it. A refresh that answers
+  `401` ends only the run it spent, while that run holds the token it spent, and mints no epoch: an
+  epoch would end the pairing. The grant keeps one key per endpoint, so a lost race costs the pairing
+  one refresh.
+- **The endpoint is the rest of a key after its prefix, colons included.** An endpoint is a URL a
+  reviewer typed, so `https://a.test/x:session:y` is legal and splitting on the separator files the
+  entry under a worker nobody is paired with. The epoch in a session key is encoded with
+  `encodeURIComponent`, which writes no colon, so the first colon after the prefix ends it.
 - **The upgrade runs once per context and everything waits on it.** `splitLegacyRecord` takes one
   `get(null)` snapshot, writes only the endpoints with no key of their own, then removes the legacy
-  key — in that order, so a failure between the two leaves the credentials readable rather than gone.
+  key. `moveToRunKeys` then moves each key per endpoint to its run, the same way. Both go in
+  that order, so a failure between the two leaves the credentials readable rather than gone.
   A `drop` that did not wait would remove a key not written yet and the upgrade would put the session
   back: **a logout that does not stick**, the defect the ticket is named after.
 - **An upgrade that fails keeps the gate shut**, so every operation rejects. Releasing it is the
