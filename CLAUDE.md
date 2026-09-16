@@ -1060,6 +1060,14 @@ the caption above it (SKG-517)` is what keeps that true.
     so that target would start `nx run-many -t test` again.
   - **`format:fix` is never cached** (`nx.json`). It writes files and declares no outputs, so a cache
     hit on the same unformatted input replayed the log and rewrote nothing (measured).
+  - **A test that reads a file outside its project declares it as an input of its `test` target**
+    (SKG-610), in its own `package.json` under `nx.targets.test.inputs`. Otherwise Nx replays the
+    test from its cache when only that file changed: a broken `CONTRIBUTING.md` came back with exit
+    code 0 (measured). **Such a list replaces `targetDefaults.test.inputs`**, so it starts with
+    `default` and `^production`, or a change to the project's own code stops invalidating the cache
+    (measured on `app.ts`). `test-inputs.test.ts` resolves every literal relative path a test names
+    and fails on one that no input covers; a path built from a template is only counted. CI is not
+    affected, because it never restores `.nx`.
 - **Tests run on `node:test` and `node:assert/strict`** — no test runner, no transpiler, no loader.
   `pnpm test` is `node --test 'src/**/*.test.ts'`; Node strips the types itself. Colocated as
   `*.test.ts`, fixtures in `*.fixture.ts`.
