@@ -72,24 +72,101 @@ function flat(value: string): string {
 /**
  * The names a source file declares, and none that it only mentions.
  *
- * A call starts its line, so a commented-out `// test('…')` declares nothing — a citation would
- * otherwise stay green after the test it names was deleted. A call inside a block comment is dropped
- * the same way. Raised in review on PR #62.
+ * A lexical scan rather than a pattern: a declaration is an `it(` or `test(` call that starts its line
+ * **in code**, and comments, strings and template literals are skipped whole. A pattern learned the
+ * shapes one review at a time — a commented-out call, then a call inside a block comment, then a line
+ * inside a multiline template literal (PR #62). Each let a citation stay green after the test it named
+ * was gone.
+ *
+ * It errs towards skipping. A name it misses makes a citation fail loudly; a name it reads by mistake
+ * is what passes in silence. `${…}` inside a template literal is skipped with the rest of it.
  */
 export function namesIn(source: string): string[] {
-  const comments = [...source.matchAll(/\/\*[\s\S]*?\*\//g)].map((block) => ({
-    start: block.index,
-    end: block.index + block[0].length,
-  }));
   const names: string[] = [];
+  let index = 0;
+  let lineStart = true;
+  /** The last character of code read, which tells a regex literal from a division. */
+  let previous = '';
 
-  for (const match of source.matchAll(/^[ \t]*(?:it|test)\(\s*(['"`])(.+?)\1/gms)) {
-    const name = match[2];
-    const inComment = comments.some((comment) => comment.start <= match.index && match.index < comment.end);
-    if (name !== undefined && !inComment) names.push(flat(name));
+  while (index < source.length) {
+    const character = source[index] as string;
+
+    if (character === '\n') {
+      lineStart = true;
+      index += 1;
+      continue;
+    }
+    if (character === ' ' || character === '\t') {
+      index += 1;
+      continue;
+    }
+
+    const declaration = lineStart ? /^(?:it|test)\(\s*(['"`])/.exec(source.slice(index, index + 32)) : null;
+    lineStart = false;
+    if (declaration !== null) {
+      const from = index + declaration[0].length;
+      const to = closingQuote(source, from, declaration[1] as string);
+      names.push(flat(source.slice(from, to).replace(/\\(.)/g, '$1')));
+      index = to + 1;
+      previous = ')';
+      continue;
+    }
+
+    if (source.startsWith('//', index)) {
+      const lineEnd = source.indexOf('\n', index);
+      index = lineEnd === -1 ? source.length : lineEnd;
+    } else if (source.startsWith('/*', index)) {
+      const commentEnd = source.indexOf('*/', index + 2);
+      index = commentEnd === -1 ? source.length : commentEnd + 2;
+    } else if (character === "'" || character === '"' || character === '`') {
+      index = closingQuote(source, index + 1, character) + 1;
+      previous = character;
+    } else if (character === '/' && startsRegex(source, index, previous)) {
+      // A regex literal holds quotes of its own, and read as code one of them would open a string that
+      // swallows the declarations after it.
+      index = regexEnd(source, index + 1);
+      previous = '/';
+    } else {
+      previous = character;
+      index += 1;
+    }
   }
 
   return names;
+}
+
+/** A slash starts a regex literal after an operator, an opening bracket, or a keyword that takes a value. */
+function startsRegex(source: string, index: number, previous: string): boolean {
+  if (previous === '' || '(,=:[!&|?{};+-*%<>~^'.includes(previous)) return true;
+
+  return /\b(?:return|typeof|case|in|of|yield|await)\s*$/.test(source.slice(Math.max(0, index - 16), index));
+}
+
+/** Where a regex literal opened before `from` closes, past escapes and character classes. */
+function regexEnd(source: string, from: number): number {
+  let index = from;
+  let inClass = false;
+  while (index < source.length && source[index] !== '\n') {
+    const character = source[index];
+    if (character === '\\') {
+      index += 2;
+      continue;
+    }
+    if (character === '[') inClass = true;
+    else if (character === ']') inClass = false;
+    else if (character === '/' && !inClass) return index + 1;
+    index += 1;
+  }
+
+  return index;
+}
+
+/** Where a literal opened before `from` closes, past every escaped character. */
+function closingQuote(source: string, from: number, quote: string): number {
+  let index = from;
+  while (index < source.length && source[index] !== quote) index += source[index] === '\\' ? 2 : 1;
+
+  return index;
 }
 
 function declaredTestNames(): Set<string> {
@@ -164,18 +241,35 @@ function citations(): Citation[] {
 }
 
 describe('the names a source declares (SKG-601)', () => {
-  it('takes a call that starts its line, and leaves one that is only mentioned', () => {
-    const source = [
-      "it('a declared name', () => {});",
-      "  test('an indented Playwright name', async () => {});",
-      "// test('a commented-out name', () => {});",
-      " * it('a name in a docstring', () => {});",
-      '/*',
-      "it('a name inside a block comment', () => {});",
-      '*/',
-    ].join('\n');
+  it('takes a call that starts its line in code, and leaves one that is only mentioned', () => {
+    // Written as a template literal on purpose: that is the shape a pattern misread (PR #62).
+    const source = `
+it('a declared name', () => {});
+  test('an indented Playwright name', async () => {});
+// test('a commented-out name', () => {}); and the reporter's note
+it('a name after a comment with an apostrophe', () => {});
+ * it('a name in a docstring', () => {});
+/*
+it('a name inside a block comment', () => {});
+*/
+const example = \`
+test('a name inside a template literal', () => {});
+\`;
+const tick = '\`';
+it('a name after a string that holds a backtick', () => {});
+const quotes = /['"\`]/g;
+it('a name after a regex literal that holds quotes', () => {});
+it('the page\\'s own name', () => {});
+`;
 
-    assert.deepEqual(namesIn(source), ['a declared name', 'an indented Playwright name']);
+    assert.deepEqual(namesIn(source), [
+      'a declared name',
+      'an indented Playwright name',
+      'a name after a comment with an apostrophe',
+      'a name after a string that holds a backtick',
+      'a name after a regex literal that holds quotes',
+      "the page's own name",
+    ]);
   });
 });
 
