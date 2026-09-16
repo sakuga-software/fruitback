@@ -16,9 +16,12 @@ import { fileURLToPath } from 'node:url';
  * alone, a change to the worker's own `app.ts` was a cache hit), so every list starts with
  * `default` and `^production`.
  *
- * Only literal relative paths are checked. A path built from a template, such as the walk over
- * every `package.json` in `contributing.test.ts`, cannot be resolved statically: it is counted, so that
- * a literal turned into a template is noticed rather than silently skipped.
+ * Only literal relative paths are checked. Two shapes cannot be resolved statically, and each is
+ * counted instead, so that a new read of that shape is noticed rather than silently skipped:
+ *
+ * - a path built from a template, such as the walk over every `package.json` in `contributing.test.ts`;
+ * - a path joined from segments, such as the root `README.md` that `package.test.ts` reads through
+ *   `join` with two parent segments.
  *
  * It lives beside `contributing.test.ts`, which also guards files at the root, because the root has no
  * `test` target.
@@ -31,6 +34,13 @@ const NX = JSON.parse(readFileSync(new URL('../../../nx.json', import.meta.url),
 
 /** Paths built from a template in the test sources today, all in `contributing.test.ts`. */
 const TEMPLATED_READS = 5;
+
+/**
+ * Paths joined from a parent segment in the test sources today: five in `packages/widget/src/package.test.ts`,
+ * which reads the root `README.md` and packs its siblings, and four in `apps/worker/src/session.test.ts`,
+ * which joins inside a temporary directory and reads nothing of the repository.
+ */
+const JOINED_READS = 9;
 
 type Project = { root: string; name: string; inputs: string[]; dependencies: string[] };
 
@@ -70,15 +80,16 @@ function testFiles(directory: string): string[] {
   return found;
 }
 
-type Reads = { reads: { test: string; path: string }[]; templated: string[] };
+type Reads = { reads: { test: string; path: string }[]; templated: string[]; joined: string[] };
 
 /** Every literal relative path a project's tests name that leaves the project, repository-relative. */
 function readsOutside(project: Project): Reads {
-  const reads: Reads = { reads: [], templated: [] };
+  const reads: Reads = { reads: [], templated: [], joined: [] };
   if (!existsSync(`${REPOSITORY}${project.root}/src`)) return reads;
 
   for (const test of testFiles(`${project.root}/src`)) {
     const source = readFileSync(`${REPOSITORY}${test}`, 'utf8');
+    for (const [call] of source.matchAll(/\bjoin\([^)]*['"]\.\.['"][^)]*\)/g)) reads.joined.push(`${test}: ${call}`);
     for (const [, , written] of source.matchAll(/(['"`])((?:\.\.\/)+[^'"`\n]*)\1/g)) {
       if (written === undefined) continue;
       if (written.includes('${')) {
@@ -141,12 +152,18 @@ describe('what a test reads, against what Nx hashes for it (SKG-610)', () => {
   it('finds the reads it checks, and counts the ones it cannot', () => {
     const reads = scanned.flatMap((entry) => entry.reads);
     const templated = scanned.flatMap((entry) => entry.templated);
+    const joined = scanned.flatMap((entry) => entry.joined);
 
     assert.ok(reads.length > 15, `only ${reads.length} reads outside a project found — the scan stopped matching`);
     assert.equal(
       templated.length,
       TEMPLATED_READS,
       `a read built from a template is checked by nobody; these are the ones today:\n${templated.join('\n')}`,
+    );
+    assert.equal(
+      joined.length,
+      JOINED_READS,
+      `a read joined from segments is checked by nobody; these are the ones today:\n${joined.join('\n')}`,
     );
   });
 

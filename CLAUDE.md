@@ -1066,7 +1066,8 @@ the caption above it (SKG-517)` is what keeps that true.
     code 0 (measured). **Such a list replaces `targetDefaults.test.inputs`**, so it starts with
     `default` and `^production`, or a change to the project's own code stops invalidating the cache
     (measured on `app.ts`). `test-inputs.test.ts` resolves every literal relative path a test names
-    and fails on one that no input covers; a path built from a template is only counted. CI is not
+    and fails on one that no input covers; a path built from a template, or joined from `..`
+    segments, is only counted. CI is not
     affected, because it never restores `.nx`.
 - **Tests run on `node:test` and `node:assert/strict`** — no test runner, no transpiler, no loader.
   `pnpm test` is `node --test 'src/**/*.test.ts'`; Node strips the types itself. Colocated as
