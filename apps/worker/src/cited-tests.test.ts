@@ -69,15 +69,69 @@ function flat(value: string): string {
   return value.split(/\s+/).join(' ').trim();
 }
 
-function declaredTestNames(): Set<string> {
-  const names = new Set<string>();
-  for (const path of filesUnder(['.test.ts', '.spec.ts'])) {
-    for (const [, , name] of readFileSync(path, 'utf8').matchAll(/(?:^|\s)(?:it|test)\(\s*(['"`])(.+?)\1/gs)) {
-      if (name !== undefined) names.add(flat(name));
-    }
+/**
+ * The names a source file declares, and none that it only mentions.
+ *
+ * A call starts its line, so a commented-out `// test('…')` declares nothing — a citation would
+ * otherwise stay green after the test it names was deleted. A call inside a block comment is dropped
+ * the same way. Raised in review on PR #62.
+ */
+export function namesIn(source: string): string[] {
+  const comments = [...source.matchAll(/\/\*[\s\S]*?\*\//g)].map((block) => ({
+    start: block.index,
+    end: block.index + block[0].length,
+  }));
+  const names: string[] = [];
+
+  for (const match of source.matchAll(/^[ \t]*(?:it|test)\(\s*(['"`])(.+?)\1/gms)) {
+    const name = match[2];
+    const inComment = comments.some((comment) => comment.start <= match.index && match.index < comment.end);
+    if (name !== undefined && !inComment) names.push(flat(name));
   }
 
   return names;
+}
+
+function declaredTestNames(): Set<string> {
+  const names = new Set<string>();
+  for (const path of filesUnder(['.test.ts', '.spec.ts'])) {
+    for (const name of namesIn(readFileSync(path, 'utf8'))) names.add(name);
+  }
+
+  return names;
+}
+
+/**
+ * The document without its fenced blocks.
+ *
+ * Line by line, because a fence closes only on its own character, at least as long as the one that
+ * opened it: a block opened with four backticks holds a three-backtick run, and `~~~` is a fence too.
+ * A regex over ``` closes on the wrong line in both cases (raised in review on PR #62). The lines are
+ * kept as empty lines, so a citation still reports the line it is on.
+ */
+export function proseOf(markdown: string): string {
+  let fence: { character: string; length: number } | undefined;
+
+  return markdown
+    .split('\n')
+    .map((line) => {
+      const opening = /^[ \t]*(`{3,}|~{3,})/.exec(line);
+      if (fence === undefined) {
+        if (opening !== null && opening[1] !== undefined) {
+          fence = { character: opening[1][0] as string, length: opening[1].length };
+
+          return '';
+        }
+
+        return line;
+      }
+
+      const closing = new RegExp(`^[ \\t]*\\${fence.character}{${fence.length},}[ \\t]*$`).test(line);
+      if (closing) fence = undefined;
+
+      return '';
+    })
+    .join('\n');
 }
 
 type Citation = { document: string; marker: string; name: string };
@@ -92,7 +146,7 @@ type Citation = { document: string; marker: string; name: string };
 function citations(): Citation[] {
   const found: Citation[] = [];
   for (const path of filesUnder(['.md'])) {
-    const prose = readFileSync(path, 'utf8').replace(/```[\s\S]*?```/g, '');
+    const prose = proseOf(readFileSync(path, 'utf8'));
     // A marker starts a word and sits outside a code span. A document that writes the convention says
     // `test:`, whose closing backtick would otherwise open a citation of the prose after it, and the
     // `test:` inside `gone-test:` would make a second one.
@@ -108,6 +162,51 @@ function citations(): Citation[] {
 
   return found;
 }
+
+describe('the names a source declares (SKG-601)', () => {
+  it('takes a call that starts its line, and leaves one that is only mentioned', () => {
+    const source = [
+      "it('a declared name', () => {});",
+      "  test('an indented Playwright name', async () => {});",
+      "// test('a commented-out name', () => {});",
+      " * it('a name in a docstring', () => {});",
+      '/*',
+      "it('a name inside a block comment', () => {});",
+      '*/',
+    ].join('\n');
+
+    assert.deepEqual(namesIn(source), ['a declared name', 'an indented Playwright name']);
+  });
+});
+
+describe('a document without its fenced blocks (SKG-601)', () => {
+  it('closes a fence only on its own character, and only when it is long enough', () => {
+    const markdown = [
+      'prose one',
+      '  ```md',
+      '  test:`inside an indented fence`',
+      '  ```',
+      'prose two',
+      '~~~',
+      'test:`inside a tilde fence`',
+      '~~~',
+      'prose three',
+      '````',
+      '```',
+      'test:`inside a longer fence`',
+      '```',
+      '````',
+      'prose four',
+    ].join('\n');
+
+    const prose = proseOf(markdown);
+
+    assert.equal(prose.includes('inside'), false, `a fenced example survived:\n${prose}`);
+    assert.match(prose, /prose one[\s\S]*prose two[\s\S]*prose three[\s\S]*prose four/);
+    // The lines are kept, so a citation still reports where it is.
+    assert.equal(prose.split('\n').length, markdown.split('\n').length);
+  });
+});
 
 describe('the tests the documents cite (SKG-601)', () => {
   const names = declaredTestNames();
