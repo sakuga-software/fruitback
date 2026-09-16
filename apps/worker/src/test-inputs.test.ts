@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, globSync, readFileSync, readdirSync } from 'node:fs';
 import { matchesGlob, posix } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -16,31 +16,49 @@ import { fileURLToPath } from 'node:url';
  * alone, a change to the worker's own `app.ts` was a cache hit), so every list starts with
  * `default` and `^production`.
  *
- * Only literal relative paths are checked. Two shapes cannot be resolved statically, and each is
- * counted instead, so that a new read of that shape is noticed rather than silently skipped:
- *
- * - a path built from a template, such as the walk over every `package.json` in `contributing.test.ts`;
- * - a path joined from segments, such as the root `README.md` that `package.test.ts` reads through
- *   `join` with two parent segments.
+ * A literal relative path is resolved and checked. Two shapes cannot be resolved statically — a path
+ * built from a template, and a path joined from `..` segments — so each one is written out in
+ * `DYNAMIC_READS` with what it reads, and those paths are checked the same way. A new dynamic read fails
+ * until it is added there, and an entry whose read is gone fails as stale (raised in review on PR #63).
  *
  * It lives beside `contributing.test.ts`, which also guards files at the root, because the root has no
  * `test` target.
  */
 
 const REPOSITORY = fileURLToPath(new URL('../../../', import.meta.url));
+
+/**
+ * This file, which names every joined call of `DYNAMIC_READS` inside a string. It is still scanned for
+ * literal paths, its own read of `nx.json` included, and never for joined calls: it joins nothing itself.
+ */
+const SELF = fileURLToPath(import.meta.url).slice(REPOSITORY.length);
 const NX = JSON.parse(readFileSync(new URL('../../../nx.json', import.meta.url), 'utf8')) as {
   targetDefaults: { test: { inputs: string[] } };
 };
 
-/** Paths built from a template in the test sources today, all in `contributing.test.ts`. */
-const TEMPLATED_READS = 5;
-
 /**
- * Paths joined from a parent segment in the test sources today: five in `packages/widget/src/package.test.ts`,
- * which reads the root `README.md` and packs its siblings, and four in `apps/worker/src/session.test.ts`,
- * which joins inside a temporary directory and reads nothing of the repository.
+ * Every read a scan cannot resolve, by test and source, with what it reads.
+ *
+ * A value is a list of repository globs, expanded against the repository, or directories ending in `/`.
+ * An empty list is a read that reaches nothing Nx should hash: a temporary directory, or a `dist` a test
+ * deletes before it builds.
  */
-const JOINED_READS = 9;
+const DYNAMIC_READS: Record<string, string[]> = {
+  'apps/worker/src/contributing.test.ts: ../../../${group}/': ['apps/', 'packages/'],
+  'apps/worker/src/contributing.test.ts: ../../../${group}/${dir}/package.json': [
+    'apps/*/package.json',
+    'packages/*/package.json',
+  ],
+  // The test files the commands in CONTRIBUTING.md run.
+  'apps/worker/src/contributing.test.ts: ../../../${dir}/${file}': ['**/*.test.ts'],
+  "packages/widget/src/package.test.ts: join(root, '..', 'shared')": ['packages/shared/'],
+  "packages/widget/src/package.test.ts: join(root, '..', '..', 'README.md')": ['README.md'],
+  // The workspace a package is packed from: the root LICENSE pnpm copies, and the front-door package.
+  "packages/widget/src/package.test.ts: join(root, '..', '..')": ['LICENSE', 'packages/fruitback/'],
+  "packages/widget/src/package.test.ts: join(root, '..', name, 'dist')": [],
+  "apps/worker/src/session.test.ts: join(path, '..')": [],
+  "apps/worker/src/session.test.ts: join(path, '..', name)": [],
+};
 
 type Project = { root: string; name: string; inputs: string[]; declared: boolean; dependencies: string[] };
 
@@ -90,7 +108,9 @@ function readsOutside(project: Project): Reads {
 
   for (const test of testFiles(`${project.root}/src`)) {
     const source = readFileSync(`${REPOSITORY}${test}`, 'utf8');
-    for (const [call] of source.matchAll(/\bjoin\([^)]*['"]\.\.['"][^)]*\)/g)) reads.joined.push(`${test}: ${call}`);
+    if (test !== SELF) {
+      for (const [call] of source.matchAll(/\bjoin\([^)]*['"]\.\.['"][^)]*\)/g)) reads.joined.push(`${test}: ${call}`);
+    }
     for (const [, , written] of source.matchAll(/(['"`])((?:\.\.\/)+[^'"`\n]*)\1/g)) {
       if (written === undefined) continue;
       if (written.includes('${')) {
@@ -107,6 +127,15 @@ function readsOutside(project: Project): Reads {
   }
 
   return reads;
+}
+
+/** The files a declared glob reads today, or the directory itself. */
+function expand(declared: string): string[] {
+  if (declared.endsWith('/')) return [declared];
+
+  return globSync(declared, { cwd: REPOSITORY }).filter(
+    (path) => !path.split('/').some((segment) => segment === 'node_modules' || segment === 'dist'),
+  );
 }
 
 /** Everything before the first glob character: the directory a pattern cannot leave. */
@@ -127,22 +156,24 @@ function covers(project: Project, path: string, roots: Map<string, string>): boo
   const patterns = project.inputs.filter((input) => input.startsWith('{workspaceRoot}/'));
   const globs = patterns.map((input) => input.slice('{workspaceRoot}/'.length));
 
+  const inDependency = () =>
+    project.inputs.includes('^production') &&
+    project.dependencies.some((dependency) => {
+      const root = roots.get(dependency);
+
+      return root !== undefined && `${path}/`.startsWith(`${root}/`);
+    });
+
   if (path === '' || path.endsWith('/')) {
-    return globs.some((glob) =>
-      path === '' ? staticPrefix(glob) === '' : staticPrefix(glob) !== '' && path.startsWith(staticPrefix(glob)),
+    return (
+      globs.some((glob) =>
+        path === '' ? staticPrefix(glob) === '' : staticPrefix(glob) !== '' && path.startsWith(staticPrefix(glob)),
+      ) || inDependency()
     );
   }
   if (globs.some((glob) => matchesGlob(path, glob))) return true;
 
-  return (
-    project.inputs.includes('^production') &&
-    !/\.(test|spec)\.tsx?$/.test(path) &&
-    project.dependencies.some((dependency) => {
-      const root = roots.get(dependency);
-
-      return root !== undefined && path.startsWith(`${root}/`);
-    })
-  );
+  return !/\.(test|spec)\.tsx?$/.test(path) && inDependency();
 }
 
 describe('what a test reads, against what Nx hashes for it (SKG-610)', () => {
@@ -150,22 +181,24 @@ describe('what a test reads, against what Nx hashes for it (SKG-610)', () => {
   const roots = new Map(all.map((project) => [project.name, project.root]));
   const scanned = all.map((project) => ({ project, ...readsOutside(project) }));
 
-  it('finds the reads it checks, and counts the ones it cannot', () => {
+  it('finds the reads it checks, and knows what every read it cannot resolve reads', () => {
     const reads = scanned.flatMap((entry) => entry.reads);
-    const templated = scanned.flatMap((entry) => entry.templated);
-    const joined = scanned.flatMap((entry) => entry.joined);
+    const dynamic = new Set(scanned.flatMap((entry) => [...entry.templated, ...entry.joined]));
 
     assert.ok(reads.length > 15, `only ${reads.length} reads outside a project found — the scan stopped matching`);
-    assert.equal(
-      templated.length,
-      TEMPLATED_READS,
-      `a read built from a template is checked by nobody; these are the ones today:\n${templated.join('\n')}`,
+    assert.deepEqual(
+      [...dynamic].filter((read) => !(read in DYNAMIC_READS)),
+      [],
+      'these reads cannot be resolved: write out what each one reads in DYNAMIC_READS',
     );
-    assert.equal(
-      joined.length,
-      JOINED_READS,
-      `a read joined from segments is checked by nobody; these are the ones today:\n${joined.join('\n')}`,
+    assert.deepEqual(
+      Object.keys(DYNAMIC_READS).filter((read) => !dynamic.has(read)),
+      [],
+      'these entries of DYNAMIC_READS name a read that is gone',
     );
+    for (const [read, declared] of Object.entries(DYNAMIC_READS)) {
+      for (const glob of declared) assert.ok(expand(glob).length > 0, `${read}: ${glob} matches nothing`);
+    }
   });
 
   it('starts every declared input list with the defaults it replaces', () => {
@@ -184,8 +217,11 @@ describe('what a test reads, against what Nx hashes for it (SKG-610)', () => {
   });
 
   it('declares every file a test reads as an input of its test target', () => {
+    const declared = Object.entries(DYNAMIC_READS).flatMap(([read, globs]) =>
+      globs.flatMap((glob) => expand(glob).map((path) => ({ test: read.split(': ')[0] as string, path }))),
+    );
     const missing = scanned.flatMap(({ project, reads }) =>
-      reads
+      [...reads, ...declared.filter(({ test }) => test.startsWith(`${project.root}/`))]
         .filter(({ path }) => !covers(project, path, roots))
         .map(({ test, path }) => `${test} reads ${path || './'}`),
     );
