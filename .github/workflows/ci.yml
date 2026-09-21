@@ -130,6 +130,8 @@ jobs:
     env:
       WORKER: worker-${{ github.run_id }}-${{ github.run_attempt }}
       COMPOSE_PROJECT_NAME: fruitback-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      CI_IMAGE: fruitback-worker:ci-${{ github.run_id }}-${{ github.run_attempt }}
+      CI_COMPOSE_IMAGE: ghcr.io/sakuga-software/fruitback-worker:ci-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
       - name: Checkout code
@@ -148,7 +150,7 @@ jobs:
           file: apps/worker/Dockerfile
           push: false
           load: true
-          tags: fruitback-worker:ci
+          tags: ${{ env.CI_IMAGE }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -158,7 +160,7 @@ jobs:
             -e ALLOWED_ORIGINS=http://localhost:5173 \
             -e LINEAR_API_KEY=ci-not-a-real-key \
             -e LINEAR_TEAM_ID=ci-team \
-            fruitback-worker:ci
+            "$CI_IMAGE"
           port=$(docker port "$WORKER" 8080 | head -1 | sed 's/.*://')
           for attempt in $(seq 1 30); do
             if curl -sf "http://127.0.0.1:$port/health"; then exit 0; fi
@@ -181,10 +183,10 @@ jobs:
         # FRUITBACK_IMAGE is set here so that the tag and the reference cannot differ. A port of 0
         # asks docker for a free one, which also keeps this run clear of the container above.
         env:
-          FRUITBACK_IMAGE: ghcr.io/sakuga-software/fruitback-worker:edge
+          FRUITBACK_IMAGE: ${{ env.CI_COMPOSE_IMAGE }}
           FRUITBACK_PORT: '0'
         run: |
-          docker tag fruitback-worker:ci "$FRUITBACK_IMAGE"
+          docker tag "$CI_IMAGE" "$FRUITBACK_IMAGE"
           mkdir -p "$RUNNER_TEMP/compose"
           cp docker-compose.yml "$RUNNER_TEMP/compose/"
           cp .env.example "$RUNNER_TEMP/compose/.env"
@@ -207,6 +209,7 @@ jobs:
         run: |
           docker rm -f "$WORKER" || true
           docker compose --project-directory "$RUNNER_TEMP/compose" down -v || true
+          docker image rm -f "$CI_IMAGE" "$CI_COMPOSE_IMAGE" || true
 
   zizmor:
     # The workflows hold the token that publishes the image, so they are audited like code (SKG-609).
