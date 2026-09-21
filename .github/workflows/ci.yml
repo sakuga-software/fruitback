@@ -17,7 +17,7 @@ jobs:
   check:
     # One job per Nx target, so a red check names what broke without opening the logs.
     name: ${{ matrix.target }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, sakuga-linux]
     strategy:
       fail-fast: false
       matrix:
@@ -60,7 +60,7 @@ jobs:
     # The two things `node --test` cannot answer for: a real selector engine and real layout. Kept to
     # six specs and ~6 seconds of browser time — a slow E2E job is one people learn to ignore.
     name: e2e
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, sakuga-linux, docker]
     # The browser comes with the image instead of being downloaded. Twice in a row, `playwright
     # install` reached 100% of the archive and then sat there until it was killed — eighteen minutes,
     # then ten — with nothing after the progress bar. Whatever that is, it is not something this repo
@@ -68,8 +68,9 @@ jobs:
     # browser cache to key. The tag is the version, so image and `@playwright/test` cannot drift.
     container:
       image: mcr.microsoft.com/playwright:v1.58.2-noble
-      # The runner's workspace belongs to uid 1001; as root, the actions trip over their own files.
-      options: --user 1001
+      # The pool runs a rootless docker, where the root of a container is the runner's own user on
+      # the host. The workspace stays writable, and uid 1001 does not exist there.
+      options: --user 0
     # Node still comes from `.nvmrc` and not from the image: the sources run untranspiled, which
     # needs a newer Node than noble ships.
     # The suite takes six seconds. If this job ever approaches ten minutes, something is wrong again.
@@ -122,7 +123,13 @@ jobs:
   image:
     # Dokploy builds this same Dockerfile on push, so a broken one must fail here first.
     name: docker image
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, sakuga-linux, docker]
+
+    # The runners share one machine, so a fixed container name, a fixed compose
+    # project or a fixed host port makes two concurrent jobs collide.
+    env:
+      WORKER: worker-${{ github.run_id }}-${{ github.run_attempt }}
+      COMPOSE_PROJECT_NAME: fruitback-ci-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
       - name: Checkout code
@@ -147,17 +154,18 @@ jobs:
 
       - name: Boot it and check readiness
         run: |
-          docker run -d --name worker -p 8080:8080 \
+          docker run -d --name "$WORKER" -p 127.0.0.1::8080 \
             -e ALLOWED_ORIGINS=http://localhost:5173 \
             -e LINEAR_API_KEY=ci-not-a-real-key \
             -e LINEAR_TEAM_ID=ci-team \
             fruitback-worker:ci
+          port=$(docker port "$WORKER" 8080 | head -1 | sed 's/.*://')
           for attempt in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:8080/health; then exit 0; fi
+            if curl -sf "http://127.0.0.1:$port/health"; then exit 0; fi
             sleep 1
           done
           echo "the container never became ready:"
-          docker logs worker
+          docker logs "$WORKER"
           exit 1
 
       - name: Setup Node.js
@@ -170,11 +178,11 @@ jobs:
         # the machine of somebody who never cloned this repository. The compose file pulls the
         # published image. The tag below puts the image of this commit in the local daemon under that
         # exact name, so compose finds it, pulls nothing, and needs no registry login.
-        # FRUITBACK_IMAGE is set here so that the tag and the reference cannot differ. The container of
-        # the step above still holds port 8080, so this run must use another port.
+        # FRUITBACK_IMAGE is set here so that the tag and the reference cannot differ. A port of 0
+        # asks docker for a free one, which also keeps this run clear of the container above.
         env:
           FRUITBACK_IMAGE: ghcr.io/sakuga-software/fruitback-worker:edge
-          FRUITBACK_PORT: '8081'
+          FRUITBACK_PORT: '0'
         run: |
           docker tag fruitback-worker:ci "$FRUITBACK_IMAGE"
           mkdir -p "$RUNNER_TEMP/compose"
@@ -182,20 +190,29 @@ jobs:
           cp .env.example "$RUNNER_TEMP/compose/.env"
           cd "$RUNNER_TEMP/compose"
           docker compose up -d --wait
-          node "$GITHUB_WORKSPACE/apps/worker/src/plant-a-pin.ts" "http://127.0.0.1:$FRUITBACK_PORT"
+          node "$GITHUB_WORKSPACE/apps/worker/src/plant-a-pin.ts" "http://127.0.0.1:$(docker compose port worker 8080 | sed 's/.*://')"
           # Recreated, not restarted: the pin must outlive the container, so it must be on the volume.
           docker compose up -d --wait --force-recreate
-          node "$GITHUB_WORKSPACE/apps/worker/src/plant-a-pin.ts" "http://127.0.0.1:$FRUITBACK_PORT" --read
+          # The recreated container gets a new free port, so read it again.
+          node "$GITHUB_WORKSPACE/apps/worker/src/plant-a-pin.ts" "http://127.0.0.1:$(docker compose port worker 8080 | sed 's/.*://')" --read
 
       - name: Worker logs, if the compose run failed
         if: failure()
         run: docker compose --project-directory "$RUNNER_TEMP/compose" logs --no-color || true
 
+      # A hosted runner drops its virtual machine. This one keeps its daemon, so the job removes
+      # what it started, or the containers and the volumes stay for ever.
+      - name: Remove what this job started
+        if: always()
+        run: |
+          docker rm -f "$WORKER" || true
+          docker compose --project-directory "$RUNNER_TEMP/compose" down -v || true
+
   zizmor:
     # The workflows hold the token that publishes the image, so they are audited like code (SKG-609).
     # Offline: the audits that call the GitHub API do not run, so the result depends on the files alone.
     name: zizmor
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, sakuga-linux, docker]
     timeout-minutes: 10
 
     steps:

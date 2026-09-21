@@ -1,0 +1,8 @@
+# Labels of the self-hosted runners of the sakuga-software organisation.
+# actionlint refuses a label that it does not know.
+self-hosted-runner:
+  labels:
+    - sakuga-linux
+    - sakuga-mac
+    - docker
+    - playwright
