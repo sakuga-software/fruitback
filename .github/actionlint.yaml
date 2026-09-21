@@ -3,6 +3,7 @@
 self-hosted-runner:
   labels:
     - sakuga-linux
+    - sakuga-linux-arm
     - sakuga-mac
     - docker
     - playwright

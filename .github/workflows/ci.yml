@@ -17,7 +17,7 @@ jobs:
   check:
     # One job per Nx target, so a red check names what broke without opening the logs.
     name: ${{ matrix.target }}
-    runs-on: [self-hosted, sakuga-linux]
+    runs-on: [self-hosted, sakuga-linux-arm]
     strategy:
       fail-fast: false
       matrix:
