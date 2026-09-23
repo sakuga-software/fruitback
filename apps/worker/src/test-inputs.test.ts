@@ -56,6 +56,8 @@ const DYNAMIC_READS: Record<string, string[]> = {
   // The workspace a package is packed from: the root LICENSE pnpm copies, and the front-door package.
   "packages/widget/src/package.test.ts: join(root, '..', '..')": ['LICENSE', 'packages/fruitback/'],
   "packages/widget/src/package.test.ts: join(root, '..', name, 'dist')": [],
+  // The icons the manifest declares, rendered by `build-icons.ts` and committed (SKG-617).
+  'apps/extension/src/icons.test.ts: ../public/${iconPath(size)}': ['apps/extension/public/icon/*.png'],
   "apps/worker/src/session.test.ts: join(path, '..')": [],
   "apps/worker/src/session.test.ts: join(path, '..', name)": [],
 };
@@ -151,8 +153,16 @@ function staticPrefix(pattern: string): string {
  * A file is covered by a `{workspaceRoot}` glob, or, when the target takes `^production`, by being a
  * file of a workspace dependency that is not a test. A directory the test walks is covered by a pattern
  * that stays inside it — for the repository root, a pattern that starts with a glob.
+ *
+ * **A path inside the project's own root is covered by `default`**, which is `{projectRoot}/**` plus
+ * the shared globals. Every list starts with it — `starts every declared input list with the defaults
+ * it replaces` is what keeps that true, so this does not check it again. The scan drops those reads
+ * before they reach here, so only a `DYNAMIC_READS` entry brings one: the icons of the extension were
+ * the first, and they read as unhashed (SKG-617).
  */
 function covers(project: Project, path: string, roots: Map<string, string>): boolean {
+  if (`${path}/`.startsWith(`${project.root}/`)) return true;
+
   const patterns = project.inputs.filter((input) => input.startsWith('{workspaceRoot}/'));
   const globs = patterns.map((input) => input.slice('{workspaceRoot}/'.length));
 

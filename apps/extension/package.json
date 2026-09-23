@@ -9,6 +9,7 @@
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
     "build": "wxt build",
+    "icons:build": "node build-icons.ts",
     "build:firefox": "wxt build -b firefox",
     "zip": "wxt zip",
     "format": "oxfmt --check .",
@@ -23,6 +24,7 @@
     "@fruitback/widget": "workspace:*"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@types/node": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",

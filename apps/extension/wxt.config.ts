@@ -1,4 +1,5 @@
 import { defineConfig } from 'wxt';
+import { ICON_SIZES, iconPath } from './src/icon-sizes.ts';
 
 /**
  * The extension is the private mode (SKG-534): the client's site embeds **nothing**, and an ordinary
@@ -26,6 +27,9 @@ export default defineConfig({
     permissions: ['storage', 'scripting', 'activeTab', 'alarms'],
     // Requested per origin by the popup, at the moment somebody switches a site on.
     optional_host_permissions: ['*://*/*'],
+    // Without these the browser draws a grey square with an initial, in the toolbar and in the list
+    // of extensions, and a store listing is refused for want of a 128px one (SKG-617).
+    icons: Object.fromEntries(ICON_SIZES.map((size) => [size, iconPath(size)])),
     action: { default_title: 'Fruitback' },
     browser_specific_settings: {
       gecko: { id: 'fruitback@sakuga-software.com', strict_min_version: '128.0' },
