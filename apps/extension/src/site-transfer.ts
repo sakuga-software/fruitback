@@ -63,7 +63,9 @@ export function importSites(text: string): SitesImport {
     if (pattern === undefined || site === undefined || fields === undefined || complaint(fields) !== '') {
       skipped.push(key);
     } else {
-      sites[pattern] = { ...site, endpoint: normalizeWorkerEndpoint(site.endpoint) };
+      const stored = { ...site, endpoint: normalizeWorkerEndpoint(site.endpoint) };
+      // The id is stored without its spaces, as both editors store it (SKG-612).
+      sites[pattern] = stored.mode === 'private' ? { ...stored, clientId: stored.clientId.trim() } : stored;
     }
   }
 

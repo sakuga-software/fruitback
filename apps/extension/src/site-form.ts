@@ -17,7 +17,9 @@ export const PATTERN_PROBLEM =
 export function complaint(values: SiteFields): string {
   if (values.endpoint === '') return 'The worker endpoint is required.';
   if (!isWorkerEndpoint(values.endpoint)) return 'The endpoint must be a full http:// or https:// URL.';
-  if (values.mode === 'private' && values.clientId === '') return 'The client id is required.';
+  // Trimmed, because an id made of spaces is an absent id. `importSites` passes the value of a file
+  // here as it is, and a worker with several clients answers `client-required` for it (SKG-612).
+  if (values.mode === 'private' && values.clientId.trim() === '') return 'The client id is required.';
   // Team mode cannot work without a session, and a session may not be opened over plain http — so
   // this entry would be stored, shown as **On**, and refuse every call. Say it here instead.
   if (values.mode === 'team' && !isSecureWorkerEndpoint(values.endpoint)) {
@@ -39,5 +41,5 @@ export function siteFrom(values: SiteFields, enabled: boolean): SiteConfig {
 
   return values.mode === 'team'
     ? { mode: 'team', endpoint, enabled }
-    : { mode: 'private', endpoint, clientId: values.clientId, enabled };
+    : { mode: 'private', endpoint, clientId: values.clientId.trim(), enabled };
 }

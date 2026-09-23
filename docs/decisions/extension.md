@@ -527,8 +527,9 @@ answer one question and a reader has to ask both in the right order. With one st
 before SKG-536 is already a valid pattern, so there is no upgrade and `parseSite` does not change.
 
 `resolveSite` is the one lookup. The exact origin wins, then the longest wildcard, so one preview can
-be switched off or sent to another client under a rule for all of them. The bridge, the relay and the
-popup call it through `readSite`. `site-patterns.test.ts` covers the resolver, and
+be switched off or sent to another client under a rule for all of them. The bridge and the relay call
+it through `readSite`, and the popup through `findSite`: the same lookup, with the pattern the entry
+is stored under, which is what the popup's **Rule:** line names. `site-patterns.test.ts` covers the resolver, and
 `sites-storage.test.ts` covers `readSite` over a storage area, because a reader that indexed the map
 by origin passes every resolver test.
 
@@ -569,6 +570,20 @@ a content script; the refresh token is in `local` (SKG-599), and a content scrip
 A content script can send a runtime message too, and its input is written by the page. So the
 background checks the sender's URL against the extension's own root (`isExtensionPage`): a page must
 not be able to add a rule for itself.
+
+**A rejected write can still be stored** (SKG-612). Only the answer is lost, and the page then said the
+change was not confirmed and skipped the activation of the tabs already open on the rule. The rule was
+On in storage and those tabs held no widget until their next load, with nothing to say why.
+`activateStored` reads storage back and activates the patterns of the change that are there and
+switched on — the patterns of that change only, never every rule the map holds, because the other tabs
+already run. The words on the screen do not change: the write is still unconfirmed, and the list is
+what says what is stored. A storage read that fails leaves the tabs as they are.
+
+**An id made of spaces is an absent id.** `complaint` compared the client id with the empty string, and
+a file could carry `"   "`. The entry was stored and shown as On, and a worker with several clients
+answered `client-required` on every call it made: authorised in the extension, refused on the wire.
+Both editors trim the field, so the rule is now in `complaint` and in `siteFrom`, where the import
+reaches it too.
 
 ### The grant, which nothing else carries
 

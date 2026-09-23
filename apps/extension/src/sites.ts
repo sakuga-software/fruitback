@@ -6,8 +6,9 @@ import { type ResolvedSite, resolveSite } from './site-patterns.ts';
  *
  * One entry per pattern (SKG-536): an exact origin, or a host wildcard such as
  * `https://*.staging.acme.dev`. `site-patterns.ts` says which entry answers for an origin, and every
- * reader asks it through `readSite`. The popup switches the entry for its tab, and the options page
- * edits all of them.
+ * reader asks it through `readSite`, or through `findSite` when it also needs the pattern the entry
+ * is stored under. The popup switches the entry for its tab and names its pattern, and the options
+ * page edits all of them.
  *
  * A pattern is a convenience for the reviewer and grants nothing on the worker. The worker still
  * compares the page's exact origin with `origins` in `FRUITBACK_CLIENTS`.
