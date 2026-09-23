@@ -516,6 +516,13 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   `matches`, so an implementation that updated there would leave a switched-off site still running.
 - **`packages/widget` is unchanged by this app, which is the ticket's own test.** The extension is a
   fourth assembler; nothing extension-shaped leaks into the widget.
+- **The icon is one SVG, rendered to a PNG for each size and committed** (SKG-617).
+  `assets/icon.svg` holds the widget's own pin — a circle plus the corner that stayed sharp, which is
+  what `border-radius: 50% 50% 50% 0` draws — and `pnpm icons:build` renders it. **Each size is
+  rendered from the vector, never resized from the big one**, or the 16px icon is a smudge. The sizes
+  live in `src/icon-sizes.ts`, which the manifest, the renderer and `icons.test.ts` all read. Nothing
+  in the build generates them, so the guard is what keeps the committed files honest: it fails on a
+  missing size, on a file of another size, and on a canvas that holds no drawing.
 - **The bridge is `window.postMessage`, and the page can forge on it.** `parseBridgeMessage` refuses
   a _malformed_ message and cannot refuse a **well-formed** one the page wrote. That is inherent to
   the main world and no handoff closes it — it is stated rather than defended, because a reviewer
