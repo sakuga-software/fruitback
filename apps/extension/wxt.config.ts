@@ -15,6 +15,9 @@ import { defineConfig } from 'wxt';
  */
 export default defineConfig({
   manifestVersion: 3,
+  // The name of the archive a store takes. Without it wxt builds one from the package name, and
+  // `@fruitback/extension` becomes `fruitbackextension-0.1.0-chrome.zip` (SKG-616).
+  zip: { name: 'fruitback' },
   manifest: {
     name: 'Fruitback',
     description: 'Leave visual feedback on any site you are allowed to review.',

@@ -1,0 +1,108 @@
+name: Release extension
+
+# The archives a store takes, built from the tag rather than from somebody's machine (SKG-616).
+# Its own workflow, and not a job of `release-image.yml`: that one builds a container for two
+# architectures, this one builds two browser archives, and neither has a reason to wait for the
+# other.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+# Read-only for every job. Only `publish` may write, and only on a tag (SKG-609).
+permissions:
+  contents: read
+
+concurrency:
+  group: release-extension-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing here runs git after the checkout, so the token has no reason to stay in .git/config.
+          persist-credentials: false
+
+      # **Nothing is restored from a cache here**, which is what tells this workflow from `ci.yml`.
+      # A cache is writable by any run of this repository, and what this job builds is shipped to a
+      # store: a poisoned entry would reach the archive rather than a test. `zizmor` fails on it.
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The manifest takes its version from the package, and a store refuses an upload whose version
+      # is not higher than the last one. A tag that says something else would publish a number nobody
+      # chose, so the two are compared here rather than discovered on the store.
+      - name: The tag and the manifest name the same version
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          declared=$(node -p "require('./apps/extension/package.json').version")
+          if [ "$TAG" != "v$declared" ]; then
+            echo "the tag is $TAG and apps/extension/package.json says $declared" >&2
+            exit 1
+          fi
+
+      - name: Build what the extension bundles
+        run: pnpm --filter @fruitback/shared build && pnpm --filter @fruitback/widget build
+
+      # Firefox gets a second archive of the sources, which AMO asks for whenever the submitted file
+      # was built. `wxt zip -b firefox` writes both.
+      - name: Zip for Chrome and for Firefox
+        run: pnpm --filter @fruitback/extension zip && pnpm --filter @fruitback/extension zip:firefox
+
+      - name: Keep the archives
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: extension-archives
+          path: apps/extension/.output/*.zip
+          # A run that uploads nothing is a run that built nothing, and it would pass in silence.
+          if-no-files-found: error
+
+  publish:
+    name: attach to the release
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # The only permission to write in this workflow, on the only job that needs one.
+    permissions:
+      contents: write
+
+    steps:
+      - name: Take the archives
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: extension-archives
+          path: archives
+
+      - name: Attach them to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # The release may exist already: `release-image.yml` runs on the same tag, and a person can
+          # have written the notes first.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" archives/*.zip --clobber
+          else
+            gh release create "$TAG" --generate-notes --verify-tag archives/*.zip
+          fi

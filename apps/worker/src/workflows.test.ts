@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
-import { isScalar, parseDocument, visit } from 'yaml';
+import { isMap, isScalar, parseDocument, visit } from 'yaml';
 
 /**
  * Every action a workflow uses is pinned to a commit SHA, with its version as a comment (SKG-608).
@@ -49,6 +49,32 @@ function referencesIn(file: string, source: string): Reference[] {
   return references;
 }
 
+/** Every workflow, by file name, parsed once. */
+function workflows(): { file: string; source: string }[] {
+  return readdirSync(WORKFLOWS)
+    .filter((file) => /\.ya?ml$/.test(file))
+    .map((file) => ({ file, source: readFileSync(new URL(file, WORKFLOWS), 'utf8') }));
+}
+
+/**
+ * What a workflow grants to every one of its jobs, as `name: level` pairs.
+ *
+ * A workflow with no `permissions` at all is the case this reports as `undefined`: it takes the
+ * repository's default, which can be write.
+ */
+function defaultPermissions(source: string): Record<string, string> | undefined {
+  const granted = parseDocument(source).get('permissions');
+  if (granted === undefined || granted === null) return undefined;
+  if (isScalar(granted)) return { all: String(granted.value) };
+  if (!isMap(granted)) return {};
+
+  return Object.fromEntries(
+    granted.items.flatMap((pair) =>
+      isScalar(pair.key) && isScalar(pair.value) ? [[String(pair.key.value), String(pair.value.value)]] : [],
+    ),
+  );
+}
+
 /** Every `uses` in the workflows. A local action has no tag to move. */
 function actionReferences(): Reference[] {
   return readdirSync(WORKFLOWS)
@@ -68,5 +94,26 @@ describe('the GitHub workflows', () => {
         .map((reference) => reference.where),
       [],
     );
+  });
+
+  /**
+   * **No workflow hands a write to every job** (SKG-609, widened to all of them by SKG-616).
+   *
+   * A job that publishes declares the permission it needs, beside the steps that need it. Granted at
+   * the top instead, the same token reaches the jobs that only build and scan — and a step added to
+   * one of those later inherits it with nothing to say so.
+   */
+  it('grant no write above the job that needs it', () => {
+    const files = workflows();
+
+    assert.ok(files.length >= 3, `only ${files.length} workflows found — the walk stopped matching`);
+    const wide = files
+      .map(({ file, source }) => ({ file, granted: defaultPermissions(source) }))
+      .filter(({ granted }) => granted === undefined || Object.values(granted).some((level) => level.includes('write')))
+      .map(
+        ({ file, granted }) => `${file}: ${granted === undefined ? 'no permissions block' : JSON.stringify(granted)}`,
+      );
+
+    assert.deepEqual(wide, [], 'these workflows give every job more than a read');
   });
 });

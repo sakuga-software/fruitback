@@ -516,6 +516,14 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   `matches`, so an implementation that updated there would leave a switched-off site still running.
 - **`packages/widget` is unchanged by this app, which is the ticket's own test.** The extension is a
   fourth assembler; nothing extension-shaped leaks into the widget.
+- **The archives a store takes are built by `release-extension.yml`, on a `v*` tag** (SKG-616).
+  `wxt zip` for Chrome, `wxt zip -b firefox` for Firefox — the second writes a **sources** archive
+  beside it, which AMO asks for whenever the submitted file was built. The tag and
+  `apps/extension/package.json` must name the same version, and the job fails when they do not: a
+  store refuses an upload whose version is not higher than the last, so a tag that says something
+  else publishes a number nobody chose. **This workflow restores no cache.** A cache entry is
+  writable by any run of the repository, and what this job builds is shipped — `zizmor` fails on the
+  pair, and `ci.yml` keeps its cache because it ships nothing.
 - **The bridge is `window.postMessage`, and the page can forge on it.** `parseBridgeMessage` refuses
   a _malformed_ message and cannot refuse a **well-formed** one the page wrote. That is inherent to
   the main world and no handoff closes it — it is stated rather than defended, because a reviewer
