@@ -1126,6 +1126,11 @@ the caption above it (SKG-517)` is what keeps that true.
   every backticked span reports sixteen false positives on these documents. A name that holds a
   backtick is cited between double backticks, and a name may wrap across lines — both sides are
   compared with the whitespace flattened. An example inside a fenced block is not a citation.
+  **The scan skips a template literal whole, through its `${…}` and through any template inside that
+  substitution** (SKG-615). A scan that closed on the first backtick read the declarations of a nested
+  template as code, so a citation of a test that was gone stayed green. That is the fourth shape of
+  text this guard had to learn. If a fifth one appears, read the names from the tests as they run
+  rather than from their source.
 
 - **`CONTRIBUTING.md` carries the rules a person trips over on a first pull request** (SKG-520). It
   points at this file and does not repeat all of it. `contributing.test.ts` holds its `pnpm` scripts,

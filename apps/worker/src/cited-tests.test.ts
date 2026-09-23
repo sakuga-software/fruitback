@@ -79,7 +79,8 @@ function flat(value: string): string {
  * was gone.
  *
  * It errs towards skipping. A name it misses makes a citation fail loudly; a name it reads by mistake
- * is what passes in silence. `${…}` inside a template literal is skipped with the rest of it.
+ * is what passes in silence. A `${…}` inside a template literal is skipped with the rest of it, and so
+ * is a template inside that substitution (SKG-615).
  */
 export function namesIn(source: string): string[] {
   const names: string[] = [];
@@ -106,7 +107,7 @@ export function namesIn(source: string): string[] {
     if (declaration !== null) {
       const quote = declaration[1] as string;
       const from = index + declaration[0].length;
-      const to = closingQuote(source, from, quote);
+      const to = literalEnd(source, from, quote);
       const written = source.slice(from, to);
       // An interpolated name exists only at run time, so no citation can name it.
       if (!(quote === '`' && interpolates(written))) names.push(flat(decodeEscapes(written)));
@@ -122,7 +123,7 @@ export function namesIn(source: string): string[] {
       const commentEnd = source.indexOf('*/', index + 2);
       index = commentEnd === -1 ? source.length : commentEnd + 2;
     } else if (character === "'" || character === '"' || character === '`') {
-      index = closingQuote(source, index + 1, character) + 1;
+      index = literalEnd(source, index + 1, character) + 1;
       previous = character;
     } else if (character === '/' && startsRegex(source, index, previous)) {
       // A regex literal holds quotes of its own, and read as code one of them would open a string that
@@ -191,10 +192,77 @@ function regexEnd(source: string, from: number): number {
   return index;
 }
 
-/** Where a literal opened before `from` closes, past every escaped character. */
+/** Where the literal opened before `from` closes. A template is followed through its substitutions. */
+function literalEnd(source: string, from: number, quote: string): number {
+  return quote === '`' ? templateEnd(source, from) : closingQuote(source, from, quote);
+}
+
+/** Where a string opened before `from` closes, past every escaped character. */
 function closingQuote(source: string, from: number, quote: string): number {
   let index = from;
   while (index < source.length && source[index] !== quote) index += source[index] === '\\' ? 2 : 1;
+
+  return index;
+}
+
+/**
+ * Where a template literal opened before `from` closes (SKG-615).
+ *
+ * A scan that stopped at the first backtick closed the outer literal on the backtick that **opens**
+ * a nested one, and then read the rest of that literal as code. Both ways to be wrong are there: a
+ * declaration written inside the nested template is collected, which leaves a citation green over a
+ * test that is gone, and the mispaired backtick can open a literal that swallows the declarations
+ * after it.
+ */
+function templateEnd(source: string, from: number): number {
+  let index = from;
+  while (index < source.length) {
+    const character = source[index];
+    if (character === '\\') {
+      index += 2;
+      continue;
+    }
+    if (character === '`') return index;
+    if (character === '$' && source[index + 1] === '{') index = substitutionEnd(source, index + 2) + 1;
+    else index += 1;
+  }
+
+  return index;
+}
+
+/**
+ * Where the `${` that opened before `from` closes.
+ *
+ * The code between the braces is skipped whole. It can hold a string, a template of its own, a
+ * comment or a regex literal, and each of those can hold a brace that ends no substitution.
+ */
+function substitutionEnd(source: string, from: number): number {
+  let index = from;
+  let depth = 1;
+  let previous = '';
+
+  while (index < source.length) {
+    const character = source[index] as string;
+
+    if (source.startsWith('//', index)) {
+      const lineEnd = source.indexOf('\n', index);
+      index = lineEnd === -1 ? source.length : lineEnd;
+    } else if (source.startsWith('/*', index)) {
+      const commentEnd = source.indexOf('*/', index + 2);
+      index = commentEnd === -1 ? source.length : commentEnd + 2;
+    } else if (character === "'" || character === '"' || character === '`') {
+      index = literalEnd(source, index + 1, character) + 1;
+      previous = character;
+    } else if (character === '/' && startsRegex(source, index, previous)) {
+      index = regexEnd(source, index + 1);
+      previous = '/';
+    } else {
+      if (character === '{') depth += 1;
+      else if (character === '}' && (depth -= 1) === 0) return index;
+      if (character !== ' ' && character !== '\t' && character !== '\n') previous = character;
+      index += 1;
+    }
+  }
 
   return index;
 }
@@ -306,6 +374,54 @@ test(\`case \${value}\`, () => {});
       'line break',
       'café',
       'a static template name',
+    ]);
+  });
+
+  /**
+   * A template can hold a template, inside a `${…}` (SKG-615).
+   *
+   * Each case here makes the scan diverge, and the mispaired backtick is what does it. A scan that
+   * closes the outer literal on the backtick that **opens** the inner one reads the declaration in
+   * it as code, which leaves a citation green over a test that is gone. A substitution that ends on
+   * a brace inside a string, a comment or a regex closes the template on the backtick beside that
+   * brace, and the literal it opens then swallows the declarations after it.
+   */
+  it('follows a template through a substitution that holds another template', () => {
+    const source = `
+const nested = \`outer \${\`
+test('a name inside a nested template', () => {});
+\`} tail\`;
+it('a name after a nested template that holds a declaration', () => {});
+const inString = \`a \${ "}\`" } b\`;
+it('a name after a substitution that holds a brace in a string', () => {});
+const inComment = \`a \${ /* one
+} \` two
+*/ 6 / 2 } b\`;
+it('a name after a substitution that holds a brace in a block comment', () => {});
+const inLineComment = \`a \${ // } \` two
+value } b\`;
+it('a name after a substitution that holds a brace in a line comment', () => {});
+const inPattern = \`a \${ String(/}\`/.test('x')) } b\`;
+it('a name after a substitution that holds a brace in a regex literal', () => {});
+const inObject = \`a \${ { key: 1 } + "\`" } b\`;
+it('a name after a substitution that holds an object', () => {});
+const divided = \`a \${ 6 / 2 } b
+test('a name inside a divided template', () => {});
+\`;
+it('a name after a substitution that holds a division', () => {});
+const escaped = \`a \\\` b\`;
+it('a name after a template that holds an escaped backtick', () => {});
+`;
+
+    assert.deepEqual(namesIn(source), [
+      'a name after a nested template that holds a declaration',
+      'a name after a substitution that holds a brace in a string',
+      'a name after a substitution that holds a brace in a block comment',
+      'a name after a substitution that holds a brace in a line comment',
+      'a name after a substitution that holds a brace in a regex literal',
+      'a name after a substitution that holds an object',
+      'a name after a substitution that holds a division',
+      'a name after a template that holds an escaped backtick',
     ]);
   });
 });
