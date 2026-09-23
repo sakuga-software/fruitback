@@ -166,7 +166,13 @@ async function createLabel(config: LinearConfig, routing: LinearRouting, name: s
 }
 
 /** Plant a seed in Linear: one issue, readable title, round-trip-able description, labels applied. */
-export async function createSeedIssue(config: LinearConfig, routing: LinearRouting, seed: Seed): Promise<CreatedIssue> {
+export async function createSeedIssue(
+  config: LinearConfig,
+  routing: LinearRouting,
+  seed: Seed,
+  /** The language the description's prose is written in (SKG-532). English when nothing says. */
+  locale?: string,
+): Promise<CreatedIssue> {
   const labelIds = await resolveLabelIds(config, routing, buildIssueLabels(seed));
 
   const created = await graphql<CreateIssueResult>(config, CREATE_ISSUE_MUTATION, {
@@ -174,7 +180,7 @@ export async function createSeedIssue(config: LinearConfig, routing: LinearRouti
       teamId: routing.teamId,
       projectId: routing.projectId,
       title: buildIssueTitle(seed),
-      description: buildIssueDescription(seed),
+      description: buildIssueDescription(seed, { locale }),
       labelIds,
     },
   });
@@ -417,7 +423,7 @@ export function createLinearStore(config: LinearConfig): SeedStore {
     // The team, because that is what separates one tenant's issues from another's here. The worker
     // used to reach for `routing.teamId` itself, which meant the read cache knew how Linear routes.
     scope: (client) => linearRoutingFor(config, client).teamId,
-    create: (seed, client) => createSeedIssue(config, linearRoutingFor(config, client), seed),
+    create: (seed, client, policy) => createSeedIssue(config, linearRoutingFor(config, client), seed, policy.locale),
     findForPage: (query, client, policy) => fetchSeedIssues(config, linearRoutingFor(config, client), query, policy),
   };
 }

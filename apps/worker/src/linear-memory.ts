@@ -63,7 +63,7 @@ const DEV_STATES = [
   { name: 'Canceled', type: 'canceled' },
 ] as const;
 
-async function createSeedIssue(seed: Seed): Promise<CreatedIssue> {
+async function createSeedIssue(seed: Seed, locale?: string): Promise<CreatedIssue> {
   const number = issues.length + 1;
   const state = DEV_STATES[number % DEV_STATES.length] ?? DEV_STATES[0];
   const identifier = `DEV-${String(number).padStart(3, '0')}`;
@@ -75,7 +75,7 @@ async function createSeedIssue(seed: Seed): Promise<CreatedIssue> {
     url: `http://localhost/dev-issue/${identifier}`,
     title: buildIssueTitle(seed),
     updatedAt: new Date().toISOString(),
-    description: buildIssueDescription(seed),
+    description: buildIssueDescription(seed, { locale }),
     state: { name: state.name, type: state.type },
     // Deliberately newest-first, like Linear's own default: the ordering is `toSeedComments`'s job,
     // and a fake that hands back an already-sorted list would never exercise it.
@@ -121,6 +121,16 @@ export function resetMemoryLinear(): void {
 }
 
 /**
+ * The issues this store holds, for the tests.
+ *
+ * The description is what the playground reads its pins back from, and the read path answers seeds
+ * rather than prose — so nothing else can see what was written into it.
+ */
+export function memoryIssues(): { description?: string | null }[] {
+  return issues;
+}
+
+/**
  * The dev-loop store, as a `SeedStore` (SKG-522).
  *
  * It stays in this file, and it stays built on `toSeedIssue` from the real connector. That coupling
@@ -138,7 +148,7 @@ export function createMemoryStore(): SeedStore {
     // The client id is already part of the worker's cache key, so there is nothing further to
     // distinguish here — unlike Linear, where two clients can share one team.
     scope: () => 'memory',
-    create: (seed) => createSeedIssue(seed),
+    create: (seed, _client, policy) => createSeedIssue(seed, policy.locale),
     findForPage: (query, _client, policy) => fetchSeedIssues(query, policy),
   };
 }

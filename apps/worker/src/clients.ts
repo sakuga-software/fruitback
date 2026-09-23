@@ -189,6 +189,13 @@ export type ClientPolicy = {
   identitySecret: string | undefined;
   /** Who may read this client's pins (SKG-533). `authenticated` answers 401 without a valid token. */
   read: ReadAccess;
+  /**
+   * The language the issue description is written in (SKG-532), for the team that triages it.
+   *
+   * Worker-wide: it comes from `FRUITBACK_TEAM_LOCALE` and no client overrides it, because a
+   * description is read where the issues are, not where the note was written.
+   */
+  locale: string;
 };
 
 /**
@@ -266,6 +273,7 @@ export function resolveClient({ clients, clientId, origin, fallback }: ResolveCl
       // Inherited, unlike `identitySecret`: this is a posture, not a key. `unreadableClients`
       // is what stops the inheritance from producing a client nobody can ever read.
       read: client.read ?? fallback.read,
+      locale: fallback.locale,
     },
     // `teamId` and `projectId` are not resolved here any more: falling back to the worker's team is
     // the Linear connector's rule, and it is the one that owns those fields now.

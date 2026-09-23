@@ -44,7 +44,18 @@ first publish made it expensive.
   ever change. It does not — `parseSeedFromDescription` iterates fenced blocks and recognises ours by
   parsing the JSON. The test
   test:`finds the block by its JSON, never by the caption above it (SKG-517)` fails if
-  that stops being true, which is what made dropping its emoji safe instead of hopeful.
+  that stops being true, which is what made dropping its emoji safe instead of hopeful. Since SKG-532
+  the caption is translated with the rest of the prose, and that test is what makes translating it
+  safe: the parser never looks at it.
+- **The two layers are what makes a translated description possible** (SKG-532). The prose on top is
+  written for the team that triages, in the worker's `FRUITBACK_TEAM_LOCALE`; the JSON block under it
+  is the widget's, and no language reaches it. So
+  `parseSeedFromDescription(buildIssueDescription(seed, { locale })) === seed` holds in every
+  language, and the round-trip test runs over several. **That is a constraint to hold rather than a
+  fact to lean on**: a translated key in the block, or a parser that looked for the caption, would
+  break it in silence. The reporter's own words — the note, the name they typed — are never
+  translated either; what is translated is the worker's word **about** that name, `verified` or
+  `unverified — self-declared`.
 - **A test whose premise disappeared was rewritten, not deleted.** gone-test:`redraws when a note changed
 stage, because its emoji did` could no longer hold: nothing in the orphan entry depends on the stage
   now. What it really guarded — that the signature invalidates on a stage change — is still worth

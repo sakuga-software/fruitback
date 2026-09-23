@@ -946,6 +946,14 @@ and _The team mode, and the call the page cannot make_:
   must not have to implement a codec it has no use for, and `sqlite.ts` is the standing proof.
 - **`pageQueryTerm` lives beside it**, because the term works only where `buildSeedBlock` writes the
   canonical URL verbatim into the JSON.
+- **The prose of a description is written in the team's language, never the reporter's** (SKG-532).
+  `FRUITBACK_TEAM_LOCALE` (English by default) reaches the stores through `ClientPolicy.locale`, and
+  `TEAM_WORDS` in `markdown-description.ts` holds the words. A description is read where the issues
+  are: a note written in Tokyo must not file a Japanese issue into a team that reads English. **The
+  locale reaches the prose and never the JSON block**, which is what keeps the round trip true in
+  every language — the test runs over several. A value that is not a locale tag is refused at boot; a
+  valid tag this build has no words for degrades to English. The note and the name the reporter typed
+  are never translated.
 - `packages/shared/src/linear.ts` became `issue.ts`; `apps/worker/src/linear.ts` keeps its name,
   because over there a team really is Linear's.
 

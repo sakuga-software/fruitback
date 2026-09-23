@@ -17,12 +17,75 @@ import { canonicalizePageUrl, type Seed, type SeedParseFailure, type SeedParseRe
  */
 
 /**
- * The line above the JSON block. It tells whoever opens the issue not to tidy the block below.
+ * The words of the prose half, in the language of the team that triages (SKG-532).
+ *
+ * **The reader of a description is the team, never the reporter.** So these follow the worker's
+ * `FRUITBACK_TEAM_LOCALE` and never the browser: a reporter in Tokyo must not file a Japanese issue
+ * into a team that reads English. What the reporter wrote — the note, their name — is never
+ * translated, and neither is the JSON block, which is the machine's half.
+ */
+export type TeamWords = {
+  page: string;
+  element: string;
+  component: string;
+  viewport: string;
+  reportedBy: string;
+  client: string;
+  anonymous: string;
+  verified: string;
+  unverified: string;
+  /** The line above the JSON block. It tells whoever opens the issue not to tidy the block below. */
+  caption: string;
+};
+
+export const TEAM_WORDS: Record<string, TeamWords> = {
+  en: {
+    page: 'Page',
+    element: 'Element',
+    component: 'Component',
+    viewport: 'Viewport',
+    reportedBy: 'Reported by',
+    client: 'Client',
+    anonymous: 'Anonymous',
+    verified: 'verified',
+    unverified: 'unverified — self-declared',
+    caption: '**Fruitback seed** · machine-readable, do not edit',
+  },
+  fr: {
+    page: 'Page',
+    element: 'Élément',
+    component: 'Composant',
+    viewport: 'Fenêtre',
+    reportedBy: 'Signalé par',
+    client: 'Client',
+    anonymous: 'Anonyme',
+    verified: 'vérifié',
+    unverified: 'non vérifié — déclaré par la personne',
+    caption: '**Graine Fruitback** · lisible par la machine, ne pas modifier',
+  },
+};
+
+/**
+ * The words for a locale tag: the tag itself, then its base language, then English.
+ *
+ * The same cascade the widget's catalogs follow, and it never throws: a tag nobody recognises costs
+ * the translation and never the description. The worker refuses a tag that is not a locale at all,
+ * at boot, where an operator sees it.
+ */
+export function teamWords(locale: string | undefined): TeamWords {
+  const tag = (locale ?? '').toLowerCase();
+  const base = tag.split('-')[0] ?? '';
+
+  return TEAM_WORDS[tag] ?? TEAM_WORDS[base] ?? (TEAM_WORDS.en as TeamWords);
+}
+
+/**
+ * The English caption, which is what every description carried before SKG-532.
  *
  * Free to reword: the parser recognises the block by parsing it, never by matching this caption.
  * `finds the block by its JSON, never by the caption above it` fails if that stops being true.
  */
-export const SEED_BLOCK_CAPTION = '**Fruitback seed** · machine-readable, do not edit';
+export const SEED_BLOCK_CAPTION = TEAM_WORDS.en?.caption ?? '';
 
 const DEFAULT_TITLE_MAX_LENGTH = 80;
 
@@ -53,24 +116,30 @@ function truncate(value: string, maxLength: number): string {
   return `${cut.trimEnd()}…`;
 }
 
-/** The human half of the description: what was said, where, and by whom. */
-export function buildIssueMetadata(seed: Seed): string[] {
+/** What the description is written in. Absent is English, which is every worker before SKG-532. */
+export type DescriptionOptions = { locale?: string };
+
+/** The human half of the description: what was said, where, and by whom, in the team's language. */
+export function buildIssueMetadata(seed: Seed, { locale }: DescriptionOptions = {}): string[] {
+  const words = teamWords(locale);
   const lines = [
-    `**Page** · [${seed.page.path}](${seed.page.url})`,
-    `**Element** · \`${seed.anchor.selector}\` (\`<${seed.anchor.tag}>\`)`,
+    `**${words.page}** · [${seed.page.path}](${seed.page.url})`,
+    `**${words.element}** · \`${seed.anchor.selector}\` (\`<${seed.anchor.tag}>\`)`,
   ];
 
   if (seed.source?.component || seed.source?.file) {
     const location = [seed.source.file, seed.source.line].filter((part) => part !== undefined).join(':');
     const component = seed.source.component ? `\`${seed.source.component}\`` : null;
-    lines.push(`**Component** · ${[component, location ? `\`${location}\`` : null].filter(Boolean).join(' — ')}`);
+    lines.push(
+      `**${words.component}** · ${[component, location ? `\`${location}\`` : null].filter(Boolean).join(' — ')}`,
+    );
   }
 
-  lines.push(`**Viewport** · ${seed.viewport.width}×${seed.viewport.height}${formatDpr(seed.viewport.dpr)}`);
-  lines.push(`**Reported by** · ${formatReporter(seed.reporter)}`);
+  lines.push(`**${words.viewport}** · ${seed.viewport.width}×${seed.viewport.height}${formatDpr(seed.viewport.dpr)}`);
+  lines.push(`**${words.reportedBy}** · ${formatReporter(seed.reporter, words)}`);
 
   if (seed.client) {
-    lines.push(`**Client** · ${seed.client.name ?? seed.client.id}`);
+    lines.push(`**${words.client}** · ${seed.client.name ?? seed.client.id}`);
   }
 
   return lines;
@@ -83,13 +152,14 @@ export function buildIssueMetadata(seed: Seed): string[] {
  * checked against a signed token is an identity. Rendering them the same way would let anyone put a
  * colleague's name on a complaint and have it read as theirs.
  */
-function formatReporter(reporter: Seed['reporter']): string {
+function formatReporter(reporter: Seed['reporter'], words: TeamWords): string {
   // A token carrying only `sub` identifies someone perfectly well; it just does not name them.
   // Reading that as "Anonymous" would throw away the one distinction this line exists to make.
+  // The name itself is the reporter's own word, so it is never translated.
   const who = [reporter?.name, reporter?.email].filter(Boolean).join(' · ') || reporter?.id;
-  if (who === undefined || who.length === 0) return 'Anonymous';
+  if (who === undefined || who.length === 0) return words.anonymous;
 
-  return reporter?.verified === true ? `${who} (verified)` : `${who} (unverified — self-declared)`;
+  return reporter?.verified === true ? `${who} (${words.verified})` : `${who} (${words.unverified})`;
 }
 
 function formatDpr(dpr: number | undefined): string {
@@ -101,9 +171,20 @@ export function buildSeedBlock(seed: Seed): string {
   return ['```json', JSON.stringify(seed, null, 2), '```'].join('\n');
 }
 
-/** Full issue description for a seed. `parseSeedFromDescription` is its exact inverse. */
-export function buildIssueDescription(seed: Seed): string {
-  const sections = [seed.note.trim(), buildIssueMetadata(seed).join('\n'), SEED_BLOCK_CAPTION, buildSeedBlock(seed)];
+/**
+ * Full issue description for a seed. `parseSeedFromDescription` is its exact inverse.
+ *
+ * **The locale reaches the prose and never the block.** That is what keeps the round trip true in
+ * every language, and it is a constraint to hold rather than a fact to rely on: a translated key, or
+ * a translated caption the parser looked for, would break it.
+ */
+export function buildIssueDescription(seed: Seed, options: DescriptionOptions = {}): string {
+  const sections = [
+    seed.note.trim(),
+    buildIssueMetadata(seed, options).join('\n'),
+    teamWords(options.locale).caption,
+    buildSeedBlock(seed),
+  ];
 
   return `${sections.filter((section) => section.length > 0).join('\n\n')}\n`;
 }

@@ -35,7 +35,7 @@ const descriptorsReadable = (() => {
   }
 })();
 
-const POLICY: ClientPolicy = { showComments: true, identitySecret: undefined, read: 'public' };
+const POLICY: ClientPolicy = { showComments: true, identitySecret: undefined, read: 'public', locale: 'en' };
 const QUIET: ClientPolicy = { ...POLICY, showComments: false };
 
 /** A reason, not `true`: a skipped test should say which platform dropped it and why. */

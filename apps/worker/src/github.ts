@@ -404,7 +404,7 @@ export function createGithubStore(config: GithubConfig, options: GithubStoreOpti
     stages: GITHUB_STAGES,
     scope: (client) => repositoryFor(config, client),
 
-    async create(seed: Seed, client: ClientConfig | undefined): Promise<CreatedIssue> {
+    async create(seed: Seed, client: ClientConfig | undefined, policy: ClientPolicy): Promise<CreatedIssue> {
       const repository = repositoryFor(config, client);
       const labels = buildIssueLabels(seed).map(githubLabelName);
 
@@ -413,7 +413,7 @@ export function createGithubStore(config: GithubConfig, options: GithubStoreOpti
       const created = createdIssueSchema.safeParse(
         await call(repository, `/repos/${repository}/issues`, {
           method: 'POST',
-          body: { title: buildIssueTitle(seed), body: buildIssueDescription(seed), labels },
+          body: { title: buildIssueTitle(seed), body: buildIssueDescription(seed, { locale: policy.locale }), labels },
         }),
       );
       if (!created.success) throw new StoreError('GitHub returned no issue');

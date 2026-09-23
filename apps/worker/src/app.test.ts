@@ -9,7 +9,7 @@ import { signIdentityToken } from './identity.ts';
 import type { SeedStore } from './store.ts';
 import { type Kv, KvError, createMemoryKv, resetSharedKv } from './kv.ts';
 import { resetCacheState } from './cache.ts';
-import { resetMemoryLinear } from './linear-memory.ts';
+import { memoryIssues, resetMemoryLinear } from './linear-memory.ts';
 
 const ORIGIN = 'https://preview.acme.test';
 
@@ -91,6 +91,34 @@ describe('POST /feedback', () => {
     await post(seed);
 
     assert.deepEqual(parseSeedFromDescription(stub.issueInput().description), { ok: true, seed });
+  });
+
+  /**
+   * The team that triages reads this description, and the reporter never does (SKG-532). So the
+   * words follow the worker's own `FRUITBACK_TEAM_LOCALE` and never the browser: a note written in
+   * Tokyo must not file a Japanese issue into a team that reads English.
+   */
+  it('writes the description in the language the worker was configured with', async () => {
+    const stub = installLinearStub();
+    const seed = seedFixture({ note: 'Le CTA est trop petit' });
+
+    await post(seed, { env: { ...env, FRUITBACK_TEAM_LOCALE: 'fr' } });
+
+    const description = stub.issueInput().description;
+    assert.match(description, /\*\*Signalé par\*\*/);
+    assert.match(description, /\*\*Élément\*\*/);
+    assert.equal(description.includes('**Reported by**'), false);
+    // The note is the reporter's own word, and the block is the machine's half. Neither is translated.
+    assert.ok(description.includes('Le CTA est trop petit'));
+    assert.deepEqual(parseSeedFromDescription(description), { ok: true, seed });
+  });
+
+  it('writes it in English when nothing says otherwise, as every worker did before', async () => {
+    const stub = installLinearStub();
+
+    await post(seedFixture());
+
+    assert.match(stub.issueInput().description, /\*\*Reported by\*\*/);
   });
 
   it("titles the issue with the visitor's own words", async () => {
@@ -516,6 +544,16 @@ describe('the in-memory Linear (dev loop)', () => {
     resetMemoryLinear();
   });
 
+  it('writes its descriptions in the team locale too, so the dev loop shows what production writes', async () => {
+    const seed = seedFixture();
+
+    await post(seed, { env: { ...fakeEnv, FRUITBACK_TEAM_LOCALE: 'fr' } });
+
+    const description = memoryIssues()[0]?.description ?? '';
+    assert.match(description, /\*\*Signalé par\*\*/);
+    assert.deepEqual(parseSeedFromDescription(description), { ok: true, seed });
+  });
+
   it('serves the whole loop with no API key at all', async () => {
     // The point of the playground: capture → issue → the pin comes back, without a Linear workspace.
     installLinearStub(); // installed to prove it is never called
@@ -908,6 +946,24 @@ describe('GET /health', () => {
 
     assert.equal(response.status, 503);
     assert.partialDeepStrictEqual(await response.json(), { missing: ['TRUSTED_PROXY_HOPS'] });
+  });
+
+  /**
+   * A value that is not a locale tag is refused and named (SKG-532), like the hops above. Prose in a
+   * language nobody chose would otherwise be the only symptom.
+   */
+  it('refuses to report ready on a FRUITBACK_TEAM_LOCALE that is not a locale', async () => {
+    const response = await get('/health', { env: { ...env, FRUITBACK_TEAM_LOCALE: 'français' } });
+
+    assert.equal(response.status, 503);
+    assert.partialDeepStrictEqual(await response.json(), { missing: ['FRUITBACK_TEAM_LOCALE'] });
+  });
+
+  /** A valid tag with no words in this build is the other case: the worker serves, in English. */
+  it('starts on a locale it has no words for', async () => {
+    const response = await get('/health', { env: { ...env, FRUITBACK_TEAM_LOCALE: 'de-AT' } });
+
+    assert.equal(response.status, 200);
   });
 });
 
