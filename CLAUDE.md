@@ -468,9 +468,11 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
 
 - **An entry's key is a pattern, and `resolveSite` is the only lookup** (SKG-536). A key is an exact
   origin or `https://*.host`; every key written before is an exact origin, so nothing is upgraded. The
-  exact origin wins, then the longest wildcard. The bridge, the relay and the popup all reach it
-  through `readSite`, and `sites-storage.test.ts` proves `readSite` resolves a wildcard. A reader that
-  indexed the map by origin would mount the widget and then have the relay refuse its calls.
+  exact origin wins, then the longest wildcard. The bridge and the relay reach it through `readSite`,
+  and the popup through `findSite`, which is the same lookup and also answers the pattern the entry is
+  stored under — the popup names that pattern on screen. `sites-storage.test.ts` proves `readSite`
+  resolves a wildcard. A reader that indexed the map by origin would mount the widget and then have
+  the relay refuse its calls.
 - **A wildcard covers the default port only**, and its base host too, as a match pattern does. The
   grant and the registration (`https://*.host/*`) cover every port; the pattern carries no port because
   whether each browser accepts one was not measured, and one refused pattern stops every site. It needs
@@ -482,6 +484,12 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   replaces it, and the two pages share no lock. `isExtensionPage` refuses the message from a content
   script, whose URL is the page's. One key per pattern was not taken: a reader would have to list the
   whole `local` area, and the bridge, a content script, must not read the refresh token stored there.
+- **A write the background did not confirm can still be stored** (SKG-612), because only the answer
+  was lost. `activateStored` reads it back and injects the scripts into the tabs already open on the
+  patterns of that change that are stored switched on. Without it the rule is On and those tabs hold
+  no widget until their next load. **A client id made of spaces is an absent id**: `complaint` refuses
+  it and `siteFrom` stores the id trimmed, so a rules file cannot store one that the worker then
+  answers `client-required` for.
 - **A rules file holds no credential and no grant.** An imported entry runs nowhere until the options
   page's **Grant access** is pressed, and `permissions.onAdded` is what re-syncs the registration,
   because a grant writes no storage. The worker's `origins` stays an exact list, but it applies to

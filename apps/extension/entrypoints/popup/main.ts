@@ -1,10 +1,10 @@
 import { browser } from 'wxt/browser';
 import { isSecureWorkerEndpoint, workerOrigin } from '../../src/endpoint.ts';
 import { matchPatternFor } from '../../src/registration.ts';
-import { NO_ACCESS_PROBLEM, STORE_PROBLEM } from '../../src/site-editor.ts';
+import { NO_ACCESS_PROBLEM, STORE_PROBLEM, activateStored } from '../../src/site-editor.ts';
 import { complaint, siteFrom } from '../../src/site-form.ts';
 import { type ResolvedSite, isWildcardPattern } from '../../src/site-patterns.ts';
-import { type SiteConfig, type SiteMode, findSite, writeSite } from '../../src/sites.ts';
+import { type SiteConfig, type SiteMode, findSite, readAll, writeSite } from '../../src/sites.ts';
 import { injectIntoOpenTabs } from '../../src/tab-injection.ts';
 import { browserTabScripting } from '../../src/tab-scripting-browser.ts';
 import { createBrowserSessions } from '../../src/session-browser.ts';
@@ -259,6 +259,11 @@ function form(origin: string, found?: ResolvedSite): HTMLElement {
   return wrapper;
 }
 
+/** The tabs already open on a pattern get both scripts. */
+function activateOpenTabs(pattern: string): Promise<void> {
+  return injectIntoOpenTabs(browserTabScripting, pattern);
+}
+
 /**
  * Ask for this pattern, then store it. For a wildcard, the browser asks for every site it covers.
  *
@@ -273,10 +278,17 @@ async function turnOn(pattern: string, site: SiteConfig): Promise<boolean> {
   const granted = await browser.permissions.request({ origins: [matchPatternFor(pattern)] });
   if (!granted) return false;
 
-  await writeSite(pattern, site);
+  try {
+    await writeSite(pattern, site);
+  } catch (error) {
+    // A write the background did not confirm can be stored anyway, and this tab would then hold no
+    // widget until its next load (SKG-612). `failed` still says the change was not confirmed.
+    await activateStored([pattern], readAll, activateOpenTabs);
+    throw error;
+  }
   // `registerContentScripts` only reaches future page loads. Every tab already open on the pattern
   // gets the scripts now, this one included, and both files refuse to run twice in one frame.
-  await injectIntoOpenTabs(browserTabScripting, pattern);
+  await activateOpenTabs(pattern);
   await render();
 
   return true;

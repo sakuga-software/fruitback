@@ -26,11 +26,35 @@ export type EditorSeams = {
   current: () => Record<string, SiteConfig>;
   /** Called after a rule is stored switched on: the tabs already open on it get the scripts. */
   activate: (pattern: string) => Promise<void>;
+  /** Storage, read after a write the background did not confirm. See `activateStored`. */
+  stored: () => Promise<Record<string, SiteConfig>>;
 };
+
+/**
+ * Activates the patterns storage holds switched on, out of the ones a write did not confirm (SKG-612).
+ *
+ * A write goes through the background, and it can reject **after** the change is stored, when only
+ * the answer is lost. The rule is then On in storage while the tabs already open on it hold no
+ * widget until their next load. Nothing is lost, and nothing says why.
+ *
+ * A read that fails leaves the tabs as they are: there is nothing left to decide on.
+ */
+export async function activateStored(
+  patterns: string[],
+  stored: EditorSeams['stored'],
+  activate: EditorSeams['activate'],
+): Promise<void> {
+  const sites = await stored().catch(() => undefined);
+  if (sites === undefined) return;
+
+  for (const pattern of patterns) {
+    if (sites[pattern]?.enabled === true) await activate(pattern);
+  }
+}
 
 export type RuleFields = SiteFields & { sites: string };
 
-export function createEditor({ request, write, current, activate }: EditorSeams): {
+export function createEditor({ request, write, current, activate, stored }: EditorSeams): {
   add: (fields: RuleFields) => Promise<string>;
   switchOn: (pattern: string, site: SiteConfig) => Promise<boolean>;
 } {
@@ -49,6 +73,10 @@ export function createEditor({ request, write, current, activate }: EditorSeams)
           try {
             await write(pattern, siteFrom(fields, true));
           } catch {
+            // It can be stored anyway, so the open tabs are activated before the words below say the
+            // change was not confirmed.
+            await activateStored([pattern], stored, activate);
+
             return STORE_PROBLEM;
           }
           await activate(pattern);
@@ -64,7 +92,13 @@ export function createEditor({ request, write, current, activate }: EditorSeams)
       return request(pattern).then(
         async (granted) => {
           if (!granted) return false;
-          await write(pattern, { ...site, enabled: true });
+          try {
+            await write(pattern, { ...site, enabled: true });
+          } catch (error) {
+            await activateStored([pattern], stored, activate);
+            // The caller says the change was not confirmed. Only the activation is done here.
+            throw error;
+          }
           await activate(pattern);
 
           return true;
