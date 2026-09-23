@@ -314,6 +314,7 @@ function routeFor(request: Request, config: WorkerConfig, clientId: string | und
       identitySecret: config.identitySecret,
       showComments: config.showComments,
       read: config.read,
+      locale: config.teamLocale,
     },
   });
 }

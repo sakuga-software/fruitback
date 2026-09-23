@@ -2,10 +2,12 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   SEED_BLOCK_CAPTION,
+  TEAM_WORDS,
   buildIssueDescription,
   buildIssueTitle,
   pageQueryTerm,
   parseSeedFromDescription,
+  teamWords,
 } from './markdown-description.ts';
 import { SEED_VERSION } from './seed.ts';
 import { minimalSeedFixture, seedFixture } from './seed.fixture.ts';
@@ -200,5 +202,70 @@ describe('a verified reporter with no name', () => {
 
   it('is still anonymous when the reporter said nothing at all', () => {
     assert.match(buildIssueDescription(seedFixture({ reporter: undefined })), /\*\*Reported by\*\* · Anonymous/);
+  });
+});
+
+/**
+ * The words of the prose follow the team that triages, never the reporter's browser (SKG-532).
+ *
+ * The invariant comes first: the locale reaches the prose and never the JSON block, so the round
+ * trip holds in every language. A translated key would break it in silence.
+ */
+describe('the language of a description (SKG-532)', () => {
+  it('reads back the same seed in every language it is written in', () => {
+    const seed = seedFixture();
+
+    for (const locale of [undefined, 'en', 'fr', 'fr-CA', 'de']) {
+      const description = buildIssueDescription(seed, { locale });
+
+      assert.deepEqual(parseSeedFromDescription(description), { ok: true, seed }, `the round trip failed in ${locale}`);
+    }
+  });
+
+  it('writes the prose in the team locale, and the caption with it', () => {
+    const description = buildIssueDescription(seedFixture({ note: 'Le CTA est trop petit' }), { locale: 'fr' });
+
+    assert.match(description, /\*\*Page\*\* · \[/);
+    assert.match(description, /\*\*Élément\*\*/);
+    assert.match(description, /\*\*Fenêtre\*\*/);
+    assert.match(description, /\*\*Signalé par\*\*/);
+    assert.match(description, /\*\*Graine Fruitback\*\*/);
+    assert.equal(description.includes('**Reported by**'), false);
+  });
+
+  it('never translates the note, nor the name the reporter typed', () => {
+    const seed = seedFixture({ note: 'The call to action is too small', reporter: { name: 'Alice Smith' } });
+
+    const description = buildIssueDescription(seed, { locale: 'fr' });
+
+    assert.ok(description.includes('The call to action is too small'));
+    assert.ok(description.includes('Alice Smith'));
+    // What is translated is the worker's own word about that name.
+    assert.match(description, /Alice Smith \(non vérifié — déclaré par la personne\)/);
+  });
+
+  it('answers a region with the words of its language, and an unknown language in English', () => {
+    assert.equal(teamWords('fr-CA').reportedBy, 'Signalé par');
+    assert.equal(teamWords('FR').reportedBy, 'Signalé par');
+    // A tag this build has no words for costs the translation, never the description.
+    assert.equal(teamWords('de').reportedBy, 'Reported by');
+    assert.equal(teamWords(undefined).reportedBy, 'Reported by');
+    assert.equal(teamWords('').reportedBy, 'Reported by');
+  });
+
+  /** Every language says the same things, or a description loses a line when it is translated. */
+  it('says the same things in each language it carries', () => {
+    const english = Object.keys(TEAM_WORDS.en ?? {}).sort();
+
+    for (const [locale, words] of Object.entries(TEAM_WORDS)) {
+      assert.deepEqual(Object.keys(words).sort(), english, `${locale} does not carry the same words`);
+      for (const [key, value] of Object.entries(words)) {
+        assert.ok(value.length > 0, `${locale}.${key} is empty`);
+      }
+    }
+  });
+
+  it('is the English caption that `SEED_BLOCK_CAPTION` names', () => {
+    assert.equal(SEED_BLOCK_CAPTION, teamWords('en').caption);
   });
 });

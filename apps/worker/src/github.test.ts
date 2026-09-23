@@ -28,7 +28,7 @@ const { privateKey: PEM, publicKey: PUBLIC_KEY } = generateKeyPairSync('rsa', {
 
 const NOW = Date.parse('2026-09-14T12:00:00Z');
 const CONFIG = { appId: '12345', privateKey: createPrivateKey(PEM), repository: 'acme/site' };
-const POLICY: ClientPolicy = { showComments: true, identitySecret: undefined, read: 'public' };
+const POLICY: ClientPolicy = { showComments: true, identitySecret: undefined, read: 'public', locale: 'en' };
 const PAGE = seedFixture().page.url;
 
 afterEach(() => {
@@ -319,6 +319,23 @@ describe('create', () => {
       body: buildIssueDescription(seed),
       labels: ['fruitback', 'fruitback:acme'],
     });
+  });
+
+  /** The prose follows the worker's own locale, wherever the issues are kept (SKG-532). */
+  it('writes the issue body in the locale the policy carries', async () => {
+    const seed = seedFixture();
+    const calls = fakeGithub({
+      ...installation(),
+      'POST /repos/acme/site/labels': () => json(201, {}),
+      'POST /repos/acme/site/issues': created,
+    });
+    const store = createGithubStore(CONFIG, { now: () => NOW });
+
+    await store.create(seed, undefined, { ...POLICY, locale: 'fr' });
+
+    const body = (apiCalls(calls)[2]?.body as { body?: string }).body ?? '';
+    assert.equal(body, buildIssueDescription(seed, { locale: 'fr' }));
+    assert.match(body, /\*\*Signalé par\*\*/);
   });
 
   it('accepts a label that already exists', async () => {

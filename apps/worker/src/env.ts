@@ -64,6 +64,14 @@ export type WorkerEnv = {
    * store still keeps its sessions on a disk it owns. A separate file, with its own schema.
    */
   FRUITBACK_SESSION_PATH?: string;
+  /**
+   * The language of the prose in an issue description (SKG-532). A BCP-47 tag; English by default.
+   *
+   * **The team that triages reads it, never the reporter**, so it is configured here and never taken
+   * from the browser. A tag this build has no words for falls back to English; a value that is not a
+   * locale at all is refused at boot.
+   */
+  FRUITBACK_TEAM_LOCALE?: string;
 };
 
 export const DEFAULT_PORT = 8080;
@@ -71,6 +79,8 @@ export const DEFAULT_PORT = 8080;
 export const DEFAULT_HOST = '0.0.0.0';
 /** One hop: Dokploy's Traefik. Raise it if another proxy (a CDN, a load balancer) is added upstream. */
 export const DEFAULT_TRUSTED_PROXY_HOPS = 1;
+/** English, which is what every description carried before SKG-532. */
+export const DEFAULT_TEAM_LOCALE = 'en';
 
 const configSchema = z.object({
   /**
@@ -128,6 +138,15 @@ const configSchema = z.object({
    * `404`, exactly as they did before this feature existed.
    */
   sessionPath: z.string().min(1).optional(),
+  /**
+   * The language an issue description is written in (SKG-532), for the team that triages.
+   *
+   * Refused at boot when it is not a locale tag, like `TRUSTED_PROXY_HOPS`: a typo would otherwise
+   * print prose in a language nobody chose and say nothing. A valid tag this build has no words for
+   * is a different case and degrades to English — a team asking for `de` gets a readable issue
+   * rather than a worker that will not start.
+   */
+  teamLocale: z.string().min(1),
 });
 
 export type WorkerConfig = z.infer<typeof configSchema>;
@@ -163,6 +182,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     // team — which is precisely the leak the map exists to prevent.
     clients: clients.ok ? clients.clients : Number.NaN,
     sessionPath: env.FRUITBACK_SESSION_PATH || undefined,
+    teamLocale: readTeamLocale(env.FRUITBACK_TEAM_LOCALE),
   };
 
   const result = configSchema.safeParse(candidate);
@@ -241,6 +261,7 @@ const NAMES_BY_FIELD: Record<string, string> = {
   trustedProxyHops: 'TRUSTED_PROXY_HOPS',
   rateLimitPerMinute: 'RATE_LIMIT_PER_MINUTE',
   read: 'FRUITBACK_READ',
+  teamLocale: 'FRUITBACK_TEAM_LOCALE',
   // Absent until SKG-526, and it showed: a secret under 32 characters failed the schema, matched no
   // name, and answered `503 misconfigured, missing:` with nothing after the colon. Every field that
   // can fail validation needs an entry here — asserted by `answers no empty diagnostic`.
@@ -293,6 +314,27 @@ function readRateLimit(value: string | undefined): number {
 
   // Refused rather than defaulted, like the hop count: a typo must not silently widen the ceiling.
   return Number.isInteger(parsed) && parsed > 0 ? parsed : Number.NaN;
+}
+
+/**
+ * The team's locale, or an empty string when the value is not a locale tag at all (SKG-532).
+ *
+ * The schema refuses the empty string, so a typo is a boot failure that names
+ * `FRUITBACK_TEAM_LOCALE`. `Intl` is what decides, because it is what a formatter would be given.
+ * A valid tag with no words in this build is not this function's business: `teamWords` falls back
+ * to English for it.
+ */
+function readTeamLocale(value: string | undefined): string {
+  const tag = (value ?? '').trim();
+  if (tag === '') return DEFAULT_TEAM_LOCALE;
+
+  try {
+    Intl.getCanonicalLocales(tag);
+  } catch {
+    return '';
+  }
+
+  return tag;
 }
 
 function readTrustedProxyHops(value: string | undefined): number {
