@@ -19,14 +19,16 @@ function icon(size: number): Buffer {
 }
 
 /**
- * Whether a PNG holds a drawing, read from its pixels.
+ * Whether a PNG paints anything a reader can see: a pixel whose alpha is not zero.
  *
- * **The first byte of every row is the filter, and it is not a pixel.** An empty canvas from this
- * rasteriser carries one `1` per row and zeros for the rest, so a scan of the whole buffer answers
- * "drawn" for a blank image — measured, and a mutant of the empty source is what showed it.
+ * **The pixels have to be unfiltered to be read.** Every row of a PNG is stored as a difference
+ * from the row above or from the pixel to its left, so a byte of the compressed stream is not a
+ * channel. The first version scanned the stream and called any non-zero byte a drawing — which is
+ * the filter byte of every row, so a blank canvas read as drawn (raised in review).
  */
 function holdsADrawing(png: Buffer): boolean {
   const width = png.readUInt32BE(16);
+  const height = png.readUInt32BE(20);
   const parts: Buffer[] = [];
   let at = PNG_SIGNATURE.length;
   while (at < png.length) {
@@ -36,11 +38,53 @@ function holdsADrawing(png: Buffer): boolean {
     at += length + 12;
   }
 
+  // RGBA, eight bits a channel: what `build-icons.ts` renders, and colour type 6 in the header.
+  const CHANNELS = 4;
   const data = inflateSync(Buffer.concat(parts));
-  // RGBA, eight bits a channel: what `build-icons.ts` renders, and `colour type 6` in the header.
-  const stride = 1 + width * 4;
+  const stride = width * CHANNELS;
+  let above = Buffer.alloc(stride);
+  let read = 0;
 
-  return data.some((byte, index) => byte !== 0 && index % stride !== 0);
+  for (let y = 0; y < height; y += 1) {
+    const filter = data[read] ?? 0;
+    const row = Buffer.from(data.subarray(read + 1, read + 1 + stride));
+    read += stride + 1;
+
+    for (let index = 0; index < stride; index += 1) {
+      const left = index >= CHANNELS ? (row[index - CHANNELS] as number) : 0;
+      const up = above[index] as number;
+      const upLeft = index >= CHANNELS ? (above[index - CHANNELS] as number) : 0;
+      row[index] = ((row[index] as number) + predictor(filter, left, up, upLeft)) & 0xff;
+    }
+
+    for (let alpha = CHANNELS - 1; alpha < stride; alpha += CHANNELS) {
+      if (row[alpha] !== 0) return true;
+    }
+    above = row;
+  }
+
+  return false;
+}
+
+/** What the row's filter subtracted, by its number: none, left, above, their mean, or Paeth. */
+function predictor(filter: number, left: number, up: number, upLeft: number): number {
+  if (filter === 1) return left;
+  if (filter === 2) return up;
+  if (filter === 3) return Math.floor((left + up) / 2);
+  if (filter === 4) return paeth(left, up, upLeft);
+
+  return 0;
+}
+
+/** The neighbour the Paeth filter predicted from, as the specification defines it. */
+function paeth(left: number, up: number, upLeft: number): number {
+  const estimate = left + up - upLeft;
+  const toLeft = Math.abs(estimate - left);
+  const toUp = Math.abs(estimate - up);
+  const toUpLeft = Math.abs(estimate - upLeft);
+  if (toLeft <= toUp && toLeft <= toUpLeft) return left;
+
+  return toUp <= toUpLeft ? up : upLeft;
 }
 
 describe('the extension icons', () => {
@@ -55,10 +99,10 @@ describe('the extension icons', () => {
   });
 
   /**
-   * Each size is rendered from the vector, so a source that draws nothing renders a canvas of the
-   * right size holding nothing at all. An empty canvas deflates to zeros, drawing does not.
+   * Each size is rendered from the vector, so a source that draws nothing — or draws in a colour
+   * nobody can see — renders a canvas of the right size with every pixel transparent.
    */
-  it('draws something at every size, the smallest included', () => {
+  it('paints something at every size, the smallest included', () => {
     for (const size of ICON_SIZES) {
       assert.ok(holdsADrawing(icon(size)), `${iconPath(size)} is an empty canvas`);
     }
