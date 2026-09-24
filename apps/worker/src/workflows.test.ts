@@ -96,45 +96,49 @@ function keysOf(node: unknown): string[] {
 }
 
 /**
- * Every step that runs `gh` with no repository to work from.
+ * Every step that runs `gh` without naming the repository it talks to.
  *
- * **A step, not a job.** `gh` reads `GH_REPO` from its own process environment — the workflow's, the
- * job's or the step's — or infers the repository from a checkout that already happened. So the
- * question is asked per step, in order: a `gh` before the checkout has nothing to infer from, and a
- * `GH_REPO` on another step covers nothing. Raised in review, after a first version that merged a
- * job's steps into one set and answered for all of them at once.
+ * **The rule is `GH_REPO`, and a checkout does not excuse it.** `gh` can infer the repository from
+ * a checkout, but only when the step runs where that checkout landed: `actions/checkout` takes a
+ * `path`, a step takes a `working-directory`, and a job can check out several repositories. Modelling
+ * that is modelling Actions, and three review rounds went into trying — each one a new corner of the
+ * same guard. Asking for the variable has no corners: it is one line in a workflow, and it says what
+ * the command talks to rather than leaving it to the directory.
+ *
+ * The variable counts wherever `gh` reads it from: the workflow, the job, or the step. An empty
+ * value names nothing and does not count. Raised in review, four times over.
  */
 export function ghStepsWithoutRepository(source: string): string[] {
   const document = parseDocument(source);
-  const workflowEnv = new Set(keysOf(document.get('env', true)));
+  const workflowRepo = namedRepository(document.get('env', true));
   const jobs = document.get('jobs', true);
   if (!isMap(jobs)) return [];
 
   return jobs.items.flatMap((pair) => {
     if (!isScalar(pair.key) || !isMap(pair.value)) return [];
     const job = String(pair.key.value);
-    const jobEnv = new Set([...workflowEnv, ...keysOf(pair.value.get('env', true))]);
+    const jobRepo = workflowRepo || namedRepository(pair.value.get('env', true));
     const steps = pair.value.get('steps', true);
     if (!isSeq(steps)) return [];
 
-    const blind: string[] = [];
-    let checkedOut = false;
-
-    steps.items.forEach((step, index) => {
-      if (!isMap(step)) return;
-      const uses = step.get('uses');
+    return steps.items.flatMap((step, index) => {
+      if (!isMap(step)) return [];
       const run = step.get('run');
-      if (typeof uses === 'string' && uses.startsWith('actions/checkout@')) checkedOut = true;
-      // `gh` after an operator or inside a substitution is still a call: `make && gh release …`,
-      // `$(gh release view …)`. Only a word that ends in `gh` is not. Raised in review.
-      if (typeof run !== 'string' || !/(^|[\s;&|(])gh\s/.test(run)) return;
+      // `gh` after an operator or inside a substitution is a call too: `make && gh release …`,
+      // `url=$(gh release view …)`. A word that merely starts with those letters is not.
+      if (typeof run !== 'string' || !/(^|[\s;&|(])gh\s/.test(run)) return [];
 
-      const named = jobEnv.has('GH_REPO') || keysOf(step.get('env', true)).includes('GH_REPO');
-      if (!checkedOut && !named) blind.push(`${job}: step ${index + 1}`);
+      return jobRepo || namedRepository(step.get('env', true)) ? [] : [`${job}: step ${index + 1}`];
     });
-
-    return blind;
   });
+}
+
+/** Whether this `env` mapping names a repository for `gh`: the key, holding something. */
+function namedRepository(env: unknown): boolean {
+  if (!isMap(env)) return false;
+  const value = env.get('GH_REPO');
+
+  return typeof value === 'string' && value.trim() !== '';
 }
 
 describe('the GitHub workflows', () => {
@@ -178,37 +182,45 @@ describe('the GitHub workflows', () => {
    * none. `release-extension.yml`'s publish job only downloads an artefact: its first upload failed
    * for that, and the tag it would have failed on does not exist yet. Raised in review.
    */
-  it('tell gh which repository it is talking about, at the step that runs it', () => {
+  it('name the repository at every step that runs gh', () => {
     const blind = workflows().flatMap(({ file, source }) =>
       ghStepsWithoutRepository(source).map((step) => `${file}: ${step}`),
     );
 
-    assert.deepEqual(blind, [], 'these steps run gh with no repository to infer from');
+    assert.deepEqual(blind, [], 'these steps run gh without naming the repository');
   });
 
   /**
-   * The rules a workflow of this repository does not hold, driven on YAML: the order of the steps,
-   * and where the variable is written. Raised in review, and the first version answered for a whole
-   * job at once — a `GH_REPO` on one step covered a `gh` on another.
+   * The rules no workflow of this repository holds, driven on YAML: where the variable is written,
+   * and what counts as a call. A checkout is deliberately not one of them — see the docstring.
    */
-  it('read the repository context of a gh step, wherever it comes from', () => {
+  it('read the repository a gh step names, wherever the variable is written', () => {
     const step = (body: string) => `jobs:\n  publish:\n    steps:\n${body}`;
-    const checkout = '      - uses: actions/checkout@abc\n';
     const ghStep = '      - run: gh release upload v1 file.zip\n';
-    const named = '      - run: gh release upload v1 file.zip\n        env:\n          GH_REPO: acme/site\n';
+    const named = `${ghStep}        env:\n          GH_REPO: acme/site\n`;
 
-    assert.deepEqual(ghStepsWithoutRepository(step(checkout + ghStep)), []);
     assert.deepEqual(ghStepsWithoutRepository(step(named)), []);
     assert.deepEqual(ghStepsWithoutRepository(`env:\n  GH_REPO: acme/site\n${step(ghStep)}`), []);
-    // A `gh` before the checkout has nothing to infer from yet.
-    assert.deepEqual(ghStepsWithoutRepository(step(ghStep + checkout)), ['publish: step 1']);
-    // And the variable of another step is another step's.
+    assert.deepEqual(
+      ghStepsWithoutRepository(`jobs:\n  publish:\n    env:\n      GH_REPO: acme/site\n    steps:\n${ghStep}`),
+      [],
+    );
+
+    // A checkout is not repository context: it depends on where it landed and where the step runs.
+    assert.deepEqual(ghStepsWithoutRepository(step(`      - uses: actions/checkout@abc\n${ghStep}`)), [
+      'publish: step 2',
+    ]);
+    // An empty value names nothing.
+    assert.deepEqual(ghStepsWithoutRepository(`env:\n  GH_REPO: ''\n${step(ghStep)}`), ['publish: step 1']);
+    // The variable of another step is another step's.
     assert.deepEqual(ghStepsWithoutRepository(step(named + ghStep)), ['publish: step 2']);
-    // A call after an operator, and one inside a substitution, are calls too.
-    const chained = '      - run: make build && gh release upload v1 file.zip\n';
-    const substituted = '      - run: url=$(gh release view v1 --json url)\n';
-    assert.deepEqual(ghStepsWithoutRepository(step(chained)), ['publish: step 1']);
-    assert.deepEqual(ghStepsWithoutRepository(step(substituted)), ['publish: step 1']);
+    // A call after an operator, and one inside a substitution, are calls.
+    assert.deepEqual(ghStepsWithoutRepository(step('      - run: make build && gh release upload v1 f.zip\n')), [
+      'publish: step 1',
+    ]);
+    assert.deepEqual(ghStepsWithoutRepository(step('      - run: url=$(gh release view v1 --json url)\n')), [
+      'publish: step 1',
+    ]);
     // A word that merely starts with those two letters is not a call.
     assert.deepEqual(ghStepsWithoutRepository(step('      - run: echo ghost writes nothing\n')), []);
   });
