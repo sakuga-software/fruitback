@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
-import { isMap, isScalar, parseDocument, visit } from 'yaml';
+import { isMap, isScalar, isSeq, parseDocument, visit } from 'yaml';
 
 /**
  * Every action a workflow uses is pinned to a commit SHA, with its version as a comment (SKG-608).
@@ -62,8 +62,11 @@ function workflows(): { file: string; source: string }[] {
  * A workflow with no `permissions` at all is the case this reports as `undefined`: it takes the
  * repository's default, which can be write.
  */
-function defaultPermissions(source: string): Record<string, string> | undefined {
-  const granted = parseDocument(source).get('permissions');
+export function defaultPermissions(source: string): Record<string, string> | undefined {
+  // `get` unwraps a scalar unless it is asked to keep the node, so `permissions: write-all` came
+  // back as a plain string and `isScalar` answered false — the widest grant of all read as a map of
+  // nothing, and this test passed over it. Raised in review.
+  const granted = parseDocument(source).get('permissions', true);
   if (granted === undefined || granted === null) return undefined;
   if (isScalar(granted)) return { all: String(granted.value) };
   if (!isMap(granted)) return {};
@@ -81,6 +84,38 @@ function actionReferences(): Reference[] {
     .filter((file) => /\.ya?ml$/.test(file))
     .flatMap((file) => referencesIn(file, readFileSync(new URL(file, WORKFLOWS), 'utf8')))
     .filter((reference) => !reference.value.startsWith('./'));
+}
+
+/** The keys of a mapping node, or nothing when the node is not one. */
+function keysOf(node: unknown): string[] {
+  return isMap(node) ? node.items.flatMap((entry) => (isScalar(entry.key) ? [String(entry.key.value)] : [])) : [];
+}
+
+/** Every job of a workflow, with the steps it runs. */
+function jobsIn(source: string): { job: string; checksOut: boolean; env: Set<string>; runsGh: boolean }[] {
+  const jobs = parseDocument(source).get('jobs', true);
+  if (!isMap(jobs)) return [];
+
+  return jobs.items.flatMap((pair) => {
+    if (!isScalar(pair.key) || !isMap(pair.value)) return [];
+    const steps = pair.value.get('steps', true);
+    const env = new Set(keysOf(pair.value.get('env', true)));
+    let checksOut = false;
+    let runsGh = false;
+
+    if (isSeq(steps)) {
+      for (const step of steps.items) {
+        if (!isMap(step)) continue;
+        const uses = step.get('uses');
+        const run = step.get('run');
+        if (typeof uses === 'string' && uses.startsWith('actions/checkout@')) checksOut = true;
+        if (typeof run === 'string' && /(^|\s)gh\s/.test(run)) runsGh = true;
+        for (const name of keysOf(step.get('env', true))) env.add(name);
+      }
+    }
+
+    return [{ job: String(pair.key.value), checksOut, env, runsGh }];
+  });
 }
 
 describe('the GitHub workflows', () => {
@@ -103,6 +138,33 @@ describe('the GitHub workflows', () => {
    * the top instead, the same token reaches the jobs that only build and scan — and a step added to
    * one of those later inherits it with nothing to say so.
    */
+  /**
+   * The widest grant of all is a scalar — `permissions: write-all` — and it is the one the reader
+   * missed. Driven on YAML rather than on the files, because no workflow here may hold that case.
+   */
+  it('read a permissions block whatever shape it is written in', () => {
+    assert.deepEqual(defaultPermissions('permissions: write-all\njobs: {}\n'), { all: 'write-all' });
+    assert.deepEqual(defaultPermissions('permissions: read-all\njobs: {}\n'), { all: 'read-all' });
+    assert.deepEqual(defaultPermissions('permissions:\n  contents: write\njobs: {}\n'), { contents: 'write' });
+    assert.deepEqual(defaultPermissions('permissions:\n  contents: read\njobs: {}\n'), { contents: 'read' });
+    assert.equal(defaultPermissions('jobs: {}\n'), undefined);
+  });
+
+  /**
+   * **`gh` reads the repository from the working directory**, and a job that checks nothing out has
+   * none. `release-extension.yml`'s publish job only downloads an artefact: its first upload failed
+   * for that, and the tag it would have failed on does not exist yet. Raised in review.
+   */
+  it('tell gh which repository it is talking about, in a job that checks nothing out', () => {
+    const blind = workflows().flatMap(({ file, source }) =>
+      jobsIn(source)
+        .filter((job) => job.runsGh && !job.checksOut && !job.env.has('GH_REPO'))
+        .map((job) => `${file}: ${job.job}`),
+    );
+
+    assert.deepEqual(blind, [], 'these jobs run gh with no repository to infer from');
+  });
+
   it('grant no write above the job that needs it', () => {
     const files = workflows();
 
