@@ -1,0 +1,15 @@
+# The site published from this folder (SKG-619).
+#
+# GitHub Pages builds it with Jekyll, and the two plugins that decide whether this works are on by
+# default there: `jekyll-optional-front-matter` renders a plain markdown file, and
+# `jekyll-relative-links` turns a link to another `.md` into the page it became. That pair is what
+# lets one file read the same on GitHub and here, which is the rule this site had to keep — the
+# markdown stays the source, and the tests keep reading the files.
+title: Fruitback
+description: Visual feedback on a live site, without a backend to host.
+theme: jekyll-theme-primer
+
+# The decisions are the per-ticket histories, written for whoever works on this repository rather
+# than for somebody trying to run it. They stay on GitHub, where their links to the source resolve.
+exclude:
+  - decisions/

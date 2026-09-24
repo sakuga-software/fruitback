@@ -12,6 +12,9 @@ When they come back to the page, their pins are still there, coloured by the iss
 
 ![A pin anchored on a button of a live page, coloured by its issue's status](docs/assets/pin-on-a-live-page.png)
 
+The guides are on **[sakuga-software.github.io/fruitback](https://sakuga-software.github.io/fruitback/)**,
+and they are the files in [docs/](docs/).
+
 **Fruitback runs no service that holds your feedback.** It lands in the tracker your team already
 uses — or, with `FRUITBACK_STORE=sqlite`, in a file on a volume you own. No database of ours, no
 dashboard of ours, no account to create anywhere.

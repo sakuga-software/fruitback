@@ -1134,6 +1134,12 @@ the caption above it (SKG-517)` is what keeps that true.
     assertion catches is an even number: it parses, and silently truncates the stylesheet.
 - Comments explain _why_, not _what_ — the tolerant parser and the redundant anchor both exist for
   reasons that are not obvious from the code.
+- **`docs/` is a site as well as a folder** (SKG-619). GitHub Pages publishes it from `main`, and
+  `docs/index.md` is its home page. **A link goes to the `.md` file, never to the page it becomes**:
+  `jekyll-relative-links` rewrites it, which is what lets one file read the same on GitHub and on the
+  site. `docs/_config.yml` excludes `decisions/`, which is written for whoever works on this
+  repository. `docs-site.test.ts` fails on a guide the home page links from nowhere and on a link
+  that names no file. The markdown stays the source: every other guard reads the files.
 - **[SECURITY.md](SECURITY.md) states the threat model, and a change to any of it lands there too.**
   Every number in it — the rate-limit default, the proxy hops, the token lifetimes — is asserted
   against the code by `security.test.ts`, so a constant that moves without the file fails the suite.
