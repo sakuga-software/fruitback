@@ -36,6 +36,7 @@
           "default",
           "^production",
           "{workspaceRoot}/**/*.md",
+          "{workspaceRoot}/docs/**/*",
           "{workspaceRoot}/**/*.test.ts",
           "{workspaceRoot}/**/*.spec.ts",
           "{workspaceRoot}/nx.json",
