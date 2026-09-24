@@ -1,6 +1,6 @@
 import { browser } from 'wxt/browser';
 import { matchPatternFor } from '../../src/registration.ts';
-import { NO_ACCESS_PROBLEM, STORE_PROBLEM, createEditor, latestOnly } from '../../src/site-editor.ts';
+import { NO_ACCESS_PROBLEM, STORE_PROBLEM, activateStored, createEditor, latestOnly } from '../../src/site-editor.ts';
 import { parseSitePattern } from '../../src/site-patterns.ts';
 import { injectIntoOpenTabs } from '../../src/tab-injection.ts';
 import { browserTabScripting as scripting } from '../../src/tab-scripting-browser.ts';
@@ -37,6 +37,7 @@ const editor = createEditor({
   write: writeSite,
   current: () => current,
   activate: (pattern) => injectIntoOpenTabs(scripting, pattern),
+  stored: readAll,
 });
 const beginRender = latestOnly();
 
@@ -220,6 +221,9 @@ function transfer(): HTMLElement {
       } catch (error) {
         console.error('[fruitback] the import was not confirmed', error);
         result.textContent = STORE_PROBLEM;
+        // The entries can be stored anyway, and the tabs open on them would hold no widget until
+        // their next load (SKG-612).
+        await activateStored(Object.keys(parsed.sites), readAll, (pattern) => injectIntoOpenTabs(scripting, pattern));
 
         return;
       }

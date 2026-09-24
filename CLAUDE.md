@@ -468,9 +468,11 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
 
 - **An entry's key is a pattern, and `resolveSite` is the only lookup** (SKG-536). A key is an exact
   origin or `https://*.host`; every key written before is an exact origin, so nothing is upgraded. The
-  exact origin wins, then the longest wildcard. The bridge, the relay and the popup all reach it
-  through `readSite`, and `sites-storage.test.ts` proves `readSite` resolves a wildcard. A reader that
-  indexed the map by origin would mount the widget and then have the relay refuse its calls.
+  exact origin wins, then the longest wildcard. The bridge and the relay reach it through `readSite`,
+  and the popup through `findSite`, which is the same lookup and also answers the pattern the entry is
+  stored under — the popup names that pattern on screen. `sites-storage.test.ts` proves `readSite`
+  resolves a wildcard. A reader that indexed the map by origin would mount the widget and then have
+  the relay refuse its calls.
 - **A wildcard covers the default port only**, and its base host too, as a match pattern does. The
   grant and the registration (`https://*.host/*`) cover every port; the pattern carries no port because
   whether each browser accepts one was not measured, and one refused pattern stops every site. It needs
@@ -482,6 +484,12 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   replaces it, and the two pages share no lock. `isExtensionPage` refuses the message from a content
   script, whose URL is the page's. One key per pattern was not taken: a reader would have to list the
   whole `local` area, and the bridge, a content script, must not read the refresh token stored there.
+- **A write the background did not confirm can still be stored** (SKG-612), because only the answer
+  was lost. `activateStored` reads it back and injects the scripts into the tabs already open on the
+  patterns of that change that are stored switched on. Without it the rule is On and those tabs hold
+  no widget until their next load. **A client id made of spaces is an absent id**: `complaint` refuses
+  it and `siteFrom` stores the id trimmed, so a rules file cannot store one that the worker then
+  answers `client-required` for.
 - **A rules file holds no credential and no grant.** An imported entry runs nowhere until the options
   page's **Grant access** is pressed, and `permissions.onAdded` is what re-syncs the registration,
   because a grant writes no storage. The worker's `origins` stays an exact list, but it applies to
@@ -516,6 +524,18 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   `matches`, so an implementation that updated there would leave a switched-off site still running.
 - **`packages/widget` is unchanged by this app, which is the ticket's own test.** The extension is a
   fourth assembler; nothing extension-shaped leaks into the widget.
+- **The extension carries its licence into the build** (SKG-621). It is `AGPL-3.0-only`, and what a
+  store hands somebody is the archive rather than this repository, so a `build:publicAssets` hook
+  copies `apps/extension/LICENSE` beside the manifest. A hook and not a copy in `public/`, so the
+  text has one home. `license.test.ts` checks the field, the text, and that the copy is declared —
+  the same rule as the published packages: a file that exists says nothing about what is in it.
+- **The icon is one SVG, rendered to a PNG for each size and committed** (SKG-617).
+  `assets/icon.svg` holds the widget's own pin — a circle plus the corner that stayed sharp, which is
+  what `border-radius: 50% 50% 50% 0` draws — and `pnpm icons:build` renders it. **Each size is
+  rendered from the vector, never resized from the big one**, or the 16px icon is a smudge. The sizes
+  live in `src/icon-sizes.ts`, which the manifest, the renderer and `icons.test.ts` all read. Nothing
+  in the build generates them, so the guard is what keeps the committed files honest: it fails on a
+  missing size, on a file of another size, and on a canvas that holds no drawing.
 - **The archives a store takes are built by `release-extension.yml`, on a `v*` tag** (SKG-616).
   `wxt zip` for Chrome, `wxt zip -b firefox` for Firefox — the second writes a **sources** archive
   beside it, which AMO asks for whenever the submitted file was built. The tag and
@@ -1122,6 +1142,12 @@ the caption above it (SKG-517)` is what keeps that true.
     assertion catches is an even number: it parses, and silently truncates the stylesheet.
 - Comments explain _why_, not _what_ — the tolerant parser and the redundant anchor both exist for
   reasons that are not obvious from the code.
+- **`docs/` is a site as well as a folder** (SKG-619). GitHub Pages publishes it from `main`, and
+  `docs/index.md` is its home page. **A link goes to the `.md` file, never to the page it becomes**:
+  `jekyll-relative-links` rewrites it, which is what lets one file read the same on GitHub and on the
+  site. `docs/_config.yml` excludes `decisions/`, which is written for whoever works on this
+  repository. `docs-site.test.ts` fails on a guide the home page links from nowhere and on a link
+  that names no file. The markdown stays the source: every other guard reads the files.
 - **[SECURITY.md](SECURITY.md) states the threat model, and a change to any of it lands there too.**
   Every number in it — the rate-limit default, the proxy hops, the token lifetimes — is asserted
   against the code by `security.test.ts`, so a constant that moves without the file fails the suite.

@@ -1,4 +1,9 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'wxt';
+import { ICON_SIZES, iconPath } from './src/icon-sizes.ts';
+
+/** Where the licence lives in the output, and where it is copied from (SKG-621). */
+export const LICENSE_IN_OUTPUT = 'LICENSE';
 
 /**
  * The extension is the private mode (SKG-534): the client's site embeds **nothing**, and an ordinary
@@ -14,6 +19,17 @@ import { defineConfig } from 'wxt';
  * main world the widget needs does not exist.
  */
 export default defineConfig({
+  // **The licence travels with the build.** This extension is AGPL-3.0-only and what a store hands
+  // somebody is the archive, not this repository: the AGPL asks for the licence to go with the work.
+  // A hook rather than a copy in `public/`, so the text has one home and cannot drift from it.
+  hooks: {
+    'build:publicAssets': (_wxt, files) => {
+      files.push({
+        relativeDest: LICENSE_IN_OUTPUT,
+        absoluteSrc: fileURLToPath(new URL('LICENSE', import.meta.url)),
+      });
+    },
+  },
   manifestVersion: 3,
   zip: {
     // The name of the archive a store takes. Without it wxt builds one from the package name, and
@@ -48,6 +64,9 @@ export default defineConfig({
     permissions: ['storage', 'scripting', 'activeTab', 'alarms'],
     // Requested per origin by the popup, at the moment somebody switches a site on.
     optional_host_permissions: ['*://*/*'],
+    // Without these the browser draws a grey square with an initial, in the toolbar and in the list
+    // of extensions, and a store listing is refused for want of a 128px one (SKG-617).
+    icons: Object.fromEntries(ICON_SIZES.map((size) => [size, iconPath(size)])),
     action: { default_title: 'Fruitback' },
     browser_specific_settings: {
       gecko: { id: 'fruitback@sakuga-software.com', strict_min_version: '128.0' },

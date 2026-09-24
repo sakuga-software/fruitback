@@ -1,6 +1,13 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { DUPLICATE_PROBLEM, NO_ACCESS_PROBLEM, STORE_PROBLEM, createEditor, latestOnly } from './site-editor.ts';
+import {
+  DUPLICATE_PROBLEM,
+  NO_ACCESS_PROBLEM,
+  STORE_PROBLEM,
+  activateStored,
+  createEditor,
+  latestOnly,
+} from './site-editor.ts';
 import { PATTERN_PROBLEM } from './site-form.ts';
 import type { SiteConfig } from './sites.ts';
 
@@ -9,6 +16,7 @@ function editor(granted: boolean, current: Record<string, SiteConfig> = {}) {
   const writes: [string, SiteConfig][] = [];
   const activated: string[] = [];
   const seams = createEditor({
+    stored: async () => ({}),
     activate: async (pattern) => {
       activated.push(pattern);
     },
@@ -55,6 +63,7 @@ describe('createEditor', () => {
       },
       write: async () => assert.fail('wrote without a grant'),
       current: () => ({}),
+      stored: async () => ({}),
     });
 
     assert.equal(await page.add(fields), NO_ACCESS_PROBLEM);
@@ -69,6 +78,7 @@ describe('createEditor', () => {
         throw new Error('the background did not store the site change');
       },
       current: () => ({}),
+      stored: async () => ({}),
     });
 
     assert.equal(await page.add(fields), STORE_PROBLEM);
@@ -126,12 +136,98 @@ describe('createEditor.switchOn', () => {
       },
       write: async () => assert.fail('wrote without a grant'),
       current: () => ({}),
+      stored: async () => ({}),
     });
 
     assert.equal(
       await page.switchOn('https://acme.dev', { mode: 'team', endpoint: 'https://w.test', enabled: false }),
       false,
     );
+  });
+});
+
+/**
+ * A write goes through the background and can reject **after** it is stored, when only the answer is
+ * lost (SKG-612). The rule is then On and the tabs already open on it hold no widget until their
+ * next load, with nothing to say why.
+ */
+describe('a write the background did not confirm', () => {
+  const PATTERN = 'https://*.staging.acme.dev';
+  const SITE: SiteConfig = { mode: 'private', endpoint: 'https://w.test', clientId: 'acme', enabled: true };
+
+  function unconfirmed(stored: Record<string, SiteConfig>) {
+    const activated: string[] = [];
+    const page = createEditor({
+      activate: async (pattern) => {
+        activated.push(pattern);
+      },
+      request: async () => true,
+      write: async () => {
+        throw new Error('the background did not store the site change');
+      },
+      current: () => ({}),
+      stored: async () => stored,
+    });
+
+    return { ...page, activated };
+  }
+
+  it('activates the open tabs when the rule is in storage, and still says it was not confirmed', async () => {
+    const page = unconfirmed({ [PATTERN]: SITE });
+
+    assert.equal(await page.add(fields), STORE_PROBLEM);
+    assert.deepEqual(page.activated, [PATTERN]);
+  });
+
+  it('activates nothing when the rule is not in storage, or is stored switched off', async () => {
+    const absent = unconfirmed({});
+    const off = unconfirmed({ [PATTERN]: { ...SITE, enabled: false } });
+
+    assert.equal(await absent.add(fields), STORE_PROBLEM);
+    assert.equal(await off.add(fields), STORE_PROBLEM);
+    assert.deepEqual([...absent.activated, ...off.activated], []);
+  });
+
+  it('activates the open tabs of a rule switched on, and still rejects', async () => {
+    const page = unconfirmed({ 'https://acme.dev': { ...SITE, enabled: true } });
+
+    await assert.rejects(page.switchOn('https://acme.dev', { ...SITE, enabled: false }));
+    assert.deepEqual(page.activated, ['https://acme.dev']);
+  });
+
+  it('leaves the tabs alone when storage cannot be read', async () => {
+    const activated: string[] = [];
+
+    await activateStored(
+      [PATTERN],
+      () => Promise.reject(new Error('storage is unreadable')),
+      async (pattern) => {
+        activated.push(pattern);
+      },
+    );
+
+    assert.deepEqual(activated, []);
+  });
+
+  /** The import writes every entry at once, and each one has its own tabs. */
+  it('activates only the patterns storage holds switched on', async () => {
+    const activated: string[] = [];
+    const stored = {
+      [PATTERN]: SITE,
+      'https://acme.dev': { ...SITE, enabled: false },
+      // On, and not part of this change: its tabs already hold the widget.
+      'https://other.dev': SITE,
+    };
+
+    await activateStored(
+      [PATTERN, 'https://acme.dev', 'https://absent.dev'],
+      async () => stored,
+      async (pattern) => {
+        activated.push(pattern);
+      },
+    );
+
+    assert.deepEqual(activated, [PATTERN]);
   });
 });
 

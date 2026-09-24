@@ -83,6 +83,24 @@ describe('exportSites and importSites', () => {
     });
   });
 
+  /** The id is what routes a note. A file is not a form, so the spaces are taken off here (SKG-612). */
+  it('skips a client id made of spaces, and stores one without its spaces', () => {
+    const result = importSites(
+      file({
+        sites: {
+          'https://a.dev': { mode: 'private', endpoint: 'https://w.test', clientId: '   ' },
+          'https://b.dev': { mode: 'private', endpoint: 'https://w.test', clientId: ' acme ' },
+        },
+      }),
+    );
+
+    assert.deepEqual(result, {
+      ok: true,
+      sites: { 'https://b.dev': { mode: 'private', endpoint: 'https://w.test', clientId: 'acme', enabled: true } },
+      skipped: ['https://a.dev'],
+    });
+  });
+
   /** A file written by hand from an old popup entry: no mode, a client id. It reads as private mode. */
   it('reads an entry with no mode as private, like the store does', () => {
     const result = importSites(
