@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
-import { isMap, isScalar, isSeq, parseDocument, visit } from 'yaml';
+import { isAlias, isMap, isScalar, isSeq, parseDocument, visit } from 'yaml';
 
 /**
  * Every action a workflow uses is pinned to a commit SHA, with its version as a comment (SKG-608).
@@ -66,7 +66,11 @@ export function defaultPermissions(source: string): Record<string, string> | und
   // `get` unwraps a scalar unless it is asked to keep the node, so `permissions: write-all` came
   // back as a plain string and `isScalar` answered false — the widest grant of all read as a map of
   // nothing, and this test passed over it. Raised in review.
-  const granted = parseDocument(source).get('permissions', true);
+  const document = parseDocument(source);
+  const written = document.get('permissions', true);
+  // An anchor elsewhere in the file and `permissions: *grant` here is the same grant, written once.
+  // Raised in review.
+  const granted = isAlias(written) ? written.resolve(document) : written;
   if (granted === undefined || granted === null) return undefined;
   if (isScalar(granted)) return { all: String(granted.value) };
   if (!isMap(granted)) return {};
@@ -91,30 +95,43 @@ function keysOf(node: unknown): string[] {
   return isMap(node) ? node.items.flatMap((entry) => (isScalar(entry.key) ? [String(entry.key.value)] : [])) : [];
 }
 
-/** Every job of a workflow, with the steps it runs. */
-function jobsIn(source: string): { job: string; checksOut: boolean; env: Set<string>; runsGh: boolean }[] {
-  const jobs = parseDocument(source).get('jobs', true);
+/**
+ * Every step that runs `gh` with no repository to work from.
+ *
+ * **A step, not a job.** `gh` reads `GH_REPO` from its own process environment — the workflow's, the
+ * job's or the step's — or infers the repository from a checkout that already happened. So the
+ * question is asked per step, in order: a `gh` before the checkout has nothing to infer from, and a
+ * `GH_REPO` on another step covers nothing. Raised in review, after a first version that merged a
+ * job's steps into one set and answered for all of them at once.
+ */
+export function ghStepsWithoutRepository(source: string): string[] {
+  const document = parseDocument(source);
+  const workflowEnv = new Set(keysOf(document.get('env', true)));
+  const jobs = document.get('jobs', true);
   if (!isMap(jobs)) return [];
 
   return jobs.items.flatMap((pair) => {
     if (!isScalar(pair.key) || !isMap(pair.value)) return [];
+    const job = String(pair.key.value);
+    const jobEnv = new Set([...workflowEnv, ...keysOf(pair.value.get('env', true))]);
     const steps = pair.value.get('steps', true);
-    const env = new Set(keysOf(pair.value.get('env', true)));
-    let checksOut = false;
-    let runsGh = false;
+    if (!isSeq(steps)) return [];
 
-    if (isSeq(steps)) {
-      for (const step of steps.items) {
-        if (!isMap(step)) continue;
-        const uses = step.get('uses');
-        const run = step.get('run');
-        if (typeof uses === 'string' && uses.startsWith('actions/checkout@')) checksOut = true;
-        if (typeof run === 'string' && /(^|\s)gh\s/.test(run)) runsGh = true;
-        for (const name of keysOf(step.get('env', true))) env.add(name);
-      }
-    }
+    const blind: string[] = [];
+    let checkedOut = false;
 
-    return [{ job: String(pair.key.value), checksOut, env, runsGh }];
+    steps.items.forEach((step, index) => {
+      if (!isMap(step)) return;
+      const uses = step.get('uses');
+      const run = step.get('run');
+      if (typeof uses === 'string' && uses.startsWith('actions/checkout@')) checkedOut = true;
+      if (typeof run !== 'string' || !/(^|\s)gh\s/.test(run)) return;
+
+      const named = jobEnv.has('GH_REPO') || keysOf(step.get('env', true)).includes('GH_REPO');
+      if (!checkedOut && !named) blind.push(`${job}: step ${index + 1}`);
+    });
+
+    return blind;
   });
 }
 
@@ -148,6 +165,10 @@ describe('the GitHub workflows', () => {
     assert.deepEqual(defaultPermissions('permissions:\n  contents: write\njobs: {}\n'), { contents: 'write' });
     assert.deepEqual(defaultPermissions('permissions:\n  contents: read\njobs: {}\n'), { contents: 'read' });
     assert.equal(defaultPermissions('jobs: {}\n'), undefined);
+    // An anchor written once and pointed at here is the same grant. Raised in review.
+    assert.deepEqual(defaultPermissions('name: &grant write-all\npermissions: *grant\njobs: {}\n'), {
+      all: 'write-all',
+    });
   });
 
   /**
@@ -155,14 +176,32 @@ describe('the GitHub workflows', () => {
    * none. `release-extension.yml`'s publish job only downloads an artefact: its first upload failed
    * for that, and the tag it would have failed on does not exist yet. Raised in review.
    */
-  it('tell gh which repository it is talking about, in a job that checks nothing out', () => {
+  it('tell gh which repository it is talking about, at the step that runs it', () => {
     const blind = workflows().flatMap(({ file, source }) =>
-      jobsIn(source)
-        .filter((job) => job.runsGh && !job.checksOut && !job.env.has('GH_REPO'))
-        .map((job) => `${file}: ${job.job}`),
+      ghStepsWithoutRepository(source).map((step) => `${file}: ${step}`),
     );
 
-    assert.deepEqual(blind, [], 'these jobs run gh with no repository to infer from');
+    assert.deepEqual(blind, [], 'these steps run gh with no repository to infer from');
+  });
+
+  /**
+   * The rules a workflow of this repository does not hold, driven on YAML: the order of the steps,
+   * and where the variable is written. Raised in review, and the first version answered for a whole
+   * job at once — a `GH_REPO` on one step covered a `gh` on another.
+   */
+  it('read the repository context of a gh step, wherever it comes from', () => {
+    const step = (body: string) => `jobs:\n  publish:\n    steps:\n${body}`;
+    const checkout = '      - uses: actions/checkout@abc\n';
+    const ghStep = '      - run: gh release upload v1 file.zip\n';
+    const named = '      - run: gh release upload v1 file.zip\n        env:\n          GH_REPO: acme/site\n';
+
+    assert.deepEqual(ghStepsWithoutRepository(step(checkout + ghStep)), []);
+    assert.deepEqual(ghStepsWithoutRepository(step(named)), []);
+    assert.deepEqual(ghStepsWithoutRepository(`env:\n  GH_REPO: acme/site\n${step(ghStep)}`), []);
+    // A `gh` before the checkout has nothing to infer from yet.
+    assert.deepEqual(ghStepsWithoutRepository(step(ghStep + checkout)), ['publish: step 1']);
+    // And the variable of another step is another step's.
+    assert.deepEqual(ghStepsWithoutRepository(step(named + ghStep)), ['publish: step 2']);
   });
 
   it('grant no write above the job that needs it', () => {
