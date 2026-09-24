@@ -1,5 +1,8 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { type Page, expect, test as withoutExtension } from '@playwright/test';
 import {
+  BUILT_EXTENSION,
   addRule,
   mintPairingCode,
   openBareSite,
@@ -52,6 +55,19 @@ async function plantOnTheLatteCard(page: Page, launch: string | RegExp, note: st
   await page.getByPlaceholder('What is wrong here?').fill(note);
   await page.getByRole('button', { name: 'Plant', exact: true }).click();
 }
+
+/**
+ * The licence a store hands out with the extension (SKG-621).
+ *
+ * `license.test.ts` reads the configuration that asks for the copy; this reads the build that
+ * `pnpm e2e` made, which is what the archive is zipped from. A packaging change that drops the file
+ * passes the first and fails this one. Raised in review.
+ */
+withoutExtension('carries its licence into the build a store is given', async () => {
+  const built = fs.readFileSync(path.join(BUILT_EXTENSION, 'LICENSE'), 'utf8');
+
+  expect(built).toEqual(fs.readFileSync('apps/extension/LICENSE', 'utf8'));
+});
 
 withoutExtension('without the extension, the site holds no widget and calls no worker', async ({ page }) => {
   const calls = workerCalls(page);

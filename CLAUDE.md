@@ -524,6 +524,11 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   `matches`, so an implementation that updated there would leave a switched-off site still running.
 - **`packages/widget` is unchanged by this app, which is the ticket's own test.** The extension is a
   fourth assembler; nothing extension-shaped leaks into the widget.
+- **The extension carries its licence into the build** (SKG-621). It is `AGPL-3.0-only`, and what a
+  store hands somebody is the archive rather than this repository, so a `build:publicAssets` hook
+  copies `apps/extension/LICENSE` beside the manifest. A hook and not a copy in `public/`, so the
+  text has one home. `license.test.ts` checks the field, the text, and that the copy is declared —
+  the same rule as the published packages: a file that exists says nothing about what is in it.
 - **The icon is one SVG, rendered to a PNG for each size and committed** (SKG-617).
   `assets/icon.svg` holds the widget's own pin — a circle plus the corner that stayed sharp, which is
   what `border-radius: 50% 50% 50% 0` draws — and `pnpm icons:build` renders it. **Each size is

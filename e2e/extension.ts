@@ -20,7 +20,7 @@ declare const chrome: {
   tabs: { create(properties: { url: string; active: boolean }): Promise<unknown> };
 };
 
-const BUILT_EXTENSION = 'apps/extension/.output/chrome-mv3';
+export const BUILT_EXTENSION = 'apps/extension/.output/chrome-mv3';
 export const PLAYGROUND_ORIGIN = 'http://localhost:5177';
 
 export type LoadedExtension = { context: BrowserContext; worker: Worker; id: string };

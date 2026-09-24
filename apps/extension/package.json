@@ -38,7 +38,8 @@
           "default",
           "^production",
           "{workspaceRoot}/docs/install.md",
-          "{workspaceRoot}/docs/reviewing.md"
+          "{workspaceRoot}/docs/reviewing.md",
+          "{workspaceRoot}/apps/worker/LICENSE"
         ]
       }
     }
