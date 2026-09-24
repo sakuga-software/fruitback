@@ -125,7 +125,9 @@ export function ghStepsWithoutRepository(source: string): string[] {
       const uses = step.get('uses');
       const run = step.get('run');
       if (typeof uses === 'string' && uses.startsWith('actions/checkout@')) checkedOut = true;
-      if (typeof run !== 'string' || !/(^|\s)gh\s/.test(run)) return;
+      // `gh` after an operator or inside a substitution is still a call: `make && gh release …`,
+      // `$(gh release view …)`. Only a word that ends in `gh` is not. Raised in review.
+      if (typeof run !== 'string' || !/(^|[\s;&|(])gh\s/.test(run)) return;
 
       const named = jobEnv.has('GH_REPO') || keysOf(step.get('env', true)).includes('GH_REPO');
       if (!checkedOut && !named) blind.push(`${job}: step ${index + 1}`);
@@ -202,6 +204,13 @@ describe('the GitHub workflows', () => {
     assert.deepEqual(ghStepsWithoutRepository(step(ghStep + checkout)), ['publish: step 1']);
     // And the variable of another step is another step's.
     assert.deepEqual(ghStepsWithoutRepository(step(named + ghStep)), ['publish: step 2']);
+    // A call after an operator, and one inside a substitution, are calls too.
+    const chained = '      - run: make build && gh release upload v1 file.zip\n';
+    const substituted = '      - run: url=$(gh release view v1 --json url)\n';
+    assert.deepEqual(ghStepsWithoutRepository(step(chained)), ['publish: step 1']);
+    assert.deepEqual(ghStepsWithoutRepository(step(substituted)), ['publish: step 1']);
+    // A word that merely starts with those two letters is not a call.
+    assert.deepEqual(ghStepsWithoutRepository(step('      - run: echo ghost writes nothing\n')), []);
   });
 
   it('grant no write above the job that needs it', () => {
