@@ -31,6 +31,28 @@ export default defineConfig({
     },
   },
   manifestVersion: 3,
+  zip: {
+    // The name of the archive a store takes. Without it wxt builds one from the package name, and
+    // `@fruitback/extension` becomes `fruitbackextension-0.1.0-chrome.zip` (SKG-616).
+    name: 'fruitback',
+    // **The sources archive has to build.** AMO rebuilds the extension from it and compares, and
+    // this extension imports two workspace packages: an archive of `apps/extension` alone holds no
+    // `@fruitback/widget`, no lockfile and no workspace file, so `pnpm install` fails on the first
+    // line. The root is the repository, and what goes in is what a build needs. Raised in review.
+    sourcesRoot: '../..',
+    includeSources: [
+      'apps/extension/**',
+      'packages/shared/**',
+      'packages/widget/**',
+      'package.json',
+      'pnpm-lock.yaml',
+      'pnpm-workspace.yaml',
+      'nx.json',
+      '.nvmrc',
+      'LICENSE',
+    ],
+    excludeSources: ['**/node_modules/**', '**/dist/**', '**/.output/**', '**/.wxt/**', '**/.nx/**'],
+  },
   manifest: {
     name: 'Fruitback',
     description: 'Leave visual feedback on any site you are allowed to review.',
