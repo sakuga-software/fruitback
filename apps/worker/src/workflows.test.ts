@@ -4,7 +4,8 @@ import { describe, it } from 'node:test';
 import { isAlias, isMap, isScalar, isSeq, parseDocument, visit } from 'yaml';
 
 /**
- * Every action a workflow uses is pinned to a commit SHA, with its version as a comment (SKG-608).
+ * Every action a workflow uses is pinned to a commit SHA, or a Docker image to its digest, with its
+ * version as a comment (SKG-608).
  *
  * A tag can move to other code, and `release-image.yml` runs with `packages: write`. Dependabot moves
  * a pin that exists, but it does not pin a new step, so this test is what holds the rule.
@@ -18,8 +19,12 @@ import { isAlias, isMap, isScalar, isSeq, parseDocument, visit } from 'yaml';
 
 const WORKFLOWS = new URL('../../../.github/workflows/', import.meta.url);
 
-/** `owner/repo@<40 hex>`, or the same for an action in a subdirectory of its repository. */
-const PINNED = /^[\w.-]+\/[\w./-]+@[0-9a-f]{40}$/;
+/**
+ * `owner/repo@<40 hex>`, or the same for an action in a subdirectory of its repository, or a Docker
+ * image pinned by the digest of its manifest: `docker://image@sha256:<64 hex>`. A digest names one
+ * image, as a SHA names one commit. A tag of either can move.
+ */
+const PINNED = /^(?:[\w.-]+\/[\w./-]+@[0-9a-f]{40}|docker:\/\/[\w./-]+@sha256:[0-9a-f]{64})$/;
 
 /** The version comment that must follow a pinned action on its line. */
 const VERSION_COMMENT = /# v\d+(\.\d+){0,2}\s*$/;
@@ -152,6 +157,12 @@ describe('the GitHub workflows', () => {
         .map((reference) => reference.where),
       [],
     );
+  });
+
+  it('take a Docker image pinned by its digest, never by a tag', () => {
+    assert.ok(PINNED.test(`docker://pragent/pr-agent@sha256:${'a'.repeat(64)}`));
+    assert.ok(!PINNED.test('docker://pragent/pr-agent:0.46.0'));
+    assert.ok(!PINNED.test('docker://pragent/pr-agent@sha256:abc'));
   });
 
   /**

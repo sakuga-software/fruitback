@@ -12,7 +12,8 @@ on:
   issue_comment:
     types: [created]
 
-# The workflow token needs no permission: PR-Agent posts with a token of the App.
+# The review posts with a token of the GitHub App, asked for below. The token of this workflow is not
+# used, so it gets no permission.
 permissions: {}
 
 jobs:
@@ -66,7 +67,7 @@ jobs:
           permission-pull-requests: write
       - name: PR Agent
         # The official image of release 0.46.0 (tag 0.46.0-github_action), pinned by digest.
-        uses: docker://pragent/pr-agent@sha256:65e5b196e38cecd7df8a71fe29942052e081a0c6645132c2ac874df60b1760c7
+        uses: docker://pragent/pr-agent@sha256:65e5b196e38cecd7df8a71fe29942052e081a0c6645132c2ac874df60b1760c7 # v0.46.0
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           # Scaleway Generative APIs: an IAM secret key, used as the key of the OpenAI-compatible endpoint.
