@@ -1,0 +1,81 @@
+# Automatic review of pull requests by Sakuga Review (MiMo through OpenRouter).
+# See https://github.com/sakuga-software/sakuga-review.
+#
+# A copy of the job of review.yml in sakuga-review, not a call to it: this repository is public, and
+# a public repository cannot call a workflow of a private one. Keep it in step with review.yml, and
+# take the script at the SHA of the same version (the step that checks out the script).
+name: Sakuga Review
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
+
+# The review posts with a token of the GitHub App, asked for below. The token of this workflow is not
+# used, so it gets no permission.
+permissions: {}
+
+jobs:
+  review:
+    name: Sakuga Review
+    # Drafts, pull requests of bots and pushes of bots are skipped. A pull request from a fork is
+    # skipped too: it gets no secret.
+    if: >-
+      github.event.sender.type != 'Bot' &&
+      !github.event.pull_request.draft &&
+      github.event.pull_request.user.type != 'Bot' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    # A runner of GitHub, free for a public repository. The self-hosted runners serve the private
+    # repositories only, and a self-hosted runner on a public repository runs the code of forks.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # A new push replaces the review of the previous one.
+    concurrency:
+      group: sakuga-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - name: Sakuga Review token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          # The Client ID of the App: not a secret.
+          client-id: Iv23liesB1xzywavcnv2
+          private-key: ${{ secrets.PR_AGENT_APP_PRIVATE_KEY }}
+          repositories: |
+            ${{ github.event.repository.name }}
+            sakuga-review
+          permission-contents: read
+          permission-pull-requests: write
+      # The whole history: the script diffs from the merge base, and a thread closes only when its
+      # file changed since the commit that the thread names.
+      - name: Check out the pull request
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          path: repo
+          persist-credentials: false
+      # The script and its prompt at v2. The private repository opens with the token of the App.
+      - name: Check out the review script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: sakuga-software/sakuga-review
+          ref: 98155ea6756730cf44ef35590f1e8f5d743cb8fe # v2
+          path: settings
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
+      # Node runs the TypeScript of the script as is: no package and no build.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '26'
+      # The script reads the code and never runs it.
+      - name: Review
+        run: >-
+          node settings/review/sakuga-review.ts --repo-dir repo --repository "$REPOSITORY"
+          --pr "$PR_NUMBER" --base "$BASE_SHA" --head "$HEAD_SHA"
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
