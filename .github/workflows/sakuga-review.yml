@@ -134,7 +134,8 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '26'
-      # A comment event carries no commit: read the head and the base of the pull request.
+      # A comment event carries no commit: read the head and the base of the pull request, and
+      # whether it comes from a fork. A fork gets no command, as it gets no review.
       - name: Read the pull request
         id: pr
         run: |
@@ -145,14 +146,15 @@ jobs:
             });
             if (!response.ok) throw new Error(`GitHub answered ${response.status}`);
             const pr = await response.json();
-            appendFileSync(process.env.GITHUB_OUTPUT, `head=${pr.head.sha}\nbase=${pr.base.sha}\n`);
+            const fork = pr.head.repo?.full_name !== process.env.REPOSITORY;
+            appendFileSync(process.env.GITHUB_OUTPUT, `head=${pr.head.sha}\nbase=${pr.base.sha}\nfork=${fork}\n`);
           '
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.issue.number }}
-      # The script reads the code of the pull request and never runs it, even from a fork.
       - name: Check out the pull request
+        if: steps.pr.outputs.fork == 'false'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.pr.outputs.head }}
@@ -160,6 +162,7 @@ jobs:
           path: repo
           persist-credentials: false
       - name: Check out the review script
+        if: steps.pr.outputs.fork == 'false'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: sakuga-software/sakuga-review
@@ -169,6 +172,7 @@ jobs:
           persist-credentials: false
       # The comment goes through the environment, never into the command line of the shell.
       - name: Command
+        if: steps.pr.outputs.fork == 'false'
         run: >-
           node settings/review/sakuga-review.ts --repo-dir repo --repository "$REPOSITORY"
           --pr "$PR_NUMBER" --base "$BASE_SHA" --head "$HEAD_SHA"
