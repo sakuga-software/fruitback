@@ -515,7 +515,10 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   `page.content.ts` mounts it with no `transport`, so it calls the worker through `fetchTransport`
   from the page, exactly as a public-mode site does. Two consequences to state rather than discover:
   its reporter is self-declared like any other, and a worker on `read: 'authenticated'` answers its
-  reads `401` — a reviewer then gets a page with no pins and no reason, which is FRU-66. **And that
+  reads `401`. The page shows no pin and no reason, so the popup asks the same read and says so
+  (`read-probe.ts`, FRU-66): only a `401` is a statement, and a worker that is down or slow gets no
+  line. The probe was measured from an extension page with **no** host permission on the worker,
+  because the E2E copy holds one and its fetch skips CORS. **And that
   cannot be worked around per client**: `FRUITBACK_SESSION_PATH` alongside `FRUITBACK_CLIENTS` is
   refused at boot, so a worker holding sessions is single-tenant and its `read` is worker-wide. A
   private-mode client beside a team-mode one is two workers, or a worker left at `public`.

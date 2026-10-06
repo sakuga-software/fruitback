@@ -1,5 +1,6 @@
 import { browser } from 'wxt/browser';
 import { isSecureWorkerEndpoint, workerOrigin } from '../../src/endpoint.ts';
+import { MODES_GUIDE, READ_NEEDS_SESSION, probeRead } from '../../src/read-probe.ts';
 import { matchPatternFor } from '../../src/registration.ts';
 import { NO_ACCESS_PROBLEM, STORE_PROBLEM, activateStored } from '../../src/site-editor.ts';
 import { complaint, siteFrom } from '../../src/site-form.ts';
@@ -70,11 +71,35 @@ async function render(editing = false): Promise<void> {
   // Pairing is against the **worker**, not the site, so there is nothing to ask for until one is
   // named. A reviewer holds one session per worker however many of its sites they have turned on.
   if (found !== undefined && !open) app.append(await session(found.site));
+  if (found !== undefined && !open && tab?.url !== undefined) app.append(readability(found.site, tab.url));
 
   app.append(optionsButton());
 }
 
 const NO_RULE = 'No rule covers this origin, so Fruitback does nothing here.';
+
+/**
+ * Why a private-mode site shows no note on a worker that reads `authenticated` (FRU-66).
+ *
+ * The line is empty until the worker answers, and stays empty unless the answer is a `401`. The
+ * popup does not wait for it: the switch must not sit behind a worker that is slow.
+ */
+function readability(site: SiteConfig, pageUrl: string): HTMLElement {
+  const line = element('p', '', 'problem');
+  if (site.mode !== 'private' || !site.enabled) return line;
+
+  void probeRead(site, pageUrl, { fetch: (url, init) => fetch(url, init) }).then((answer) => {
+    if (answer !== 'wants-a-session') return;
+
+    const guide = element('a', 'Which mode can read it');
+    guide.href = MODES_GUIDE;
+    guide.target = '_blank';
+    guide.rel = 'noreferrer';
+    line.append(`${READ_NEEDS_SESSION} `, guide);
+  });
+
+  return line;
+}
 
 /** Every entry, wildcards and the rules file included, on the options page (FRU-43). */
 function optionsButton(): HTMLElement {

@@ -6,6 +6,7 @@ import {
   addRule,
   mintPairingCode,
   openBareSite,
+  openPopup,
   pairFromPopup,
   readSeeds,
   readableByThePage,
@@ -156,6 +157,45 @@ async function expectNoCredentialReadable(page: Page, tokens: StoredToken[]): Pr
   expect(messages.join('\n')).not.toMatch(/authorization/i);
   expect(chromeStorage).toBe('undefined');
 }
+
+test('private mode on a worker that wants a session: the popup says why the page shows no note (FRU-66)', async ({
+  extension,
+}) => {
+  await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: AUTHENTICATED_WORKER_ORIGIN });
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'ext-private-authenticated');
+  // The widget mounts and looks ready. Its reads answer 401, and nothing on the page says so.
+  await expect(page.getByRole('button', { name: /Leave feedback/ })).toBeVisible();
+
+  const popup = await openPopup(extension, page);
+
+  await expect(popup.getByText(/answers a signed-in reader only/)).toBeVisible();
+  const shot = test.info().outputPath('popup.png');
+  await popup.screenshot({ path: shot });
+  await test.info().attach('popup', { path: shot, contentType: 'image/png' });
+  await expect(popup.getByRole('link', { name: 'Which mode can read it' })).toHaveAttribute(
+    'href',
+    'https://sakuga-software.github.io/fruitback/modes.html',
+  );
+});
+
+test('private mode on a worker that answers anyone: the popup says nothing about a session', async ({ extension }) => {
+  // The control for the spec above: the same rule, on the worker that reads `public`.
+  await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'ext-private-public');
+
+  const popup = await openPopup(extension, page);
+  // An absence proves nothing until the question was asked and answered, so wait for the answer.
+  await page.bringToFront();
+  const answered = popup.waitForResponse((response) => response.url().startsWith(`${WORKER_ORIGIN}/feedback?`));
+  await popup.reload();
+  expect((await answered).status()).toBe(200);
+  await popup.evaluate(() => new Promise((resolve) => setTimeout(resolve, 0)));
+
+  await expect(popup.getByText(/answers a signed-in reader only/)).toHaveCount(0);
+  await expect(popup.getByText('On · playground', { exact: false })).toBeVisible();
+});
 
 test('team mode: paired from the popup, the site reads and writes through the relay and never sees a token', async ({
   extension,

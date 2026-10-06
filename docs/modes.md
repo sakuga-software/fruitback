@@ -28,8 +28,8 @@ identity token. What the three modes differ on is **who can produce one**.
   minted by that site's backend and lives in its page's JavaScript.
 - **Private mode cannot.** The extension mounts the widget with no `identityToken` and no transport,
   so it has nothing to attach and the site embeds nothing that could supply one. On an `authenticated`
-  worker those reads answer `401`, and the reviewer gets a page with no pins and no reason
-  (FRU-66). Left at the `public` default, the pins are the same pins on the same open path: private
+  worker those reads answer `401`, and the page shows no pins. The popup says why: `This worker
+answers a signed-in reader only, and private mode carries no session.` Left at the `public` default, the pins are the same pins on the same open path: private
   mode changes **who is shown** the feedback, never **who may fetch** it.
 - **Team mode is the only one where the reviewer supplies it, and the only one that keeps it out of
   the page.** The site's widget is handed the extension's transport, and the token is attached in the
@@ -79,8 +79,9 @@ Every mode needs the worker: it is what holds the tracker's API key, and that ke
 client-side JavaScript. One container — [self-hosting.md](self-hosting.md).
 
 `FRUITBACK_READ=authenticated` under private mode is worth spelling out: the widget the extension
-mounts sends no token, so the read answers `401` and the reviewer gets a page with no pins and no
-reason — the same screen as a worker that is down (FRU-66).
+mounts sends no token, so the read answers `401` and the page shows no pins — the same page as a
+worker that is down. The popup tells the two apart: it asks the worker the same read, and on a `401`
+it says that the worker wants a session that private mode does not carry.
 
 **And one worker cannot serve team mode and a client map at the same time.** `FRUITBACK_SESSION_PATH`
 alongside `FRUITBACK_CLIENTS` is refused at boot: a session signs its access token with the

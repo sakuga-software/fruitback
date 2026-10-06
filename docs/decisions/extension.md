@@ -609,6 +609,29 @@ download were built and type-checked, not seen. Since FRU-45, `e2e/extension.spe
 in a real Chromium and adds its rules through it. The prompt and the download are still not exercised:
 automation cannot answer the prompt, and the fixture declares its hosts instead.
 
+### Private mode on a worker that wants a session (FRU-66)
+
+A private-mode widget calls the worker from the page, with no credential. On a worker that reads
+`authenticated` each read answers `401`, and the widget leaves the page as it is, which is the rule
+for a `401` (FRU-40). The reviewer saw a page with no pins and no reason.
+
+**Taken: say so, in the popup.** `read-probe.ts` asks the read the widget asks, for the tab and the
+client of the rule, and the popup writes one line on a `401`. Only a `401` is a statement: a worker
+that is down, slow or rate-limited gets no line, because the popup did not measure why. The popup
+does not wait for the answer, so the switch never sits behind a slow worker.
+
+**Not taken: carry a session in private mode.** Mounting the private-mode widget on the relay would
+let a paired reviewer read an `authenticated` worker. The relay checks the endpoint the page
+declares against the stored one, and in private mode the page declares nothing, so that check would
+have to be designed again rather than reused. Nobody has asked for it. Open it again when somebody
+needs a private-mode client on a worker that holds sessions, and not before.
+
+**Measured, because the test cannot see it.** The E2E copy of the extension holds a host permission
+on both workers, so its `fetch` skips CORS. The shipped extension holds none in private mode. From a
+page of the unmodified build, with `permissions.contains` answering `false` for the worker, a `fetch`
+of `/feedback` on an `authenticated` worker reads `status: 401` (Chromium 1234): the worker puts its
+CORS headers on the refusal for an extension origin.
+
 ## The team mode, and the call the page cannot make (FRU-57)
 
 Private mode injects a widget into a site that ships none. Team mode is for the team that ships its
