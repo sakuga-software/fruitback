@@ -493,8 +493,12 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
 - **A rules file holds no credential and no grant.** An imported entry runs nowhere until the options
   page's **Grant access** is pressed, and `permissions.onAdded` is what re-syncs the registration,
   because a grant writes no storage. The worker's `origins` stays an exact list, but it applies to
-  private mode only: the relay calls from the extension origin, which the worker exempts. **A wildcard
-  team rule lends the reviewer's session to every page it covers**, and SECURITY.md says so.
+  private mode only: the relay calls from the extension origin, which the worker exempts.
+- **A wildcard in team mode covers nothing** (FRU-75). `https://*.vercel.app` is a valid pattern, and
+  in team mode it would lend the reviewer's session to the sites of other people. `lendsSession` is
+  the one predicate: `resolveSite` skips such an entry, so the bridge, the relay and the popup all
+  refuse it, `complaint` takes the pattern and refuses it in the form and in the import, and the
+  background does not register it. A wildcard stays valid in private mode, which carries no token.
 - **The rules stay in `chrome.storage.local`.** The ticket asked for `sync`; a host permission does
   not travel with a synced rule, and moving the key is a storage-shape change. That is FRU-72.
 

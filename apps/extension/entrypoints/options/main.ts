@@ -1,7 +1,8 @@
 import { browser } from 'wxt/browser';
 import { matchPatternFor } from '../../src/registration.ts';
 import { NO_ACCESS_PROBLEM, STORE_PROBLEM, activateStored, createEditor, latestOnly } from '../../src/site-editor.ts';
-import { parseSitePattern } from '../../src/site-patterns.ts';
+import { STALE_TEAM_WILDCARD } from '../../src/site-form.ts';
+import { lendsSession, parseSitePattern } from '../../src/site-patterns.ts';
 import { injectIntoOpenTabs } from '../../src/tab-injection.ts';
 import { browserTabScripting as scripting } from '../../src/tab-scripting-browser.ts';
 import { type SitesImport, exportSites, importSites } from '../../src/site-transfer.ts';
@@ -98,22 +99,29 @@ async function row(pattern: string, site: SiteConfig): Promise<HTMLElement> {
   const granted = await browser.permissions.contains({ origins: [matchPatternFor(pattern)] });
   const client = site.mode === 'team' ? "team mode · the site's own widget" : site.clientId;
 
+  // A rule stored before FRU-75. It runs nowhere now, so the row offers only to remove it.
+  const refused = lendsSession(pattern, site);
+
   const buttons = document.createElement('span');
   buttons.className = 'buttons';
-  if (!granted) buttons.append(button('Grant access', () => attempt(grant(pattern, site))));
-  buttons.append(
-    site.enabled
-      ? button('Turn off', () => attempt(writeSite(pattern, { ...site, enabled: false })))
-      : button('Turn on', () => attempt(editor.switchOn(pattern, site))),
-    button('Remove', () => attempt(removeSite(pattern)), 'secondary'),
-  );
+  if (!refused) {
+    if (!granted) buttons.append(button('Grant access', () => attempt(grant(pattern, site))));
+    buttons.append(
+      site.enabled
+        ? button('Turn off', () => attempt(writeSite(pattern, { ...site, enabled: false })))
+        : button('Turn on', () => attempt(editor.switchOn(pattern, site))),
+    );
+  }
+  buttons.append(button('Remove', () => attempt(removeSite(pattern)), 'secondary'));
 
   const item = document.createElement('li');
   item.append(
     element('span', pattern, 'pattern'),
     buttons,
-    element('span', `${site.enabled ? 'On' : 'Off'} · ${client} · ${site.endpoint}`, 'state'),
-    element('span', granted ? 'Access granted' : 'No access in this browser', granted ? 'state' : 'problem'),
+    element('span', `${site.enabled && !refused ? 'On' : 'Off'} · ${client} · ${site.endpoint}`, 'state'),
+    refused
+      ? element('span', STALE_TEAM_WILDCARD, 'problem')
+      : element('span', granted ? 'Access granted' : 'No access in this browser', granted ? 'state' : 'problem'),
   );
 
   return item;

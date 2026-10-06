@@ -84,9 +84,11 @@ client id is still a claim. What the worker checks differs by mode:
 - **Team mode**: the relay calls from the extension's origin, which the worker exempts from `origins`
   (see [What the extension relays](#what-the-extension-relays-and-what-it-refuses-to)). The binding
   is the extension's own: a page gets a relayed call only if a rule covers its origin, and only to the
-  endpoint that rule names. **A wildcard team rule lets every page it covers spend the reviewer's
-  session** on that endpoint, so a reviewer who writes `https://*.staging.acme.dev` trusts every
-  subdomain under it, as they trust one origin when they turn one on.
+  endpoint that rule names. **A team rule names one origin, and a wildcard in team mode covers
+  nothing.** A wildcard needs only a base of two labels, so `https://*.vercel.app` is a valid pattern,
+  and it would let the sites of other people spend the reviewer's session. The form and the import
+  refuse such a rule, and for one already stored the bridge does not announce and the relay answers
+  `site-not-configured`. A wildcard stays valid in private mode, which carries no credential.
   A rules file holds no session and no host
   permission, so an imported rule runs nowhere until the reviewer grants its pattern in their browser.
 
@@ -332,7 +334,7 @@ than it accepts. It sends nothing unless all of the following are true:
 |              |                                                                                               |
 | ------------ | --------------------------------------------------------------------------------------------- |
 | The origin   | comes from the sender the browser reports, never from the message                             |
-| The site     | has an entry the reviewer stored, switched on, in team mode — or a wildcard entry covering it |
+| The site     | has an entry the reviewer stored for that exact origin, switched on, in team mode             |
 | The endpoint | is the one that entry names — a page asking for another worker is **refused, not redirected** |
 | The path     | is `/feedback`, the one path the widget calls                                                 |
 | The headers  | are rebuilt: `Content-Type` may come from the page, `Authorization` never does                |

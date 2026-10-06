@@ -121,9 +121,11 @@ rule for all of them. **A site that no rule covers mounts nothing**: there is no
 refuse. On a site a wildcard covers, the popup's switch reads `Turn off for every site this rule covers`,
 because that is what it does.
 
-**In team mode, a wildcard rule lends your session to every page it covers.** The relay spends your
-session for any page a team rule covers, so `https://*.staging.acme.dev` trusts every subdomain under it.
-Use one origin when that is all you mean.
+**A team-mode rule names one origin, never a wildcard.** The relay spends your session for the page a
+team rule covers, and a wildcard such as `https://*.vercel.app` covers sites that are not yours. The
+popup, the options page and an imported file all refuse a wildcard in team mode. A wildcard stays
+valid in private mode, which carries no session. A team wildcard that an earlier version stored runs
+nowhere now: the options page says so on its row, and offers to remove it.
 
 **A wildcard is a convenience in your browser, and grants nothing on the worker.** The worker compares
 each page's exact origin with the `origins` of its client, so `pr-12.staging.acme.dev` has to be listed

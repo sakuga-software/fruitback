@@ -8,7 +8,7 @@ import {
   createEditor,
   latestOnly,
 } from './site-editor.ts';
-import { PATTERN_PROBLEM } from './site-form.ts';
+import { PATTERN_PROBLEM, WILDCARD_TEAM_PROBLEM } from './site-form.ts';
 import type { SiteConfig } from './sites.ts';
 
 function editor(granted: boolean, current: Record<string, SiteConfig> = {}) {
@@ -103,8 +103,10 @@ describe('createEditor', () => {
     assert.equal(await duplicate.add(fields), DUPLICATE_PROBLEM);
     const incomplete = editor(true);
     assert.equal(await incomplete.add({ ...fields, clientId: '' }), 'The client id is required.');
+    const lending = editor(true);
+    assert.equal(await lending.add({ ...fields, mode: 'team', clientId: '' }), WILDCARD_TEAM_PROBLEM);
 
-    for (const page of [bad, duplicate, incomplete]) {
+    for (const page of [bad, duplicate, incomplete, lending]) {
       assert.deepEqual(page.requests, []);
       assert.deepEqual(page.writes, []);
     }

@@ -90,7 +90,8 @@ export type ResolvedSite = { pattern: string; site: SiteConfig };
  *
  * An exact origin wins over every wildcard, and a longer wildcard wins over a shorter one. So a
  * reviewer can switch one subdomain off, or send it to another client, under a rule for all of
- * them. A key that is not a pattern covers nothing.
+ * them. A key that is not a pattern covers nothing, and a wildcard in team mode covers nothing
+ * either: see `lendsSession`.
  */
 export function resolveSite(sites: Record<string, SiteConfig>, origin: string): ResolvedSite | undefined {
   const exact = sites[origin];
@@ -99,6 +100,7 @@ export function resolveSite(sites: Record<string, SiteConfig>, origin: string): 
   let best: ResolvedSite | undefined;
   for (const [pattern, site] of Object.entries(sites)) {
     if (!pattern.includes(`://${WILDCARD}`) || parseSitePattern(pattern) !== pattern) continue;
+    if (lendsSession(pattern, site)) continue;
     if (!coversOrigin(pattern, origin)) continue;
     if (best === undefined || pattern.length > best.pattern.length) best = { pattern, site };
   }
@@ -108,4 +110,20 @@ export function resolveSite(sites: Record<string, SiteConfig>, origin: string): 
 
 export function isWildcardPattern(pattern: string): boolean {
   return pattern.includes(`://${WILDCARD}`);
+}
+
+/**
+ * Whether a rule would lend the reviewer's session to every site a wildcard covers (FRU-75).
+ *
+ * In team mode the relay calls the worker with the session of the reviewer, for the page that asks.
+ * A wildcard needs only a base of two labels, so `https://*.vercel.app` is a valid pattern, and it
+ * covers the sites of everybody. A team rule must name one origin. A wildcard stays valid in private
+ * mode, which carries no credential.
+ *
+ * Every reader asks this through `resolveSite`: the bridge does not announce, the relay answers
+ * `site-not-configured`, and the popup shows no rule. The form and the import refuse the rule, and
+ * the background does not register it.
+ */
+export function lendsSession(pattern: string, site: Pick<SiteConfig, 'mode'>): boolean {
+  return site.mode === 'team' && isWildcardPattern(pattern);
 }

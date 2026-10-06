@@ -60,7 +60,7 @@ export function importSites(text: string): SitesImport {
       endpoint: site.endpoint,
       clientId: site.mode === 'private' ? site.clientId : '',
     };
-    if (pattern === undefined || site === undefined || fields === undefined || complaint(fields) !== '') {
+    if (pattern === undefined || site === undefined || fields === undefined || complaint(fields, pattern) !== '') {
       skipped.push(key);
     } else {
       const stored = { ...site, endpoint: normalizeWorkerEndpoint(site.endpoint) };

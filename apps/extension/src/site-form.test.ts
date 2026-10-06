@@ -1,26 +1,31 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { complaint, siteFrom } from './site-form.ts';
+import { WILDCARD_TEAM_PROBLEM, complaint, siteFrom } from './site-form.ts';
+
+const ORIGIN = 'https://acme.dev';
 
 describe('complaint', () => {
   it('accepts a complete entry in each mode', () => {
-    assert.equal(complaint({ mode: 'private', endpoint: 'http://staging.acme.dev', clientId: 'acme' }), '');
-    assert.equal(complaint({ mode: 'team', endpoint: 'https://feedback.acme.dev', clientId: '' }), '');
-    assert.equal(complaint({ mode: 'team', endpoint: 'http://localhost:8788', clientId: '' }), '');
+    assert.equal(complaint({ mode: 'private', endpoint: 'http://staging.acme.dev', clientId: 'acme' }, ORIGIN), '');
+    assert.equal(complaint({ mode: 'team', endpoint: 'https://feedback.acme.dev', clientId: '' }, ORIGIN), '');
+    assert.equal(complaint({ mode: 'team', endpoint: 'http://localhost:8788', clientId: '' }, ORIGIN), '');
   });
 
   it('names the first field that is wrong', () => {
-    assert.equal(complaint({ mode: 'private', endpoint: '', clientId: 'acme' }), 'The worker endpoint is required.');
     assert.equal(
-      complaint({ mode: 'private', endpoint: 'javascript:alert(1)', clientId: 'acme' }),
+      complaint({ mode: 'private', endpoint: '', clientId: 'acme' }, ORIGIN),
+      'The worker endpoint is required.',
+    );
+    assert.equal(
+      complaint({ mode: 'private', endpoint: 'javascript:alert(1)', clientId: 'acme' }, ORIGIN),
       'The endpoint must be a full http:// or https:// URL.',
     );
     assert.equal(
-      complaint({ mode: 'private', endpoint: 'https://w.test', clientId: '' }),
+      complaint({ mode: 'private', endpoint: 'https://w.test', clientId: '' }, ORIGIN),
       'The client id is required.',
     );
     assert.equal(
-      complaint({ mode: 'team', endpoint: 'http://feedback.acme.dev', clientId: '' }),
+      complaint({ mode: 'team', endpoint: 'http://feedback.acme.dev', clientId: '' }, ORIGIN),
       'A team-mode worker must be on https (localhost excepted).',
     );
   });
@@ -31,10 +36,26 @@ describe('complaint', () => {
    */
   it('treats a client id made of spaces as absent', () => {
     assert.equal(
-      complaint({ mode: 'private', endpoint: 'https://w.test', clientId: '   ' }),
+      complaint({ mode: 'private', endpoint: 'https://w.test', clientId: '   ' }, ORIGIN),
       'The client id is required.',
     );
-    assert.equal(complaint({ mode: 'private', endpoint: 'https://w.test', clientId: ' acme ' }), '');
+    assert.equal(complaint({ mode: 'private', endpoint: 'https://w.test', clientId: ' acme ' }, ORIGIN), '');
+  });
+});
+
+describe('a wildcard in team mode (FRU-75)', () => {
+  const team = { mode: 'team', endpoint: 'https://feedback.acme.dev', clientId: '' } as const;
+
+  it('is refused, because it lends the session to every site it covers', () => {
+    assert.equal(complaint(team, 'https://*.vercel.app'), WILDCARD_TEAM_PROBLEM);
+    assert.equal(complaint(team, 'https://*.staging.acme.dev'), WILDCARD_TEAM_PROBLEM);
+  });
+
+  it('is still accepted in private mode, which carries no credential', () => {
+    assert.equal(
+      complaint({ mode: 'private', endpoint: 'https://w.test', clientId: 'acme' }, 'https://*.staging.acme.dev'),
+      '',
+    );
   });
 });
 

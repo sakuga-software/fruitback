@@ -64,7 +64,7 @@ export function createEditor({ request, write, current, activate, stored }: Edit
       const pattern = parseSitePattern(fields.sites);
       if (pattern === undefined) return Promise.resolve(PATTERN_PROBLEM);
       if (current()[pattern] !== undefined) return Promise.resolve(DUPLICATE_PROBLEM);
-      const problem = complaint(fields);
+      const problem = complaint(fields, pattern);
       if (problem !== '') return Promise.resolve(problem);
 
       return request(pattern).then(
