@@ -45,6 +45,11 @@ describe('node server.mjs forget (FRU-85)', () => {
     assert.equal(parseForgetArgs(['--email', '  ']).ok, false);
   });
 
+  it('never reads a flag as the address, so a dry run cannot turn into a deletion', () => {
+    assert.equal(parseForgetArgs(['--email', '--dry-run']).ok, false);
+    assert.equal(parseForgetArgs(['--email', '--dry-run', 'alice@example.com']).ok, false);
+  });
+
   it('lists on a dry run, then deletes, and says so', async () => {
     const path = await storeWithAlice();
 

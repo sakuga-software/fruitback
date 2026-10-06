@@ -134,7 +134,10 @@ export function parseForgetArgs(argv: readonly string[]): ForgetArgsResult {
       dryRun = true;
     } else if (flag === '--email') {
       email = argv[index + 1];
-      if (email === undefined) return { ok: false, error: `${FORGET_USAGE}\n--email needs a value` };
+      // `--email --dry-run` would otherwise read the flag as the address and run a real deletion.
+      if (email === undefined || email.startsWith('--')) {
+        return { ok: false, error: `${FORGET_USAGE}\n--email needs a value` };
+      }
       index += 1;
     } else {
       // Refused rather than ignored: `--dryrun` must not delete what `--dry-run` would only list.
