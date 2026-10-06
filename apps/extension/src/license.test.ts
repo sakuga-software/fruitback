@@ -27,10 +27,7 @@ describe('the licence of the extension', () => {
     assert.match(license, /GNU AFFERO GENERAL PUBLIC LICENSE\s+Version 3/);
     // The same text as the worker's, which is under the same licence. Two copies that drift are two
     // licences, and the one the archive carries is this one.
-    // Written from this file rather than from `EXTENSION`, because that is how `test-inputs.test.ts`
-    // reads a path: against the file it is written in. The two have to agree, or the read is declared
-    // as an input of nothing (SKG-610).
-    assert.equal(license, read(new URL('../../worker/LICENSE', import.meta.url)));
+    assert.equal(license, read(new URL('../worker/LICENSE', EXTENSION)));
   });
 
   /** A licence in the repository and not in the archive is the case this whole ticket is about. */
