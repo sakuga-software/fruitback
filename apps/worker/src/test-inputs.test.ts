@@ -112,11 +112,15 @@ type Scan = { paths: string[]; templated: string[]; joined: string[] };
 type Reads = { reads: { test: string; path: string }[]; templated: string[]; joined: string[] };
 
 const IDENTIFIER = '[A-Za-z_$][\\w$]*';
+/** A call oxfmt wrapped puts a line break after the parenthesis and a comma after the last argument. */
 const BASE_DECLARATION = new RegExp(
-  `\\bconst (${IDENTIFIER}) = (?:fileURLToPath\\()?new URL\\((['"])([^'"\\n]*)\\2, (import\\.meta\\.url|${IDENTIFIER})\\)`,
+  `\\bconst (${IDENTIFIER}) = (?:fileURLToPath\\()?new URL\\(\\s*(['"])([^'"\\n]*)\\2,\\s*(import\\.meta\\.url|${IDENTIFIER}),?\\s*\\)`,
   'g',
 );
-const READ_FROM_BASE = new RegExp(`\\bnew URL\\((?:(['"])([^'"\\n]*)\\1|([^,()]+)), (${IDENTIFIER})\\)`, 'g');
+const READ_FROM_BASE = new RegExp(
+  `\\bnew URL\\(\\s*(?:(['"])([^'"\\n]*)\\1|([^,()'"]+)),\\s*(${IDENTIFIER}),?\\s*\\)`,
+  'g',
+);
 
 /** `path` resolved the way `new URL` resolves it against `base`, both relative to the repository. */
 function resolveUrl(path: string, base: string): string {
@@ -145,7 +149,7 @@ function scan(test: string, source: string): Scan {
     for (const read of source.matchAll(READ_FROM_BASE)) {
       const [call, , literal, computed, name] = read;
       const base = bases.get(name as string);
-      if (literal !== undefined) throughBase.add(read.index + 'new URL('.length);
+      if (literal !== undefined) throughBase.add(read.index + call.indexOf(`${read[1]}${literal}${read[1]}`));
       if (base === undefined) {
         found.joined.push(`${test}: ${call}`);
         continue;
@@ -302,6 +306,26 @@ describe('how the scan resolves a path (SKG-622)', () => {
 
     assert.ok(paths.includes('docs/'), paths.join(', '));
     assert.deepEqual(templated, [`${test}: \`\${name}.md\``]);
+  });
+
+  it('reads a call that oxfmt wrapped over several lines', () => {
+    const { paths } = scan(
+      test,
+      source([
+        'const EXTENSION = new URL(',
+        "  'UP/',",
+        '  import.meta.url,',
+        ');',
+        'readFileSync(',
+        '  new URL(',
+        "    'UP/worker/LICENSE',",
+        '    EXTENSION,',
+        '  ),',
+        ');',
+      ]),
+    );
+
+    assert.deepEqual(paths, ['apps/worker/LICENSE', 'apps/extension/']);
   });
 
   it('refuses a read through a base the file does not declare', () => {
