@@ -66,7 +66,7 @@ describe('where a second instance keeps its preferences', () => {
    * The defect this seam exists for, written as the failure rather than as the fix.
    *
    * The store lets what is in `localStorage` **override** what `init` was passed, which is right for
-   * one widget and wrong for two. The browser extension (SKG-534) mounts a second one on a site that
+   * one widget and wrong for two. The browser extension (FRU-41) mounts a second one on a site that
    * may embed its own, and without a key of its own it would inherit the site's `endpoint` and
    * `clientId` — the reviewer's notes going to a worker nobody chose, with nothing on screen to say
    * so.
@@ -133,7 +133,7 @@ describe('the optional picture', () => {
   });
 
   it('offers the setting only when the host gave it something to capture with', () => {
-    // The reason this toggle was left out of SKG-503: a switch that controls nothing.
+    // The reason this toggle was left out of FRU-14: a switch that controls nothing.
     const bare = mountable();
     const widgetWithout = init({ document: bare.document, endpoint: 'https://worker.test', clientId: 'acme' });
     const withoutRoot = bare.document.querySelector('[data-fruitback-host]')?.shadowRoot as ShadowRoot;
@@ -205,7 +205,7 @@ describe('reading pins', () => {
   const ok = (issues: unknown[]) => new Response(JSON.stringify({ issues }), { status: 200 });
 
   it('sends the identity token on a read, not only on a write', async () => {
-    // A client configured `read: "authenticated"` (SKG-533) answers 401 without one, so the reader
+    // A client configured `read: "authenticated"` (FRU-40) answers 401 without one, so the reader
     // has to carry the same token the write path already did.
     const page = mountWithCta();
     const seen = stubReads(() => ok([]));
@@ -227,7 +227,7 @@ describe('reading pins', () => {
   it('sends no Authorization header when the host mints no token', async () => {
     // The anonymous case stays the default, and an empty header is not the same as none.
     //
-    // This asserted `init === undefined` until SKG-595, which is the shape the old code happened to
+    // This asserted `init === undefined` until FRU-56, which is the shape the old code happened to
     // pass rather than the promise being made: every call carries a method now, so the absence of
     // the header is what has to be checked.
     const page = mountWithCta();
@@ -245,7 +245,7 @@ describe('reading pins', () => {
     widget.destroy();
   });
 
-  it('offers in the settings only the stages the worker reports (SKG-525)', async () => {
+  it('offers in the settings only the stages the worker reports (FRU-32)', async () => {
     const page = mountWithCta();
     stubReads(
       () => new Response(JSON.stringify({ issues: [], stages: ['seeded', 'ripe', 'composted'] }), { status: 200 }),
@@ -303,7 +303,7 @@ describe('reading pins', () => {
 describe('the theme a host passes in', () => {
   it('reaches the host element, where an inline property beats the :host declaration', () => {
     // Written on the element rather than into the stylesheet on purpose: an inline custom property
-    // wins without anyone needing a more specific selector (SKG-528).
+    // wins without anyone needing a more specific selector (FRU-35).
     const page = mountPage('<main><button id="cta">Commander</button></main>');
     const widget = init({
       document: page.document,
@@ -511,7 +511,7 @@ describe('who carries the calls', () => {
   });
 });
 
-describe('the language a mount speaks (SKG-530)', () => {
+describe('the language a mount speaks (FRU-37)', () => {
   const catalog = { fr: { 'launch.label': 'Laisser un feedback', 'settings.open': 'Ouvrir les réglages Fruitback' } };
   const shadow = (page: MountedPage) =>
     (page.document.querySelector('[data-fruitback-host]') as HTMLElement).shadowRoot;
@@ -545,7 +545,7 @@ describe('the language a mount speaks (SKG-530)', () => {
     }
   });
 
-  it('speaks the bundled French on a French page, with no catalog passed (SKG-531)', () => {
+  it('speaks the bundled French on a French page, with no catalog passed (FRU-38)', () => {
     const page = pageInFrench();
     const widget = init({ document: page.document, endpoint: 'https://worker.test', clientId: 'acme' });
 

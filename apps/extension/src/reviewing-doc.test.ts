@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 /**
- * The popup's words, checked against the guide that quotes them (SKG-539).
+ * The popup's words, checked against the guide that quotes them (FRU-46).
  *
  * `docs/reviewing.md` is the reviewer's side of the three modes, and it walks somebody through a
  * screen by naming what is on it. A renamed button leaves that guide describing a popup nobody has,
@@ -102,7 +102,7 @@ describe('the guide quotes the popup this extension renders', () => {
     }
   });
 
-  /** The same walk-through, on the options page (SKG-536). */
+  /** The same walk-through, on the options page (FRU-43). */
   it('names the options page controls it walks somebody through', () => {
     const controls = ['Add rule', 'Grant access', 'No access in this browser', 'Export rules', 'Import a rules file'];
 

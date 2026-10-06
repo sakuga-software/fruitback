@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { openPlayground } from './pin.ts';
 
 /**
- * The popover (SKG-493) in a browser: the two things that only exist there — a media query deciding
+ * The popover (FRU-4) in a browser: the two things that only exist there — a media query deciding
  * whether it is a popover or a sheet, and an animation that has to stop when the reader asked for
  * less motion.
  */

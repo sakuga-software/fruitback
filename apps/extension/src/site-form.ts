@@ -2,7 +2,7 @@ import { isSecureWorkerEndpoint, isWorkerEndpoint, normalizeWorkerEndpoint } fro
 import type { SiteConfig, SiteMode } from './sites.ts';
 
 /**
- * The fields of a site entry, checked the same way in the popup and on the options page (SKG-536).
+ * The fields of a site entry, checked the same way in the popup and on the options page (FRU-43).
  *
  * Two copies of these rules would drift, and the bridge applies the endpoint rule again before it
  * mounts. An entry that only one editor refused would be stored, shown as **On**, and then ignored.
@@ -18,7 +18,7 @@ export function complaint(values: SiteFields): string {
   if (values.endpoint === '') return 'The worker endpoint is required.';
   if (!isWorkerEndpoint(values.endpoint)) return 'The endpoint must be a full http:// or https:// URL.';
   // Trimmed, because an id made of spaces is an absent id. `importSites` passes the value of a file
-  // here as it is, and a worker with several clients answers `client-required` for it (SKG-612).
+  // here as it is, and a worker with several clients answers `client-required` for it (FRU-73).
   if (values.mode === 'private' && values.clientId.trim() === '') return 'The client id is required.';
   // Team mode cannot work without a session, and a session may not be opened over plain http — so
   // this entry would be stored, shown as **On**, and refuse every call. Say it here instead.

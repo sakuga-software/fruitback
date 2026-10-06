@@ -3,10 +3,10 @@ import { createStoredSessions } from './session-storage.ts';
 import type { SessionResponse, Sessions } from './session.ts';
 
 /**
- * `session.ts` wired to the real browser (SKG-599).
+ * `session.ts` wired to the real browser (FRU-60).
  *
  * Everything that binds `browser` or `fetch` is here, so the domain beside it stays runnable under
- * `node --test`. The same split `bridge.ts` made for SKG-534.
+ * `node --test`. The same split `bridge.ts` made for FRU-41.
  */
 
 /** Long enough for a slow worker on a slow connection, short enough to unwedge the endpoint. */
@@ -15,7 +15,7 @@ const REQUEST_TIMEOUT_MS = 20 * 1_000;
 /**
  * The three session routes, over `fetch`.
  *
- * The routes are exempt from the worker's origin allowlist (SKG-535) and answer a
+ * The routes are exempt from the worker's origin allowlist (FRU-42) and answer a
  * `chrome-extension://` origin with the CORS headers that let an extension page read the reply, so
  * an ordinary cross-origin `fetch` should reach them. `Content-Type: application/json` makes the
  * request preflighted, which the worker allows. **That was measured with `curl`, which does not

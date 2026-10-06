@@ -1,7 +1,7 @@
 import { type Fruitback, type FruitbackOptions, init } from './embed.ts';
 
 /**
- * The `<script>` tag entry point (SKG-505).
+ * The `<script>` tag entry point (FRU-16).
  *
  * A client site that has no build step gets the widget the way it gets an analytics snippet: one
  * tag, two attributes, nothing to import.

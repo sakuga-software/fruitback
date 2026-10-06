@@ -166,7 +166,7 @@ jobs:
           node-version-file: .nvmrc
 
       - name: From docker-compose.yml alone to a planted pin
-        # SKG-541. The directory holds only the compose file and a .env copied from .env.example, like
+        # FRU-48. The directory holds only the compose file and a .env copied from .env.example, like
         # the machine of somebody who never cloned this repository. The compose file pulls the
         # published image. The tag below puts the image of this commit in the local daemon under that
         # exact name, so compose finds it, pulls nothing, and needs no registry login.
@@ -192,7 +192,7 @@ jobs:
         run: docker compose --project-directory "$RUNNER_TEMP/compose" logs --no-color || true
 
   zizmor:
-    # The workflows hold the token that publishes the image, so they are audited like code (SKG-609).
+    # The workflows hold the token that publishes the image, so they are audited like code (FRU-70).
     # Offline: the audits that call the GitHub API do not run, so the result depends on the files alone.
     name: zizmor
     runs-on: ubuntu-latest

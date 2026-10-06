@@ -1,7 +1,7 @@
 import { ICON_DATA, type IconShape } from './icon-data.ts';
 
 /**
- * The widget's glyphs, as inline SVG (SKG-529).
+ * The widget's glyphs, as inline SVG (FRU-36).
  *
  * They used to be emoji — a sprout on the launch button, a gear, a fallen leaf on the detached-notes
  * chip, a strawberry on the confirmation. An emoji is drawn by the system's own font, so the same

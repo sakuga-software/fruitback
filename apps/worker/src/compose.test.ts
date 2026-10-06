@@ -6,7 +6,7 @@ import { DEFAULT_PORT, DEFAULT_TRUSTED_PROXY_HOPS } from './env.ts';
 import { DEFAULT_LIMIT } from './rate-limit.ts';
 
 /**
- * `docker-compose.yml` and `.env.example` against the variables the worker reads (SKG-541).
+ * `docker-compose.yml` and `.env.example` against the variables the worker reads (FRU-48).
  *
  * Dokploy does not read the compose file, so nothing else stops the two from drifting apart. The
  * worker's own variables come from `WorkerEnv`, and a store's come from its `envNames`, so a store
@@ -125,7 +125,7 @@ describe('.env.example', () => {
 });
 
 describe('docs/self-hosting.md', () => {
-  /** The cells of each row of the variable reference, keyed by the variable name (SKG-543). */
+  /** The cells of each row of the variable reference, keyed by the variable name (FRU-50). */
   function referenceRows(): Map<string, string> {
     const section = /^## Every environment variable\n([\s\S]*?)(?=^## )/m.exec(SELF_HOSTING)?.[1] ?? '';
 

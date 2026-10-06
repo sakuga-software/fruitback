@@ -1,5 +1,5 @@
 /**
- * The sizes the icon is rendered at, and where each one lands (SKG-617).
+ * The sizes the icon is rendered at, and where each one lands (FRU-78).
  *
  * One list, read by three places that would otherwise drift: `wxt.config.ts` declares them in the
  * manifest, `build-icons.ts` renders them, and `icons.test.ts` checks the files on disk. A size

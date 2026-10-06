@@ -5,7 +5,7 @@ import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 /**
- * What a test reads outside its project, against what Nx hashes for it (SKG-610).
+ * What a test reads outside its project, against what Nx hashes for it (FRU-71).
  *
  * Nx replays `test` from its cache when none of the target's inputs changed. A test that reads
  * `CLAUDE.md` or another project's source reads a file Nx does not hash, so a broken document came
@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
  *
  * A literal relative path is resolved and checked. **A path read through `new URL(path, BASE)` is
  * resolved against `BASE`**, when the file declares it as `new URL(literal, import.meta.url)` or
- * from another such base (SKG-622). Resolved against the test file instead, `'../worker/LICENSE'`
+ * from another such base (FRU-83). Resolved against the test file instead, `'../worker/LICENSE'`
  * read from `apps/extension/` reads as a path inside the extension, and the file really read is
  * hashed by nobody.
  *
@@ -63,7 +63,7 @@ const DYNAMIC_READS: Record<string, string[]> = {
   // The workspace a package is packed from: the root LICENSE pnpm copies, and the front-door package.
   "packages/widget/src/package.test.ts: join(root, '..', '..')": ['LICENSE', 'packages/fruitback/'],
   "packages/widget/src/package.test.ts: join(root, '..', name, 'dist')": [],
-  // The icons the manifest declares, rendered by `build-icons.ts` and committed (SKG-617).
+  // The icons the manifest declares, rendered by `build-icons.ts` and committed (FRU-78).
   'apps/extension/src/icons.test.ts: ../public/${iconPath(size)}': ['apps/extension/public/icon/*.png'],
   "apps/worker/src/session.test.ts: join(path, '..')": [],
   "apps/worker/src/session.test.ts: join(path, '..', name)": [],
@@ -227,7 +227,7 @@ function staticPrefix(pattern: string): string {
  * the shared globals. Every list starts with it — `starts every declared input list with the defaults
  * it replaces` is what keeps that true, so this does not check it again. The scan drops those reads
  * before they reach here, so only a `DYNAMIC_READS` entry brings one: the icons of the extension were
- * the first, and they read as unhashed (SKG-617).
+ * the first, and they read as unhashed (FRU-78).
  */
 function covers(project: Project, path: string, roots: Map<string, string>): boolean {
   if (`${path}/`.startsWith(`${project.root}/`)) return true;
@@ -263,7 +263,7 @@ function source(lines: string[]): string {
   return lines.join('\n').replaceAll('UP/', '../');
 }
 
-describe('how the scan resolves a path (SKG-622)', () => {
+describe('how the scan resolves a path (FRU-83)', () => {
   const test = 'apps/extension/src/license.test.ts';
 
   it('resolves a read through a declared base against that base, as it resolves one from the file', () => {
@@ -336,7 +336,7 @@ describe('how the scan resolves a path (SKG-622)', () => {
   });
 });
 
-describe('what a test reads, against what Nx hashes for it (SKG-610)', () => {
+describe('what a test reads, against what Nx hashes for it (FRU-71)', () => {
   const all = projects();
   const roots = new Map(all.map((project) => [project.name, project.root]));
   const scanned = all.map((project) => ({ project, ...readsOutside(project) }));

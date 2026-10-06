@@ -67,7 +67,7 @@ function constantIn(source: string, name: string): string {
 }
 
 /**
- * The reviewer's guide states the same lifetimes, in the reviewer's words (SKG-539).
+ * The reviewer's guide states the same lifetimes, in the reviewer's words (FRU-46).
  *
  * `docs/reviewing.md` tells somebody how long their pairing code is good for and what a log out
  * leaves behind, so it carries the three numbers `SECURITY.md` already carries — a second place for
@@ -225,7 +225,7 @@ describe('SECURITY.md states what the code does', () => {
 describe('the preflight lets through what the widget actually sends', () => {
   /**
    * `read: 'authenticated'` is the mitigation SECURITY.md names, and it was unreachable from a
-   * browser (SKG-518).
+   * browser (FRU-25).
    *
    * `embed.ts` sends `Authorization: Bearer …` on the read **and** on the write when a host mints a
    * token. That header is not CORS-safelisted, so both requests are preflighted — and a preflight

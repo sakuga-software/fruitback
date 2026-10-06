@@ -4,7 +4,7 @@ import { DEFAULT_SEED_STAGE } from '@fruitback/shared';
 import { createLinearStore, linearRoutingFor, stageForLinearState } from './linear.ts';
 
 /**
- * These tests moved here from `packages/shared` with the code they cover (SKG-516). The contract
+ * These tests moved here from `packages/shared` with the code they cover (FRU-23). The contract
  * package names the stages; this connector is what knows how Linear's own workflow reaches them.
  */
 
@@ -38,7 +38,7 @@ describe('linearRoutingFor', () => {
 
   it('sends a client with no team of its own to the worker’s', () => {
     // This fallback used to live in `resolveClient`, which meant the worker's client resolution knew
-    // that a store routes by team (SKG-522). Falling back to *the worker's team* is a rule about
+    // that a store routes by team (FRU-29). Falling back to *the worker's team* is a rule about
     // teams, so it belongs to the file that knows what a team is.
     assert.deepEqual(linearRoutingFor(config, undefined), { teamId: 'team_worker', projectId: 'project_worker' });
     assert.deepEqual(linearRoutingFor(config, {}), { teamId: 'team_worker', projectId: 'project_worker' });

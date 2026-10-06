@@ -5,10 +5,10 @@ export const DEFAULT_LIMIT = 20;
 export const WINDOW_MS = 60_000;
 
 /**
- * A sliding window, estimated from two fixed windows (SKG-542).
+ * A sliding window, estimated from two fixed windows (FRU-49).
  *
  * The count lives in the `Kv`, which lives in the process: N replicas allow N times the limit until a
- * store shared between them exists (SKG-606). The previous window's count is weighted by how much of it still overlaps the last minute.
+ * store shared between them exists (FRU-67). The previous window's count is weighted by how much of it still overlaps the last minute.
  *
  * - `incr` comes first and is atomic. A check before the count would let a burst of parallel requests
  *   all read the same low count and all pass.
@@ -52,7 +52,7 @@ function windowKey(clientIp: string, window: number): string {
  * request.
  *
  * Other proxies replace the header: Traefik and Caddy by default, and nginx with `$remote_addr`
- * (measured, SKG-543). Behind them the chain is shorter, and a count that is too high falls back to
+ * (measured, FRU-50). Behind them the chain is shorter, and a count that is too high falls back to
  * the socket peer.
  */
 export function resolveClientIp(

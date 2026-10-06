@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 import { AUTHENTICATED_WORKER_ORIGIN, WORKER_SESSION_ENV } from './e2e/worker-sessions.ts';
 
 /**
- * The E2E suite (SKG-511).
+ * The E2E suite (FRU-19).
  *
  * It exists for the two things a DOM emulator cannot vouch for and that this product happens to rest
  * on: a real selector engine (`CSS.escape`, attribute quoting) and real layout (`getBoundingClientRect`,
@@ -31,7 +31,7 @@ export default defineConfig({
   use: {
     baseURL: PLAYGROUND,
     ...devices['Desktop Chrome'],
-    // The widget follows the browser's language (SKG-530), and the specs find its chrome by English names.
+    // The widget follows the browser's language (FRU-37), and the specs find its chrome by English names.
     locale: 'en-US',
     viewport: { width: 1440, height: 900 },
     trace: 'on-first-retry',

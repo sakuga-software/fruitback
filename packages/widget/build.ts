@@ -4,7 +4,7 @@ import { promisify } from 'node:util';
 import { build } from 'esbuild';
 
 /**
- * Two files, both self-contained (SKG-505).
+ * Two files, both self-contained (FRU-16).
  *
  * `react-grab` and `zod` are bundled rather than declared as peers: the acceptance criterion is that
  * the widget imposes no heavy dependency on the host, and a client site should not have to install —

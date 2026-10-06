@@ -4,7 +4,7 @@ import type { SeedSource } from '@fruitback/shared';
  * The react-grab payoff: the component and the source file behind the clicked element.
  *
  * `react-grab/primitives` owns this properly — it instruments the app and knows the mapping. The
- * widget host (SKG-492) will pass what it resolved through `captureSeed({ source })`, and that always
+ * widget host (FRU-3) will pass what it resolved through `captureSeed({ source })`, and that always
  * wins over what is here.
  *
  * What is here is the fallback for a page where react-grab is not mounted: React attaches its fiber

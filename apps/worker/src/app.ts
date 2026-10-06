@@ -36,12 +36,12 @@ import { createSqliteSessionStore } from './session-sqlite.ts';
 const MAX_BODY_BYTES = 64 * 1_024;
 
 /**
- * Which store this process writes to (SKG-522, SKG-526).
+ * Which store this process writes to (FRU-29, FRU-33).
  *
  * It was a `Pick<typeof realLinear, 'createSeedIssue' | 'fetchSeedIssues'>` — an interface
  * discovered by accident — then a branch on a `fakeLinear` boolean with Linear's three credentials
  * read straight off the config. Both are gone: the provider was selected and validated at boot
- * (`stores.ts`), and this is only where it is built. SQLite (SKG-524) and GitHub (SKG-525) each
+ * (`stores.ts`), and this is only where it is built. SQLite (FRU-31) and GitHub (FRU-32) each
  * added an entry to the registry and nothing here.
  *
  * A dev-only store cannot win in production: `readStoreConfig` refuses it at boot rather than
@@ -52,7 +52,7 @@ export function storeFor(config: WorkerConfig): SeedStore {
 }
 
 /**
- * The extension's session store, or `undefined` when this worker runs without one (SKG-535).
+ * The extension's session store, or `undefined` when this worker runs without one (FRU-42).
  *
  * Deliberately not built from `config.store`: sessions are credentials and seeds are not, so they
  * never share a backend. See `FRUITBACK_SESSION_PATH`.
@@ -70,7 +70,7 @@ export type RequestContext = {
    *
    * This began as `storeFor(config)` inside the two handlers, which was invisible for Linear and the
    * in-memory one — both are stateless closures — and would have opened a SQLite connection per
-   * request the moment SKG-524 landed. A refactor that exists to let a store hold a resource must
+   * request the moment FRU-31 landed. A refactor that exists to let a store hold a resource must
    * not reconstruct it on every call.
    *
    * Optional because `handleRequest` answers `/health` and the misconfigured diagnostic *before*
@@ -79,10 +79,10 @@ export type RequestContext = {
    * fresh store per case.
    */
   store?: SeedStore;
-  /** Same reason as `store`, for the sessions (SKG-535). A suite hands over a fresh file per case. */
+  /** Same reason as `store`, for the sessions (FRU-42). A suite hands over a fresh file per case. */
   sessionStore?: SessionStore;
   /**
-   * Where the rate limiter and the read cache keep their state (SKG-542). When it is absent, the
+   * Where the rate limiter and the read cache keep their state (FRU-49). When it is absent, the
    * handler uses `processKv`, which gives the one instance of this process and never a new empty one.
    */
   kv?: Kv;
@@ -103,7 +103,7 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
     if (!config.ok) return json(503, { ok: false, error: 'misconfigured', missing: config.missing });
 
     // Announced, not hidden: a `200 ok` that quietly stores feedback in RAM would be the worst kind
-    // of green check. The open-read count is here for the same reason (SKG-533) — a deployment
+    // of green check. The open-read count is here for the same reason (FRU-40) — a deployment
     // whose pins anyone can read should be able to say so without an operator reading the config.
     //
     // A count and not the ids: `/health` needs no authentication either, and listing client ids
@@ -112,7 +112,7 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
 
     return json(200, {
       ok: true,
-      // The store's name, always, rather than the old `fakeLinear: true` (SKG-526). Which store a
+      // The store's name, always, rather than the old `fakeLinear: true` (FRU-33). Which store a
       // process runs on is the thing an operator cannot tell from a green check, and naming one
       // provider in the answer was the last place `/health` assumed there was only ever one.
       store: config.config.store.provider,
@@ -143,7 +143,7 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
     return json(405, { error: 'method-not-allowed' }, cors.headers);
   }
 
-  // Metered before the dispatch, and that ordering is the point (SKG-535). Both feedback directions
+  // Metered before the dispatch, and that ordering is the point (FRU-42). Both feedback directions
   // burn the same provider quota, and `/session/pair` is a code-guessing oracle without a limit —
   // this check used to sit *below* the `404`, so a new route would have been unmetered by default.
   // An unknown path costs quota too now, which is the right answer for something being probed.
@@ -154,7 +154,7 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
     allowed = await checkRateLimit(kv, context.clientIp, { limit: config.config.rateLimitPerMinute });
   } catch (error) {
     if (!(error instanceof KvError)) throw error;
-    // Refused, not let through (SKG-542). A limiter that opens whenever its `Kv` does not answer is a
+    // Refused, not let through (FRU-49). A limiter that opens whenever its `Kv` does not answer is a
     // limiter any caller can open. `/health` does not reach this line, so it keeps answering.
     console.error(`[fruitback] rate limit unavailable: ${error.message}`);
 
@@ -190,7 +190,7 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
 }
 
 /**
- * The extension's session endpoints (SKG-535).
+ * The extension's session endpoints (FRU-42).
  *
  * Three routes and no more: spend a pairing code, exchange a refresh token for an access token, and
  * end the session. Minting a code is **not** here — it is a command an operator runs on the
@@ -245,7 +245,7 @@ async function handleSession(
           200,
           {
             accessToken: refreshed.accessToken,
-            // Every refresh rotates (SKG-600), and this field is the whole of the client's half.
+            // Every refresh rotates (FRU-61), and this field is the whole of the client's half.
             // It is named here rather than spread, so leaving it out is what this route would do by
             // default — the rotation would work perfectly and reach nobody. A test asserts the body
             // carries it, because `tsc` cannot: the object is built field by field.
@@ -294,14 +294,14 @@ function parseJsonObject(text: string): Record<string, unknown> | undefined {
 }
 
 /**
- * Which client this request belongs to, and what was decided for it (SKG-504).
+ * Which client this request belongs to, and what was decided for it (FRU-15).
  *
  * On a single-client worker this is the worker's own defaults and nothing else happens. With a client
  * map, a request that names nobody — or names a client it cannot be embedded as — is refused rather
  * than served from the default, because on a multi-tenant worker the default *is* the leak.
  *
  * `teamId` and `projectId` used to be resolved here too. They went to the Linear connector with
- * SKG-522: falling back to *the worker's team* is a rule about teams, and this function has no
+ * FRU-29: falling back to *the worker's team* is a rule about teams, and this function has no
  * business knowing that a store has any.
  */
 function routeFor(request: Request, config: WorkerConfig, clientId: string | undefined): ClientResolution {
@@ -320,7 +320,7 @@ function routeFor(request: Request, config: WorkerConfig, clientId: string | und
 }
 
 /**
- * Whether this caller may read this client's pins (SKG-533).
+ * Whether this caller may read this client's pins (FRU-40).
  *
  * Until now `GET /feedback` answered anyone who could build the URL, so every note, its author and
  * the team's replies were readable by any visitor of the client's site — and by `curl`, which is why
@@ -506,7 +506,7 @@ async function postFeedback(
   const route = routeFor(request, config, clientId);
   if (!route.ok) return routingFailure(route, corsHeaders);
 
-  // Whose word the attribution is (SKG-498). The claimed reporter loses `verified` whatever it said,
+  // Whose word the attribution is (FRU-9). The claimed reporter loses `verified` whatever it said,
   // and only a token this worker checked can put it back.
   const identity = await attributionFor(request, route.policy.identitySecret, seed.reporter);
   if (!identity.ok) {

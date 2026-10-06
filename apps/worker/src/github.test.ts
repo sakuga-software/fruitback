@@ -15,7 +15,7 @@ import {
 import { StoreError } from './store.ts';
 
 /**
- * The GitHub store against a fake GitHub (SKG-525). No test writes to a real repository.
+ * The GitHub store against a fake GitHub (FRU-32). No test writes to a real repository.
  *
  * The routes and the response fields follow the REST documentation, API version 2022-11-28.
  */
@@ -321,7 +321,7 @@ describe('create', () => {
     });
   });
 
-  /** The prose follows the worker's own locale, wherever the issues are kept (SKG-532). */
+  /** The prose follows the worker's own locale, wherever the issues are kept (FRU-39). */
   it('writes the issue body in the locale the policy carries', async () => {
     const seed = seedFixture();
     const calls = fakeGithub({

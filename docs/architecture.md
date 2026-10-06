@@ -2,7 +2,7 @@
 
 Written for somebody changing Fruitback, or deciding whether to. It is the design half of the old
 README: the page a reader lands on answers _what is this_, and everything that answers _why is it
-shaped like that_ is here (SKG-519).
+shaped like that_ is here (FRU-26).
 
 The per-ticket histories — the measurements, the first versions that failed, the reviews that caught
 them — are one level down, in [decisions/](decisions/).
@@ -24,9 +24,9 @@ from the anchor we stored.
 
 ## Architecture
 
-**The diagram shows the default path, `FRUITBACK_STORE=linear`.** Since SKG-526 the third column is
+**The diagram shows the default path, `FRUITBACK_STORE=linear`.** Since FRU-33 the third column is
 whichever connector is configured — `sqlite` writes a row in a file the worker owns, `github` an issue
-in a repository (SKG-525), and the shape of the exchange does not change. This page was written when Linear was the only answer, and it is scoped
+in a repository (FRU-32), and the shape of the exchange does not change. This page was written when Linear was the only answer, and it is scoped
 here rather than rewritten: the reasoning below is still why the Linear connector looks the way it
 does.
 
@@ -46,16 +46,16 @@ pin overlay            ◀──GET─── query by label+URL ◀────�
   site. On `FRUITBACK_STORE=sqlite` there is no such token and it still exists, because somebody has
   to hold the file and answer the two routes. It also decides attribution (anonymous vs signed in).
 - **shared** — `@fruitback/shared`, the _seed_ contract. Both ends depend on it.
-- **extension** — `@fruitback/extension`, the same widget on a site that embeds **nothing** (SKG-534).
+- **extension** — `@fruitback/extension`, the same widget on a site that embeds **nothing** (FRU-41).
   The reviewer installs it, switches a site on, and the page they are reviewing is untouched — no
   tag, no package, no deploy, and nothing for an ordinary visitor to see. MV3 on Chromium and
   Firefox. It asks for **no host permission at install**: the content scripts are registered at
   runtime, per origin, when somebody turns that site on.
 
 No dashboard and no user accounts: the tracker you already run is both. The sentence that stood here
-until SKG-519 said "no database, no session store" as well, and it had simply outlived itself —
-`FRUITBACK_STORE=sqlite` keeps the seeds in a file of the worker's own since SKG-524, and
-`FRUITBACK_SESSION_PATH` keeps the extension's sessions in another since SKG-535. Neither is a
+until FRU-26 said "no database, no session store" as well, and it had simply outlived itself —
+`FRUITBACK_STORE=sqlite` keeps the seeds in a file of the worker's own since FRU-31, and
+`FRUITBACK_SESSION_PATH` keeps the extension's sessions in another since FRU-42. Neither is a
 database _of users_, which is what the claim was ever about.
 
 ## The seed

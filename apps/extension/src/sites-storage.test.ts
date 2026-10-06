@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { storage } from './session-storage.fixture.ts';
 
 /**
- * `sites.ts` over a storage area, as the bridge, the relay and the popup call it (SKG-536).
+ * `sites.ts` over a storage area, as the bridge, the relay and the popup call it (FRU-43).
  *
  * `site-patterns.test.ts` tests the resolver. This file tests that `readSite` uses it: a reader that
  * looked up the exact origin would pass every resolver test and still refuse a wildcard site.
@@ -53,7 +53,7 @@ describe('sites.ts over storage', () => {
     assert.equal(await readSite('https://acme.dev'), undefined);
   });
 
-  it('reads an entry stored before SKG-536, by its origin', async () => {
+  it('reads an entry stored before FRU-43, by its origin', async () => {
     await fake.area.set({
       sites: { 'http://localhost:5177': { endpoint: 'http://localhost:8788', clientId: 'acme' } },
     });

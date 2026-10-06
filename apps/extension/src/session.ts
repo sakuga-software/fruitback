@@ -1,14 +1,14 @@
 /**
- * The reviewer's session with a worker, kept where the page cannot reach it (SKG-599).
+ * The reviewer's session with a worker, kept where the page cannot reach it (FRU-60).
  *
- * SKG-535 built the worker half — pairing codes, tokens, revocation. This is the other half, and it
+ * FRU-42 built the worker half — pairing codes, tokens, revocation. This is the other half, and it
  * carries the constraint that shaped both: **the token never goes into the page's world.** The
  * widget runs there, `window.postMessage` is the only channel it shares with us, and the page is on
  * that channel too. So nothing here is ever posted; the isolated content script asks the background
- * to make the call, and SKG-596 adds that relay. `worlds.test.ts` is what keeps it true.
+ * to make the call, and FRU-57 adds that relay. `worlds.test.ts` is what keeps it true.
  *
  * Written against three storage seams and one `post`, so all of it runs under `node --test`. The
- * real `browser.storage` is bound in `session-storage.ts`, and the real world boundary is SKG-538.
+ * real `browser.storage` is bound in `session-storage.ts`, and the real world boundary is FRU-45.
  *
  * **Two areas, on purpose.** The refresh token is worth weeks and goes in `local`; the access token
  * is worth ten minutes and goes in `session`, which the browser empties when it closes. Both in
@@ -39,12 +39,12 @@ export type StoredSession = {
    * split that keeps the refresh token out of it. So a fresh opaque id, minted on pairing and on
    * every refresh. See `matches`.
    *
-   * Optional, because an entry stored before SKG-600 has none. Two absent markers compare equal,
+   * Optional, because an entry stored before FRU-61 has none. Two absent markers compare equal,
    * which is the behaviour that entry already had.
    */
   generation?: string;
   /**
-   * Which run of this endpoint's session the entry belongs to (SKG-603).
+   * Which run of this endpoint's session the entry belongs to (FRU-64).
    *
    * A logout mints a new epoch before it clears, so an entry stamped with the one before it is
    * refused by every reader — see `stillOpen` in `session-storage.ts`. That is what catches a logout
@@ -67,7 +67,7 @@ export type AccessGrant = {
 };
 
 /**
- * One storage area, keyed by worker endpoint, **one entry per endpoint** (SKG-602).
+ * One storage area, keyed by worker endpoint, **one entry per endpoint** (FRU-63).
  *
  * A reviewer can hold a session with more than one worker — two clients, two deployments — and a
  * token is only good against the worker that minted it. The endpoint is what a site in `sites.ts`
@@ -87,7 +87,7 @@ export type Area<T> = {
 };
 
 /**
- * The sessions area, which also knows which run of a session each entry belongs to (SKG-604).
+ * The sessions area, which also knows which run of a session each entry belongs to (FRU-65).
  *
  * `put` writes the run its value's epoch names, and `drop` removes every run of the endpoint.
  * `end` removes one run, and only while it still holds the refresh token `spent` holds: a refresh
@@ -155,7 +155,7 @@ export function isFresh(grant: AccessGrant | undefined, now: number): grant is A
  * minutes because nothing looked past its clock. Revoking on the worker does not reach it. Raised in
  * review.
  *
- * It is the second of the two refusals that case gets since SKG-603: the session that grant names is
+ * It is the second of the two refusals that case gets since FRU-64: the session that grant names is
  * itself stamped with a run that is over, so `stillOpen` already keeps it out of the read this
  * compares against.
  *
@@ -217,21 +217,21 @@ export function createSessions({
    * The compare and the write are not one operation and cannot be: `chrome.storage` has no
    * transaction, and the popup and this context share nothing else. **What the write carries is what
    * covers the gap.** It is stamped with the epoch of the very read the comparison was made on
-   * (SKG-603), and a logout mints a new epoch before it clears, so a logout landing anywhere around
+   * (FRU-64), and a logout mints a new epoch before it clears, so a logout landing anywhere around
    * these lines leaves the endpoint logged out:
    *
    * - before the read — the session is gone, so the comparison refuses.
    * - between the read and the session write — the stamp is a run of the session that is over, and
    *   `stillOpen` refuses the entry for good. The grant below then has no session to match.
    * - between the session write and the grant write — the same, and `matches` refuses the orphan
-   *   grant as well. That second refusal is the **generation** marker, added on SKG-600.
+   *   grant as well. That second refusal is the **generation** marker, added on FRU-61.
    *
    * The stamp has to come from **this** read and not from a fresher one, which is why the session is
    * read here rather than handed in: a stamp read after the logout would agree with storage and put
    * the session back.
    *
-   * Since SKG-602 the two writes touch only this endpoint's own keys, so nothing here can reach
-   * another worker's entry whatever else is running. Since SKG-604 the session write touches only
+   * Since FRU-63 the two writes touch only this endpoint's own keys, so nothing here can reach
+   * another worker's entry whatever else is running. Since FRU-65 the session write touches only
    * the run it read, so it cannot reach a pairing made after that read either. The grant has one key
    * per endpoint and can still land over that pairing's grant. `matches` refuses it, and the next
    * call refreshes the pairing's own session.
@@ -270,7 +270,7 @@ export function createSessions({
   /**
    * Both credentials for one endpoint, gone — and the run they belonged to marked over.
    *
-   * **The epoch is minted first, and that order is the whole of SKG-603.** A refresh in the other
+   * **The epoch is minted first, and that order is the whole of FRU-64.** A refresh in the other
    * context can already be holding an answer for this session; dropping the keys does not reach it,
    * and it writes them back. The new epoch is what that write is measured against, so it has to be
    * in storage before anything is removed. Everything stamped with the epoch before it is refused
@@ -304,7 +304,7 @@ export function createSessions({
    * The session a refused refresh spent, gone, and its grant too unless the grant belongs to a
    * session storage still holds.
    *
-   * **No epoch is minted here, which is the difference from `forget`** (SKG-604). A logout and a new
+   * **No epoch is minted here, which is the difference from `forget`** (FRU-65). A logout and a new
    * pairing in the other context can land while this refresh is in the air, and a new epoch would
    * end that pairing. What a mint would refuse is a write from a refresh of the same chain, and the
    * worker has refused that chain: whatever such a write holds, the next refresh answers `401` for
@@ -340,7 +340,7 @@ export function createSessions({
 
     const issued = parseIssued(answer.body);
 
-    // **A refresh without a successor is not a success.** Every refresh rotates since SKG-600, so a
+    // **A refresh without a successor is not a success.** Every refresh rotates since FRU-61, so a
     // `200` carrying no `refreshToken` means the worker spent the stored token and this answer lost
     // the replacement — a body truncated by a proxy, a route that stopped naming the field. Taking
     // it leaves a spent token in storage and a working access token over it, and the session dies
@@ -537,7 +537,7 @@ type Issued = {
  * request, never the extension.
  *
  * `refreshToken` stays optional **here** while both call sites require it: `/session/pair` and
- * `/session/refresh` each mint one since SKG-600, and each says so itself. Requiring it in the
+ * `/session/refresh` each mint one since FRU-61, and each says so itself. Requiring it in the
  * parser would put the rule one level away from the failure it prevents, and a third route that
  * issues only an access token would have to work around it.
  */

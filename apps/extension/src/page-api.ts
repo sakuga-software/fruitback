@@ -1,7 +1,7 @@
 import type { FruitbackTransport } from '@fruitback/widget';
 
 /**
- * What the extension puts on a team-mode page, and how the site finds it (SKG-596).
+ * What the extension puts on a team-mode page, and how the site finds it (FRU-57).
  *
  * The site's widget is dormant: it has no way to reach the worker until a reviewer with the
  * extension opens the page. This is that way — a transport the site passes straight to `init`.

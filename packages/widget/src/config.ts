@@ -1,10 +1,10 @@
 import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
 
 /**
- * What the reporter can change about the widget, and where it is kept (SKG-503).
+ * What the reporter can change about the widget, and where it is kept (FRU-14).
  *
  * **What is not here is the point.** The ticket asked for the Linear team, project and labels too,
- * and they are deliberately absent: since SKG-504 the worker resolves those from the client id it is
+ * and they are deliberately absent: since FRU-15 the worker resolves those from the client id it is
  * given, and refuses an id it does not know. A browser that could name its own team would either be
  * ignored — a setting that does nothing is worse than no setting — or obeyed, which would let any
  * page write into any workspace. The client id is the one thing the reporter can say; what it routes
@@ -21,7 +21,7 @@ export type WidgetConfig = {
   /** Stages whose pins are not drawn. `ripe` and `composted` are what "resolved" means. */
   hiddenStages: SeedStage[];
   /**
-   * Attach an image of the element to the note (SKG-495). **Off by default**, and only offered when
+   * Attach an image of the element to the note (FRU-6). **Off by default**, and only offered when
    * the embedder gave `init` something to capture with — a switch that controls nothing is worse
    * than no switch.
    */

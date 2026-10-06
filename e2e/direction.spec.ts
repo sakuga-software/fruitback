@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { WORKER_ORIGIN } from './pin.ts';
 
 /**
- * The widget in a right-to-left language (SKG-531).
+ * The widget in a right-to-left language (FRU-38).
  *
  * What flips is layout: the dock moves to the reader's corner and the popover opens on the element's
  * right edge. What must not flip is geometry: a pin sits on the element it belongs to, whatever the

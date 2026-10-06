@@ -4,7 +4,7 @@ import { isSecureWorkerEndpoint } from './endpoint.ts';
 import type { SiteConfig } from './sites.ts';
 
 /**
- * The call the page asked for, made by the background instead (SKG-596).
+ * The call the page asked for, made by the background instead (FRU-57).
  *
  * This is the whole of team mode's security, and it is here rather than in the content script for
  * one reason: **a content script's input is written by the page**. The isolated world carries the

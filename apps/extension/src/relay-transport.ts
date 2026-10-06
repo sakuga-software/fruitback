@@ -9,12 +9,12 @@ import {
 import type { FruitbackTransport } from '@fruitback/widget';
 
 /**
- * The transport the page's dormant widget is handed, in the main world (SKG-596).
+ * The transport the page's dormant widget is handed, in the main world (FRU-57).
  *
  * It posts the request on the bridge and waits for the answer that carries the same `id`. Extracted
  * from `page.content.ts` so `node --test` can reach it: an entrypoint binds `window` at import, and
  * the three things that can go wrong here — the wrong answer, a late answer, two calls at once —
- * are invisible from the outside. Same split `bridge.ts` made for SKG-534.
+ * are invisible from the outside. Same split `bridge.ts` made for FRU-41.
  */
 export type RelayTransportSeams = {
   post: (message: RelayRequestMessage) => void;

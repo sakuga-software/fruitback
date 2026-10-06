@@ -5,7 +5,7 @@ import { inflateSync } from 'node:zlib';
 import { ICON_SIZES, iconPath } from './icon-sizes.ts';
 
 /**
- * The committed icons, against the sizes the manifest declares (SKG-617).
+ * The committed icons, against the sizes the manifest declares (FRU-78).
  *
  * `build-icons.ts` renders them and nothing in the build does, so a stale or missing file reaches a
  * browser as a grey square and a store listing as a refusal. The header of a PNG carries its size,

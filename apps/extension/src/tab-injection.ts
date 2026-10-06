@@ -1,7 +1,7 @@
 import { BRIDGE_FILE, PAGE_FILE, matchPatternFor, publicPath } from './registration.ts';
 
 /**
- * Puts both content scripts into the tabs already open on a pattern (SKG-536).
+ * Puts both content scripts into the tabs already open on a pattern (FRU-43).
  *
  * `registerContentScripts` reaches only the next page load. The popup injects into its own tab, but a
  * rule added, switched on or granted on the options page covers tabs the options page is not. Without

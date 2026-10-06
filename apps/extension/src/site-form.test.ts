@@ -26,7 +26,7 @@ describe('complaint', () => {
   });
 
   /**
-   * An id made of spaces is an absent id (SKG-612). The worker normalizes it to empty and answers
+   * An id made of spaces is an absent id (FRU-73). The worker normalizes it to empty and answers
    * `client-required`, so a file could store a rule that is On and refused on every read.
    */
   it('treats a client id made of spaces as absent', () => {

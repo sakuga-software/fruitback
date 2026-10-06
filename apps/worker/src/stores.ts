@@ -5,11 +5,11 @@ import { createSqliteStoreSpec } from './sqlite.ts';
 import { type StoreConfigResult, type StoreEnv, type StoreSpec, storeProviderFor } from './store-config.ts';
 
 /**
- * Every store this worker can run on (SKG-526).
+ * Every store this worker can run on (FRU-33).
  *
  * A separate module from `store-config.ts` because the connectors import `defineStore` from there:
  * holding the registry in the same file would make `store-config.ts` and `linear.ts` import each
- * other. SQLite (SKG-524) and GitHub (SKG-525) are one entry each.
+ * other. SQLite (FRU-31) and GitHub (FRU-32) are one entry each.
  */
 export const STORE_SPECS: readonly StoreSpec[] = [
   createLinearStoreSpec(),
@@ -42,7 +42,7 @@ export function isDevOnlyProvider(provider: string): boolean {
  *   configured for SQLite to an API it has no key for — an opaque failure per request instead of one
  *   clear line at boot.
  * - **A dev-only provider under `NODE_ENV=production`** is refused outright, not downgraded. This is
- *   the guard `FRUITBACK_FAKE_LINEAR` has always had, and the one thing SKG-526 must not loosen:
+ *   the guard `FRUITBACK_FAKE_LINEAR` has always had, and the one thing FRU-33 must not loosen:
  *   feedback accepted into RAM and lost on the next restart, behind a green health check, is worse
  *   than a worker that refuses to start. The deprecated flag is still *ignored* rather than refused
  *   — see `fakeLinearIgnoredReason` for why the two differ.

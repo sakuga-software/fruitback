@@ -46,7 +46,7 @@ export function Fruitback() {
    * The last identifier planted, kept apart from `status` on purpose.
    *
    * `status` has two writers: this component, and the widget reporting a re-resolution it decided on
-   * by itself (SKG-513). They race — a confirmation would be overwritten by a pin count arriving a
+   * by itself (FRU-21). They race — a confirmation would be overwritten by a pin count arriving a
    * hundred milliseconds later — so the one fact a test needs to synchronise on lives on its own.
    */
   const [planted, setPlanted] = useState('');
@@ -61,7 +61,7 @@ export function Fruitback() {
   const target = useRef<CaptureTarget | null>(null);
 
   useEffect(() => {
-    // The reporter's own preferences, kept in this browser (SKG-503). The endpoint and the client id
+    // The reporter's own preferences, kept in this browser (FRU-14). The endpoint and the client id
     // start from the build's values and can be pointed elsewhere without a rebuild.
     const config = createConfigStore({
       // `screenshot` off: this harness gives the widget no way to capture one, so the toggle is not
@@ -91,7 +91,7 @@ export function Fruitback() {
       host: host.root,
       shouldShow: (issue) => !config.get().hiddenStages.includes(issue.stage),
       onSelect: (issue) => setStatus(`${issue.identifier} · ${issue.stateName}`),
-      // The widget re-resolves by itself when the page changes (SKG-513). This only reports it: the
+      // The widget re-resolves by itself when the page changes (FRU-21). This only reports it: the
       // host never has to work out that it re-rendered.
       onResolve: (entries) => setStatus(`${entries.length} pin${entries.length > 1 ? 's' : ''}`),
     });
@@ -186,7 +186,7 @@ async function plant(
     client: { id: config.clientId, name: 'Playground' },
     // What the visitor typed about themselves, and no more. The worker stores it as self-declared
     // and strips any `verified` flag — an identity would need a signed token this playground has no
-    // reason to mint (SKG-498).
+    // reason to mint (FRU-9).
     reporter,
     // Straight from react-grab, through the host — and on this app there is a fiber to read.
     source: target.source,

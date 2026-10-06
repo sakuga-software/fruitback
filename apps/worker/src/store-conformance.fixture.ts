@@ -10,7 +10,7 @@ import { createMemoryKv } from './kv.ts';
 import { type CreatedIssue, type SeedStore, StoreError } from './store.ts';
 
 /**
- * What every `SeedStore` promises, whatever holds the seeds (SKG-527).
+ * What every `SeedStore` promises, whatever holds the seeds (FRU-34).
  *
  * `store-conformance.test.ts` runs this suite once for each entry in `STORE_SPECS`. A remote store
  * runs against a double that keeps what it receives, so that a read finds what a write stored.

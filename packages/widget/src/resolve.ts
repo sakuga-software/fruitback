@@ -131,7 +131,7 @@ const FINDERS: Record<SeedAnchorStrategy, Finder> = {
    * Last resort: whichever element of the right tag still occupies the box the pin was planted on.
    *
    * Strict, because this one is choosing on position alone. Below the threshold the honest answer is
-   * that the element is gone, and the pin becomes an orphan (SKG-501 decides how to present it).
+   * that the element is gone, and the pin becomes an orphan (FRU-12 decides how to present it).
    */
   bounds: (anchor, root) => {
     let best: { element: Element; score: number } | null = null;

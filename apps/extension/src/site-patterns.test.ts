@@ -63,7 +63,7 @@ describe('parseSitePattern', () => {
     }
   });
 
-  /** Every key a browser holds from before SKG-536 is an origin, and it must read back as itself. */
+  /** Every key a browser holds from before FRU-43 is an origin, and it must read back as itself. */
   it('reads every origin the popup has ever stored as itself', () => {
     for (const origin of ['https://acme.dev', 'http://localhost:5177', 'http://127.0.0.1:8080', 'http://[::1]:3000']) {
       assert.equal(parseSitePattern(origin), origin);
@@ -115,7 +115,7 @@ describe('resolveSite', () => {
     assert.equal(resolveSite(sites, 'https://www.acme.dev')?.pattern, 'https://*.acme.dev');
   });
 
-  /** SKG-504 on the worker, and the ticket: a site with no rule mounts nothing, and borrows no client. */
+  /** FRU-15 on the worker, and the ticket: a site with no rule mounts nothing, and borrows no client. */
   it('answers nothing for an origin no entry covers', () => {
     assert.equal(resolveSite(sites, 'https://globex.dev'), undefined);
     assert.equal(resolveSite(sites, 'http://www.acme.dev'), undefined);
@@ -129,7 +129,7 @@ describe('resolveSite', () => {
     assert.equal(resolveSite(stored, 'https://www.acme.dev'), undefined);
   });
 
-  /** The shape a release cannot re-run: an entry from before SKG-536, keyed by its origin. */
+  /** The shape a release cannot re-run: an entry from before FRU-43, keyed by its origin. */
   it('still resolves an entry written before the patterns existed', () => {
     const legacy = parseSite({ endpoint: 'https://worker.test', clientId: 'acme', enabled: true });
     assert.ok(legacy !== undefined);

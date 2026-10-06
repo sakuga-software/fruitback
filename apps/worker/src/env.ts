@@ -32,7 +32,7 @@ export type WorkerEnv = {
   PORT?: string;
   HOST?: string;
   /**
-   * The older spelling of `FRUITBACK_STORE=memory`, kept working (SKG-526).
+   * The older spelling of `FRUITBACK_STORE=memory`, kept working (FRU-33).
    *
    * Dev only: serve the playground off an in-memory Linear instead of the real API, so the whole
    * capture → issue → pins loop runs with no key and writes to nobody's workspace. Ignored when
@@ -46,17 +46,17 @@ export type WorkerEnv = {
    * Absent means one client, which is how this worker has always behaved. See `clients.ts`.
    */
   FRUITBACK_CLIENTS?: string;
-  /** Shared with the client site so it can mint identity tokens (SKG-498). */
+  /** Shared with the client site so it can mint identity tokens (FRU-9). */
   FRUITBACK_IDENTITY_SECRET?: string;
-  /** `1` keeps Linear comments out of the read path (SKG-502). */
+  /** `1` keeps Linear comments out of the read path (FRU-13). */
   FRUITBACK_HIDE_COMMENTS?: string;
   /**
    * Who may read pins: `public` (the default, and what this worker has always done) or
-   * `authenticated` (SKG-533). A mapped client's own `read` overrides this.
+   * `authenticated` (FRU-40). A mapped client's own `read` overrides this.
    */
   FRUITBACK_READ?: string;
   /**
-   * SQLite file holding the extension's sessions (SKG-535). Absent turns the `/session` endpoints
+   * SQLite file holding the extension's sessions (FRU-42). Absent turns the `/session` endpoints
    * off, which is every worker that has no extension pointed at it.
    *
    * **Not the seed store, whatever `FRUITBACK_STORE` says.** Seeds go wherever the team already
@@ -65,7 +65,7 @@ export type WorkerEnv = {
    */
   FRUITBACK_SESSION_PATH?: string;
   /**
-   * The language of the prose in an issue description (SKG-532). A BCP-47 tag; English by default.
+   * The language of the prose in an issue description (FRU-39). A BCP-47 tag; English by default.
    *
    * **The team that triages reads it, never the reporter**, so it is configured here and never taken
    * from the browser. A tag this build has no words for falls back to English; a value that is not a
@@ -79,12 +79,12 @@ export const DEFAULT_PORT = 8080;
 export const DEFAULT_HOST = '0.0.0.0';
 /** One hop: Dokploy's Traefik. Raise it if another proxy (a CDN, a load balancer) is added upstream. */
 export const DEFAULT_TRUSTED_PROXY_HOPS = 1;
-/** English, which is what every description carried before SKG-532. */
+/** English, which is what every description carried before FRU-39. */
 export const DEFAULT_TEAM_LOCALE = 'en';
 
 const configSchema = z.object({
   /**
-   * Which store, and how to build one (SKG-526).
+   * Which store, and how to build one (FRU-33).
    *
    * Opaque on purpose: the provider's own fields were `linearApiKey`, `linearTeamId` and
    * `linearProjectId` right here, where every module reading the config could see one connector's
@@ -93,7 +93,7 @@ const configSchema = z.object({
    */
   store: z.custom<StoreConfig>(),
   /**
-   * Shared with the client site so it can mint identity tokens (SKG-498). Absent — the default —
+   * Shared with the client site so it can mint identity tokens (FRU-9). Absent — the default —
    * means every reporter is self-declared, which is a perfectly good way to run this.
    *
    * **This is the single-client key.** A worker with a client map ignores it: each client declares
@@ -104,15 +104,15 @@ const configSchema = z.object({
    */
   identitySecret: z.string().min(32).optional(),
   /**
-   * Show the team's Linear replies inside the pin (SKG-502). On unless `FRUITBACK_HIDE_COMMENTS` is
+   * Show the team's Linear replies inside the pin (FRU-13). On unless `FRUITBACK_HIDE_COMMENTS` is
    * set. A mapped client's own `showComments` overrides this.
    *
    * Editorial, and independent of `read` — see the field on the client for why the two stay
-   * uncoupled (SKG-539).
+   * uncoupled (FRU-46).
    */
   showComments: z.boolean(),
   /**
-   * Who may read pins when a client does not say for itself (SKG-533).
+   * Who may read pins when a client does not say for itself (FRU-40).
    *
    * **`public` by default, and that is a compatibility decision rather than a security one.** Every
    * deployment before this change served reads to anyone, so defaulting to `authenticated` would
@@ -134,12 +134,12 @@ const configSchema = z.object({
    */
   clients: z.custom<ClientMap | undefined>().optional(),
   /**
-   * Where the extension's sessions live (SKG-535). Absent means the `/session` endpoints answer
+   * Where the extension's sessions live (FRU-42). Absent means the `/session` endpoints answer
    * `404`, exactly as they did before this feature existed.
    */
   sessionPath: z.string().min(1).optional(),
   /**
-   * The language an issue description is written in (SKG-532), for the team that triages.
+   * The language an issue description is written in (FRU-39), for the team that triages.
    *
    * Refused at boot when it is not a locale tag, like `TRUSTED_PROXY_HOPS`: a typo would otherwise
    * print prose in a language nobody chose and say nothing. A valid tag this build has no words for
@@ -159,7 +159,7 @@ export type ConfigResult = { ok: true; config: WorkerConfig } | { ok: false; mis
  */
 export function readConfig(env: WorkerEnv): ConfigResult {
   const clients = readClientMap(env.FRUITBACK_CLIENTS);
-  // The selected provider validates its own environment (SKG-526). The in-memory store needs none,
+  // The selected provider validates its own environment (FRU-33). The in-memory store needs none,
   // which is what removed the stand-in Linear credentials the dev loop used to be handed.
   const store = readStoreConfig(env);
   const candidate = {
@@ -203,7 +203,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     return { ok: false, missing: missing.length > 0 ? [...new Set(missing)] : ['(invalid configuration)'] };
   }
 
-  // Refused at boot rather than served as a permanent 401 (SKG-533). A client that requires a
+  // Refused at boot rather than served as a permanent 401 (FRU-40). A client that requires a
   // verified reader and has no key to verify one with answers nobody, for ever, and the symptom — a
   // widget showing no pins — points at the browser rather than at this line of configuration.
   const unreadable = unreadableClients({
@@ -232,7 +232,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   // ignores that key — each client brings its own. So on a mapped worker a session would mint tokens
   // no client accepts: pairing works, the reviewer looks logged in, and every read answers 401.
   // Refused loudly rather than shipped as a feature that quietly does nothing. Per-client session
-  // minting belongs with team mode (SKG-596), where a client id is what a request carries.
+  // minting belongs with team mode (FRU-57), where a client id is what a request carries.
   if (result.data.sessionPath !== undefined && result.data.clients !== undefined) {
     return {
       ok: false,
@@ -244,7 +244,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
 }
 
 /**
- * Absent means `public`, which is what every worker did before SKG-533. Anything else is passed
+ * Absent means `public`, which is what every worker did before FRU-40. Anything else is passed
  * through verbatim so the enum refuses it — a misspelt `FRUITBACK_READ=authenticaed` must not fall
  * back to the open setting it was written to close.
  */
@@ -262,7 +262,7 @@ const NAMES_BY_FIELD: Record<string, string> = {
   rateLimitPerMinute: 'RATE_LIMIT_PER_MINUTE',
   read: 'FRUITBACK_READ',
   teamLocale: 'FRUITBACK_TEAM_LOCALE',
-  // Absent until SKG-526, and it showed: a secret under 32 characters failed the schema, matched no
+  // Absent until FRU-33, and it showed: a secret under 32 characters failed the schema, matched no
   // name, and answered `503 misconfigured, missing:` with nothing after the colon. Every field that
   // can fail validation needs an entry here — asserted by `answers no empty diagnostic`.
   identitySecret: 'FRUITBACK_IDENTITY_SECRET',
@@ -317,7 +317,7 @@ function readRateLimit(value: string | undefined): number {
 }
 
 /**
- * The team's locale, or an empty string when the value is not a locale tag at all (SKG-532).
+ * The team's locale, or an empty string when the value is not a locale tag at all (FRU-39).
  *
  * The schema refuses the empty string, so a typo is a boot failure that names
  * `FRUITBACK_TEAM_LOCALE`. `Intl` is what decides, because it is what a formatter would be given.

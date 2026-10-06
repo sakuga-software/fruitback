@@ -1,5 +1,5 @@
 /**
- * What `@fruitback/widget` promises (SKG-505).
+ * What `@fruitback/widget` promises (FRU-16).
  *
  * Deliberately narrower than `index.ts`. Everything in this package is exported *somewhere* because
  * the playground and the tests reach into the parts, but a published surface is a contract: every

@@ -6,7 +6,7 @@ import { type Kv, KvError, createMemoryKv } from './kv.ts';
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * What every `Kv` must answer. It runs against the memory store here, and a shared store (SKG-606)
+ * What every `Kv` must answer. It runs against the memory store here, and a shared store (FRU-67)
  * must pass it too.
  *
  * Every other test runs on the memory store, so it answers the way Redis answers: its integer rules

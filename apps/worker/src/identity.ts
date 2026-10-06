@@ -1,7 +1,7 @@
 import type { SeedReporter } from '@fruitback/shared';
 
 /**
- * Turning a claim into an identity (SKG-498).
+ * Turning a claim into an identity (FRU-9).
  *
  * Anyone can type a name into the popover, so `seed.reporter` is a claim by whoever was on the page.
  * A client site that already knows who its visitor is can say so properly: it mints a short-lived

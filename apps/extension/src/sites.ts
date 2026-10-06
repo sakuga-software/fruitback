@@ -4,7 +4,7 @@ import { type ResolvedSite, resolveSite } from './site-patterns.ts';
 /**
  * Which worker answers for which origin, in which mode, and whether this origin is switched on.
  *
- * One entry per pattern (SKG-536): an exact origin, or a host wildcard such as
+ * One entry per pattern (FRU-43): an exact origin, or a host wildcard such as
  * `https://*.staging.acme.dev`. `site-patterns.ts` says which entry answers for an origin, and every
  * reader asks it through `readSite`, or through `findSite` when it also needs the pattern the entry
  * is stored under. The popup switches the entry for its tab and names its pattern, and the options
@@ -18,10 +18,10 @@ import { type ResolvedSite, resolveSite } from './site-patterns.ts';
  */
 
 /**
- * Which of the three modes this origin is in (SKG-539).
+ * Which of the three modes this origin is in (FRU-46).
  *
- * `private` is SKG-534: the site embeds nothing and the extension mounts the widget, so the entry
- * carries the client id nobody else can supply. `team` is SKG-596: the site embeds its own dormant
+ * `private` is FRU-41: the site embeds nothing and the extension mounts the widget, so the entry
+ * carries the client id nobody else can supply. `team` is FRU-57: the site embeds its own dormant
  * widget and the extension only announces itself and relays, so the client id comes from the site's
  * own build and this entry has none. The public mode is not here at all — it needs no extension.
  *
@@ -98,7 +98,7 @@ export async function replaceAll(sites: Record<string, SiteConfig>): Promise<voi
 /**
  * Tolerant field by field, like the widget's own config store: a bad entry costs its own site.
  *
- * **An absent mode reads as private.** Every entry written before SKG-596 has no `mode` and a real
+ * **An absent mode reads as private.** Every entry written before FRU-57 has no `mode` and a real
  * client id, and it has to keep mounting the widget exactly as it did — a stored shape is the one
  * thing a release cannot re-run.
  */

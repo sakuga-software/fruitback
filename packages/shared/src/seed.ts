@@ -14,7 +14,7 @@ import { z } from 'zod';
 
 /** Bump only when the payload shape changes. Readers accept older versions, refuse newer ones. */
 /**
- * 2 since SKG-498 added `reporter.verified`. Readers accept older versions and refuse newer ones,
+ * 2 since FRU-9 added `reporter.verified`. Readers accept older versions and refuse newer ones,
  * so a v1 seed still parses: it simply carries no verified identity, which is exactly what it meant.
  */
 export const SEED_VERSION = 2;
@@ -85,7 +85,7 @@ export const seedAnchorSchema = z.object({
   bounds: seedBoundsSchema,
 });
 
-/** Precedence the widget applies when re-planting a pin (M4 / SKG-500). */
+/** Precedence the widget applies when re-planting a pin (M4 / FRU-11). */
 export const SEED_ANCHOR_STRATEGIES = ['selector', 'testId', 'text', 'domPath', 'bounds'] as const;
 export type SeedAnchorStrategy = (typeof SEED_ANCHOR_STRATEGIES)[number];
 
@@ -124,7 +124,7 @@ export const seedClientSchema = z.object({
 /**
  * Absent means anonymous. The worker decides what it trusts; the widget only reports.
  *
- * **`verified` is the worker's word, never the client's** (SKG-498). A browser can put any name and
+ * **`verified` is the worker's word, never the client's** (FRU-9). A browser can put any name and
  * any address in here — that is what the popover's optional fields are — so a reader has to be able
  * to tell a claim from an identity the worker checked against a signed token. The worker strips this
  * flag from anything that arrives with it, and sets it only after verifying.
@@ -145,7 +145,7 @@ export const seedEnvSchema = z.object({
   platform: z.string().optional(),
 });
 
-/** Filled in by the worker once the capture is uploaded as a Linear attachment (M2 / SKG-495). */
+/** Filled in by the worker once the capture is uploaded as a Linear attachment (M2 / FRU-6). */
 export const seedScreenshotSchema = z.object({
   url: httpUrl.optional(),
   width: finite.optional(),

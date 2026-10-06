@@ -80,11 +80,11 @@ describe('parseSeedFromDescription', () => {
     assert.deepEqual(parsedSeed(`${SEED_BLOCK_CAPTION}\n\n\`\`\`json\n${payload}`), seed);
   });
 
-  it('finds the block by its JSON, never by the caption above it (SKG-517)', () => {
+  it('finds the block by its JSON, never by the caption above it (FRU-24)', () => {
     // `SEED_BLOCK_CAPTION` is written into every issue description, so whether it is load-bearing
     // decides whether it can ever be reworded. It is not: `parseSeedFromDescription` iterates fenced
     // blocks and recognises ours by parsing the JSON. Asserted rather than read, because "the parser
-    // does not use it" is exactly the kind of claim that ages badly — and SKG-517 needed it true
+    // does not use it" is exactly the kind of claim that ages badly — and FRU-24 needed it true
     // before dropping the emoji the caption used to open with.
     const block = ['```json', payload, '```'].join('\n');
 
@@ -206,12 +206,12 @@ describe('a verified reporter with no name', () => {
 });
 
 /**
- * The words of the prose follow the team that triages, never the reporter's browser (SKG-532).
+ * The words of the prose follow the team that triages, never the reporter's browser (FRU-39).
  *
  * The invariant comes first: the locale reaches the prose and never the JSON block, so the round
  * trip holds in every language. A translated key would break it in silence.
  */
-describe('the language of a description (SKG-532)', () => {
+describe('the language of a description (FRU-39)', () => {
   it('reads back the same seed in every language it is written in', () => {
     const seed = seedFixture();
 

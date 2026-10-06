@@ -34,27 +34,27 @@ export type CaptureHostOptions = {
   document?: Document;
   /** Swapped in the tests; production wants react-grab. */
   engine?: CaptureEngine;
-  /** The reporter picked an element. The note UI is the caller's business (SKG-493). */
+  /** The reporter picked an element. The note UI is the caller's business (FRU-4). */
   onSelect: (target: CaptureTarget) => void;
   /** Label on the floating button. Wins over the translated one: a host's label is the host's word. */
   label?: string;
   /**
-   * Adds a settings button next to the floating one, and calls this when it is pressed (SKG-503).
+   * Adds a settings button next to the floating one, and calls this when it is pressed (FRU-14).
    * Left out, there is no button — a widget with a gear that opens nothing is worse than none.
    */
   onConfigure?: () => void;
   /**
    * Anything else the pointer must skip. The widget already excludes itself; a page that mounts its
-   * own chrome around the widget — a dev toolbar, the config panel of SKG-503 — says so here, or the
+   * own chrome around the widget — a dev toolbar, the config panel of FRU-14 — says so here, or the
    * reporter ends up leaving feedback about the feedback button.
    */
   ignore?: (element: Element) => boolean;
   /**
-   * Design tokens the host overrides (SKG-528). Colours, shadows, the font family, the animation
+   * Design tokens the host overrides (FRU-35). Colours, shadows, the font family, the animation
    * durations — and nothing else: `applyTheme` writes only the names `ThemeToken` enumerates.
    */
   theme?: FruitbackTheme;
-  /** The widget's words (SKG-530). Left out: English, with dates in this document's language. */
+  /** The widget's words (FRU-37). Left out: English, with dates in this document's language. */
   translator?: Translator;
 };
 
@@ -79,10 +79,10 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   const container = document.createElement('div');
   container.dataset.fruitbackHost = '';
   // Inherited by everything in the Shadow root. The positions below are document coordinates and do
-  // not follow it (SKG-531).
+  // not follow it (FRU-38).
   container.dir = t.direction;
   container.lang = t.lang;
-  // A named landmark: a screen reader meets the widget in the middle of the host's content (SKG-544).
+  // A named landmark: a screen reader meets the widget in the middle of the host's content (FRU-51).
   container.setAttribute('role', 'region');
   container.setAttribute('aria-label', t.text('widget.label'));
   // Positioned at the document origin with no size of its own: children can then use document
@@ -104,7 +104,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   button.type = 'button';
   button.className = 'fruitback-launch';
   button.dataset.fruitbackHostLaunch = '';
-  // The seed the button plants, as the shape the page will then show — not as an emoji (SKG-529).
+  // The seed the button plants, as the shape the page will then show — not as an emoji (FRU-36).
   // The label lives in its own span so that setting it never removes the icon, and so the button's
   // accessible name stays exactly the label: the SVG is aria-hidden and contributes no text.
   const launchLabel = document.createElement('span');
@@ -215,7 +215,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   }
 
   /**
-   * The capture mode without a pointer (SKG-544).
+   * The capture mode without a pointer (FRU-51).
    *
    * - Down and Up move to the next or previous element in document order.
    * - Left moves to the parent and Right to the first child. The two keys swap in a right-to-left language.
@@ -380,13 +380,13 @@ const STYLES = `
   The reset stops at the edge of an SVG, and that exclusion is load-bearing rather than tidy. Under a
   plain star selector, a path computes d:none and stroke:none — the geometry itself is a CSS property
   since SVG2, so all:initial erases the drawing. Every icon renders as an empty box, with no error
-  anywhere. Measured in Chromium before this was written (SKG-529).
+  anywhere. Measured in Chromium before this was written (FRU-36).
 */
 *:not(svg, svg *) { all: initial; box-sizing: border-box; color: inherit; font: inherit; letter-spacing: inherit; }
 /*
   all:initial also stops inheritance. Without the three inherit values above, an element with no colour
   rule of its own is black at 16px: the launch label on a chip, and the thread and the panel on a dark
-  surface, where axe measured 1.2 to 1 (SKG-544). The host gives the first values to inherit.
+  surface, where axe measured 1.2 to 1 (FRU-51). The host gives the first values to inherit.
 */
 :host { color: var(--fruitback-color-text); font: 14px/1.45 var(--fruitback-font-sans); }
 /*
@@ -395,7 +395,7 @@ const STYLES = `
   by looking at it; no unit test would have, since happy-dom draws nothing.
 */
 style, script { display: none; }
-/* The reset also removes the focus ring. The keyboard reaches these controls, so they must show focus (SKG-544). */
+/* The reset also removes the focus ring. The keyboard reaches these controls, so they must show focus (FRU-51). */
 button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible {
   outline: 2px solid var(--fruitback-color-accent);
   outline-offset: 2px;

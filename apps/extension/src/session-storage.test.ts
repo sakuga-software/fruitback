@@ -291,7 +291,7 @@ describe('the second upgrade, from a key per endpoint to a key per run', () => {
 
 describe('an area waits for its own upgrade', () => {
   /**
-   * The defect SKG-602 is named after, on the one run where it is reachable.
+   * The defect FRU-63 is named after, on the one run where it is reachable.
    *
    * A reviewer logs out while the upgrade is still in flight. Without the wait, the drop removes a
    * key that is not written yet and the upgrade then writes the session back from the legacy record
@@ -325,7 +325,7 @@ describe('an area waits for its own upgrade', () => {
    *
    * The upgrade holds a snapshot taken before the write, so its "this endpoint has no key yet" test
    * is answered from stale storage and it writes the legacy value back. That value is a **spent**
-   * refresh token under rotation (SKG-600): the next refresh presents it, the worker reads a replay,
+   * refresh token under rotation (FRU-61): the next refresh presents it, the worker reads a replay,
    * and the whole chain is revoked.
    */
   it('does not let a refresh land before the legacy record is split', async () => {
@@ -500,7 +500,7 @@ describe('the epoch that ends a run of a session', () => {
   });
 });
 
-describe('what the sessions area removes (SKG-604)', () => {
+describe('what the sessions area removes (FRU-65)', () => {
   const OTHER = 'https://other.test';
   const OVER = { ...SESSION, refreshToken: 'refresh.1', epoch: 'epo.1' };
   const OPEN = { ...SESSION, refreshToken: 'refresh.9', epoch: 'epo.3' };

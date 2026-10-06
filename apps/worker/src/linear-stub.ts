@@ -28,7 +28,7 @@ export type StoredIssue = {
   updatedAt: string;
   description: string | null;
   state: { name: string; type: string } | null;
-  /** What Linear returns for the nested `comments` connection (SKG-502). */
+  /** What Linear returns for the nested `comments` connection (FRU-13). */
   comments?: { nodes: { id: string; body: string; createdAt: string; user: { name: string } | null }[] } | null;
 };
 

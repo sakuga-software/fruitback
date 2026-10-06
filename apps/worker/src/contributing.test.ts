@@ -4,7 +4,7 @@ import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 /**
- * `CONTRIBUTING.md` against the files it describes (SKG-520).
+ * `CONTRIBUTING.md` against the files it describes (FRU-27).
  *
  * The page tells a person which commands to run, which ports to open, which checks must pass and how
  * to write a pull request title. Each of these has one source in the repository, and a source can change

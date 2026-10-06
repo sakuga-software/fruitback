@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { openPlayground, plantPin, status } from './pin.ts';
 
 /**
- * The config panel (SKG-503), in a browser that has a real Shadow root and a real localStorage.
+ * The config panel (FRU-14), in a browser that has a real Shadow root and a real localStorage.
  *
  * What is checked here and not in `node --test`: that the settings survive a reload, and that hiding
  * a stage actually removes the pin the client can see.

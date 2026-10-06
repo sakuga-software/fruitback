@@ -2,7 +2,7 @@ import { parseSitePattern } from './site-patterns.ts';
 import { SITE_MUTATION, type SiteConfig, type SiteMutation, parseSite } from './sites.ts';
 
 /**
- * The background as the only writer of the sites map (SKG-536).
+ * The background as the only writer of the sites map (FRU-43).
  *
  * The popup and the options page share no lock, and a change reads the whole map and then replaces
  * it. Two changes close together could each drop the other's entry, or bring a removed rule back. So

@@ -2,7 +2,7 @@ import type { SeedStage } from '@fruitback/shared';
 import { FRENCH } from './locale-fr.ts';
 
 /**
- * Every word the widget shows, and the catalogs the bundle carries (SKG-530, SKG-531).
+ * Every word the widget shows, and the catalogs the bundle carries (FRU-37, FRU-38).
  *
  * English and French are maintained in this repository. A host adds or overrides others through
  * `init({ messages })`, and no i18n library ships: records of strings and `Intl` are enough.
@@ -15,7 +15,7 @@ import { FRENCH } from './locale-fr.ts';
  * - A message is text. The widget writes it with `textContent` or an attribute, never as markup.
  * - `settings.open` and `settings.dialog` must stay different: they are the accessible names of the
  *   gear and of the dialog it opens. The same applies to `widget.label`, `launch.label`,
- *   `composer.dialog` and `composer.label` (SKG-544).
+ *   `composer.dialog` and `composer.label` (FRU-51).
  * - Each bundled catalog weighs on the size guard. If the list grows, load them lazily; do not widen
  *   the guard.
  */

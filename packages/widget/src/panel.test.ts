@@ -40,7 +40,7 @@ function toggle(input: HTMLInputElement, checked: boolean, document: Document): 
   input.dispatchEvent(new document.defaultView!.Event('change', { bubbles: true }));
 }
 
-describe('what the panel looks like (SKG-529)', () => {
+describe('what the panel looks like (FRU-36)', () => {
   it('titles itself in words and closes with a drawing', () => {
     // The title opened with a sprout and the close button was a multiplication sign set at 18px —
     // one a character we do not control, the other a character standing in for an icon. The dialog
@@ -147,7 +147,7 @@ describe('createConfigPanel', () => {
   });
 });
 
-describe('the stages a store can report (SKG-525)', () => {
+describe('the stages a store can report (FRU-32)', () => {
   const GITHUB: SeedStage[] = ['seeded', 'ripe', 'composted'];
 
   function mountOffering(stages: SeedStage[], defaults: WidgetConfig = DEFAULTS) {
@@ -229,7 +229,7 @@ describe('the stages a store can report (SKG-525)', () => {
   });
 });
 
-describe('the panel as a dialog (SKG-544)', () => {
+describe('the panel as a dialog (FRU-51)', () => {
   function keyOn(page: MountedPage, target: Element, key: string, shiftKey = false): KeyboardEvent {
     const KeyboardEventCtor = (page.view as unknown as { KeyboardEvent: typeof KeyboardEvent }).KeyboardEvent;
     const event = new KeyboardEventCtor('keydown', { key, shiftKey, bubbles: true, cancelable: true });

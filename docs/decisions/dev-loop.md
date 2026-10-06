@@ -19,7 +19,7 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - **`FRUITBACK_STORE=memory` swaps the real Linear for `linear-memory.ts`**, so the whole loop —
   capture, issue, pins coloured by state — runs with no API key and writes to nobody's workspace. It
   is refused under `NODE_ENV=production` (which the Dockerfile sets), `/health` answers
-  `{ ok: true, store: 'memory', openRead: 1 }` (measured on `dev:fake`, SKG-543: it sets no
+  `{ ok: true, store: 'memory', openRead: 1 }` (measured on `dev:fake`, FRU-50: it sets no
   `FRUITBACK_READ`, so reads are public), and the boot log says so. `FRUITBACK_FAKE_LINEAR=1` is the older
   spelling, still works, and now says at boot that it is deprecated — see _Which store, and who
   validates it_ ([worker.md](worker.md)). It is
@@ -32,12 +32,12 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   the half of a seed that says _which component_ a note is about. Each of those found a real defect
   the moment it first ran — see below.
 - **A re-render used to be invisible to the widget**, and the playground re-resolved by hand because
-  the host had caused it and therefore knew. A client's app cannot know, so SKG-513 moved that into
+  the host had caused it and therefore knew. A client's app cannot know, so FRU-21 moved that into
   the overlay: `fruitback.tsx` now only _reports_ what the widget decided, through `onResolve`. The
   proof that the gap is really closed is that deleting the manual call left `reanchor.spec.ts` green
   — and that restoring the old overlay makes all three of its specs fail.
-- The toolbar and `fruitback.tsx` are **scaffolding, not the product** — SKG-492/493 replace the
-  capture UI, SKG-500 replaces the re-anchoring. Do not grow features there; grow them in
+- The toolbar and `fruitback.tsx` are **scaffolding, not the product** — FRU-3/493 replace the
+  capture UI, FRU-11 replaces the re-anchoring. Do not grow features there; grow them in
   `packages/widget`.
 - `apps/playground/.react-router/` is typegen, regenerated on dev and build. It is ignored, not
   committed.
@@ -69,13 +69,13 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   Anything the widget takes away by itself has the same shape — the composer clears its confirmation
   1.1s after showing it, so waiting for `harvested` and _then_ reading the Shadow root again is two
   round trips with a deadline between them. Poll, and keep the value that satisfied the poll
-  (SKG-529). Measured: the two-step form fails once 1.5s passes between the steps.
+  (FRU-36). Measured: the two-step form fails once 1.5s passes between the steps.
 - It has already earned its keep four times: the browser caching `GET /feedback` and serving the
   widget its own stale answer right after planting a pin; `domPath` resolving cleanly onto the
   neighbouring card; React 19's `useId` format accepted as a stable id; and the fiber walk throwing on
   the `null` owner React ends every tree with, which stopped a click from planting anything at all.
 
-## The extension under Playwright (SKG-538)
+## The extension under Playwright (FRU-45)
 
 `e2e/extension.spec.ts` loads `apps/extension/.output/chrome-mv3`, which `pnpm e2e` now builds, into a
 persistent Chromium context. Measured on Chromium 151 before the specs were written:

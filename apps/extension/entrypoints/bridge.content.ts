@@ -11,10 +11,10 @@ import { readSite } from '../src/sites.ts';
 import { BRIDGE_SCRIPT_FLAG } from '../src/page-api.ts';
 
 /**
- * The half that can reach the browser, in the isolated world (SKG-534, SKG-596).
+ * The half that can reach the browser, in the isolated world (FRU-41, FRU-57).
  *
  * It owns everything `page.content.ts` cannot touch — `browser.storage`, and the network relay of
- * SKG-596 — and it owns nothing about the widget. The split is the ticket's constraint held from
+ * FRU-57 — and it owns nothing about the widget. The split is the ticket's constraint held from
  * the other side: `packages/widget` is unchanged by this app, because the widget runs where it
  * always ran, in the page.
  *

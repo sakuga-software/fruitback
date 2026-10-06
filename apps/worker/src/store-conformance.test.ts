@@ -16,7 +16,7 @@ import { type ConformanceSubject, describeStoreConformance, repliesNewestFirst }
 import { isDevOnlyProvider, storeProviders } from './stores.ts';
 
 /**
- * Each store against the conformance suite (SKG-527). A new store adds a subject here, and a row to the
+ * Each store against the conformance suite (FRU-34). A new store adds a subject here, and a row to the
  * store matrix in `docs/self-hosting.md`.
  */
 

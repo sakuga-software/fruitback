@@ -47,9 +47,9 @@ Plus the licence split and the two measurements that decided how it is asserted.
   runs, not what its docstring says.
 - `react-grab` and `zod` are **bundled, and are devDependencies**: a client site must not have to
   install — or resolve a version conflict over — a library it never asked for.
-- **Bundling them makes their MIT notices our obligation** (SKG-515). MIT asks the notice to travel
+- **Bundling them makes their MIT notices our obligation** (FRU-22). MIT asks the notice to travel
   with the code, and both are compiled into `dist`. **Phosphor joined them for the same reason by a
-  different route** (SKG-529): the widget installs no icon library, but two of its paths are copied
+  different route** (FRU-36): the widget installs no icon library, but two of its paths are copied
   into `src/icon-data.ts` and compiled in, and copied geometry is still their work. Like `zod`, the
   package carries no notice of its own — and no `LICENSE` file either — so the text in
   `THIRD-PARTY-NOTICES.md` came from Phosphor's own repository, which `info.json` names. Measured: `react-grab` carries `@license` banners
@@ -59,7 +59,7 @@ Plus the licence split and the two measurements that decided how it is asserted.
 
 ## Licences
 
-- **MIT on the three published packages, AGPL-3.0-only on the worker** (SKG-515). The split follows
+- **MIT on the three published packages, AGPL-3.0-only on the worker** (FRU-22). The split follows
   the client/server boundary: the widget is compiled into someone else's site, and copyleft on code
   that ships inside a client's bundle is a licence nobody adopts. The worker is the server, which is
   the only place copyleft bites.
@@ -73,7 +73,7 @@ Plus the licence split and the two measurements that decided how it is asserted.
 - `THIRD-PARTY-NOTICES.md` is the opposite case: npm force-includes nothing by that name, so its
   `files` entry **is** load-bearing. Dropping it was measured failing the guard.
 - The ESM build is left readable (the consumer's bundler minifies it); the IIFE is minified because it
-  lands on a page exactly as built. **102 kB gzipped** (measured on SKG-531), guarded by a test that trips at 150 kB — a
+  lands on a page exactly as built. **102 kB gzipped** (measured on FRU-38), guarded by a test that trips at 150 kB — a
   tripwire for a dependency that should have been bundled out, not a budget.
 - **The README snippet is executed by the suite**, not merely quoted: `package.spec.ts` serves the
   built IIFE through `page.route` and appends the documented tag with its `data-` attributes, which

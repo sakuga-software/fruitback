@@ -8,7 +8,7 @@ import { type SitesImport, exportSites, importSites } from '../../src/site-trans
 import { type SiteConfig, type SiteMode, readAll, removeSite, writeSite, writeSites } from '../../src/sites.ts';
 
 /**
- * Every site entry, wildcards included, and the rules file a team hands around (SKG-536).
+ * Every site entry, wildcards included, and the rules file a team hands around (FRU-43).
  *
  * What an entry covers is decided in `site-patterns.ts`, what a valid one is in `site-form.ts`, what a
  * button does in `site-editor.ts`, and what a file holds in `site-transfer.ts`. This page builds the
@@ -222,7 +222,7 @@ function transfer(): HTMLElement {
         console.error('[fruitback] the import was not confirmed', error);
         result.textContent = STORE_PROBLEM;
         // The entries can be stored anyway, and the tabs open on them would hold no widget until
-        // their next load (SKG-612).
+        // their next load (FRU-73).
         await activateStored(Object.keys(parsed.sites), readAll, (pattern) => injectIntoOpenTabs(scripting, pattern));
 
         return;

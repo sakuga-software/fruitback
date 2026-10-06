@@ -139,7 +139,7 @@ skipped, and the page names it.
 The file holds patterns, modes, endpoints and client ids. It holds no session and no access, so an
 imported rule reads `No access in this browser` until you press **Grant access**, and a team-mode worker
 still needs you to pair. The rules stay in the browser that holds them: they do not sync to your other
-browsers yet (SKG-611).
+browsers yet (FRU-72).
 
 ## What log out does, and what it cannot undo
 

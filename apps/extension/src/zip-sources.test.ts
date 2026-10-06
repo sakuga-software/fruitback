@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 /**
- * What the sources archive has to carry (SKG-616).
+ * What the sources archive has to carry (FRU-77).
  *
  * AMO rebuilds the extension from that archive and compares it with the one submitted, so the
  * archive has to build. This extension imports workspace packages: an archive of `apps/extension`

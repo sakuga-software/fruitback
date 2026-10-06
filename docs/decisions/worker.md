@@ -25,9 +25,9 @@ connector's environment, and what a second connector with no markdown body actua
   body, `429` rate-limited, `500` misconfigured, `502` `store-unavailable` (the widget should keep the
   note and retry), `401` the read needs an identity. `/health` answers `503` when misconfigured so a
   bad deploy is never routed to. **A code the widget reads is a promise**, so it names a role and
-  never a vendor — `linear-unavailable` became `store-unavailable` with SKG-522 for that reason.
+  never a vendor — `linear-unavailable` became `store-unavailable` with FRU-29 for that reason.
 
-## The rate limit and the cache, behind a Kv (SKG-542)
+## The rate limit and the cache, behind a Kv (FRU-49)
 
 `cache.ts` and `rate-limit.ts` each kept a `Map` of their own, reached directly. The ticket asked for
 both behind a replaceable store, because two replicas behind one load balancer have two rate limits
@@ -101,7 +101,7 @@ removed before merging, on the maintainer's decision, for two reasons:
 - nearly every defect the reviews found was in that client or in its parity with the memory store.
   Code nobody runs in production goes on collecting those, with nobody to see them.
 
-What it learned is written up in SKG-606: the atomic `INCR` and `PEXPIRE` script, the timeout that
+What it learned is written up in FRU-67: the atomic `INCR` and `PEXPIRE` script, the timeout that
 destroys a pipelined connection, one URL parser for the boot check and the client, `AUTH` for a
 named user with no password, the 2^53 ceiling, and TLS as the maintainer's call. So is the option to
 measure first, Traefik's `RateLimit` middleware. The removed code is in the history of PR #46.
@@ -116,11 +116,11 @@ degradation the ticket asked to have written down rather than discovered.
 
 - **`GET /feedback` used to answer anyone who could build the URL.** Every note, its author and the
   team's replies were readable by any visitor of the client's site, and by `curl` — which is why
-  hiding pins in the browser was never the fix. `read: 'public' | 'authenticated'` is (SKG-533), per
+  hiding pins in the browser was never the fix. `read: 'public' | 'authenticated'` is (FRU-40), per
   client in `FRUITBACK_CLIENTS` or worker-wide via `FRUITBACK_READ`.
 - **The extension is a different problem.** It settles _visibility_ — the pins leave the visitor's
   DOM. It settles nothing about _authorisation_: the endpoint stays open and `curl` still works.
-  Building SKG-534 without this ticket hides the comments in the UI and leaves them in the API.
+  Building FRU-41 without this ticket hides the comments in the UI and leaves them in the API.
 - **`authorizeRead` runs before `cached`, and the guard is `stub.calls`, not the status code.** A
   gate moved below the cache still returns `401`, so asserting the status cannot tell the two apart
   — it was measured passing against exactly that mutation. What it costs is a Linear call per
@@ -151,7 +151,7 @@ degradation the ticket asked to have written down rather than discovered.
 
 ## The team's replies
 
-- **Comments come from Linear on every read** (SKG-502), and close the loop: someone leaves a note,
+- **Comments come from Linear on every read** (FRU-13), and close the loop: someone leaves a note,
   the team answers in the issue, and the answer appears where the note was left rather than in an
   inbox the reporter does not have.
 - **Absent and empty mean different things.** No `comments` field at all means the worker was not
@@ -159,17 +159,17 @@ degradation the ticket asked to have written down rather than discovered.
   widget says so. A client with replies switched off must not read as a team that never answered.
 - **`showComments` is on by default and is a real switch**, per client or worker-wide
   (`FRUITBACK_HIDE_COMMENTS=1`). Under `read: 'public'` it is the only thing between an issue thread
-  and anyone who can load the client's page; under `read: 'authenticated'` (SKG-533) it is back to
+  and anyone who can load the client's page; under `read: 'authenticated'` (FRU-40) it is back to
   being the editorial choice it should always have been, because the reader is someone the worker
   checked.
 
 ## Where a seed is stored
 
-- **`store.ts` is the interface, and it existed before it was named** (SKG-522). `app.ts` used to
+- **`store.ts` is the interface, and it existed before it was named** (FRU-29). `app.ts` used to
   select between the real and the in-memory module through
   `Pick<typeof realLinear, 'createSeedIssue' | 'fetchSeedIssues'>` — two methods, two
   implementations, an interface discovered by accident. `SeedStore` writes it down so SQLite
-  (SKG-524) and GitHub (SKG-525) are implementations rather than new branches.
+  (FRU-31) and GitHub (FRU-32) are implementations rather than new branches.
 - **`findForPage` states the intention, not the method.** Linear filters server-side with
   `description: { contains: … }`, GitHub lists issues by label, SQL does a `WHERE`, and a store with no
   search would walk everything. Exposing a `contains` filter on the interface would have made
@@ -191,17 +191,17 @@ degradation the ticket asked to have written down rather than discovered.
 - **The store is built once per process, by the transport.** `createFruitbackServer` constructs it
   and every request gets it through `RequestContext`. It began as `storeFor(config)` inside the two
   handlers, which is invisible for Linear and the in-memory one — both stateless closures — and
-  would have opened a SQLite connection per request the moment SKG-524 landed. Caught in review, not
+  would have opened a SQLite connection per request the moment FRU-31 landed. Caught in review, not
   by a test, because nothing observable was wrong yet. The tests that hold it now assert the handler
   used the store it was **given**: a Linear stub left untouched is the proof it built none of its own.
 
 ## Which store, and who validates it
 
 - **`FRUITBACK_STORE` selects the connector, and each connector validates its own environment**
-  (SKG-526). SKG-522 named the interface but left the worker Linear-shaped anyway: `WorkerConfig`
+  (FRU-33). FRU-29 named the interface but left the worker Linear-shaped anyway: `WorkerConfig`
   carried `linearApiKey`, `linearTeamId` and `linearProjectId`, so every module that could read the
   config could read one provider's credentials — and `readConfig` checked those three for **every**
-  deployment, so a SQLite worker (SKG-524) would have been refused at boot for a missing Linear key.
+  deployment, so a SQLite worker (FRU-31) would have been refused at boot for a missing Linear key.
 - **What the worker keeps of a store is a name and a way to build one.** `StoreConfig` is
   `{ provider, create() }` and nothing else; a test asserts exactly those two keys, so the next
   provider's fields cannot arrive here either. `storeFor` is now one line.
@@ -222,7 +222,7 @@ any store` asks it of every spec rather than of Linear.
   So the sugar falls back to the real store and says so in the log; the explicit selection is refused
   at boot. `pnpm dev` and the E2E suite use the new spelling, which is what keeps the selection path
   exercised outside the unit tests.
-  - **The deprecation warning it shipped with fired only when the flag lost** (SKG-581), which is the
+  - **The deprecation warning it shipped with fired only when the flag lost** (FRU-54), which is the
     inverse of who it is for: the operator who needs to hear it is the one the variable still works
     for, and that deployment booted in silence. There are now two halves and they are exhaustive —
     `fakeLinearIgnoredReason` when it got the process nowhere, `fakeLinearDeprecationNotice` when it
@@ -234,7 +234,7 @@ any store` asks it of every spec rather than of Linear.
     way `embed.test.ts` asserts the widget's transport. Without that, deleting the `console.warn`
     leaves every case of the notice green and the warning reaching nobody — the shape of defect this
     repository keeps paying for.
-  - The reason the flag is kept alive is the `.env` files and compose stacks that predate SKG-526.
+  - The reason the flag is kept alive is the `.env` files and compose stacks that predate FRU-33.
     **No script, package manifest or workflow here selects a store with it** — `store-config.ts`'s own
     docstring said it was in `apps/worker/package.json` and the CI workflow for a round after that
     ticket moved both. The tests still set it, deliberately: `stores.test.ts` covers the flag itself,
@@ -255,7 +255,7 @@ any store` asks it of every spec rather than of Linear.
 
 ## SQLite, and what a second connector actually proved
 
-- **`sqlite.ts` is the connector that had to be uncomfortable** (SKG-524). One implementation of
+- **`sqlite.ts` is the connector that had to be uncomfortable** (FRU-31). One implementation of
   `SeedStore` proved nothing; GitHub Issues would have proved almost as little, since markdown bodies,
   labels and full-text search are Linear's shape under another name. SQLite shares none of it — no
   description, no `contains` filter, no labels, no workflow states.
@@ -268,7 +268,7 @@ any store` asks it of every spec rather than of Linear.
   re-checks afterwards. That is the payoff of naming the intention rather than the method.
 - **The connection is shared per path, and the store object is not.** `handleRequest` still falls back
   to building a store when the transport did not hand it one, so without the shared handle that path
-  opens a database per request — the hazard SKG-522 was written to prevent. The test asserts **how
+  opens a database per request — the hazard FRU-29 was written to prevent. The test asserts **how
   many handles were opened**, not `connections.size`: the map is keyed by path, so a `connect` that
   stopped reusing overwrites the entry and leaves the size at one. Both weaker spellings were measured
   passing against the mutation before this one was written.
@@ -281,7 +281,7 @@ any store` asks it of every spec rather than of Linear.
   but a caller reaching for `.catch()` would have been bypassed on the one path that matters, a volume
   nobody mounted.
 - **`sqlite3` is in the runtime image for one reason: the backup line in
-  [self-hosting.md](../self-hosting.md)** (the README until SKG-519 moved it). The store needs
+  [self-hosting.md](../self-hosting.md)** (the README until FRU-26 moved it). The store needs
   nothing installed; `.backup` needs a binary, and it is the only safe way to copy a live database.
   Measured in a container: `fruitback.db` was 4 KB while `fruitback.db-wal` held 53 KB, so a `cp`
   of the `.db` alone would have lost the note that had just been planted.
@@ -292,8 +292,8 @@ any store` asks it of every spec rather than of Linear.
   the **right** of `X-Forwarded-For`, because the left of an appended chain is what the caller wrote.
   Reading the leftmost entry makes the rate limit bypassable with one header. An earlier version of
   this line said each proxy appends and that the leftmost entry is correct behind Cloudflare. Neither
-  was measured. SKG-543 measured nginx appending, and Traefik and Caddy replacing by default.
-- **`FRUITBACK_CLIENTS` makes one worker serve several client sites** (SKG-504). It maps a
+  was measured. FRU-50 measured nginx appending, and Traefik and Caddy replacing by default.
+- **`FRUITBACK_CLIENTS` makes one worker serve several client sites** (FRU-15). It maps a
   `clientId` to a team, a project and the origins that client may be embedded on. Absent, nothing
   changes: one team, one project, `client` optional on a read.
 - **Configured, a client has to be named on both paths** — the `client` parameter on a read,
@@ -307,17 +307,17 @@ any store` asks it of every spec rather than of Linear.
   under `fruitback:  acme  ` while its owner's clean read asked for `fruitback:acme` and found
   nothing: authorised at both ends, invisible in between. The write path normalises it into the seed
   the same way it re-canonicalises `page.url`, and for the same reason.
-- **`clientId` is client-asserted**, and SKG-498 did not change that: identity tokens say who the
+- **`clientId` is client-asserted**, and FRU-9 did not change that: identity tokens say who the
   _reporter_ is, not which client the page is. `origins` is what turns the claim into something
   checkable against the browser's own header — the trust level CORS gives, and strictly more than
   nothing. Do not describe it as authentication.
 - A malformed `FRUITBACK_CLIENTS` is refused at boot rather than ignored, and named on `/health`.
 - The rate limiter counts in the `Kv`, which lives in the process: **per replica**, so N containers
-  multiply the ceiling by N. A store the replicas share is SKG-606.
+  multiply the ceiling by N. A store the replicas share is FRU-67.
 - Tests drive `handleRequest` with plain `Request` objects against a stubbed Linear
   (`linear-stub.ts`); no container needed. The assertion that matters most is that the stored
   description parses back into the exact seed that was posted.
-- **`reporter.verified` is the worker's word, never the client's** (SKG-498). Anything arriving with
+- **`reporter.verified` is the worker's word, never the client's** (FRU-9). Anything arriving with
   that flag has it stripped, whatever else it says: without that, a browser posting
   `reporter: { name: 'CEO', verified: true }` reads in Linear exactly like an identity this worker
   checked. `identity.ts` sets it only after verifying a **standard compact JWT (HS256)** against the
@@ -337,7 +337,7 @@ any store` asks it of every spec rather than of Linear.
 - `exp` is **required** in the claims — a token that never expires is a password. Signatures are
   compared in constant time, because a `===` on the base64 leaks how much of it was right.
 
-## GitHub Issues, and the stages it cannot say (SKG-525)
+## GitHub Issues, and the stages it cannot say (FRU-32)
 
 - **The ticket's own test was the cost, and the cost was low.** `SeedStore` gained one optional field,
   `stages`, and `app.ts`'s read path one line. Everything else is `github.ts`, one entry in
@@ -406,7 +406,7 @@ any store` asks it of every spec rather than of Linear.
   REST documentation, API version 2022-11-28. The shapes of an issue row, a comment and
   `state_reason` were read from a public repository with `gh api`; nothing was written anywhere.
 
-## The conformance suite, and the matrix (SKG-527)
+## The conformance suite, and the matrix (FRU-34)
 
 - **The doubles keep what they receive.** `linear-stub.ts` answers from a fixed list and records the
   calls, so it cannot serve a suite that writes and then reads. `fakeLinear` and `fakeGithub` in
@@ -449,7 +449,7 @@ any store` asks it of every spec rather than of Linear.
 ## The markdown codec, and the file that outlived its name
 
 - **`markdown-description.ts` holds "put a seed in a markdown body and keep the issue readable"**
-  (SKG-523) — `buildIssueTitle`, `buildIssueMetadata`, `buildSeedBlock`, `buildIssueDescription`,
+  (FRU-30) — `buildIssueTitle`, `buildIssueMetadata`, `buildSeedBlock`, `buildIssueDescription`,
   `parseSeedFromDescription` and `pageQueryTerm`. None of it was ever Linear's; every issue tracker
   worth connecting to stores a markdown body and lets something search it.
 - **It is a strategy connectors share, not part of `SeedStore`.** Putting it on the interface would
@@ -462,8 +462,8 @@ any store` asks it of every spec rather than of Linear.
   ticket asked for and what makes the move provable: 44 shared tests before, 44 after, and
   `parseSeedFromDescription(buildIssueDescription(seed)) === seed` is still the same assertion on the
   same fixture.
-- **`linear.ts` became `issue.ts`, because the name had outlived what it described.** SKG-516 took
-  Linear's workflow states out of it, SKG-517 took the words a human reads, and this ticket took the
+- **`linear.ts` became `issue.ts`, because the name had outlived what it described.** FRU-23 took
+  Linear's workflow states out of it, FRU-24 took the words a human reads, and this ticket took the
   codec. What was left — a label, a ripeness, and the shape of what a read answers — names no
   provider at all. `apps/worker/src/linear.ts` keeps its name: over there, a team really is Linear's.
 - **Nothing outside the package had to change**, because every consumer imports through the
@@ -476,19 +476,19 @@ any store` asks it of every spec rather than of Linear.
 
 ## The extension's session
 
-- **The reviewer is not a visitor who typed a name** (SKG-535). SKG-498 defined `reporter.verified`
+- **The reviewer is not a visitor who typed a name** (FRU-42). FRU-9 defined `reporter.verified`
   and left nothing able to set it on this side: a client site could mint an identity token, and the
   extension could not. A session is what finally makes that flag the worker's own word.
 - **The operator vouches, and the code carries who for.** A pairing code is minted _for_ Alice, with
   her name and address in it. The alternative — the extension supplying a name at pairing time — is
-  the browser asserting an identity again, which is the hole SKG-498 was written to close. It was
+  the browser asserting an identity again, which is the hole FRU-9 was written to close. It was
   rejected for that reason and not on ergonomics.
 - **The access token is an ordinary identity token, and that is the whole economy of the design.**
   `identity.ts` already mints and verifies HS256 JWTs, and both request paths already check them. A
   session that mints the same shape adds no second verification path, and `read: 'authenticated'`
-  (SKG-533) started accepting the extension with no change to a single line of the read path.
-- **Rotation was refused once, and then built** (SKG-600). It needs a grace for the answer that never
-  arrives, and until SKG-599 there was no client half to measure that against. There is now, and the
+  (FRU-40) started accepting the extension with no change to a single line of the read path.
+- **Rotation was refused once, and then built** (FRU-61). It needs a grace for the answer that never
+  arrives, and until FRU-60 there was no client half to measure that against. There is now, and the
   measurement changed the design — see _Rotation, and the grace that is not a clock_ below.
 - **No OAuth, no identity provider, no user table.** Every decision leans on "one administrator, one
   container, no third party". An authentication flow assuming an identity provider makes the project
@@ -532,7 +532,7 @@ any store` asks it of every spec rather than of Linear.
 
 ### What the tests hold, and one they could not
 
-- **Revocation is mutation-tested.** `findSession` is gone since SKG-600 — every read of a session
+- **Revocation is mutation-tested.** `findSession` is gone since FRU-61 — every read of a session
   rotates it, so there is no lookup beside `rotateSession`. Dropping `revoked_at IS NULL` from
   `revoke` still fails test:`revokes on the worker, so the refresh token stops working everywhere`, and
   dropping the chain revocation from `revokeSession` fails test:`ends the whole chain on log out, not only
@@ -545,7 +545,7 @@ or the POST never happens`. What says the exemption is not a hole in the gate is
   origin that is on no allowlist is still refused there.
   - Two of those three names were quoted here **truncated**, and the second was quoted with a
     sentence that had stopped being true. The exemption was scoped to `/session/` when this was
-    written; SKG-596 widened it to every route, because the relay calls `/feedback` from the service
+    written; FRU-57 widened it to every route, because the relay calls `/feedback` from the service
     worker. The test was renamed to say so and this paragraph was not. Found while fixing a third
     stale test name a reviewer caught on this ticket — `grep` for a quoted name is the check, and
     nothing runs it.
@@ -568,15 +568,15 @@ or the POST never happens`. What says the exemption is not a hole in the gate is
 The extension half — `chrome.storage.local` for the refresh token, `chrome.storage.session` for the
 short access token, and the background refresh — is **not** here. The two halves have different
 verification stories: this one is fully covered by `node --test`, and the other needs a real Chromium
-with an extension loaded, which SKG-538 exists to build and which does not exist yet. Shipping them
+with an extension loaded, which FRU-45 exists to build and which does not exist yet. Shipping them
 together would let the half nobody can test ride in on the half that is.
 
 Per-client session minting is absent for a stated reason rather than an accidental one: a session
 signs with the worker-wide key, and a worker with `FRUITBACK_CLIENTS` ignores that key. The pair is
 refused at boot instead of shipping a feature that pairs successfully and then answers `401` to
-everything. That belongs with team mode (SKG-596), where a request carries a client id.
+everything. That belongs with team mode (FRU-57), where a request carries a client id.
 
-## Rotation, and the grace that is not a clock (SKG-600)
+## Rotation, and the grace that is not a clock (FRU-61)
 
 A refresh token that never changes is a thirty-day password. A copy taken from a browser profile
 stays good for the rest of that month, and nothing observes the theft. Rotating on every refresh

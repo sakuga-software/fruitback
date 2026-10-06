@@ -28,7 +28,7 @@ const SESSION_ALARM = 'fruitback-session-refresh';
 const MIN_ALARM_DELAY_MS = 60 * 1000;
 
 /**
- * Keeps the two content scripts registered for exactly the sites that are switched on (SKG-534).
+ * Keeps the two content scripts registered for exactly the sites that are switched on (FRU-41).
  *
  * The extension declares no host permission, so nothing runs anywhere until this does it — see
  * wxt.config.ts for why an install-time `<all_urls>` was not acceptable for a review tool.
@@ -55,7 +55,7 @@ export default defineBackground(() => {
 
       // A permission the reviewer granted once can be revoked in the browser's own settings, without
       // this extension hearing about it in any way it could act on. Chromium registers a script for
-      // an origin we do not hold and says nothing (measured, SKG-538), so the grant is checked here.
+      // an origin we do not hold and says nothing (measured, FRU-45), so the grant is checked here.
       const held = await Promise.all(
         wanted.map((pattern) => browser.permissions.contains({ origins: [matchPatternFor(pattern)] })),
       );
@@ -68,7 +68,7 @@ export default defineBackground(() => {
   });
 
   /**
-   * Keeps every paired worker's access token fresh, and the alarm pointed at the next one (SKG-599).
+   * Keeps every paired worker's access token fresh, and the alarm pointed at the next one (FRU-60).
    *
    * **No token leaves the extension's trusted contexts.** This one and the popup hold them; the
    * isolated content script asks this to make a call, and the page's world is never told anything.
@@ -103,7 +103,7 @@ export default defineBackground(() => {
   });
 
   /**
-   * Team mode: the call the page cannot make, made here (SKG-596).
+   * Team mode: the call the page cannot make, made here (FRU-57).
    *
    * The origin is read off the sender the browser reports and never off the message — a content
    * script's input is written by the page, and this is the context the page cannot reach. Everything
@@ -111,7 +111,7 @@ export default defineBackground(() => {
    */
   const relay = createRelay({ readSite, ensureAccess: (endpoint) => sessions.ensureAccess(endpoint), send });
 
-  /** The only writer of the sites map, so a change from the popup and one from the options page cannot drop each other (SKG-536). */
+  /** The only writer of the sites map, so a change from the popup and one from the options page cannot drop each other (FRU-43). */
   const ownSites = createSiteOwner({ read: readAll, replace: replaceAll });
   const extensionRoot = browser.runtime.getURL('/popup.html').replace(/popup\.html$/, '');
 
@@ -157,7 +157,7 @@ export default defineBackground(() => {
     if (area !== 'local') return;
     if (changes.sites !== undefined) void sync();
     // A pairing or a logout from the popup, this run's own writes — the worker rotates on every
-    // refresh (SKG-600), so every refresh stores a new token — and the upgrade in `upgradeAreas`,
+    // refresh (FRU-61), so every refresh stores a new token — and the upgrade in `upgradeAreas`,
     // which writes every endpoint at once. Each re-entry settles at once: the next run finds the
     // tokens fresh, refreshes nothing and only re-arms the alarm.
     if (touchesARefreshToken(Object.keys(changes))) void refreshSessions();

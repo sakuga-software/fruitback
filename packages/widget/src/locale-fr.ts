@@ -1,7 +1,7 @@
 import type { Catalog } from './messages.ts';
 
 /**
- * French, maintained in this repository (SKG-531).
+ * French, maintained in this repository (FRU-38).
  *
  * Every key is required, so a key added to `ENGLISH` does not compile until it is translated here.
  * `messages.test.ts` also checks that each message keeps the placeholders of its English one.

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { badgeFor, expectPinOn, openPlayground, pinFor, plantPin, planted, status, waitForPins } from './pin.ts';
 
 /**
- * The overlay in a browser that actually lays out and scrolls (SKG-500). The unit tests state every
+ * The overlay in a browser that actually lays out and scrolls (FRU-11). The unit tests state every
  * box by hand — happy-dom computes none — so the questions left for here are the ones only a real
  * engine answers: does the pin still sit on its element after the page moves, and does it stay out
  * of the way of the page underneath.
@@ -88,7 +88,7 @@ function assertDistinct(stages: (string | undefined)[]): void {
 
 test('the planted identifier survives the widget announcing its own re-resolution', async ({ page }) => {
   // The CI failure this closes: `status` has two writers — this harness, and the widget reporting a
-  // re-resolution it decided on by itself (SKG-513). The confirmation was overwritten by a pin count
+  // re-resolution it decided on by itself (FRU-21). The confirmation was overwritten by a pin count
   // arriving a moment later, so `plantPin` timed out waiting for a message that had already been and
   // gone. Locally the count won the race; on CI it lost.
   await openPlayground(page, 'planted-signal');
@@ -157,7 +157,7 @@ test('a reply is not drawn as a bullet point', async ({ page }) => {
   throw new Error('no issue came back with replies in three attempts');
 });
 
-test('the popover and the thread open inside the window on a page scrolled sideways (SKG-607)', async ({ page }) => {
+test('the popover and the thread open inside the window on a page scrolled sideways (FRU-68)', async ({ page }) => {
   // The popover scales in from 96%, which moves its edges by a few pixels mid-animation.
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await openPlayground(page, 'scrolled-sideways');

@@ -148,7 +148,7 @@ describe('createEditor.switchOn', () => {
 
 /**
  * A write goes through the background and can reject **after** it is stored, when only the answer is
- * lost (SKG-612). The rule is then On and the tabs already open on it hold no widget until their
+ * lost (FRU-73). The rule is then On and the tabs already open on it hold no widget until their
  * next load, with nothing to say why.
  */
 describe('a write the background did not confirm', () => {

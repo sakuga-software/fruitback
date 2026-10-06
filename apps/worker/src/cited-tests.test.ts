@@ -4,11 +4,11 @@ import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 /**
- * The tests the documents name, against the tests that exist (SKG-601).
+ * The tests the documents name, against the tests that exist (FRU-62).
  *
  * `SECURITY.md`, `CLAUDE.md` and the pages under `docs/` say which test holds a claim. Nothing
  * checked that those names were real, and five had drifted: a renamed test, and a citation truncated
- * before a ` (SKG-517)` suffix. **A truncated citation still greps**, so looking for drift by hand
+ * before a ` (FRU-24)` suffix. **A truncated citation still greps**, so looking for drift by hand
  * finds none.
  *
  * A name is cited as test:`the name`, and the marker is what makes this possible: backticks alone
@@ -80,7 +80,7 @@ function flat(value: string): string {
  *
  * It errs towards skipping. A name it misses makes a citation fail loudly; a name it reads by mistake
  * is what passes in silence. A `${…}` inside a template literal is skipped with the rest of it, and so
- * is a template inside that substitution (SKG-615).
+ * is a template inside that substitution (FRU-76).
  */
 export function namesIn(source: string): string[] {
   const names: string[] = [];
@@ -206,7 +206,7 @@ function closingQuote(source: string, from: number, quote: string): number {
 }
 
 /**
- * Where a template literal opened before `from` closes (SKG-615).
+ * Where a template literal opened before `from` closes (FRU-76).
  *
  * A scan that stopped at the first backtick closed the outer literal on the backtick that **opens**
  * a nested one, and then read the rest of that literal as code. Both ways to be wrong are there: a
@@ -338,7 +338,7 @@ function citations(): Citation[] {
   return found;
 }
 
-describe('the names a source declares (SKG-601)', () => {
+describe('the names a source declares (FRU-62)', () => {
   it('takes a call that starts its line in code, and leaves one that is only mentioned', () => {
     // Written as a template literal on purpose: that is the shape a pattern misread (PR #62).
     const source = `
@@ -378,7 +378,7 @@ test(\`case \${value}\`, () => {});
   });
 
   /**
-   * A template can hold a template, inside a `${…}` (SKG-615).
+   * A template can hold a template, inside a `${…}` (FRU-76).
    *
    * Each case here makes the scan diverge, and the mispaired backtick is what does it. A scan that
    * closes the outer literal on the backtick that **opens** the inner one reads the declaration in
@@ -426,7 +426,7 @@ it('a name after a template that holds an escaped backtick', () => {});
   });
 });
 
-describe('a document without its fenced blocks (SKG-601)', () => {
+describe('a document without its fenced blocks (FRU-62)', () => {
   it('closes a fence only on its own character, and only when it is long enough', () => {
     const markdown = [
       'prose one',
@@ -455,7 +455,7 @@ describe('a document without its fenced blocks (SKG-601)', () => {
   });
 });
 
-describe('the tests the documents cite (SKG-601)', () => {
+describe('the tests the documents cite (FRU-62)', () => {
   const names = declaredTestNames();
   const cited = citations();
 

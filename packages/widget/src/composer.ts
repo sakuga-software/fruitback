@@ -30,13 +30,13 @@ export type ComposerOptions = {
    * open with the text intact, because a note lost to a network blip is the one failure this widget
    * cannot afford.
    *
-   * `reporter` is what the visitor optionally typed about themselves (SKG-498). It is a **claim**:
+   * `reporter` is what the visitor optionally typed about themselves (FRU-9). It is a **claim**:
    * the worker stores it as self-declared unless the embedder also sends a signed identity token,
    * and it strips any `verified` flag that arrives from a browser.
    */
   onSubmit: (note: string, reporter?: SeedReporter) => Promise<boolean | void>;
   onClose?: () => void;
-  /** The widget's words (SKG-530). Left out: English, with dates in this document's language. */
+  /** The widget's words (FRU-37). Left out: English, with dates in this document's language. */
   translator?: Translator;
 };
 
@@ -73,7 +73,7 @@ export function createComposer(options: ComposerOptions): Composer {
   const send = root.querySelector('[data-fruitback-send]') as HTMLButtonElement;
   // Appended after the template is parsed: the seed the button plants, in the shape the page will
   // then show it in. Written here rather than in TEMPLATE because an SVG in an innerHTML string is
-  // parsed into the HTML namespace and renders nothing (SKG-529).
+  // parsed into the HTML namespace and renders nothing (FRU-36).
   send.append(createIcon(document, 'drop'), t.text('composer.send'));
   const cancel = root.querySelector('[data-fruitback-cancel]') as HTMLButtonElement;
   const status = root.querySelector('[data-fruitback-status]') as HTMLElement;
@@ -153,7 +153,7 @@ export function createComposer(options: ComposerOptions): Composer {
   /**
    * Under the element it belongs to, flipped above when there is no room. Aligned on the element's
    * start edge: its left in a left-to-right language, its right otherwise. The value stays a physical
-   * left, because it is a position against the page (SKG-531).
+   * left, because it is a position against the page (FRU-38).
    *
    * On a narrow screen the rules below take over entirely and pin it to the bottom of the viewport, so
    * the position set here stops mattering — which is why it is set with `style` and overridden by a media query.
@@ -170,7 +170,7 @@ export function createComposer(options: ComposerOptions): Composer {
 
     // Custom properties rather than inline `left`/`top`: an inline style would beat the media query
     // below and leave the mobile sheet offset by whatever the element's position happened to be.
-    // `start` is in document coordinates, so the window it must stay inside starts at `scrollX` (SKG-607).
+    // `start` is in document coordinates, so the window it must stay inside starts at `scrollX` (FRU-68).
     root.style.setProperty(
       '--fruitback-composer-left',
       `${Math.max(scrollX + GAP, Math.min(start, scrollX + width - WIDTH - GAP))}px`,

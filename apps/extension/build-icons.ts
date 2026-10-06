@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { ICON_SIZES, iconPath } from './src/icon-sizes.ts';
 
 /**
- * Render the extension's icon, at every size a browser asks for (SKG-617).
+ * Render the extension's icon, at every size a browser asks for (FRU-78).
  *
  * **Each size is rendered from the vector, never resized from the big one.** A 16px icon made by
  * shrinking a 128px one keeps the detail of the large drawing as a smudge. The rasteriser is

@@ -11,7 +11,7 @@ import {
 
 /**
  * The page's own world, which mounts the widget in private mode and announces itself in team mode
- * (SKG-534, SKG-596).
+ * (FRU-41, FRU-57).
  *
  * **`world: 'MAIN'` is not a preference here, it is the ticket.** A content script in the isolated
  * world shares the DOM but not the properties page scripts put on it, and everything that gives a

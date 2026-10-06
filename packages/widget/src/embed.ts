@@ -16,7 +16,7 @@ import { type Overlay, createOverlay } from './overlay.ts';
 import { type ConfigPanel, type OfferedStages, createConfigPanel, createOfferedStages } from './panel.ts';
 
 /**
- * One call that mounts the whole widget on a page (SKG-505).
+ * One call that mounts the whole widget on a page (FRU-16).
  *
  * Everything below this line already existed; what did not was anything that put the pieces
  * together. The playground assembled them by hand — host, overlay, popover, settings, and the two
@@ -37,14 +37,14 @@ export type FruitbackOptions = {
   /** Shown on the floating button. Wins over `launch.label` in `messages`. */
   label?: string;
   /**
-   * The language to show, as a BCP 47 tag (SKG-530). Left out, the widget reads the browser's
+   * The language to show, as a BCP 47 tag (FRU-37). Left out, the widget reads the browser's
    * language. A tag that `Intl` refuses is ignored.
    */
   locale?: string;
   /**
    * The host's own translations, by locale tag: `{ de: { 'launch.label': 'Feedback geben' } }`.
    *
-   * The bundle carries English and French (SKG-531). For each key the widget uses the first valid
+   * The bundle carries English and French (FRU-38). For each key the widget uses the first valid
    * message in this order: the host's exact tag, the bundled exact tag, the host's primary subtag,
    * the bundled primary subtag, then English. A message that is unknown or of the wrong shape is
    * ignored. A plural message has one string per `Intl.PluralRules` category, and `other` is required.
@@ -53,13 +53,13 @@ export type FruitbackOptions = {
    */
   messages?: Readonly<Record<string, FruitbackMessages>>;
   /**
-   * A short-lived JWT identifying the visitor (SKG-498). Called before every write, so a token that
+   * A short-lived JWT identifying the visitor (FRU-9). Called before every write, so a token that
    * expires mid-session is refreshed rather than rejected. Without it every reporter is
    * self-declared, which is the default and a perfectly good way to run this.
    */
   identityToken?: () => string | undefined | Promise<string | undefined>;
   /**
-   * Take a picture of the element the note is about, and return where it now lives (SKG-495).
+   * Take a picture of the element the note is about, and return where it now lives (FRU-6).
    *
    * A seam rather than a bundled library, for two reasons. The seed contract stores a **URL**, so
    * something has to host the image, and that is the embedder's storage — they already have some and
@@ -77,7 +77,7 @@ export type FruitbackOptions = {
   /** Off when the reporter has not agreed to send their user agent along. */
   includeEnv?: boolean;
   /**
-   * Design tokens, so the widget can be made to look like it belongs (SKG-528).
+   * Design tokens, so the widget can be made to look like it belongs (FRU-35).
    *
    * Tokens and not a stylesheet: colours, shadows, the font family and the two animation durations.
    * A host that could write arbitrary CSS into the Shadow root would turn our class names into a
@@ -112,7 +112,7 @@ export type FruitbackOptions = {
    * Who carries the calls to the worker. Defaults to `fetch`, from this page.
    *
    * The seam exists so a host can put the calls somewhere the page cannot reach. The browser
-   * extension relays them through its own session (SKG-595), which is the only way a team token can
+   * extension relays them through its own session (FRU-56), which is the only way a team token can
    * gate a read without the page's JavaScript being able to read that token.
    *
    * It is also how a mount stays dormant: a site that wants the widget only for a reviewer does not
@@ -304,7 +304,7 @@ function createReader(
     const url = canonicalizePageUrl(view.location.href);
 
     try {
-      // Sent on reads too since SKG-533: a client configured `read: 'authenticated'` answers 401
+      // Sent on reads too since FRU-40: a client configured `read: 'authenticated'` answers 401
       // without one. Asked for per read rather than once, for the same reason the write path does —
       // a short-lived token that expired mid-session would otherwise turn every later read into a
       // 401 until the page is reloaded.
@@ -374,7 +374,7 @@ export async function plant({
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      // Never in the body: the seed is stored verbatim in a Linear description (SKG-498).
+      // Never in the body: the seed is stored verbatim in a Linear description (FRU-9).
       ...(token !== undefined ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(seed),

@@ -5,7 +5,7 @@ import { THEME_STYLES, THEME_TOKENS, applyTheme, missingStageTokens, stageToken 
 import { mountPage } from './dom.fixture.ts';
 
 /**
- * The token layer (SKG-528). None of this can be seen in happy-dom — it draws nothing and resolves
+ * The token layer (FRU-35). None of this can be seen in happy-dom — it draws nothing and resolves
  * no `var()` — so what is asserted here is the *contract*: which names exist, which are declared,
  * and what `applyTheme` will and will not write. What it looks like is `e2e/` and a recording.
  */
@@ -95,7 +95,7 @@ describe('applyTheme', () => {
 
 describe('a foreground token is only ever used on the background it is named for', () => {
   /**
-   * The defect this exists for was mine, and review caught it (SKG-528).
+   * The defect this exists for was mine, and review caught it (FRU-35).
    *
    * The original CSS said `color: #fff` in five places, and mapping that to a single
    * `--fruitback-color-on-accent` coupled three elements whose background is not the accent: the gear

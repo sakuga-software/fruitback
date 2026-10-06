@@ -45,7 +45,7 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
 initial` also undoes the browser's `display: none` on `<style>`, which then renders the stylesheet
   as visible text in the corner of the client's page. Hence `style, script { display: none }`. Both
   are covered by E2E tests, because neither is visible to a DOM emulator. The reset on every element
-  inside stops inheritance too, so it declares `color` and `font` as `inherit` (SKG-544, in _The
+  inside stops inheritance too, so it declares `color` and `font` as `inherit` (FRU-51, in _The
   keyboard, the screen reader and the contrast_).
 - **The host sits at the document origin, absolutely positioned, with no size.** The overlay places
   pins in document coordinates, and absolute positions resolve against the nearest positioned
@@ -56,7 +56,7 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   change lands in one file.
 - **Hit testing has to be told to ignore us**, since react-grab traverses open shadow roots and would
   otherwise return our own highlight box. `ignore` extends that to chrome the _page_ mounts around
-  the widget (the dev toolbar today, SKG-503's config panel next). Note what it does not do:
+  the widget (the dev toolbar today, FRU-14's config panel next). Note what it does not do:
   react-grab walks _past_ a rejected candidate, so hovering our own chrome highlights whatever is
   behind it. Harmless; capturing it would not be.
 - **Never `instanceof Element` in this package.** It reads a class off one realm, and an element from
@@ -65,7 +65,7 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
 
 ## The look, and the one thing a host may change
 
-- **`theme.ts` owns every colour, shadow, radius, font family and duration** (SKG-528, SKG-529). They were
+- **`theme.ts` owns every colour, shadow, radius, font family and duration** (FRU-35, FRU-36). They were
   hexadecimals spread across five `STYLES` literals — `host.ts`, `overlay.ts`, `composer.ts`,
   `panel.ts`, `orphans.ts` — plus the stage colours, which travelled in the _published contract_.
 - **Custom properties, because inheritance is what crosses the modules.** Each module injects its own
@@ -80,7 +80,7 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
 ## One prefix, and it is `fruitback`
 
 - **`--fruitback-*` tokens, `.fruitback-*` classes, `data-fruitback-*` attributes.** One word
-  everywhere (SKG-580), including the names on the `<script>` tag the README documents.
+  everywhere (FRU-53), including the names on the `<script>` tag the README documents.
 - **It took three goes, and the reason it landed here is worth keeping.** `--fb-` was reckless for a
   property that inherits into a Shadow root. `--fruit-` fixed that and introduced a subtler problem:
   the repo then had `--fruit-`, `.fruit-`, _and_ `data-fruitback-` on the script tag, and an
@@ -98,7 +98,7 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   — 32 in this package. Renaming the stylesheet without the JavaScript that sets the attribute turned
   25 unit tests red on the first attempt, which is the loud version of exactly the failure above.
 - **`--fb-` and `--fruit-` survive in the prose above, and only there.** They are the history that
-  explains the current name; the first pass of SKG-580 spared them mechanically and left a paragraph
+  explains the current name; the first pass of FRU-53 spared them mechanically and left a paragraph
   describing a distinction the code had stopped making, which is the worse failure — a comment that
   outlives what it described.
 - **`init({ theme })` takes tokens, never CSS.** A host that could write a stylesheet into the Shadow
@@ -112,16 +112,16 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   to that block. Searching the whole stylesheet passed a mutation that deleted a declaration, because
   the dark block redeclares it — a token declared only under `prefers-color-scheme: dark` is undefined
   in light mode.
-- **Radii are tokenised now, and the order of the two moves is the point** (SKG-529). SKG-528 refused
+- **Radii are tokenised now, and the order of the two moves is the point** (FRU-36). FRU-35 refused
   to name eight distinct values, because eight tokens each used once is indirection wearing the
-  costume of a scale. SKG-529 shortened the scale first — 4, 6 and 8 became `sm`; 10 and 12 became
+  costume of a scale. FRU-36 shortened the scale first — 4, 6 and 8 became `sm`; 10 and 12 became
   `md`; 14 and 18 became `lg`; 999px is `pill` — and named the four that were left. Naming them before
   reducing them would have frozen the accident.
 - The pin's silhouette is **not** in that scale: `border-radius: 50% 50% 50% 0` is a shape, not a
   corner size, and it is the product's identity rather than a preference a host may set.
 - Spacing is still literal — nobody overrides it, and substituting sixty numbers is where a silent
   visual regression hides.
-- SKG-528 changed **no colour**: every token holds the hexadecimal that was already there, and
+- FRU-35 changed **no colour**: every token holds the hexadecimal that was already there, and
   `e2e/overlay.spec.ts`'s computed-colour read is the proof. One shadow moved 4px, because the thread
   and the panel spelled the same intention two ways.
 
@@ -133,7 +133,7 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   the send button is disabled in flight (**a second click would plant the same note twice**, and the
   worker cannot tell the difference), a failure keeps the popover open **with the text intact**, and
   a refusal (`onSubmit` resolving `false`) is treated as a failure rather than a success.
-- **Name and e-mail are optional, behind a disclosure, and never `verified`** (SKG-498). Anonymous
+- **Name and e-mail are optional, behind a disclosure, and never `verified`** (FRU-9). Anonymous
   is what happens if the reporter does nothing, and the widget states a claim rather than an
   identity — the flag that would make it one is the worker's to set.
 - **Losing what someone just wrote is the one failure this widget cannot afford.** Anything that
@@ -154,7 +154,7 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
 
 ## Who carries the calls
 
-- **`transport` is a seam, and it is the same one twice** (SKG-595). The widget stays dormant when a
+- **`transport` is a seam, and it is the same one twice** (FRU-56). The widget stays dormant when a
   host has nothing to reach the worker with, and the extension relays the calls when it does. Those
   looked like two features; they are one question — _who carries this_ — asked once.
 - **Plain objects, not `Request` and `Response`.** Neither survives `postMessage`, and the
@@ -195,12 +195,12 @@ header when the host mints no token` compared `fetch`'s second argument to `unde
 
 ## The optional picture
 
-- **The widget does not bundle a rasteriser** (SKG-495). `captureScreenshot` is a seam the embedder
+- **The widget does not bundle a rasteriser** (FRU-6). `captureScreenshot` is a seam the embedder
   fills, for two reasons that each stand alone: the seed contract stores a **URL**, so the image has
   to live in someone's storage, and html2canvas weighs more than this entire widget — bundling it
   would break `package.test.ts`'s 150 kB tripwire and the promise that tripwire guards.
 - **Off by default, and the toggle is absent unless `captureScreenshot` was given.** A switch that
-  controls nothing is what kept this setting out of SKG-503.
+  controls nothing is what kept this setting out of FRU-14.
 - **A capture that throws costs the picture and never the note.** A canvas tainted by a cross-origin
   image is the ordinary outcome, not the exotic one; the E2E test for this fails by losing the note
   entirely when the guard is removed.
@@ -210,8 +210,8 @@ header when the host mints no token` compared `fetch`'s second argument to `unde
 
 ## The settings panel
 
-- **What is not configurable is the design** (SKG-503). The ticket asked for the Linear team, project
-  and labels; they are absent. Since SKG-504 the worker resolves those from the client id and refuses
+- **What is not configurable is the design** (FRU-14). The ticket asked for the Linear team, project
+  and labels; they are absent. Since FRU-15 the worker resolves those from the client id and refuses
   an id it does not know, so a browser naming its own team would either be ignored — a setting that
   does nothing is worse than none — or obeyed, which lets any page write into any workspace. The
   client id is what the reporter can say; what it routes to stays server-side.
@@ -221,9 +221,9 @@ header when the host mints no token` compared `fetch`'s second argument to `unde
 - **The stored config is parsed like a seed**: tolerant, field by field. It is a string a human can
   edit in devtools, and a malformed one costs the reporter their preferences, never the widget.
 - **Filtering lives in the overlay, not in the embedder.** `shouldShow` plus `refilter` redraw from
-  the issues already held, so hiding a stage costs no request — and, as with SKG-513, a client's app
+  the issues already held, so hiding a stage costs no request — and, as with FRU-21, a client's app
   is not going to re-fetch on the widget's behalf.
-- **The panel offers a box only for the stages the worker reports** (SKG-525). The list arrives with
+- **The panel offers a box only for the stages the worker reports** (FRU-32). The list arrives with
   each read and lives in `OfferedStages`, not in `ConfigStore`: the config store persists to
   `localStorage`, and a stored copy of what one worker reports would outlive a change of store. A
   stage the reporter hid stays in `hiddenStages` while no box shows it, so a worker that reports it
@@ -239,12 +239,12 @@ header when the host mints no token` compared `fetch`'s second argument to `unde
   and the dialog `Fruitback settings`, and a host catalog must keep them apart too; giving both the same name is ambiguous to a screen reader and
   to any test that finds elements by name.
 
-## The words, and the catalogs the bundle carries (SKG-530, SKG-531)
+## The words, and the catalogs the bundle carries (FRU-37, FRU-38)
 
 - **`messages.ts` holds every word the widget shows, behind a key.** No i18n library ships: a record
   of strings and `Intl.PluralRules` cost a few hundred bytes, under a size guard that trips at 150 kB.
-- **English is the default, and French is bundled beside it** (SKG-531). The project is open source,
-  so its default is the language most readers share. SKG-530 shipped English alone, and for that
+- **English is the default, and French is bundled beside it** (FRU-38). The project is open source,
+  so its default is the language most readers share. FRU-37 shipped English alone, and for that
   release a French site showed English until it passed `messages`. A French browser now gets French
   with nothing passed.
 - **`ENGLISH` is exhaustive, and so is every bundled catalog.** `Catalog` requires every key, so a
@@ -262,7 +262,7 @@ header when the host mints no token` compared `fetch`'s second argument to `unde
   puts 0 in `one`, so an English fallback read with Portuguese rules would say "0 detached note"; a
   German count reads `1.234` and its English fallback `1,234`.
 - **A byline says when relative to now, in the language of the words** (`Intl.RelativeTimeFormat`,
-  SKG-531), and carries the absolute date in its `title`. The absolute date follows the locale the
+  FRU-38), and carries the absolute date in its `title`. The absolute date follows the locale the
   reader asked for, not the catalog. The label is computed when the thread is drawn. No timer
   refreshes it, but a re-resolve redraws an open thread, so "3 hours ago" can move forward then. A date the store wrote in a shape `Date` cannot read is shown as it
   came.
@@ -308,7 +308,7 @@ header when the host mints no token` compared `fetch`'s second argument to `unde
 - **Each bundled catalog weighs on the size guard.** If the list grows, catalogs load on demand; the
   guard is not widened.
 
-## The keyboard, the screen reader and the contrast (SKG-544)
+## The keyboard, the screen reader and the contrast (FRU-51)
 
 The widget lays itself over somebody else's page, which may have been audited. An accessibility
 defect of ours is a defect of theirs.
@@ -454,8 +454,8 @@ contrast.
 - **Every match must be unique and of the captured tag**, and `domPath` must additionally still be
   roughly where the seed said it was — a structural path always resolves to _something_, and after
   an insertion that something is the neighbour.
-- **Detached is not the same as unsure** (SKG-501). A pin found only by `bounds` is still placed,
-  dashed, and marked unconfident — that is SKG-500's answer and the orphan list does not touch it.
+- **Detached is not the same as unsure** (FRU-12). A pin found only by `bounds` is still placed,
+  dashed, and marked unconfident — that is FRU-11's answer and the orphan list does not touch it.
   `orphans.ts` lists only the notes where the cascade found **nothing**: `resolution.element === null`.
   Listing the unsure ones would tell a reporter their note is lost while it sits on the right element.
 - **The list is a sibling of the overlay's container, so `isOurs` has to be told about it.** It was
@@ -474,7 +474,7 @@ contrast.
   exactly right.
 - The overlay positions in **document coordinates** and re-measures on scroll and resize — a
   `position: fixed` header moves relative to the document as the page scrolls.
-- **It also watches the page, because nothing announces a re-render** (SKG-513). A `MutationObserver`
+- **It also watches the page, because nothing announces a re-render** (FRU-21). A `MutationObserver`
   on `childList`/`subtree` re-resolves every pin, debounced, and a `ResizeObserver` on each anchored
   element catches what moves without the structure changing. Deliberately **not** `attributes`: a
   design system toggles classes on every hover, and an element that merely changed class is still
@@ -491,7 +491,7 @@ contrast.
   else would have.
 - **Pins let clicks through**; only the badge is clickable. A widget that swallows the client's own
   buttons is one they turn off.
-- `createOverlay({ host })` takes where to render. It defaults to `<body>`; SKG-492's Shadow root
+- `createOverlay({ host })` takes where to render. It defaults to `<body>`; FRU-3's Shadow root
   passes itself there, which is what finally isolates these styles.
 - Tests run against **happy-dom** (`dom.fixture.ts`), a devDependency of this package only —
   uniqueness and sibling questions cannot be answered honestly by a hand-rolled fake. Nothing outside

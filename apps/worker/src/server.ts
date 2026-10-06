@@ -27,10 +27,10 @@ export function createFruitbackServer(env: WorkerEnv, provided?: SeedStore): Ser
   // count to key the limiter with.
   const trustedProxyHops = config.ok ? config.config.trustedProxyHops : DEFAULT_TRUSTED_PROXY_HOPS;
   /**
-   * Built here, once, and handed to every request (SKG-522).
+   * Built here, once, and handed to every request (FRU-29).
    *
    * `app.ts` would build one per call otherwise. That is free for Linear and the in-memory store —
-   * both are stateless closures — and would open a SQLite connection per request as soon as SKG-524
+   * both are stateless closures — and would open a SQLite connection per request as soon as FRU-31
    * lands. A misconfigured process has no store: it only ever answers `/health` and the diagnostic.
    */
   const store = provided ?? (config.ok ? storeFor(config.config) : undefined);
@@ -132,7 +132,7 @@ export function startServer(env: WorkerEnv = process.env): Server {
     console.error(`[fruitback] FRUITBACK_FAKE_LINEAR ignored: ${flagIgnored}`);
   }
 
-  // The other half, and the one an operator with something to migrate actually hears (SKG-581):
+  // The other half, and the one an operator with something to migrate actually hears (FRU-54):
   // warning only when the flag *loses* reaches everybody except the deployments still relying on it.
   // A warning rather than an error, because nothing is wrong here — the flag worked. The two are
   // mutually exclusive by construction, so this never doubles the line above.
@@ -145,7 +145,7 @@ export function startServer(env: WorkerEnv = process.env): Server {
     if (config.ok) {
       // Never log the API key. Everything else is worth having in `docker logs` on day one.
       console.log(
-        // The store's name rather than a team id (SKG-522): "which store is this process on" is the
+        // The store's name rather than a team id (FRU-29): "which store is this process on" is the
         // thing an operator cannot tell from their own env, and naming a team here was the last
         // place the worker's own logging assumed one.
         `[fruitback] listening on ${host}:${port} · store ${store?.name ?? 'none'} · ` +
@@ -161,7 +161,7 @@ export function startServer(env: WorkerEnv = process.env): Server {
       }
 
       // `public` stays the default so an upgrade never blanks a working deployment — but an operator
-      // should not have to infer their exposure from a field they did not write (SKG-533). Named
+      // should not have to infer their exposure from a field they did not write (FRU-40). Named
       // here, where only they can see it; `/health` carries a count and no ids.
       const openRead = openReadClients({ read: config.config.read, clients: config.config.clients });
       if (openRead.length > 0) {

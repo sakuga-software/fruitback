@@ -1,5 +1,5 @@
 /**
- * Focus inside the widget's dialogs (SKG-544).
+ * Focus inside the widget's dialogs (FRU-51).
  *
  * For a node focused inside a Shadow root, `document.activeElement` is the host element. These
  * helpers read the active element of the root node that holds the dialog.

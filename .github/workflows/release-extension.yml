@@ -1,6 +1,6 @@
 name: Release extension
 
-# The archives a store takes, built from the tag rather than from somebody's machine (SKG-616).
+# The archives a store takes, built from the tag rather than from somebody's machine (FRU-77).
 # Its own workflow, and not a job of `release-image.yml`: that one builds a container for two
 # architectures, this one builds two browser archives, and neither has a reason to wait for the
 # other.
@@ -9,7 +9,7 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
-# Read-only for every job. Only `publish` may write, and only on a tag (SKG-609).
+# Read-only for every job. Only `publish` may write, and only on a tag (FRU-70).
 permissions:
   contents: read
 

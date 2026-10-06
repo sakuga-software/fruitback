@@ -1,5 +1,5 @@
 /**
- * What a storage area holds, and how it was upgraded to hold it (SKG-602).
+ * What a storage area holds, and how it was upgraded to hold it (FRU-63).
  *
  * Split out of `session-browser.ts` so `node --test` reaches the key rules and the upgrade without
  * `browser`. Storage arrives as `StorageArea`, which is the part of `chrome.storage` these need.
@@ -10,9 +10,9 @@
  *
  * A key per endpoint makes a write atomic per endpoint. It does not order two writes, and a logout
  * has to beat a refresh that read storage before it. That is the epoch, and `stillOpen` is the rule
- * it is read by (SKG-603).
+ * it is read by (FRU-64).
  *
- * **A session key names its epoch too** (SKG-604). A refresh writes the run of the session it read,
+ * **A session key names its epoch too** (FRU-65). A refresh writes the run of the session it read,
  * so a write that lost the race to a logout and a new pairing lands beside the new pairing, never
  * over it.
  */
@@ -32,7 +32,7 @@ import {
 export const GRANT_PREFIX = 'fruitback:grant:';
 
 /**
- * The prefix of a session key: `fruitback:session-run:<epoch>:<endpoint>` (SKG-604).
+ * The prefix of a session key: `fruitback:session-run:<epoch>:<endpoint>` (FRU-65).
  *
  * The epoch is encoded with `encodeURIComponent`, which never writes a colon, so the first colon
  * after the prefix ends it. The endpoint is the rest of the key, colons included. A session with no
@@ -41,14 +41,14 @@ export const GRANT_PREFIX = 'fruitback:grant:';
 export const RUN_PREFIX = 'fruitback:session-run:';
 
 /**
- * The prefix of a session key from SKG-602 to SKG-604: the endpoint and no epoch.
+ * The prefix of a session key from FRU-63 to FRU-65: the endpoint and no epoch.
  *
  * Only `moveToRunKeys` reads one, and it removes it.
  */
 export const ENDPOINT_SESSION_PREFIX = 'fruitback:session:';
 
 /**
- * The prefix of an endpoint's epoch, in `local` beside the session it dates (SKG-603).
+ * The prefix of an endpoint's epoch, in `local` beside the session it dates (FRU-64).
  *
  * An opaque id, minted when a session starts and when one ends. See `StoredSession.epoch` for what
  * it is for, and `stillOpen` for the rule that reads it.
@@ -56,7 +56,7 @@ export const ENDPOINT_SESSION_PREFIX = 'fruitback:session:';
 export const EPOCH_PREFIX = 'fruitback:epoch:';
 
 /**
- * The keys that held every endpoint at once, before SKG-602.
+ * The keys that held every endpoint at once, before FRU-63.
  *
  * `splitLegacyRecord` is the only thing that reads one, and it removes it. They are exported because
  * the test that covers the upgrade has to write one.
@@ -174,7 +174,7 @@ export function runsOf(snapshot: Record<string, unknown>): Run[] {
 }
 
 /**
- * The sessions still open, out of the sessions storage holds (SKG-603).
+ * The sessions still open, out of the sessions storage holds (FRU-64).
  *
  * **A session is honoured only while it agrees with its endpoint's epoch.** `chrome.storage` has no
  * transaction and no compare-and-set, so a write cannot be refused at the moment it lands: a logout
@@ -202,7 +202,7 @@ export function stillOpen(runs: Run[], epochs: Record<string, string>): Record<s
  * halves of the comparison. It is where the rule is enforced rather than at the call sites, because
  * a reader added later would otherwise see a session that was logged out.
  *
- * **A write removes the runs that are over, after it lands** (SKG-604). A refresh that lost the race
+ * **A write removes the runs that are over, after it lands** (FRU-65). A refresh that lost the race
  * to a logout writes a run that is over, and nothing reads that key again. The removal is measured
  * against the epoch in its own snapshot, and an epoch never comes back, so it cannot remove a run
  * that is still open or one written after that snapshot. A write that lost the race sees the new
@@ -345,7 +345,7 @@ export async function upgradeSessions(local: StorageArea): Promise<void> {
 }
 
 /**
- * The upgrade from a key per endpoint to a key per run (SKG-604).
+ * The upgrade from a key per endpoint to a key per run (FRU-65).
  *
  * Each entry moves to the run its own epoch names. **A run that already has its key is left
  * alone**: the other context upgraded first, and a refresh can have written a newer value there
@@ -410,9 +410,9 @@ export async function splitLegacyRecord<T>(
  * The window this leaves: the other context can read the legacy record, a logout can remove that
  * endpoint's new key, and the read already in flight can then write the session back. It needs a log
  * out inside the one storage round trip that separates the read from the write, on the first run
- * after the upgrade only. **The epoch answers it** (SKG-603): a legacy record predates the marker, so
+ * after the upgrade only. **The epoch answers it** (FRU-64): a legacy record predates the marker, so
  * what is written back carries none while the logout minted one, and `stillOpen` refuses the entry.
- * A pairing made inside the window is kept since SKG-604: the entry written back names a run with no
+ * A pairing made inside the window is kept since FRU-65: the entry written back names a run with no
  * epoch, and the pairing's key names its own.
  */
 function migrationOf<T>(

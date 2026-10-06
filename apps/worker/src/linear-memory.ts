@@ -14,12 +14,12 @@ import type { CreatedIssue, SeedIssueQuery, SeedStore } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
 
 /**
- * Linear, in memory, for the dev loop (SKG-511).
+ * Linear, in memory, for the dev loop (FRU-19).
  *
  * The playground needs the whole round — capture, issue, pins coloured by state — and the real thing
  * needs an API key and writes into a workspace people actually triage. This stands in for it, behind
  * `FRUITBACK_STORE=memory` and never in production — see `createMemoryStoreSpec` below, whose
- * `devOnly` flag is the whole of that guard since SKG-526.
+ * `devOnly` flag is the whole of that guard since FRU-33.
  *
  * It is deliberately not a mock: an issue is stored as the **description string**
  * `buildIssueDescription` produces, and read back through the same `toSeedIssue` the real path uses.
@@ -31,7 +31,7 @@ import { type StoreSpec, defineStore } from './store-config.ts';
  */
 
 /**
- * Keyed by **client id**, not by team (SKG-522). A team is Linear's way of separating tenants and
+ * Keyed by **client id**, not by team (FRU-29). A team is Linear's way of separating tenants and
  * this store has no reason to borrow it — the client id is what both paths already carry.
  */
 type StoredIssue = IssueNode & { labels: string[]; clientId: string | undefined };
@@ -44,7 +44,7 @@ const issues: StoredIssue[] = [];
  * these to seeded / green / ripening / ripe / composted.
  */
 /**
- * Canned replies, so the dev loop shows a pin that has been answered (SKG-502).
+ * Canned replies, so the dev loop shows a pin that has been answered (FRU-13).
  *
  * Every third issue gets a thread. A playground where nothing ever has comments makes the feature
  * invisible, and one where everything does hides the empty case — which is the one the widget has to
@@ -103,7 +103,7 @@ async function fetchSeedIssues(query: SeedIssueQuery, policy: ClientPolicy): Pro
   return (
     issues
       // Same isolation as the real filter, by the key this store actually holds. A read that names no
-      // client gets every seed on the page, as on the other stores (SKG-527).
+      // client gets every seed on the page, as on the other stores (FRU-34).
       .filter((issue) => query.clientId === undefined || issue.clientId === query.clientId)
       .filter((issue) => required.every((label) => issue.labels.includes(label)))
       // `contains`, like the real filter — the exact URL check is `toSeedIssue`'s job, here as there.
@@ -131,7 +131,7 @@ export function memoryIssues(): { description?: string | null }[] {
 }
 
 /**
- * The dev-loop store, as a `SeedStore` (SKG-522).
+ * The dev-loop store, as a `SeedStore` (FRU-29).
  *
  * It stays in this file, and it stays built on `toSeedIssue` from the real connector. That coupling
  * is the feature: an issue is stored as the description `buildIssueDescription` produces and read
@@ -154,9 +154,9 @@ export function createMemoryStore(): SeedStore {
 }
 
 /**
- * The dev-loop store as a selectable provider (SKG-526): `FRUITBACK_STORE=memory`.
+ * The dev-loop store as a selectable provider (FRU-33): `FRUITBACK_STORE=memory`.
  *
- * `devOnly`, and that flag is the whole of the guard SKG-511 wrote by hand. It reads no environment
+ * `devOnly`, and that flag is the whole of the guard FRU-19 wrote by hand. It reads no environment
  * of its own — there is nothing to configure about a list in a variable — so its `envNames` map is
  * empty and it can never be the reason a boot diagnostic names a variable.
  */

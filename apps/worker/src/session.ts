@@ -1,21 +1,21 @@
 import { type IdentityClaims, signIdentityToken } from './identity.ts';
 
 /**
- * A durable identity for the extension's reviewer (SKG-535).
+ * A durable identity for the extension's reviewer (FRU-42).
  *
  * The reviewer is not a visitor who typed a name into the popover. They are somebody an operator
  * vouched for, and the worker has to be able to say so on its own word. That is what turns
- * `reporter.verified` from a flag SKG-498 defined into a flag something actually sets.
+ * `reporter.verified` from a flag FRU-9 defined into a flag something actually sets.
  *
  * **The admin names the person, never the browser.** A pairing code is minted for Alice, with her
  * name and her address in it, and whoever redeems that code gets a session that says Alice. An
  * extension that supplied its own name at pairing time would be the browser asserting an identity
- * again, which is the exact hole SKG-498 closed.
+ * again, which is the exact hole FRU-9 closed.
  *
  * **The access token is an ordinary identity token.** `identity.ts` already mints and verifies
  * HS256 JWTs, and the read and write paths already check them. Minting the same shape here means
  * there is one verification path in this worker rather than two, and `read: 'authenticated'`
- * (SKG-533) starts accepting the extension with no change at all.
+ * (FRU-40) starts accepting the extension with no change at all.
  *
  * **Codes and refresh tokens are stored as SHA-256 digests.** They are bearer credentials that live
  * on disk for weeks, so a copy of the database must not be a set of working logins. Nothing here
@@ -38,7 +38,7 @@ export type SessionIdentity = {
  * It is deliberately **not** `SeedStore`. Seeds go wherever the team already tracks issues — Linear,
  * GitHub, a file — and none of those is a place to keep credentials. A Linear-backed worker still
  * needs its sessions on a disk it owns. So this has its own implementation, its own file and its own
- * environment variable, the way SKG-526 made every connector validate its own.
+ * environment variable, the way FRU-33 made every connector validate its own.
  */
 export type SessionStore = {
   createPairing(pairing: { codeHash: string; identity: SessionIdentity; expiresAt: number }): Promise<void>;
@@ -58,7 +58,7 @@ export type SessionStore = {
     now: number;
   }): Promise<SessionIdentity | undefined>;
   /**
-   * Spends this refresh token and issues its successor, in one transaction (SKG-600).
+   * Spends this refresh token and issues its successor, in one transaction (FRU-61).
    *
    * Every refresh rotates, so there is no read-only lookup beside this one: a caller that could ask
    * "is this token live" without spending it would be a second path to keep in step with this one.
@@ -103,7 +103,7 @@ export const ACCESS_TTL_SECONDS = 10 * 60;
 export const REFRESH_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 /**
- * How long a rotated refresh token stays usable while its successor has not been (SKG-600).
+ * How long a rotated refresh token stays usable while its successor has not been (FRU-61).
  *
  * **It is a ceiling, not the mechanism.** What normally retires a predecessor is its successor being
  * used, which needs no clock at all. This bounds the one case that has none: an answer lost on the
@@ -254,7 +254,7 @@ export async function redeemPairing(
 }
 
 /**
- * A fresh access token, and a fresh refresh token to go with it (SKG-600).
+ * A fresh access token, and a fresh refresh token to go with it (FRU-61).
  *
  * **Every refresh rotates.** A refresh token that never changes is a thirty-day password: a copy
  * taken from a browser profile stays good for the rest of that month, and nothing observes the

@@ -25,7 +25,7 @@ export type CaptureSeedOptions = {
   /** Defaults to the element's own window. Passed explicitly when capturing inside an iframe. */
   view?: Window;
   client?: SeedClient;
-  /** Client-asserted and unverified until SKG-498 — the worker treats it as a claim, not identity. */
+  /** Client-asserted and unverified until FRU-9 — the worker treats it as a claim, not identity. */
   reporter?: SeedReporter;
   screenshot?: SeedScreenshot;
   /**

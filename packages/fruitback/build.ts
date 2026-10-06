@@ -3,7 +3,7 @@ import { readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 
 /**
- * A re-export shim, compiled (SKG-505).
+ * A re-export shim, compiled (FRU-16).
  *
  * Nothing is bundled here on purpose: the two packages it forwards are real dependencies, so a
  * consumer resolves them the way they resolve anything else, and there is one copy of the widget on

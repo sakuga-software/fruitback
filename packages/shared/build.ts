@@ -3,7 +3,7 @@ import { readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 
 /**
- * The seed contract, compiled (SKG-505).
+ * The seed contract, compiled (FRU-16).
  *
  * This package was internal for a long time, and `main` pointed straight at `src/index.ts` — which
  * works everywhere in this repo and nowhere outside it. The sources import each other with the `.ts`

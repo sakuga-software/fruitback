@@ -7,7 +7,7 @@ import { WORKER_ORIGIN } from './pin.ts';
 import { AUTHENTICATED_WORKER_ORIGIN, WORKER_SESSION_ENV } from './worker-sessions.ts';
 
 /**
- * The extension, loaded into a real Chromium, against the playground as an ordinary site (SKG-538).
+ * The extension, loaded into a real Chromium, against the playground as an ordinary site (FRU-45).
  *
  * The site is `/?case=…&widget=off`: the playground with no widget of its own, so a widget on it
  * came from the extension or from what a spec mounts on purpose.
@@ -190,7 +190,7 @@ export async function storedTokens(worker: Worker): Promise<StoredToken[]> {
     };
     for (const area of ['local', 'session'] as const) {
       for (const [key, value] of Object.entries(await chrome.storage[area].get(null))) {
-        // The prefix without its colon, so a session key per endpoint and one per run (SKG-604) both match.
+        // The prefix without its colon, so a session key per endpoint and one per run (FRU-65) both match.
         if (key.startsWith('fruitback:session') || key.startsWith('fruitback:grant:')) walk(area, value);
       }
     }

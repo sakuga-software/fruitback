@@ -10,7 +10,7 @@ import { StoreError } from './store.ts';
 import { closeSqliteConnections, createSqliteStore, createSqliteStoreSpec, sqliteConnectionsOpened } from './sqlite.ts';
 
 /**
- * The second connector, and the one that had to be uncomfortable (SKG-524).
+ * The second connector, and the one that had to be uncomfortable (FRU-31).
  *
  * These run against a real file rather than `:memory:`, because half of what this store promises is
  * about a file: that the schema is created on first open, that reopening finds the seeds again, and
@@ -170,7 +170,7 @@ describe('the file survives the process', () => {
     // They are two autocommitted statements otherwise, and a crash between them leaves the tables
     // created with the version still at 0 — so the next open re-runs CREATE TABLE, fails, and the
     // database is bricked. The transaction is what makes that state unreachable; this asserts the
-    // consistent one it leaves instead. Raised in review on SKG-524.
+    // consistent one it leaves instead. Raised in review on FRU-31.
     const path = freshPath();
     await createSqliteStore({ path }).create(seedFixture(), undefined, POLICY);
     closeSqliteConnections();
@@ -191,7 +191,7 @@ describe('the file survives the process', () => {
 
   it('opens the file once, however many stores are built on it', async () => {
     // `handleRequest` still falls back to building a store when the transport did not hand it one,
-    // so without the shared handle that path opens a database per request — the exact hazard SKG-522
+    // so without the shared handle that path opens a database per request — the exact hazard FRU-29
     // was written to prevent, and one nothing observable would have reported.
     const path = freshPath();
     const seed = seedFixture();
@@ -217,7 +217,7 @@ describe('the file survives the process', () => {
     // The constructor succeeds on any file; the first PRAGMA is what discovers it is not a database —
     // a bad restore, a truncated volume. The handle is open by then, and `handleRequest` still falls
     // back to building a store per request, so an unclosed one leaks a descriptor on every request
-    // until the process runs out. Raised in review on SKG-524.
+    // until the process runs out. Raised in review on FRU-31.
     const path = freshPath();
     writeFileSync(path, 'ceci n’est pas une base de donnees');
     const store = createSqliteStore({ path });
@@ -268,7 +268,7 @@ describe('the replies', () => {
   });
 
   it('says empty when it looked and says nothing when it did not', async () => {
-    // Absent and empty mean different things (SKG-502): a client with replies switched off must not
+    // Absent and empty mean different things (FRU-13): a client with replies switched off must not
     // read as a team that never answered.
     const path = freshPath();
     const seed = seedFixture();
@@ -432,7 +432,7 @@ describe('a row the code did not write', () => {
     // Written together, so they can only drift through an edit or a restore. If they do, this seed
     // belongs to another page, and returning it puts one page's note on top of another's element.
     // The Linear connector keeps the same invariant for a different reason — its filter is a
-    // substring match. Raised in review on SKG-524.
+    // substring match. Raised in review on FRU-31.
     const path = freshPath();
     const seed = seedFixture();
     await createSqliteStore({ path }).create(seed, undefined, POLICY);

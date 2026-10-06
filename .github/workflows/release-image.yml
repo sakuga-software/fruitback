@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 # Read-only for every job. Only `publish` gets the permissions that write to the registry and sign
-# (SKG-609): `check` runs a build, QEMU and Trivy, and none of them needs to publish.
+# (FRU-70): `check` runs a build, QEMU and Trivy, and none of them needs to publish.
 permissions:
   contents: read
 

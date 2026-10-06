@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { WORKER_ORIGIN, openPlayground, plantPin, storedSeeds } from './pin.ts';
 
 /**
- * Attribution (SKG-498), through the popover a reporter actually uses.
+ * Attribution (FRU-9), through the popover a reporter actually uses.
  *
  * The unit tests own the token verification; what is checked here is the half a browser decides:
  * that anonymous stays one click away, and that what someone types about themselves survives the
