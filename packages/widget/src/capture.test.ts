@@ -90,6 +90,14 @@ describe('captureSeed', () => {
     assert.deepEqual(Object.keys(seed).sort(), ['anchor', 'createdAt', 'id', 'kind', 'note', 'page', 'v', 'viewport']);
   });
 
+  it('sends no environment unless it is asked to (FRU-84)', () => {
+    const page = mountPricingPage();
+
+    const seed = captureSeed({ element: page.query('button'), note: '', id: 'sd_quiet', createdAt: CREATED_AT });
+
+    assert.equal('env' in seed, false);
+  });
+
   it('collects the environment when it is allowed to', () => {
     const page = mountPricingPage();
 
@@ -98,6 +106,7 @@ describe('captureSeed', () => {
       note: '',
       id: 'sd_env',
       createdAt: CREATED_AT,
+      includeEnv: true,
     });
 
     assert.ok(seed.env?.userAgent);

@@ -10,6 +10,9 @@ import { type Fruitback, type FruitbackOptions, init } from './embed.ts';
  *             data-fruitback-endpoint="https://feedback.acme.dev"
  *             data-fruitback-client="acme" defer></script>
  *
+ * `data-fruitback-label` and `data-fruitback-include-env="true"` are optional. The second one is the
+ * only way a tag can send the environment of the reporter, which is off by default (FRU-84).
+ *
  * `defer` matters: the widget mounts into `<body>`, so running before it exists would throw. The
  * mount is deferred to `DOMContentLoaded` anyway rather than trusting the tag to carry the
  * attribute, because the one thing a snippet gets wrong is the part nobody reads.
@@ -29,7 +32,10 @@ if (script !== null) {
   const clientId = script.dataset.fruitbackClient;
 
   if (endpoint !== undefined && clientId !== undefined) {
-    const mount = (): void => void init({ endpoint, clientId, label: script.dataset.fruitbackLabel });
+    // Only the word `true` turns it on. An empty attribute or a typo must not start to send the user
+    // agent of every reporter.
+    const includeEnv = script.dataset.fruitbackIncludeEnv === 'true';
+    const mount = (): void => void init({ endpoint, clientId, label: script.dataset.fruitbackLabel, includeEnv });
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once: true });
     else mount();

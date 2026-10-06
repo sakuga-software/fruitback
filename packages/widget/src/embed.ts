@@ -74,7 +74,10 @@ export type FruitbackOptions = {
   captureScreenshot?: (element: Element) => Promise<CapturedScreenshot | undefined>;
   /** Chrome the page mounts around the widget, which the pointer must skip. */
   ignore?: (element: Element) => boolean;
-  /** Off when the reporter has not agreed to send their user agent along. */
+  /**
+   * Send the user agent, the language and the platform of the reporter with the note. Off by default
+   * (FRU-84): a reporter who does nothing is anonymous, and these three narrow down who they are.
+   */
   includeEnv?: boolean;
   /**
    * Design tokens, so the widget can be made to look like it belongs (FRU-35).
