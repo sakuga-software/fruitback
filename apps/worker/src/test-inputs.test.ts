@@ -16,8 +16,14 @@ import { fileURLToPath } from 'node:url';
  * alone, a change to the worker's own `app.ts` was a cache hit), so every list starts with
  * `default` and `^production`.
  *
- * A literal relative path is resolved and checked. Two shapes cannot be resolved statically — a path
- * built from a template, and a path joined from `..` segments — so each one is written out in
+ * A literal relative path is resolved and checked. **A path read through `new URL(path, BASE)` is
+ * resolved against `BASE`**, when the file declares it as `new URL(literal, import.meta.url)` or
+ * from another such base (SKG-622). Resolved against the test file instead, `'../worker/LICENSE'`
+ * read from `apps/extension/` reads as a path inside the extension, and the file really read is
+ * hashed by nobody.
+ *
+ * Three shapes cannot be resolved statically — a path built from a template, a path joined from `..`
+ * segments, and a path read through a base the file does not declare — so each one is written out in
  * `DYNAMIC_READS` with what it reads, and those paths are checked the same way. A new dynamic read fails
  * until it is added there, and an entry whose read is gone fails as stale (raised in review on PR #63).
  *
@@ -28,8 +34,9 @@ import { fileURLToPath } from 'node:url';
 const REPOSITORY = fileURLToPath(new URL('../../../', import.meta.url));
 
 /**
- * This file, which names every joined call of `DYNAMIC_READS` inside a string. It is still scanned for
- * literal paths, its own read of `nx.json` included, and never for joined calls: it joins nothing itself.
+ * This file, which names every joined call of `DYNAMIC_READS` inside a string, and writes sources with a
+ * base for the scan to read. It is still scanned for literal paths, its own read of `nx.json` included,
+ * and never for joined calls or bases: it reads nothing through either.
  */
 const SELF = fileURLToPath(import.meta.url).slice(REPOSITORY.length);
 const NX = JSON.parse(readFileSync(new URL('../../../nx.json', import.meta.url), 'utf8')) as {
@@ -101,27 +108,85 @@ function testFiles(directory: string): string[] {
   return found;
 }
 
+type Scan = { paths: string[]; templated: string[]; joined: string[] };
 type Reads = { reads: { test: string; path: string }[]; templated: string[]; joined: string[] };
 
-/** Every literal relative path a project's tests name that leaves the project, repository-relative. */
+const IDENTIFIER = '[A-Za-z_$][\\w$]*';
+const BASE_DECLARATION = new RegExp(
+  `\\bconst (${IDENTIFIER}) = (?:fileURLToPath\\()?new URL\\((['"])([^'"\\n]*)\\2, (import\\.meta\\.url|${IDENTIFIER})\\)`,
+  'g',
+);
+const READ_FROM_BASE = new RegExp(`\\bnew URL\\((?:(['"])([^'"\\n]*)\\1|([^,()]+)), (${IDENTIFIER})\\)`, 'g');
+
+/** `path` resolved the way `new URL` resolves it against `base`, both relative to the repository. */
+function resolveUrl(path: string, base: string): string {
+  return decodeURIComponent(new URL(path, `file:///${base}`).pathname.slice(1));
+}
+
+/**
+ * Every relative path `test` names, resolved against the repository, before any filter on the project.
+ *
+ * A literal is resolved against the test file, unless it is the path of a `new URL` with a declared base.
+ * A computed path through a declared base reads the base, so the base is what is checked.
+ */
+function scan(test: string, source: string): Scan {
+  const found: Scan = { paths: [], templated: [], joined: [] };
+  const throughBase = new Set<number>();
+
+  if (test !== SELF) {
+    for (const [call] of source.matchAll(/\bjoin\([^)]*['"]\.\.['"][^)]*\)/g)) found.joined.push(`${test}: ${call}`);
+
+    const bases = new Map<string, string>([['import.meta.url', test]]);
+    for (const [, name, , path, base] of source.matchAll(BASE_DECLARATION)) {
+      const resolvedBase = bases.get(base as string);
+      if (resolvedBase !== undefined) bases.set(name as string, resolveUrl(path as string, resolvedBase));
+    }
+
+    for (const read of source.matchAll(READ_FROM_BASE)) {
+      const [call, , literal, computed, name] = read;
+      const base = bases.get(name as string);
+      if (literal !== undefined) throughBase.add(read.index + 'new URL('.length);
+      if (base === undefined) {
+        found.joined.push(`${test}: ${call}`);
+        continue;
+      }
+      if (literal === undefined) {
+        const expression = (computed as string).trim();
+        if (expression.startsWith('`')) found.templated.push(`${test}: ${expression}`);
+        else found.paths.push(resolveUrl('./', base));
+        continue;
+      }
+
+      if (literal.includes('${')) found.templated.push(`${test}: ${literal}`);
+      else found.paths.push(resolveUrl(literal, base));
+    }
+  }
+
+  for (const literal of source.matchAll(/(['"`])((?:\.\.\/)+[^'"`\n]*)\1/g)) {
+    const written = literal[2];
+    if (written === undefined || throughBase.has(literal.index)) continue;
+    if (written.includes('${')) {
+      found.templated.push(`${test}: ${written}`);
+      continue;
+    }
+
+    const resolved = posix.normalize(posix.join(posix.dirname(test), written));
+    found.paths.push(written.endsWith('/') ? `${resolved.replace(/\/?$/, '/')}`.replace(/^\.\/$/, '') : resolved);
+  }
+
+  return found;
+}
+
+/** Every relative path a project's tests name that leaves the project, repository-relative. */
 function readsOutside(project: Project): Reads {
   const reads: Reads = { reads: [], templated: [], joined: [] };
   if (!existsSync(`${REPOSITORY}${project.root}/src`)) return reads;
 
   for (const test of testFiles(`${project.root}/src`)) {
-    const source = readFileSync(`${REPOSITORY}${test}`, 'utf8');
-    if (test !== SELF) {
-      for (const [call] of source.matchAll(/\bjoin\([^)]*['"]\.\.['"][^)]*\)/g)) reads.joined.push(`${test}: ${call}`);
-    }
-    for (const [, , written] of source.matchAll(/(['"`])((?:\.\.\/)+[^'"`\n]*)\1/g)) {
-      if (written === undefined) continue;
-      if (written.includes('${')) {
-        reads.templated.push(`${test}: ${written}`);
-        continue;
-      }
-
-      const resolved = posix.normalize(posix.join(posix.dirname(test), written));
-      const path = written.endsWith('/') ? `${resolved.replace(/\/?$/, '/')}`.replace(/^\.\/$/, '') : resolved;
+    const { paths, templated, joined } = scan(test, readFileSync(`${REPOSITORY}${test}`, 'utf8'));
+    reads.templated.push(...templated);
+    reads.joined.push(...joined);
+    for (const path of paths) {
       if (!(path === '' || path.startsWith('../')) && !`${path}/`.startsWith(`${project.root}/`)) {
         reads.reads.push({ test, path });
       }
@@ -185,6 +250,67 @@ function covers(project: Project, path: string, roots: Map<string, string>): boo
 
   return !/\.(test|spec)\.tsx?$/.test(path) && inDependency();
 }
+
+/**
+ * A source as a test file would write it. `UP/` stands for the parent segment, so the scan of this file
+ * does not read the paths of these examples as reads of its own.
+ */
+function source(lines: string[]): string {
+  return lines.join('\n').replaceAll('UP/', '../');
+}
+
+describe('how the scan resolves a path (SKG-622)', () => {
+  const test = 'apps/extension/src/license.test.ts';
+
+  it('resolves a read through a declared base against that base, as it resolves one from the file', () => {
+    const fromFile = scan(test, source(["readFileSync(new URL('UP/UP/worker/LICENSE', import.meta.url));"]));
+    const fromBase = scan(
+      test,
+      source([
+        "const EXTENSION = new URL('UP/', import.meta.url);",
+        "readFileSync(new URL('UP/worker/LICENSE', EXTENSION));",
+      ]),
+    );
+
+    assert.deepEqual(fromFile.paths, ['apps/worker/LICENSE']);
+    // The declaration reads the base too, and that base is the extension itself.
+    assert.deepEqual(fromBase.paths, ['apps/worker/LICENSE', 'apps/extension/']);
+  });
+
+  it('follows a base declared from another base, and a path with no parent segment', () => {
+    const { paths } = scan(
+      test,
+      source([
+        "const REPOSITORY = fileURLToPath(new URL('UP/UP/UP/', import.meta.url));",
+        "const WORKER = new URL('apps/worker/', REPOSITORY);",
+        "readFileSync(new URL('package.json', WORKER));",
+      ]),
+    );
+
+    assert.ok(paths.includes('apps/worker/package.json'), paths.join(', '));
+  });
+
+  it('reads the base itself when the path through it is computed', () => {
+    const { paths, templated } = scan(
+      test,
+      source([
+        "const DOCS = new URL('UP/UP/UP/docs/', import.meta.url);",
+        'readFileSync(new URL(link, DOCS));',
+        'readFileSync(new URL(`${name}.md`, DOCS));',
+      ]),
+    );
+
+    assert.ok(paths.includes('docs/'), paths.join(', '));
+    assert.deepEqual(templated, [`${test}: \`\${name}.md\``]);
+  });
+
+  it('refuses a read through a base the file does not declare', () => {
+    const { paths, joined } = scan(test, source(["readFileSync(new URL('UP/worker/LICENSE', elsewhere));"]));
+
+    assert.deepEqual(joined, [`${test}: new URL('../worker/LICENSE', elsewhere)`]);
+    assert.deepEqual(paths, []);
+  });
+});
 
 describe('what a test reads, against what Nx hashes for it (SKG-610)', () => {
   const all = projects();
