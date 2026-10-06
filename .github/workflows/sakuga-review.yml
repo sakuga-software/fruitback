@@ -65,7 +65,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: sakuga-software/sakuga-review
-          ref: 37df2bf7d03a076030cd29820c3bc5c53325779b # v4
+          ref: ea75cd4ceb471dab6b3cede1994ab13dcb07f30b # v4.1
           path: settings
           token: ${{ steps.app-token.outputs.token }}
           persist-credentials: false
@@ -166,7 +166,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: sakuga-software/sakuga-review
-          ref: 37df2bf7d03a076030cd29820c3bc5c53325779b # v4
+          ref: ea75cd4ceb471dab6b3cede1994ab13dcb07f30b # v4.1
           path: settings
           token: ${{ steps.app-token.outputs.token }}
           persist-credentials: false
