@@ -87,6 +87,8 @@ export type Overlay = {
   refilter(): void;
   /** What each pin resolved to, in render order — the honest account of what was found. */
   resolutions(): { issue: SeedIssue; strategy: AnchorResolution['strategy'] }[];
+  /** Whether a thread is open. `render` closes it, so a caller that can wait asks first. */
+  threadOpen(): boolean;
   destroy(): void;
 };
 
@@ -420,6 +422,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     resolve,
     refilter,
     resolutions,
+    threadOpen: () => thread !== null,
     destroy() {
       if (frame !== 0) view?.cancelAnimationFrame(frame);
       if (resolveTimer !== undefined) clearTimeout(resolveTimer);

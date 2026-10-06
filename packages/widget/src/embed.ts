@@ -162,6 +162,14 @@ function transportFor(options: FruitbackOptions): FruitbackTransport {
 /** The panel writes on every keystroke, so a typed endpoint must not become a request per character. */
 const REQUERY_DEBOUNCE_MS = 300;
 
+/**
+ * How old the last read must be before a return to the tab reads again (FRU-87).
+ *
+ * It is the time the worker keeps a read in its cache (`CACHE_TTL_MS` in `apps/worker/src/cache.ts`).
+ * A read before that gets the same answer, so it costs a request and shows nothing new.
+ */
+const REREAD_AFTER_MS = 15_000;
+
 export function init(options: FruitbackOptions): Fruitback {
   const document = options.document ?? globalThis.document;
   // Named rather than left to fail. This is the published entry point, so the first thing anyone
@@ -218,7 +226,13 @@ export function init(options: FruitbackOptions): Fruitback {
   });
 
   const stages = createOfferedStages();
-  const read = createReader(overlay, stages, view, options);
+  const reader = createReader(overlay, stages, view, options);
+  let lastReadAt = Number.NEGATIVE_INFINITY;
+  const read = (current: WidgetConfig): Promise<void> => {
+    lastReadAt = Date.now();
+
+    return reader(current);
+  };
 
   composer = createComposer({
     document,
@@ -266,6 +280,15 @@ export function init(options: FruitbackOptions): Fruitback {
 
   const stopWatchingUrl = watchUrl(view, () => void read(config.get()));
 
+  // The team changes the state of an issue while the reviewer is in another tab. `render` closes an
+  // open thread, and somebody who comes back to a thread is reading it: that return reads nothing,
+  // and the next one does.
+  const stopWatchingReturn = watchReturn(document, () => {
+    if (overlay.threadOpen() || Date.now() - lastReadAt < REREAD_AFTER_MS) return;
+
+    void read(config.get());
+  });
+
   void read(config.get());
 
   return {
@@ -274,6 +297,7 @@ export function init(options: FruitbackOptions): Fruitback {
     destroy() {
       if (requery !== undefined) clearTimeout(requery);
       stopWatchingUrl();
+      stopWatchingReturn();
       unsubscribe();
       panel.destroy();
       composer.destroy();
@@ -412,6 +436,22 @@ async function screenshotFor(
 /** Spread, so an absent screenshot stays absent rather than becoming an empty object. */
 function optionalScreenshot(screenshot: SeedScreenshot | undefined): { screenshot?: SeedScreenshot } {
   return screenshot === undefined ? {} : { screenshot };
+}
+
+/**
+ * Tell the widget that the reporter came back to the tab.
+ *
+ * Nothing pushes a change of state to an open page, and a webhook would need a secret for each store
+ * and a connection for each visitor. A page that somebody looks at again is the moment a stale pin
+ * is seen, so that is when to read.
+ */
+function watchReturn(document: Document, onReturn: () => void): () => void {
+  const check = (): void => {
+    if (document.visibilityState === 'visible') onReturn();
+  };
+  document.addEventListener('visibilitychange', check);
+
+  return () => document.removeEventListener('visibilitychange', check);
 }
 
 /**
