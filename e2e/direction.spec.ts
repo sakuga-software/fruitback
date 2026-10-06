@@ -16,7 +16,7 @@ const IIFE = 'packages/widget/dist/fruitback.iife.js';
 const ARABIC = {
   'launch.label': 'اترك ملاحظة',
   'composer.placeholder': 'ما المشكلة هنا؟',
-  'composer.send': 'ازرع',
+  'composer.send': 'أرسل',
 };
 
 test('in Arabic the dock and the popover move, and the pin stays on its element', async ({ page }) => {

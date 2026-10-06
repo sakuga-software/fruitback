@@ -43,7 +43,7 @@ export async function plantPin(page: Page, target: Locator, note: string): Promi
   await page.getByRole('button', { name: /Leave feedback/ }).click();
   await target.click();
   await page.getByPlaceholder('What is wrong here?').fill(note);
-  await page.getByRole('button', { name: 'Plant', exact: true }).click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
 
   // Synchronised on the identifier, not on the status line. The status has two writers — this
   // harness and the widget announcing a re-resolution it decided on by itself (FRU-21) — so a

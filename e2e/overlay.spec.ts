@@ -182,7 +182,7 @@ test('the popover and the thread open inside the window on a page scrolled sidew
   await expect.poll(() => insideWindow(composer), { message: 'the popover opened outside the window' }).toBe(true);
 
   await page.getByPlaceholder('What is wrong here?').fill('Sur une page qui défile de côté');
-  await page.getByRole('button', { name: 'Plant', exact: true }).click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(composer).toBeHidden({ timeout: 5_000 });
 
   await badgeFor(page, 'Sur une page qui défile de côté').click();

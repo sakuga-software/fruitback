@@ -13,15 +13,15 @@ async function selectTheCta(page: import('@playwright/test').Page) {
   await expect(page.getByPlaceholder('What is wrong here?')).toBeVisible();
 }
 
-test('a note goes from planting to harvested, and the pin lands', async ({ page }) => {
+test('a note goes from sending to sent, and the pin lands', async ({ page }) => {
   await openPlayground(page, 'composer-happy');
   await selectTheCta(page);
 
   await page.getByPlaceholder('What is wrong here?').fill('Le CTA devrait être plus large');
-  await page.getByRole('button', { name: 'Plant', exact: true }).click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
 
   // The product's own word for it, in the status the composer announces.
-  await expect(page.locator('[data-fruitback-composer]')).toContainText(/harvested/);
+  await expect(page.locator('[data-fruitback-composer]')).toContainText(/\bsent\b/);
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
   // And it closes itself once the confirmation has been read.
   await expect(page.locator('[data-fruitback-composer]')).toBeHidden({ timeout: 5_000 });
@@ -39,13 +39,13 @@ test('a failed send keeps the note and stays open', async ({ page }) => {
 
   const note = 'Une remarque qui a pris du temps à écrire';
   await page.getByPlaceholder('What is wrong here?').fill(note);
-  await page.getByRole('button', { name: 'Plant', exact: true }).click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
 
   await expect(page.locator('[data-fruitback-composer]')).toContainText(/did not go through/);
   await expect(page.locator('[data-fruitback-composer]')).toBeVisible();
   await expect(page.getByPlaceholder('What is wrong here?')).toHaveValue(note);
   // Retrying is one click, not one more typing session.
-  await expect(page.getByRole('button', { name: 'Plant', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
 });
 
 test('on a phone it is a sheet at the bottom, not a popover beside the element', async ({ page }) => {
@@ -106,7 +106,7 @@ test('the pin is a drop, and it says what it is to a screen reader', async ({ pa
   await openPlayground(page, 'composer-pin-shape');
   await selectTheCta(page);
   await page.getByPlaceholder('What is wrong here?').fill('Un pin en goutte');
-  await page.getByRole('button', { name: 'Plant', exact: true }).click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 
   const badge = page.locator('.fruitback-pin-badge');

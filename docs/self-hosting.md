@@ -47,7 +47,9 @@ gh api repos/sakuga-software/fruitback/contents/.env.example -H 'Accept: applica
 | `memory`          | the memory of the process     | nothing                                                                                                | Never on a server. The image refuses it.                                              |
 
 What each store can show on a pin. `store-conformance.test.ts` compares the stages, the reply cap in the
-Replies column and the last column with the code.
+Replies column and the last column with the code. A stage is named here as it is stored, in the
+`stage` column and in the JSON. The widget shows `seeded` as **New**, `green` as **To do**, `ripening`
+as **In progress**, `ripe` as **Done** and `composted` as **Closed**.
 
 | Store    | Stages                                             | What changes the stage                                               | Replies                                                                        | Runs in production |
 | -------- | -------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------ |
@@ -415,11 +417,11 @@ the worker mints expires after one hour and reaches one repository.
 What you give up: GitHub has two issue states, so a pin has three stages instead of five, and the
 settings panel offers only these three.
 
-| The issue                                                      | The stage of the pin |
-| -------------------------------------------------------------- | -------------------- |
-| open, reopened included                                        | `seeded`             |
-| closed as completed, or closed before GitHub recorded a reason | `ripe`               |
-| closed as not planned, or as a duplicate                       | `composted`          |
+| The issue                                                      | The stage of the pin         |
+| -------------------------------------------------------------- | ---------------------------- |
+| open, reopened included                                        | `seeded`, shown as New       |
+| closed as completed, or closed before GitHub recorded a reason | `ripe`, shown as Done        |
+| closed as not planned, or as a duplicate                       | `composted`, shown as Closed |
 
 **On a public repository, every note is public**, with the name and the address of the reporter when
 they typed one. See [SECURITY.md](../SECURITY.md).

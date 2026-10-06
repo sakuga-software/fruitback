@@ -10,16 +10,16 @@ import { type MessageKey, type Translator, createTranslator, languageOf } from '
  * embedded in someone's site can post through whatever the host set up while this file stays
  * ignorant of the worker's URL, of auth, and of retries. What it does own is the part that is easy
  * to get wrong and impossible to test from the outside: the button that must not fire twice, the
- * error that must not eat the text someone just typed, and the "harvested" beat before it closes.
+ * error that must not eat the text someone just typed, and the confirmation before it closes.
  *
- * Its shape is the product's, not a framework's: a drop of fruit. That is the whole reason the pin
- * is a teardrop and the confirmation says *harvested* rather than *sent*.
+ * The fruit stays in the shape: the pin is a teardrop. The words stay plain, so the button says
+ * *Send* and the confirmation says *sent* (FRU-86).
  */
 
 /** Long enough to read the confirmation, short enough not to be in the way. */
-const HARVESTED_MS = 1_100;
+const SENT_MS = 1_100;
 
-export type ComposerState = 'idle' | 'sending' | 'harvested' | 'failed';
+export type ComposerState = 'idle' | 'sending' | 'sent' | 'failed';
 
 export type ComposerOptions = {
   document?: Document;
@@ -106,7 +106,7 @@ export function createComposer(options: ComposerOptions): Composer {
     root.dataset.fruitbackState = next;
     // Disabled while in flight: a second click would plant the same note twice, and the worker has
     // no way to tell the difference.
-    send.disabled = next === 'sending' || next === 'harvested';
+    send.disabled = next === 'sending' || next === 'sent';
     field.readOnly = next === 'sending';
     status.textContent = next === 'idle' ? '' : t.text(STATUS[next]);
   }
@@ -131,8 +131,8 @@ export function createComposer(options: ComposerOptions): Composer {
 
     if (mine !== session) return;
 
-    setState('harvested');
-    closing = view?.setTimeout(close, HARVESTED_MS) ?? 0;
+    setState('sent');
+    closing = view?.setTimeout(close, SENT_MS) ?? 0;
   }
 
   function open(anchor: { left: number; top: number; bottom: number; right: number }): void {
@@ -241,7 +241,7 @@ const GAP = 10;
 
 const STATUS = {
   sending: 'composer.sending',
-  harvested: 'composer.harvested',
+  sent: 'composer.sent',
   failed: 'composer.failed',
 } as const satisfies Record<Exclude<ComposerState, 'idle'>, MessageKey>;
 
@@ -353,7 +353,7 @@ const STYLES = `
   color: var(--fruitback-color-on-accent);
 }
 .fruitback-composer-send[disabled] { opacity: 0.55; cursor: default; }
-.fruitback-composer[data-fruitback-state="harvested"] .fruitback-composer-status {
+.fruitback-composer[data-fruitback-state="sent"] .fruitback-composer-status {
   color: var(--fruitback-color-success);
   font-weight: 600;
 }

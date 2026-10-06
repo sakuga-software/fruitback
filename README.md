@@ -7,8 +7,7 @@
 
 A client opens their staging site, clicks the element that bothers them, types a note. It lands as a
 triaged issue carrying the CSS selector, the React component and the source file behind that element.
-When they come back to the page, their pins are still there, coloured by the issue's status:
-🌱 seeded → 🍏 green → 🍊 ripening → 🍓 ripe.
+When they come back to the page, their pins are still there, coloured by the issue's status: new, to do, in progress, done.
 
 ![A pin anchored on a button of a live page, coloured by its issue's status](docs/assets/pin-on-a-live-page.png)
 
@@ -120,12 +119,12 @@ runtime, per origin, when somebody switches that site on.
 keeps the behaviour it has. Each connector reads only its own variables — a worker on SQLite is never
 asked for a Linear key — and an unknown name is refused at boot rather than quietly defaulted.
 
-| `FRUITBACK_STORE`    | Needs                                                                                    | Runs on                          | Good for                                                                                                                                                                                 |
-| -------------------- | ---------------------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `linear` _(default)_ | `LINEAR_API_KEY`, `LINEAR_TEAM_ID`                                                       | anywhere the worker runs         | A team already triaging in Linear. Dashboard, API, MCP and integrations come for free.                                                                                                   |
-| `sqlite`             | `FRUITBACK_SQLITE_PATH`                                                                  | **a persistent filesystem only** | Self-hosting with no third party at all. One file on a volume.                                                                                                                           |
-| `github`             | `FRUITBACK_GITHUB_APP_ID`, `FRUITBACK_GITHUB_PRIVATE_KEY`, `FRUITBACK_GITHUB_REPOSITORY` | anywhere the worker runs         | A team whose issues are already on GitHub. Three stages instead of five: `seeded` while open, `ripe` when closed as completed, `composted` when closed as not planned or as a duplicate. |
-| `memory`             | nothing                                                                                  | the dev loop                     | Refused under `NODE_ENV=production`.                                                                                                                                                     |
+| `FRUITBACK_STORE`    | Needs                                                                                    | Runs on                          | Good for                                                                                                                                                                     |
+| -------------------- | ---------------------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `linear` _(default)_ | `LINEAR_API_KEY`, `LINEAR_TEAM_ID`                                                       | anywhere the worker runs         | A team already triaging in Linear. Dashboard, API, MCP and integrations come for free.                                                                                       |
+| `sqlite`             | `FRUITBACK_SQLITE_PATH`                                                                  | **a persistent filesystem only** | Self-hosting with no third party at all. One file on a volume.                                                                                                               |
+| `github`             | `FRUITBACK_GITHUB_APP_ID`, `FRUITBACK_GITHUB_PRIVATE_KEY`, `FRUITBACK_GITHUB_REPOSITORY` | anywhere the worker runs         | A team whose issues are already on GitHub. Three stages instead of five: New while open, Done when closed as completed, Closed when closed as not planned or as a duplicate. |
+| `memory`             | nothing                                                                                  | the dev loop                     | Refused under `NODE_ENV=production`.                                                                                                                                         |
 
 SQLite is one file through `node:sqlite` — no dependency, no native module, and the schema migrates
 itself on open, so a self-hoster starts one container rather than two. What it gives up is the

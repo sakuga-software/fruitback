@@ -49,7 +49,7 @@ export const TEAM_WORDS: Record<string, TeamWords> = {
     anonymous: 'Anonymous',
     verified: 'verified',
     unverified: 'unverified — self-declared',
-    caption: '**Fruitback seed** · machine-readable, do not edit',
+    caption: '**Fruitback data** · machine-readable, do not edit',
   },
   fr: {
     page: 'Page',
@@ -61,7 +61,7 @@ export const TEAM_WORDS: Record<string, TeamWords> = {
     anonymous: 'Anonyme',
     verified: 'vérifié',
     unverified: 'non vérifié — déclaré par la personne',
-    caption: '**Graine Fruitback** · lisible par la machine, ne pas modifier',
+    caption: '**Données Fruitback** · lisible par la machine, ne pas modifier',
   },
 };
 

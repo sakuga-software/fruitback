@@ -45,7 +45,7 @@ const PAIRS: Pair[] = [
     minimum: 4.5,
     where: 'the thread line that says no reply yet',
   },
-  { foreground: 'color-success', background: 'color-surface-raised', minimum: 4.5, where: 'the harvested status' },
+  { foreground: 'color-success', background: 'color-surface-raised', minimum: 4.5, where: 'the sent status' },
   { foreground: 'color-accent', background: 'color-surface-raised', minimum: 4.5, where: 'the failed status' },
   {
     foreground: 'color-accent',

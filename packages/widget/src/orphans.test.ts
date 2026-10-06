@@ -91,7 +91,7 @@ describe('createOrphanList', () => {
 
     list?.update([seedIssueFixture({ seed: seedFixture({ id: 'sd_1', note: 'Une note' }), stage: 'ripe' })]);
 
-    assert.equal(page.document.querySelector('.fruitback-orphans-note')?.getAttribute('aria-label'), 'Ripe · Une note');
+    assert.equal(page.document.querySelector('.fruitback-orphans-note')?.getAttribute('aria-label'), 'Done · Une note');
     assert.equal(page.document.querySelector('.fruitback-orphans-stage')?.getAttribute('aria-hidden'), 'true');
   });
 

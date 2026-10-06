@@ -44,14 +44,14 @@ const sendButton = () => composer?.element.querySelector('[data-fruitback-send]'
 const statusText = () => composer?.element.querySelector('[data-fruitback-status]')?.textContent ?? '';
 
 describe('what the popover looks like (FRU-36)', () => {
-  it('draws the seed on the send button and still calls it Plant', () => {
+  it('draws the drop on the send button and still calls it Send', () => {
     // The icon is appended after the template is parsed, because an SVG written into an innerHTML
     // string lands in the HTML namespace and renders nothing at all. It is aria-hidden, so the
     // button's accessible name has to be the word alone.
     mount(async () => {});
 
     assert.ok(sendButton().querySelector('svg.fruitback-icon'), 'the send button lost its mark');
-    assert.equal(sendButton().textContent, 'Plant');
+    assert.equal(sendButton().textContent, 'Send');
   });
 
   it('confirms in words, with no strawberry in front of them', async () => {
@@ -61,7 +61,7 @@ describe('what the popover looks like (FRU-36)', () => {
     sendButton().click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    assert.equal(statusText(), 'harvested');
+    assert.equal(statusText(), 'sent');
   });
 });
 
@@ -95,7 +95,7 @@ describe('createComposer', () => {
     assert.equal(field().value, '');
   });
 
-  it('walks from sending to harvested, and says so out loud', async () => {
+  it('walks from sending to sent, and says so out loud', async () => {
     let release: () => void = () => {};
     const inFlight = new Promise<void>((resolve) => (release = resolve));
     mount(async () => {
@@ -108,13 +108,13 @@ describe('createComposer', () => {
     sendButton().click();
     await Promise.resolve();
     assert.equal(composer?.state(), 'sending');
-    assert.match(statusText(), /planting/);
+    assert.match(statusText(), /sending/);
 
     release();
     await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.equal(composer?.state(), 'harvested');
+    assert.equal(composer?.state(), 'sent');
     // The word the product uses, not "sent".
-    assert.match(statusText(), /harvested/);
+    assert.match(statusText(), /^sent$/);
   });
 
   it('refuses to plant the same note twice', async () => {
@@ -201,7 +201,7 @@ describe('createComposer', () => {
   });
 
   it('says nothing when the reporter walked away mid-send', async () => {
-    // Cancel while the request is in flight and the response still arrives. Announcing "harvested" on
+    // Cancel while the request is in flight and the response still arrives. Announcing "sent" on
     // a closed popover, or focusing a hidden textarea, is the kind of ghost that makes a widget feel
     // haunted.
     let release: () => void = () => {};
@@ -293,7 +293,7 @@ describe('createComposer', () => {
     assert.equal(placedLeft(createTranslator()), '500px');
     // 700 minus the popover's 320: its right edge sits on the element's right edge.
     assert.equal(
-      placedLeft(createTranslator({ locale: 'ar', messages: { ar: { 'composer.send': 'ازرع' } } })),
+      placedLeft(createTranslator({ locale: 'ar', messages: { ar: { 'composer.send': 'أرسل' } } })),
       '380px',
     );
   });
@@ -323,7 +323,7 @@ describe('createComposer', () => {
     assert.equal(
       placedLeft(
         { left: 1_520, top: 200, bottom: 240, right: 1_600 },
-        createTranslator({ locale: 'ar', messages: { ar: { 'composer.send': 'ازرع' } } }),
+        createTranslator({ locale: 'ar', messages: { ar: { 'composer.send': 'أرسل' } } }),
       ),
       '1510px',
     );
