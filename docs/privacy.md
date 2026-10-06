@@ -1,0 +1,160 @@
+# What the widget collects
+
+The widget runs on a page somebody else visits, and what they write leaves that page. If your team is
+in the European Union, or your reporters are, that is a processing of personal data and you are the
+one who has to declare it. You cannot do that without a list of what is sent, so this page is the
+list.
+
+**This is not legal advice.** It says what the code does, field by field, and what it does not do
+yet. What you owe your reporters under the law that applies to you is for you, or your counsel, to
+decide.
+
+## What a note carries
+
+A note is one **seed**: a JSON object the widget builds in the reporter's browser and posts to your
+worker. Its shape is `seedSchema` in [`packages/shared/src/seed.ts`](https://github.com/sakuga-software/fruitback/blob/main/packages/shared/src/seed.ts),
+and nothing outside that schema is sent.
+
+| Field                                      | What it is                                                                       | Sent                                    | What controls it                                                         |
+| ------------------------------------------ | -------------------------------------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------ |
+| `note`                                     | what the reporter typed, up to 5,000 characters                                  | always                                  | the reporter                                                             |
+| `page.url`, `page.path`                    | the page address, with the fragment and the tracking parameters removed          | always                                  | nothing: the page address is how a pin is found again                    |
+| `page.title`                               | the page's `<title>`                                                             | when the page has one                   | the site                                                                 |
+| `viewport`                                 | the window's width, height and pixel ratio                                       | always                                  | nothing                                                                  |
+| `anchor`                                   | a selector, a structural path, the tag, up to 160 characters of the element text | always                                  | nothing: this is what places the pin                                     |
+| `anchor.attrs`                             | the element's `id`, test id, `name`, `role` and `aria-label`, when present       | when the element has them               | the site's markup                                                        |
+| `source`                                   | the React component, file, line and column behind the element                    | when the build exposes them             | the site's build: a production build usually exposes none                |
+| `client.id`                                | the client id the site was given                                                 | always                                  | the integrator                                                           |
+| `reporter.name`, `reporter.email`          | what the reporter typed in the optional fields                                   | **only if the reporter fills them in**  | the reporter                                                             |
+| `reporter.id`, `.name`, `.email`           | the identity in a signed token, replacing anything typed                         | added by the worker, from a valid token | the integrator (`identityToken`) or, in team mode, the pairing           |
+| `env.userAgent`, `env.locale`, `.platform` | the browser's user agent string, language and platform                           | **by default**                          | the integrator: `init({ includeEnv: false })`                            |
+| `screenshot`                               | the URL of a picture of the page                                                 | **only if the reporter turns it on**    | the integrator supplies `captureScreenshot`; the reporter switches it on |
+| `id`, `createdAt`                          | a random identifier and the time of writing                                      | always                                  | nothing                                                                  |
+
+The excerpt of the element's text (`anchor.text`) is the site's own text, not the reporter's. It can
+still be personal data: an element that shows a customer's name carries that name into the seed.
+If your staging site shows real customer records, keep that in mind before you invite reviewers.
+
+### What is right by default
+
+- **A reporter who does nothing is anonymous.** The name and e-mail fields sit behind a disclosure,
+  are optional, and are sent only when filled in. The widget stores them nowhere.
+- **No picture leaves the page unless somebody chose it.** The widget bundles no screen capture.
+  The setting is absent unless the integrator supplied `captureScreenshot`, and present, it starts
+  off: the reporter turns it on. The picture goes to **your** storage, and the seed holds only its
+  URL — whether that URL is public is your decision.
+- **The identity token never enters the seed.** It travels in an `Authorization` header and is
+  verified, not stored. The seed is kept verbatim for as long as the issue exists, and a credential
+  in it would outlive its expiry by months.
+- **A typed name is never presented as checked.** Only a signed token makes `reporter.verified`
+  true; the worker removes the flag from anything a browser sends.
+
+### What is on by default and you may want off
+
+- **The browser environment.** `env` is sent unless the integrator passes `includeEnv: false` to
+  `init`. A user agent string, with a language and a time, narrows down who a reporter is. **The
+  `<script>` tag install has no attribute for this**: a site installed that way sends `env` with
+  every note. Use the npm install, or `init` from your own script, to turn it off.
+- **The extension's private mode sends it too.** The extension mounts the widget with its defaults,
+  so a reviewer's notes carry their browser's environment.
+
+## Where it goes
+
+The widget talks to one address: the worker the integrator, or the reviewer in the extension, named.
+Fruitback runs no service of its own and receives nothing. The worker then writes the seed to the
+store it is configured with:
+
+| Store    | Where a note lands                                       | Who runs it                         |
+| -------- | -------------------------------------------------------- | ----------------------------------- |
+| `linear` | an issue in your Linear workspace, the seed in its body  | Linear, outside your infrastructure |
+| `github` | an issue in your GitHub repository, the seed in its body | GitHub, outside your infrastructure |
+| `sqlite` | a row in a database file on your volume                  | you                                 |
+
+In the two trackers, the issue description also states the reporter's name and e-mail in a line
+your team reads, and the seed below it repeats them. [SECURITY.md](../SECURITY.md#a-seed-is-stored-in-the-clear-in-your-issue-tracker)
+says who can read each store. **On a public GitHub repository, that is everyone.**
+
+### Who can read a note back
+
+The widget reads the notes of a page to draw their pins, and the answer carries **the whole seed**,
+name and e-mail included, and the replies of your team with their authors' names. By default the
+read path is public (`FRUITBACK_READ=public`): anybody who knows a page address and its client id
+can read them, with or without the widget.
+
+- `FRUITBACK_READ=authenticated`, or `"read": "authenticated"` on one client, requires a signed
+  identity token on every read. [modes.md](modes.md) says which mode can supply one.
+- `FRUITBACK_HIDE_COMMENTS=1`, or `showComments: false` on one client, keeps your team's replies,
+  and the names of the people who wrote them, out of the answer.
+
+### What the worker keeps besides the note
+
+- **No access log.** The worker writes to its output at boot, on a configuration problem and on a
+  failed request. It does not log the requests it serves. Your reverse proxy probably does: its
+  access log holds the address of every visitor that loaded a pin, and you set its retention.
+- **The address of a caller, for two minutes, in memory.** The rate limit counts requests per
+  address over one-minute windows, and keeps a window for two. Nothing writes the address to disk.
+- **The answer to a read, for 15 seconds, in memory.** The read cache keeps a page's notes so a burst
+  of visitors costs one call to the store.
+- **The extension's sessions, on disk**, when `FRUITBACK_SESSION_PATH` is set. Each row holds the
+  subject, name and e-mail the operator gave when minting the pairing code, its dates, and a SHA-256
+  digest of the code or token, never the token itself. Expired rows are removed when a new code is
+  redeemed.
+
+### What stays in the reporter's browser
+
+- `localStorage`, under `fruitback:config` (or the `configKey` the integrator chose): the worker
+  address, the client id, the stages the reporter hid and the screenshot switch. No name, no e-mail,
+  no note. In private mode the extension writes `fruitback:config:extension` into **the site's**
+  storage, so a site can see that a reviewer used the extension on it.
+- The extension keeps its rules and its session tokens in its own storage, which no page can read.
+- The widget sets no cookie.
+
+## How long a note is kept
+
+As long as the issue or the row exists. Fruitback deletes nothing on its own.
+
+- **Linear and GitHub:** the retention of your workspace or repository. Closing an issue does not
+  delete it.
+- **SQLite:** yours, and the file's backups are part of it. A backup kept for a year keeps every
+  note for a year.
+
+## Deleting a reporter's notes
+
+**There is no deletion command yet.** A reporter who asks for their notes to be erased is today a
+manual task, and it is the gap on this page.
+
+- **Linear and GitHub:** find the issues and delete them in the tracker. A search on the e-mail
+  address finds them, because the description states it. On GitHub only an administrator of the
+  repository can delete an issue.
+- **SQLite:** run this against the file `FRUITBACK_SQLITE_PATH` names. You do not have to stop the
+  worker: the file is in WAL mode, so the deletion does not wait for its connection.
+
+  ```bash
+  sqlite3 /data/fruitback.db "PRAGMA foreign_keys = ON;
+    DELETE FROM seeds WHERE json_extract(seed, '$.reporter.email') = 'alice@example.com';"
+  ```
+
+  **Keep `PRAGMA foreign_keys = ON`.** SQLite turns foreign keys off for each new connection, and the
+  replies to a note are removed with it only through that key. Without it the note goes and the
+  replies stay, attached to nothing (measured). A read can still show the note for up to 15
+  seconds, from the cache. Then delete it from your backups too, or record when they expire.
+
+  A typed e-mail is a claim: a reporter can write somebody else's address, and two reporters can
+  write the same one. Read the rows before you delete them —
+  `SELECT id, json_extract(seed, '$.note') FROM seeds WHERE …` — and delete by `id` (the `n` of
+  `FB-n`) when in doubt.
+
+## A notice you can adapt
+
+Put this near the widget, or in your own privacy policy, and change what is not true for your
+deployment:
+
+> **Feedback on this page.** When you leave a note, we receive what you write, the address of this
+> page, the part of the page you pointed at, the size of your window, and your browser's name,
+> version and language. Your name and e-mail are optional; we receive them only if you type them. A
+> picture of the page is sent only if you turn it on. Your note is stored in _[Linear / GitHub /
+> our own server]_ and is visible to _[our team / anyone who can open this page]_ until we delete
+> it. To have your notes erased, write to _[address]_.
+
+Remove the browser sentence if you pass `includeEnv: false`, and the picture sentence if you supplied
+no `captureScreenshot`.

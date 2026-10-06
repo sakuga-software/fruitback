@@ -415,8 +415,9 @@ The widget can send, from a third party's page: a hand-written note, a name, an 
 agent (`includeEnv`), the page URL, and a picture of what the person was looking at. All of it lands
 in an issue tracker, and for the Linear and GitHub connectors that is outside your own infrastructure.
 
-That is a processing of personal data and a deployment of Fruitback has to be declared as one. What
-Fruitback owes its operators here is documentation, and that is tracked separately.
+That is a processing of personal data and a deployment of Fruitback has to be declared as one.
+[docs/privacy.md](docs/privacy.md) lists every field, what is sent by default, where it is kept, and
+how to delete a reporter's notes. It is not legal advice.
 
 ## What is not a vulnerability
 
