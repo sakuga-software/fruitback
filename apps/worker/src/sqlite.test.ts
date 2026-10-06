@@ -481,3 +481,72 @@ describe('the store spec', () => {
     assert.equal(createSqliteStoreSpec().devOnly, false);
   });
 });
+
+describe('forgetting a reporter (FRU-85)', () => {
+  async function plant(path: string, id: string, email?: string): Promise<void> {
+    const reporter = email === undefined ? {} : { reporter: { name: id, email } };
+    await createSqliteStore({ path }).create(seedFixture({ id, note: `note ${id}`, ...reporter }), undefined, POLICY);
+  }
+
+  function count(path: string, table: 'seeds' | 'comments'): number {
+    closeSqliteConnections();
+    const database = new DatabaseSync(path);
+    const row = database.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number };
+    database.close();
+
+    return row.n;
+  }
+
+  it('deletes the seeds of that address and their replies, and leaves every other seed', async () => {
+    const path = freshPath();
+    await plant(path, 'sd_alice1', 'alice@example.com');
+    await plant(path, 'sd_bob', 'bob@example.com');
+    await plant(path, 'sd_alice2', ' Alice@Example.COM ');
+    await plant(path, 'sd_anonymous');
+    closeSqliteConnections();
+    reply(path, 1, 'une réponse', 'Team', '2026-01-01T00:00:00.000Z');
+    reply(path, 2, 'une autre', 'Team', '2026-01-01T00:00:00.000Z');
+
+    const forgotten = await createSqliteStore({ path }).forgetReporter?.('ALICE@example.com', { dryRun: false });
+
+    assert.deepEqual(
+      forgotten?.map((seed) => [seed.identifier, seed.note]),
+      [
+        ['FB-1', 'note sd_alice1'],
+        ['FB-3', 'note sd_alice2'],
+      ],
+    );
+    assert.equal(count(path, 'seeds'), 2);
+    // The cascade, which needs foreign_keys on the connection: without it the reply to FB-1 stays.
+    assert.equal(count(path, 'comments'), 1);
+  });
+
+  it('lists the same seeds on a dry run, and deletes nothing', async () => {
+    const path = freshPath();
+    await plant(path, 'sd_alice', 'alice@example.com');
+
+    const listed = await createSqliteStore({ path }).forgetReporter?.('alice@example.com', { dryRun: true });
+
+    assert.deepEqual(
+      listed?.map((seed) => seed.identifier),
+      ['FB-1'],
+    );
+    assert.equal(count(path, 'seeds'), 1);
+  });
+
+  it('is not stopped by a row that is not JSON, and leaves that row alone', async () => {
+    const path = freshPath();
+    await plant(path, 'sd_alice', 'alice@example.com');
+    closeSqliteConnections();
+    const database = new DatabaseSync(path);
+    database
+      .prepare('INSERT INTO seeds (client_id, page_url, stage, seed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(null, 'https://example.com/', 'seeded', '{not json', '2026-01-01', '2026-01-01');
+    database.close();
+
+    const forgotten = await createSqliteStore({ path }).forgetReporter?.('alice@example.com', { dryRun: false });
+
+    assert.equal(forgotten?.length, 1);
+    assert.equal(count(path, 'seeds'), 1);
+  });
+});

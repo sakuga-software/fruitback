@@ -12,7 +12,7 @@ import {
   seedSchema,
 } from '@fruitback/shared';
 import type { ClientPolicy } from './clients.ts';
-import { type CreatedIssue, type SeedIssueQuery, type SeedStore, StoreError } from './store.ts';
+import { type CreatedIssue, type ForgottenSeed, type SeedIssueQuery, type SeedStore, StoreError } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
 
 /**
@@ -273,6 +273,7 @@ export function createSqliteStore(config: SqliteConfig): SeedStore {
     scope: () => config.path,
     create: (seed, _client, _policy) => insert(config, seed),
     findForPage: (query, _client, policy) => select(config, query, policy),
+    forgetReporter: (email, options) => forget(config, email, options),
   };
 }
 
@@ -299,6 +300,69 @@ async function insert(config: SqliteConfig, seed: Seed): Promise<CreatedIssue> {
     return { id: String(id), identifier: identifierFor(id) };
   } catch (error) {
     throw new StoreError(`SQLite could not store the seed: ${String(error)}`);
+  }
+}
+
+/**
+ * The address is compared trimmed and in lower case, on both sides.
+ *
+ * The filter runs here and not in a `json_extract`: one row that is not JSON makes that query throw
+ * for every row, and a row is parsed, never trusted. The deletion is one transaction, and the
+ * connection has `foreign_keys` on, so the replies go with their seed.
+ */
+async function forget(config: SqliteConfig, email: string, options: { dryRun: boolean }): Promise<ForgottenSeed[]> {
+  const database = connect(config.path);
+  const wanted = email.trim().toLowerCase();
+
+  try {
+    const rows = database.prepare('SELECT id, page_url, seed, created_at FROM seeds ORDER BY id').all() as {
+      id: number;
+      page_url: string;
+      seed: string;
+      created_at: string;
+    }[];
+    const found = rows.filter((row) => reporterEmailOf(row.seed) === wanted);
+
+    if (!options.dryRun && found.length > 0) {
+      const remove = database.prepare('DELETE FROM seeds WHERE id = ?');
+      database.exec('BEGIN');
+      try {
+        for (const row of found) remove.run(row.id);
+        database.exec('COMMIT');
+      } catch (error) {
+        database.exec('ROLLBACK');
+        throw error;
+      }
+    }
+
+    return found.map((row) => ({
+      identifier: identifierFor(row.id),
+      createdAt: row.created_at,
+      pageUrl: row.page_url,
+      note: noteOf(row.seed),
+    }));
+  } catch (error) {
+    throw new StoreError(`SQLite could not forget the reporter: ${String(error)}`);
+  }
+}
+
+function reporterEmailOf(text: string): string | undefined {
+  const email = (readJson(text) as { reporter?: { email?: unknown } } | undefined)?.reporter?.email;
+
+  return typeof email === 'string' ? email.trim().toLowerCase() : undefined;
+}
+
+function noteOf(text: string): string {
+  const note = (readJson(text) as { note?: unknown } | undefined)?.note;
+
+  return typeof note === 'string' ? note : '';
+}
+
+function readJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
   }
 }
 

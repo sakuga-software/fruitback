@@ -58,4 +58,14 @@ export type SeedStore = {
   scope(client: ClientConfig | undefined): string;
   create(seed: Seed, client: ClientConfig | undefined, policy: ClientPolicy): Promise<CreatedIssue>;
   findForPage(query: SeedIssueQuery, client: ClientConfig | undefined, policy: ClientPolicy): Promise<SeedIssue[]>;
+  /**
+   * Delete every seed whose reporter gave this address, and the replies to it (FRU-85).
+   *
+   * Only a store that holds the rows itself has this. A tracker keeps the issues in the team's own
+   * workspace, and the team deletes them there. `node server.mjs forget` refuses a store without it.
+   */
+  forgetReporter?(email: string, options: { dryRun: boolean }): Promise<ForgottenSeed[]>;
 };
+
+/** One seed that `forgetReporter` found, as the operator reads it before it goes. */
+export type ForgottenSeed = { identifier: string; createdAt: string; pageUrl: string; note: string };

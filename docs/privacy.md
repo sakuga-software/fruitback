@@ -120,29 +120,30 @@ As long as the issue or the row exists. Fruitback deletes nothing on its own.
 
 ## Deleting a reporter's notes
 
-**There is no deletion command yet.** A reporter who asks for their notes to be erased is today a
-manual task, and it is the gap on this page.
+A typed e-mail is a claim: a reporter can write somebody else's address, and two reporters can write
+the same one. So list the notes first, read the list, and delete after.
 
-- **Linear and GitHub:** find the issues and delete them in the tracker. A search on the e-mail
-  address finds them, because the description states it. On GitHub only an administrator of the
-  repository can delete an issue.
-- **SQLite:** run this against the file `FRUITBACK_SQLITE_PATH` names. You do not have to stop the
-  worker: the file is in WAL mode, so the deletion does not wait for its connection.
+- **SQLite:** the worker has a command for it. Run it in the container, like `pair`:
 
   ```bash
-  sqlite3 /data/fruitback.db "PRAGMA foreign_keys = ON;
-    DELETE FROM seeds WHERE json_extract(seed, '$.reporter.email') = 'alice@example.com';"
+  docker exec <container> node server.mjs forget --email alice@example.com --dry-run
+  docker exec <container> node server.mjs forget --email alice@example.com
   ```
 
-  **Keep `PRAGMA foreign_keys = ON`.** SQLite turns foreign keys off for each new connection, and the
-  replies to a note are removed with it only through that key. Without it the note goes and the
-  replies stay, attached to nothing (measured). A read can still show the note for up to 15
-  seconds, from the cache. Then delete it from your backups too, or record when they expire.
+  The first line lists the notes that give this address, with their `FB-n`, date, page and the start
+  of the note, and deletes nothing. The second deletes them, with the team's replies to them. The
+  address is compared without case and without the spaces around it. You do not have to stop the
+  worker: the file is in WAL mode. A page can still show a deleted note for up to 15 seconds, from
+  the cache. Then delete it from your backups too, or record when they expire.
 
-  A typed e-mail is a claim: a reporter can write somebody else's address, and two reporters can
-  write the same one. Read the rows before you delete them —
-  `SELECT id, json_extract(seed, '$.note') FROM seeds WHERE …` — and delete by `id` (the `n` of
-  `FB-n`) when in doubt.
+- **Linear and GitHub:** the notes are issues in your own workspace, so you delete them there, and
+  the command says so rather than deleting anything. Search the issues for the address, because the
+  description states it, read them, and delete the ones that are this reporter's. On GitHub only an
+  administrator of the repository can delete an issue. Closing an issue does not delete it.
+
+If you delete SQLite rows by hand with `sqlite3`, start the session with `PRAGMA foreign_keys = ON`.
+The `sqlite3` shell turns foreign keys off for each new connection, and without them the note goes
+and its replies stay, attached to nothing (measured). The worker's own connection has them on.
 
 ## A notice you can adapt
 
