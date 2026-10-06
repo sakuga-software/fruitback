@@ -131,6 +131,10 @@ For a site with no build step. `endpoint` and `client` are required and are the 
 ></script>
 ```
 
+Add `data-fruitback-include-env="true"` to send the reporter's user agent, language and platform
+with each note. It is off by default, and [privacy.md](privacy.md) says what that means for your
+notice.
+
 `defer` matters: the widget mounts into `<body>`. It auto-mounts only when **both** `endpoint` and
 `client` are on the tag; with either missing it does nothing and `Fruitback.init(…)` is yours to call
 — which is what a site with its own bootstrap wants.
@@ -173,7 +177,7 @@ inside a bundle.
 | `messages`      | your own words for that language — see [Another language](#another-language)         |
 | `ignore`        | elements the pointer must skip — your own chrome, a support chat, a cookie banner    |
 | `identityToken` | a function returning a signed token, so a reporter is _verified_ rather than claimed |
-| `includeEnv`    | `false` when the reporter has not agreed to send their user agent along              |
+| `includeEnv`    | `true` to send the reporter's user agent, language and platform — off by default     |
 | `transport`     | who carries the calls — the extension's, in team mode below                          |
 
 ### Another language

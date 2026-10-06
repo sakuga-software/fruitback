@@ -203,6 +203,10 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   win, a `useId` `:r7:` and a CSS-modules class are refused, and whatever comes out is verified
   unique against the document. When nothing identifies an element that repeats, the selector is
   **scoped under the nearest identifiable ancestor** rather than pathed from `<html>`.
+- **`env` is off unless the integrator asks** (FRU-84): `includeEnv` defaults to `false`, and on the
+  `<script>` tag only `data-fruitback-include-env="true"` turns it on. A reporter who does nothing is
+  anonymous, and a user agent with a language narrows down who they are. `docs/privacy.md` and its
+  notice template say what is sent, so a change to this default changes them too.
 - `page.url` is canonicalized here too, which is what makes the widget query the read path with the
   key its seeds were stored under.
 - **react-grab owns `source`, but only field by field.** `captureSeed({ source })` wins per field and

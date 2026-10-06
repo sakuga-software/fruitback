@@ -35,7 +35,10 @@ export type CaptureSeedOptions = {
    * knows the name. Taking either one entire would throw away the half the other got right.
    */
   source?: SeedSource;
-  /** Off when the reporter has not agreed to send their user agent along. */
+  /**
+   * Send the user agent, the language and the platform of the reporter with the note. Off by default
+   * (FRU-84): a reporter who does nothing is anonymous, and these three narrow down who they are.
+   */
   includeEnv?: boolean;
   /** Injected by the tests, and by anything that needs the seed to be reproducible. */
   id?: string;
@@ -43,7 +46,7 @@ export type CaptureSeedOptions = {
 };
 
 export function captureSeed(options: CaptureSeedOptions): Seed {
-  const { element, note, includeEnv = true } = options;
+  const { element, note, includeEnv = false } = options;
   const view = options.view ?? element.ownerDocument.defaultView;
   if (view === null) {
     throw new Error('captureSeed: the element belongs to a document with no window');

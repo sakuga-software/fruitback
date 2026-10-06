@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { WORKER_ORIGIN } from './pin.ts';
+import { WORKER_ORIGIN, storedSeeds } from './pin.ts';
 
 /**
  * The built widget on a page, mounted the way a client site mounts it (FRU-16).
@@ -113,26 +113,38 @@ test('a client-side navigation changes which pins are on screen', async ({ page 
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(0);
 });
 
-test('the documented snippet mounts on its own, from its data attributes', async ({ page }) => {
-  // The one path FRU-16 shipped unverified in a browser: `addScriptTag` cannot set attributes, so
-  // the auto-mount was only ever asserted against the built source. Playwright can serve the real
-  // file from disk, which lets the documented tag be the documented tag.
+/**
+ * The documented tag, served from the built file, with the attributes a site wrote on it.
+ *
+ * `addScriptTag` cannot set attributes, so the auto-mount was only ever asserted against the built
+ * source (FRU-16). Playwright can serve the real file from disk, which lets the documented tag be
+ * the documented tag.
+ */
+async function plantFromTheDocumentedTag(
+  page: import('@playwright/test').Page,
+  testCase: string,
+  attributes: Record<string, string> = {},
+): Promise<void> {
   await page.route('**/fruitback.iife.js', (route) =>
     route.fulfill({ path: IIFE, contentType: 'application/javascript' }),
   );
 
-  await page.goto('/?widget=off&case=snippet');
+  await page.goto(`/?widget=off&case=${testCase}`);
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
 
-  await page.evaluate((endpoint) => {
-    const script = document.createElement('script');
-    script.src = 'https://cdn.acme.dev/fruitback.iife.js';
-    script.dataset.fruitbackEndpoint = endpoint;
-    script.dataset.fruitbackClient = 'playground';
-    script.dataset.fruitbackLabel = 'Leave feedback';
-    script.defer = true;
-    document.head.append(script);
-  }, WORKER_ORIGIN);
+  await page.evaluate(
+    ({ endpoint, extra }) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.acme.dev/fruitback.iife.js';
+      script.dataset.fruitbackEndpoint = endpoint;
+      script.dataset.fruitbackClient = 'playground';
+      script.dataset.fruitbackLabel = 'Leave feedback';
+      for (const [name, value] of Object.entries(extra)) script.setAttribute(name, value);
+      script.defer = true;
+      document.head.append(script);
+    },
+    { endpoint: WORKER_ORIGIN, extra: attributes },
+  );
 
   // Nothing called `init`: the tag configured itself.
   await expect(page.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
@@ -144,6 +156,22 @@ test('the documented snippet mounts on its own, from its data attributes', async
   await page.getByRole('button', { name: 'Send', exact: true }).click();
 
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
+}
+
+test('the documented snippet mounts on its own, from its data attributes', async ({ page }) => {
+  await plantFromTheDocumentedTag(page, 'snippet');
+
+  // The tag asked for nothing more, so the browser of the reporter is not in the note (FRU-84).
+  const [seed] = await storedSeeds(page);
+  expect(seed?.env).toBeUndefined();
+});
+
+test('a tag sends the environment of the reporter only when it says so (FRU-84)', async ({ page }) => {
+  // The control for the absence above: the same tag, with the one attribute that turns it on.
+  await plantFromTheDocumentedTag(page, 'snippet-env', { 'data-fruitback-include-env': 'true' });
+
+  const [seed] = await storedSeeds(page);
+  expect(seed?.env?.userAgent).toEqual(expect.stringContaining('Mozilla'));
 });
 
 test('a half-configured tag leaves the page alone', async ({ page }) => {

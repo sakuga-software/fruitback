@@ -15,21 +15,21 @@ A note is one **seed**: a JSON object the widget builds in the reporter's browse
 worker. Its shape is `seedSchema` in [`packages/shared/src/seed.ts`](https://github.com/sakuga-software/fruitback/blob/main/packages/shared/src/seed.ts),
 and nothing outside that schema is sent.
 
-| Field                                      | What it is                                                                       | Sent                                    | What controls it                                                         |
-| ------------------------------------------ | -------------------------------------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------ |
-| `note`                                     | what the reporter typed, up to 5,000 characters                                  | always                                  | the reporter                                                             |
-| `page.url`, `page.path`                    | the page address, with the fragment and the tracking parameters removed          | always                                  | nothing: the page address is how a pin is found again                    |
-| `page.title`                               | the page's `<title>`                                                             | when the page has one                   | the site                                                                 |
-| `viewport`                                 | the window's width, height and pixel ratio                                       | always                                  | nothing                                                                  |
-| `anchor`                                   | a selector, a structural path, the tag, up to 160 characters of the element text | always                                  | nothing: this is what places the pin                                     |
-| `anchor.attrs`                             | the element's `id`, test id, `name`, `role` and `aria-label`, when present       | when the element has them               | the site's markup                                                        |
-| `source`                                   | the React component, file, line and column behind the element                    | when the build exposes them             | the site's build: a production build usually exposes none                |
-| `client.id`                                | the client id the site was given                                                 | always                                  | the integrator                                                           |
-| `reporter.name`, `reporter.email`          | what the reporter typed in the optional fields                                   | **only if the reporter fills them in**  | the reporter                                                             |
-| `reporter.id`, `.name`, `.email`           | the identity in a signed token, replacing anything typed                         | added by the worker, from a valid token | the integrator (`identityToken`) or, in team mode, the pairing           |
-| `env.userAgent`, `env.locale`, `.platform` | the browser's user agent string, language and platform                           | **by default**                          | the integrator: `init({ includeEnv: false })`                            |
-| `screenshot`                               | the URL of a picture of the page                                                 | **only if the reporter turns it on**    | the integrator supplies `captureScreenshot`; the reporter switches it on |
-| `id`, `createdAt`                          | a random identifier and the time of writing                                      | always                                  | nothing                                                                  |
+| Field                                      | What it is                                                                       | Sent                                    | What controls it                                                          |
+| ------------------------------------------ | -------------------------------------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------- |
+| `note`                                     | what the reporter typed, up to 5,000 characters                                  | always                                  | the reporter                                                              |
+| `page.url`, `page.path`                    | the page address, with the fragment and the tracking parameters removed          | always                                  | nothing: the page address is how a pin is found again                     |
+| `page.title`                               | the page's `<title>`                                                             | when the page has one                   | the site                                                                  |
+| `viewport`                                 | the window's width, height and pixel ratio                                       | always                                  | nothing                                                                   |
+| `anchor`                                   | a selector, a structural path, the tag, up to 160 characters of the element text | always                                  | nothing: this is what places the pin                                      |
+| `anchor.attrs`                             | the element's `id`, test id, `name`, `role` and `aria-label`, when present       | when the element has them               | the site's markup                                                         |
+| `source`                                   | the React component, file, line and column behind the element                    | when the build exposes them             | the site's build: a production build usually exposes none                 |
+| `client.id`                                | the client id the site was given                                                 | always                                  | the integrator                                                            |
+| `reporter.name`, `reporter.email`          | what the reporter typed in the optional fields                                   | **only if the reporter fills them in**  | the reporter                                                              |
+| `reporter.id`, `.name`, `.email`           | the identity in a signed token, replacing anything typed                         | added by the worker, from a valid token | the integrator (`identityToken`) or, in team mode, the pairing            |
+| `env.userAgent`, `env.locale`, `.platform` | the browser's user agent string, language and platform                           | **only if the integrator turns it on**  | the integrator: `init({ includeEnv: true })`, or the attribute on the tag |
+| `screenshot`                               | the URL of a picture of the page                                                 | **only if the reporter turns it on**    | the integrator supplies `captureScreenshot`; the reporter switches it on  |
+| `id`, `createdAt`                          | a random identifier and the time of writing                                      | always                                  | nothing                                                                   |
 
 The excerpt of the element's text (`anchor.text`) is the site's own text, not the reporter's. It can
 still be personal data: an element that shows a customer's name carries that name into the seed.
@@ -48,15 +48,16 @@ If your staging site shows real customer records, keep that in mind before you i
   in it would outlive its expiry by months.
 - **A typed name is never presented as checked.** Only a signed token makes `reporter.verified`
   true; the worker removes the flag from anything a browser sends.
+- **The browser environment stays on the page.** A user agent string, with a language and a time,
+  narrows down who a reporter is, so `env` is not sent. The extension's private mode mounts the
+  widget with its defaults, so it sends none either.
 
-### What is on by default and you may want off
+### What you can turn on
 
-- **The browser environment.** `env` is sent unless the integrator passes `includeEnv: false` to
-  `init`. A user agent string, with a language and a time, narrows down who a reporter is. **The
-  `<script>` tag install has no attribute for this**: a site installed that way sends `env` with
-  every note. Use the npm install, or `init` from your own script, to turn it off.
-- **The extension's private mode sends it too.** The extension mounts the widget with its defaults,
-  so a reviewer's notes carry their browser's environment.
+- **The browser environment.** Pass `includeEnv: true` to `init`, or write
+  `data-fruitback-include-env="true"` on the `<script>` tag, and every note carries the user agent,
+  the language and the platform of its reporter. Only the word `true` turns it on. If you do, say so
+  in your notice.
 
 ## Where it goes
 
@@ -151,11 +152,11 @@ Put this near the widget, or in your own privacy policy, and change what is not 
 deployment:
 
 > **Feedback on this page.** When you leave a note, we receive what you write, the address of this
-> page, the part of the page you pointed at, the size of your window, and your browser's name,
-> version and language. Your name and e-mail are optional; we receive them only if you type them. A
-> picture of the page is sent only if you turn it on. Your note is stored in _[Linear / GitHub /
-> our own server]_ and is visible to _[our team / anyone who can open this page]_ until we delete
-> it. To have your notes erased, write to _[address]_.
+> page, the part of the page you pointed at, and the size of your window. Your name and e-mail are
+> optional; we receive them only if you type them. A picture of the page is sent only if you turn it
+> on. Your note is stored in _[Linear / GitHub / our own server]_ and is visible to _[our team /
+> anyone who can open this page]_ until we delete it. To have your notes erased, write to
+> _[address]_.
 
-Remove the browser sentence if you pass `includeEnv: false`, and the picture sentence if you supplied
-no `captureScreenshot`.
+If you turned `includeEnv` on, add "and your browser's name, version and language" to the first
+sentence. Remove the picture sentence if you supplied no `captureScreenshot`.
