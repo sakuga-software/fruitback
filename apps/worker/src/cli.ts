@@ -1,6 +1,8 @@
 import { type WorkerEnv, readConfig } from './env.ts';
 import { PAIRING_TTL_SECONDS } from './session.ts';
 import { createPairingCommand } from './app.ts';
+import { CACHE_TTL_MS } from './cache.ts';
+import type { ForgottenSeed } from './store.ts';
 
 /**
  * Minting a pairing code, as a command rather than a route (FRU-42).
@@ -100,4 +102,104 @@ export async function runPair(argv: readonly string[], env: WorkerEnv): Promise<
       'It is not stored and cannot be shown again — mint another if it is lost.',
     ],
   };
+}
+
+/**
+ * Deleting the notes of one reporter, as a command for the same reason as `pair` (FRU-85).
+ *
+ * `docker exec <container> node server.mjs forget --email alice@acme.dev --dry-run`
+ *
+ * It always lists what it found before it says what it did. A typed address is a claim: a reporter
+ * can type somebody else's, and two reporters can type the same one. Run it with `--dry-run` first,
+ * and read the list.
+ */
+
+export type ForgetArgs = { email: string; dryRun: boolean };
+
+export type ForgetArgsResult = { ok: true; args: ForgetArgs } | { ok: false; error: string };
+
+const FORGET_USAGE = 'usage: forget --email <address> [--dry-run]';
+
+/** A note excerpt long enough to recognise it, short enough to keep one note on one line. */
+const NOTE_EXCERPT_LENGTH = 60;
+
+export function parseForgetArgs(argv: readonly string[]): ForgetArgsResult {
+  let email: string | undefined;
+  let dryRun = false;
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const flag = argv[index];
+
+    if (flag === '--dry-run') {
+      dryRun = true;
+    } else if (flag === '--email') {
+      email = argv[index + 1];
+      // `--email --dry-run` would otherwise read the flag as the address and run a real deletion.
+      if (email === undefined || email.startsWith('--')) {
+        return { ok: false, error: `${FORGET_USAGE}\n--email needs a value` };
+      }
+      index += 1;
+    } else {
+      // Refused rather than ignored: `--dryrun` must not delete what `--dry-run` would only list.
+      return { ok: false, error: `${FORGET_USAGE}\nunexpected: ${flag}` };
+    }
+  }
+
+  if (email === undefined || email.trim() === '') return { ok: false, error: `${FORGET_USAGE}\n--email is required` };
+
+  return { ok: true, args: { email: email.trim(), dryRun } };
+}
+
+export type ForgetOutcome = { ok: boolean; lines: string[] };
+
+export async function runForget(argv: readonly string[], env: WorkerEnv): Promise<ForgetOutcome> {
+  const parsed = parseForgetArgs(argv);
+  if (!parsed.ok) return { ok: false, lines: [parsed.error] };
+
+  const config = readConfig(env);
+  if (!config.ok) return { ok: false, lines: [`misconfigured: ${config.missing.join(', ')}`] };
+
+  const store = config.config.store.create();
+  if (store.forgetReporter === undefined) {
+    const provider = config.config.store.provider;
+
+    return {
+      ok: false,
+      lines: [
+        `the ${provider} store does not delete notes from this command.`,
+        provider === 'memory'
+          ? 'Its notes are in the memory of the worker, and they go when the worker stops.'
+          : `They are issues in your tracker: search them for ${parsed.args.email}, read them, and delete the ones that are this reporter's.`,
+      ],
+    };
+  }
+
+  let found: ForgottenSeed[];
+  try {
+    found = await store.forgetReporter(parsed.args.email, { dryRun: parsed.args.dryRun });
+  } catch (error) {
+    return { ok: false, lines: [String(error instanceof Error ? error.message : error)] };
+  }
+
+  if (found.length === 0) return { ok: true, lines: [`no note gives ${parsed.args.email} as its reporter's address.`] };
+
+  const listed = found.map((seed) => `  ${seed.identifier}  ${seed.createdAt}  ${seed.pageUrl}  ${excerpt(seed.note)}`);
+
+  return {
+    ok: true,
+    lines: parsed.args.dryRun
+      ? [`${found.length} note(s) give ${parsed.args.email}. Nothing was deleted (--dry-run):`, ...listed]
+      : [
+          `deleted ${found.length} note(s), with their replies, that give ${parsed.args.email}:`,
+          ...listed,
+          // The worker caches a read for this long, so a page can still show the note for a moment.
+          `A page can still show them for ${Math.round(CACHE_TTL_MS / 1000)} seconds. Your backups still hold them.`,
+        ],
+  };
+}
+
+function excerpt(note: string): string {
+  const line = note.replace(/\s+/g, ' ').trim();
+
+  return line.length > NOTE_EXCERPT_LENGTH ? `${line.slice(0, NOTE_EXCERPT_LENGTH - 1)}…` : line;
 }

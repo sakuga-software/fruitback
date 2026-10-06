@@ -950,6 +950,11 @@ and _The team mode, and the call the page cannot make_:
   `server.mjs` because the image copies the bundle and no source). An endpoint
   would need an admin credential of its own and would stay reachable for ever; a command is reachable
   by whoever already sets the secrets.
+- **Forgetting a reporter is a command too** (FRU-85): `node server.mjs forget --email … [--dry-run]`.
+  It lists before it says what it did, because a typed address is a claim. Only a store that holds
+  its rows implements `forgetReporter`; a tracker store is refused with where to delete instead.
+  `node:sqlite` turns foreign keys **on** by default, so deleting the pragma in `connect` is an
+  equivalent mutant: test the cascade with the pragma set to `OFF`.
 - **An extension origin is exempt from `ALLOWED_ORIGINS`, on every route** (FRU-42, widened by
   FRU-57). That list names client _sites_; an extension's origin carries an id that differs between
   an unpacked build and a store build, so an operator cannot put it there. Measured: an MV3 service
