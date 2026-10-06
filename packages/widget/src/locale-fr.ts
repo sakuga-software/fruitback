@@ -33,9 +33,9 @@ export const FRENCH: Catalog = {
   'composer.emailPlaceholder': 'vous@exemple.fr',
   'composer.emailLabel': 'Votre e-mail (facultatif)',
   'composer.cancel': 'Annuler',
-  'composer.send': 'Planter',
-  'composer.sending': 'on plante…',
-  'composer.harvested': 'récolté',
+  'composer.send': 'Envoyer',
+  'composer.sending': 'envoi…',
+  'composer.sent': 'envoyé',
   'composer.failed': 'pas passé — le texte est gardé, réessayez',
 
   'pin.label': '{stage} · {note}',
@@ -55,9 +55,9 @@ export const FRENCH: Catalog = {
   'orphans.count': { one: '{count} note détachée', other: '{count} notes détachées' },
   'orphans.entry': '{stage} · {note}',
 
-  'stage.seeded': 'Semé',
-  'stage.green': 'Vert',
-  'stage.ripening': 'En maturation',
-  'stage.ripe': 'Mûr',
-  'stage.composted': 'Composté',
+  'stage.seeded': 'Nouveau',
+  'stage.green': 'À faire',
+  'stage.ripening': 'En cours',
+  'stage.ripe': 'Terminé',
+  'stage.composted': 'Fermé',
 };

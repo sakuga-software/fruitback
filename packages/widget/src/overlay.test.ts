@@ -169,7 +169,7 @@ describe('createOverlay', () => {
     (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
 
     const header = page.document.querySelector('.fruitback-thread-stage');
-    assert.equal(header?.textContent, 'Ripening');
+    assert.equal(header?.textContent, 'In progress');
   });
 
   it('leaves no dangling separator in the badge tooltip when the state is unnamed', () => {
@@ -181,7 +181,7 @@ describe('createOverlay', () => {
     overlay.render([issueOnCta({ identifier: 'SKG-742', stateName: '', stage: 'composted' })]);
 
     const badge = page.document.querySelector('.fruitback-pin-badge');
-    assert.equal(badge?.getAttribute('title'), 'SKG-742 · Composted');
+    assert.equal(badge?.getAttribute('title'), 'SKG-742 · Closed');
   });
 
   it('closes the thread with a drawing rather than a character (FRU-36)', () => {

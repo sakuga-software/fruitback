@@ -50,7 +50,7 @@ async function plant(page: import('@playwright/test').Page, note: string) {
   await page.getByRole('button', { name: '🌱 Feedback' }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   await page.getByPlaceholder('What is wrong here?').fill(note);
-  await page.getByRole('button', { name: 'Plant', exact: true }).click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 }
 

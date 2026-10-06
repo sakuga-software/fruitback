@@ -229,7 +229,7 @@ describe('the language of a description (FRU-39)', () => {
     assert.match(description, /\*\*Élément\*\*/);
     assert.match(description, /\*\*Fenêtre\*\*/);
     assert.match(description, /\*\*Signalé par\*\*/);
-    assert.match(description, /\*\*Graine Fruitback\*\*/);
+    assert.match(description, /\*\*Données Fruitback\*\*/);
     assert.equal(description.includes('**Reported by**'), false);
   });
 

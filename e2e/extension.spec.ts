@@ -53,7 +53,7 @@ async function plantOnTheLatteCard(page: Page, launch: string | RegExp, note: st
   await page.getByRole('button', { name: launch }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   await page.getByPlaceholder('What is wrong here?').fill(note);
-  await page.getByRole('button', { name: 'Plant', exact: true }).click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
 }
 
 /**

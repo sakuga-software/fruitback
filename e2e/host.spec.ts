@@ -96,7 +96,7 @@ test('no emoji survives anywhere in the widget chrome (FRU-36)', async ({ page }
   await page.getByPlaceholder('What is wrong here?').fill('Une note sur un champ qui disparaît');
   seen.push(await chrome());
 
-  await page.getByRole('button', { name: 'Plant', exact: true }).click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   // Polled, and the polled value is the value kept. The confirmation clears itself 1.1s after it
   // appears, so waiting for it and *then* reading the root again is two round trips with a deadline
   // between them: on a loaded machine the second one finds a closed popover, and the presence marker
@@ -104,9 +104,22 @@ test('no emoji survives anywhere in the widget chrome (FRU-36)', async ({ page }
   // down this file — assert on what you measured, not on a second measurement. Raised in review,
   // twice: the first version of this comment sent the reader to `overlay.spec.ts`, which has no
   // poll in it at all.
-  let harvested = '';
-  await expect.poll(async () => (harvested = await chrome())).toMatch(/harvested/);
-  seen.push(harvested);
+  // The wait reads the status element, because the stylesheet in the root names the sent state too.
+  let sent = '';
+  await expect
+    .poll(async () => {
+      const read = await page.evaluate(() => {
+        const root = document.querySelector('[data-fruitback-host]')?.shadowRoot;
+        return {
+          text: root?.textContent ?? '',
+          status: root?.querySelector('.fruitback-composer-status')?.textContent ?? '',
+        };
+      });
+      sent = read.text;
+      return read.status;
+    })
+    .toBe('sent');
+  seen.push(sent);
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 
   // The detached drawer, which needs an element to have gone.
@@ -120,7 +133,7 @@ test('no emoji survives anywhere in the widget chrome (FRU-36)', async ({ page }
   // Proof that the emoji check below is checking something. `textContent` on a Shadow root includes
   // the CSS of every <style> in it, so asserting the text is non-empty passes before a single piece
   // of chrome has rendered — which is what the first version of this test did. Raised in review.
-  for (const rendered of ['Leave feedback', 'Settings', 'harvested', 'detached note']) {
+  for (const rendered of ['Leave feedback', 'Settings', 'detached note']) {
     expect(text, `never reached the state that renders ${rendered}`).toContain(rendered);
   }
 

@@ -42,7 +42,7 @@ test('a note can be planted with the keyboard alone', async ({ page }) => {
 
   await page.keyboard.type('Planté sans souris');
   await page.keyboard.press('Shift+Tab');
-  const plant = page.getByRole('button', { name: 'Plant', exact: true });
+  const plant = page.getByRole('button', { name: 'Send', exact: true });
   await expect(plant).toBeFocused();
   // The reset removes the browser's focus ring, and host.ts puts one back.
   expect(await plant.evaluate((node) => getComputedStyle(node).outlineStyle)).toBe('solid');
@@ -122,7 +122,7 @@ for (const scheme of ['light', 'dark'] as const) {
     const cta = page.locator('#checkout-cta');
     const note = `Vu par axe, ${scheme}`;
     await plantPin(page, cta, note);
-    // The popover stays open in its harvested state for a moment, and each scan must see one state.
+    // The popover stays open in its sent state for a moment, and each scan must see one state.
     await expect(page.getByRole('dialog', { name: 'Leave a note' })).toBeHidden({ timeout: 5_000 });
 
     const violations: string[] = [];

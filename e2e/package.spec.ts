@@ -82,7 +82,7 @@ test('the snippet plants a note and reads it back, through its own transport', a
   await page.getByRole('button', { name: '🌱 Feedback' }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   await page.getByPlaceholder('What is wrong here?').fill('Planté par le snippet');
-  await page.getByRole('button', { name: 'Plant', exact: true }).click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
 
   // The pin appears because `init` re-read after writing, not because anything told it to.
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
@@ -104,7 +104,7 @@ test('a client-side navigation changes which pins are on screen', async ({ page 
   await page.getByRole('button', { name: '🌱 Feedback' }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   await page.getByPlaceholder('What is wrong here?').fill('Sur la page des formules');
-  await page.getByRole('button', { name: 'Plant', exact: true }).click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 
   await page.getByRole('link', { name: 'Commander' }).click();
@@ -141,7 +141,7 @@ test('the documented snippet mounts on its own, from its data attributes', async
   await page.getByRole('button', { name: 'Leave feedback' }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
   await page.getByPlaceholder('What is wrong here?').fill('Planté par le snippet du README');
-  await page.getByRole('button', { name: 'Plant', exact: true }).click();
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
 
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 });

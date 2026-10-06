@@ -50,9 +50,9 @@ export const ENGLISH = {
   'composer.emailPlaceholder': 'you@example.com',
   'composer.emailLabel': 'Your email (optional)',
   'composer.cancel': 'Cancel',
-  'composer.send': 'Plant',
-  'composer.sending': 'planting…',
-  'composer.harvested': 'harvested',
+  'composer.send': 'Send',
+  'composer.sending': 'sending…',
+  'composer.sent': 'sent',
   'composer.failed': 'did not go through — your text is kept, try again',
 
   'pin.label': '{stage} · {note}',
@@ -72,11 +72,11 @@ export const ENGLISH = {
   'orphans.count': { one: '{count} detached note', other: '{count} detached notes' },
   'orphans.entry': '{stage} · {note}',
 
-  'stage.seeded': 'Seeded',
-  'stage.green': 'Green',
-  'stage.ripening': 'Ripening',
-  'stage.ripe': 'Ripe',
-  'stage.composted': 'Composted',
+  'stage.seeded': 'New',
+  'stage.green': 'To do',
+  'stage.ripening': 'In progress',
+  'stage.ripe': 'Done',
+  'stage.composted': 'Closed',
 } as const satisfies Record<string, string | PluralMessage> & Record<`stage.${SeedStage}`, string>;
 
 export type MessageKey = keyof typeof ENGLISH;
