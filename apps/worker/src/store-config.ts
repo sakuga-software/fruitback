@@ -2,12 +2,12 @@ import { z } from 'zod';
 import type { SeedStore } from './store.ts';
 
 /**
- * Which store this process runs on, and who validates its configuration (SKG-526).
+ * Which store this process runs on, and who validates its configuration (FRU-33).
  *
- * SKG-522 named the `SeedStore` interface but left the worker Linear-shaped anyway: `WorkerConfig`
+ * FRU-29 named the `SeedStore` interface but left the worker Linear-shaped anyway: `WorkerConfig`
  * carried `linearApiKey`, `linearTeamId` and `linearProjectId`, so every module that could read the
  * config could read one provider's credentials. `readConfig` also validated those three fields for
- * every deployment, including the ones that will not have them — a SQLite worker (SKG-524) would
+ * every deployment, including the ones that will not have them — a SQLite worker (FRU-31) would
  * have been refused at boot for a missing Linear key.
  *
  * So the provider is selected by `FRUITBACK_STORE`, and **each provider validates its own
@@ -97,14 +97,14 @@ export function defineStore<TOptions>(spec: {
   };
 }
 
-/** What `FRUITBACK_STORE` selects when it is not set: what every deployment ran before SKG-526. */
+/** What `FRUITBACK_STORE` selects when it is not set: what every deployment ran before FRU-33. */
 export const DEFAULT_STORE_PROVIDER = 'linear';
 
 /**
  * Read `FRUITBACK_STORE`, including the compatibility shim for the flag it replaces.
  *
  * `FRUITBACK_FAKE_LINEAR=1` still selects the in-memory store, because it is in the `.env` files and
- * compose stacks of everyone who ran this loop before SKG-526 — **not** because any script, package
+ * compose stacks of everyone who ran this loop before FRU-33 — **not** because any script, package
  * manifest or workflow here selects a store with it. `dev:fake`, `serve:fake` and the E2E suite were moved
  * to `FRUITBACK_STORE=memory` by that ticket, and this paragraph went on naming them for a round. The
  * tests still set it, and deliberately: `stores.test.ts` to cover the flag itself, `app.test.ts` to
@@ -161,8 +161,8 @@ export function fakeLinearIgnoredReason(env: StoreEnv): string | undefined {
  * What to say about `FRUITBACK_FAKE_LINEAR` when it is still doing something, or `undefined` when
  * there is nothing to say.
  *
- * The other half of `fakeLinearIgnoredReason`, and the half SKG-526 asked for and did not ship
- * (SKG-581). A deprecation warning that fires only when the flag **loses** is heard by exactly the
+ * The other half of `fakeLinearIgnoredReason`, and the half FRU-33 asked for and did not ship
+ * (FRU-54). A deprecation warning that fires only when the flag **loses** is heard by exactly the
  * operators who have nothing to migrate: the one who needs it is the one for whom the variable still
  * works, and that is the common case — it is still in everybody's `.env` and compose file.
  *

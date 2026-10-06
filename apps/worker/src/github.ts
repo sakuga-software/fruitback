@@ -19,7 +19,7 @@ import { type CreatedIssue, type SeedIssueQuery, type SeedStore, StoreError } fr
 import { type StoreSpec, defineStore } from './store-config.ts';
 
 /**
- * GitHub Issues, as a `SeedStore` (SKG-525).
+ * GitHub Issues, as a `SeedStore` (FRU-32).
  *
  * The worker signs in as a GitHub App, not with a personal token. A personal token does not expire
  * and reaches every repository of its owner. An installation token expires after one hour, and this

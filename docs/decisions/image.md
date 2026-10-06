@@ -6,7 +6,7 @@ immutable.
 
 ## The published image
 
-- **`ghcr.io/<owner>/fruitback-worker`, and self-hosting stops needing this repository** (SKG-540).
+- **`ghcr.io/<owner>/fruitback-worker`, and self-hosting stops needing this repository** (FRU-47).
   Building from source on a small VPS means a clone, a pnpm install and a full compilation, which
   fails for lack of memory about as often as it succeeds.
 - **The build stage is pinned to `--platform=$BUILDPLATFORM`, and that is what makes arm64 cheap.**
@@ -46,7 +46,7 @@ immutable.
   timed out. That was the first version, and it was measured hanging.
 - **Trivy runs with `ignore-unfixed`.** An Alpine CVE with no patch available reddens every release
   for something nobody can act on, and a gate that cannot be satisfied is a gate somebody deletes.
-- **Every action is pinned to a commit SHA, with its version as a comment (SKG-608).** A tag can be
+- **Every action is pinned to a commit SHA, with its version as a comment (FRU-69).** A tag can be
   moved to other code, and the `publish` job holds `packages: write`, so a moved tag could publish the
   image. Each SHA is the commit the tag named when it was pinned, so the pin changed no behaviour.
   `.github/dependabot.yml` moves the SHA and the comment together; without it the pins would freeze.
@@ -66,7 +66,7 @@ immutable.
   handed the token explicitly.
 - The push needs `packages: write`, the attestations need `id-token: write` **and**
   `attestations: write`. A missing one fails at the end of a long build with a 403 that names nothing.
-- **Only `publish` holds those three (SKG-609).** They were granted at workflow level, so `check` held
+- **Only `publish` holds those three (FRU-70).** They were granted at workflow level, so `check` held
   them too while it built, emulated and scanned. The workflow now grants `contents: read`, and
   `publish` declares the rest. `ci.yml`'s `zizmor` job audits the workflows offline on every pull
   request, so a permission widened back fails a check.
@@ -75,7 +75,7 @@ immutable.
   as `node` with `NODE_ENV=production`, and the smoke script passes against the real image and fails
   against the mutant. Verified by pushing to a throwaway `registry:2` on localhost.
 
-## The compose file (SKG-541)
+## The compose file (FRU-48)
 
 - **It pulls the image, and it is the one file a stranger downloads.** It used to build from the
   repository, and called itself a reference to keep in step by hand with a Dokploy deployment that
@@ -94,7 +94,7 @@ immutable.
   `docker compose exec worker`: the SQLite backup in `.env.example` and `self-hosting.md`, and the
   pairing command in `.env.example` and `reviewing.md`. SQLite is the default. Linear is
   `FRUITBACK_STORE=linear` and two keys. GitHub is `FRUITBACK_STORE=github` and three variables
-  (SKG-525).
+  (FRU-32).
 - **`TRUSTED_PROXY_HOPS` is 0 in this file and 1 in the code.** The file publishes the port with
   nothing in front. The old file said 1 with a published port, which is the forgeable case: each
   forged `X-Forwarded-For` gets a new bucket. Measured, forged reads kept answering `200` past the
@@ -122,7 +122,7 @@ immutable.
 - **A shell variable wins over `.env`.** A `LINEAR_API_KEY` exported in a shell profile reached
   `docker compose config` with `.env` empty. The local run of the same check used `env -i`.
 
-## The self-hosting guide (SKG-543)
+## The self-hosting guide (FRU-50)
 
 The ticket turned moved material into a guide that someone who did not write the code can follow.
 What it took was mostly measuring, because four things the documentation said were not true.
@@ -183,7 +183,7 @@ What it took was mostly measuring, because four things the documentation said we
   and checks the file with `test -s` first, and the worker is stopped while it runs. Measured on both
   paths, with Compose and with `docker run`: a good backup gives back its pins, and a missing one
   stops the commands with every pin still there.
-- **The migration from before SKG-541 needed the same contract, and a review found two more gaps.**
+- **The migration from before FRU-48 needed the same contract, and a review found two more gaps.**
   Its `break` left the loop and fell through to the `docker compose up` after it, so a failed restore
   still started the worker on the empty volume. And `for db in $dbs` iterates once under zsh, which
   does not split a variable into words. The block now uses `docker compose create`, lists the files in

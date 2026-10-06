@@ -39,7 +39,7 @@ describe('createOrphanList', () => {
     assert.equal(page.document.querySelector('.fruitback-orphans-item'), first, 'the same node, not a new one');
   });
 
-  it('shows the handle as plain text when the store has nowhere to open (SKG-524)', () => {
+  it('shows the handle as plain text when the store has nowhere to open (FRU-31)', () => {
     // An anchor with an empty href resolves to the current page, so clicking it would reload the
     // client's site. The identifier is still worth showing, so it degrades to a span rather than
     // vanishing with the link.
@@ -63,14 +63,14 @@ describe('createOrphanList', () => {
     assert.equal(handle?.getAttribute('href'), 'https://linear.app/sakuga-software/issue/SKG-901');
   });
 
-  it('repaints the entry when a note changed stage (SKG-529)', () => {
+  it('repaints the entry when a note changed stage (FRU-36)', () => {
     // This assertion has been rewritten twice, and the history is the reason it is worth reading.
     // It first asserted the entry's *text* changed, because the entry opened with the stage's emoji.
-    // SKG-517 removed that emoji and nothing rendered here depended on the stage any more, so it
+    // FRU-24 removed that emoji and nothing rendered here depended on the stage any more, so it
     // fell back to asserting a rebuilt node and left the signature over-invalidating on purpose,
     // pending the ticket that would decide how a stage shows up in this list.
     //
-    // That ticket is SKG-529 and the answer is a drop in the stage's colour, so the signature is
+    // That ticket is FRU-36 and the answer is a drop in the stage's colour, so the signature is
     // honest again and this can assert what a reader sees. Drop `:${stage}` from the key in
     // `orphans.ts` and a note that ripens keeps the colour it had — which is what this catches.
     const page = mount();
@@ -95,7 +95,7 @@ describe('createOrphanList', () => {
     assert.equal(page.document.querySelector('.fruitback-orphans-stage')?.getAttribute('aria-hidden'), 'true');
   });
 
-  it('puts no character in front of a detached note (SKG-517, SKG-529)', () => {
+  it('puts no character in front of a detached note (FRU-24, FRU-36)', () => {
     // The entry opened with `SEED_STAGE_STYLES[stage].emoji`, a rendering decision that travelled in
     // the published contract; the chip above it opened with a fallen leaf. Both are drawings now, so
     // the entry's text is the note's own words and nothing else.
@@ -107,7 +107,7 @@ describe('createOrphanList', () => {
     assert.equal(page.document.querySelector('.fruitback-orphans-toggle')?.textContent, '1 detached note');
   });
 
-  it('counts in the plural forms of the locale, not with an appended s (SKG-530)', () => {
+  it('counts in the plural forms of the locale, not with an appended s (FRU-37)', () => {
     // Polish has three forms where English has two, so "add an s after one" is wrong at 5 and at 22.
     const page = mountPage('<main></main>');
     const forms = { one: '{count} notatka', few: '{count} notatki', many: '{count} notatek', other: '{count} notatki' };
@@ -154,7 +154,7 @@ describe('createOrphanList', () => {
   });
 });
 
-describe('announcing detached notes (SKG-544)', () => {
+describe('announcing detached notes (FRU-51)', () => {
   const announced = (page: ReturnType<typeof mount>) =>
     page.document.querySelector('[data-fruitback-orphans-announcer]')?.textContent ?? '';
 

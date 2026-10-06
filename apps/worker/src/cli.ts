@@ -3,7 +3,7 @@ import { PAIRING_TTL_SECONDS } from './session.ts';
 import { createPairingCommand } from './app.ts';
 
 /**
- * Minting a pairing code, as a command rather than a route (SKG-535).
+ * Minting a pairing code, as a command rather than a route (FRU-42).
  *
  * Vouching for a person is the one privileged operation this worker has. Behind an endpoint it
  * would need an admin credential of its own — a second secret to distribute, rotate and get wrong —

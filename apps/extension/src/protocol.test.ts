@@ -92,9 +92,9 @@ describe('parseBridgeMessage', () => {
   });
   /**
    * The channel carries a fixed set of fields and builds its answer from scratch, so a token cannot
-   * travel on it even if something upstream put one in the object (SKG-599).
+   * travel on it even if something upstream put one in the object (FRU-60).
    *
-   * Pinned here because SKG-596 adds a relay message to this file, and the tempting shape for a
+   * Pinned here because FRU-57 adds a relay message to this file, and the tempting shape for a
    * relay is to spread the request it was given. The parser is the last place that would be noticed,
    * and the page is listening on the other side. See `worlds.test.ts` for the other half.
    */
@@ -114,7 +114,7 @@ describe('parseBridgeMessage', () => {
 });
 
 /**
- * The relay's half of the channel (SKG-596).
+ * The relay's half of the channel (FRU-57).
  *
  * Everything below arrives from the page's world, and on a team-mode page the page and our own
  * main-world script are indistinguishable senders. So the parser is where a relay message stops

@@ -1,9 +1,9 @@
 /**
- * Where the rate limiter and the read cache keep their state (SKG-542).
+ * Where the rate limiter and the read cache keep their state (FRU-49).
  *
  * Both kept a `Map` of their own. The interface is the smallest one both callers need: a value with an
  * expiry, and a counter with an expiry. This process holds one memory implementation. A store shared
- * between replicas is SKG-606, and it is one more implementation of this type.
+ * between replicas is FRU-67, and it is one more implementation of this type.
  *
  * **Values are strings, the memory store included.** A store that kept objects would accept a value a
  * remote store cannot hold, and every test would pass against it.
@@ -22,7 +22,7 @@ export class KvError extends Error {}
 /** Expired entries are swept at most this often, on any call. Nothing is scheduled while idle. */
 const SWEEP_INTERVAL_MS = 1_000;
 
-/** What this worker did before SKG-542, and still the right answer for a single container. */
+/** What this worker did before FRU-49, and still the right answer for a single container. */
 export type MemoryKv = Kv & {
   /** How many entries it holds, expired ones included until the next sweep. */
   size(): number;

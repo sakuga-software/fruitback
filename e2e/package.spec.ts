@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { WORKER_ORIGIN } from './pin.ts';
 
 /**
- * The built widget on a page, mounted the way a client site mounts it (SKG-505).
+ * The built widget on a page, mounted the way a client site mounts it (FRU-16).
  *
  * Every other spec drives the widget the playground assembled by hand. This one loads `dist` — the
  * two files that are actually published — and lets the snippet do the assembling, because a package
@@ -28,7 +28,7 @@ async function mountFromScriptTag(page: import('@playwright/test').Page): Promis
       (globalThis as { Fruitback: { init(options: Record<string, string>): unknown } }).Fruitback.init({
         endpoint,
         clientId: 'playground',
-        // An emoji on purpose: a host's label is the host's word, and SKG-529 took our emoji out of
+        // An emoji on purpose: a host's label is the host's word, and FRU-36 took our emoji out of
         // the widget's own chrome without starting to filter theirs. `screenshot.spec.ts` mounts
         // with the same label and exercises the same promise. What changed is the *documented*
         // snippet further down, which no longer suggests one.
@@ -50,9 +50,7 @@ test('a script tag mounts the widget, with no build step on the page', async ({ 
   await expect(page.getByLabel('Open Fruitback settings')).toBeVisible();
 });
 
-test('a host catalog reaches the built widget, over the bundled one, key by key (SKG-530, SKG-531)', async ({
-  page,
-}) => {
+test('a host catalog reaches the built widget, over the bundled one, key by key (FRU-37, FRU-38)', async ({ page }) => {
   await page.goto('/?widget=off&case=script-tag-locale');
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await page.addScriptTag({ path: IIFE });
@@ -62,7 +60,7 @@ test('a host catalog reaches the built widget, over the bundled one, key by key 
         endpoint,
         clientId: 'playground',
         locale: 'fr',
-        // French is bundled since SKG-531. The host's own word wins over it, and a key the host leaves
+        // French is bundled since FRU-38. The host's own word wins over it, and a key the host leaves
         // out comes from the bundled French rather than from English.
         messages: { fr: { 'launch.label': 'Donner mon avis' } },
       }),
@@ -116,7 +114,7 @@ test('a client-side navigation changes which pins are on screen', async ({ page 
 });
 
 test('the documented snippet mounts on its own, from its data attributes', async ({ page }) => {
-  // The one path SKG-505 shipped unverified in a browser: `addScriptTag` cannot set attributes, so
+  // The one path FRU-16 shipped unverified in a browser: `addScriptTag` cannot set attributes, so
   // the auto-mount was only ever asserted against the built source. Playwright can serve the real
   // file from disk, which lets the documented tag be the documented tag.
   await page.route('**/fruitback.iife.js', (route) =>

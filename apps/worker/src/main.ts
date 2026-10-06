@@ -5,7 +5,7 @@ import { runPair } from './cli.ts';
  * Container entry point, kept apart from `server.ts` so importing the server in a test does not bind
  * a port as a side effect.
  *
- * One subcommand, `pair`, which mints a pairing code for the extension (SKG-535). Anything else
+ * One subcommand, `pair`, which mints a pairing code for the extension (FRU-42). Anything else
  * starts the server, so the image's `CMD` is unchanged and a deployment that knows nothing about
  * sessions behaves exactly as before.
  */

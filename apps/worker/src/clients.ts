@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { isExtensionOrigin } from './cors.ts';
 
 /**
- * One worker, several client sites (SKG-504).
+ * One worker, several client sites (FRU-15).
  *
  * Until now every seed landed in the same team and the same project, whoever sent it, and a read
  * with no `client` parameter answered with **everything on that URL** — which on a shared worker is
@@ -12,7 +12,7 @@ import { isExtensionOrigin } from './cors.ts';
  * Two things it is honest about.
  *
  * **`clientId` is still client-asserted.** The seed says who it is, and nothing yet proves it —
- * SKG-498 is where a signed token makes that a claim worth trusting. So `origins` here is not
+ * FRU-9 is where a signed token makes that a claim worth trusting. So `origins` here is not
  * decoration: binding a client to the sites it may be embedded on turns "I am acme" into something
  * the worker can check against the browser's own `Origin`, which is the same trust level CORS
  * already gives and strictly more than nothing.
@@ -34,7 +34,7 @@ const clientSchema = z.object({
   /** Where this client's issues are created and read. Falls back to `LINEAR_TEAM_ID`. */
   teamId: z.string().min(1).optional(),
   projectId: z.string().min(1).optional(),
-  /** The GitHub repository for this client's issues (SKG-525). Falls back to `FRUITBACK_GITHUB_REPOSITORY`. */
+  /** The GitHub repository for this client's issues (FRU-32). Falls back to `FRUITBACK_GITHUB_REPOSITORY`. */
   repository: z.string().regex(REPOSITORY_PATTERN).optional(),
   /**
    * Sites this client may be embedded on. When present, a request claiming this client from another
@@ -42,7 +42,7 @@ const clientSchema = z.object({
    */
   origins: z.array(z.string().min(1)).min(1).optional(),
   /**
-   * Shared with this client's site so it can mint identity tokens (SKG-498). Without one, this
+   * Shared with this client's site so it can mint identity tokens (FRU-9). Without one, this
    * client's reporters are always self-declared — a perfectly good mode, and the default.
    *
    * **Deliberately not inherited from `FRUITBACK_IDENTITY_SECRET`**, unlike `teamId` and
@@ -53,15 +53,15 @@ const clientSchema = z.object({
    */
   identitySecret: z.string().min(32).optional(),
   /**
-   * Show the team's Linear replies inside the pin (SKG-502). **On by default**, because closing that
+   * Show the team's Linear replies inside the pin (FRU-13). **On by default**, because closing that
    * loop is the point of the feature.
    *
-   * Since SKG-533 this is an editorial switch again rather than an access control: under
+   * Since FRU-40 this is an editorial switch again rather than an access control: under
    * `read: 'authenticated'` the reader is someone this worker checked, so the comments are already
    * only reaching people entitled to them. Under `read: 'public'` it is still the only thing standing
    * between an issue thread and anyone who can load the page.
    *
-   * **The two are not coupled, and that is the decision** (SKG-539). `authenticated` is what team
+   * **The two are not coupled, and that is the decision** (FRU-46). `authenticated` is what team
    * mode runs on, and there the access question does not arise — but whether a reviewer should watch
    * the team talk about their note is editorial, and it stays the operator's. Forcing this on under
    * `authenticated` would change what a deployment already does, silently, to save a line of
@@ -69,7 +69,7 @@ const clientSchema = z.object({
    */
   showComments: z.boolean().optional(),
   /**
-   * Who may read this client's pins (SKG-533).
+   * Who may read this client's pins (FRU-40).
    *
    * `public` is what this worker has always done: `GET /feedback?url=…&client=…` answers anyone who
    * can build the URL, so the notes, their authors and the team's replies are readable by every
@@ -85,7 +85,7 @@ const clientSchema = z.object({
    * dependency runs the other way — `authenticated` is what makes team mode worth turning on.
    *
    * **This is the closest thing to a mode, and there is deliberately no `mode` field beside it**
-   * (SKG-539). A client's mode is decided in the reviewer's browser — one field on the site's entry
+   * (FRU-46). A client's mode is decided in the reviewer's browser — one field on the site's entry
    * in the extension — and the worker cannot observe it: a private-mode read and a public-mode read
    * are the same anonymous `GET`. A field here would be a declaration nothing checks and nothing
    * enforces, and a switch that controls nothing is worse than no switch. What the worker can say is
@@ -174,10 +174,10 @@ export function readClientMap(value: string | undefined): ClientMapResult {
 }
 
 /**
- * Per-client decisions the **worker** makes, whatever store is behind it (SKG-522).
+ * Per-client decisions the **worker** makes, whatever store is behind it (FRU-29).
  *
  * This is the half of the old `Routing` that was never about Linear: whether replies come back
- * (SKG-502), whose word an identity is (SKG-498), and who may read at all (SKG-533). The other half
+ * (FRU-13), whose word an identity is (FRU-9), and who may read at all (FRU-40). The other half
  * — `teamId` and `projectId` — went to the Linear connector, where a team and a project mean
  * something. They meant nothing to SQLite, and the worker was reading `teamId` to build its cache
  * key, which is how the read path came to know that stores route by team.
@@ -185,12 +185,12 @@ export function readClientMap(value: string | undefined): ClientMapResult {
 export type ClientPolicy = {
   /** Whether the read path returns the team's replies — see `showComments` on the client. */
   showComments: boolean;
-  /** Set when this client can mint identity tokens (SKG-498). Absent means self-declared only. */
+  /** Set when this client can mint identity tokens (FRU-9). Absent means self-declared only. */
   identitySecret: string | undefined;
-  /** Who may read this client's pins (SKG-533). `authenticated` answers 401 without a valid token. */
+  /** Who may read this client's pins (FRU-40). `authenticated` answers 401 without a valid token. */
   read: ReadAccess;
   /**
-   * The language the issue description is written in (SKG-532), for the team that triages it.
+   * The language the issue description is written in (FRU-39), for the team that triages it.
    *
    * Worker-wide: it comes from `FRUITBACK_TEAM_LOCALE` and no client overrides it, because a
    * description is read where the issues are, not where the note was written.
@@ -253,7 +253,7 @@ export function resolveClient({ clients, clientId, origin, fallback }: ResolveCl
   // A request with no Origin is not a browser request, so there is nothing to check it against —
   // the same reasoning `resolveCors` applies, and the same limit: this binds a claim to a site, it
   // does not authenticate anyone. An extension origin is the same case: the relay calls from a
-  // service worker whose id no operator can put in `origins` (SKG-596).
+  // service worker whose id no operator can put in `origins` (FRU-57).
   if (
     client.origins !== undefined &&
     origin !== null &&

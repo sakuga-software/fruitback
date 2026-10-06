@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 /**
  * The token never reaches the page's world, asserted from the build rather than from a promise.
  *
- * SKG-535 stated it and SKG-599 has to keep it: an access token that the host site's JavaScript can
+ * FRU-42 stated it and FRU-60 has to keep it: an access token that the host site's JavaScript can
  * read is the worst outcome of this batch. A content script with `world: 'MAIN'` runs in the page's
  * own realm, so anything it can reach, the page can reach.
  *
@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
  *
  * What it cannot see: the workspace packages a main-world file imports. `@fruitback/widget` is the
  * one that matters, and it is kept clean the other way round — the widget takes a `transport` seam
- * (SKG-595) and never learns that a session exists.
+ * (FRU-56) and never learns that a session exists.
  */
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));

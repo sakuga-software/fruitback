@@ -4,7 +4,7 @@ import { describe, it } from 'node:test';
 import { parse } from 'yaml';
 
 /**
- * The home page of the documentation site, against the guides beside it (SKG-619).
+ * The home page of the documentation site, against the guides beside it (FRU-80).
  *
  * The site is `docs/`, published by GitHub Pages from `main`. The markdown stays the source — every
  * other test here reads the files, not the site — so what can rot is the one page that was written
@@ -49,7 +49,7 @@ function linksOfIndex(): string[] {
   });
 }
 
-describe('the documentation site (SKG-619)', () => {
+describe('the documentation site (FRU-80)', () => {
   it('links every guide from its home page', () => {
     const linked = new Set(linksOfIndex());
     const all = guides();

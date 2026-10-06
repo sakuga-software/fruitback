@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 /**
- * Which rules follow the reading direction, and which never do (SKG-531).
+ * Which rules follow the reading direction, and which never do (FRU-38).
  *
  * happy-dom resolves no logical property and computes no layout, so a unit test cannot see a pin move.
  * It can read the stylesheets. Two failures are silent in a browser too:
@@ -43,7 +43,7 @@ async function rulesOf(file: string): Promise<Rule[]> {
   }));
 }
 
-describe('the stylesheets and the reading direction (SKG-531)', () => {
+describe('the stylesheets and the reading direction (FRU-38)', () => {
   it('names a physical side only in a geometry rule', async () => {
     const offenders: string[] = [];
     let physicalSeen = 0;

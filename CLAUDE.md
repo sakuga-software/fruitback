@@ -15,13 +15,13 @@ Fruitback is a visual feedback widget: a client clicks an element on their stagi
 note, and it becomes an issue carrying the CSS selector, the React component and the source file.
 Coming back to the page, they see their pins again, coloured by that issue's status.
 
-**It is three products sharing one core, and they differ on what the site ships** (SKG-539):
+**It is three products sharing one core, and they differ on what the site ships** (FRU-46):
 **public**, where the site embeds the widget and every visitor can leave a note; **private**, where
 the site embeds nothing and the extension mounts the widget for one reviewer; **team**, where the
 site embeds a dormant widget the extension wakes and relays for. [docs/modes.md](docs/modes.md) is
 the page that names them for a reader, and the one thing to carry from it here: **who may read is
 `read`, and the mode decides who can satisfy it.** Public mode can run `authenticated` when the host
-mints its own tokens (`init({ identityToken })`, sent on reads since SKG-533); team mode is the only
+mints its own tokens (`init({ identityToken })`, sent on reads since FRU-40); team mode is the only
 one where the **reviewer** supplies the credential and the page never holds it; **private mode can
 supply neither**, so it changes who is _shown_ the feedback and never who may _fetch_ it. Writing
 "only team mode protects a read" is the overclaim in the other direction, and it shipped in this
@@ -32,7 +32,7 @@ naming decision, not a third code path: what differs lives in the assembly layer
 **Status, threads, assignees and history belong to the store**, never to a second model kept in step
 with it. Every store the worker speaks to is one somebody already runs: Linear is the default and
 the richest of them, `FRUITBACK_STORE=sqlite` is the door for a self-hoster who wants no third
-party, and `FRUITBACK_STORE=github` is for a team whose issues are already on GitHub. Fruitback does not reinvent issue tracking, and since SKG-524 it no longer requires somebody
+party, and `FRUITBACK_STORE=github` is for a team whose issues are already on GitHub. Fruitback does not reinvent issue tracking, and since FRU-31 it no longer requires somebody
 else's account either. See [docs/architecture.md](docs/architecture.md) for the alternatives that
 were dropped.
 
@@ -40,7 +40,7 @@ were dropped.
 managed platform primitives. When something needs infrastructure, reach for what a single container
 behind Traefik can do.
 
-**Deeper** — _Project_, _Layout_, and what this file said about itself before SKG-524:
+**Deeper** — _Project_, _Layout_, and what this file said about itself before FRU-31:
 [docs/decisions/project.md](docs/decisions/project.md).
 
 ## Commands
@@ -74,7 +74,7 @@ node --test src/seed.test.ts                 # one file, from the package direct
 - `apps/worker` (`@fruitback/worker`) — the Node service. `POST /feedback` plants a seed,
   `GET /feedback?url=…` returns the seeds of that page. Still called "worker" because that is what
   everyone calls it, though it is no longer an edge worker.
-- `apps/extension` — the browser extension (SKG-534): the widget on a site that embeds nothing.
+- `apps/extension` — the browser extension (FRU-41): the widget on a site that embeds nothing.
 - `apps/playground` (`@fruitback/playground`) — the dev loop: a deliberately hostile fake client site
   with the widget mounted on it, built as a React Router 8 + Vite app with HeroUI because the
   widget's clients are React apps. Not shipped, not deployed.
@@ -122,7 +122,7 @@ builds `dist` first, because `package.spec.ts` loads the real file.
 - **A cold Vite cache is the difference between your machine and CI.** The guarantee is
   `e2e/warm-up.ts`, a `globalSetup`; `optimizeDeps.include` is not enough on its own. Reproduce the
   CI condition with `rm -rf apps/playground/node_modules/.vite`.
-- **`extension.spec.ts` loads the built extension into a real Chromium** (SKG-538), and `pnpm e2e`
+- **`extension.spec.ts` loads the built extension into a real Chromium** (FRU-45), and `pnpm e2e`
   builds it first. The fixture launches `channel: 'chromium'`: the headless shell Playwright uses by
   default loads no extension (measured). Automation cannot answer a host permission prompt, so it
   loads a **copy** whose manifest declares the playground and both workers. The shipped manifest still asks for
@@ -165,16 +165,16 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   have added them had silently not applied.
 - `react-grab` and `zod` are **bundled, and are devDependencies** — a client site must not have to
   install, or resolve a version conflict over, a library it never asked for. Bundling makes their MIT
-  notices our obligation (SKG-515), and `packages/widget/THIRD-PARTY-NOTICES.md` is how they travel.
+  notices our obligation (FRU-22), and `packages/widget/THIRD-PARTY-NOTICES.md` is how they travel.
   Phosphor is in there for the same reason by a different route: two of its paths are compiled in.
-- **102 kB gzipped (measured on SKG-531), guarded by a test that trips at 150 kB** — a tripwire for a dependency that should
+- **102 kB gzipped (measured on FRU-38), guarded by a test that trips at 150 kB** — a tripwire for a dependency that should
   have been bundled out, not a budget.
 
 **Deeper** — _The published package_: [docs/decisions/packaging.md](docs/decisions/packaging.md).
 
 ## Licences
 
-- **MIT on the three published packages, AGPL-3.0-only on the worker** (SKG-515). The split follows
+- **MIT on the three published packages, AGPL-3.0-only on the worker** (FRU-22). The split follows
   the client/server boundary: the widget is compiled into someone else's site, and copyleft on code
   that ships inside a client's bundle is a licence nobody adopts.
 - **The guard asserts the `license` field and the LICENSE text, not the presence of a file.** npm
@@ -183,7 +183,7 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   never declared one. `THIRD-PARTY-NOTICES.md` is the opposite case: nothing force-includes it, so
   its `files` entry **is** load-bearing.
 - **The README snippet is read from the README and checked against the build** (`package.test.ts`,
-  SKG-519). Every `data-fruitback-*` attribute the landing page tells a reader to write must be one
+  FRU-26). Every `data-fruitback-*` attribute the landing page tells a reader to write must be one
   the built script actually reads. Before that, the claim in this file was an overclaim: the test
   asserted the _build_ named one attribute and nothing had ever opened the file a reader copies from,
   so a renamed attribute left the landing page quietly wrong with a green suite. The built global is
@@ -231,7 +231,7 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
     nothing a unit test can see.
   - the reset declares `color`, `font` and `letter-spacing` as `inherit`, and `:host` gives the first
     values. `all: initial` stops inheritance too: an element with no rule of its own painted black at
-    16px, and the panel and the thread were 1.2:1 on the dark surface until axe measured them (SKG-544).
+    16px, and the panel and the thread were 1.2:1 on the dark surface until axe measured them (FRU-51).
     `contrast.test.ts` compares tokens and cannot see it.
 - **The host sits at the document origin, absolutely positioned, with no size.** The overlay places
   pins in document coordinates; move or offset the host and every pin moves with it.
@@ -246,7 +246,7 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
 
 **One prefix, and it is `fruitback`**
 
-- **`--fruitback-*` tokens, `.fruitback-*` classes, `data-fruitback-*` attributes** (SKG-580). One
+- **`--fruitback-*` tokens, `.fruitback-*` classes, `data-fruitback-*` attributes** (FRU-53). One
   word everywhere, including on the `<script>` tag the README documents. A custom property inherits
   _into_ the Shadow root, so a name the host also uses repaints our widget silently: `--fb-` would be
   what a Facebook SDK picks, and an intermediate `--fruit-` reads as an inconsistency rather than a
@@ -270,7 +270,7 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
 
 **No emoji**
 
-- **Nothing in `packages/widget` renders an emoji** (SKG-529). An emoji is drawn by the system's own
+- **Nothing in `packages/widget` renders an emoji** (FRU-36). An emoji is drawn by the system's own
   font: the same codepoint is flat on Windows and glossy on macOS, it takes no colour, and it carries
   a register that cannot be dialled down. `icons.ts` holds the four glyphs, built with
   `createElementNS`, sized in `em`, painted in `currentColor`. An SVG assigned through `innerHTML` is
@@ -304,7 +304,7 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
 
 **Who carries the calls**
 
-- **`transport` is a seam, and it is the same one twice** (SKG-595): the widget stays dormant when a
+- **`transport` is a seam, and it is the same one twice** (FRU-56): the widget stays dormant when a
   host has nothing to reach the worker with, and the extension relays the calls when it does.
   `TransportRequest` and `TransportResponse` are **plain objects, not `Request` and `Response`** —
   neither survives `postMessage`.
@@ -320,7 +320,7 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
 
 **The optional picture**
 
-- **The widget does not bundle a rasteriser** (SKG-495). `captureScreenshot` is a seam the embedder
+- **The widget does not bundle a rasteriser** (FRU-6). `captureScreenshot` is a seam the embedder
   fills: the seed contract stores a **URL**, and html2canvas weighs more than this entire widget.
 - **Off by default, and the toggle is absent unless `captureScreenshot` was given.** A switch that
   controls nothing is worse than no switch.
@@ -329,7 +329,7 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
 
 **The settings panel**
 
-- **What is not configurable is the design** (SKG-503). The Linear team, project and labels are
+- **What is not configurable is the design** (FRU-14). The Linear team, project and labels are
   absent: the client id is what the reporter can say, and what it routes to stays server-side.
 - `config.ts` is the store, `panel.ts` the UI. It writes on every change, and **reading
   `localStorage` can throw** rather than return `null` — Safari in private browsing raises on the
@@ -342,18 +342,18 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   beats a new default for ever.
 - **Filtering lives in the overlay, not in the embedder.** `shouldShow` plus `refilter` redraw from
   the issues already held, so hiding a stage costs no request.
-- **The panel offers a box only for the stages the worker reports** (SKG-525). `OfferedStages` is kept
+- **The panel offers a box only for the stages the worker reports** (FRU-32). `OfferedStages` is kept
   out of `ConfigStore`, because a copy in `localStorage` would outlive a change of store. A stage the
   reporter hid stays hidden in the config. `.fruitback-config-check[hidden]` needs its own
   `display: none`: the class sets `display: flex`, which beats the browser's rule for `hidden`.
 - **Do not use generic tags in the widget's chrome.** Playwright's selectors pierce open shadow
   roots, so a `<header>` in the panel made the page's own `header button` ambiguous. And inside the
-  widget's region landmark a `<header>` is a banner, which axe refuses (SKG-544).
+  widget's region landmark a `<header>` is a banner, which axe refuses (FRU-51).
 - **Two elements must not share one accessible name.** The gear says `Open Fruitback settings`
   and the dialog `Fruitback settings`. A host catalog must keep `settings.open` and `settings.dialog` apart
   too.
 
-**The keyboard and the screen reader** (SKG-544)
+**The keyboard and the screen reader** (FRU-51)
 
 - **The popover and the panel are modal dialogs, and `aria-modal` ships only with the trap.** The
   page gets no `inert`, so `holdFocus` in `focus.ts` makes the claim true: Tab stays inside, Escape
@@ -387,7 +387,7 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   only, and a control fails when the accent passes. It found what the token test cannot: text that the
   reset painted black.
 
-**The words** (SKG-530, SKG-531)
+**The words** (FRU-37, FRU-38)
 
 - **`messages.ts` holds every word, behind a key. English and French are bundled** and maintained
   here; English is the default. No i18n library. A host passes `init({ locale, messages })`. For
@@ -434,14 +434,14 @@ And _No emoji, and what replaced them_ in [docs/decisions/icons.md](docs/decisio
   `domPath` and `bounds` only locate a spot. A pin found by position is still placed, drawn dashed
   with a `≈`, and its thread says so. **Do not make the cascade stricter without reading
   `resolve.test.ts` first**: refusing outright throws away the many cases where position is right.
-- **Detached is not the same as unsure** (SKG-501). `orphans.ts` lists only the notes where the
+- **Detached is not the same as unsure** (FRU-12). `orphans.ts` lists only the notes where the
   cascade found **nothing** (`resolution.element === null`). The list is a sibling of the overlay's
   container, so **`isOurs` has to be told about it** — it was not, and rebuilding it on every resolve
   mutated the document, which scheduled another resolve. `orphans.owns` closes that loop.
 - **`resolve()` is not `render()`.** `render` takes new data and rebuilds, which closes the thread;
   `resolve` keeps the pins and the open thread and only updates what was _found_, confidence marks
   included.
-- **It watches the page, because nothing announces a re-render** (SKG-513). A `MutationObserver` on
+- **It watches the page, because nothing announces a re-render** (FRU-21). A `MutationObserver` on
   `childList`/`subtree`, debounced, plus a `ResizeObserver` per anchored element. Deliberately **not**
   `attributes`: a design system toggles classes on every hover, and what must be caught is the element
   being _replaced_.
@@ -461,12 +461,12 @@ And _No emoji, and what replaced them_ in [docs/decisions/icons.md](docs/decisio
 
 Three modes: **public** (the site embeds the widget, everyone sees the pins), **private** (the site
 embeds nothing and the extension injects the widget) and **team** (the site embeds a dormant widget
-the extension activates and relays for). Private is SKG-534, team is SKG-596, and SKG-539 is where
+the extension activates and relays for). Private is FRU-41, team is FRU-57, and FRU-46 is where
 they were named for a reader — [docs/modes.md](docs/modes.md) and
 [docs/reviewing.md](docs/reviewing.md). Which one an origin is in is one field on its entry, and **an
 entry with no `mode` reads as private** — that is every entry a reviewer's browser already holds.
 
-- **An entry's key is a pattern, and `resolveSite` is the only lookup** (SKG-536). A key is an exact
+- **An entry's key is a pattern, and `resolveSite` is the only lookup** (FRU-43). A key is an exact
   origin or `https://*.host`; every key written before is an exact origin, so nothing is upgraded. The
   exact origin wins, then the longest wildcard. The bridge and the relay reach it through `readSite`,
   and the popup through `findSite`, which is the same lookup and also answers the pattern the entry is
@@ -484,7 +484,7 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   replaces it, and the two pages share no lock. `isExtensionPage` refuses the message from a content
   script, whose URL is the page's. One key per pattern was not taken: a reader would have to list the
   whole `local` area, and the bridge, a content script, must not read the refresh token stored there.
-- **A write the background did not confirm can still be stored** (SKG-612), because only the answer
+- **A write the background did not confirm can still be stored** (FRU-73), because only the answer
   was lost. `activateStored` reads it back and injects the scripts into the tabs already open on the
   patterns of that change that are stored switched on. Without it the rule is On and those tabs hold
   no widget until their next load. **A client id made of spaces is an absent id**: `complaint` refuses
@@ -496,13 +496,13 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   private mode only: the relay calls from the extension origin, which the worker exempts. **A wildcard
   team rule lends the reviewer's session to every page it covers**, and SECURITY.md says so.
 - **The rules stay in `chrome.storage.local`.** The ticket asked for `sync`; a host permission does
-  not travel with a synced rule, and moving the key is a storage-shape change. That is SKG-611.
+  not travel with a synced rule, and moving the key is a storage-shape change. That is FRU-72.
 
 - **The private-mode widget carries no credential**, and nothing about the mode is access control.
   `page.content.ts` mounts it with no `transport`, so it calls the worker through `fetchTransport`
   from the page, exactly as a public-mode site does. Two consequences to state rather than discover:
   its reporter is self-declared like any other, and a worker on `read: 'authenticated'` answers its
-  reads `401` — a reviewer then gets a page with no pins and no reason, which is SKG-605. **And that
+  reads `401` — a reviewer then gets a page with no pins and no reason, which is FRU-66. **And that
   cannot be worked around per client**: `FRUITBACK_SESSION_PATH` alongside `FRUITBACK_CLIENTS` is
   refused at boot, so a worker holding sessions is single-tenant and its `read` is worker-wide. A
   private-mode client beside a team-mode one is two workers, or a worker left at `public`.
@@ -524,19 +524,19 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   `matches`, so an implementation that updated there would leave a switched-off site still running.
 - **`packages/widget` is unchanged by this app, which is the ticket's own test.** The extension is a
   fourth assembler; nothing extension-shaped leaks into the widget.
-- **The extension carries its licence into the build** (SKG-621). It is `AGPL-3.0-only`, and what a
+- **The extension carries its licence into the build** (FRU-82). It is `AGPL-3.0-only`, and what a
   store hands somebody is the archive rather than this repository, so a `build:publicAssets` hook
   copies `apps/extension/LICENSE` beside the manifest. A hook and not a copy in `public/`, so the
   text has one home. `license.test.ts` checks the field, the text, and that the copy is declared —
   the same rule as the published packages: a file that exists says nothing about what is in it.
-- **The icon is one SVG, rendered to a PNG for each size and committed** (SKG-617).
+- **The icon is one SVG, rendered to a PNG for each size and committed** (FRU-78).
   `assets/icon.svg` holds the widget's own pin — a circle plus the corner that stayed sharp, which is
   what `border-radius: 50% 50% 50% 0` draws — and `pnpm icons:build` renders it. **Each size is
   rendered from the vector, never resized from the big one**, or the 16px icon is a smudge. The sizes
   live in `src/icon-sizes.ts`, which the manifest, the renderer and `icons.test.ts` all read. Nothing
   in the build generates them, so the guard is what keeps the committed files honest: it fails on a
   missing size, on a file of another size, and on a canvas that holds no drawing.
-- **The archives a store takes are built by `release-extension.yml`, on a `v*` tag** (SKG-616).
+- **The archives a store takes are built by `release-extension.yml`, on a `v*` tag** (FRU-77).
   `wxt zip` for Chrome, `wxt zip -b firefox` for Firefox — the second writes a **sources** archive
   beside it, which AMO asks for whenever the submitted file was built. The tag and
   `apps/extension/package.json` must name the same version, and the job fails when they do not: a
@@ -567,7 +567,7 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   harmless, and not solved here. It is the private mode's defect only: in team mode there is one
   widget and it is the site's.
 
-**The team mode** (SKG-596)
+**The team mode** (FRU-57)
 
 - **The main world announces instead of mounting.** `page.content.ts` puts
   `window.fruitbackExtension = { version, transport }` on the page and fires `fruitback:extension`.
@@ -582,7 +582,7 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   declaration against.
 - **The relay is the mode.** Without it this is decluttering: a page can forge the presence signal,
   and `curl` still reads a worker left at `read: 'public'`. It has security value **only** on
-  `read: 'authenticated'` (SKG-533, which is built). Do not describe the mode as a guarantee
+  `read: 'authenticated'` (FRU-40, which is built). Do not describe the mode as a guarantee
   without naming that setting.
 - **Every decision the relay makes is in the background, and `src/relay.ts` holds all of them.** A
   content script's own input is written by the page, so the isolated world carries the request
@@ -621,7 +621,7 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   calls `/feedback` from the service worker, which sends `chrome-extension://<id>`. See the worker
   section below.
 
-**The session** (SKG-599, the extension half of SKG-535)
+**The session** (FRU-60, the extension half of FRU-42)
 
 - **The refresh token lives in `chrome.storage.local` and the access token in
   `chrome.storage.session`.** One survives the browser closing and the other must not. Both in
@@ -630,11 +630,11 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
 - **Nothing calls `setAccessLevel` on the session area.** Its default excludes content scripts, which
   is the boundary this whole batch exists to hold. A token is held only by the extension's **trusted
   contexts** — the background, which refreshes, and the popup, which pairs and logs out. The isolated
-  script never reads one; it asks the background to make the call, the seam SKG-596's relay needs.
+  script never reads one; it asks the background to make the call, the seam FRU-57's relay needs.
 - **Pairing asks for a host permission on the worker's origin**, which is not the site's. The session
   routes answer a `chrome-extension://` origin with CORS headers that ought to make an unprivileged
   `fetch` enough — but that was measured with `curl`, which does not enforce CORS. It is the
-  repository's recurring defect (SKG-518) waiting to happen, so the permission is asked for rather
+  repository's recurring defect (FRU-25) waiting to happen, so the permission is asked for rather
   than relied on. **It must be requested before anything is awaited in the click handler**, like
   `turnOn`: a gesture is lost across an await and the prompt never appears.
 - **A refresh writes nothing back once the refresh token in storage is no longer the one it spent**
@@ -642,13 +642,13 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   contexts sharing only storage, so a logout can land while an alarm is awaiting `/session/refresh`,
   and the answer used to put a working access token back under a screen saying signed out. The token
   is its own generation marker for that compare.
-- **A logout mints a new epoch for the endpoint before it clears anything** (SKG-603), and a session
+- **A logout mints a new epoch for the endpoint before it clears anything** (FRU-64), and a session
   stamped with the one before it is refused by every reader (`stillOpen`). The compare and the write
   in `keepIfCurrent` are **not** one operation and cannot be — `chrome.storage` has no transaction —
   so what covers the gap is what the write **carries**: the epoch of the very read the compare was
   made on. A logout landing anywhere around those lines leaves the endpoint logged out. Nothing
   refuses the write itself. The entry lands, unreadable, under the key of its own run, and removes
-  that key after it lands (SKG-604).
+  that key after it lands (FRU-65).
   **The stamp must come from that read and from no fresher one**, which is why `keepIfCurrent` reads
   the session itself and why the `epochs` seam has `put` and no `read` — a writer that could read the
   epoch could stamp with the logout's own.
@@ -661,7 +661,7 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   the day it is written. **It detects the world on the code, not on the file** — the docstring of
   `page.content.ts` quotes `world: 'MAIN'`, so the first version guarded a file that had stopped
   reaching the page and reported a pass.
-- **No credential crosses plain `http://`** (SKG-596). `isSecureWorkerEndpoint` requires https or
+- **No credential crosses plain `http://`** (FRU-57). `isSecureWorkerEndpoint` requires https or
   loopback, and `pair`, `refresh` and the revoke in `logout` all ask it — in `session.ts`, not only
   in the popup that warns first, so a session stored before the rule cannot keep spending its token
   over the wire. `isWorkerEndpoint` is **not** tightened: it gates the private mode's mount, which
@@ -669,7 +669,7 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
 - **`postJson` bounds its own request.** `refreshOnce` holds the in-flight promise so a second
   caller joins it rather than spending the token twice, so a worker that accepts a connection and
   never answers leaves that endpoint unable to refresh for the life of the service worker. Found by
-  looking for the other half of a review finding about the relay's fetch. Until SKG-602 one queue
+  looking for the other half of a review finding about the relay's fetch. Until FRU-63 one queue
   chained every storage write, and the same hang stopped **every** worker.
 - **Only a `401` ends a session.** An outage or a `502` keeps the refresh token: throwing it away on
   a network blip logs a reviewer out of a session the worker still considers open, and the only way
@@ -692,9 +692,9 @@ and _The team mode, and the call the page cannot make_:
 
 ## The worker
 
-- It exists because a store's API key cannot ship in client-side JS — and, since SKG-524, because
+- It exists because a store's API key cannot ship in client-side JS — and, since FRU-31, because
   somebody has to hold the SQLite file too. **Resist putting logic here that belongs in the widget or
-  in the store.** The rule is the point; "exactly one reason" was the wording until SKG-519, and it
+  in the store.** The rule is the point; "exactly one reason" was the wording until FRU-26, and it
   stopped being true when a store with no API key shipped.
 - **`app.ts` is transport-agnostic** — a `handleRequest(request, env, context)` over web
   `Request`/`Response`. `server.ts` adapts `node:http` onto it and `main.ts` starts it. Keep new
@@ -706,10 +706,10 @@ and _The team mode, and the call the page cannot make_:
   can find again.
 - **The `description contains` filter is a substring match**, so `/pricing` also matches
   `/pricing?tab=annual`. `fetchSeedIssues` re-checks `seed.page.url` exactly before returning.
-- **The rate limiter and the read cache keep their state in a `Kv`** (SKG-542), and this process
+- **The rate limiter and the read cache keep their state in a `Kv`** (FRU-49), and this process
   holds one, in memory. Two replicas are therefore two ceilings — the configured limit multiplied by
   the container count — and the deployment is one container. A Redis implementation was built,
-  reviewed and removed before merging: it is SKG-606, with what it learned. `kv.ts` is the seam and
+  reviewed and removed before merging: it is FRU-67, with what it learned. `kv.ts` is the seam and
   the memory store. **Values are strings**, so a value a remote store cannot hold fails here too.
 - The read cache is two layers. **The in-flight promise stays in this process**, so a burst on one
   replica costs one call and N replicas cost at most N. The settled answer goes in the `Kv` for
@@ -739,7 +739,7 @@ and _The team mode, and the call the page cannot make_:
   `RequestContext`. Building it per handler would open a SQLite connection per request. The tests
   assert the handler used the store it was **given**.
 - **`FRUITBACK_STORE` selects the connector, and each connector validates its own environment**
-  (SKG-526). `StoreConfig` is `{ provider, create() }` and nothing else. A store **names its own
+  (FRU-33). `StoreConfig` is `{ provider, create() }` and nothing else. A store **names its own
   environment variables** through `envNames`, so a boot diagnostic says `LINEAR_API_KEY` and never
   `apiKey`. `store-config.ts` is the mechanism, `stores.ts` the registry; a new store is one entry in
   `STORE_SPECS`.
@@ -747,14 +747,14 @@ and _The team mode, and the call the page cannot make_:
   `FRUITBACK_FAKE_LINEAR=1` is the one exception and it _degrades_ rather than refusing — a flag a
   container inherited must not stop it serving production, while a provider somebody deliberately
   named must not be silently swapped.
-- **Every state the deprecated flag can be in says something at boot** (SKG-581).
+- **Every state the deprecated flag can be in says something at boot** (FRU-54).
   `fakeLinearIgnoredReason` answers when the flag lost — to `NODE_ENV=production`, or to an explicit
   `FRUITBACK_STORE`. `fakeLinearDeprecationNotice` answers when it selected the memory store, and
   when `FRUITBACK_STORE` took precedence over it and the flag is a stale line somebody can delete —
   **precedence, never that the store is in use**, because an explicit `memory` is still refused under
   `NODE_ENV=production` and the notice would otherwise print one line above the boot failure that
   says so. The two are mutually exclusive by construction, and a test pins that over every
-  environment it enumerates. **SKG-526 shipped only the first**, which reached every operator except the ones
+  environment it enumerates. **FRU-33 shipped only the first**, which reached every operator except the ones
   still relying on the flag — the inverse of who a deprecation notice is for. `server.ts` has no test
   of its own, so the boot line is asserted on its **source**: the notice's own cases all stay green
   with the call deleted, and the warning then reaches nobody.
@@ -763,7 +763,7 @@ and _The team mode, and the call the page cannot make_:
 - **A row is parsed, never trusted**, in every connector. A malformed one costs that pin; the page
   keeps its other notes. `sqlite.ts`'s `insert` and `select` are `async` so a failure to open the
   file rejects rather than throwing synchronously.
-- **Every store passes `store-conformance.test.ts`** (SKG-527). The cases live in
+- **Every store passes `store-conformance.test.ts`** (FRU-34). The cases live in
   `store-conformance.fixture.ts`; each store gives a subject that opens it against a double that keeps
   what it receives. A step a store cannot do is a string reason, reported as skipped, never as passed.
   The outage case goes through `handleRequest`, because the promise is the `502`, not the throw. The
@@ -773,7 +773,7 @@ and _The team mode, and the call the page cannot make_:
   rejected `fetch` and an unreadable body as well as an error status.
 - **`linear-memory.ts` keeps its name and its import of `toSeedIssue` on purpose.** That coupling is
   the feature.
-- **`github.ts` signs in as a GitHub App, never with a personal token** (SKG-525). An RS256 JWT from
+- **`github.ts` signs in as a GitHub App, never with a personal token** (FRU-32). An RS256 JWT from
   `node:crypto` buys an installation token narrowed to **one repository**, cached per repository until
   five minutes before it expires. Concurrent reads share one mint, a failed mint is not kept, and a
   `401` drops the token. The installation is found from the repository, so there is no variable for it.
@@ -794,7 +794,7 @@ and _The team mode, and the call the page cannot make_:
 
 **Identity, and who may read a pin**
 
-- **`reporter.verified` is the worker's word, never the client's** (SKG-498). Anything arriving with
+- **`reporter.verified` is the worker's word, never the client's** (FRU-9). Anything arriving with
   that flag has it stripped, whatever else it says.
 - **`alg` is asserted against the token, never read from it.** A verifier that trusts the token's own
   algorithm accepts `alg: none` and validates everything. Anything but `HS256` is refused before a
@@ -805,7 +805,7 @@ and _The team mode, and the call the page cannot make_:
   verbatim in a description anyone with workspace access can read.
 - A token that fails to verify is a **401**, not a downgrade to anonymous. No token at all is fine
   and stays the default.
-- **`read: 'public' | 'authenticated'`** (SKG-533), per client or worker-wide. `public` stays the
+- **`read: 'public' | 'authenticated'`** (FRU-40), per client or worker-wide. `public` stays the
   default — that is compatibility, not security, and the exposure is made _sayable_ instead: the boot
   log names every client whose pins anyone can read, and `/health` **counts** them without listing
   the ids.
@@ -822,7 +822,7 @@ and _The team mode, and the call the page cannot make_:
 **Several client sites**
 
 - **`FRUITBACK_CLIENTS` maps a `clientId` to a team, a project and the origins that client may be
-  embedded on** (SKG-504). Configured, a client has to be named on **both** paths — the `client`
+  embedded on** (FRU-15). Configured, a client has to be named on **both** paths — the `client`
   parameter on a read, `seed.client.id` on a write — and an unknown one is refused. A read that named
   nobody used to answer with every seed on that URL.
 - **`normalizeClientId` runs before the id is used for anything.** It picks the route, builds the
@@ -834,12 +834,12 @@ and _The team mode, and the call the page cannot make_:
 - **`resolveClientIp` is security-relevant.** The client IP is the entry `TRUSTED_PROXY_HOPS` from
   the **right** of `X-Forwarded-For`. Reading the leftmost entry makes the rate limit bypassable with
   one header. **Do not write that each proxy appends**: nginx with `$proxy_add_x_forwarded_for`
-  appends, while nginx with `$remote_addr`, Traefik and Caddy replace the header (measured, SKG-543).
+  appends, while nginx with `$remote_addr`, Traefik and Caddy replace the header (measured, FRU-50).
   The self-hosting guide depends on the difference.
 
 **The extension's session**
 
-- **A session is credentials, and credentials are not seeds** (SKG-535). `FRUITBACK_SESSION_PATH` is
+- **A session is credentials, and credentials are not seeds** (FRU-42). `FRUITBACK_SESSION_PATH` is
   its own SQLite file, whatever `FRUITBACK_STORE` says — a worker keeping its seeds in Linear still
   keeps its sessions on a disk it owns.
 - **Do not reuse `sqlite.ts`'s `connect` for it.** That helper applies the _seeds_ migrations and
@@ -847,15 +847,15 @@ and _The team mode, and the call the page cannot make_:
   `comments` tables and two schemas fighting over one counter. `session-sqlite.ts` has its own.
 - **The operator names the person; the browser never does.** A pairing code is minted _for_ someone,
   carrying their name, and whoever redeems it gets a session that says so. An extension supplying its
-  own name at pairing time is the browser asserting an identity, which is what SKG-498 closed.
+  own name at pairing time is the browser asserting an identity, which is what FRU-9 closed.
 - **The access token is an ordinary identity token**, signed with the same key `identity.ts`
   verifies. One verification path in this worker rather than two, and `read: 'authenticated'` accepts
   the extension with no change at all.
 - **Pairing codes and refresh tokens are stored as SHA-256 digests.** A copy of the file must not be
   a set of working logins. A test reads the bytes SQLite wrote — the `-wal` file included, because a
   row just written is only there. **This is why a rotation cannot answer the same successor twice**,
-  and it is what shaped SKG-600.
-- **Every refresh rotates** (SKG-600). A refresh token that never changes is a thirty-day password.
+  and it is what shaped FRU-61.
+- **Every refresh rotates** (FRU-61). A refresh token that never changes is a thirty-day password.
   What retires a predecessor is its **successor being used** — proof the _token holder_ received it,
   never proof of which holder, because a bearer token cannot say — not a clock.
   `ROTATION_GRACE_SECONDS` is the ceiling for an answer that was lost, measured from the **first**
@@ -891,11 +891,11 @@ and _The team mode, and the call the page cannot make_:
   reach. The two writes are not one operation and cannot be, because `chrome.storage` has no
   transaction. It is an opaque id, never the refresh token: copying a credential into the session
   area would undo the split that keeps it out. Absent on both sides compares equal, so an upgrade
-  keeps the session it had. Since SKG-603 that case is refused twice — the session the grant names is
+  keeps the session it had. Since FRU-64 that case is refused twice — the session the grant names is
   itself stamped with a run that is over — and what the generation still holds on its own is a grant
   and a session that drifted apart **inside** one run, which a partial write leaves behind.
-- **One storage key per endpoint, in both areas** (SKG-602). `fruitback:grant:<endpoint>`, joined by
-  `fruitback:epoch:<endpoint>` beside the session it dates (SKG-603), and `Area` has `put`/`drop`
+- **One storage key per endpoint, in both areas** (FRU-63). `fruitback:grant:<endpoint>`, joined by
+  `fruitback:epoch:<endpoint>` beside the session it dates (FRU-64), and `Area` has `put`/`drop`
   rather than a whole-record `write`. One
   key holding every endpoint made every write a read-modify-write, and the popup and the background
   do not share a lock: two refreshes each read the record and each replaced it, so the later write
@@ -903,7 +903,7 @@ and _The team mode, and the call the page cannot make_:
   reviewer pairs again. A logout in the popup was written away the same way. `refreshOnce` is per
   endpoint and cannot cover this; it is what makes two workers refresh in parallel in the first
   place. A queue in `session.ts` held it inside one context only, and it is gone.
-- **A session key names its run too** (SKG-604): `fruitback:session-run:<epoch>:<endpoint>`. A
+- **A session key names its run too** (FRU-65): `fruitback:session-run:<epoch>:<endpoint>`. A
   refresh writes the run it read, so a logout and a new pairing inside its window keep the pairing.
   `put` removes the runs of its endpoint that its snapshot shows as over. That is safe because an
   epoch never comes back and a key written after the snapshot is not in it. A refresh that answers
@@ -950,8 +950,8 @@ and _The team mode, and the call the page cannot make_:
   `server.mjs` because the image copies the bundle and no source). An endpoint
   would need an admin credential of its own and would stay reachable for ever; a command is reachable
   by whoever already sets the secrets.
-- **An extension origin is exempt from `ALLOWED_ORIGINS`, on every route** (SKG-535, widened by
-  SKG-596). That list names client _sites_; an extension's origin carries an id that differs between
+- **An extension origin is exempt from `ALLOWED_ORIGINS`, on every route** (FRU-42, widened by
+  FRU-57). That list names client _sites_; an extension's origin carries an id that differs between
   an unpacked build and a store build, so an operator cannot put it there. Measured: an MV3 service
   worker posting JSON sends `chrome-extension://<id>` and triggers a preflight, and both answered
   `403`. The `/session/` routes needed it first; the relay then called `/feedback` the same way.
@@ -970,11 +970,11 @@ and _The team mode, and the call the page cannot make_:
 **The markdown codec**
 
 - **`markdown-description.ts` holds "put a seed in a markdown body and keep the issue readable"**
-  (SKG-523). It is a strategy connectors **share**, not part of `SeedStore` — a store with columns
+  (FRU-30). It is a strategy connectors **share**, not part of `SeedStore` — a store with columns
   must not have to implement a codec it has no use for, and `sqlite.ts` is the standing proof.
 - **`pageQueryTerm` lives beside it**, because the term works only where `buildSeedBlock` writes the
   canonical URL verbatim into the JSON.
-- **The prose of a description is written in the team's language, never the reporter's** (SKG-532).
+- **The prose of a description is written in the team's language, never the reporter's** (FRU-39).
   `FRUITBACK_TEAM_LOCALE` (English by default) reaches the stores through `ClientPolicy.locale`, and
   `TEAM_WORDS` in `markdown-description.ts` holds the words. A description is read where the issues
   are: a note written in Tokyo must not file a Japanese issue into a team that reads English. **The
@@ -995,7 +995,7 @@ And _The published image_ in [docs/decisions/image.md](docs/decisions/image.md).
 
 ## The published image
 
-- **`ghcr.io/<owner>/fruitback-worker`** (SKG-540), for `linux/amd64` and `linux/arm64`. A Raspberry
+- **`ghcr.io/<owner>/fruitback-worker`** (FRU-47), for `linux/amd64` and `linux/arm64`. A Raspberry
   Pi and an ARM VPS are ordinary self-hosting.
 - **The build stage is pinned to `--platform=$BUILDPLATFORM`.** It produces one bundled JavaScript
   file whose bytes are identical on every platform, so emulating the install and the bundle buys
@@ -1011,32 +1011,32 @@ And _The published image_ in [docs/decisions/image.md](docs/decisions/image.md).
 - **Trivy runs with `ignore-unfixed`**, and its version carries the `v` (`# v0.36.0`). One tag out
   of seventy-five is unprefixed, so the wrong form looks valid until the next bump.
 - **Every `uses:` is pinned to a 40-character commit SHA, with its version as a trailing comment**
-  (SKG-608). A tag can move to other code, and the `publish` job of `release-image.yml` holds
+  (FRU-69). A tag can move to other code, and the `publish` job of `release-image.yml` holds
   `packages: write`.
   `.github/dependabot.yml` moves an existing pin, SHA and comment together. It does not pin a new step:
   `workflows.test.ts` fails on any `uses:` that is not a SHA followed by its version.
 - **`persist-credentials: false` on every checkout** — `actions/checkout` otherwise writes the token
   into `.git/config`, where any later step reads it.
-- **Only the `publish` job holds the write permissions** (SKG-609). The workflow grants
+- **Only the `publish` job holds the write permissions** (FRU-70). The workflow grants
   `contents: read`, and `packages`, `id-token` and `attestations` are declared on `publish` alone, so
   `check` builds, emulates and scans with a token that cannot publish. `ci.yml`'s `zizmor` job audits
   the workflows offline on every pull request and fails on any finding: a permission widened back or
   an unpinned action is a red check, not a review comment.
 - **Attaching the package is not publishing it.** A new package inherits the repository's visibility;
   making it public is a manual, one-time change in the package settings.
-- **`docker-compose.yml` pulls the image, and `compose.test.ts` holds it to the worker** (SKG-541).
+- **`docker-compose.yml` pulls the image, and `compose.test.ts` holds it to the worker** (FRU-48).
   The `worker` service passes exactly `WorkerEnv` plus every store's `envNames`, except `NODE_ENV`,
   `HOST` and `FRUITBACK_FAKE_LINEAR`. Each value comes from `.env`, except `PORT`, which is the literal
   `8080`; the host side reads `FRUITBACK_PORT`. `.env.example` assigns exactly what the file
   interpolates. A new variable in the worker fails the suite until both files carry it.
-- **`docs/self-hosting.md` is held to the same list** (SKG-543). Its _Every environment variable_
+- **`docs/self-hosting.md` is held to the same list** (FRU-50). Its _Every environment variable_
   section must name exactly the worker's variables and the compose file's, one table row each, with
   the code's defaults for `PORT`, `TRUSTED_PROXY_HOPS` and `RATE_LIMIT_PER_MINUTE`. What a wrong value
   breaks is written from measurements on the image; re-measure a row before changing it.
-- **A documented `sqlite3 .restore` must check its file first** (SKG-543). A missing file restores as an
+- **A documented `sqlite3 .restore` must check its file first** (FRU-50). A missing file restores as an
   empty database and exits `0`, which erased every pin in a measurement. Chain the steps with `&&`,
   put `test -s` before `.restore`, and stop the worker while it runs.
-- **`/health` checks the configuration and never the store** (measured, SKG-543): a SQLite directory
+- **`/health` checks the configuration and never the store** (measured, FRU-50): a SQLite directory
   that does not exist, or a refused Linear key, answers `200` there and `502` on the first read. Do
   not describe `/health` as proof the worker can serve.
 - **The compose file sets `TRUSTED_PROXY_HOPS` to 0; the code defaults to 1.** The file publishes the
@@ -1058,34 +1058,34 @@ And _The published image_ in [docs/decisions/image.md](docs/decisions/image.md).
   return exactly `seed`. Two rules protect it — **no schema default values**, and no field the widget
   cannot rebuild from what is stored. test:`adds no field the caller did not provide` is there
   because a default is the easy way to break this silently.
-- **Bump `SEED_VERSION` when the payload shape changes** — it is `2` since SKG-498. Readers accept
+- **Bump `SEED_VERSION` when the payload shape changes** — it is `2` since FRU-9. Readers accept
   older versions and refuse newer ones (`unsupported-version`) rather than silently dropping fields.
 - **`parseSeed*` never throws.** It returns `{ ok: false, reason }` — the input is a description a
   human may have edited.
 - **`canonicalizePageUrl` is the page identity**: fragment and tracking params dropped, remaining
   params sorted. It must stay idempotent, and its output must appear **verbatim** in the description
   — that is what makes the `description: { contains: … }` filter work.
-- **The contract holds the vocabulary and nothing a human reads** (SKG-517). No emoji, no English
+- **The contract holds the vocabulary and nothing a human reads** (FRU-24). No emoji, no English
   label, no colour: those are rendering decisions, and a published type is the one place they can
   never be changed or translated downstream.
-- **The stage vocabulary is the contract's; the projection onto it is the connector's** (SKG-516).
+- **The stage vocabulary is the contract's; the projection onto it is the connector's** (FRU-23).
   `SEED_STAGES` and `DEFAULT_SEED_STAGE` live in `shared`; `stageForLinearState` lives in
   `apps/worker/src/linear.ts`. The fallback for an unrecognised state stays in `shared` on purpose —
   an unknown state must colour the pin rather than hide someone's note.
-- **A store can report only some stages, and says which** (SKG-525). `SeedStore.stages` travels as
+- **A store can report only some stages, and says which** (FRU-32). `SeedStore.stages` travels as
   `stages` on every `GET /feedback`, with or without pins — derived from the pins on screen, an empty
   page would offer the wrong boxes. `offeredStages` reads it tolerantly and answers every stage when
   the field is absent. GitHub reports `seeded`, `ripe` and `composted`. A read-envelope field, so
   `SEED_VERSION` does not move.
 - **`SEED_BLOCK_CAPTION` is free to reword.** `parseSeedFromDescription` iterates fenced blocks and
   recognises ours by parsing the JSON, and test:`finds the block by its JSON, never by
-the caption above it (SKG-517)` is what keeps that true.
+the caption above it (FRU-24)` is what keeps that true.
 
 **Deeper** — [docs/decisions/contract.md](docs/decisions/contract.md).
 
 ## Conventions
 
-- **Commit subjects and PR titles are Conventional Commits**: `type(scope): what changed (SKG-xxx)`.
+- **Commit subjects and PR titles are Conventional Commits**: `type(scope): what changed (FRU-xxx)`.
   Types in use: `feat`, `fix`, `refactor`, `chore`, `docs`, `test`, `style`, `ci`. The scope is the
   package — `worker`, `widget`, `shared`, `playground`, `extension` — and is omitted when the change
   spans them. A squash merge takes the PR title as the subject, so the **PR title** is the one that
@@ -1097,7 +1097,7 @@ the caption above it (SKG-517)` is what keeps that true.
 - Formatting and linting are oxfmt / oxlint (config at the root). 120 columns, single quotes,
   trailing commas.
   - **The root is an Nx project too, named `workspace`, with `format` and `format:fix` only**
-    (SKG-584). It formats what no package owns: `e2e/`, `docs/`, the root Markdown and JSON.
+    (FRU-55). It formats what no package owns: `e2e/`, `docs/`, the root Markdown and JSON.
     `.oxfmtignore` gives `apps/` and `packages/` back to their own targets, and only this target
     reads it. Do not move that list to `ignorePatterns` in `.oxfmtrc.json`: every package reads that
     file, and its `oxfmt --check .` then finds no file at all.
@@ -1107,13 +1107,13 @@ the caption above it (SKG-517)` is what keeps that true.
   - **`format:fix` is never cached** (`nx.json`). It writes files and declares no outputs, so a cache
     hit on the same unformatted input replayed the log and rewrote nothing (measured).
   - **A test that reads a file outside its project declares it as an input of its `test` target**
-    (SKG-610), in its own `package.json` under `nx.targets.test.inputs`. Otherwise Nx replays the
+    (FRU-71), in its own `package.json` under `nx.targets.test.inputs`. Otherwise Nx replays the
     test from its cache when only that file changed: a broken `CONTRIBUTING.md` came back with exit
     code 0 (measured). **Such a list replaces `targetDefaults.test.inputs`**, so it starts with
     `default` and `^production`, or a change to the project's own code stops invalidating the cache
     (measured on `app.ts`). `test-inputs.test.ts` resolves every literal relative path a test names
     and fails on one that no input covers. **A path read through `new URL(path, BASE)` is resolved
-    against `BASE`** when the file declares it from `import.meta.url` (SKG-622): resolved against the
+    against `BASE`** when the file declares it from `import.meta.url` (FRU-83): resolved against the
     test file, `'../worker/LICENSE'` read from `apps/extension/` passed as a read of the extension's
     own. A path it cannot resolve — built from a template, joined from `..` segments, or read through
     a base the file does not declare — is written out in `DYNAMIC_READS` with what it reads, and
@@ -1145,7 +1145,7 @@ the caption above it (SKG-517)` is what keeps that true.
     assertion catches is an even number: it parses, and silently truncates the stylesheet.
 - Comments explain _why_, not _what_ — the tolerant parser and the redundant anchor both exist for
   reasons that are not obvious from the code.
-- **`docs/` is a site as well as a folder** (SKG-619). GitHub Pages publishes it from `main`, and
+- **`docs/` is a site as well as a folder** (FRU-80). GitHub Pages publishes it from `main`, and
   `docs/index.md` is its home page. **A link goes to the `.md` file, never to the page it becomes**:
   `jekyll-relative-links` rewrites it, which is what lets one file read the same on GitHub and on the
   site. `docs/_config.yml` excludes `decisions/`, which is written for whoever works on this
@@ -1156,7 +1156,7 @@ the caption above it (SKG-517)` is what keeps that true.
   against the code by `security.test.ts`, so a constant that moves without the file fails the suite.
   What that test cannot check is a _property_ that changed: a new route, a new thing stored in the
   clear, a guarantee tightened or dropped. Those are a hand edit, in the same commit.
-- **A document that names a test marks the citation** (SKG-601). `test:` before the backticked name,
+- **A document that names a test marks the citation** (FRU-62). `test:` before the backticked name,
   and `gone-test:` for a name the prose says is gone on purpose:
 
   ```md
@@ -1172,18 +1172,20 @@ the caption above it (SKG-517)` is what keeps that true.
   backtick is cited between double backticks, and a name may wrap across lines — both sides are
   compared with the whitespace flattened. An example inside a fenced block is not a citation.
   **The scan skips a template literal whole, through its `${…}` and through any template inside that
-  substitution** (SKG-615). A scan that closed on the first backtick read the declarations of a nested
+  substitution** (FRU-76). A scan that closed on the first backtick read the declarations of a nested
   template as code, so a citation of a test that was gone stayed green. That is the fourth shape of
   text this guard had to learn. If a fifth one appears, read the names from the tests as they run
   rather than from their source.
 
-- **`CONTRIBUTING.md` carries the rules a person trips over on a first pull request** (SKG-520). It
+- **`CONTRIBUTING.md` carries the rules a person trips over on a first pull request** (FRU-27). It
   points at this file and does not repeat all of it. `contributing.test.ts` holds its `pnpm` scripts,
   ports, Node and pnpm versions, CI checks and commit types to their sources. A new convention that an
   outside contributor cannot guess belongs there too, in one sentence.
 - Work is tracked in Linear on the
-  [Fruitback](https://linear.app/sakuga-software/project/fruitback-ed574263d8d6) project (team SKG).
-  Reference tickets as `SKG-xxx` in commits.
+  [Fruitback](https://linear.app/sakuga-software/project/fruitback-ed574263d8d6) project (team Fruitback, key
+  `FRU`). Reference tickets as `FRU-xxx` in commits. Every `FRU-` number in this repository was an
+  `SKG-` number until 2026-10-06, when the tickets left the Sakuga-software team; Linear still
+  redirects the old keys, and merged commit messages keep them.
 
 ## Linear MCP
 

@@ -39,7 +39,7 @@ LABEL org.opencontainers.image.licenses="AGPL-3.0-only"
 ENV NODE_ENV=production
 WORKDIR /app
 
-# The `sqlite3` CLI, and only for the backup the README documents (SKG-524). The store itself uses
+# The `sqlite3` CLI, and only for the backup the README documents (FRU-31). The store itself uses
 # `node:sqlite` and needs nothing installed; what needs a binary is `.backup`, which is the one safe
 # way to copy a live database — `cp` misses the write-ahead log beside it. About 1.5 MB, and without
 # it "the database is the product" comes with a documented command that is not there. Alpine has no

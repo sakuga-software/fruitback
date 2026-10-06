@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { WORKER_ORIGIN, openPlayground } from './pin.ts';
 
 /**
- * The optional picture (SKG-495), in a browser — the only place the full path is reachable.
+ * The optional picture (FRU-6), in a browser — the only place the full path is reachable.
  *
  * `init` uses react-grab's hit testing to decide what was clicked, and happy-dom has neither
  * `elementsFromPoint` nor layout, so the unit tests stop at the setting itself. Everything that

@@ -16,7 +16,7 @@ import { type CreatedIssue, type SeedIssueQuery, type SeedStore, StoreError } fr
 import { type StoreSpec, defineStore } from './store-config.ts';
 
 /**
- * Seeds in a SQLite file, so self-hosting needs nobody's account (SKG-524).
+ * Seeds in a SQLite file, so self-hosting needs nobody's account (FRU-31).
  *
  * **This is the connector that had to be uncomfortable.** One implementation of `SeedStore` proved
  * nothing — an abstraction with a single implementation is an abstraction imagined. GitHub Issues
@@ -31,7 +31,7 @@ import { type StoreSpec, defineStore } from './store-config.ts';
  *   schema was to invent a URL. It is optional now, and the widget renders the link conditionally.
  * - **The widget's thread said "sur Linear".** A vendor name in the UI of a widget that is not
  *   supposed to know which store answers — the same defect `store-unavailable` fixed in the error
- *   codes (SKG-522).
+ *   codes (FRU-29).
  *
  * Everything else fitted, which is the result this ticket was for.
  *
@@ -90,7 +90,7 @@ export const COMMENTS_PER_ISSUE = 20;
  * `SeedStore` objects are cheap and the transport builds one per call on purpose — see
  * `RequestContext.store`. A **connection** is not cheap, and `handleRequest` still has a fallback
  * that builds a store when the transport did not provide one. Without this map that fallback opens a
- * database handle per request, which is the exact hazard SKG-522 was written to prevent and which
+ * database handle per request, which is the exact hazard FRU-29 was written to prevent and which
  * nothing observable would have reported.
  */
 const connections = new Map<string, DatabaseSync>();
@@ -199,7 +199,7 @@ function stageOf(value: string): SeedStage {
 }
 
 /**
- * What this store calls each of its states, for `stateName` (SKG-517).
+ * What this store calls each of its states, for `stateName` (FRU-24).
  *
  * It read `SEED_STAGE_STYLES[stage].label` until the contract stopped carrying words at all, and the
  * replacement belongs **here** rather than in a shared helper: `stateName` is by definition the
@@ -375,7 +375,7 @@ function commentsFor(database: DatabaseSync, rows: SeedRow[]): Map<number, SeedC
 }
 
 /**
- * SQLite as a selectable store (SKG-524): `FRUITBACK_STORE=sqlite`.
+ * SQLite as a selectable store (FRU-31): `FRUITBACK_STORE=sqlite`.
  *
  * `FRUITBACK_SQLITE_PATH` names its own variable, like every other connector's, so a worker on
  * Linear is never asked for it and a worker on SQLite is never asked for a Linear key.

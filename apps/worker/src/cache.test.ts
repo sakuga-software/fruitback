@@ -96,7 +96,7 @@ describe('cached', () => {
   });
 
   it('keeps the answer in the Kv, where another replica reads it', async () => {
-    // What SKG-542 moved. A value kept in this process would pass every test above.
+    // What FRU-49 moved. A value kept in this process would pass every test above.
     const written: string[] = [];
     const recording: Kv = { ...kv, set: (key, value, ttl) => (written.push(value), kv.set(key, value, ttl)) };
 

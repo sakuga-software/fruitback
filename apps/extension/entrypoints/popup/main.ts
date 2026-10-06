@@ -11,9 +11,9 @@ import { createBrowserSessions } from '../../src/session-browser.ts';
 import { type PairFailure, describeIdentity } from '../../src/session.ts';
 
 /**
- * The switch for the tab you are looking at, and the two fields that make it work (SKG-534).
+ * The switch for the tab you are looking at, and the two fields that make it work (FRU-41).
  *
- * Deliberately not the editor for every site: that is the options page (SKG-536). This is the one
+ * Deliberately not the editor for every site: that is the options page (FRU-43). This is the one
  * question a reviewer asks from the toolbar: is Fruitback on here, which rule says so, and against
  * which worker.
  *
@@ -24,7 +24,7 @@ import { type PairFailure, describeIdentity } from '../../src/session.ts';
 /**
  * One for the whole popup, not one per render.
  *
- * Building it runs the upgrade to one key per endpoint (SKG-602), and `render` runs again after
+ * Building it runs the upgrade to one key per endpoint (FRU-63), and `render` runs again after
  * every pairing, logout and site change. Two of these also hold separate in-flight refresh maps, so
  * they can each spend the same refresh token.
  */
@@ -38,7 +38,7 @@ void render();
  * @param editing Show the fields for an origin that already has an entry.
  *
  * Without it there is no way to change one. An entry is written once and then only switched on and
- * off, so an origin turned on before SKG-596 could never be moved to team mode — which is every
+ * off, so an origin turned on before FRU-57 could never be moved to team mode — which is every
  * origin a reviewer already uses. The options page edits every entry; this is the path from the
  * toolbar.
  */
@@ -62,7 +62,7 @@ async function render(editing = false): Promise<void> {
   app.replaceChildren(
     element('h1', 'Fruitback'),
     element('p', origin, 'origin'),
-    // SKG-536: why the widget does or does not appear here must be answerable from the toolbar.
+    // FRU-43: why the widget does or does not appear here must be answerable from the toolbar.
     element('p', found === undefined ? NO_RULE : `Rule: ${found.pattern}`, 'rule'),
     open || found === undefined ? form(origin, found) : status(found),
   );
@@ -76,7 +76,7 @@ async function render(editing = false): Promise<void> {
 
 const NO_RULE = 'No rule covers this origin, so Fruitback does nothing here.';
 
-/** Every entry, wildcards and the rules file included, on the options page (SKG-536). */
+/** Every entry, wildcards and the rules file included, on the options page (FRU-43). */
 function optionsButton(): HTMLElement {
   const button = element('button', 'All sites and rules', 'secondary');
   button.addEventListener('click', () => void browser.runtime.openOptionsPage());
@@ -101,7 +101,7 @@ const PAIRING_PROBLEM: Record<PairFailure | 'blocked', string> = {
  * worker with a real preflight — but that was measured with `curl`, which does not enforce CORS, and
  * no browser runs on this machine to settle it. So the permission is asked for rather than relied
  * on: granted, the call is privileged and CORS never comes into it. Raised in review, and this is
- * the repository's recurring defect (SKG-518) — correct logic the real caller never reaches.
+ * the repository's recurring defect (FRU-25) — correct logic the real caller never reaches.
  *
  * Retained once granted, which is what lets the background refresh and the logout revoke later, with
  * no gesture to ask from.
@@ -111,7 +111,7 @@ async function grantWorkerOrigin(endpoint: string): Promise<boolean> {
 }
 
 /**
- * Paste a code, see who you are, log out (SKG-599).
+ * Paste a code, see who you are, log out (FRU-60).
  *
  * Deliberately thin: everything it decides lives in `src/session.ts`, where `node --test` can reach
  * it. What is here is four elements and the two strings a person reads.
@@ -282,7 +282,7 @@ async function turnOn(pattern: string, site: SiteConfig): Promise<boolean> {
     await writeSite(pattern, site);
   } catch (error) {
     // A write the background did not confirm can be stored anyway, and this tab would then hold no
-    // widget until its next load (SKG-612). `failed` still says the change was not confirmed.
+    // widget until its next load (FRU-73). `failed` still says the change was not confirmed.
     await activateStored([pattern], readAll, activateOpenTabs);
     throw error;
   }

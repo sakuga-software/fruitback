@@ -1,12 +1,12 @@
 # No emoji, and what replaced them
 
-SKG-529 took every emoji out of `packages/widget` and put four drawn glyphs in their place. Which
+FRU-36 took every emoji out of `packages/widget` and put four drawn glyphs in their place. Which
 set, why a filled weight decided it, why Iconify is a source and never a runtime, and the two guards
 that keep the generated file honest.
 
 ## No emoji, and what replaced them
 
-- **Nothing in `packages/widget` renders an emoji** (SKG-529). A sprout opened the launch button, a
+- **Nothing in `packages/widget` renders an emoji** (FRU-36). A sprout opened the launch button, a
   gear sat on the settings chip, a fallen leaf on the detached-notes count, a strawberry on the
   confirmation. An emoji is drawn by the system's own font: the same codepoint is flat on Windows,
   glossy on macOS and something else on Android, it takes no colour, sits on no typographic grid, and
@@ -73,18 +73,18 @@ that keep the generated file honest.
   drawing in every font. `≈` stays on an unsure pin — it is the whole warning in one character; `×`
   became the `close` icon because it was standing in for a drawing at 18px and aligning on no
   baseline; `→` stays on the thread's link.
-- **A host's label is still the host's word.** SKG-529 took our emoji out of the widget's chrome and
+- **A host's label is still the host's word.** FRU-36 took our emoji out of the widget's chrome and
   did not start filtering theirs: `e2e/package.spec.ts` **and** `e2e/screenshot.spec.ts` both mount
   with `label: '🌱 Feedback'` on purpose and assert it renders. What changed is the _documented_
   snippet, in `README.md` and `docs/install.md`, which no longer suggests one. The first version of
   this bullet named one file and called it the only one; run
   `grep -rnP "[\x{1F300}-\x{1FAFF}]" e2e` rather than trusting a number written here, which is the
-  same rule the SKG-517 emoji inventory in _The seed contract_ ([contract.md](contract.md)) had to
+  same rule the FRU-24 emoji inventory in _The seed contract_ ([contract.md](contract.md)) had to
   learn twice.
 - **The guard is `icons.test.ts`'s test:`has none in any source file of this package`**, and it reads every
   `.ts` in the package rather than the rendered strings — a rendered check only sees the states a test
   reaches, and each of the removed emoji sat on a path some test did not run. `e2e/host.spec.ts`'s
-  test:`no emoji survives anywhere in the widget chrome (SKG-529)` is the other half: it **drives** the widget
+  test:`no emoji survives anywhere in the widget chrome (FRU-36)` is the other half: it **drives** the widget
   through the dock, the settings panel, the open composer, the confirmation and the detached drawer,
   reading the composed Shadow root after each, because a popover that has closed leaves nothing to
   read. Both were measured failing on a planted emoji — the E2E one on `MESSAGES.harvested`

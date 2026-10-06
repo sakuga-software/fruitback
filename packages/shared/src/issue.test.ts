@@ -11,7 +11,7 @@ describe('labels', () => {
 });
 
 describe('the stage vocabulary', () => {
-  // The projection from a provider's own states lives with its connector since SKG-516 — this
+  // The projection from a provider's own states lives with its connector since FRU-23 — this
   // package is installed by every consumer of the widget, and a `LinearStateType` here made all of
   // them depend on Linear. `apps/worker/src/linear.test.ts` owns that mapping's tests now. What is
   // still the contract's is the vocabulary itself and the fallback every connector uses.
@@ -28,7 +28,7 @@ describe('the stage vocabulary', () => {
   });
 });
 
-describe('offeredStages (SKG-525)', () => {
+describe('offeredStages (FRU-32)', () => {
   it('keeps the stages a worker reports, in the order of the contract', () => {
     assert.deepEqual(offeredStages(['composted', 'seeded', 'ripe']), ['seeded', 'ripe', 'composted']);
   });
@@ -38,7 +38,7 @@ describe('offeredStages (SKG-525)', () => {
   });
 
   it('offers every stage if the worker sends nothing usable', () => {
-    // A worker from before SKG-525 sends no field. Its panel must not lose a box.
+    // A worker from before FRU-32 sends no field. Its panel must not lose a box.
     for (const value of [undefined, null, 'seeded', [], ['blue']]) {
       assert.deepEqual(offeredStages(value), [...SEED_STAGES], JSON.stringify(value));
     }

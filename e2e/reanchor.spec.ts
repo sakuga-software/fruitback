@@ -25,7 +25,7 @@ test('pins survive a redeploy that rewrites classes, ids and the order of the pa
 });
 
 test('the structural path alone would have landed on the neighbouring card', async ({ page }) => {
-  // The finding from the SKG-494 browser test, kept as a standing expectation: after a card is
+  // The finding from the FRU-5 browser test, kept as a standing expectation: after a card is
   // inserted, `li:nth-child(2)` still resolves — to the wrong button. Both say "Ajouter", so a text
   // check would not catch it either. This is why `domPath` ranks below the selector, and why a
   // domPath match is worth doubting rather than trusting.

@@ -1,7 +1,7 @@
 import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
 
 /**
- * The widget's design tokens, and the only thing a host may change about how it looks (SKG-528).
+ * The widget's design tokens, and the only thing a host may change about how it looks (FRU-35).
  *
  * Before this, every colour was a hexadecimal written into one of five `STYLES` literals — `host.ts`,
  * `overlay.ts`, `composer.ts`, `panel.ts`, `orphans.ts` — plus the stage colours, which travelled in
@@ -18,16 +18,16 @@ import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
  * was the first attempt and no better, being exactly what a Facebook SDK or somebody's flexbox
  * utilities would pick. `--fruit-` was the second and did fix that, but the package already spelled
  * its script-tag attributes `data-fruitback-*`, so two prefixes coexisted with no rule saying which
- * belonged where. SKG-580 settled on the whole word for all of it: tokens, classes and attributes.
+ * belonged where. FRU-53 settled on the whole word for all of it: tokens, classes and attributes.
  *
- * **SKG-528 changed no rendered colour.** Every colour was the hexadecimal already in the
- * stylesheets. SKG-544 then changed three values for contrast: `color-border-strong`,
+ * **FRU-35 changed no rendered colour.** Every colour was the hexadecimal already in the
+ * stylesheets. FRU-51 then changed three values for contrast: `color-border-strong`,
  * `color-text-subtle` and `color-success`. `contrast.test.ts` measures every pair a module paints.
  *
  * One thing does move, by 4 pixels: the thread's shadow was `0 10px 34px rgba(0, 0, 0, 0.18)` and the
  * panel's `0 10px 30px rgb(0 0 0 / 18%)` — the same intention spelled twice. They are one token now.
  *
- * **Radii are tokenised now, and only because the scale was shortened first** (SKG-529). SKG-528 left
+ * **Radii are tokenised now, and only because the scale was shortened first** (FRU-36). FRU-35 left
  * them out on purpose: there were eight distinct values in use, each mapping to exactly one token,
  * which is indirection wearing the costume of a scale. The eight are four — 4, 6 and 8 became `sm`;
  * 10 and 12 became `md`; 14 and 18 became `lg`; 999px is `pill` — and four is a scale a reader can
@@ -129,7 +129,7 @@ export const THEME_STYLES = `
     color:#fff in five places, and naming it after the accent coupled three elements whose background
     is something else — the gear on the chip, every pin badge on its stage, the orphan chip on the
     warning. A host pairing a pale accent with a dark foreground would have turned those three into
-    dark text on unchanged dark fills. Caught in review on SKG-528.
+    dark text on unchanged dark fills. Caught in review on FRU-35.
   */
   --fruitback-color-on-accent: #fff;
   --fruitback-color-on-chip: #fff;

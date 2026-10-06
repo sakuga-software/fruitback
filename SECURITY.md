@@ -73,7 +73,7 @@ cannot make a visitor's browser do something privileged. It is emphatically **no
 direct caller reads nothing. Under the public default, `curl` reads every note on a page, and closing
 that is `FRUITBACK_READ=authenticated`, not CORS.
 
-**The extension's site rules are the same claim, made by the reviewer's browser** (SKG-536). A rule
+**The extension's site rules are the same claim, made by the reviewer's browser** (FRU-43). A rule
 maps an origin, or a wildcard such as `https://*.staging.acme.dev`, to a worker and a mode, and it can
 be imported from a file somebody sent. In private mode the rule holds the client id the widget
 asserts; in team mode it holds none, and the site's own widget asserts its client id. Either way the
@@ -130,7 +130,7 @@ token to one repository and one hour, but the key itself does not expire. So:
 
 `RATE_LIMIT_PER_MINUTE` (20 by default) is held in memory, per container. **Run N replicas and the
 effective ceiling is N times what you configured**, with nothing to see anywhere. One container is the
-ordinary deployment and the whole story; a store the replicas share is tracked as SKG-606.
+ordinary deployment and the whole story; a store the replicas share is tracked as FRU-67.
 
 The window slides, estimated from the current minute and the one before it. A caller who sends a full
 burst at the end of a window and spaces the next ones out gets **at most 39 requests in any 60
@@ -145,7 +145,7 @@ the worker takes the entry that many places **from the right** of `X-Forwarded-F
 peer when the chain is shorter. Set it to the number of proxies between the internet and the
 container.
 
-`docker-compose.yml` publishes the port with no proxy in front, so it sets 0 (SKG-541). With 1 and
+`docker-compose.yml` publishes the port with no proxy in front, so it sets 0 (FRU-48). With 1 and
 no proxy, the rightmost entry is the one the caller wrote: each read that forges a new address gets a
 new bucket, and the limit never applies. Measured on that file: with 1, forged reads kept answering
 `200` past the limit; with 0, the same reads answered `429` once the limit was reached.
@@ -162,7 +162,7 @@ a count that is too high costs a shared bucket instead: see the next paragraph. 
 | `2` — one too many         | `1.2.3.4`       | **what the caller sent**                            |
 | `0` — none                 | the socket peer | the proxy's own address: everyone shares one bucket |
 
-**Not every proxy appends** (measured on SKG-543). nginx with `$proxy_add_x_forwarded_for` keeps what
+**Not every proxy appends** (measured on FRU-50). nginx with `$proxy_add_x_forwarded_for` keeps what
 the caller sent and appends, so the table above holds: with `2` behind it, 24 forged reads all
 answered `200`. Traefik v3.5 and Caddy 2.10 replace the header by default with the address they saw.
 Behind them a count that is too high falls back to the socket peer, so every caller shares the
@@ -217,7 +217,7 @@ person; redeeming it opens a session.
 | Refresh token | 256 bits, 30 days, **rotated on every refresh**, revocable |
 | On disk       | codes and refresh tokens are stored as **SHA-256 digests** |
 
-**Every refresh spends its refresh token and issues a new one** (SKG-600). A token that never
+**Every refresh spends its refresh token and issues a new one** (FRU-61). A token that never
 changed was a thirty-day password: a copy taken from a browser profile stayed good for the rest of
 the month and nothing observed the theft.
 
@@ -281,31 +281,31 @@ In neither case does the thief end up with less than they started with — they 
 credential. What changes is that the theft becomes visible within minutes instead of lasting a
 month, and that no state leaves both parties quietly sharing one session.
 
-Since SKG-599 the extension holds its half of that, and **where** matters as much as the lifetimes:
+Since FRU-60 the extension holds its half of that, and **where** matters as much as the lifetimes:
 
 |               |                                                                                   |
 | ------------- | --------------------------------------------------------------------------------- |
 | Refresh token | `chrome.storage.local`, in the reviewer's browser profile — it survives a restart |
 | Access token  | `chrome.storage.session`, which the browser empties when it closes                |
 
-**Each endpoint has its own storage key** (SKG-602). One key holding every worker made the popup and
+**Each endpoint has its own storage key** (FRU-63). One key holding every worker made the popup and
 the background write over each other: a refresh could put a credential back after a logout cleared
 it, so a session a reviewer had ended stayed usable until it expired. Logging out now removes the
 key it names, and no ordinary operation on another endpoint writes it.
 
 Two writers still reach that key, and the split does not order them. A refresh for the **same**
 endpoint compares the stored token and writes after it, so a logout can land between the two. **A
-logout mints a new epoch for the endpoint before it clears anything** (SKG-603), and an entry stamped
+logout mints a new epoch for the endpoint before it clears anything** (FRU-64), and an entry stamped
 with the epoch before it is refused by every reader. The write itself cannot be stopped — there is no
 transaction and no compare-and-set — and it no longer has to be: the session a refresh puts back is
 one nothing answers with, and the access token minted beside it has no session to match. **The key
-names the run too** (SKG-604): the refresh writes the run it read, and that write removes its own key
+names the run too** (FRU-65): the refresh writes the run it read, and that write removes its own key
 because its snapshot holds the new epoch. So the refresh token the logout revoked does not stay in
 storage.
 
 The upgrade to per-endpoint keys writes from a snapshot too, and the epoch reaches that write as
 well: a legacy record predates the marker, so what the upgrade puts back carries no epoch and the
-logout minted one. A **pairing** made inside either window is kept (SKG-604): its key names its own
+logout minted one. A **pairing** made inside either window is kept (FRU-65): its key names its own
 run, and neither the refresh nor the upgrade writes that key. A refresh that the worker refuses ends
 only the run it spent, and mints no epoch that would end the pairing.
 
@@ -321,7 +321,7 @@ and granted per worker at the moment somebody pairs, never at install.
 
 ### What the extension relays, and what it refuses to
 
-In team mode (SKG-596) the site embeds its own widget and leaves it dormant. The extension puts a
+In team mode (FRU-57) the site embeds its own widget and leaves it dormant. The extension puts a
 transport on the page, and the calls it carries are made by the background service worker, which
 attaches the session token. **The token never travels on the page bridge**; what travels is the
 request and the answer.
@@ -366,7 +366,7 @@ not a set of working logins, but it is a list of who holds a session and until w
 
 **An extension origin is exempt from `ALLOWED_ORIGINS`, on every route.** The id in
 `chrome-extension://<id>` changes between an unpacked build and a store build, so no operator can
-write it down. The three `/session/` routes needed that first; since SKG-596 the relay calls
+write it down. The three `/session/` routes needed that first; since FRU-57 the relay calls
 `/feedback` from the extension's own service worker, which sends the same origin, so the exemption
 is by **scheme** — `chrome-extension:`, `moz-extension:`, `safari-web-extension:` — and by nothing
 else. Every other origin, including one that merely looks like those, still answers to the list.

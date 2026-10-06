@@ -3,7 +3,7 @@ import type { RotationOutcome, SessionIdentity, SessionStore } from './session.t
 import { StoreError } from './store.ts';
 
 /**
- * Where the extension's sessions live (SKG-535).
+ * Where the extension's sessions live (FRU-42).
  *
  * **Its own file, and its own module, deliberately.** `sqlite.ts` looks like it could be reused —
  * same driver, same shape of helper — and it cannot: its `connect` runs the *seeds* migrations and
@@ -49,7 +49,7 @@ const MIGRATIONS: readonly string[] = [
   CREATE INDEX pairings_by_expiry ON pairings (expires_at);
   CREATE INDEX sessions_by_expiry ON sessions (expires_at);
   `,
-  // Rotation (SKG-600). `rotated_at` marks a token that has issued its successor and
+  // Rotation (FRU-61). `rotated_at` marks a token that has issued its successor and
   // `predecessor_hash` is the link back to the one it replaced — kept because retiring a predecessor
   // when its successor is used needs exactly that one hop.
   //
@@ -392,7 +392,7 @@ export function createSqliteSessionStore(path: string): SessionStore {
     },
 
     /**
-     * Spends a refresh token and issues its successor, in one transaction (SKG-600).
+     * Spends a refresh token and issues its successor, in one transaction (FRU-61).
      *
      * The three outcomes, and what decides each:
      *
@@ -437,7 +437,7 @@ export function createSqliteSessionStore(path: string): SessionStore {
     },
 
     /**
-     * Ends the session, and a session is the whole chain — in both directions (SKG-600).
+     * Ends the session, and a session is the whole chain — in both directions (FRU-61).
      *
      * Revoking the presented row alone was enough before rotation. It is not now, and the first fix
      * for it only covered half the chain. Both halves were raised in review, one round apart:

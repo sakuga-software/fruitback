@@ -26,9 +26,9 @@ type RequestOverrides = {
   headers?: Record<string, string>;
   /** Already resolved by the transport in production — see `resolveClientIp`. */
   clientIp?: string;
-  /** Built once by the transport in production — see `RequestContext.store` (SKG-522). */
+  /** Built once by the transport in production — see `RequestContext.store` (FRU-29). */
   store?: SeedStore;
-  /** Built once by the transport in production — see `RequestContext.kv` (SKG-542). */
+  /** Built once by the transport in production — see `RequestContext.kv` (FRU-49). */
   kv?: Kv;
 };
 
@@ -94,7 +94,7 @@ describe('POST /feedback', () => {
   });
 
   /**
-   * The team that triages reads this description, and the reporter never does (SKG-532). So the
+   * The team that triages reads this description, and the reporter never does (FRU-39). So the
    * words follow the worker's own `FRUITBACK_TEAM_LOCALE` and never the browser: a note written in
    * Tokyo must not file a Japanese issue into a team that reads English.
    */
@@ -280,7 +280,7 @@ describe('CORS', () => {
   });
 
   /**
-   * The extension relays a client site's call from its own service worker (SKG-596), which sends
+   * The extension relays a client site's call from its own service worker (FRU-57), which sends
    * `chrome-extension://<id>` on the POST. No operator can put that id on an allowlist — it differs
    * between an unpacked build and a store build — and a `403` here is the whole of team mode not
    * working, with nothing in a browser to say why.
@@ -394,7 +394,7 @@ describe('GET /feedback', () => {
     assert.deepEqual(body.issues[0]?.seed, seed);
   });
 
-  it('says which stages the store can report, so the panel offers only those (SKG-525)', async () => {
+  it('says which stages the store can report, so the panel offers only those (FRU-32)', async () => {
     installLinearStub({ storedIssues: [] });
     const linear = (await readBody(PAGE)) as ReadResponse & { stages?: unknown };
     assert.deepEqual(linear.stages, [...SEED_STAGES]);
@@ -585,7 +585,7 @@ describe('the in-memory Linear (dev loop)', () => {
 
     assert.equal(response.status, 200);
     // `openRead: 1` because this dev worker serves one client and its reads are public — the
-    // default, and what every worker did before SKG-533.
+    // default, and what every worker did before FRU-40.
     assert.deepEqual(await response.json(), { ok: true, store: 'memory', openRead: 1 });
   });
 
@@ -593,7 +593,7 @@ describe('the in-memory Linear (dev loop)', () => {
     // The Dockerfile sets NODE_ENV=production, so this is what a container inheriting the flag does.
     // The flag *degrades* to the real store, which then has no credentials — so the diagnostic names
     // Linear's variables rather than the flag. An explicit FRUITBACK_STORE=memory is refused outright
-    // instead; see the SKG-526 suite.
+    // instead; see the FRU-33 suite.
     const response = await get('/health', { env: { ...fakeEnv, NODE_ENV: 'production' } });
 
     assert.equal(response.status, 503);
@@ -629,11 +629,11 @@ function unreachableKv(): Kv {
   return { ...createMemoryKv(), get: down, set: down, incr: down };
 }
 
-describe('the Kv the transport hands over (SKG-542)', () => {
+describe('the Kv the transport hands over (FRU-49)', () => {
   const CACHED_PAGE = 'https://preview.acme.test/pricing?tab=annual';
 
   it('holds one rate limit for two replicas on one Kv', async () => {
-    // Two handlers on one `Kv` share one count. A store shared between replicas (SKG-606) relies on it.
+    // Two handlers on one `Kv` share one count. A store shared between replicas (FRU-67) relies on it.
     installLinearStub();
     const kv = createMemoryKv();
     const replicas = [{ kv }, { kv: { ...kv } }];
@@ -903,8 +903,8 @@ describe('GET /health', () => {
 
     assert.equal(response.status, 200);
     // Compared exactly rather than partially, on purpose: this endpoint is public, so a field
-    // appearing here should have to be written down. `openRead` is one such field (SKG-533), and
-    // `store` is the other (SKG-526) — it replaced `fakeLinear: true`, which only one provider could
+    // appearing here should have to be written down. `openRead` is one such field (FRU-40), and
+    // `store` is the other (FRU-33) — it replaced `fakeLinear: true`, which only one provider could
     // ever say.
     assert.deepEqual(await response.json(), { ok: true, store: 'linear', openRead: 1 });
   });
@@ -949,7 +949,7 @@ describe('GET /health', () => {
   });
 
   /**
-   * A value that is not a locale tag is refused and named (SKG-532), like the hops above. Prose in a
+   * A value that is not a locale tag is refused and named (FRU-39), like the hops above. Prose in a
    * language nobody chose would otherwise be the only symptom.
    */
   it('refuses to report ready on a FRUITBACK_TEAM_LOCALE that is not a locale', async () => {
@@ -1158,7 +1158,7 @@ describe('the team’s replies on the read path', () => {
   });
 });
 
-describe('who may read a pin (SKG-533)', () => {
+describe('who may read a pin (FRU-40)', () => {
   const SECRET = 'a-read-secret-long-enough-to-not-be-guessed';
   const inAnHour = () => Math.floor((Date.now() + 3_600_000) / 1000);
   const closed: WorkerEnv = { ...env, FRUITBACK_READ: 'authenticated', FRUITBACK_IDENTITY_SECRET: SECRET };
@@ -1320,7 +1320,7 @@ describe('a read nobody could ever satisfy', () => {
   });
 });
 
-describe('one store per process, not one per request (SKG-522)', () => {
+describe('one store per process, not one per request (FRU-29)', () => {
   /** Records what it was asked, so a test can tell it apart from a store the handler built itself. */
   function countingStore() {
     const seen = { reads: 0, writes: 0 };
@@ -1370,7 +1370,7 @@ describe('one store per process, not one per request (SKG-522)', () => {
 
   it('serves several requests from the same instance', async () => {
     // The property that matters, and the one a per-call `storeFor` broke: a store holding a
-    // resource — a SQLite connection, once SKG-524 lands — is opened once and reused.
+    // resource — a SQLite connection, once FRU-31 lands — is opened once and reused.
     //
     // Two *different* pages on purpose. The first version of this asked for the same URL twice and
     // counted one read, which is the read cache doing exactly its job (`cache.ts`) rather than a

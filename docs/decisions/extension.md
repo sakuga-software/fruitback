@@ -1,15 +1,15 @@
 # The extension, and the two worlds
 
 **This describes the private mode**, where the client's site embeds nothing and the extension
-injects the widget. SKG-539 since named three modes — public, private and team — and the team mode
+injects the widget. FRU-46 since named three modes — public, private and team — and the team mode
 turns the extension into a relay rather than an injector. Nothing below was rewritten for that; it
-is the private mode as SKG-534 built it. What each mode does and does not protect is
+is the private mode as FRU-41 built it. What each mode does and does not protect is
 [../modes.md](../modes.md); the one thing to carry here is that **this mode holds no credential**, so
 it changes who is shown the feedback and never who may fetch it.
 
 ## The extension, and the two worlds
 
-- **The client's site embeds nothing** (SKG-534). No tag, no npm package, no deployment — which is
+- **The client's site embeds nothing** (FRU-41). No tag, no npm package, no deployment — which is
   also the end of the integration friction: today, getting a page reviewed needs a deploy. Ordinary
   visitors see nothing because there is nothing in their page to see.
 - **`world: 'MAIN'` is the ticket, not a preference, and it was measured before it was written.** A
@@ -38,7 +38,7 @@ it changes who is shown the feedback and never who may fetch it.
   where it always ran — in the page — so the extension is a fourth assembler beside `global.ts` and
   nothing extension-shaped leaks into the widget. `createCaptureHost` does take an `engine` seam that
   would have allowed a narrower bridge; it was not needed, and not using it is what keeps this app
-  off SKG-530's branch.
+  off FRU-37's branch.
 - **No host permission at install.** The obvious build declares its content scripts on `<all_urls>`,
   which asks a reviewer to let a tool read every page they will ever visit. `background.ts` registers
   the two scripts at runtime for the origins somebody turned on and granted, and unregisters them on
@@ -59,7 +59,7 @@ it changes who is shown the feedback and never who may fetch it.
   the page reads. So it is stated rather than defended — **a reviewer grants an origin precisely
   because they trust that origin's code**, and the extension runs on no other. What is reduced is
   what is at stake: nothing secret travels there, the endpoint and client id are already in the
-  client's own DOM in tag mode, and an identity token is **not sent at all**. SKG-535 keeps the token
+  client's own DOM in tag mode, and an identity token is **not sent at all**. FRU-42 keeps the token
   in the isolated world behind a relay, which is what has to keep being true.
 - **`registerContentScripts` reaches the _next_ page load, never the open one.** So the popup injects
   both files into the current tab after the grant, or the reviewer switches a site on and looks at a
@@ -123,9 +123,9 @@ it changes who is shown the feedback and never who may fetch it.
   can drive, which is why that path is unit-tested and the browser run uses a build with the scripts
   declared statically.
 
-## The session, and the token that never goes down (SKG-599)
+## The session, and the token that never goes down (FRU-60)
 
-SKG-535 built the worker half — pairing codes, access and refresh tokens, revocation, three routes
+FRU-42 built the worker half — pairing codes, access and refresh tokens, revocation, three routes
 exempt from the origin allowlist. This is the other half, and it carries the constraint that shaped
 both: an access token the host site's JavaScript can read is the worst outcome of this batch.
 
@@ -133,13 +133,13 @@ both: an access token the host site's JavaScript can read is the worst outcome o
   `chrome.storage.local`, which survives the browser closing; the access token goes in
   `chrome.storage.session`, which does not. Both in `session` would look tidier and be worse: a
   reviewer who pairs again every morning keeps their pairing code in a text file, which is a worse
-  place than the one the split was protecting. SKG-535's "when the lifetime suits it" is what allows
+  place than the one the split was protecting. FRU-42's "when the lifetime suits it" is what allows
   this.
 - **Nothing calls `setAccessLevel` on the session area, on purpose.** Its default excludes content
   scripts, which is exactly the boundary this ticket holds. Widening it to
   `TRUSTED_AND_UNTRUSTED_CONTEXTS` so the isolated script could read the token directly would put the
   token one `postMessage` mistake away from the page — the isolated script asks the background to
-  make the call instead, which is the same seam SKG-596's relay needs. What _does_ hold a token is
+  make the call instead, which is the same seam FRU-57's relay needs. What _does_ hold a token is
   every trusted context: the background refreshes and the popup pairs and logs out, which is what
   `TRUSTED_CONTEXTS` means and what the documentation now says. Raised in review, where the first
   wording claimed the background was the only one.
@@ -163,14 +163,14 @@ both: an access token the host site's JavaScript can read is the worst outcome o
   - The first test for it passed for the wrong reason: it mutated storage before the refresh had
     read it, so the early `not-paired` answered and the guard never ran. Synchronised on the request
     being _entered_ instead, then mutated — and removing the guard now fails both cases.
-  - **Narrowed again by SKG-600**, because rotation made this path run on _every_ refresh rather than
+  - **Narrowed again by FRU-61**, because rotation made this path run on _every_ refresh rather than
     on the rare answer that carried a new token. The compare and the write were separate — a read, a
     read, a write — so a logout landing across any of the three was enough. `keepIfCurrent` does both
     on one read and reports whether it wrote; nothing mints a grant when it did not. Still not
     closed then, and it could not be closed by a tighter gap: `chrome.storage` has no transaction.
-    **SKG-603 closed it from the other side**, by what the write carries rather than when it lands.
+    **FRU-64 closed it from the other side**, by what the write carries rather than when it lands.
     Raised in review.
-- **One refresh in flight per endpoint, and the race is not the one above** (SKG-600, raised in
+- **One refresh in flight per endpoint, and the race is not the one above** (FRU-61, raised in
   review). Rotation turned a duplicated refresh from a wasted request into a lockout: two callers
   spend the same token, the worker reads the second as a retry inside the grace and revokes the
   first successor, and whichever answer lands last decides what the extension holds. If it is the
@@ -200,14 +200,14 @@ both: an access token the host site's JavaScript can read is the worst outcome o
     spent token. Under rotation that token is a replay, and its next use revokes the chain.
     test:`lets two workers refresh at the same time` — a test written to prove the lock was correctly
     scoped — is what makes it reachable. The fix at the time was one queue over both areas, inside
-    one context. SKG-602 replaced it with one key per endpoint, which reaches the popup too, and the
+    one context. FRU-63 replaced it with one key per endpoint, which reaches the popup too, and the
     queue is gone. Raised in review.
   - The first test for it **deadlocked the moment the fix landed**: it gated on two writes being in
     flight at once, which is precisely what the fix prevents. A test that cannot pass against correct
     code is not a test. It yields a few microtasks in the write instead — unserialised, both reads
     land before either write; serialised, the yielding changes nothing.
 - **A `200` from `/session/refresh` carrying no `refreshToken` is a failure, not a success**
-  (SKG-600, raised in review). Every refresh rotates, so an answer without a successor means the
+  (FRU-61, raised in review). Every refresh rotates, so an answer without a successor means the
   worker spent the stored token and the replacement did not arrive — a truncated body, a route that
   stopped naming the field. Accepting it stored a spent token under a working access token, and the
   session died at the end of the grace with nothing to explain it. It answers `unavailable`, so the
@@ -251,8 +251,8 @@ both: an access token the host site's JavaScript can read is the worst outcome o
   directly rather than through the alarm, and the first token after a restart comes from the service
   worker's own start-up call. Raised in review — both halves were tested and their composition was
   not.
-- **Rotation was half-built on purpose, and SKG-600 built the other half.** A rotated refresh token
-  is stored when one arrives, and since SKG-600 one arrives on every **successful** refresh — an
+- **Rotation was half-built on purpose, and FRU-61 built the other half.** A rotated refresh token
+  is stored when one arrives, and since FRU-61 one arrives on every **successful** refresh — an
   answer without it is refused here rather than taken, because the worker has spent the stored token
   by then. The lost-answer case is handled on the worker rather than here: the spent token stays
   usable until its successor is used **or `ROTATION_GRACE_SECONDS` passes**, whichever comes first,
@@ -260,14 +260,14 @@ both: an access token the host site's JavaScript can read is the worst outcome o
   missing ceiling and the "on every refresh" overstatement. This side needs nothing but the store it
   already had.
 - Verified over the real transport rather than against the handler, which is this repo's recurring
-  defect (SKG-518): a real `OPTIONS` preflight from `chrome-extension://…` for
+  defect (FRU-25): a real `OPTIONS` preflight from `chrome-extension://…` for
   `Content-Type: application/json`, then pair → refresh → revoke → refresh, answering
   `204 / 200 / 200 / 204 / 401`. What is **not** verified here is `chrome.storage` itself and the
-  real world boundary — that is SKG-538, and no browser runs on this machine.
+  real world boundary — that is FRU-45, and no browser runs on this machine.
 
-## One storage key per endpoint (SKG-602)
+## One storage key per endpoint (FRU-63)
 
-SKG-600's review found a refresh for one worker restoring another's **spent** token. The fix then was
+FRU-61's review found a refresh for one worker restoring another's **spent** token. The fix then was
 a queue in `session.ts`: one read-modify-write on storage at a time. That held it inside the
 background. It did not reach the popup, which builds its own `createSessions` over the same two
 areas, and the queue could not be made to — `chrome.storage` has no lock and the contexts share
@@ -292,7 +292,7 @@ context, and a second lock guarding what the first guards is a question for whoe
 The compare in `keepIfCurrent` and the write after it are still two operations, and `forget` is still
 two drops. At the time of this ticket the **generation** marker covered one of the two logouts that
 can land there — a grant minted for a session storage no longer holds is refused on the next read —
-and the other was left open and named: SKG-603, below. The whole-record write only looked atomic
+and the other was left open and named: FRU-64, below. The whole-record write only looked atomic
 across the two areas; it was two `set` calls as well.
 
 ### The upgrade, and the one interleaving it does not close
@@ -313,11 +313,11 @@ the other context may have finished first and had a refresh land since. What sta
 context can hold a snapshot, a logout can remove the new key, and the upgrade can then write the
 session back. It needs a log out inside the one storage round trip between that read and that write,
 on the first run after the upgrade only. Narrowed and stated, like everything else here — **and
-closed by SKG-603**, below, which reached it for free: a legacy record predates the epoch, so what
+closed by FRU-64**, below, which reached it for free: a legacy record predates the epoch, so what
 the upgrade writes back carries none while the logout minted one, and no reader answers with it.
 test:`refuses the session an upgrade still in flight writes back after a logout` is the case. What that
 window still cost was a pairing made inside it, which the upgrade put the older entry back over. The
-endpoint then read as signed out. SKG-604, below, closes that too.
+endpoint then read as signed out. FRU-65, below, closes that too.
 
 **`storage.session` is migrated too**, though the browser usually empties it before anybody notices.
 An extension updated while the browser stays open still holds the legacy grants record, and a grant
@@ -339,9 +339,9 @@ whose reason has changed reads as stale to whoever greps for the defect next.
 `sites.ts` keeps the whole-record write it always had. Only the popup calls `writeSite`, and there is
 one popup.
 
-## A logout that lands inside a refresh (SKG-603)
+## A logout that lands inside a refresh (FRU-64)
 
-SKG-602 gave every endpoint its own key, which makes a write atomic **per endpoint**. It does not
+FRU-63 gave every endpoint its own key, which makes a write atomic **per endpoint**. It does not
 order two writers, and one interleaving was left open and named:
 
 ```
@@ -351,7 +351,7 @@ background: put(session, gen.N) ← the session is back
 background: put(grant,   gen.N) ← and the grant agrees with it
 ```
 
-Both writes carry the same new generation, so `matches` accepts the grant: SKG-600's marker catches a
+Both writes carry the same new generation, so `matches` accepts the grant: FRU-61's marker catches a
 logout landing _between_ the two writes and cannot catch one landing _before_ them. The refresh token
 put back is revoked on the worker — logging out revokes the chain — so the next refresh answers
 `401`. That does not reach the access token already minted, which stays good for its remaining ten
@@ -373,7 +373,7 @@ three places a logout can land are all covered by one rule:
 - between the read and the write — the stamp names a run that is over; the entry lands and no reader
   answers with it. The grant beside it has no session to match.
 - between the session write and the grant write — the same, and `matches` refuses the orphan grant
-  as well. Two refusals where SKG-600 left one.
+  as well. Two refusals where FRU-61 left one.
 
 The check moved from write time, where there is no ordering, to read time, where there is no race.
 
@@ -394,7 +394,7 @@ Absent on both sides compares equal, which is the rule `matches` already follows
 before this marker existed is kept rather than signing the reviewer out on an update.
 
 What this did not do is remove the entry. A refresh that lost the race still wrote its key, and it
-stayed in storage, unreadable, until the next pairing wrote over it. SKG-604 removes it, and says why
+stayed in storage, unreadable, until the next pairing wrote over it. FRU-65 removes it, and says why
 that removal is safe where a write from a read is not.
 
 ### Two `Sessions` over one storage
@@ -436,11 +436,11 @@ refresh reads, the reviewer logs out and pairs again, and the refresh's write la
 pairing stamped with the run before it — so `stillOpen` hid an endpoint somebody had just paired.
 Before this ticket the same write put a **spent** token back and the endpoint read as paired until
 the next refresh answered `401`; after it, the endpoint read as signed out at once. Closing it meant
-versioning the key rather than stamping the value: **SKG-604**, below. Raised in review.
+versioning the key rather than stamping the value: **FRU-65**, below. Raised in review.
 
-## A key per run of a session (SKG-604)
+## A key per run of a session (FRU-65)
 
-SKG-603 stamps what a refresh writes with the run it read, so a write that loses the race to a logout
+FRU-64 stamps what a refresh writes with the run it read, so a write that loses the race to a logout
 is refused. That covered the credential and not the key. A logout and a new pairing inside the
 refresh's window put the new session under the one key the endpoint had, and the refresh then wrote
 its refused entry over it.
@@ -454,7 +454,7 @@ key, and the refresh's write lands beside it.
 - **The epoch is encoded with `encodeURIComponent`**, which never writes a colon, so the first colon
   after the prefix ends it. The endpoint is the rest of the key, colons included. The epoch minted in
   production is hex and holds no colon, but the key does not depend on that.
-- **A session with no epoch has an empty segment.** That is every session stored before SKG-603, and
+- **A session with no epoch has an empty segment.** That is every session stored before FRU-64, and
   absent still compares equal to absent.
 - **A value whose epoch is not the one its key names is dropped.** Nothing here writes one.
 
@@ -470,7 +470,7 @@ Nothing wrote over it any more, so **`put` removes the runs of its endpoint that
 writes.** The snapshot it measures against is taken after its own write. A refresh that lost the race
 therefore sees the epoch the logout minted, and removes its own key.
 
-SKG-603 said a removal from a read is the defect this batch is about. A write from a read puts back a
+FRU-64 said a removal from a read is the defect this batch is about. A write from a read puts back a
 value the read took before something changed. This removal takes away a run that its snapshot already
 shows as over, and two facts make that safe:
 
@@ -497,10 +497,10 @@ refresh.
 
 ### The upgrade
 
-`upgradeSessions` runs the SKG-602 split, then `moveToRunKeys`: each `fruitback:session:<endpoint>`
+`upgradeSessions` runs the FRU-63 split, then `moveToRunKeys`: each `fruitback:session:<endpoint>`
 entry moves to the run its own epoch names, the writes land before the removals, and a run that
 already has its key is left alone. The window it leaves is the one `migrationOf` states, on the first
-run after the upgrade only. A pairing made inside the SKG-602 window is kept now as well, because the
+run after the upgrade only. A pairing made inside the FRU-63 window is kept now as well, because the
 entry the split writes back names the run with no epoch:
 test:`keeps a pairing made while an upgrade in flight writes back`.
 
@@ -514,7 +514,7 @@ before it writes, no second upgrade, a grant always or never dropped, and a key 
 The first of them stops the helper that holds a write open, so its tests fail on the timeout of the
 test rather than on an assertion.
 
-## The options page, and what a wildcard covers (SKG-536)
+## The options page, and what a wildcard covers (FRU-43)
 
 The popup edits the entry for its own tab. The options page lists every entry, adds one for a pattern,
 grants access, and reads and writes a rules file.
@@ -524,7 +524,7 @@ grants access, and reads and writes a rules file.
 An entry's key was an exact origin. It is now a pattern: that origin, or `https://*.host`. The other
 design was a second store of rules that resolve _to_ an entry. It was not taken, because two stores
 answer one question and a reader has to ask both in the right order. With one store, every key written
-before SKG-536 is already a valid pattern, so there is no upgrade and `parseSite` does not change.
+before FRU-43 is already a valid pattern, so there is no upgrade and `parseSite` does not change.
 
 `resolveSite` is the one lookup. The exact origin wins, then the longest wildcard, so one preview can
 be switched off or sent to another client under a rule for all of them. The bridge and the relay call
@@ -540,7 +540,7 @@ registers. A wildcard takes no port and covers the default one. How each browser
 in a match pattern was not measured here, and the two ways to be wrong are not equal: if the scripts run on
 another port, the resolver answers nothing and the bridge unmounts; if the resolver covered a port the
 scripts do not run on, the popup would say **On** over a page with no widget. A bare `*` is refused,
-because it is the permission for every site that SKG-534 refused to ask for at install.
+because it is the permission for every site that FRU-41 refused to ask for at install.
 
 The grant and the registration are wider than the resolver. `https://*.staging.acme.dev/*` names no
 port, and a match pattern with no port covers every port, so the browser grants access to, and runs
@@ -565,13 +565,13 @@ sends three at once and keeps all three. A change the background did not store r
 
 The other fix, one storage key per pattern, was not taken. A key per pattern leaves no single key to
 read, so a reader lists the whole `local` area with `get(null)`. The bridge is a reader, and it runs in
-a content script; the refresh token is in `local` (SKG-599), and a content script must not read it.
+a content script; the refresh token is in `local` (FRU-60), and a content script must not read it.
 
 A content script can send a runtime message too, and its input is written by the page. So the
 background checks the sender's URL against the extension's own root (`isExtensionPage`): a page must
 not be able to add a rule for itself.
 
-**A rejected write can still be stored** (SKG-612). Only the answer is lost, and the page then said the
+**A rejected write can still be stored** (FRU-73). Only the answer is lost, and the page then said the
 change was not confirmed and skipped the activation of the tabs already open on the rule. The rule was
 On in storage and those tabs held no widget until their next load, with nothing to say why.
 `activateStored` reads storage back and activates the patterns of the change that are there and
@@ -602,18 +602,18 @@ restarts.
 
 The ticket asks for `chrome.storage.sync`. A host permission does not travel with a synced rule, so a
 second browser would show the rule and run nothing; and moving the rules out of `local` is the kind of
-storage change SKG-602 needed an ordered upgrade for. It is SKG-611.
+storage change FRU-63 needed an ordered upgrade for. It is FRU-72.
 
 No browser ran on this machine when this shipped: the page, the grant prompt for a wildcard and the
-download were built and type-checked, not seen. Since SKG-538, `e2e/extension.spec.ts` drives this page
+download were built and type-checked, not seen. Since FRU-45, `e2e/extension.spec.ts` drives this page
 in a real Chromium and adds its rules through it. The prompt and the download are still not exercised:
 automation cannot answer the prompt, and the fixture declares its hosts instead.
 
-## The team mode, and the call the page cannot make (SKG-596)
+## The team mode, and the call the page cannot make (FRU-57)
 
 Private mode injects a widget into a site that ships none. Team mode is for the team that ships its
 own: the widget is in their build, dormant, and it wakes up for a reviewer carrying the extension.
-SKG-595 had already put the seam in — `init({ transport })` — and this fills it.
+FRU-56 had already put the seam in — `init({ transport })` — and this fills it.
 
 ### The page speaks last, and it is told so
 
@@ -689,7 +689,7 @@ written by the page**. The isolated world carries the request across and decides
 
 None of this worked at first, and nothing in the extension would have shown why: both of the
 worker's origin gates answer `403` to `chrome-extension://<id>`, which is what an MV3 service worker
-sends on a POST. SKG-535 had already measured that and exempted the three `/session/` routes; the
+sends on a POST. FRU-42 had already measured that and exempted the three `/session/` routes; the
 relay calls `/feedback` the same way.
 
 So the exemption is now by **scheme**, in one predicate `resolveCors` and `resolveClient` both ask.
@@ -724,9 +724,9 @@ at once getting their own.
 
 ### What is not verified here
 
-The same limit SKG-599 has: no browser runs on this machine. The worker's side of the origin change
+The same limit FRU-60 has: no browser runs on this machine. The worker's side of the origin change
 is exercised through `handleRequest`, and the relay's gates through their seams, but the announcement
-reaching a real page's `window` and a real `sender.origin` are SKG-538's to prove.
+reaching a real page's `window` and a real `sender.origin` are FRU-45's to prove.
 
 ### The two halves nobody raised
 
@@ -735,7 +735,7 @@ Both of the review's findings had a twin in the session code, and the twins were
 `postJson` had no deadline while the relay's fetch gained one. That mattered more here than there:
 the storage queue chained one promise onto the last, so a worker that accepted a connection and never
 answered wedged **every later refresh for every worker** — not only its own, and not only until the
-next alarm. It is now bounded the same way. SKG-602 removed that queue, so the hang is back to the
+next alarm. It is now bounded the same way. FRU-63 removed that queue, so the hang is back to the
 one endpoint whose in-flight promise `refreshOnce` holds — still worth the deadline, no longer worth
 every worker.
 

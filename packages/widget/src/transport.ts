@@ -1,5 +1,5 @@
 /**
- * How a widget instance reaches the worker (SKG-595).
+ * How a widget instance reaches the worker (FRU-56).
  *
  * `embed.ts` is the only file that knows the worker exists, and it builds every call. What it does
  * not decide is who carries them. The default carries them with `fetch`, from the page the widget

@@ -333,7 +333,7 @@ describe('keeping an access token fresh', () => {
   /**
    * Two endpoints refreshing at once must not write each other's tokens away.
    *
-   * **This passes for a structural reason since SKG-602, not for a serialised one.** A write names
+   * **This passes for a structural reason since FRU-63, not for a serialised one.** A write names
    * the endpoint it touches, so a refresh for one worker cannot reach another's entry at all. Before
    * that, one key held every endpoint and a write replaced it whole: a read-modify-write for one
    * worker landed on a snapshot taken before another's write and put a **spent** token back. The
@@ -344,7 +344,7 @@ describe('keeping an access token fresh', () => {
    * `refreshOnce` does not cover this and is not meant to: it is per endpoint, and
    * `lets two workers refresh at the same time` asserts that on purpose. That test is what makes
    * this reachable, and rotation is what made it likely — before it, `keep` ran only on the rare
-   * answer that carried a new token. Raised in review on SKG-600.
+   * answer that carried a new token. Raised in review on FRU-61.
    *
    * The interleaving is not forced with a gate, and the first attempt to do so deadlocked the moment
    * the fix landed — the gate waited for two writes at once, which is exactly what the fix prevents.
@@ -572,7 +572,7 @@ describe('logging out', () => {
    * Returning there would leave both credentials in place after the worker was already told to
    * revoke: a fresh grant, still readable, under a popup that says signed out. So the drops are in a
    * `finally` and the failure still reaches the caller. That logout is then back to what it was
-   * before SKG-603 — cleared here, and a refresh in flight can put the session back — which is the
+   * before FRU-64 — cleared here, and a refresh in flight can put the session back — which is the
    * side to degrade to. Raised in review.
    */
   it('clears both areas even when the epoch cannot be written', async () => {
@@ -737,7 +737,7 @@ describe('parseIssued', () => {
 });
 
 /**
- * Nothing here crosses a plain `http://` connection (SKG-596).
+ * Nothing here crosses a plain `http://` connection (FRU-57).
  *
  * A pairing code is spent for a refresh token worth thirty days, and a refresh spends that token
  * again on every renewal — both readable by anyone on the path. The relay's own check was the half
@@ -930,7 +930,7 @@ describe('a logout that lands inside a refresh', () => {
   });
 
   /**
-   * The interleaving SKG-602 left open, and what the epoch does to it.
+   * The interleaving FRU-63 left open, and what the epoch does to it.
    *
    * The upgrade from the one legacy record writes from a snapshot, and it does not wait on itself —
    * so a context still splitting the record can write an endpoint back after another context logged
@@ -992,7 +992,7 @@ describe('a logout that lands inside a refresh', () => {
   });
 
   /**
-   * **SKG-603.** The logout lands between the refresh reading storage and writing it back, so both
+   * **FRU-64.** The logout lands between the refresh reading storage and writing it back, so both
    * of the refresh's writes land and agree with each other: the session is back, and the access
    * token minted for it matches. The refresh token put back is revoked on the worker, but that does
    * not reach a token already minted — a reviewer who clicked log out could read pins for the ten
@@ -1030,7 +1030,7 @@ describe('a logout that lands inside a refresh', () => {
   });
 
   /**
-   * The other window, covered since SKG-600 and still covered: the logout lands between the session
+   * The other window, covered since FRU-61 and still covered: the logout lands between the session
    * write and the grant write, so the grant is an orphan over storage that holds no session. It must
    * not be honoured for its remaining ten minutes either.
    */
@@ -1058,7 +1058,7 @@ describe('a logout that lands inside a refresh', () => {
   });
 
   /**
-   * **SKG-604.** The reviewer logs out and pairs again while a refresh in the other context holds
+   * **FRU-65.** The reviewer logs out and pairs again while a refresh in the other context holds
    * an answer for the session before. That refresh writes the run it read, which is no longer the
    * run of the endpoint: before, it wrote the one key the endpoint had, over the new pairing, and
    * `stillOpen` then hid a session somebody had just paired.
@@ -1185,7 +1185,7 @@ describe('a logout that lands inside a refresh', () => {
   });
 
   /**
-   * The window SKG-602's upgrade leaves, with a pairing inside it. The upgrade writes the legacy
+   * The window FRU-63's upgrade leaves, with a pairing inside it. The upgrade writes the legacy
    * entry back from its snapshot, and that entry names the run with no epoch. The pairing names its
    * own, so the write lands beside it.
    */

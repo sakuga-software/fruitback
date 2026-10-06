@@ -171,11 +171,11 @@ It also says how to report a vulnerability.
 | [CLAUDE.md](CLAUDE.md)                       | The conventions and invariants, for anyone — human or agent — writing code here |
 
 Work is tracked in Linear on the
-[Fruitback](https://linear.app/sakuga-software/project/fruitback-ed574263d8d6) project (team SKG).
+[Fruitback](https://linear.app/sakuga-software/project/fruitback-ed574263d8d6) project (team Fruitback, key `FRU`).
 
 ## Licence
 
-Two licences, split where the client/server boundary is (SKG-515).
+Two licences, split where the client/server boundary is (FRU-22).
 
 |                                                            |                   |
 | ---------------------------------------------------------- | ----------------- |

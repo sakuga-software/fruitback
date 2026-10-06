@@ -5,7 +5,7 @@ import { holdFocus } from './focus.ts';
 import { createIcon } from './icons.ts';
 
 /**
- * The settings panel, opened from the floating button (SKG-503).
+ * The settings panel, opened from the floating button (FRU-14).
  *
  * There is no dashboard: a client who can reach the page can reach the settings. That is the whole
  * distribution story for a widget dropped into someone else's site.
@@ -19,15 +19,15 @@ export type ConfigPanelOptions = {
   host: Element | ShadowRoot;
   store: ConfigStore;
   /**
-   * Whether the embedder gave `init` a way to capture an image (SKG-495). Without one the toggle is
+   * Whether the embedder gave `init` a way to capture an image (FRU-6). Without one the toggle is
    * not rendered at all: a switch that controls nothing is worse than no switch, which is why this
-   * setting was left out of SKG-503 in the first place.
+   * setting was left out of FRU-14 in the first place.
    */
   screenshotSupported?: boolean;
   /** The stages to offer a filter for. If left out, the panel offers every stage. */
   stages?: OfferedStages;
   document?: Document;
-  /** The widget's words (SKG-530). Left out: English, with dates in this document's language. */
+  /** The widget's words (FRU-37). Left out: English, with dates in this document's language. */
   translator?: Translator;
 };
 
@@ -40,7 +40,7 @@ export type ConfigPanel = {
 };
 
 /**
- * The stages the worker can report, as the last read said (SKG-525).
+ * The stages the worker can report, as the last read said (FRU-32).
  *
  * Not in `ConfigStore`: that store keeps the reporter's preferences in `localStorage`. This list
  * comes from the worker, and a stored copy would outlive a change of store.

@@ -8,7 +8,7 @@ import { fakeLinearDeprecationNotice, fakeLinearIgnoredReason } from './store-co
 
 /**
  * `FRUITBACK_STORE` selects the connector, and each connector validates its own environment
- * (SKG-526).
+ * (FRU-33).
  *
  * These drive `readConfig` rather than `handleRequest`, because what changed is what a worker will
  * agree to boot with. `/health` reporting the store's name is asserted in `app.test.ts`, where the
@@ -39,7 +39,7 @@ function providerOf(env: WorkerEnv): string {
 
 describe('selecting the store', () => {
   it('runs on Linear when nothing says otherwise', () => {
-    // The default is compatibility, not preference: every worker deployed before SKG-526 sets none
+    // The default is compatibility, not preference: every worker deployed before FRU-33 sets none
     // of these variables and must keep booting onto exactly the store it had.
     assert.equal(providerOf(linearEnv), 'linear');
   });
@@ -52,7 +52,7 @@ describe('selecting the store', () => {
     // A typo must not send a worker configured for SQLite to an API it has no key for. That would be
     // an opaque failure on every request instead of one line at boot — the same reasoning as
     // FRUITBACK_READ and TRUSTED_PROXY_HOPS.
-    // `postgres` and not `sqlite`: this test named a store that has since been built (SKG-524), and
+    // `postgres` and not `sqlite`: this test named a store that has since been built (FRU-31), and
     // an example that can stop being an example is how a guard quietly starts testing nothing.
     const missing = missingOf({ ...linearEnv, FRUITBACK_STORE: 'postgres' });
 
@@ -66,7 +66,7 @@ describe('selecting the store', () => {
   it('asks only the selected store for its configuration', () => {
     // The point of the ticket. Before it, `readConfig` validated LINEAR_API_KEY and LINEAR_TEAM_ID
     // for every deployment, and the dev loop was handed stand-in credentials to satisfy them — which
-    // is why a SQLite worker (SKG-524) would have been refused at boot for a missing Linear key.
+    // is why a SQLite worker (FRU-31) would have been refused at boot for a missing Linear key.
     const result = readConfig({ ALLOWED_ORIGINS: 'https://acme.test', FRUITBACK_STORE: 'memory' });
 
     assert.ok(result.ok, `expected no Linear credentials to be required, missing: ${result.ok ? '' : result.missing}`);
@@ -108,7 +108,7 @@ describe('a dev-only store cannot be deployed', () => {
   it('refuses the in-memory store under NODE_ENV=production', () => {
     // The Dockerfile sets NODE_ENV=production. Feedback accepted into RAM and lost on the next
     // restart, behind a green health check, is worse than a worker that refuses to start — and this
-    // guard is the one thing SKG-526 must not loosen while generalising the flag it came from.
+    // guard is the one thing FRU-33 must not loosen while generalising the flag it came from.
     const missing = missingOf({ ...linearEnv, FRUITBACK_STORE: 'memory', NODE_ENV: 'production' });
 
     assert.equal(missing.length, 1);
@@ -138,7 +138,7 @@ describe('FRUITBACK_FAKE_LINEAR, the spelling this replaces', () => {
     // It is in the `.env` files and compose stacks of everyone who ran this loop before the rename —
     // not in anything here: `dev:fake`, `serve:fake` and the E2E suite all moved to
     // FRUITBACK_STORE=memory. Breaking it would have been a gratuitous cost. This comment named the
-    // package manifest and the CI workflow for three tickets after SKG-526 emptied both.
+    // package manifest and the CI workflow for three tickets after FRU-33 emptied both.
     assert.equal(providerOf(sugar), 'memory');
     assert.equal(providerOf({ ...sugar, FRUITBACK_FAKE_LINEAR: 'true' }), 'memory');
   });
@@ -157,7 +157,7 @@ describe('FRUITBACK_FAKE_LINEAR, the spelling this replaces', () => {
   });
 
   /**
-   * The half SKG-526 asked for and did not ship, and the reason it matters is the asymmetry: the
+   * The half FRU-33 asked for and did not ship, and the reason it matters is the asymmetry: the
    * shipped warning fires only when the flag **loses**, which is every operator with nothing to
    * migrate. The one still relying on it heard nothing at all.
    */
@@ -280,7 +280,7 @@ describe('the boot diagnostic', () => {
     { label: 'non-numeric rate limit', env: { ...linearEnv, RATE_LIMIT_PER_MINUTE: 'lots' }, names: 'RATE_LIMIT' },
     { label: 'non-numeric proxy hops', env: { ...linearEnv, TRUSTED_PROXY_HOPS: 'one' }, names: 'TRUSTED_PROXY_HOPS' },
     { label: 'malformed client map', env: { ...linearEnv, FRUITBACK_CLIENTS: '{oops' }, names: 'FRUITBACK_CLIENTS' },
-    // A short HMAC secret is a guessable one, so the schema refuses it — and until SKG-526 nothing
+    // A short HMAC secret is a guessable one, so the schema refuses it — and until FRU-33 nothing
     // mapped that field to a name, so the answer was `missing:` followed by nothing at all.
     {
       label: 'identity secret under 32 characters',

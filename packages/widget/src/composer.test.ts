@@ -43,7 +43,7 @@ const field = () => composer?.element.querySelector('[data-fruitback-note]') as 
 const sendButton = () => composer?.element.querySelector('[data-fruitback-send]') as HTMLButtonElement;
 const statusText = () => composer?.element.querySelector('[data-fruitback-status]')?.textContent ?? '';
 
-describe('what the popover looks like (SKG-529)', () => {
+describe('what the popover looks like (FRU-36)', () => {
   it('draws the seed on the send button and still calls it Plant', () => {
     // The icon is appended after the template is parsed, because an SVG written into an innerHTML
     // string lands in the HTML namespace and renders nothing at all. It is aria-hidden, so the
@@ -74,7 +74,7 @@ describe('createComposer', () => {
 
   it('carries no content in the template, so the field is not prefilled before any open', () => {
     // Measured before any `open()`, which sets `value` to '' and would mask a polluted template.
-    // The trap is that a textarea's content is whitespace-sensitive: SKG-580 wrapped this tag to get
+    // The trap is that a textarea's content is whitespace-sensitive: FRU-53 wrapped this tag to get
     // under 120 columns, and a break placed between `>` and `</textarea>` rather than between two
     // attributes puts text in the field that nobody typed. Losing or inventing what someone wrote is
     // the one failure this widget cannot afford.
@@ -254,7 +254,7 @@ describe('createComposer', () => {
     assert.equal(field().getAttribute('aria-label'), 'Your comment');
   });
 
-  it('writes a host translation as text, never as markup (SKG-530)', () => {
+  it('writes a host translation as text, never as markup (FRU-37)', () => {
     // The template is parsed with innerHTML, so a word interpolated into it would be parsed too.
     const page = mountPage('<main></main>');
     const host = page.document.createElement('div');
@@ -276,7 +276,7 @@ describe('createComposer', () => {
     assert.equal(composer.element.querySelector('b'), null);
   });
 
-  it('opens on the element’s start edge, which is its right in a right-to-left language (SKG-531)', () => {
+  it('opens on the element’s start edge, which is its right in a right-to-left language (FRU-38)', () => {
     const anchor = { left: 500, top: 200, bottom: 240, right: 700 };
     const placedLeft = (translator: ReturnType<typeof createTranslator>) => {
       const page = mountPage('<main></main>', { width: 1_000, height: 1_000 });
@@ -298,7 +298,7 @@ describe('createComposer', () => {
     );
   });
 
-  it('stays inside the window when the page is scrolled sideways (SKG-607)', () => {
+  it('stays inside the window when the page is scrolled sideways (FRU-68)', () => {
     const placedLeft = (
       anchor: { left: number; top: number; bottom: number; right: number },
       translator = createTranslator(),
@@ -399,7 +399,7 @@ describe('saying who you are, or not', () => {
   });
 });
 
-describe('the popover as a dialog (SKG-544)', () => {
+describe('the popover as a dialog (FRU-51)', () => {
   function keyOn(target: Element, key: string, shiftKey = false): KeyboardEvent {
     const KeyboardEventCtor = keyboardEventCtor(mounted as MountedPage);
     const event = new KeyboardEventCtor('keydown', { key, shiftKey, bubbles: true, cancelable: true });

@@ -2,13 +2,13 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { originsFromClients, readClientMap, resolveClient } from './clients.ts';
 
-// A `ClientPolicy` since SKG-522: `teamId` and `projectId` moved to the Linear connector, which is
+// A `ClientPolicy` since FRU-29: `teamId` and `projectId` moved to the Linear connector, which is
 // where a team means something. `linear.test.ts` covers their fallback now.
 const FALLBACK = {
   identitySecret: undefined,
   showComments: true,
   read: 'public',
-  // Worker-wide, and no client overrides it: a description is read where the issues are (SKG-532).
+  // Worker-wide, and no client overrides it: a description is read where the issues are (FRU-39).
   locale: 'en',
 } as const;
 
@@ -48,7 +48,7 @@ describe('resolveClient', () => {
   });
 
   it('hands the client entry on, for the store to read its own fields from', () => {
-    // Not picked apart here on purpose (SKG-522): `teamId` is Linear's, an `owner/repo` would be
+    // Not picked apart here on purpose (FRU-29): `teamId` is Linear's, an `owner/repo` would be
     // GitHub's, and SQLite wants neither. Naming any of them in this function is what made the
     // read cache know that stores route by team.
     const resolved = resolveClient({
@@ -91,7 +91,7 @@ describe('resolveClient', () => {
   });
 
   it('refuses a client claimed from a site it is not embedded on', () => {
-    // `clientId` is client-asserted until SKG-498; binding it to an origin is the cheapest check
+    // `clientId` is client-asserted until FRU-9; binding it to an origin is the cheapest check
     // available, at the same trust level CORS already gives.
     const resolved = resolveClient({
       clients: MAP,
@@ -111,7 +111,7 @@ describe('resolveClient', () => {
   });
 
   /**
-   * The extension is not a site, and its origin carries an id no operator can write down (SKG-596).
+   * The extension is not a site, and its origin carries an id no operator can write down (FRU-57).
    * The same reasoning the `origin: null` case above applies: this binds a claim to a site, and a
    * caller that is not a site has nothing to bind.
    */

@@ -29,7 +29,7 @@ identity token. What the three modes differ on is **who can produce one**.
 - **Private mode cannot.** The extension mounts the widget with no `identityToken` and no transport,
   so it has nothing to attach and the site embeds nothing that could supply one. On an `authenticated`
   worker those reads answer `401`, and the reviewer gets a page with no pins and no reason
-  (SKG-605). Left at the `public` default, the pins are the same pins on the same open path: private
+  (FRU-66). Left at the `public` default, the pins are the same pins on the same open path: private
   mode changes **who is shown** the feedback, never **who may fetch** it.
 - **Team mode is the only one where the reviewer supplies it, and the only one that keeps it out of
   the page.** The site's widget is handed the extension's transport, and the token is attached in the
@@ -80,7 +80,7 @@ client-side JavaScript. One container — [self-hosting.md](self-hosting.md).
 
 `FRUITBACK_READ=authenticated` under private mode is worth spelling out: the widget the extension
 mounts sends no token, so the read answers `401` and the reviewer gets a page with no pins and no
-reason — the same screen as a worker that is down (SKG-605).
+reason — the same screen as a worker that is down (FRU-66).
 
 **And one worker cannot serve team mode and a client map at the same time.** `FRUITBACK_SESSION_PATH`
 alongside `FRUITBACK_CLIENTS` is refused at boot: a session signs its access token with the

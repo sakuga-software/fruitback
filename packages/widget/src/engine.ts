@@ -19,7 +19,7 @@ import { getElementBounds, getElementContext, getElementAtPoint, isElementGrabba
 export type CaptureEngine = {
   /** The element a pointer at these viewport coordinates is really pointing at. */
   elementAt(clientX: number, clientY: number, reject: (element: Element) => boolean): Element | null;
-  /** Whether the keyboard cursor of the capture mode can stop on this element (SKG-544). */
+  /** Whether the keyboard cursor of the capture mode can stop on this element (FRU-51). */
   grabbable(element: Element): boolean;
   /** Viewport bounds, correct through transformed iframes. */
   boundsOf(element: Element): { left: number; top: number; width: number; height: number };

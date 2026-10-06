@@ -1,7 +1,7 @@
 const ALLOW_ANY_ORIGIN = '*';
 
 /**
- * The schemes a browser extension's own pages and service worker send as their `Origin` (SKG-596).
+ * The schemes a browser extension's own pages and service worker send as their `Origin` (FRU-57).
  *
  * Named one by one rather than as "anything that is not http", because a scheme list fails closed:
  * `null`, `file://` and whatever a browser adds next fall through to the allowlist, where they
@@ -37,7 +37,7 @@ export type CorsDecision = {
  * from posting into your Linear through your Worker.
  *
  * An extension origin is allowed for the same reason, and it is the one this batch needed: the
- * extension relays a client site's call from its own service worker (SKG-596), which sends
+ * extension relays a client site's call from its own service worker (FRU-57), which sends
  * `chrome-extension://<id>` on the POST, and no allowlist can name that id.
  */
 export function resolveCors(request: Request, allowedOrigins: string[]): CorsDecision {
@@ -56,7 +56,7 @@ export function resolveCors(request: Request, allowedOrigins: string[]): CorsDec
       Vary: 'Origin',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       // `Authorization` is not optional here, and leaving it out made the identity feature
-      // unreachable from a browser (SKG-518). `embed.ts` sends `Authorization: Bearer …` on both the
+      // unreachable from a browser (FRU-25). `embed.ts` sends `Authorization: Bearer …` on both the
       // read and the write when a host mints a token. That header is not CORS-safelisted, so the
       // request is preflighted, and a preflight that does not list it is refused by the browser
       // before the worker sees anything — `read: 'authenticated'` answered nobody, and a verified
@@ -69,7 +69,7 @@ export function resolveCors(request: Request, allowedOrigins: string[]): CorsDec
 }
 
 /**
- * CORS for the extension's session routes, which are **not** bound to the site allowlist (SKG-535).
+ * CORS for the extension's session routes, which are **not** bound to the site allowlist (FRU-42).
  *
  * `ALLOWED_ORIGINS` lists the client *sites* the widget is embedded on. An extension is not one of
  * them: its origin is `chrome-extension://<id>`, and that id differs between an unpacked build and a

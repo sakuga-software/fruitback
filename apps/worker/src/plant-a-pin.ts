@@ -1,7 +1,7 @@
 import type { Seed } from '@fruitback/shared';
 
 /**
- * Plant one pin through a running worker, then read it back (SKG-541).
+ * Plant one pin through a running worker, then read it back (FRU-48).
  *
  * The CI image job runs this against `docker-compose.yml`, started from a directory that holds only
  * that file and a `.env`. Run it once to plant. Then recreate the container and run it with `--read`:

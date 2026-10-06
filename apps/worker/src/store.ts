@@ -2,12 +2,12 @@ import type { Seed, SeedIssue, SeedStage } from '@fruitback/shared';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
 
 /**
- * Where a seed is stored, behind one interface (SKG-522).
+ * Where a seed is stored, behind one interface (FRU-29).
  *
  * The seam already existed and was not named: `app.ts` selected between `linear.ts` and
  * `linear-memory.ts` through a `Pick<typeof realLinear, 'createSeedIssue' | 'fetchSeedIssues'>`,
  * which is an interface discovered by accident. This is that interface written down, so a second
- * store — SQLite (SKG-524), GitHub Issues (SKG-525) — is an implementation rather than a rewrite.
+ * store — SQLite (FRU-31), GitHub Issues (FRU-32) — is an implementation rather than a rewrite.
  *
  * **What is deliberately not here: how to find the seeds of a page.** Linear can filter server-side
  * with `description: { contains: <canonical url> }`, GitHub lists issues by label, a SQL store does a
@@ -29,7 +29,7 @@ export class StoreError extends Error {}
  * What a store hands back after planting a seed.
  *
  * `url` is optional for the same reason it is on `SeedIssue`: a store may have no interface to open
- * (SKG-524). The widget does not read it — this travels in the `201` body, where an empty string
+ * (FRU-31). The widget does not read it — this travels in the `201` body, where an empty string
  * would be a URL the caller could follow to nowhere.
  */
 export type CreatedIssue = { id: string; identifier: string; url?: string };
@@ -44,7 +44,7 @@ export type SeedStore = {
    * The stages this store can report. Absent means every stage in `SEED_STAGES`.
    *
    * `GET /feedback` sends this list, and the settings panel offers a filter only for these stages
-   * (SKG-525). A filter for a stage that no pin can have does nothing.
+   * (FRU-32). A filter for a stage that no pin can have does nothing.
    */
   readonly stages?: readonly SeedStage[];
   /**

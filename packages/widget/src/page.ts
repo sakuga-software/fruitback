@@ -26,7 +26,7 @@ export function capturePage(view: Window): SeedPage {
 export function captureViewport(view: Window): SeedViewport {
   const viewport: SeedViewport = { width: view.innerWidth, height: view.innerHeight };
 
-  // Kept even at 1 — it is an observation, not a default, and the screenshot work (SKG-495) needs it
+  // Kept even at 1 — it is an observation, not a default, and the screenshot work (FRU-6) needs it
   // to read a capture taken on a retina screen.
   if (Number.isFinite(view.devicePixelRatio)) viewport.dpr = view.devicePixelRatio;
 

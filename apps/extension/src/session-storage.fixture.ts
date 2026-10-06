@@ -1,5 +1,5 @@
 /**
- * `chrome.storage`, in memory (SKG-602).
+ * `chrome.storage`, in memory (FRU-63).
  *
  * Shared by `session-storage.test.ts` and `session.test.ts`: the second drives two `Sessions` over
  * one of these, which is the only way to reach what the popup and the background do to each other.

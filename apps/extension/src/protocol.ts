@@ -1,5 +1,5 @@
 /**
- * What the two worlds say to each other (SKG-534, SKG-596).
+ * What the two worlds say to each other (FRU-41, FRU-57).
  *
  * A content script in the **isolated** world can read `chrome.storage` and talk to the background,
  * but it cannot see `__reactFiber$` — React sets that in the page's world, and expando properties do
@@ -10,7 +10,7 @@
  * **The page is on that channel too.** It receives everything we post and can post anything back, so
  * nothing secret may travel here and every message must be parsed rather than trusted. The endpoint
  * and the client id are not secrets — the `<script>` tag mode writes both into the client's own DOM.
- * An identity token (SKG-498) is a secret, which is why none is sent: the relay below carries the
+ * An identity token (FRU-9) is a secret, which is why none is sent: the relay below carries the
  * request and the background attaches the credential, out of the page's reach.
  */
 
@@ -22,7 +22,7 @@ export const CHANNEL = 'fruitback-extension';
 /**
  * The request the page asks the extension to make for it, and the answer.
  *
- * The widget's own transport seam (SKG-595), named here rather than re-declared: the relay exists to
+ * The widget's own transport seam (FRU-56), named here rather than re-declared: the relay exists to
  * fill it, and two copies of the shape would drift. Both are plain objects, because neither
  * `Request` nor `Response` survives `postMessage`.
  */
@@ -51,7 +51,7 @@ const MAX_ID_LENGTH = 100;
  * **The abort is the point, not the deadline.** Without it a worker that accepts a connection and
  * never answers leaves the request in flight while the page is told the call failed — and a reviewer
  * told their note failed presses send again, which plants it twice. The worker cannot tell the two
- * apart (SKG-498 gives a seed its own id, which dedupes a retry of the *same* request, not a second
+ * apart (FRU-9 gives a seed its own id, which dedupes a retry of the *same* request, not a second
  * one). Raised in review.
  */
 export const RELAY_CALL_TIMEOUT_MS = 20 * 1_000;
@@ -95,7 +95,7 @@ export type ReadyMessage = {
 };
 
 /**
- * Team mode: the extension is here, and it is not mounting anything (SKG-596).
+ * Team mode: the extension is here, and it is not mounting anything (FRU-57).
  *
  * The other half of `mount`, sent for a site that embeds its own widget. The main world answers it
  * by putting a transport on the page, so the site's dormant widget has something to call. Nothing
@@ -108,7 +108,7 @@ export type AnnounceMessage = {
 };
 
 /**
- * A call the page cannot make itself, on its way to the background (SKG-596).
+ * A call the page cannot make itself, on its way to the background (FRU-57).
  *
  * `id` pairs it with its answer. The page shares this channel, so it can send one of these and read
  * the answer to it — which buys it a call to a worker it can already reach, with a credential it

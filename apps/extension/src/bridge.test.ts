@@ -33,7 +33,7 @@ describe('createApply', () => {
   });
 
   /**
-   * Team mode mounts nothing, which is the whole of it (SKG-596). The site embeds its own widget, so
+   * Team mode mounts nothing, which is the whole of it (FRU-57). The site embeds its own widget, so
    * a mount here would put a second one beside it — and the client id this entry does not carry is
    * the site's, not the reviewer's.
    */

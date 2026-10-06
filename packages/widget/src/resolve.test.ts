@@ -146,7 +146,7 @@ describe('resolveAnchor', () => {
   });
 
   it('refuses the structural path when what it found has moved across the page', () => {
-    // The trap, from the SKG-494 browser test and the SKG-511 suite: insert a card and
+    // The trap, from the FRU-5 browser test and the FRU-19 suite: insert a card and
     // `li:nth-child(2)` matches exactly one element — the neighbour, with the same tag and the same
     // text, so neither of those can tell them apart. Where it *is* can.
     const page = mountCards();

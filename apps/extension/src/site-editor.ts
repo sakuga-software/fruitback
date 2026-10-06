@@ -3,7 +3,7 @@ import { parseSitePattern } from './site-patterns.ts';
 import type { SiteConfig } from './sites.ts';
 
 /**
- * What the options page does when a button adds a rule or switches one on (SKG-536).
+ * What the options page does when a button adds a rule or switches one on (FRU-43).
  *
  * Behind seams so `node --test` reaches it, the same split `bridge.ts` makes. Two rules hold here:
  *
@@ -31,7 +31,7 @@ export type EditorSeams = {
 };
 
 /**
- * Activates the patterns storage holds switched on, out of the ones a write did not confirm (SKG-612).
+ * Activates the patterns storage holds switched on, out of the ones a write did not confirm (FRU-73).
  *
  * A write goes through the background, and it can reject **after** the change is stored, when only
  * the answer is lost. The rule is then On in storage while the tabs already open on it hold no

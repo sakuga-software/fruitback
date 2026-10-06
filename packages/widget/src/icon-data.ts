@@ -5,7 +5,7 @@
 // Phosphor Icons, https://github.com/phosphor-icons/core
 //
 // The notice travels in packages/widget/THIRD-PARTY-NOTICES.md, because this geometry is compiled
-// into dist rather than installed by the consumer. Same obligation as react-grab and zod (SKG-515).
+// into dist rather than installed by the consumer. Same obligation as react-grab and zod (FRU-22).
 
 /** Where each path came from, asserted by the test rather than trusted. */
 export const ICON_SOURCE = {

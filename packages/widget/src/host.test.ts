@@ -68,7 +68,7 @@ function launchButton(): HTMLElement {
   return button as HTMLElement;
 }
 
-describe('the chrome the reporter sees (SKG-529)', () => {
+describe('the chrome the reporter sees (FRU-36)', () => {
   it('names the launch button in words, and draws the seed as a shape', () => {
     // The label used to open with a sprout. An emoji is drawn by the system font, so nothing about
     // it is ours to set — and the accessible name is the label, which is what every E2E spec finds
@@ -105,7 +105,7 @@ describe('the chrome the reporter sees (SKG-529)', () => {
     assert.ok(launchButton().querySelector('svg.fruitback-icon'), 'stopping a capture removed the mark');
   });
 
-  it('keeps the host label over a translated one, before and after a capture (SKG-530)', () => {
+  it('keeps the host label over a translated one, before and after a capture (FRU-37)', () => {
     mount(
       () => null,
       () => {},
@@ -125,7 +125,7 @@ describe('the chrome the reporter sees (SKG-529)', () => {
     assert.equal(launchButton().textContent, 'Feedback, please');
   });
 
-  it('tells the Shadow root the language and the direction of its words (SKG-531)', () => {
+  it('tells the Shadow root the language and the direction of its words (FRU-38)', () => {
     mount(() => null);
     const container = host?.root.host as HTMLElement;
     assert.equal(container.dir, 'ltr');
@@ -296,7 +296,7 @@ describe('createCaptureHost', () => {
   });
 });
 
-describe('selecting an element without a pointer (SKG-544)', () => {
+describe('selecting an element without a pointer (FRU-51)', () => {
   function mountKeyboard(
     options: {
       grabbable?: (element: Element) => boolean;

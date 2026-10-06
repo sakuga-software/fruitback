@@ -4,7 +4,7 @@ import { z } from 'zod';
 /**
  * An issue as the two ends exchange it: its labels, its stage, and the envelope of a read.
  *
- * Nothing here names a provider. This file was `linear.ts` until SKG-523; see
+ * Nothing here names a provider. This file was `linear.ts` until FRU-30; see
  * docs/decisions/worker.md for what left it and when.
  */
 
@@ -16,7 +16,7 @@ export function clientLabelName(clientId: string): string {
   return `${FRUITBACK_LABEL}:${clientId}`;
 }
 
-/** Labels to apply when creating the issue (M3 / SKG-497). */
+/** Labels to apply when creating the issue (M3 / FRU-8). */
 export function buildIssueLabels(seed: Seed): string[] {
   return seed.client ? [FRUITBACK_LABEL, clientLabelName(seed.client.id)] : [FRUITBACK_LABEL];
 }
@@ -27,7 +27,7 @@ export function buildIssueLabels(seed: Seed): string[] {
  * The vocabulary belongs here, the projection onto it does not. Linear has workflow state types,
  * GitHub has open/closed, a SQL store has its own column, so each connector owns its own mapping.
  * A provider's states named here make every consumer of this package depend on that provider
- * (SKG-516).
+ * (FRU-23).
  */
 export const SEED_STAGES = ['seeded', 'green', 'ripening', 'ripe', 'composted'] as const;
 export type SeedStage = (typeof SEED_STAGES)[number];
@@ -42,13 +42,13 @@ export type SeedStage = (typeof SEED_STAGES)[number];
 export const DEFAULT_SEED_STAGE: SeedStage = 'seeded';
 
 /**
- * The stages a store can report, read from the `stages` field of the read envelope (SKG-525).
+ * The stages a store can report, read from the `stages` field of the read envelope (FRU-32).
  *
  * A store can report only some of `SEED_STAGES`. GitHub has two issue states, not five state types.
  * The settings panel offers a filter only for the stages in this list.
  *
  * Tolerant, like `parseSeed*`. If the value is absent, malformed or empty, the result is every stage:
- * a worker from before SKG-525 sends no field, and its panel must not change. The result keeps the
+ * a worker from before FRU-32 sends no field, and its panel must not change. The result keeps the
  * order of `SEED_STAGES`.
  */
 export function offeredStages(value: unknown): SeedStage[] {
@@ -60,7 +60,7 @@ export function offeredStages(value: unknown): SeedStage[] {
 }
 
 /**
- * A reply from the team, as the widget shows it (SKG-502).
+ * A reply from the team, as the widget shows it (FRU-13).
  *
  * Part of the read envelope, not of the seed. Comments live in whichever store answers — Linear, and
  * `sqlite.ts` in its own table — and are fetched from it. Nothing here changes the round trip, so
@@ -77,15 +77,15 @@ export const seedCommentSchema = z.object({
 export type SeedComment = z.infer<typeof seedCommentSchema>;
 
 /**
- * What the worker sends back to the widget for one planted seed (M4 / SKG-499). Kept here because
+ * What the worker sends back to the widget for one planted seed (M4 / FRU-10). Kept here because
  * both ends validate against it.
  */
 export const seedIssueSchema = z.object({
   id: z.string().min(1),
-  /** Human handle, e.g. `SKG-491` from Linear, `FB-12` from a store that numbers its own. */
+  /** Human handle, e.g. `FRU-2` from Linear, `FB-12` from a store that numbers its own. */
   identifier: z.string().min(1),
   /**
-   * Where a human can open this note in the store's own interface, when the store has one (SKG-524).
+   * Where a human can open this note in the store's own interface, when the store has one (FRU-31).
    *
    * Optional because SQLite has no web interface. Keeping it required meant inventing a URL that
    * goes nowhere, and a link back to the current page reads as a lost note. The widget renders the

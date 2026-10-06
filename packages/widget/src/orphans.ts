@@ -4,10 +4,10 @@ import { createIcon } from './icons.ts';
 import { stageToken } from './theme.ts';
 
 /**
- * The notes whose element is gone (SKG-501).
+ * The notes whose element is gone (FRU-12).
  *
  * A pin that still resolves — even only by position — stays on the page, dashed and marked unsure;
- * that is SKG-500's answer and this file does not touch it. What this is for is the case where the
+ * that is FRU-11's answer and this file does not touch it. What this is for is the case where the
  * cascade found **nothing**: the element was deleted, and the pin is drawn at the box it was planted
  * on, which after a redesign can mean anywhere.
  *
@@ -42,7 +42,7 @@ export type OrphanListOptions = {
   host: Element | ShadowRoot;
   /** The reporter asked to look at this note. */
   onSelect?: (issue: SeedIssue) => void;
-  /** The widget's words (SKG-530). Left out: English, with dates in this document's language. */
+  /** The widget's words (FRU-37). Left out: English, with dates in this document's language. */
   translator?: Translator;
 };
 
@@ -65,7 +65,7 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
   toggle.type = 'button';
   toggle.className = 'fruitback-orphans-toggle';
   toggle.setAttribute('aria-expanded', 'false');
-  // A dashed drop rather than the fallen leaf that used to open this label (SKG-529). It is the pin's
+  // A dashed drop rather than the fallen leaf that used to open this label (FRU-36). It is the pin's
   // own silhouette, drawn the way the overlay draws a pin it could not re-anchor — the chip and the
   // pin then say the same thing in the same language, which an emoji could not do.
   const toggleCount = document.createElement('span');
@@ -83,7 +83,7 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
 
   root.append(toggle, list);
 
-  // A sibling of the root, because the root is hidden while the list is empty (SKG-544).
+  // A sibling of the root, because the root is hidden while the list is empty (FRU-51).
   // A live region inside a hidden element announces nothing.
   const announcer = document.createElement('div');
   announcer.className = 'fruitback-orphans-announcer';
@@ -100,8 +100,8 @@ export function createOrphanList(options: OrphanListOptions): OrphanList {
   return {
     update(issues) {
       // Identity *and* stage, and the stage is in there because the entry draws it: each row carries
-      // a drop in its stage's colour. SKG-517 left this over-invalidating on purpose, pending the
-      // ticket that would decide how a stage shows up here; that ticket is SKG-529, and this is the
+      // a drop in its stage's colour. FRU-24 left this over-invalidating on purpose, pending the
+      // ticket that would decide how a stage shows up here; that ticket is FRU-36, and this is the
       // answer. Drop the stage from this key and a note that ripens keeps the colour it had.
       const next = issues.map((issue) => `${issue.seed.id}:${issue.stage}`).join('|');
       if (next === drawn) return;
@@ -170,7 +170,7 @@ function entry(
 
 /**
  * The identifier, as a link when the store has somewhere to open it and as plain text otherwise
- * (SKG-524).
+ * (FRU-31).
  *
  * A store with no web interface — SQLite — reports no `url`, and an anchor with an empty `href`
  * resolves to the current page: clicking it reloads the client's site and loses whatever the

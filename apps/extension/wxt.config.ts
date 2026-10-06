@@ -2,11 +2,11 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'wxt';
 import { ICON_SIZES, iconPath } from './src/icon-sizes.ts';
 
-/** Where the licence lives in the output, and where it is copied from (SKG-621). */
+/** Where the licence lives in the output, and where it is copied from (FRU-82). */
 export const LICENSE_IN_OUTPUT = 'LICENSE';
 
 /**
- * The extension is the private mode (SKG-534): the client's site embeds **nothing**, and an ordinary
+ * The extension is the private mode (FRU-41): the client's site embeds **nothing**, and an ordinary
  * visitor sees nothing because there is nothing in their page to see.
  *
  * **No host permission is asked for at install.** The obvious build declares its content scripts on
@@ -33,7 +33,7 @@ export default defineConfig({
   manifestVersion: 3,
   zip: {
     // The name of the archive a store takes. Without it wxt builds one from the package name, and
-    // `@fruitback/extension` becomes `fruitbackextension-0.1.0-chrome.zip` (SKG-616).
+    // `@fruitback/extension` becomes `fruitbackextension-0.1.0-chrome.zip` (FRU-77).
     name: 'fruitback',
     // **The sources archive has to build.** AMO rebuilds the extension from it and compares, and
     // this extension imports two workspace packages: an archive of `apps/extension` alone holds no
@@ -60,12 +60,12 @@ export default defineConfig({
     // answers without it, but withholds `url` — so the popup would decide there is no origin and
     // offer nothing, on every site, forever. Raised in review, and it made a fresh install useless.
     // `alarms` keeps the session's access token fresh from a service worker the browser is free
-    // to stop at any moment (SKG-599) — a `setTimeout` would die with it.
+    // to stop at any moment (FRU-60) — a `setTimeout` would die with it.
     permissions: ['storage', 'scripting', 'activeTab', 'alarms'],
     // Requested per origin by the popup, at the moment somebody switches a site on.
     optional_host_permissions: ['*://*/*'],
     // Without these the browser draws a grey square with an initial, in the toolbar and in the list
-    // of extensions, and a store listing is refused for want of a 128px one (SKG-617).
+    // of extensions, and a store listing is refused for want of a 128px one (FRU-78).
     icons: Object.fromEntries(ICON_SIZES.map((size) => [size, iconPath(size)])),
     action: { default_title: 'Fruitback' },
     browser_specific_settings: {

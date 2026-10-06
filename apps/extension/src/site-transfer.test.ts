@@ -83,7 +83,7 @@ describe('exportSites and importSites', () => {
     });
   });
 
-  /** The id is what routes a note. A file is not a form, so the spaces are taken off here (SKG-612). */
+  /** The id is what routes a note. A file is not a form, so the spaces are taken off here (FRU-73). */
   it('skips a client id made of spaces, and stores one without its spaces', () => {
     const result = importSites(
       file({

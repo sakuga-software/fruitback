@@ -7,7 +7,7 @@ import { buildDomPath, buildSelector } from './selector.ts';
  * The redundancy is the design: `selector`, the test id, the text, `domPath` and `bounds` are five
  * independent ways to find the element again, because the site *will* be redeployed between the
  * moment the note is written and the moment someone comes back to read it. Resolution order lives in
- * the widget's re-anchoring engine (SKG-500); this only has to make sure each way is worth trying.
+ * the widget's re-anchoring engine (FRU-11); this only has to make sure each way is worth trying.
  *
  * Nothing here writes a field it did not observe: an absent text excerpt stays absent rather than
  * becoming `''`, or the seed stops round-tripping through the Linear description.

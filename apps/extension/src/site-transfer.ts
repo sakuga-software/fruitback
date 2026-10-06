@@ -4,7 +4,7 @@ import { parseSitePattern } from './site-patterns.ts';
 import { type SiteConfig, parseSite } from './sites.ts';
 
 /**
- * The sites map as a file a team can hand around (SKG-536).
+ * The sites map as a file a team can hand around (FRU-43).
  *
  * The file holds patterns, modes, endpoints and client ids. It holds no credential: a session stays
  * in the browser that paired, and a host permission stays in the browser that granted it. So an
@@ -64,7 +64,7 @@ export function importSites(text: string): SitesImport {
       skipped.push(key);
     } else {
       const stored = { ...site, endpoint: normalizeWorkerEndpoint(site.endpoint) };
-      // The id is stored without its spaces, as both editors store it (SKG-612).
+      // The id is stored without its spaces, as both editors store it (FRU-73).
       sites[pattern] = stored.mode === 'private' ? { ...stored, clientId: stored.clientId.trim() } : stored;
     }
   }

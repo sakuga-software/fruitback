@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { LICENSE_IN_OUTPUT } from '../wxt.config.ts';
 
 /**
- * The licence this extension is under, and the copy that travels with it (SKG-621).
+ * The licence this extension is under, and the copy that travels with it (FRU-82).
  *
  * **What a store hands somebody is the archive, not this repository.** The AGPL asks for the licence
  * to go with the work, and the field in `package.json` is a claim the archive has to carry. The

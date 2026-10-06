@@ -112,7 +112,7 @@ describe('POST /session/refresh', () => {
 
   /**
    * The answer carries a **new** refresh token, and the route is the half that can silently not
-   * (SKG-600).
+   * (FRU-61).
    *
    * `app.ts` builds this body field by field, so omitting the rotated token is what it would do by
    * default: the rotation would work perfectly, the store would hold the successor, and the client
@@ -303,7 +303,7 @@ describe('the pair command', () => {
 
 describe('the rate limit', () => {
   /**
-   * The reason `checkRateLimit` moved above the path dispatch (SKG-535).
+   * The reason `checkRateLimit` moved above the path dispatch (FRU-42).
    *
    * A pairing code is 60 bits, which is plenty on its own — but an unmetered endpoint that answers
    * "yes or no" to a guess is an oracle, and this check used to sit *below* the `404` that rejected
@@ -382,7 +382,7 @@ describe('who may call these routes', () => {
   });
 
   /**
-   * The allowlist still governs `/feedback`, and it governs **sites** (SKG-596).
+   * The allowlist still governs `/feedback`, and it governs **sites** (FRU-57).
    *
    * This test used to assert that an extension origin was refused here, and that was true until the
    * relay existed: team mode has the extension call `/feedback` from its own service worker, which
@@ -414,7 +414,7 @@ describe('who may call these routes', () => {
 describe('the session connection', () => {
   /**
    * `handleSession` builds a store per request wherever the transport did not hand one over, which
-   * is production. Without the map that opens a database handle per call — the hazard SKG-522 was
+   * is production. Without the map that opens a database handle per call — the hazard FRU-29 was
    * written to prevent, and one nothing observable reports.
    *
    * The assertion is on the counter and not `connections.size`: the map is keyed by path, so a

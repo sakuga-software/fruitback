@@ -24,7 +24,7 @@ const LINEAR_GRAPHQL_ENDPOINT = 'https://api.linear.app/graphql';
 const FRUITBACK_LABEL_COLOR = '#E53935';
 
 /**
- * This connector's own configuration, read once at boot and held by the store (SKG-522).
+ * This connector's own configuration, read once at boot and held by the store (FRU-29).
  *
  * It used to take the whole `WorkerConfig` per call, which is how `linearApiKey`, `linearTeamId` and
  * `linearProjectId` came to sit in the worker's validated config where every other module could see
@@ -64,7 +64,7 @@ async function graphql<T>(config: LinearConfig, query: string, variables: Record
       body: JSON.stringify({ query, variables }),
     });
   } catch {
-    // A network failure is a store failure, so the widget keeps the note (SKG-527). A plain error
+    // A network failure is a store failure, so the widget keeps the note (FRU-34). A plain error
     // here reached the transport as a 500.
     throw new StoreError('Linear could not be reached');
   }
@@ -170,7 +170,7 @@ export async function createSeedIssue(
   config: LinearConfig,
   routing: LinearRouting,
   seed: Seed,
-  /** The language the description's prose is written in (SKG-532). English when nothing says. */
+  /** The language the description's prose is written in (FRU-39). English when nothing says. */
   locale?: string,
 ): Promise<CreatedIssue> {
   const labelIds = await resolveLabelIds(config, routing, buildIssueLabels(seed));
@@ -244,7 +244,7 @@ function optionalComments(comments: SeedComment[] | undefined): { comments?: See
 }
 
 /**
- * Comments fetched per issue (SKG-502).
+ * Comments fetched per issue (FRU-13).
  *
  * Bounded because this rides along with every read of every pin on a page: fifty issues with an
  * unbounded comment list is a payload nobody asked for and a Linear bill somebody pays. A thread
@@ -337,9 +337,9 @@ function toSeedComments(node: IssueNode): SeedComment[] | undefined {
  * Linear's workflow state types, projected onto the pin's ripeness.
  *
  * This is the connector's half of the status story, and it lives here rather than in
- * `@fruitback/shared` because it is Linear's vocabulary (SKG-516). The contract owns `SeedStage`;
+ * `@fruitback/shared` because it is Linear's vocabulary (FRU-23). The contract owns `SeedStage`;
  * every connector owns the projection onto it. GitHub's projection gives three stages, not five: see
- * `stageForGithubIssue` in `github.ts` (SKG-525).
+ * `stageForGithubIssue` in `github.ts` (FRU-32).
  */
 export const LINEAR_STATE_TYPES = [
   'triage',
@@ -411,11 +411,11 @@ export function toSeedIssue(
 }
 
 /**
- * Linear, as a `SeedStore` (SKG-522).
+ * Linear, as a `SeedStore` (FRU-29).
  *
  * Everything above already existed; this is the adapter that lets `app.ts` stop importing it by
  * name. Bound to its configuration at construction rather than handed the worker's config per call,
- * which is what a store holding a connection — SQLite (SKG-524) — is going to need.
+ * which is what a store holding a connection — SQLite (FRU-31) — is going to need.
  */
 export function createLinearStore(config: LinearConfig): SeedStore {
   return {
@@ -429,7 +429,7 @@ export function createLinearStore(config: LinearConfig): SeedStore {
 }
 
 /**
- * Linear as a selectable store (SKG-526): `FRUITBACK_STORE=linear`, which is also the default.
+ * Linear as a selectable store (FRU-33): `FRUITBACK_STORE=linear`, which is also the default.
  *
  * The three variables are named **here** rather than in `env.ts`. They were in the worker's own
  * validated config, which meant every deployment was checked for a Linear key — including the ones

@@ -4,7 +4,7 @@ import { SEED_STAGES } from '@fruitback/shared';
 import { THEME_STYLES } from './theme.ts';
 
 /**
- * WCAG 2.2 contrast of the default tokens, in the light scheme and in the dark scheme (SKG-544).
+ * WCAG 2.2 contrast of the default tokens, in the light scheme and in the dark scheme (FRU-51).
  *
  * Text needs 4.5:1 (1.4.3). The border of a field and a focus ring need 3:1 (1.4.11).
  * `KNOWN_FAILURES` holds the pairs that fail now. They are the accent and the stage colours, which
@@ -124,7 +124,7 @@ const light = declared(THEME_STYLES.slice(0, THEME_STYLES.indexOf('@media')));
 const darkStart = THEME_STYLES.indexOf('@media (prefers-color-scheme: dark)');
 const dark = { ...light, ...declared(THEME_STYLES.slice(darkStart, THEME_STYLES.indexOf('@media', darkStart + 1))) };
 
-describe('the contrast of the default tokens (SKG-544)', () => {
+describe('the contrast of the default tokens (FRU-51)', () => {
   it('measures what WCAG measures', () => {
     assert.equal(ratio('#000', '#fff'), 21);
     assert.equal(ratio('#fff', '#fff'), 1);

@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 /**
- * What the two published files actually contain (SKG-505).
+ * What the two published files actually contain (FRU-16).
  *
  * Every other test in this package runs against the sources. These run against the **build**, which
  * is the only thing a client site ever sees: a widget whose `dist` is broken has a green suite and
@@ -61,7 +61,7 @@ describe('the script-tag build', () => {
   });
 
   /**
-   * The README's snippet, read from the README (SKG-519).
+   * The README's snippet, read from the README (FRU-26).
    *
    * `CLAUDE.md` said the snippet was executed by the suite, and it was not: the test above asserts
    * the *build* names one attribute, and nothing had ever opened the file a reader copies from. So a
@@ -95,7 +95,7 @@ describe('the script-tag build', () => {
   });
 
   /**
-   * The other direction, which the first version left open (SKG-519).
+   * The other direction, which the first version left open (FRU-26).
    *
    * "Everything documented is read" says nothing about a snippet that stopped documenting what the
    * tag cannot mount without. `global.ts` returns early unless **both** `fruitbackEndpoint` and
@@ -220,7 +220,7 @@ describe('a consumer installing this from npm', () => {
           // And the scoped packages directly, because they stay published and someone will.
           'import { init as initScoped } from "@fruitback/widget";',
           'import type { SeedIssue } from "@fruitback/shared";',
-          // The theme type, because `FruitbackOptions.theme` names it (SKG-528). It resolves through
+          // The theme type, because `FruitbackOptions.theme` names it (FRU-35). It resolves through
           // `theme.d.ts`, which ships but is not reachable through the package's `exports` — so
           // "the option is documented" and "the consumer can describe what they pass" are two
           // different claims, and this is the one that checks the second.
@@ -228,7 +228,7 @@ describe('a consumer installing this from npm', () => {
           'const palette: FruitbackTheme = { "color-accent": "#0055ff" };',
           'export const accent: ThemeToken = "color-accent";',
           'export const mount = () => init({ endpoint: "https://w.test", clientId: "acme", theme: palette });',
-          // The message types, because `FruitbackOptions.messages` names them (SKG-530). A plural value
+          // The message types, because `FruitbackOptions.messages` names them (FRU-37). A plural value
           // reaches `Intl.LDMLPluralRule`, which only a consumer's own `lib` can resolve.
           'import type { FruitbackMessages, MessageKey } from "fruitback";',
           'const french: FruitbackMessages = { "launch.label": "Laisser un feedback", "orphans.count": { one: "{count} note", other: "{count} notes" } };',
@@ -270,7 +270,7 @@ describe('a consumer installing this from npm', () => {
           stdout.includes('package/dist/'),
           `${tarball} ships no dist — its prepack did not run, and publishConfig points at one`,
         );
-        // A package nobody may legally use is worse than an unpublished one (SKG-515), and all three
+        // A package nobody may legally use is worse than an unpublished one (FRU-22), and all three
         // shipped as `UNLICENSED` until this ticket. So the field is what gets asserted, read back
         // out of the tarball rather than off disk.
         //

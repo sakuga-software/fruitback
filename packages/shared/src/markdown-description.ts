@@ -2,7 +2,7 @@ import { canonicalizePageUrl, type Seed, type SeedParseFailure, type SeedParseRe
 
 /**
  * A seed stored in a markdown description, with the issue still readable by whoever triages it
- * (SKG-523).
+ * (FRU-30).
  *
  * Nothing here belongs to one provider. Every tracker worth connecting to stores a markdown body and
  * lets something search it, so this is a strategy connectors share rather than part of `SeedStore`.
@@ -17,7 +17,7 @@ import { canonicalizePageUrl, type Seed, type SeedParseFailure, type SeedParseRe
  */
 
 /**
- * The words of the prose half, in the language of the team that triages (SKG-532).
+ * The words of the prose half, in the language of the team that triages (FRU-39).
  *
  * **The reader of a description is the team, never the reporter.** So these follow the worker's
  * `FRUITBACK_TEAM_LOCALE` and never the browser: a reporter in Tokyo must not file a Japanese issue
@@ -80,7 +80,7 @@ export function teamWords(locale: string | undefined): TeamWords {
 }
 
 /**
- * The English caption, which is what every description carried before SKG-532.
+ * The English caption, which is what every description carried before FRU-39.
  *
  * Free to reword: the parser recognises the block by parsing it, never by matching this caption.
  * `finds the block by its JSON, never by the caption above it` fails if that stops being true.
@@ -116,7 +116,7 @@ function truncate(value: string, maxLength: number): string {
   return `${cut.trimEnd()}…`;
 }
 
-/** What the description is written in. Absent is English, which is every worker before SKG-532. */
+/** What the description is written in. Absent is English, which is every worker before FRU-39. */
 export type DescriptionOptions = { locale?: string };
 
 /** The human half of the description: what was said, where, and by whom, in the team's language. */
@@ -146,7 +146,7 @@ export function buildIssueMetadata(seed: Seed, { locale }: DescriptionOptions = 
 }
 
 /**
- * Says whose word it is, because the difference is the point (SKG-498).
+ * Says whose word it is, because the difference is the point (FRU-9).
  *
  * A name typed into the popover is a claim by whoever was on the page. Only a name the worker
  * checked against a signed token is an identity. Rendering them the same way would let anyone put a

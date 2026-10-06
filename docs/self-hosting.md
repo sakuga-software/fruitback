@@ -6,7 +6,7 @@ planted pin, then covers what keeps it running: the reverse proxy, every variabl
 something is wrong, backups, upgrades and sizing. [install.md](install.md) is the other half: the
 widget on your site.
 
-Where this page gives a number or an answer, it was measured on the image (SKG-543), and it says so.
+Where this page gives a number or an answer, it was measured on the image (FRU-50), and it says so.
 
 ## Before you start
 
@@ -131,7 +131,7 @@ docker compose up -d --wait
   `docker compose up -d --wait` to update.
 - **`TRUSTED_PROXY_HOPS` is 0, because the file publishes the port directly.** The worker's own
   default is 1, for one Traefik. With 1 and no proxy in front, forged reads kept answering `200` past
-  the limit; with 0, they answered `429` (measured on this file, SKG-541).
+  the limit; with 0, they answered `429` (measured on this file, FRU-48).
 - **A variable exported in your shell wins over `.env`.** Compose reads the shell first, so a
   `LINEAR_API_KEY` left in a shell profile reaches the container even when `.env` leaves it empty.
 - **`ALLOWED_ORIGINS` is required by the file itself.** Without it, Compose refuses to start:
@@ -186,7 +186,7 @@ entries than that, the worker uses the address of the connection, which is the n
 every caller then shares that proxy's bucket.
 
 **Proxies do not all write the header the same way**, and that changes what a wrong count costs.
-Measured on SKG-543: the worker behind each proxy, a caller sending `X-Forwarded-For: 1.2.3.4`, then
+Measured on FRU-50: the worker behind each proxy, a caller sending `X-Forwarded-For: 1.2.3.4`, then
 24 reads that each forged a different address, against the default limit of 20.
 
 | In front of the worker, default settings | The worker receives          | `1`           | `2`                      | `3`                      |
@@ -251,7 +251,7 @@ empty value counts as absent.
 | Variable          | Default                                         | What it does                                                                                                     | When it is wrong                                                                                                                                                                                                                                                                                                                                                                                   |
 | ----------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `FRUITBACK_IMAGE` | `ghcr.io/sakuga-software/fruitback-worker:edge` | Compose only. The image, as a tag or a digest.                                                                   | A tag that does not exist fails the pull. A tag already on the machine is not pulled again: run `docker compose pull`.                                                                                                                                                                                                                                                                             |
-| `FRUITBACK_PORT`  | `8080`                                          | Compose only. The port on the host, or `127.0.0.1:8080` to keep it off the internet.                             | An `.env` from before SKG-541 says `PORT`, which the file ignores: the port falls back to 8080.                                                                                                                                                                                                                                                                                                    |
+| `FRUITBACK_PORT`  | `8080`                                          | Compose only. The port on the host, or `127.0.0.1:8080` to keep it off the internet.                             | An `.env` from before FRU-48 says `PORT`, which the file ignores: the port falls back to 8080.                                                                                                                                                                                                                                                                                                     |
 | `PORT`            | `8080`                                          | The port the process listens on, inside the container. Compose sets it to 8080 and does not read it from `.env`. | A value other than the published port makes the worker unreachable, and Docker still reports it `healthy`, because the healthcheck probes the same port (measured with `9000`). With `docker run`, a value that is not a positive integer: the process listens on 8080 with no message, but the healthcheck probes the raw value, so Docker marks the container `unhealthy` (measured with `abc`). |
 | `HOST`            | `0.0.0.0`                                       | The interface the process listens on. Compose does not pass it.                                                  | `127.0.0.1` makes the worker unreachable from outside the container, and Docker still reports it `healthy` (measured).                                                                                                                                                                                                                                                                             |
 | `NODE_ENV`        | `production`, set by the image                  | What refuses the in-memory store. Compose does not pass it.                                                      | Any other value lets `FRUITBACK_STORE=memory` start, and every note dies with the container.                                                                                                                                                                                                                                                                                                       |
@@ -268,7 +268,7 @@ empty value counts as absent.
 
 | Variable                       | Default                                                  | What it does                                                                                                                                                                                                                                                  | When it is wrong                                                                                                                                                                                                                                                                   |
 | ------------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `FRUITBACK_STORE`              | `linear` in the worker, `sqlite` in `docker-compose.yml` | The store: `sqlite`, `linear`, `github` or `memory`.                                                                                                                                                                                                          | Unknown: refused, `FRUITBACK_STORE (unknown store "sqlit", expected linear \| sqlite \| github \| memory)`. `memory` in the image: refused. Left out of an `.env` from before SKG-541: Compose starts on an empty SQLite file, and the Linear pins seem gone.                      |
+| `FRUITBACK_STORE`              | `linear` in the worker, `sqlite` in `docker-compose.yml` | The store: `sqlite`, `linear`, `github` or `memory`.                                                                                                                                                                                                          | Unknown: refused, `FRUITBACK_STORE (unknown store "sqlit", expected linear \| sqlite \| github \| memory)`. `memory` in the image: refused. Left out of an `.env` from before FRU-48: Compose starts on an empty SQLite file, and the Linear pins seem gone.                       |
 | `FRUITBACK_SQLITE_PATH`        | none; `/data/fruitback.db` in `docker-compose.yml`       | The SQLite file. It is created, and its schema migrated, on the first read or write.                                                                                                                                                                          | Absent with `sqlite`: refused. In a directory that does not exist: `/health` answers `200`, and every read and write answers `502 store-unavailable` naming the file (measured). Outside the volume: it works until the container is recreated, then every pin is gone (measured). |
 | `LINEAR_API_KEY`               | none                                                     | A Linear personal API key. A secret: it never reaches a browser.                                                                                                                                                                                              | Absent with `linear`: refused, with `LINEAR_TEAM_ID`. Wrong: `/health` answers `200`, and every read and write answers `502 store-unavailable`, `Linear responded 401` (measured).                                                                                                 |
 | `LINEAR_TEAM_ID`               | none                                                     | The team that receives the issues. A client's `teamId` replaces it.                                                                                                                                                                                           | Absent with `linear`: refused. Wrong: not checked at boot; Linear refuses the call, and the worker answers `502 store-unavailable` with Linear's message.                                                                                                                          |
@@ -315,7 +315,7 @@ that is refused logs `[fruitback] misconfigured, missing: … — /health will r
 **`/health` checks the configuration, and nothing else.** It does not open the SQLite file, does not
 call Linear, and is not rate-limited. So read a page too:
 `curl 'http://localhost:8080/feedback?url=https%3A%2F%2Fstaging.example.com%2F'`. All measured on
-SKG-543:
+FRU-50:
 
 | You see                                                                        | `/health`                                                  | A read                                  | Cause                                                                                  |
 | ------------------------------------------------------------------------------ | ---------------------------------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------- |
@@ -519,7 +519,7 @@ database. When a
 release adds a version, its notes say so, and a rollback past it means restoring the backup from
 step 1 — and losing the pins planted since.
 
-### Upgrading a deployment from before SKG-541
+### Upgrading a deployment from before FRU-48
 
 The old compose file built the image, kept no volume, read `PORT` for the host port, defaulted
 `TRUSTED_PROXY_HOPS` to 1, and passed no `FRUITBACK_STORE`, so the worker ran on Linear. An `.env`
@@ -580,7 +580,7 @@ Before the first `docker compose up` with the new file, change these lines in `.
 
 ## Sizing, and more than one replica
 
-**One container, and a small one.** Measured on SKG-543, on an Apple Silicon machine under OrbStack,
+**One container, and a small one.** Measured on FRU-50, on an Apple Silicon machine under OrbStack,
 the container limited to one CPU (`--cpus=1`), on SQLite, with `RATE_LIMIT_PER_MINUTE` raised to
 100 000 000 so that the load tool was not refused:
 
@@ -605,7 +605,7 @@ The database held 2 020 pins in 4.8 MB. Read these numbers with three limits in 
 Two are two rate limits: `RATE_LIMIT_PER_MINUTE=20` lets 40 a minute through — and up to 78 in a
 burst at a window edge, twice the bound `SECURITY.md` gives for one — with nothing said anywhere, and
 a cold page costs one store call per replica. SQLite adds its own reason: one file on one volume
-belongs to one container. A state the replicas share is not built: it is SKG-606, written up with what
+belongs to one container. A state the replicas share is not built: it is FRU-67, written up with what
 a first implementation learned.
 
 ## Deploying with Dokploy
@@ -645,7 +645,7 @@ A plain Node HTTP process — `node:http` adapted onto a web-standard handler, n
 
 The three below exist only when `FRUITBACK_SESSION_PATH` is set, and answer `404` otherwise — a
 worker without the extension does not advertise that they are there. They are the browser
-extension's session (SKG-535), and they are **exempt from `ALLOWED_ORIGINS`**: an extension's origin
+extension's session (FRU-42), and they are **exempt from `ALLOWED_ORIGINS`**: an extension's origin
 carries an id that differs between an unpacked build and a store build, so an operator cannot put it
 on a list. The rate limiter is what protects them, which is why it runs above the path dispatch.
 

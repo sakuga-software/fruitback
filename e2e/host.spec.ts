@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { badgeFor, openPlayground, plantPin } from './pin.ts';
 
 /**
- * The Shadow DOM host (SKG-492), in a browser that has a real selector engine, a real cascade and
+ * The Shadow DOM host (FRU-3), in a browser that has a real selector engine, a real cascade and
  * real hit testing — the three things the unit tests replace with a fake because happy-dom has none
  * of them.
  */
@@ -40,7 +40,7 @@ test('the page cannot restyle the widget, however hard it tries', async ({ page 
   expect(styles.fontFamily).not.toContain('Papyrus');
 });
 
-test('the icons are actually drawn, not empty boxes (SKG-529)', async ({ page }) => {
+test('the icons are actually drawn, not empty boxes (FRU-36)', async ({ page }) => {
   // The one failure this ticket could ship silently. The host reset is `all: initial`, and since
   // SVG2 a path's own geometry is a CSS property — so a bare star selector computes `d: none` and
   // `stroke: none`, every icon renders as nothing, and neither the console nor a unit test says a
@@ -72,7 +72,7 @@ test('the icons are actually drawn, not empty boxes (SKG-529)', async ({ page })
   expect(drawn?.height).toBeGreaterThan(6);
 });
 
-test('no emoji survives anywhere in the widget chrome (SKG-529)', async ({ page }) => {
+test('no emoji survives anywhere in the widget chrome (FRU-36)', async ({ page }) => {
   // The unit guard reads this package's sources. This one reads what a visitor actually sees — and
   // it therefore has to *reach* each state, which is the whole reason it drives the widget rather
   // than opening one panel. The first version only opened the settings panel and claimed to cover

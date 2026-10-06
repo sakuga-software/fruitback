@@ -1,7 +1,7 @@
 /**
  * Which origins the two content scripts are registered for, kept in step with what is switched on.
  *
- * This is the whole reason the extension asks for no host permission at install (SKG-534). Nothing
+ * This is the whole reason the extension asks for no host permission at install (FRU-41). Nothing
  * runs on a page until somebody turned that site on **and** granted the origin; turning it off
  * unregisters, so the scripts stop running on the reviewer's next navigation there.
  *

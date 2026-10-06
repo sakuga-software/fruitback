@@ -1,12 +1,12 @@
 # The project, and the layout
 
-**What `CLAUDE.md` used to say**, before SKG-598 condensed both sections. The current versions are
+**What `CLAUDE.md` used to say**, before FRU-59 condensed both sections. The current versions are
 in [CLAUDE.md](../../CLAUDE.md) and they are the ones to trust — the Layout below predates
 `packages/fruitback` and the settings panel, and names `packages/widget`'s parts by the tickets that
 built them.
 
 It is kept because each section carries a history the condensed version drops: what the project
-claimed about itself before SKG-524 gave the worker a store of its own, and which ticket built which
+claimed about itself before FRU-31 gave the worker a store of its own, and which ticket built which
 part of the widget.
 
 ## Project
@@ -16,7 +16,7 @@ note, and it becomes an issue carrying the CSS selector, the React component and
 Coming back to the page, they see their pins again, coloured by that issue's status.
 
 **Fruitback does not reinvent issue tracking — but it no longer requires somebody else's account.**
-That is a change, and SKG-524 made it deliberately. This file used to say _there is no Fruitback
+That is a change, and FRU-31 made it deliberately. This file used to say _there is no Fruitback
 backend, Linear is the database_, and until the SQLite connector that was exactly true. It is not any
 more: `FRUITBACK_STORE=sqlite` puts the seeds in a file on a volume, and a self-hoster who wants no
 third party has a door.
@@ -40,22 +40,22 @@ behind Traefik can do.
   `GET /feedback?url=…` returns the seeds of that page. Still called "worker" because that is what
   everyone calls it, though it is no longer an edge worker.
 - `packages/widget` (`@fruitback/widget`) — the browser half, and now the whole of it: **capture**
-  (`captureSeed`, SKG-494), **the overlay** (`resolveAnchor` + `createOverlay`, SKG-500), **the
-  Shadow DOM host** (`createCaptureHost`, SKG-492) and **the note popover** (`createComposer`,
-  SKG-493). The playground only says where the worker is.
+  (`captureSeed`, FRU-5), **the overlay** (`resolveAnchor` + `createOverlay`, FRU-11), **the
+  Shadow DOM host** (`createCaptureHost`, FRU-3) and **the note popover** (`createComposer`,
+  FRU-4). The playground only says where the worker is.
 
-- `apps/extension` (`@fruitback/extension`) — the browser extension (SKG-534): the same widget, on a
+- `apps/extension` (`@fruitback/extension`) — the browser extension (FRU-41): the same widget, on a
   site that embeds nothing. wxt, MV3 on Chromium **and** Firefox. Two content scripts, one per world
   — see _The extension, and the two worlds_ ([extension.md](extension.md)).
-- `apps/playground` (`@fruitback/playground`) — the dev loop (SKG-511, SKG-512): a deliberately
+- `apps/playground` (`@fruitback/playground`) — the dev loop (FRU-19, FRU-20): a deliberately
   hostile fake client site with the widget mounted on it. **A React Router 8 + Vite app with HeroUI**
-  since SKG-512, because the widget's clients are React apps and a static page could not exercise
+  since FRU-20, because the widget's clients are React apps and a static page could not exercise
   half of what the widget does. Not shipped, not deployed.
 
 ## The milestones, as the README carried them
 
-Archived here when the README became a landing page (SKG-519). It had gone stale where it mattered
-most — it still named `SKG-491 → SKG-497 → SKG-500` as the critical path, which was schema, write and
+Archived here when the README became a landing page (FRU-26). It had gone stale where it mattered
+most — it still named `FRU-2 → FRU-8 → FRU-11` as the critical path, which was schema, write and
 read-back, all three long shipped. A roadmap on a landing page is a promise that ages badly; the live
 one is [the Linear project](https://linear.app/sakuga-software/project/fruitback-ed574263d8d6).
 

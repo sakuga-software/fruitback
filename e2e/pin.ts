@@ -11,8 +11,8 @@ export const WORKER_ORIGIN = 'http://localhost:8788';
  * The three moves every spec makes: open a page of one's own, plant a pin, and check a pin sits on
  * an element.
  *
- * The harness these drive is the playground's, not the product's — the real capture UI is SKG-492/493
- * and the real re-anchoring is SKG-500. What the specs actually assert through it is the pipeline
+ * The harness these drive is the playground's, not the product's — the real capture UI is FRU-3/493
+ * and the real re-anchoring is FRU-11. What the specs actually assert through it is the pipeline
  * underneath: `captureSeed`, `POST /feedback`, `GET /feedback`.
  */
 
@@ -39,14 +39,14 @@ export async function plantPin(page: Page, target: Locator, note: string): Promi
 
   // The launch button lives in the widget's Shadow root, which Playwright's selectors pierce. The
   // name is a pattern rather than a string because an embedder sets the label — it opened with a
-  // sprout until SKG-529, and it is a mark beside the words now.
+  // sprout until FRU-36, and it is a mark beside the words now.
   await page.getByRole('button', { name: /Leave feedback/ }).click();
   await target.click();
   await page.getByPlaceholder('What is wrong here?').fill(note);
   await page.getByRole('button', { name: 'Plant', exact: true }).click();
 
   // Synchronised on the identifier, not on the status line. The status has two writers — this
-  // harness and the widget announcing a re-resolution it decided on by itself (SKG-513) — so a
+  // harness and the widget announcing a re-resolution it decided on by itself (FRU-21) — so a
   // confirmation can be overwritten by a pin count arriving a moment later. It was, on CI, where the
   // timing differs. Counting pins alone races too: the old ones are still on the page while the new
   // set is being fetched.

@@ -74,7 +74,7 @@ describe('createIcon', () => {
   });
 });
 
-describe('the icons taken from Iconify (SKG-529)', () => {
+describe('the icons taken from Iconify (FRU-36)', () => {
   /**
    * The committed data against the installed package.
    *
@@ -110,7 +110,7 @@ describe('the icons taken from Iconify (SKG-529)', () => {
 
   it('is named in the notices, because it is compiled into dist', () => {
     // MIT asks the notice to travel with the code, and this geometry ships inside the bundle rather
-    // than being installed by the consumer. Same obligation as react-grab and zod (SKG-515), and the
+    // than being installed by the consumer. Same obligation as react-grab and zod (FRU-22), and the
     // same guard: `package.test.ts` asserts the file is in the tarball, this asserts it says so.
     const notices = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'THIRD-PARTY-NOTICES.md'), 'utf8');
 
@@ -119,7 +119,7 @@ describe('the icons taken from Iconify (SKG-529)', () => {
   });
 });
 
-describe('the widget renders no emoji (SKG-529)', () => {
+describe('the widget renders no emoji (FRU-36)', () => {
   /**
    * The whole package, comments included, rather than the rendered strings alone.
    *

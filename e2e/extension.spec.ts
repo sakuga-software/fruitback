@@ -19,7 +19,7 @@ import { WORKER_ORIGIN } from './pin.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 /**
- * The extension across its worlds (SKG-538): what a site gets with it, without it, and what its page
+ * The extension across its worlds (FRU-45): what a site gets with it, without it, and what its page
  * can never read.
  */
 
@@ -57,7 +57,7 @@ async function plantOnTheLatteCard(page: Page, launch: string | RegExp, note: st
 }
 
 /**
- * The licence a store hands out with the extension (SKG-621).
+ * The licence a store hands out with the extension (FRU-82).
  *
  * `license.test.ts` reads the configuration that asks for the copy; this reads the build that
  * `pnpm e2e` made, which is what the archive is zipped from. A packaging change that drops the file

@@ -32,4 +32,4 @@ design material the README used to carry.
 
 A paragraph belongs here when losing it costs an anecdote, and in `CLAUDE.md` when losing it means
 somebody writes broken code. A conclusion that is load-bearing stays in `CLAUDE.md` as one line and
-links here for the reasoning behind it (SKG-598).
+links here for the reasoning behind it (FRU-59).

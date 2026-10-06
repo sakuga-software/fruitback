@@ -7,11 +7,11 @@ import { type Kv, KvError } from './kv.ts';
  * The read path runs on every page load of a client's staging site, and a provider API key is
  * rate-limited per key, not per visitor. Ten people on one page must not spend ten times the quota.
  *
- * **Two layers, and each one holds a different property** (SKG-542):
+ * **Two layers, and each one holds a different property** (FRU-49):
  *
  * - The in-flight promise stays in this process. Concurrent misses on one replica share one load. A
  *   promise cannot cross a process, so N replicas that miss together make up to N loads.
- * - The settled answer goes to the `Kv`, for `CACHE_TTL_MS`. A store shared between replicas (SKG-606)
+ * - The settled answer goes to the `Kv`, for `CACHE_TTL_MS`. A store shared between replicas (FRU-67)
  *   would serve it to all of them.
  *
  * A failure is never written, so an outage is not served for the rest of the TTL.

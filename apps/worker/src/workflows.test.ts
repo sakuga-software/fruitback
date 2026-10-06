@@ -5,7 +5,7 @@ import { isAlias, isMap, isScalar, isSeq, parseDocument, visit } from 'yaml';
 
 /**
  * Every action a workflow uses is pinned to a commit SHA, or a Docker image to its digest, with its
- * version as a comment (SKG-608).
+ * version as a comment (FRU-69).
  *
  * A tag can move to other code, and `release-image.yml` runs with `packages: write`. Dependabot moves
  * a pin that exists, but it does not pin a new step, so this test is what holds the rule.
@@ -166,7 +166,7 @@ describe('the GitHub workflows', () => {
   });
 
   /**
-   * **No workflow hands a write to every job** (SKG-609, widened to all of them by SKG-616).
+   * **No workflow hands a write to every job** (FRU-70, widened to all of them by FRU-77).
    *
    * A job that publishes declares the permission it needs, beside the steps that need it. Granted at
    * the top instead, the same token reaches the jobs that only build and scan — and a step added to

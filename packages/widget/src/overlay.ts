@@ -20,7 +20,7 @@ import { type AnchorResolution, resolveAnchor } from './resolve.ts';
  *
  * **The page moves under it, and nothing announces that.** Scroll and resize do not fire when a
  * framework swaps a subtree, so the overlay watches the document and re-resolves. A client's app
- * cannot do that for it (SKG-513).
+ * cannot do that for it (FRU-21).
  *
  * **The overlay must not take the page hostage.** The client's site still has to be usable while
  * pins are on it, so the pin outlines let clicks through and only the badge is clickable. That is
@@ -48,7 +48,7 @@ const RESOLVE_MAX_WAIT_MS = 500;
 export type OverlayOptions = {
   document?: Document;
   /**
-   * Where the overlay's own DOM lives. Defaults to a container on `<body>`; SKG-492's Shadow DOM
+   * Where the overlay's own DOM lives. Defaults to a container on `<body>`; FRU-3's Shadow DOM
    * host will pass its root here, which is what finally isolates these styles from the client's.
    * Whatever is passed has to sit at the document origin and be unpositioned, or the pins land
    * somewhere else — absolute positions resolve against the nearest positioned ancestor.
@@ -56,7 +56,7 @@ export type OverlayOptions = {
   host?: Element | ShadowRoot;
   /**
    * Which pins to draw. Re-read on `refilter`, so a preference change does not need the issues to be
-   * fetched again (SKG-503). Defaults to drawing everything.
+   * fetched again (FRU-14). Defaults to drawing everything.
    */
   shouldShow?: (issue: SeedIssue) => boolean;
   /** Called when a pin is clicked, in case the host wants to do more than open the thread. */
@@ -66,7 +66,7 @@ export type OverlayOptions = {
    * detect the change itself — which a client's app cannot do.
    */
   onResolve?: (resolutions: { issue: SeedIssue; strategy: AnchorResolution['strategy'] }[]) => void;
-  /** The widget's words (SKG-530). Left out: English, with dates in this document's language. */
+  /** The widget's words (FRU-37). Left out: English, with dates in this document's language. */
   translator?: Translator;
 };
 
@@ -111,7 +111,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   host.append(style, container);
 
   /**
-   * The notes whose element the cascade could not find at all (SKG-501).
+   * The notes whose element the cascade could not find at all (FRU-12).
    *
    * Owned here rather than by the embedder for the same reason the mutation observer is: on a
    * client's site there is nobody to notice that a redeploy detached three pins and no one to build
@@ -382,7 +382,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   function onDocumentClick(event: Event): void {
     if (thread === null) return;
 
-    // `composedPath`, not `event.target`: once the overlay lives in a Shadow root (SKG-492), a click
+    // `composedPath`, not `event.target`: once the overlay lives in a Shadow root (FRU-3), a click
     // inside the thread is retargeted to the host element on the way out, and `contains` would say
     // the click came from outside and close the thread the user just clicked into.
     const path = event.composedPath();
@@ -443,8 +443,8 @@ function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolu
   const pin = document.createElement('div');
 
   pin.className = 'fruitback-pin';
-  // The token rather than the hexadecimal the contract carries (SKG-528). One indirection buys the
-  // dark theme, the host override and, once SKG-517 lands, a contract that stops shipping colours at
+  // The token rather than the hexadecimal the contract carries (FRU-35). One indirection buys the
+  // dark theme, the host override and, once FRU-24 lands, a contract that stops shipping colours at
   // all — a widget's palette has no business travelling in the payload both ends must agree on.
   pin.style.setProperty('--fruitback-pin-color', stageToken(issue.stage));
   pin.dataset.fruitbackPin = issue.seed.id;
@@ -491,7 +491,7 @@ function applyResolution(pin: HTMLElement, issue: SeedIssue, resolution: AnchorR
     }),
   );
   const glyph = pin.querySelector('.fruitback-pin-glyph');
-  // Empty when the pin is sure of itself (SKG-517): the drop's shape and its stage colour say which
+  // Empty when the pin is sure of itself (FRU-24): the drop's shape and its stage colour say which
   // stage it is, and the emoji that used to sit here was a rendering choice travelling in a published
   // type. The `≈` stays, because it is the whole warning in one character — this one was placed by
   // coordinates, not recognised — and a typographic symbol is not an emoji.
@@ -509,7 +509,7 @@ function summarise(issue: SeedIssue): string {
 }
 
 /**
- * The team's answers, oldest first (SKG-502).
+ * The team's answers, oldest first (FRU-13).
  *
  * This is what closes the loop: someone leaves a note, the team replies in Linear, and the reply
  * shows up where the note was left rather than in an inbox the reporter does not have.
@@ -554,7 +554,7 @@ function replies(document: Document, issue: SeedIssue, t: Translator): HTMLEleme
  * What the store calls this issue's state, or the stage when it calls it nothing.
  *
  * The Linear connector reports `node.state?.name ?? ''`, so an issue with no state gives an empty
- * string. That used to be hidden behind the stage's emoji; with the glyph gone (SKG-517) it surfaced
+ * string. That used to be hidden behind the stage's emoji; with the glyph gone (FRU-24) it surfaced
  * twice — an empty thread header, and a tooltip reading `SKG-742 · ` with a dangling separator.
  *
  * **A function and not the expression inlined twice**, because the second site is how this was found:
@@ -579,7 +579,7 @@ function buildThread(document: Document, issue: SeedIssue, resolution: AnchorRes
   const reporter = issue.seed.reporter?.name ?? issue.seed.reporter?.email ?? t.text('thread.anonymous');
 
   thread.append(
-    // A div, not a header: inside the widget's region landmark a header is a banner (SKG-544).
+    // A div, not a header: inside the widget's region landmark a header is a banner (FRU-51).
     element(document, 'div', 'fruitback-thread-head', [
       // The store's own word for the state, with no glyph in front of it. `stateName` is what the
       // store said — Linear's "In Progress", SQLite's own — and the stage colour is already on the
@@ -623,11 +623,11 @@ function closeButton(document: Document, t: Translator): HTMLElement {
 }
 
 /**
- * The way out to the store's own interface, when it has one (SKG-524).
+ * The way out to the store's own interface, when it has one (FRU-31).
  *
  * Two things changed here, and both were the contract leaking. The label said **Linear** in a widget
  * that is not supposed to know which store is behind the worker — the same reason `502` reports
- * `store-unavailable` and not `linear-unavailable` (SKG-522). And `url` is now optional, because
+ * `store-unavailable` and not `linear-unavailable` (FRU-29). And `url` is now optional, because
  * SQLite has no page to open: rendering an anchor anyway would put a link on every pin that leads
  * back to the page the reader is already on, which reads as the store having lost the note.
  *
@@ -648,7 +648,7 @@ function link(document: Document, issue: SeedIssue, t: Translator): HTMLElement[
 }
 
 /**
- * Who, and when, as a relative date (SKG-531). The absolute date goes in the title, for a reader who
+ * Who, and when, as a relative date (FRU-38). The absolute date goes in the title, for a reader who
  * needs the day. A date the store wrote in a shape `Date` cannot read is shown as it came.
  */
 function byline(
@@ -679,7 +679,7 @@ function element(document: Document, tag: string, className: string, content: st
 
 /**
  * Below the pin when there is room for it on screen, above it when there is not. Aligned on the pin's
- * start edge for the reading direction; the value stays a physical left, like the pin (SKG-531).
+ * start edge for the reading direction; the value stays a physical left, like the pin (FRU-38).
  */
 function positionThread(thread: HTMLElement, pin: HTMLElement | undefined, direction: Direction): void {
   if (pin === undefined) return;
@@ -700,7 +700,7 @@ function positionThread(thread: HTMLElement, pin: HTMLElement | undefined, direc
   const roomBelow = below + threadHeight <= scrollY + viewportHeight;
   const start = direction === 'rtl' ? left + pinWidth - THREAD_WIDTH : left;
 
-  // The pin's left is in document coordinates, so the window it must stay inside starts at `scrollX` (SKG-607).
+  // The pin's left is in document coordinates, so the window it must stay inside starts at `scrollX` (FRU-68).
   thread.style.left = `${Math.max(scrollX + THREAD_GAP, Math.min(start, scrollX + viewportWidth - THREAD_WIDTH - THREAD_GAP))}px`;
   thread.style.top = `${roomBelow ? below : Math.max(0, top - threadHeight - THREAD_GAP)}px`;
 }
@@ -734,7 +734,7 @@ function boundsToPixels(
 }
 
 /**
- * Kept in one string rather than set per element: when the host becomes a Shadow root (SKG-492) this
+ * Kept in one string rather than set per element: when the host becomes a Shadow root (FRU-3) this
  * whole sheet moves inside it untouched, and the class names stop mattering.
  */
 const STYLES = `

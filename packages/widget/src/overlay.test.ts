@@ -60,7 +60,7 @@ describe('createOverlay', () => {
 
     const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
     assert.equal(pin.dataset.fruitbackStage, 'ripe');
-    // The token, not the hexadecimal (SKG-528). What the pin actually renders is asserted end to
+    // The token, not the hexadecimal (FRU-35). What the pin actually renders is asserted end to
     // end in `e2e/overlay.spec.ts`, which reads the computed colour in a real browser — the only
     // place a `var()` can be resolved at all.
     assert.equal(pin.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-stage-ripe)');
@@ -158,7 +158,7 @@ describe('createOverlay', () => {
     assert.equal(page.view.getComputedStyle(badge).pointerEvents, 'auto');
   });
 
-  it('falls back to the stage when the store reports no state name (SKG-517)', () => {
+  it('falls back to the stage when the store reports no state name (FRU-24)', () => {
     // The Linear connector reports `node.state?.name ?? ''`, so an issue with no state gives an empty
     // string. That used to leave a lone glyph in the header; with the glyph gone it would leave an
     // empty span — a thread whose top row is just a close button. Raised in review.
@@ -175,7 +175,7 @@ describe('createOverlay', () => {
   it('leaves no dangling separator in the badge tooltip when the state is unnamed', () => {
     // The second site of the same hole, and the reason `stateLabel` is a function: the header was
     // fixed and this one was left behind, giving `SKG-742 · ` with nothing after the separator.
-    // Raised in review on SKG-517.
+    // Raised in review on FRU-24.
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });
     overlay.render([issueOnCta({ identifier: 'SKG-742', stateName: '', stage: 'composted' })]);
@@ -184,7 +184,7 @@ describe('createOverlay', () => {
     assert.equal(badge?.getAttribute('title'), 'SKG-742 · Composted');
   });
 
-  it('closes the thread with a drawing rather than a character (SKG-529)', () => {
+  it('closes the thread with a drawing rather than a character (FRU-36)', () => {
     // The close button was a multiplication sign set at 18px, which every font draws differently and
     // no font aligns on the header's baseline. It is `ph:x-bold` now — a filled path, sized in em and
     // painted in currentColor. Its name stays on the button, so nothing about the change reaches a
@@ -214,7 +214,7 @@ describe('createOverlay', () => {
   });
 
   it('names no vendor in the way out, because the widget does not know which store answered', () => {
-    // The label said "sur Linear" until SKG-524, in a widget that is not supposed to know what is
+    // The label said "sur Linear" until FRU-31, in a widget that is not supposed to know what is
     // behind the worker — the same defect `store-unavailable` fixed in the error codes.
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });
@@ -227,7 +227,7 @@ describe('createOverlay', () => {
     assert.doesNotMatch(link?.textContent ?? '', /Linear/);
   });
 
-  it('draws no link at all when the store has nowhere to open (SKG-524)', () => {
+  it('draws no link at all when the store has nowhere to open (FRU-31)', () => {
     // SQLite has no interface, so it reports no `url`. An anchor with an empty href resolves to the
     // current page: clicking it would reload the client's site and lose whatever they were doing —
     // and a link that goes nowhere reads as the store having lost the note.
@@ -443,7 +443,7 @@ describe('coalescing the work', () => {
 
 describe('showing only some pins', () => {
   it('draws only what the filter accepts, and can change its mind without new data', () => {
-    // The filter belongs here rather than in the embedder for the same reason SKG-513's observer
+    // The filter belongs here rather than in the embedder for the same reason FRU-21's observer
     // does: on a client's site nobody is going to fetch the issues again to hide a stage.
     const page = mountWithCta();
     let hidden: string[] = [];
@@ -542,7 +542,7 @@ describe('the team’s replies', () => {
   });
 });
 
-describe('the reading direction and the dates (SKG-531)', () => {
+describe('the reading direction and the dates (FRU-38)', () => {
   it('opens the thread on the pin’s start edge, and leaves the pin where it is', () => {
     const placedBy = (translator: ReturnType<typeof createTranslator>) => {
       const page = mountWithCta();
@@ -567,7 +567,7 @@ describe('the reading direction and the dates (SKG-531)', () => {
     });
   });
 
-  it('opens the thread inside the window when the page is scrolled sideways (SKG-607)', () => {
+  it('opens the thread inside the window when the page is scrolled sideways (FRU-68)', () => {
     const placedBy = (viewportLeft: number, translator = createTranslator()) => {
       const page = mountWithCta();
       page.view.scrollTo(1_500, 0);
@@ -658,7 +658,7 @@ describe('the detached notes', () => {
 
   it('does not list a pin that was placed by position', () => {
     // The line this whole ticket had to be re-scoped around: a pin found only by `bounds` is still
-    // on the page, dashed and marked unsure (SKG-500). It is not detached, and listing it here would
+    // on the page, dashed and marked unsure (FRU-11). It is not detached, and listing it here would
     // be telling the reporter their note is lost when it is sitting on the right element.
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });
@@ -749,7 +749,7 @@ describe('the detached list is the widget’s own DOM', () => {
   });
 });
 
-describe('the thread and the keyboard (SKG-544)', () => {
+describe('the thread and the keyboard (FRU-51)', () => {
   function openOnCta(): { page: MountedPage; badge: HTMLElement } {
     const page = mountWithCta();
     overlay = createOverlay({ document: page.document });

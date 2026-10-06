@@ -53,7 +53,7 @@ export function createApply({ readSite, post }: BridgeSeams): (force?: boolean) 
  * What this origin's entry means for the page's world.
  *
  * The mode is the whole difference between the two the extension serves: in `private` the widget is
- * ours and we mount it, in `team` the widget is the site's and we only say we are here (SKG-596).
+ * ours and we mount it, in `team` the widget is the site's and we only say we are here (FRU-57).
  * Both go through the generation and unchanged-decision guards above, so team mode costs neither of
  * them a second implementation.
  */

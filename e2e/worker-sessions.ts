@@ -2,7 +2,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 /**
- * The worker holds extension sessions during the suite, so the team-mode spec can pair (SKG-538).
+ * The worker holds extension sessions during the suite, so the team-mode spec can pair (FRU-45).
  *
  * The server and the `pair` command must read the same file and the same key. The key is a test
  * value, and the worker refuses one shorter than 32 characters.

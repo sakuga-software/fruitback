@@ -79,7 +79,7 @@ CI runs each of these as its own check on every pull request to `main`. Run them
 
 Then:
 
-- **The title is a Conventional Commit**: `type(scope): what changed (SKG-xxx)`. The key at the end is the
+- **The title is a Conventional Commit**: `type(scope): what changed (FRU-xxx)`. The key at the end is the
   Linear ticket; leave it out when the change has none. The types are `feat`, `fix`,
   `refactor`, `chore`, `docs`, `test`, `style`, `ci`. The scope is the package — `worker`, `widget`,
   `shared`, `playground`, `extension` — and you leave it out when the change touches several. A squash

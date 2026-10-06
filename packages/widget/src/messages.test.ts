@@ -127,7 +127,7 @@ describe('the bundled catalog', () => {
     assert.ok(Object.keys(BUNDLED_CATALOGS).length > 1, 'only one catalog is checked');
   });
 
-  it('gives every named part of the widget a name of its own, in every bundled catalog (SKG-544)', () => {
+  it('gives every named part of the widget a name of its own, in every bundled catalog (FRU-51)', () => {
     const named = [
       'widget.label',
       'launch.label',
@@ -340,7 +340,7 @@ describe('every word the widget shows', () => {
   });
 });
 
-describe('the catalogs in the bundle (SKG-531)', () => {
+describe('the catalogs in the bundle (FRU-38)', () => {
   const placeholders = (message: string) => new Set([...message.matchAll(/\{(\w+)\}/g)].map((match) => match[1]));
 
   it('carries French, and a French browser gets it with nothing passed', () => {
@@ -371,7 +371,7 @@ describe('the catalogs in the bundle (SKG-531)', () => {
   });
 });
 
-describe('the reading direction (SKG-531)', () => {
+describe('the reading direction (FRU-38)', () => {
   it('is right to left for the scripts that are', () => {
     assert.deepEqual(
       ['ar', 'he-IL', 'fa', 'ur', 'en-US', 'fr', 'zh-Hant', 'not a tag!'].map((tag) => directionOf(tag)),
@@ -404,7 +404,7 @@ describe('the reading direction (SKG-531)', () => {
   });
 });
 
-describe('dates and numbers (SKG-531)', () => {
+describe('dates and numbers (FRU-38)', () => {
   const now = () => Date.parse('2026-09-14T12:00:00.000Z');
 
   it('says when, relative to now, in the language of the words', () => {

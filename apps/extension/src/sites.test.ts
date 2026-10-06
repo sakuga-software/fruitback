@@ -7,7 +7,7 @@ describe('parseSite', () => {
    * The one shape a release cannot re-run.
    *
    * Written as a literal rather than built by this repository's own writer, because what has to keep
-   * working is what a browser profile already holds: an entry stored before SKG-596, with no `mode`
+   * working is what a browser profile already holds: an entry stored before FRU-57, with no `mode`
    * and a real client id. If it ever stopped reading as private mode, every reviewer using the
    * extension today would open their browser to a site that mounts nothing.
    */

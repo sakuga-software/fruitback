@@ -3,7 +3,7 @@ import { expect, type Locator, type Page, test } from '@playwright/test';
 import { badgeFor, openPlayground, plantPin } from './pin.ts';
 
 /**
- * The widget without a pointer, and under axe-core (SKG-544).
+ * The widget without a pointer, and under axe-core (FRU-51).
  *
  * The unit tests hold the key handling. These hold what happy-dom cannot show: that a real browser
  * moves focus where the handlers say, and that the real page does not scroll away or press a button.

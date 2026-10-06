@@ -336,7 +336,7 @@ describe('a row nobody can trust', () => {
 });
 
 /**
- * Rotation, and the grace that keeps a lost answer from locking a reviewer out (SKG-600).
+ * Rotation, and the grace that keeps a lost answer from locking a reviewer out (FRU-61).
  *
  * A refresh token that never changes is a thirty-day password: a copy taken from a browser profile
  * stays good for the rest of the month and nothing observes the theft. Every test below is about one
@@ -811,7 +811,7 @@ describe('the rotation grace is derived, not chosen', () => {
 });
 
 /**
- * The upgrade path, which a test on a fresh file never walks (SKG-600).
+ * The upgrade path, which a test on a fresh file never walks (FRU-61).
  *
  * Every other test here creates an empty database, so both migrations run together and
  * `ALTER TABLE ... ADD COLUMN` is applied to a table with no rows in it. What ships is the opposite:
