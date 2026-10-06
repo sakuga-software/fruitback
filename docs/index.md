@@ -19,6 +19,7 @@ because a tracker's API key cannot ship in client-side JavaScript.
 | [Running the worker yourself](self-hosting.md)      | One container behind a reverse proxy: every environment variable, and what a wrong value breaks. |
 | [Reviewing a site with the extension](reviewing.md) | The reviewer's side: the browser extension, a rule per site, and pairing.                        |
 | [Translating the widget](translating.md)            | The words a host can replace, and the catalogs the bundle carries.                               |
+| [What the widget collects](privacy.md)              | Every field a note carries, where it goes, how long it stays, and how to delete it.              |
 | [Architecture](architecture.md)                     | What the parts are, and the designs that were dropped.                                           |
 
 ## The code
