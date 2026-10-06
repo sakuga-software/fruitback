@@ -235,7 +235,7 @@ function form(origin: string, found?: ResolvedSite): HTMLElement {
     // Said out loud rather than refused in silence. The bridge applies the same rule before it
     // mounts, so an endpoint that fails here would have been stored, shown as **On**, and then
     // ignored by a page that reported nothing — which reads as a broken extension. Raised in review.
-    problem.textContent = complaint(values);
+    problem.textContent = complaint(values, pattern);
     if (problem.textContent !== '') return;
 
     // `enabled` is kept: changing the endpoint of a site that is switched off must not switch it on.

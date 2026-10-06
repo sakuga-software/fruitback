@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { FEEDBACK_PATH, type RelaySeams, createRelay } from './relay.ts';
 import { type RelayRequest, type RelayResponse, parseRelayRequest } from './protocol.ts';
+import { resolveSite } from './site-patterns.ts';
 import type { SiteConfig } from './sites.ts';
 
 /**
@@ -53,6 +54,21 @@ describe('the relay refuses before it sends', () => {
     const { relay, sent } = harness();
 
     assert.deepEqual(await relay(READ, undefined), { ok: false, status: 0, body: 'unknown-sender' });
+    assert.deepEqual(sent, []);
+  });
+
+  /**
+   * The lookup the background gives the relay is `resolveSite`. A wildcard stored in team mode by an
+   * earlier version must not lend the session to a page it covers (FRU-75).
+   */
+  it('refuses an origin that only a team-mode wildcard covers', async () => {
+    const stored = { 'https://*.vercel.app': TEAM };
+    const { relay, sent } = harness({ readSite: async (origin) => resolveSite(stored, origin)?.site });
+
+    assert.partialDeepStrictEqual(await relay(READ, 'https://somebody.vercel.app'), {
+      ok: false,
+      body: 'site-not-configured',
+    });
     assert.deepEqual(sent, []);
   });
 

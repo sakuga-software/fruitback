@@ -83,6 +83,22 @@ describe('exportSites and importSites', () => {
     });
   });
 
+  /** A file must not store the rule that the form refuses: a wildcard that lends a session (FRU-75). */
+  it('skips a wildcard in team mode, and keeps the same wildcard in private mode', () => {
+    const result = importSites(
+      file({
+        sites: {
+          'https://*.vercel.app': { mode: 'team', endpoint: 'https://feedback.acme.dev' },
+          'https://*.staging.acme.dev': { mode: 'private', endpoint: 'https://feedback.acme.dev', clientId: 'acme' },
+        },
+      }),
+    );
+
+    assert.ok(result.ok);
+    assert.deepEqual(Object.keys(result.sites), ['https://*.staging.acme.dev']);
+    assert.deepEqual(result.skipped, ['https://*.vercel.app']);
+  });
+
   /** The id is what routes a note. A file is not a form, so the spaces are taken off here (FRU-73). */
   it('skips a client id made of spaces, and stores one without its spaces', () => {
     const result = importSites(

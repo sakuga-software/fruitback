@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { coversOrigin, parseSitePattern, resolveSite } from './site-patterns.ts';
+import { coversOrigin, lendsSession, parseSitePattern, resolveSite } from './site-patterns.ts';
 import { parseSite, type SiteConfig } from './sites.ts';
 
 const on = (clientId: string): SiteConfig => ({
@@ -130,6 +130,34 @@ describe('resolveSite', () => {
   });
 
   /** The shape a release cannot re-run: an entry from before FRU-43, keyed by its origin. */
+  /**
+   * `https://*.vercel.app` is a valid pattern, and in team mode the relay answers for every page a
+   * rule covers with the session of the reviewer (FRU-75).
+   */
+  it('answers nothing for an origin that only a team-mode wildcard covers', () => {
+    const team = { mode: 'team', endpoint: 'https://worker.test', enabled: true } as const;
+
+    assert.equal(resolveSite({ 'https://*.vercel.app': team }, 'https://somebody.vercel.app'), undefined);
+    assert.ok(lendsSession('https://*.vercel.app', team));
+  });
+
+  it('still answers with a team rule that names the origin, and with a private wildcard under a team one', () => {
+    const team = { mode: 'team', endpoint: 'https://worker.test', enabled: true } as const;
+    const sites = {
+      'https://*.staging.acme.dev': team,
+      'https://*.acme.dev': on('acme'),
+      'https://app.acme.dev': team,
+    };
+
+    assert.equal(resolveSite(sites, 'https://app.acme.dev')?.site.mode, 'team');
+    assert.deepEqual(resolveSite(sites, 'https://pr-7.staging.acme.dev'), {
+      pattern: 'https://*.acme.dev',
+      site: sites['https://*.acme.dev'],
+    });
+    assert.equal(lendsSession('https://*.acme.dev', on('acme')), false);
+    assert.equal(lendsSession('https://app.acme.dev', team), false);
+  });
+
   it('still resolves an entry written before the patterns existed', () => {
     const legacy = parseSite({ endpoint: 'https://worker.test', clientId: 'acme', enabled: true });
     assert.ok(legacy !== undefined);

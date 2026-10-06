@@ -1,7 +1,7 @@
 import { browser } from 'wxt/browser';
 import { readAll, readSite, replaceAll } from '../src/sites.ts';
 import { createSiteOwner, isExtensionPage, parseSiteMutation } from '../src/site-writes.ts';
-import { parseSitePattern } from '../src/site-patterns.ts';
+import { lendsSession, parseSitePattern } from '../src/site-patterns.ts';
 import { matchPatternFor, serialize, syncRegistration } from '../src/registration.ts';
 import { createBrowserSessions } from '../src/session-browser.ts';
 import { touchesARefreshToken } from '../src/session-storage.ts';
@@ -50,7 +50,9 @@ export default defineBackground(() => {
       const sites = await readAll();
       // A key that is not a pattern covers nothing in `resolveSite`, so it registers nothing here.
       const wanted = Object.entries(sites)
-        .filter(([pattern, site]) => site.enabled && parseSitePattern(pattern) === pattern)
+        .filter(
+          ([pattern, site]) => site.enabled && parseSitePattern(pattern) === pattern && !lendsSession(pattern, site),
+        )
         .map(([pattern]) => pattern);
 
       // A permission the reviewer granted once can be revoked in the browser's own settings, without
