@@ -5,6 +5,9 @@
 # A copy of the jobs of review.yml in sakuga-review, not a call to it: this repository is public, and
 # a public repository cannot call a workflow of a private one. Keep it in step with review.yml, and
 # take the script at the SHA of the same version (the step that checks out the script).
+#
+# `sakuga-agent[bot]` is the App that the Claude Code agents push with: it counts as a person, as the
+# `trusted_bots` input of review.yml does by default. A copy has no input, so its name is written here.
 name: Sakuga Review
 
 on:
@@ -24,9 +27,9 @@ jobs:
     # skipped too: it gets no secret.
     if: >-
       github.event_name == 'pull_request' &&
-      github.event.sender.type != 'Bot' &&
+      (github.event.sender.type != 'Bot' || github.event.sender.login == 'sakuga-agent[bot]') &&
       !github.event.pull_request.draft &&
-      github.event.pull_request.user.type != 'Bot' &&
+      (github.event.pull_request.user.type != 'Bot' || github.event.pull_request.user.login == 'sakuga-agent[bot]') &&
       github.event.pull_request.head.repo.full_name == github.repository
     # A runner of GitHub, free for a public repository. The self-hosted runners serve the private
     # repositories only, and a self-hosted runner on a public repository runs the code of forks.
@@ -65,7 +68,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: sakuga-software/sakuga-review
-          ref: ea75cd4ceb471dab6b3cede1994ab13dcb07f30b # v4.1
+          ref: f421015719b5e137fefb82113931c91253747239 # v5
           path: settings
           token: ${{ steps.app-token.outputs.token }}
           persist-credentials: false
@@ -95,8 +98,9 @@ jobs:
       github.event_name == 'issue_comment' &&
       github.event.issue.pull_request &&
       github.event.issue.state == 'open' &&
-      github.event.sender.type != 'Bot' &&
-      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR", "CONTRIBUTOR"]'), github.event.comment.author_association) &&
+      (github.event.sender.login == 'sakuga-agent[bot]' ||
+        (github.event.sender.type != 'Bot' &&
+          contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR", "CONTRIBUTOR"]'), github.event.comment.author_association))) &&
       startsWith(github.event.comment.body, '@sakuga-review')
     runs-on: ubuntu-latest
     # A heavy review can think for 12 minutes.
@@ -166,7 +170,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: sakuga-software/sakuga-review
-          ref: ea75cd4ceb471dab6b3cede1994ab13dcb07f30b # v4.1
+          ref: f421015719b5e137fefb82113931c91253747239 # v5
           path: settings
           token: ${{ steps.app-token.outputs.token }}
           persist-credentials: false
@@ -188,3 +192,4 @@ jobs:
           COMMAND: ${{ github.event.comment.body }}
           COMMENT_ID: ${{ github.event.comment.id }}
           COMMENTER: ${{ github.event.comment.user.login }}
+          TRUSTED_BOTS: sakuga-agent[bot]
