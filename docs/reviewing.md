@@ -47,6 +47,12 @@ declares its own. Either row carries **Turn off here** and **Change**.
 A grant reaches the **next** page load, so the popup injects into the tab you have open. Come back to
 the page and the widget is there.
 
+**If a private-mode site shows no note, open the popup.** When the worker reads `authenticated`, the
+popup says `This worker answers a signed-in reader only, and private mode carries no session. Notes do not show on this site.`,
+with a link to [the three modes](modes.md). Private mode carries no session, so the fix is on the
+worker's side: read `public` for that client, or use team mode. The popup says nothing when the
+worker is down or slow, because it did not measure why.
+
 **A team-mode endpoint must be `https`, or loopback for the dev loop** — a session is a bearer
 credential and it does not cross plain `http`, so the popup refuses the entry rather than storing one
 that would be shown as **On** and refuse every call. **Private mode accepts plain `http://`**, and

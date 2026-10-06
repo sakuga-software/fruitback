@@ -122,6 +122,27 @@ export async function addRule(
     .toBe(2);
 }
 
+/**
+ * The popup, for the site in `site`.
+ *
+ * The popup acts on the active tab of its window. It opens behind the site, so the site stays that tab.
+ */
+export async function openPopup(extension: LoadedExtension, site: Page): Promise<Page> {
+  await site.bringToFront();
+  const url = `chrome-extension://${extension.id}/popup.html`;
+  await extension.worker.evaluate(async (popupUrl) => {
+    await chrome.tabs.create({ url: popupUrl, active: false });
+  }, url);
+
+  let popup: Page | undefined;
+  await expect.poll(() => (popup = extension.context.pages().find((page) => page.url() === url))).toBeDefined();
+  if (popup === undefined) throw new Error('the popup did not open');
+
+  await expect(popup.getByText(PLAYGROUND_ORIGIN, { exact: true })).toBeVisible();
+
+  return popup;
+}
+
 /** A pairing code, minted the way an operator mints one: the worker's own `pair` command. */
 export function mintPairingCode(name: string): string {
   const output = execFileSync(process.execPath, ['src/main.ts', 'pair', '--subject', 'e2e-reviewer', '--name', name], {
@@ -135,23 +156,10 @@ export function mintPairingCode(name: string): string {
   return code;
 }
 
-/**
- * Pair from the popup, for the site in `site`.
- *
- * The popup acts on the active tab of its window. It opens behind the site, so the site stays that tab.
- */
+/** Pair from the popup, for the site in `site`. */
 export async function pairFromPopup(extension: LoadedExtension, site: Page, code: string, name: string): Promise<void> {
-  await site.bringToFront();
-  const url = `chrome-extension://${extension.id}/popup.html`;
-  await extension.worker.evaluate(async (popupUrl) => {
-    await chrome.tabs.create({ url: popupUrl, active: false });
-  }, url);
+  const popup = await openPopup(extension, site);
 
-  let popup: Page | undefined;
-  await expect.poll(() => (popup = extension.context.pages().find((page) => page.url() === url))).toBeDefined();
-  if (popup === undefined) return;
-
-  await expect(popup.getByText(PLAYGROUND_ORIGIN, { exact: true })).toBeVisible();
   await popup.getByLabel('Pairing code').fill(code);
   await popup.getByRole('button', { name: 'Pair with this worker' }).click();
   await expect(popup.getByText(`Paired as ${name}`)).toBeVisible();
