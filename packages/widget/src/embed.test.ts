@@ -300,6 +300,115 @@ describe('reading pins', () => {
   });
 });
 
+describe('coming back to the tab (FRU-87)', () => {
+  const PAGE = '<main><section><button data-testid="checkout-cta">Commander</button></section></main>';
+  const ENDPOINT = 'https://worker.test';
+
+  afterEach(() => {
+    mock.timers.reset();
+    mock.restoreAll();
+  });
+
+  function onCta() {
+    return seedIssueFixture({
+      seed: seedFixture({
+        anchor: {
+          selector: '[data-testid="checkout-cta"]',
+          tag: 'button',
+          text: 'Commander',
+          bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 },
+        },
+      }),
+    });
+  }
+
+  /** A widget that counts its reads, on a clock the test moves. */
+  async function mounted(issues = [onCta()]) {
+    mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+    const page = mountPage(PAGE, { width: 1_000, height: 1_000 });
+    setDocumentSize(page.document, 1_000, 1_000);
+    setRect(page.query('button'), { left: 100, top: 200, width: 200, height: 40 });
+
+    let reads = 0;
+    const widget = init({
+      document: page.document,
+      endpoint: ENDPOINT,
+      clientId: 'acme',
+      transport: async () => {
+        reads += 1;
+
+        return { ok: true, status: 200, body: JSON.stringify({ issues }) };
+      },
+    });
+    await widget.refresh();
+    const before = reads;
+
+    const comeBack = async (state: 'visible' | 'hidden' = 'visible'): Promise<void> => {
+      Object.defineProperty(page.document, 'visibilityState', { value: state, configurable: true });
+      const EventCtor = (page.view as unknown as { Event: typeof Event }).Event;
+      page.document.dispatchEvent(new EventCtor('visibilitychange'));
+      // The read is started and not awaited by the listener, so its turns are let through here.
+      await new Promise((resolve) => setImmediate(resolve));
+    };
+
+    return { page, widget, comeBack, readsSince: () => reads - before };
+  }
+
+  it('reads again when the tab is visible again and the last read is old', async () => {
+    const { widget, comeBack, readsSince } = await mounted();
+
+    mock.timers.tick(15_000);
+    await comeBack();
+
+    assert.equal(readsSince(), 1);
+    widget.destroy();
+  });
+
+  it('does not read while the worker would still answer from its cache', async () => {
+    const { widget, comeBack, readsSince } = await mounted();
+
+    mock.timers.tick(14_999);
+    await comeBack();
+
+    assert.equal(readsSince(), 0);
+    widget.destroy();
+  });
+
+  it('does not read when the tab goes to the background', async () => {
+    const { widget, comeBack, readsSince } = await mounted();
+
+    mock.timers.tick(60_000);
+    await comeBack('hidden');
+
+    assert.equal(readsSince(), 0);
+    widget.destroy();
+  });
+
+  it('leaves an open thread alone, because a read would close it', async () => {
+    const { page, widget, comeBack, readsSince } = await mounted();
+    const root = page.document.querySelector('[data-fruitback-host]')?.shadowRoot as ShadowRoot;
+    (root.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+    assert.ok(root.querySelector('.fruitback-thread'), 'the thread did not open');
+
+    mock.timers.tick(60_000);
+    await comeBack();
+
+    assert.equal(readsSince(), 0);
+    assert.ok(root.querySelector('.fruitback-thread'), 'the thread was closed');
+    widget.destroy();
+  });
+
+  it('stops listening when the widget is destroyed', async () => {
+    const { widget, comeBack, readsSince } = await mounted();
+    widget.destroy();
+
+    mock.timers.tick(60_000);
+    await comeBack();
+
+    assert.equal(readsSince(), 0);
+  });
+});
+
 describe('the theme a host passes in', () => {
   it('reaches the host element, where an inline property beats the :host declaration', () => {
     // Written on the element rather than into the stylesheet on purpose: an inline custom property

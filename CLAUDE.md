@@ -152,6 +152,11 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
 - **`init` patches `history.pushState`/`replaceState`** and restores them on `destroy`. A pin belongs
   to a URL, `popstate` does not fire for a `pushState`, and there is no framework to ask on a
   client's site.
+- **`init` reads the pins again when the tab is visible again** (FRU-87), if the last read is older
+  than the 15 seconds the worker caches a read. That is what replaced a webhook: nothing pushes a
+  change of state to an open page. **It does not read while a thread is open**, because `render`
+  closes the thread and somebody who comes back to a thread is reading it. The listener is on the
+  page's own `document`, and `destroy` removes it.
 - **The `workspace` fields point at source; `publishConfig` swaps in `dist` when pnpm packs. All
   three packages need `prepack`.** Miss either and the tarball ships `src` while `publishConfig`
   points at a `dist` that is not there — a failure that lands in a consumer's build and nowhere here.
