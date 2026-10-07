@@ -70,7 +70,7 @@ async function render(editing = false): Promise<void> {
 
   // Pairing is against the **worker**, not the site, so there is nothing to ask for until one is
   // named. A reviewer holds one session per worker however many of its sites they have turned on.
-  if (found !== undefined && !open) app.append(await session(found.site));
+  if (found !== undefined && !open) app.append(...(await session(found.site)));
   if (found !== undefined && !open && tab?.url !== undefined) app.append(readability(found.site, tab.url));
 
   app.append(optionsButton());
@@ -141,9 +141,13 @@ async function grantWorkerOrigin(endpoint: string): Promise<boolean> {
  * Deliberately thin: everything it decides lives in `src/session.ts`, where `node --test` can reach
  * it. What is here is four elements and the two strings a person reads.
  */
-async function session(site: SiteConfig): Promise<HTMLElement> {
+async function session(site: SiteConfig): Promise<HTMLElement[]> {
   const endpoint = site.endpoint;
   const held = (await sessions.list())[endpoint];
+  // Private mode carries no session, so it offers no pairing (FRU-88). A session that this worker
+  // already holds stays on the screen, with its log out.
+  if (held === undefined && site.mode !== 'team') return [];
+
   const wrapper = document.createElement('div');
   wrapper.className = 'session';
 
@@ -169,7 +173,7 @@ async function session(site: SiteConfig): Promise<HTMLElement> {
     row.append(element('span', `Paired as ${describeIdentity(held.identity)}`, 'state'), out);
     wrapper.append(row);
 
-    return wrapper;
+    return [wrapper];
   }
 
   const code = field('Pairing code', 'ABCD-EFGH-JKMN');
@@ -212,17 +216,13 @@ async function session(site: SiteConfig): Promise<HTMLElement> {
 
   const row = document.createElement('div');
   row.className = 'row';
-  // Said plainly in team mode, because there it is the difference between a page that shows this
-  // reviewer's pins and one that shows nothing at all: the relay refuses a call it has no session
-  // for, rather than making it without one.
-  const unpaired =
-    site.mode === 'team'
-      ? 'Not paired — this site cannot reach the worker until you do'
-      : 'Not paired with this worker';
-  row.append(element('span', unpaired, 'state'));
+  // Said plainly, because it is the difference between a page that shows this reviewer's pins and
+  // one that shows nothing at all: the relay refuses a call it has no session for, rather than
+  // making it without one.
+  row.append(element('span', 'Not paired — this site cannot reach the worker until you do', 'state'));
   wrapper.append(row, code.label, submit, problem);
 
-  return wrapper;
+  return [wrapper];
 }
 
 /**

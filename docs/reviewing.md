@@ -62,6 +62,8 @@ protect, and an `http://` staging site is exactly the thing this mode is for.
 ## 3. Pair, in team mode
 
 Private mode needs nothing more — the widget is mounted, and it reads as an anonymous visitor would.
+The popup offers no pairing there, because a session would change nothing. If you already hold a
+session with that worker, the popup still shows it, with **Log out**.
 Team mode relays every call through your session, so until you pair the site can reach nothing:
 
 > Not paired — this site cannot reach the worker until you do
