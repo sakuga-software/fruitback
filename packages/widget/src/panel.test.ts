@@ -142,6 +142,96 @@ describe('createConfigPanel', () => {
   });
 });
 
+describe('copying the feedback as text (FRU-109)', () => {
+  const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+  function mountCopying(clipboard: { writeText(text: string): Promise<void> } | undefined) {
+    const page: MountedPage = mountPage('<main></main>');
+    Object.defineProperty(page.view.navigator, 'clipboard', { value: clipboard, configurable: true });
+    const store = createConfigStore({ defaults: DEFAULTS, storage: null });
+    let asked = 0;
+    panel = createConfigPanel({
+      host: page.document.body,
+      store,
+      document: page.document,
+      exportText: () => `# Feedback, asked ${++asked}`,
+    });
+    panel.open();
+
+    const button = page.document.querySelector('.fruitback-config-copy-button') as HTMLButtonElement;
+    const status = () => page.document.querySelector('.fruitback-config-copy-status')?.textContent;
+    const manual = () => page.document.querySelector('.fruitback-config-copy-text') as HTMLTextAreaElement | null;
+
+    return { page, button, status, manual };
+  }
+
+  it('has no button when it was given nothing to copy', () => {
+    const { page } = mount();
+
+    assert.equal(page.document.querySelector('.fruitback-config-copy-button'), null);
+  });
+
+  it('writes the text to the clipboard and says so', async () => {
+    const written: string[] = [];
+    const { button, status, manual } = mountCopying({ writeText: async (text) => void written.push(text) });
+
+    assert.equal(button.textContent, 'Copy the feedback as text');
+    button.click();
+    await settle();
+
+    assert.deepEqual(written, ['# Feedback, asked 1']);
+    assert.equal(status(), 'Copied');
+    assert.equal(manual(), null, 'a field showed for a copy that worked');
+  });
+
+  it('reads the text again at each click, because the pins change', async () => {
+    const written: string[] = [];
+    const { button } = mountCopying({ writeText: async (text) => void written.push(text) });
+
+    button.click();
+    await settle();
+    button.click();
+    await settle();
+
+    assert.deepEqual(written, ['# Feedback, asked 1', '# Feedback, asked 2']);
+  });
+
+  for (const [refusal, clipboard] of [
+    ['refuses', { writeText: async () => Promise.reject(new Error('NotAllowedError')) }],
+    ['is absent', undefined],
+  ] as const) {
+    it(`shows the text to copy by hand when the clipboard ${refusal}`, async () => {
+      const { page, button, status, manual } = mountCopying(clipboard);
+
+      button.click();
+      await settle();
+
+      assert.equal(status(), 'Copy the text from here');
+      assert.equal(manual()?.value, '# Feedback, asked 1');
+      assert.equal(manual()?.readOnly, true);
+      assert.equal(manual()?.getAttribute('aria-label'), 'Copy the text from here');
+      assert.ok(page.document.activeElement === manual(), 'the field with the text has no focus');
+    });
+  }
+
+  it('takes the field away when a later copy works', async () => {
+    let allowed = false;
+    const { button, status, manual } = mountCopying({
+      writeText: async () => (allowed ? undefined : Promise.reject(new Error('refused'))),
+    });
+    button.click();
+    await settle();
+    assert.notEqual(manual(), null);
+
+    allowed = true;
+    button.click();
+    await settle();
+
+    assert.equal(manual(), null);
+    assert.equal(status(), 'Copied');
+  });
+});
+
 describe('the stages a store can report (FRU-32)', () => {
   const GITHUB: SeedStage[] = ['seeded', 'ripe', 'composted'];
 

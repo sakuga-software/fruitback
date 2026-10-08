@@ -86,7 +86,7 @@ export type Overlay = {
    */
   refilter(): void;
   /** What each pin resolved to, in render order — the honest account of what was found. */
-  resolutions(): { issue: SeedIssue; strategy: AnchorResolution['strategy'] }[];
+  resolutions(): { issue: SeedIssue; strategy: AnchorResolution['strategy']; confident: boolean }[];
   /** Whether a thread is open. `render` closes it, so a caller that can wait asks first. */
   threadOpen(): boolean;
   destroy(): void;
@@ -148,8 +148,12 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     });
   }
 
-  function resolutions(): { issue: SeedIssue; strategy: AnchorResolution['strategy'] }[] {
-    return placed.map((entry) => ({ issue: entry.issue, strategy: entry.resolution.strategy }));
+  function resolutions(): { issue: SeedIssue; strategy: AnchorResolution['strategy']; confident: boolean }[] {
+    return placed.map((entry) => ({
+      issue: entry.issue,
+      strategy: entry.resolution.strategy,
+      confident: entry.resolution.confident,
+    }));
   }
 
   function reposition(): void {

@@ -83,8 +83,9 @@ test('the settings dialog holds focus, and gives it back to the gear', async ({ 
 
   await page.keyboard.press('Shift+Tab');
   await expect(dialog.getByRole('button', { name: 'Close settings' })).toBeFocused();
+  // The last control of the panel, so the trap wraps from its first to its last.
   await page.keyboard.press('Shift+Tab');
-  await expect(dialog.getByRole('checkbox', { name: 'Hide resolved feedback' })).toBeFocused();
+  await expect(dialog.getByRole('button', { name: 'Copy the feedback as text' })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(dialog.getByRole('button', { name: 'Close settings' })).toBeFocused();
 

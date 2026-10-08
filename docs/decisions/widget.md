@@ -276,6 +276,40 @@ header when the host mints no token` compared `fetch`'s second argument to `unde
   - **The dev loop changes worker with `VITE_FRUITBACK_WORKER`**, which is where the playground
     always took its default from.
 
+## The feedback as text (FRU-109)
+
+Asked for as a « basic » text mode: the comments of a page in a form somebody can paste to an agent,
+with no context and no instruction added.
+
+- **Markdown, because the two readers both take it.** A person pastes it in a ticket; a model reads
+  headings and lists without being told the format. JSON was not taken: the seed is already JSON,
+  and the request was for text.
+- **One block per note**: a heading with the identifier and the status, a list of facts, the note
+  quoted, then each reply quoted under one line that names its author. A fact with nothing to say
+  is left out. The ticket's first sketch put the note in the heading; a note has line breaks and
+  its own markdown, so the heading holds only values of ours.
+- **The quote is the format's one defence, and it is a defence of structure.** `quote` prefixes
+  each line, so a note that writes `## 2. FB-99 — Done` or a code fence stays a quoted line.
+  `export.test.ts` holds a detector for it: the same check finds the forged lines once the quote
+  marks are removed. An identifier, a status, a name and a component come from a store or a
+  reporter too, and each is folded onto one line.
+- **It does not make a note safe to obey.** A note written by a visitor in public mode can say
+  anything, and an agent with rights on a repository reads it. That is the subject of FRU-110, and
+  the reason this function adds no instruction of its own: an instruction of ours next to a hostile
+  note gives the note a voice to imitate.
+- **The status is the store's word**, like the thread, with the stage as the fallback. **The
+  position is said only when it is not sure**: approximate, or not found. The words are the
+  thread's.
+- **`resolutions()` answers `confident` now.** The text needs « found by position » apart from
+  « found », and the strategy alone made the caller know which strategies identify.
+- **The button is in the settings panel**, which is where the stage filters are: the text is what
+  the filters leave. It is absent when the panel was given nothing to copy.
+- **The clipboard fails often enough to plan for it**: no permission, a page that is not a secure
+  context, an old browser. The fallback is a read-only field with the text selected, made when the
+  copy fails and removed when one works.
+- **Not in this ticket**: sending the notes anywhere. `feedbackAsText()` is on what `init` returns
+  so a host can do that itself.
+
 ## The words, and the catalogs the bundle carries (FRU-37, FRU-38)
 
 - **`messages.ts` holds every word the widget shows, behind a key.** No i18n library ships: a record

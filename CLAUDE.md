@@ -369,6 +369,23 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   and the dialog `Fruitback settings`. A host catalog must keep `settings.open` and `settings.dialog` apart
   too.
 
+**The feedback as text** (FRU-109)
+
+- **`export.ts` is one pure function, and `feedbackAsText()` on what `init` returns is the same
+  text the panel's button copies.** It reads `overlay.resolutions()`, so it costs no request and
+  leaves out a stage the reporter hid. It is an addition to the contract in `public.ts`.
+- **The text holds no instruction and no introduction.** It is what the reviewers wrote and where.
+  A sentence that tells a reader what to do with it belongs to whoever pastes it.
+- **Every line a reviewer wrote is quoted, and every value of ours is one line.** A note is text
+  from anybody who can reach the page. Unquoted, a line of it can pass for a heading of this
+  format, or for the note after it. A selector goes in a code span one backtick longer than its
+  longest run. The quote stops a forged structure. It does not make the text safe to obey.
+- **The words are catalog keys, the dates are not.** `2026-10-06` reads the same in every language.
+  `messages.test.ts` holds a key that never rendered as a failure, so the copied text is pushed
+  into that check by hand: it is in no DOM node.
+- **A clipboard can refuse.** The panel then shows the text in a field, selected. The field is made
+  on demand: at rest the panel holds no field to type in (FRU-89).
+
 **The keyboard and the screen reader** (FRU-51)
 
 - **The popover and the panel are modal dialogs, and `aria-modal` ships only with the trap.** The
@@ -438,6 +455,7 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
 _The widget_, _The host, and why everything lives in one Shadow root_,
 _The look, and the one thing a host may change_, _One prefix, and it is `fruitback`_,
 _The popover_, _Who carries the calls_, _The optional picture_, _The settings panel_,
+_The feedback as text_,
 _The keyboard, the screen reader and the contrast_,
 _The words, and the catalogs the bundle carries_.
 And _No emoji, and what replaced them_ in [docs/decisions/icons.md](docs/decisions/icons.md).

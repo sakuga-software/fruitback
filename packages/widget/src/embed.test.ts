@@ -317,6 +317,34 @@ describe('reading pins', () => {
     widget.destroy();
   });
 
+  it('gives the notes on screen as text, without the stages the reporter hid (FRU-109)', async () => {
+    const page = mountWithCta();
+    const closed = seedIssueFixture({
+      ...onCta(),
+      id: 'closed',
+      identifier: 'FB-2',
+      stage: 'composted',
+      stateName: 'Closed',
+    });
+    const reads = stubReads(() => ok([{ ...onCta(), identifier: 'FB-1' }, closed]));
+    const widget = init({ document: page.document, endpoint: ENDPOINT, clientId: 'acme', locale: 'en' });
+    await widget.refresh();
+    const before = reads.length;
+
+    const both = widget.feedbackAsText();
+    assert.match(both, /^## 1\. FB-1 — /m);
+    assert.match(both, /^## 2\. FB-2 — Closed$/m);
+    assert.match(both, /^# Feedback on /m);
+
+    (shadowOf(page).querySelector('[name="stage-composted"]') as HTMLInputElement).click();
+
+    assert.doesNotMatch(widget.feedbackAsText(), /FB-2/);
+    assert.match(widget.feedbackAsText(), /^## 1\. FB-1 — /m);
+    assert.equal(reads.length, before, 'the text cost a request');
+
+    widget.destroy();
+  });
+
   it('ignores the answer of a read that a newer read replaced', async () => {
     // Two reads can be in flight, and nothing makes them answer in the order they were sent.
     const page = mountWithCta();
