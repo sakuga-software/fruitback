@@ -536,10 +536,16 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
 - **The popup offers pairing in team mode only** (FRU-88). A session changes nothing in private mode,
   and a form that does nothing reads as the fix for a page with no pins. A session the extension
   already holds with that worker stays on the screen with its log out: a credential is never hidden.
+- **A problem is shown with the one thing to do about it** (FRU-90). `remedy.ts` lists every problem
+  the popup and the options page can say, each with a remedy or with the reason it has none, and
+  `showProblem` draws the button from that list on both pages. `remedy.test.ts` fails on a problem
+  constant that is in no entry, and on a page that writes a problem by hand. **A remedy runs in its
+  own click**, so it can ask for a permission: the pairing attempt and the turn-on are functions the
+  button calls again, never a promise that already ran.
 - **The guide's words are guarded against the popup's** (`reviewing-doc.test.ts`). `docs/reviewing.md`
   walks somebody through a screen by naming what is on it, and a renamed button leaves it describing
-  a popup nobody has. The pairing failures and the mode labels are read **out of** `popup/main.ts`,
-  so a fifth message is covered the day it is written; the buttons are named one by one, because a
+  a popup nobody has. The mode labels are read **out of** `popup/main.ts` and the pairing failures are imported from
+  `remedy.ts`, so a fifth message is covered the day it is written; the buttons are named one by one, because a
   regex over them would guard whichever ones it happened to match.
 
 - **`world: 'MAIN'` is the ticket, not a preference.** A content script in the isolated world shares
@@ -716,7 +722,8 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   minute, for ever. `isFresh` is the single freshness rule the three callers share so they cannot
   drift apart.
 
-**Deeper** — _The extension, and the two worlds_, _The session, and the token that never goes down_
+**Deeper** — _The extension, and the two worlds_, _A problem, and the one thing to do about it_,
+_The session, and the token that never goes down_
 and _The team mode, and the call the page cannot make_:
 [docs/decisions/extension.md](docs/decisions/extension.md).
 

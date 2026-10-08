@@ -124,6 +124,43 @@ it changes who is shown the feedback and never who may fetch it.
   can drive, which is why that path is unit-tested and the browser run uses a build with the scripts
   declared statically.
 
+## A problem, and the one thing to do about it (FRU-90)
+
+The popup and the options page stated a problem and stopped: « The worker did not answer. Try
+again. » with nothing to press. The options page already had the right shape in one place, « No
+access in this browser » with **Grant access** beside it.
+
+- **`remedy.ts` is the inventory, and the pages draw from it.** Fifteen problems. Seven have a
+  remedy; eight have a reason for none, which is a field beside the message or a file only another
+  file replaces.
+
+  | The page says                               | Beside it             |
+  | ------------------------------------------- | --------------------- |
+  | a code that is spent or expired             | **How to get a code** |
+  | a worker that did not answer                | **Try again**         |
+  | a refused permission on the worker          | **Grant access**      |
+  | a worker on plain http, from either message | **Change the worker** |
+  | a refused permission on the site            | **Grant access**      |
+  | a change that was not confirmed             | **Check the list**    |
+
+- **One function draws them, `showProblem`.** Two pages that each build a button drift: the popup
+  would say « Retry » where the options page says « Try again ». `remedy.test.ts` fails on a page
+  that writes a problem by hand, and on a problem constant of `site-editor.ts` or `site-form.ts`
+  that is in no entry of the list.
+- **A remedy is a click, and that is what makes « Grant access » possible.** A host permission can
+  only be asked for while a gesture is handled. So the pairing attempt and the turn-on became
+  functions, and the remedy calls the function again: the request is the first thing it does. A
+  remedy that held the promise of the first attempt could only say that it failed.
+- **« Try again » is offered only where the same try can succeed.** A worker that did not answer
+  left the code unspent. A code the worker refused is spent, so the popup links to the guide and
+  offers no second try: the E2E spec asserts that absence, and the other half of the same spec is
+  its control.
+- **« Check the list » and not « Retry » for a change that was not confirmed.** The change can be
+  stored although its answer was lost (FRU-73), so doing it again is the wrong advice. On the popup
+  the button opens the options page; on the options page it reads the list again from storage.
+- **The pairing failures moved out of `popup/main.ts`**, into a module `node --test` can import. The
+  guide's guard read them out of the popup source with a regular expression; it imports them now.
+
 ## The session, and the token that never goes down (FRU-60)
 
 FRU-42 built the worker half — pairing codes, access and refresh tokens, revocation, three routes

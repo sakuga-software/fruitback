@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { READ_NEEDS_SESSION } from './read-probe.ts';
+import { PAIRING_NEEDS_HTTPS, PAIRING_PROBLEM, PROBLEMS, REMEDY_LABEL } from './remedy.ts';
 
 /**
  * The popup's words, checked against the guide that quotes them (FRU-46).
@@ -12,13 +13,13 @@ import { READ_NEEDS_SESSION } from './read-probe.ts';
  * and nothing else would say so: the strings are not imported anywhere, there is no Chromium on CI
  * to open the popup with, and prose does not fail a build.
  *
- * The failure messages and the mode labels are **read out of the popup** rather than listed here, so
- * a fifth message or a third mode is covered the day it is written. The buttons are named, because
- * they are built one by one at their call sites and a regex over them would guard whichever ones it
- * happened to match.
+ * The failure messages are **imported from `remedy.ts`** and the mode labels are **read out of the
+ * popup** rather than listed here, so a fifth message or a third mode is covered the day it is
+ * written. The buttons are named, because they are built one by one at their call sites and a regex
+ * over them would guard whichever ones it happened to match.
  *
- * Source text rather than an import: `popup/main.ts` binds `browser` at import, so `node --test`
- * cannot load it. The same reason `page-api.test.ts` reads `docs/install.md` as text.
+ * Source text for the popup rather than an import: `popup/main.ts` binds `browser` at import, so
+ * `node --test` cannot load it. The same reason `page-api.test.ts` reads `docs/install.md` as text.
  */
 describe('the guide quotes the popup this extension renders', () => {
   const read = (path: string): string => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8');
@@ -26,12 +27,8 @@ describe('the guide quotes the popup this extension renders', () => {
   const optionsPage = read('../entrypoints/options/main.ts');
   const guide = read('../../../docs/reviewing.md');
 
-  /** Every value of `PAIRING_PROBLEM`, by its `key: 'message'` shape. */
-  const problems = [
-    ...(/const PAIRING_PROBLEM[^=]*= \{([\s\S]*?)\n\};/.exec(popup)?.[1] ?? '').matchAll(/: '([^']+)'/g),
-  ]
-    .map((match) => match[1] ?? '')
-    .filter((message) => message !== '');
+  /** Every way a pairing fails. The popup draws them from this record, and the check below says so. */
+  const problems = Object.values(PAIRING_PROBLEM);
 
   /**
    * Every mode label the popup offers, out of the block that builds the options.
@@ -49,7 +46,8 @@ describe('the guide quotes the popup this extension renders', () => {
    * this is the check the first version of `worlds.test.ts` did not have.
    */
   it('finds the strings it is written to guard', () => {
-    assert.equal(problems.length, 4, `read ${problems.length} pairing failures out of the popup`);
+    assert.equal(problems.length, 4, `read ${problems.length} pairing failures`);
+    assert.ok(popup.includes('PAIRING_PROBLEM['), 'the popup no longer draws its pairing failures from remedy.ts');
     assert.ok(options !== '', 'the options block of modeField was not found; this guard reads nothing');
     // Counted against the `SiteMode` union rather than against a number written here, so a third
     // mode raises the bar instead of slipping under it.
@@ -87,10 +85,6 @@ describe('the guide quotes the popup this extension renders', () => {
       'Worker endpoint',
       'Client id',
       'Not paired — this site cannot reach the worker until you do',
-      // Not in `PAIRING_PROBLEM`, and the one a reviewer on an http worker actually meets: the popup
-      // disables the button before `sessions.pair` runs, so the record's own `insecure-endpoint`
-      // never reaches that screen. Raised in review.
-      'Pairing needs https (localhost excepted): a session must not cross http.',
       "team mode · the site's own widget",
       'No rule covers this origin, so Fruitback does nothing here.',
       'Turn off for every site this rule covers',
@@ -100,6 +94,26 @@ describe('the guide quotes the popup this extension renders', () => {
     for (const control of controls) {
       assert.ok(popup.includes(control), `the popup no longer renders: ${control}`);
       assert.ok(guide.includes(control), `docs/reviewing.md no longer names: ${control}`);
+    }
+
+    // Not in `PAIRING_PROBLEM`, and the one a reviewer on an http worker actually meets: the popup
+    // disables the button before `sessions.pair` runs, so the record's own `insecure-endpoint`
+    // never reaches that screen. Raised in review.
+    assert.ok(popup.includes('PAIRING_NEEDS_HTTPS'), 'the popup no longer says that pairing needs https');
+    assert.ok(guide.includes(PAIRING_NEEDS_HTTPS), 'docs/reviewing.md no longer quotes the https line');
+  });
+
+  /** The button beside a problem is a step of the walk-through too (FRU-90). */
+  it('names the remedy of every problem it quotes', () => {
+    const quoted = PROBLEMS.filter((problem) => guide.includes(problem.text));
+
+    assert.ok(quoted.length >= 5, `the guide quotes ${quoted.length} problems: this check reads nothing`);
+    for (const problem of quoted) {
+      if (problem.remedy === null) continue;
+      assert.ok(
+        guide.includes(`**${REMEDY_LABEL[problem.remedy]}**`),
+        `docs/reviewing.md quotes "${problem.text}" and does not name its button: ${REMEDY_LABEL[problem.remedy]}`,
+      );
     }
   });
 
