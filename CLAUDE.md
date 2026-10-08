@@ -389,12 +389,16 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   must include it: otherwise its new text reads as a page change and schedules a resolve.
 - **The host container is a landmark**, `role="region"` named by `widget.label`. A screen reader meets
   the widget in the middle of the host's content, and the landmark says what it is.
-- **`contrast.test.ts` measures every pair a module paints, in both schemes, against a list of known
-  failures**: the accent, the stage colours and the dark warning wait for a design decision. A pin
-  sits on the host's page, so no test can promise its contrast. `e2e/a11y.spec.ts` runs axe-core in
-  both schemes, scoped to `[data-fruitback-host]`, with animations off. It lets through the accent
-  only, and a control fails when the accent passes. It found what the token test cannot: text that the
-  reset painted black.
+- **`contrast.test.ts` measures every pair a module paints, in both schemes, and no pair fails**
+  (FRU-93). A pin sits on the host's page, so no test can promise its contrast. `e2e/a11y.spec.ts`
+  runs axe-core in both schemes, scoped to `[data-fruitback-host]`, with animations off, and finds
+  nothing. Its control repaints a label grey and expects a finding: an empty list proves nothing
+  alone. Axe finds what the token test cannot, because that test compares the tokens a pair names and
+  not the rule that paints them: text that the reset painted black, and a label that kept the
+  foreground of the accent on the chip.
+- **In the dark scheme the accent and the warning are light fills with dark text on them.** Each one
+  is a fill under text and also text on the surface, and no single red does both with white text.
+  A style that changes a background must change the foreground with it.
 
 **The words** (FRU-37, FRU-38)
 

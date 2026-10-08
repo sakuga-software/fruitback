@@ -7,9 +7,8 @@ import { THEME_STYLES } from './theme.ts';
  * WCAG 2.2 contrast of the default tokens, in the light scheme and in the dark scheme (FRU-51).
  *
  * Text needs 4.5:1 (1.4.3). The border of a field and a focus ring need 3:1 (1.4.11).
- * `KNOWN_FAILURES` holds the pairs that fail now. They are the accent and the stage colours, which
- * are the product's identity and wait for a decision. A pair that starts to pass must leave the list,
- * and a new failure must go in it on purpose.
+ * No pair fails since FRU-93. Before it, a list of known failures held the accent, four stage colours
+ * and the dark warning.
  *
  * The pin itself sits on the host's page, whose colour nothing here knows. No test can promise its
  * contrast.
@@ -74,24 +73,13 @@ const PAIRS: Pair[] = [
     minimum: 4.5,
     where: 'the approximate mark on a pin',
   })),
-];
-
-const KNOWN_FAILURES = [
-  'light: color-on-accent on color-accent, the launch and send labels',
-  'light: color-accent on color-surface-raised, the failed status',
-  'light: color-accent on color-surface, the thread and detached-note links',
-  'light: color-on-stage on stage-seeded, the approximate mark on a pin',
-  'light: color-on-stage on stage-green, the approximate mark on a pin',
-  'light: color-on-stage on stage-ripening, the approximate mark on a pin',
-  'light: color-on-stage on stage-ripe, the approximate mark on a pin',
-  'dark: color-on-accent on color-accent, the launch and send labels',
-  'dark: color-accent on color-surface-raised, the failed status',
-  'dark: color-accent on color-surface, the thread and detached-note links',
-  'dark: color-warning on color-surface, the thread warning about an approximate position',
-  'dark: color-on-stage on stage-seeded, the approximate mark on a pin',
-  'dark: color-on-stage on stage-green, the approximate mark on a pin',
-  'dark: color-on-stage on stage-ripening, the approximate mark on a pin',
-  'dark: color-on-stage on stage-ripe, the approximate mark on a pin',
+  // A drawing and a border, not text: 1.4.11 asks for 3:1. The list names the stage in words too.
+  ...SEED_STAGES.map((stage) => ({
+    foreground: `stage-${stage}`,
+    background: 'color-surface',
+    minimum: 3,
+    where: 'the stage mark of a detached note, and the top border of a thread',
+  })),
 ];
 
 function declared(block: string): Record<string, string> {
@@ -140,7 +128,7 @@ describe('the contrast of the default tokens (FRU-51)', () => {
     }
   });
 
-  it('fails only where a failure is known', () => {
+  it('passes for every pair, in both schemes', () => {
     const failures: string[] = [];
     for (const [scheme, tokens] of [
       ['light', light],
@@ -148,10 +136,12 @@ describe('the contrast of the default tokens (FRU-51)', () => {
     ] as const) {
       for (const { foreground, background, minimum, where } of PAIRS) {
         const measured = ratio(tokens[foreground] ?? '', tokens[background] ?? '');
-        if (measured < minimum) failures.push(`${scheme}: ${foreground} on ${background}, ${where}`);
+        if (measured < minimum) {
+          failures.push(`${scheme}: ${foreground} on ${background}, ${where} (${measured.toFixed(2)})`);
+        }
       }
     }
 
-    assert.deepEqual(failures, KNOWN_FAILURES);
+    assert.deepEqual(failures, []);
   });
 });

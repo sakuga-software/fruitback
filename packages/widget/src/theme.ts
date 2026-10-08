@@ -22,7 +22,9 @@ import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
  *
  * **FRU-35 changed no rendered colour.** Every colour was the hexadecimal already in the
  * stylesheets. FRU-51 then changed three values for contrast: `color-border-strong`,
- * `color-text-subtle` and `color-success`. `contrast.test.ts` measures every pair a module paints.
+ * `color-text-subtle` and `color-success`. FRU-93 changed the accent and four stage colours, and
+ * gave the dark scheme its own accent and warning. `contrast.test.ts` measures every pair a module
+ * paints, and no pair fails.
  *
  * One thing does move, by 4 pixels: the thread's shadow was `0 10px 34px rgba(0, 0, 0, 0.18)` and the
  * panel's `0 10px 30px rgb(0 0 0 / 18%)` — the same intention spelled twice. They are one token now.
@@ -122,10 +124,10 @@ export function missingStageTokens(): SeedStage[] {
  */
 export const THEME_STYLES = `
 :host {
-  --fruitback-color-accent: #e53935;
+  --fruitback-color-accent: #dd2c27;
   /*
     One foreground per filled background, and not one shared by all of them.
-    All four hold #fff today, which is why a single on-accent looked harmless: the original CSS said
+    All four hold #fff in the light scheme, which is why a single on-accent looked harmless: the original CSS said
     color:#fff in five places, and naming it after the accent coupled three elements whose background
     is something else — the gear on the chip, every pin badge on its stage, the orphan chip on the
     warning. A host pairing a pale accent with a dark foreground would have turned those three into
@@ -146,11 +148,14 @@ export const THEME_STYLES = `
   --fruitback-color-success: #4e7d2a;
   --fruitback-color-warning: #8d6e63;
 
-  /* Ripening, not a rainbow. Same five values the contract used to carry. */
-  --fruitback-stage-seeded: #a3b18a;
-  --fruitback-stage-green: #7cb342;
-  --fruitback-stage-ripening: #fb8c00;
-  --fruitback-stage-ripe: #e53935;
+  /*
+    Ripening, not a rainbow. Each one holds white text at 4.5:1 or more (FRU-93), which the first
+    four did not. A pin sits on the page of the host, so the dark scheme keeps these values.
+  */
+  --fruitback-stage-seeded: #6a7950;
+  --fruitback-stage-green: #56802e;
+  --fruitback-stage-ripening: #ac5f00;
+  --fruitback-stage-ripe: #dd2c27;
   --fruitback-stage-composted: #8d6e63;
 
   /* Named for the elevation they belong to, not for a size, so a fifth one has to justify itself. */
@@ -178,6 +183,15 @@ export const THEME_STYLES = `
 */
 @media (prefers-color-scheme: dark) {
   :host {
+    /*
+      The accent and the warning are a fill under text and also text on the surface. No red holds
+      white text at 4.5:1 and is also readable on a dark surface, so the dark scheme uses a lighter
+      fill with dark text on it (FRU-93).
+    */
+    --fruitback-color-accent: #ec6a65;
+    --fruitback-color-on-accent: #1c1917;
+    --fruitback-color-warning: #a88a7e;
+    --fruitback-color-on-warning: #1c1917;
     --fruitback-color-surface: #1c1917;
     --fruitback-color-surface-raised: #262220;
     --fruitback-color-border: #3a3532;

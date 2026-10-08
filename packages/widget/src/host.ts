@@ -479,5 +479,9 @@ li { display: list-item; }
   clip-path: inset(50%);
   white-space: nowrap;
 }
-:host([data-fruitback-capturing]) .fruitback-launch { background: var(--fruitback-color-chip); }
+:host([data-fruitback-capturing]) .fruitback-launch {
+  background: var(--fruitback-color-chip);
+  /* The label is on the chip now. The foreground of the accent is dark in the dark scheme (FRU-93). */
+  color: var(--fruitback-color-on-chip);
+}
 `;
