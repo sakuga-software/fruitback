@@ -52,6 +52,12 @@ WORKDIR /app
 # commit; the image is pinned by digest at deploy time, which is where that guarantee belongs.
 RUN apk upgrade --no-cache && apk add --no-cache sqlite
 
+# The base image carries npm, npx and corepack, and this stage runs none of them: the bundle below
+# holds its own dependencies. npm has its own dependencies, and the release gate scans them. It
+# refused every build of `main` for two weeks on `brace-expansion` and `undici` inside npm, which
+# `apk upgrade` cannot reach (FRU-79). What is not in the image cannot hold a vulnerability.
+RUN rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /opt/yarn-*
+
 # The default home for FRUITBACK_SQLITE_PATH, and a mount point for the volume that outlives the
 # container. Created here and owned by `node`, because the process does not run as root and a store
 # that cannot write its own directory fails at the first note rather than at boot.

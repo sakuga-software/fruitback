@@ -6,8 +6,25 @@ import { defineConfig } from 'vite';
  * The port is fixed and documented in CLAUDE.md, because `/tf` and `/tfp` read it from there rather
  * than probing. `strictPort` makes a clash fail loudly instead of silently moving the playground.
  */
+/**
+ * The host names the development server answers for, beside localhost.
+ *
+ * Vite refuses a request whose `Host` it does not know. The public demonstration (FRU-79) runs this
+ * server behind a proxy, so its container names its own host here.
+ */
+const allowedHosts = (process.env.PLAYGROUND_ALLOWED_HOSTS ?? '')
+  .split(',')
+  .map((host) => host.trim())
+  .filter((host) => host !== '');
+
+/**
+ * Behind a proxy that ends TLS, the page is on port 443 and this server on 5177. The client of Vite
+ * opens its socket on the port of the server by default, which the proxy does not publish.
+ */
+const hmr = allowedHosts.length > 0 ? { protocol: 'wss', clientPort: 443 } : undefined;
+
 export default defineConfig({
-  server: { port: 5177, strictPort: true },
+  server: { port: 5177, strictPort: true, allowedHosts, hmr },
   preview: { port: 5177, strictPort: true },
   /**
    * Pre-bundled at boot rather than discovered on the first navigation.
