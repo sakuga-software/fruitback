@@ -9,7 +9,8 @@ import {
 } from './clients.ts';
 import { type WorkerConfig, type WorkerEnv, readAllowedOrigins, readConfig } from './env.ts';
 import { type SeedStore, StoreError } from './store.ts';
-import { diagnosticCorsHeaders, openCors, resolveCors } from './cors.ts';
+import { type CorsDecision, diagnosticCorsHeaders, openCors, resolveCors } from './cors.ts';
+import { PAIR_PATH, pairPage } from './pair-page.ts';
 import { checkRateLimit } from './rate-limit.ts';
 import { cached, invalidate } from './cache.ts';
 import { type Kv, KvError, processKv } from './kv.ts';
@@ -130,7 +131,12 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
   // The session routes answer the extension, which is not a site on the allowlist and cannot be put
   // on one — see `openCors`. Resolved before the gate, so the preflight succeeds too.
   const session = pathname.startsWith('/session/');
-  const cors = session ? openCors(request) : resolveCors(request, config.config.allowedOrigins);
+  // The pairing page is opened from a link, by a browser, as a document. No site reads it through
+  // CORS, so the list of client sites does not apply and it answers with no CORS header at all.
+  const pairing = pathname === PAIR_PATH;
+  const site = (): CorsDecision => resolveCors(request, config.config.allowedOrigins);
+  const extension = (): CorsDecision => (session ? openCors(request) : site());
+  const cors: CorsDecision = pairing ? { allowed: true, headers: {} } : extension();
   if (!cors.allowed) {
     return json(403, { error: 'origin-not-allowed' });
   }
@@ -163,6 +169,17 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
 
   if (!allowed) {
     return json(429, { error: 'rate-limited' }, cors.headers);
+  }
+
+  if (pairing) {
+    // It exists only where the sessions do, like the three routes below: a worker without the
+    // extension does not advertise the page.
+    if (context.sessionStore === undefined && config.config.sessionPath === undefined) {
+      return json(404, { error: 'not-found' });
+    }
+    if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' });
+
+    return pairPage();
   }
 
   if (session) {

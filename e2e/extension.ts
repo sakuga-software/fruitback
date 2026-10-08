@@ -127,7 +127,7 @@ export async function addRule(
  *
  * The popup acts on the active tab of its window. It opens behind the site, so the site stays that tab.
  */
-export async function openPopup(extension: LoadedExtension, site: Page): Promise<Page> {
+export async function openPopup(extension: LoadedExtension, site: Page, origin = PLAYGROUND_ORIGIN): Promise<Page> {
   await site.bringToFront();
   const url = `chrome-extension://${extension.id}/popup.html`;
   await extension.worker.evaluate(async (popupUrl) => {
@@ -138,28 +138,46 @@ export async function openPopup(extension: LoadedExtension, site: Page): Promise
   await expect.poll(() => (popup = extension.context.pages().find((page) => page.url() === url))).toBeDefined();
   if (popup === undefined) throw new Error('the popup did not open');
 
-  await expect(popup.getByText(PLAYGROUND_ORIGIN, { exact: true })).toBeVisible();
+  await expect(popup.getByText(origin, { exact: true })).toBeVisible();
 
   return popup;
 }
 
 /** A pairing code, minted the way an operator mints one: the worker's own `pair` command. */
 export function mintPairingCode(name: string): string {
-  const output = execFileSync(process.execPath, ['src/main.ts', 'pair', '--subject', 'e2e-reviewer', '--name', name], {
-    cwd: 'apps/worker',
-    encoding: 'utf8',
-    env: { ...process.env, FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: PLAYGROUND_ORIGIN, ...WORKER_SESSION_ENV },
-  });
-  const code = /^ {4}(\S+)$/m.exec(output)?.[1];
-  if (code === undefined) throw new Error(`the pair command printed no code:\n${output}`);
+  return mintPairing(name).code;
+}
 
-  return code;
+/**
+ * A code and the link that carries it, from one run of the `pair` command (FRU-92).
+ *
+ * One source for both, so the spec that pairs by the link and the spec that pairs by the field use a
+ * code the same command minted.
+ */
+export function mintPairing(name: string, endpoint = AUTHENTICATED_WORKER_ORIGIN): { code: string; link: string } {
+  const output = execFileSync(
+    process.execPath,
+    ['src/main.ts', 'pair', '--subject', 'e2e-reviewer', '--name', name, '--endpoint', endpoint],
+    {
+      cwd: 'apps/worker',
+      encoding: 'utf8',
+      env: { ...process.env, FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: PLAYGROUND_ORIGIN, ...WORKER_SESSION_ENV },
+    },
+  );
+  const code = /^ {4}([0-9A-Z-]+)$/m.exec(output)?.[1];
+  const link = /^ {4}(https?:\/\/\S+)$/m.exec(output)?.[1];
+  if (code === undefined || link === undefined)
+    throw new Error(`the pair command printed no code or no link:\n${output}`);
+
+  return { code, link };
 }
 
 /** Pair from the popup, for the site in `site`. */
 export async function pairFromPopup(extension: LoadedExtension, site: Page, code: string, name: string): Promise<void> {
   const popup = await openPopup(extension, site);
 
+  // The field is one step away since FRU-92: a link is the first way in.
+  await popup.getByRole('button', { name: 'I have a code' }).click();
   await popup.getByLabel('Pairing code').fill(code);
   await popup.getByRole('button', { name: 'Pair with this worker' }).click();
   await expect(popup.getByText(`Paired as ${name}`)).toBeVisible();

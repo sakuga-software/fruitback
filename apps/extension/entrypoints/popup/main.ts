@@ -12,6 +12,7 @@ import { createBrowserSessions } from '../../src/session-browser.ts';
 import { describeIdentity } from '../../src/session.ts';
 import { showProblem } from '../../src/problem-view.ts';
 import { PAIRING_CODE_REQUIRED, PAIRING_NEEDS_HTTPS, PAIRING_PROBLEM } from '../../src/remedy.ts';
+import { type PairLink, parsePairLink } from '../../src/pair-link.ts';
 
 /**
  * The switch for the tab you are looking at, and the two fields that make it work (FRU-41).
@@ -55,6 +56,16 @@ async function render(editing = false): Promise<void> {
     // A `chrome://` page, the store, a PDF viewer. Nothing is wrong, and saying so is better than an
     // enabled-looking switch that silently does nothing.
     app.textContent = 'Fruitback works on http and https pages.';
+
+    return;
+  }
+
+  // A pairing link is about a worker, not about a site to review, so it gets a screen of its own:
+  // the form to switch this origin on would be the wrong question on a worker's own page.
+  const link = parsePairLink(tab?.url);
+  if (link !== undefined && !editing) {
+    app.replaceChildren(element('h1', 'Fruitback'), element('p', origin, 'origin'), ...(await linked(link)));
+    app.append(optionsButton());
 
     return;
   }
@@ -130,68 +141,86 @@ async function grantWorkerOrigin(endpoint: string): Promise<boolean> {
 }
 
 /**
- * Paste a code, see who you are, log out (FRU-60).
+ * The screen for a tab that is a pairing link (FRU-92): the worker it names, and one button.
  *
- * Deliberately thin: everything it decides lives in `src/session.ts`, where `node --test` can reach
- * it. What is here is four elements and the two strings a person reads.
+ * The worker is the page the link is on, so the reviewer reads here what they are about to trust.
+ * The person the code was minted for is not known before the code is spent. The worker answers it,
+ * and the row then says `Paired as …`: a name read from the link would be the word of whoever
+ * wrote the link.
  */
-async function session(site: SiteConfig): Promise<HTMLElement[]> {
-  const endpoint = site.endpoint;
-  const held = (await sessions.list())[endpoint];
-  // Private mode carries no session, so it offers no pairing (FRU-88). A session that this worker
-  // already holds stays on the screen, with its log out.
-  if (held === undefined && site.mode !== 'team') return [];
+async function linked(link: PairLink): Promise<HTMLElement[]> {
+  const held = (await sessions.list())[link.endpoint];
+  if (held !== undefined) {
+    return [paired(link.endpoint, describeIdentity(held.identity)), element('p', LINK_ALREADY_PAIRED, 'state')];
+  }
 
+  const submit = element('button', 'Pair with this worker');
+  const problem = element('p', '', 'problem');
   const wrapper = document.createElement('div');
   wrapper.className = 'session';
+  wrapper.append(element('p', `This page is a pairing link for ${link.endpoint}.`, 'state'), submit, problem);
 
-  if (held !== undefined) {
-    const out = element('button', 'Log out');
-    out.addEventListener('click', () => {
-      out.disabled = true;
-      // `logout` revokes on the worker first and clears here whatever that answers. See its comment:
-      // a screen that says signed out while this extension still holds a working credential is the
-      // one outcome worth avoiding.
-      void sessions
-        .logout(endpoint)
-        // Redrawn whatever it answered, because `logout` clears here whatever the revoke or the
-        // epoch write did. Rendering only on success leaves the row saying paired over storage that
-        // holds nothing, with a dead button. And a click is fire-and-forget, so a failure nobody
-        // logs here is logged nowhere at all. Raised in review.
-        .catch((error: unknown) => console.error('[fruitback] the log out did not finish', error))
-        .then(() => render());
-    });
-
-    const row = document.createElement('div');
-    row.className = 'row';
-    row.append(element('span', `Paired as ${describeIdentity(held.identity)}`, 'state'), out);
-    wrapper.append(row);
+  if (!isSecureWorkerEndpoint(link.endpoint)) {
+    submit.disabled = true;
+    showProblem(problem, PAIRING_NEEDS_HTTPS);
 
     return [wrapper];
   }
 
-  const code = field('Pairing code', 'ABCD-EFGH-JKMN');
-  const submit = element('button', 'Pair with this worker');
-  const problem = element('p', '', 'problem');
+  const attempt = pairing(link.endpoint, () => link.code, submit, problem, {});
+  submit.addEventListener('click', attempt);
 
-  // Pairing spends a code and is handed a refresh token — thirty days of access — so it does not
-  // happen over plain http. Loopback excepted: that is the dev loop. Raised in review.
-  // The worker this rule names is what is wrong, so the way out is the fields of the rule.
-  const change = (): void => void render(true);
+  return [wrapper];
+}
 
-  if (!isSecureWorkerEndpoint(endpoint)) {
-    submit.disabled = true;
-    showProblem(problem, PAIRING_NEEDS_HTTPS, { change });
-  }
+const LINK_ALREADY_PAIRED = 'This browser is already paired with that worker, so the link is not needed.';
 
-  /**
-   * One attempt, from the button or from the remedy under a failed one (FRU-90).
-   *
-   * Both are clicks, and that is the point: the attempt asks for a permission first, and a remedy
-   * that ran outside a click would ask for it with no gesture and get no prompt.
-   */
+/** Who this browser is paired as with a worker, and the way out. */
+function paired(endpoint: string, identity: string): HTMLElement {
+  const out = element('button', 'Log out');
+  out.addEventListener('click', () => {
+    out.disabled = true;
+    // `logout` revokes on the worker first and clears here whatever that answers. See its comment:
+    // a screen that says signed out while this extension still holds a working credential is the
+    // one outcome worth avoiding.
+    void sessions
+      .logout(endpoint)
+      // Redrawn whatever it answered, because `logout` clears here whatever the revoke or the
+      // epoch write did. Rendering only on success leaves the row saying paired over storage that
+      // holds nothing, with a dead button. And a click is fire-and-forget, so a failure nobody
+      // logs here is logged nowhere at all. Raised in review.
+      .catch((error: unknown) => console.error('[fruitback] the log out did not finish', error))
+      .then(() => render());
+  });
+
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.append(element('span', `Paired as ${identity}`, 'state'), out);
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'session';
+  wrapper.append(row);
+
+  return wrapper;
+}
+
+/**
+ * One attempt to pair, from the button or from the remedy under a failed one (FRU-90).
+ *
+ * Both are clicks, and that is the point: the attempt asks for a permission first, and a remedy
+ * that ran outside a click would ask for it with no gesture and get no prompt.
+ *
+ * `change` opens the fields of the rule. A pairing link has no rule, so it passes none.
+ */
+function pairing(
+  endpoint: string,
+  code: () => string,
+  submit: HTMLButtonElement,
+  problem: HTMLElement,
+  { change }: { change?: () => void },
+): () => void {
   const attempt = (): void => {
-    const value = code.input.value.trim();
+    const value = code().trim();
     showProblem(problem, value === '' ? PAIRING_CODE_REQUIRED : '');
     if (value === '') return;
 
@@ -216,12 +245,62 @@ async function session(site: SiteConfig): Promise<HTMLElement[]> {
       showProblem(problem, PAIRING_PROBLEM[result === undefined ? 'blocked' : result.reason], {
         retry: attempt,
         grant: attempt,
-        change,
+        ...(change === undefined ? {} : { change }),
       });
     })();
   };
 
-  submit.addEventListener('click', attempt);
+  return attempt;
+}
+
+/**
+ * Paste a code, see who you are, log out (FRU-60).
+ *
+ * Deliberately thin: everything it decides lives in `src/session.ts`, where `node --test` can reach
+ * it. What is here is four elements and the two strings a person reads.
+ */
+async function session(site: SiteConfig): Promise<HTMLElement[]> {
+  const endpoint = site.endpoint;
+  const held = (await sessions.list())[endpoint];
+  // Private mode carries no session, so it offers no pairing (FRU-88). A session that this worker
+  // already holds stays on the screen, with its log out.
+  if (held === undefined && site.mode !== 'team') return [];
+  if (held !== undefined) return [paired(endpoint, describeIdentity(held.identity))];
+
+  const code = field('Pairing code', 'ABCD-EFGH-JKMN');
+  const submit = element('button', 'Pair with this worker');
+  const problem = element('p', '', 'problem');
+
+  // The worker this rule names is what is wrong, so the way out is the fields of the rule.
+  const change = (): void => void render(true);
+
+  // Pairing spends a code and is handed a refresh token — thirty days of access — so it does not
+  // happen over plain http. Loopback excepted: that is the dev loop. Raised in review.
+  if (!isSecureWorkerEndpoint(endpoint)) {
+    submit.disabled = true;
+    showProblem(problem, PAIRING_NEEDS_HTTPS, { change });
+  }
+
+  submit.addEventListener(
+    'click',
+    pairing(endpoint, () => code.input.value, submit, problem, { change }),
+  );
+
+  // A link pairs with no code to copy (FRU-92), so the field is one step away: it is what a
+  // reviewer uses when the link did not reach them, or when the operator read a code out.
+  const typed = document.createElement('div');
+  typed.hidden = isSecureWorkerEndpoint(endpoint);
+  typed.append(code.label, submit, problem);
+
+  const reveal = element('button', 'I have a code', 'secondary');
+  reveal.hidden = typed.hidden === false;
+  reveal.setAttribute('aria-expanded', 'false');
+  reveal.addEventListener('click', () => {
+    typed.hidden = false;
+    reveal.hidden = true;
+    reveal.setAttribute('aria-expanded', 'true');
+    code.input.focus();
+  });
 
   const row = document.createElement('div');
   row.className = 'row';
@@ -229,10 +308,15 @@ async function session(site: SiteConfig): Promise<HTMLElement[]> {
   // one that shows nothing at all: the relay refuses a call it has no session for, rather than
   // making it without one.
   row.append(element('span', 'Not paired — this site cannot reach the worker until you do', 'state'));
-  wrapper.append(row, code.label, submit, problem);
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'session';
+  wrapper.append(row, element('p', HOW_TO_PAIR, 'state'), reveal, typed);
 
   return [wrapper];
 }
+
+const HOW_TO_PAIR = 'Open the pairing link you were sent, then click this icon on that page.';
 
 /**
  * Ask for the mode, and for what that mode cannot work without.

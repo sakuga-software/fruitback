@@ -4,6 +4,7 @@ import { type Page, expect, test as withoutExtension } from '@playwright/test';
 import {
   BUILT_EXTENSION,
   addRule,
+  mintPairing,
   mintPairingCode,
   openBareSite,
   openPopup,
@@ -278,6 +279,7 @@ test('a failed pairing offers the one thing to do about it, and Try again pairs 
   };
 
   // A code nobody minted: the worker answers, so the popup must not offer to try it again.
+  await popup.getByRole('button', { name: 'I have a code' }).click();
   await popup.getByLabel('Pairing code').fill('AAAA-BBBB-CCCC');
   await popup.getByRole('button', { name: 'Pair with this worker' }).click();
   await expect(popup.getByText('That code has been used or has expired. Ask for a new one.')).toBeVisible();
@@ -302,4 +304,50 @@ test('a failed pairing offers the one thing to do about it, and Try again pairs 
   await popup.getByRole('button', { name: 'Try again' }).click();
   await expect(popup.getByText(`Paired as ${REVIEWER}`)).toBeVisible();
   expect(refused, 'the first attempt did not reach the route, so nothing was retried').toBe(2);
+});
+
+test('a pairing link pairs with one click, and the site then works through that session (FRU-92)', async ({
+  extension,
+}) => {
+  await addRule(extension, { mode: 'team', endpoint: AUTHENTICATED_WORKER_ORIGIN });
+  const site = await extension.context.newPage();
+  await openBareSite(site, 'ext-pair-link');
+  await mountTheSiteWidget(site, AUTHENTICATED_WORKER_ORIGIN);
+
+  // The link an operator sends, opened like any link.
+  const { link, code } = mintPairing(REVIEWER);
+  expect(link).toBe(`${AUTHENTICATED_WORKER_ORIGIN}/pair#${code}`);
+  const linkPage = await extension.context.newPage();
+  const requests: string[] = [];
+  linkPage.on('request', (request) => requests.push(request.url()));
+  await linkPage.goto(link);
+  await expect(linkPage.getByRole('heading', { name: 'Pair the Fruitback extension' })).toBeVisible();
+  // The worker was asked for the page, and the code was in no request: a fragment is not sent.
+  expect(requests.length).toBeGreaterThan(0);
+  expect(requests.join('\n')).not.toContain(code);
+
+  const popup = await openPopup(extension, linkPage, AUTHENTICATED_WORKER_ORIGIN);
+  await expect(popup.getByText(`This page is a pairing link for ${AUTHENTICATED_WORKER_ORIGIN}.`)).toBeVisible();
+  // No field to fill in, and no form to switch the worker's own page on as a site.
+  await expect(popup.getByLabel('Pairing code')).toHaveCount(0);
+  await expect(popup.getByRole('button', { name: 'Turn on for this site' })).toHaveCount(0);
+  const shot = test.info().outputPath('pair-link.png');
+  await popup.screenshot({ path: shot, clip: { x: 0, y: 0, width: 520, height: 220 } });
+  await test.info().attach('pair-link', { path: shot, contentType: 'image/png' });
+  const pageShot = test.info().outputPath('pair-page.png');
+  await linkPage.screenshot({ path: pageShot, clip: { x: 0, y: 0, width: 900, height: 360 } });
+  await test.info().attach('pair-page', { path: pageShot, contentType: 'image/png' });
+
+  await popup.getByRole('button', { name: 'Pair with this worker' }).click();
+  await expect(popup.getByText(`Paired as ${REVIEWER}`)).toBeVisible();
+
+  // The session is stored under the endpoint the rule names, so the site's widget is served.
+  await plantOnTheLatteCard(site, 'Team feedback', 'Planté après un lien');
+  await expect(site.locator('[data-fruitback-pin]')).toHaveCount(1);
+
+  // The same link a second time: the code is spent, and the popup says what to do next.
+  await popup.getByRole('button', { name: 'Log out' }).click();
+  await popup.getByRole('button', { name: 'Pair with this worker' }).click();
+  await expect(popup.getByText('That code has been used or has expired. Ask for a new one.')).toBeVisible();
+  await expect(popup.getByRole('link', { name: 'How to get a code' })).toBeVisible();
 });

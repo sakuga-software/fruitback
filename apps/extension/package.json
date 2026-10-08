@@ -40,7 +40,9 @@
           "^production",
           "{workspaceRoot}/docs/install.md",
           "{workspaceRoot}/docs/reviewing.md",
-          "{workspaceRoot}/apps/worker/LICENSE"
+          "{workspaceRoot}/apps/worker/LICENSE",
+          "{workspaceRoot}/apps/worker/src/pair-page.ts",
+          "{workspaceRoot}/apps/worker/src/session.ts"
         ]
       }
     }

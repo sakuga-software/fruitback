@@ -219,6 +219,26 @@ person; redeeming it opens a session.
 | Refresh token | 256 bits, 30 days, **rotated on every refresh**, revocable |
 | On disk       | codes and refresh tokens are stored as **SHA-256 digests** |
 
+**A pairing code can travel in a link, `<worker>/pair#<code>`** (FRU-92). What that changes:
+
+- **The code is in the fragment**, which a browser sends to no server. The worker does not receive
+  it and no access log holds it. `GET /pair` is a static page with no script, it reads nothing from
+  the request, and it answers `Cache-Control: no-store` and `Referrer-Policy: no-referrer`.
+- **The code is in the reviewer's browser history and in whatever carried the link**: an e-mail, a
+  chat. It was already in that message as a code to copy. It is spent at the first pairing and dies
+  after 15 minutes, which is the whole protection: treat a link like the code it holds.
+- **Any page can have an address of that shape**, so a link proves nothing about who wrote it. The
+  extension takes the worker from the page the link is on, never from a value in the address: a page
+  can make the popup offer a pairing with **itself** and with no other worker. The popup names that
+  worker and pairs only on a click. A reviewer who pairs with a worker they do not know has given it
+  nothing: a session is per worker, and the relay uses it only for a site whose rule names that
+  worker.
+- **The popup reads the link, not a script in the page.** The address of the tab comes to it through
+  `activeTab`, on the click on the toolbar icon. No content script runs on the worker's page and the
+  code crosses no `postMessage`.
+- **The person is not named before the pairing.** A name in the link would be the word of whoever
+  wrote the link. The worker answers who the code was minted for, and the popup shows it after.
+
 **Every refresh spends its refresh token and issues a new one** (FRU-61). A token that never
 changed was a thirty-day password: a copy taken from a browser profile stayed good for the rest of
 the month and nothing observed the theft.
