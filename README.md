@@ -192,5 +192,4 @@ Copyright (C) 2026 Sakuga Software; the full text is in
 `@fruitback/widget` compiles `react-grab` and `zod` **into** its `dist` rather than asking a client
 site to install them. Both are MIT, and MIT requires their notices to travel with the code, so the
 tarball ships [`THIRD-PARTY-NOTICES.md`](packages/widget/THIRD-PARTY-NOTICES.md) — checked by the
-suite, not by hand. `apps/playground` is not published and not deployed; it inherits the repository's
-MIT licence.
+suite, not by hand. `apps/playground` is not published; it inherits the repository's MIT licence.

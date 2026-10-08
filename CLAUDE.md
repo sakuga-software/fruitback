@@ -77,7 +77,8 @@ node --test src/seed.test.ts                 # one file, from the package direct
 - `apps/extension` — the browser extension (FRU-41): the widget on a site that embeds nothing.
 - `apps/playground` (`@fruitback/playground`) — the dev loop: a deliberately hostile fake client site
   with the widget mounted on it, built as a React Router 8 + Vite app with HeroUI because the
-  widget's clients are React apps. Not shipped, not deployed.
+  widget's clients are React apps. Not shipped. It is deployed once, as the public demonstration
+  (FRU-79), and nowhere else.
 
 ## The dev loop
 
@@ -101,6 +102,12 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   features there; grow them in `packages/widget`. `fruitback.tsx` only _reports_ what the widget
   decided, through `onResolve` — a client's app cannot know when to re-resolve, so the widget must.
 - `apps/playground/.react-router/` is typegen, regenerated on dev and build. Ignored, not committed.
+- **The public demonstration is this playground, served in development mode** (FRU-79):
+  `demo.fruitback.com`, with its worker on `api.demo.fruitback.com`. A production build of the page
+  loses the component and the file of a note (measured: `bound qi`, and a chunk of the bundle), and
+  those two are the product. `apps/playground/Dockerfile` therefore runs a development server. It
+  must hold no secret and no volume. Anybody can write to that worker: it keeps its notes in SQLite,
+  holds no key of any tracker, and is emptied every night.
 
 **Deeper** — _The dev loop_, and why the playground is a React app:
 [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
@@ -1080,6 +1087,11 @@ And _The published image_ in [docs/decisions/image.md](docs/decisions/image.md).
 - **`release-image.yml` checks every architecture it publishes, one job each, before anything is
   pushed** — and the check asserts the image _refuses_ `FRUITBACK_STORE=memory`, matching the `503`
   and the **variable name**, never the prose beside it.
+- **The runtime stage holds no npm** (FRU-79). The base image carries npm, npx and corepack, the
+  worker runs none of them, and the release gate scans npm's own dependencies: every build of `main`
+  was refused for two weeks on a package inside npm, so `edge` stayed two weeks old. `apk upgrade`
+  does not reach those files. **A release that fails publishes nothing and says so only in the
+  Actions tab**: look at `release-image.yml` after a merge, not only at `ci.yml`.
 - **Trivy runs with `ignore-unfixed`**, and its version carries the `v` (`# v0.36.0`). One tag out
   of seventy-five is unprefixed, so the wrong form looks valid until the next bump.
 - **Every `uses:` is pinned to a 40-character commit SHA, with its version as a trailing comment**

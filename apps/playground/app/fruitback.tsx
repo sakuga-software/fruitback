@@ -39,6 +39,8 @@ import { redeploy, removeCard } from './site-state';
 
 const CLIENT_ID = 'playground';
 const WORKER_ORIGIN = import.meta.env.VITE_FRUITBACK_WORKER ?? 'http://localhost:8788';
+/** A sentence for the toolbar of a deployed playground. Absent in the dev loop and in the E2E suite. */
+const DEMO_NOTICE: string | undefined = import.meta.env.VITE_FRUITBACK_DEMO_NOTICE || undefined;
 
 export function Fruitback() {
   const location = useLocation();
@@ -269,6 +271,12 @@ function DevToolbar({ status, planted, onReload }: { status: string; planted: st
       <span data-fruitback-dev="status" className="min-w-[150px] opacity-70">
         {status}
       </span>
+      {/* The public demonstration (FRU-79): anybody can write here, so the page says what it is. */}
+      {DEMO_NOTICE !== undefined ? (
+        <span data-fruitback-dev="demo" className="border-l border-stone-600 pl-3 opacity-90">
+          {DEMO_NOTICE}
+        </span>
+      ) : null}
     </div>
   );
 }

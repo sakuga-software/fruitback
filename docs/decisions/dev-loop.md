@@ -129,3 +129,30 @@ Each guard was run against a mutant, and each mutant failed a check:
 The spec passed on the last one, and that is not a weak spec. A script registered at runtime takes its
 world from `registerContentScripts`, so the `world` in the entrypoint does not reach the browser.
 `worlds.test.ts` finds the main-world files by that declaration, so it is the check that fails.
+
+## The public demonstration (FRU-79)
+
+A reviewer of a browser store installs the extension and tries it. With no worker to reach and no
+page to try it on, the extension does nothing, and that is a refusal. The same instance shows the
+product to somebody without `pnpm dev`.
+
+- **`demo.fruitback.com` is the playground, `api.demo.fruitback.com` its worker**, on em-sakuga-01
+  through Dokploy, both built from `main` by their Dockerfiles.
+- **The playground runs in development mode, and that was measured, not preferred.** On a
+  production build, a note planted on the « Ajouter » button carries
+  `{ component: 'bound qi', file: '/assets/site-state-Bgn4uEnK.js' }`. In development mode the same
+  click carries `{ component: 'Button', file: 'site.tsx', line: 58 }`. The component and the file
+  come from metadata that only a development build of React keeps.
+- **A development server on the internet is acceptable here for one reason: the container holds
+  nothing.** No secret in its environment, no volume, and its files are this public repository.
+  Vite refuses a `Host` it does not know (`PLAYGROUND_ALLOWED_HOSTS`) and a path outside the
+  workspace (`/@fs/etc/passwd` answers `403`, measured). Do not copy this Dockerfile for a real site.
+- **The worker holds no key.** SQLite on a volume, `FRUITBACK_READ=public`,
+  `RATE_LIMIT_PER_MINUTE=10`, `ALLOWED_ORIGINS=https://demo.fruitback.com`, and no session path: a
+  session needs an identity secret, and this instance must hold none.
+- **It is emptied every night**, by `sqlite3` in the running container, with
+  `PRAGMA foreign_keys = ON` so the replies go with their notes. Removing the file does nothing: the
+  worker keeps its connection, and the notes stay in a file that has no name.
+- **The toolbar says what the page is** when `VITE_FRUITBACK_DEMO_NOTICE` is set. The dev loop and
+  the E2E suite do not set it.
+- **What it does not show: team mode.** That mode needs sessions, and sessions need a secret.

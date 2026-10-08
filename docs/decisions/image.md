@@ -44,6 +44,13 @@ immutable.
 - **A misconfigured worker does not exit — it serves `/health` as `503`.** So the check waits for an
   answer and reads its status; a check that waited for the process to exit would hang until the job
   timed out. That was the first version, and it was measured hanging.
+- **The runtime stage removes npm, npx and corepack (FRU-79).** The gate failed on
+  `brace-expansion` (CVE-2026-102276, CVE-2026-102278) and `undici` (CVE-2026-19534), all three
+  under `/usr/local/lib/node_modules/npm`. The worker never runs npm: its bundle holds its own
+  dependencies. Every build of `main` from 2026-09-24 to 2026-10-08 was refused, so `edge` was two
+  weeks behind `main` and nobody saw it: the failure is a red run of a workflow that no pull request
+  shows. After the removal the same scan finds nothing (measured with Trivy 0.70.0 on the local
+  build), and `server.mjs pair` and `forget` still run in the image.
 - **Trivy runs with `ignore-unfixed`.** An Alpine CVE with no patch available reddens every release
   for something nobody can act on, and a gate that cannot be satisfied is a gate somebody deletes.
 - **Every action is pinned to a commit SHA, with its version as a comment (FRU-69).** A tag can be
