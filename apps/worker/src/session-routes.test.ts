@@ -8,7 +8,8 @@ import { closeSessionConnections, createSqliteSessionStore } from './session-sql
 import { createPairing } from './session.ts';
 import { handleRequest } from './app.ts';
 import { verifyIdentityToken } from './identity.ts';
-import { runPair } from './cli.ts';
+import { LOOPBACK, runPair } from './cli.ts';
+import { readFileSync } from 'node:fs';
 import { sessionConnectionsOpened } from './session-sqlite.ts';
 
 /** 32 characters, because `readConfig` refuses a shorter HMAC secret. */
@@ -199,6 +200,75 @@ describe('POST /session/revoke', () => {
   });
 });
 
+describe('GET /pair, the page a pairing link opens (FRU-92)', () => {
+  const page = (env: WorkerEnv, path = '/pair', init: RequestInit = {}) =>
+    // An address of its own: the limiter of this process counts every test of this file together.
+    handleRequest(new Request(`https://worker.test${path}`, init), env, { clientIp: '198.51.100.92' });
+
+  it('answers a page with no script, that nothing keeps and that says nothing of where it came from', async () => {
+    const response = await page(envWith());
+    const html = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('Content-Type') ?? '', /^text\/html/);
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+    assert.equal(response.headers.get('Referrer-Policy'), 'no-referrer');
+    assert.match(response.headers.get('Content-Security-Policy') ?? '', /default-src 'none'/);
+    assert.doesNotMatch(response.headers.get('Content-Security-Policy') ?? '', /script-src/);
+    assert.doesNotMatch(html, /<script|javascript:|\son\w+=/i);
+    assert.match(html, /Pair with this worker/);
+  });
+
+  /**
+   * The code belongs in the fragment, which never reaches here. A link written with a query by
+   * mistake must not have its code read, echoed or stored: the page is the same bytes.
+   */
+  it('reads nothing from the address it was asked for', async () => {
+    const env = envWith();
+    const plain = await (await page(env)).text();
+    const withQuery = await (await page(env, '/pair?code=ABCD-EFGH-JKMN&name=%3Cb%3EMallory')).text();
+
+    assert.equal(withQuery, plain);
+    assert.doesNotMatch(withQuery, /ABCD-EFGH-JKMN|Mallory/);
+  });
+
+  it('says how long a code lives, from the constant the worker uses', async () => {
+    assert.match(await (await page(envWith())).text(), /works once, for 15 minutes/);
+  });
+
+  it('does not exist on a worker that keeps no sessions', async () => {
+    const response = await page({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' });
+
+    assert.equal(response.status, 404);
+  });
+
+  it('is a page to open, and nothing to post to', async () => {
+    assert.equal((await page(envWith(), '/pair', { method: 'POST', body: '{}' })).status, 405);
+  });
+
+  it('opens whatever sites the worker serves, because a link is not a site', async () => {
+    // A navigation can carry an Origin. The list of client sites must not turn the page away.
+    const response = await page(envWith({ ALLOWED_ORIGINS: 'https://app.acme.dev' }), '/pair', {
+      headers: { Origin: 'https://mail.example.com' },
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'), null);
+  });
+
+  it('is metered like every other route', async () => {
+    const env = envWith({ RATE_LIMIT_PER_MINUTE: '2' });
+    const statuses: number[] = [];
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      statuses.push(
+        (await handleRequest(new Request('https://worker.test/pair'), env, { clientIp: '198.51.100.44' })).status,
+      );
+    }
+
+    assert.deepEqual(statuses, [200, 200, 429]);
+  });
+});
+
 describe('a worker with no session store', () => {
   it('does not advertise that these routes exist', async () => {
     const env = { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' } satisfies WorkerEnv;
@@ -261,6 +331,67 @@ describe('the pair command', () => {
 
     const session = (await response.json()) as { identity: unknown };
     assert.deepEqual(session.identity, { subject: 'alice', name: 'Alice Martin' });
+  });
+
+  it('prints a link when it is told where the worker answers, with the code after the # (FRU-92)', async () => {
+    const env = envWith();
+    const outcome = await runPair(
+      ['--subject', 'alice', '--endpoint', 'https://feedback.acme.dev/fruitback/?x=1#y'],
+      env,
+    );
+
+    assert.ok(outcome.ok, outcome.lines.join('\n'));
+    const code = outcome.lines.find((line) => /^ {4}[0-9A-Z]{4}-/.test(line))?.trim();
+    const link = outcome.lines.find((line) => line.includes('/pair#'))?.trim();
+    assert.equal(link, `https://feedback.acme.dev/fruitback/pair#${code}`);
+    // The code is after the #, so no server on the way receives it.
+    assert.equal(new URL(link ?? '').search, '');
+    assert.equal((await call(env, '/session/pair', { code }, 'POST', '198.51.100.93')).status, 200);
+  });
+
+  it('prints the code alone, and how to get a link, when it is not told where the worker answers', async () => {
+    const outcome = await runPair(['--subject', 'alice'], envWith());
+
+    assert.ok(outcome.ok);
+    assert.equal(
+      outcome.lines.some((line) => line.includes('/pair#')),
+      false,
+    );
+    assert.ok(outcome.lines.join('\n').includes('--endpoint'));
+  });
+
+  /**
+   * The command prints a link, and the extension decides whether it pairs there. Two lists of the
+   * hosts where plain http is allowed, in two packages, with nothing else to hold them together.
+   */
+  it('prints a link over plain http for the hosts the extension pairs with, and for no other', async () => {
+    const source = readFileSync(new URL('../../extension/src/endpoint.ts', import.meta.url), 'utf8');
+    const declared = /const LOOPBACK = \[(.+)\];/.exec(source)?.[1] ?? '';
+    const ofTheExtension = [...declared.matchAll(/'([^']+)'/g)].map((match) => match[1] ?? '');
+
+    assert.ok(ofTheExtension.length >= 3, 'the list of the extension was not read: this check compares nothing');
+    // The extension also names `::1` without brackets, a spelling `new URL` never answers.
+    assert.deepEqual([...LOOPBACK].sort(), ofTheExtension.filter((host) => host !== '::1').sort());
+
+    for (const host of LOOPBACK) {
+      const outcome = await runPair(['--subject', 'alice', '--endpoint', `http://${host}:8789`], envWith());
+      assert.ok(outcome.ok && outcome.lines.some((line) => line.includes(`http://${host}:8789/pair#`)), host);
+    }
+  });
+
+  it('refuses an address a pairing code must not cross, and mints nothing', async () => {
+    for (const endpoint of ['http://feedback.acme.dev', 'ftp://acme.dev', 'not a url', 'https://user:pw@acme.dev']) {
+      const outcome = await runPair(['--subject', 'alice', '--endpoint', endpoint], envWith());
+
+      assert.equal(outcome.ok, false, endpoint);
+      assert.equal(
+        outcome.lines.some((line) => /^ {4}[0-9A-Z]{4}-/.test(line)),
+        false,
+        endpoint,
+      );
+    }
+    // Loopback is the dev loop, and it is not on a wire.
+    assert.ok((await runPair(['--subject', 'alice', '--endpoint', 'http://localhost:8789'], envWith())).ok);
   });
 
   /**

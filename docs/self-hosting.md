@@ -645,7 +645,7 @@ A plain Node HTTP process — `node:http` adapted onto a web-standard handler, n
 | `OPTIONS /feedback`              | CORS preflight, never reaches the store                                                                                              |
 | `GET /health`                    | `200` when the configuration is valid, `503` naming what is wrong when it is not                                                     |
 
-The three below exist only when `FRUITBACK_SESSION_PATH` is set, and answer `404` otherwise — a
+The four below exist only when `FRUITBACK_SESSION_PATH` is set, and answer `404` otherwise — a
 worker without the extension does not advertise that they are there. They are the browser
 extension's session (FRU-42), and they are **exempt from `ALLOWED_ORIGINS`**: an extension's origin
 carries an id that differs between an unpacked build and a store build, so an operator cannot put it
@@ -656,6 +656,7 @@ on a list. The rate limiter is what protects them, which is why it runs above th
 | `POST /session/pair`    | spends a pairing code, opens a session                      |
 | `POST /session/refresh` | a refresh token for a fresh access token                    |
 | `POST /session/revoke`  | ends the session; `204` whether or not there was one to end |
+| `GET /pair`             | the page a pairing link opens: static, no script            |
 
 A pairing code is minted by a **command on the container**, never over HTTP:
 
@@ -664,6 +665,12 @@ docker compose exec worker node server.mjs pair --subject alice --name "Alice Ma
 ```
 
 With `docker run`, write `docker exec fruitback` instead of `docker compose exec worker`.
+
+Add `--endpoint https://feedback.acme.dev`, the address reviewers reach this worker at, and the
+command also prints a link, `https://feedback.acme.dev/pair#<code>`. The reviewer opens it and
+clicks the extension: nothing to copy. The container does not know its public address, which is why
+you give it. The code is after the `#`, so it reaches no server and no access log, yours included.
+An `http://` address is refused unless it is `localhost`.
 
 Vouching for a person is not something this worker has to defend as a network surface.
 

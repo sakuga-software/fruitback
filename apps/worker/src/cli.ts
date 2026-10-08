@@ -2,6 +2,7 @@ import { type WorkerEnv, readConfig } from './env.ts';
 import { PAIRING_TTL_SECONDS } from './session.ts';
 import { createPairingCommand } from './app.ts';
 import { CACHE_TTL_MS } from './cache.ts';
+import { pairingLink } from './pair-page.ts';
 import type { ForgetSelector, ForgottenSeed } from './store.ts';
 
 /**
@@ -18,13 +19,13 @@ import type { ForgetSelector, ForgottenSeed } from './store.ts';
  * path is a command an operator cannot run. Raised in review, and checked against a real build.
  */
 
-export type PairArgs = { subject: string; name?: string; email?: string };
+export type PairArgs = { subject: string; name?: string; email?: string; endpoint?: string };
 
 export type PairArgsResult = { ok: true; args: PairArgs } | { ok: false; error: string };
 
-const USAGE = 'usage: pair --subject <id> [--name "<full name>"] [--email <address>]';
+const USAGE = 'usage: pair --subject <id> [--name "<full name>"] [--email <address>] [--endpoint <worker URL>]';
 
-const KNOWN_FLAGS = new Set(['subject', 'name', 'email']);
+const KNOWN_FLAGS = new Set(['subject', 'name', 'email', 'endpoint']);
 
 /**
  * `--flag value` only.
@@ -57,6 +58,16 @@ export function parsePairArgs(argv: readonly string[]): PairArgsResult {
   const name = values.get('name')?.trim();
   const email = values.get('email')?.trim();
 
+  // The address the reviewer reaches this worker at. The container does not know it, so the
+  // operator gives it, and the command then prints a link instead of a code to copy (FRU-92).
+  const endpoint = publicEndpoint(values.get('endpoint'));
+  if (endpoint === null) {
+    return {
+      ok: false,
+      error: `${USAGE}\n--endpoint must be an https:// URL, or http:// on localhost: a pairing code must not cross plain http`,
+    };
+  }
+
   return {
     ok: true,
     args: {
@@ -64,8 +75,37 @@ export function parsePairArgs(argv: readonly string[]): PairArgsResult {
       subject: subject.trim(),
       ...(name === undefined || name === '' ? {} : { name }),
       ...(email === undefined || email === '' ? {} : { email }),
+      ...(endpoint === undefined ? {} : { endpoint }),
     },
   };
+}
+
+/**
+ * The hosts where plain http is not on a wire. `new URL` keeps the brackets on an IPv6 host.
+ *
+ * The extension pairs on the same hosts and no other (`isSecureWorkerEndpoint`). A test compares the
+ * two lists: a link printed for a host the extension refuses is a link that pairs nothing.
+ */
+export const LOOPBACK = ['localhost', '127.0.0.1', '[::1]'];
+
+/**
+ * The worker's public address with no query, no fragment and no slash at the end, or `undefined`
+ * when none was given, or `null` when the value cannot carry a pairing code.
+ *
+ * A path is kept: a worker behind `https://example.com/fruitback` is an ordinary deployment.
+ */
+function publicEndpoint(value: string | undefined): string | undefined | null {
+  if (value === undefined) return undefined;
+
+  try {
+    const url = new URL(value.trim());
+    const secure = url.protocol === 'https:' || (url.protocol === 'http:' && LOOPBACK.includes(url.hostname));
+    if (!secure || url.username !== '' || url.password !== '') return null;
+
+    return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
+  } catch {
+    return null;
+  }
 }
 
 export type PairOutcome = { ok: true; lines: string[] } | { ok: false; lines: string[] };
@@ -90,6 +130,16 @@ export async function runPair(argv: readonly string[], env: WorkerEnv): Promise<
 
   const who = [parsed.args.name, parsed.args.email].filter((part) => part !== undefined).join(' ');
 
+  const link =
+    parsed.args.endpoint === undefined
+      ? ['To get a link the reviewer only has to open, add --endpoint <the address of this worker>.', '']
+      : [
+          'Or send this link. The reviewer opens it, then clicks the Fruitback icon:',
+          '',
+          `    ${pairingLink(parsed.args.endpoint, minted.code)}`,
+          '',
+        ];
+
   return {
     ok: true,
     lines: [
@@ -97,6 +147,7 @@ export async function runPair(argv: readonly string[], env: WorkerEnv): Promise<
       '',
       `    ${minted.code}`,
       '',
+      ...link,
       // Said out loud because the store keeps only a digest: there is no command that reads it back.
       `Valid for ${Math.round(PAIRING_TTL_SECONDS / 60)} minutes, and usable once.`,
       'It is not stored and cannot be shown again — mint another if it is lost.',

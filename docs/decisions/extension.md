@@ -161,6 +161,54 @@ access in this browser » with **Grant access** beside it.
 - **The pairing failures moved out of `popup/main.ts`**, into a module `node --test` can import. The
   guide's guard read them out of the popup source with a regular expression; it imports them now.
 
+## A pairing code that arrives as a link (FRU-92)
+
+A reviewer was handed `ABCD-EFGH-JKMN`, opened the popup on the right site and copied it in. The
+ticket asked for a link, and left the path to be measured. Four were on the table.
+
+| Path                                                           | What stops it                                                                                                                           |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| A content script on the worker's page                          | It needs a host permission on the worker, and the first pairing is where that permission is asked for.                                  |
+| `externally_connectable`                                       | The origins are declared in the manifest. A self-hosted worker is not known at build time, and Firefox has no such key.                 |
+| A page of the extension, `chrome-extension://<id>/pair.html#…` | The worker cannot know the id, which differs between an unpacked build and a store build. A web page cannot link to that scheme either. |
+| **The popup reads the address of the tab**                     | Nothing. No new permission, the same on Firefox, and any self-hosted worker.                                                            |
+
+- **Measured, in Chromium 1234, on the built extension.** A tab on
+  `http://localhost:<port>/fruitback/pair#ABCD-EFGH-JKMN`, then `tabs.query({ active: true })`:
+
+  | The extension                                | `tab.url`                                                |
+  | -------------------------------------------- | -------------------------------------------------------- |
+  | unmodified, no permission on that origin     | withheld (`undefined`)                                   |
+  | a copy with a host permission on that origin | the whole address, with the path prefix and the fragment |
+
+  So the address carries the fragment whenever the extension may see the tab. **What automation
+  cannot do is the click on the toolbar icon**, which is what grants `activeTab` on the unmodified
+  build: `chrome.action.openPopup()` opened no popup in headless Chromium. The popup already
+  depends on that grant to read the origin of the tab (FRU-41), so the mechanism is in use; the
+  fragment under a real click is the one step checked by hand.
+
+- **The worker is the page the link is on.** `parsePairLink` reads no worker from the query or the
+  fragment. A link is forgeable, and the only thing a forged one can do is offer a pairing with the
+  page that forged it. The path before `/pair` is kept: the session is stored under the endpoint,
+  and a rule names `https://example.com/fruitback` with its path.
+- **`pair --endpoint`, and no environment variable.** The container does not know its public
+  address. A variable for it would be one more line in every `.env`, checked by three guards, for
+  one printed line. The flag refuses plain `http://` outside localhost, so a link is never minted
+  for an address a code must not cross.
+- **The page is static and the module takes no request.** `pairPage()` has no parameter, so a code
+  put in the query by mistake cannot be read, echoed or logged by this code. A test asks for
+  `/pair?code=…` and compares the bytes with `/pair`.
+- **The popup shows the link screen in place of the site screen.** On a worker's own page the form
+  that switches a site on is the wrong question. The field for a code moved behind **I have a
+  code**: it is the way in when a link did not arrive.
+- **A page of a site can have an address of that shape**: `https://example.com/docs/pair#AAAA-BBBB-CCCC`.
+  The popup would show the link screen there and hide the form that switches the site on. Raised in
+  review. No rule on the address tells the two apart, so the link screen carries a button, **This is
+  a site to review**, that opens the site's own screen.
+- **No name before the pairing.** The first design put the name in the fragment so the popup could
+  say who the code was for. That name is the word of whoever wrote the link, which is the claim
+  FRU-9 refuses from a browser. The worker says who, after the code is spent.
+
 ## The session, and the token that never goes down (FRU-60)
 
 FRU-42 built the worker half — pairing codes, access and refresh tokens, revocation, three routes

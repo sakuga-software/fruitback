@@ -81,6 +81,7 @@ describe('the guide quotes the popup this extension renders', () => {
       'Turn off here',
       'Change',
       'Pair with this worker',
+      'I have a code',
       'Log out',
       'Worker endpoint',
       'Client id',

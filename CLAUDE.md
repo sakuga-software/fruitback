@@ -554,6 +554,14 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
 - **The popup offers pairing in team mode only** (FRU-88). A session changes nothing in private mode,
   and a form that does nothing reads as the fix for a page with no pins. A session the extension
   already holds with that worker stays on the screen with its log out: a credential is never hidden.
+- **A pairing link is `<worker>/pair#<code>`, and the popup reads it from the address of the tab**
+  (FRU-92). `parsePairLink` takes the worker from **where the page is**, never from a value in the
+  address: any page can have an address of that shape, so a page can offer a pairing with itself
+  and with no other worker. The popup names the worker and pairs on a click. `GET /pair` takes no
+  request and runs no script, so the worker cannot read a code and the page cannot either. The
+  person is not named before the code is spent: a name in a link is the word of its writer.
+  **A click on the toolbar icon cannot be automated**, so the E2E spec proves the flow with a host
+  permission on the worker; the `activeTab` grant of a real click is the one step checked by hand.
 - **A problem is shown with the one thing to do about it** (FRU-90). `remedy.ts` lists every problem
   the popup and the options page can say, each with a remedy or with the reason it has none, and
   `showProblem` draws the button from that list on both pages. `remedy.test.ts` fails on a problem
@@ -741,6 +749,7 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   drift apart.
 
 **Deeper** — _The extension, and the two worlds_, _A problem, and the one thing to do about it_,
+_A pairing code that arrives as a link_,
 _The session, and the token that never goes down_
 and _The team mode, and the call the page cannot make_:
 [docs/decisions/extension.md](docs/decisions/extension.md).

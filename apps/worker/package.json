@@ -49,7 +49,8 @@
           "{workspaceRoot}/.github/**/*",
           "{workspaceRoot}/apps/playground/vite.config.ts",
           "{workspaceRoot}/packages/widget/src/embed.ts",
-          "{workspaceRoot}/apps/extension/src/session.ts"
+          "{workspaceRoot}/apps/extension/src/session.ts",
+          "{workspaceRoot}/apps/extension/src/endpoint.ts"
         ]
       }
     }

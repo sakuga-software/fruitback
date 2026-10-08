@@ -78,15 +78,29 @@ only when it is set.
 **A pairing code is minted by an operator, on the container, never over HTTP:**
 
 ```bash
-docker compose exec worker node server.mjs pair --subject alex@acme.dev --name "Alex"
+docker compose exec worker node server.mjs pair --subject alex@acme.dev --name "Alex" \
+  --endpoint https://feedback.acme.dev
 ```
 
 The name in that command is what your notes will be signed with. The worker vouches for it because
 an operator typed it; the browser never asserts its own identity, which is the whole reason the code
 comes from a person rather than a form.
 
-Paste it into **Pair with this worker**. The popup then reads `Paired as Alex`, with **Log out**
-beside it.
+With `--endpoint`, the address the worker answers at, the command prints a **link** as well as the
+code: `https://feedback.acme.dev/pair#ABCD-EFGH-JKMN`. That is what the operator sends you.
+
+1. Open the link. The page says what to do, and it is all it does: it runs no script.
+2. Click the Fruitback icon in the toolbar, on that tab. The popup reads
+   `This page is a pairing link for https://feedback.acme.dev.` — **read the address**: it is the
+   worker you are about to trust with your notes.
+3. Press **Pair with this worker**. The popup then reads `Paired as Alex`, with **Log out** beside
+   it. Go back to the site: it reaches the worker now.
+
+The code is after the `#`, and a browser sends nothing after a `#` to a server, so the worker's logs
+do not hold it. It is still in your browser's history, and it is spent the moment you pair.
+
+**If you were given a code and no link**, open the popup on the site, press **I have a code**, and
+paste it into the field above **Pair with this worker**.
 
 On a worker that is not on `https`, there is nothing to paste into: the button is disabled before you
 get that far, under
