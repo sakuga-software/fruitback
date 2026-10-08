@@ -65,7 +65,11 @@ async function render(editing = false): Promise<void> {
   const link = parsePairLink(tab?.url);
   if (link !== undefined && !editing) {
     app.replaceChildren(element('h1', 'Fruitback'), element('p', origin, 'origin'), ...(await linked(link)));
-    app.append(optionsButton());
+    // An address of this shape is not proof of a worker: a page of a site to review can end in
+    // `/pair` with a fragment that looks like a code. The way to the site's own screen stays open.
+    const site = element('button', NOT_A_LINK, 'secondary');
+    site.addEventListener('click', () => void render(true));
+    app.append(site, optionsButton());
 
     return;
   }
@@ -172,6 +176,8 @@ async function linked(link: PairLink): Promise<HTMLElement[]> {
 
   return [wrapper];
 }
+
+const NOT_A_LINK = 'This is a site to review';
 
 const LINK_ALREADY_PAIRED = 'This browser is already paired with that worker, so the link is not needed.';
 

@@ -331,6 +331,11 @@ test('a pairing link pairs with one click, and the site then works through that 
   // No field to fill in, and no form to switch the worker's own page on as a site.
   await expect(popup.getByLabel('Pairing code')).toHaveCount(0);
   await expect(popup.getByRole('button', { name: 'Turn on for this site' })).toHaveCount(0);
+  // The address has the shape of a link, and that proves nothing: the site's screen is one click away.
+  await popup.getByRole('button', { name: 'This is a site to review' }).click();
+  await expect(popup.getByRole('button', { name: 'Turn on for this site' })).toBeVisible();
+  await popup.reload();
+  await expect(popup.getByText(`This page is a pairing link for ${AUTHENTICATED_WORKER_ORIGIN}.`)).toBeVisible();
   const shot = test.info().outputPath('pair-link.png');
   await popup.screenshot({ path: shot, clip: { x: 0, y: 0, width: 520, height: 220 } });
   await test.info().attach('pair-link', { path: shot, contentType: 'image/png' });

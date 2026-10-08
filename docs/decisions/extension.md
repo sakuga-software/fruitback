@@ -201,6 +201,10 @@ ticket asked for a link, and left the path to be measured. Four were on the tabl
 - **The popup shows the link screen in place of the site screen.** On a worker's own page the form
   that switches a site on is the wrong question. The field for a code moved behind **I have a
   code**: it is the way in when a link did not arrive.
+- **A page of a site can have an address of that shape**: `https://example.com/docs/pair#AAAA-BBBB-CCCC`.
+  The popup would show the link screen there and hide the form that switches the site on. Raised in
+  review. No rule on the address tells the two apart, so the link screen carries a button, **This is
+  a site to review**, that opens the site's own screen.
 - **No name before the pairing.** The first design put the name in the fragment so the popup could
   say who the code was for. That name is the word of whoever wrote the link, which is the claim
   FRU-9 refuses from a browser. The worker says who, after the code is spent.
