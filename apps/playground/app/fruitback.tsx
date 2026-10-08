@@ -250,7 +250,7 @@ function DevToolbar({ status, planted, onReload }: { status: string; planted: st
   return (
     <div
       data-fruitback-dev="toolbar"
-      className="fixed bottom-4 left-4 z-[2147483001] flex items-center gap-2 rounded-xl bg-stone-900 px-4 py-3 text-sm text-stone-50 shadow-lg"
+      className="fixed bottom-4 left-4 z-[2147483001] flex max-w-[calc(100vw-18rem)] flex-wrap items-center gap-2 rounded-xl bg-stone-900 px-4 py-3 text-sm text-stone-50 shadow-lg"
     >
       <strong>
         Fruitback <span className="rounded bg-red-600 px-1.5 py-0.5 font-semibold">playground</span>
@@ -273,7 +273,7 @@ function DevToolbar({ status, planted, onReload }: { status: string; planted: st
       </span>
       {/* The public demonstration (FRU-79): anybody can write here, so the page says what it is. */}
       {DEMO_NOTICE !== undefined ? (
-        <span data-fruitback-dev="demo" className="border-l border-stone-600 pl-3 opacity-90">
+        <span data-fruitback-dev="demo" className="basis-full opacity-90">
           {DEMO_NOTICE}
         </span>
       ) : null}
