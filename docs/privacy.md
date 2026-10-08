@@ -25,7 +25,7 @@ and nothing outside that schema is sent.
 | `anchor.attrs`                             | the element's `id`, test id, `name`, `role` and `aria-label`, when present       | when the element has them               | the site's markup                                                         |
 | `source`                                   | the React component, file, line and column behind the element                    | when the build exposes them             | the site's build: a production build usually exposes none                 |
 | `client.id`                                | the client id the site was given                                                 | always                                  | the integrator                                                            |
-| `reporter.name`, `reporter.email`          | what the reporter typed in the optional fields                                   | **only if the reporter fills them in**  | the reporter                                                              |
+| `reporter.name`                            | what the reporter typed in the optional name field                               | **only if the reporter fills it in**    | the reporter                                                              |
 | `reporter.id`, `.name`, `.email`           | the identity in a signed token, replacing anything typed                         | added by the worker, from a valid token | the integrator (`identityToken`) or, in team mode, the pairing            |
 | `env.userAgent`, `env.locale`, `.platform` | the browser's user agent string, language and platform                           | **only if the integrator turns it on**  | the integrator: `init({ includeEnv: true })`, or the attribute on the tag |
 | `screenshot`                               | the URL of a picture of the page                                                 | **only if the reporter turns it on**    | the integrator supplies `captureScreenshot`; the reporter switches it on  |
@@ -37,8 +37,10 @@ If your staging site shows real customer records, keep that in mind before you i
 
 ### What is right by default
 
-- **A reporter who does nothing is anonymous.** The name and e-mail fields sit behind a disclosure,
-  are optional, and are sent only when filled in. The widget stores them nowhere.
+- **A reporter who does nothing is anonymous.** The name field sits behind a disclosure, is
+  optional, and is sent only when filled in. The widget asks for no e-mail address.
+- **The widget remembers nobody who did not ask.** The name stays in the reporter's browser only if
+  the reporter ticks « Remember me on this site », and unticking the box erases it at once.
 - **No picture leaves the page unless somebody chose it.** The widget bundles no screen capture.
   The setting is absent unless the integrator supplied `captureScreenshot`, and present, it starts
   off: the reporter turns it on. The picture goes to **your** storage, and the seed holds only its
@@ -104,7 +106,8 @@ can read them, with or without the widget.
 ### What stays in the reporter's browser
 
 - `localStorage`, under `fruitback:config` (or the `configKey` the integrator chose): the stages the
-  reporter hid and the screenshot switch. No name, no e-mail, no note. In private mode the extension writes `fruitback:config:extension` into **the site's**
+  reporter hid and the screenshot switch. The reporter's name too, **only if the reporter ticked
+  « Remember me on this site »**. No e-mail, no note. In private mode the extension writes `fruitback:config:extension` into **the site's**
   storage, so a site can see that a reviewer used the extension on it.
 - The extension keeps its rules and its session tokens in its own storage, which no page can read.
 - The widget sets no cookie.
@@ -120,8 +123,13 @@ As long as the issue or the row exists. Fruitback deletes nothing on its own.
 
 ## Deleting a reporter's notes
 
-A typed e-mail is a claim: a reporter can write somebody else's address, and two reporters can write
-the same one. So list the notes first, read the list, and delete after.
+The widget asks for no e-mail address since FRU-91, so a note carries one in two cases only: the
+integrator's identity token gave it, or the note was written before. A typed name is a claim, and
+so was a typed e-mail: a reporter can write somebody else's, and two reporters can write the same
+one. So list the notes first, read the list, and delete after.
+
+**A note signed with a name only has no address to search for.** Find it by its page, its date and
+its text, in your tracker or in the SQLite file.
 
 - **SQLite:** the worker has a command for it. Run it in the container, like `pair`:
 
@@ -151,11 +159,11 @@ Put this near the widget, or in your own privacy policy, and change what is not 
 deployment:
 
 > **Feedback on this page.** When you leave a note, we receive what you write, the address of this
-> page, the part of the page you pointed at, and the size of your window. Your name and e-mail are
-> optional; we receive them only if you type them. A picture of the page is sent only if you turn it
-> on. Your note is stored in _[Linear / GitHub / our own server]_ and is visible to _[our team /
-> anyone who can open this page]_ until we delete it. To have your notes erased, write to
-> _[address]_.
+> page, the part of the page you pointed at, and the size of your window. Your name is optional; we
+> receive it only if you type it, and your browser keeps it only if you ask it to. A picture of the
+> page is sent only if you turn it on. Your note is stored in _[Linear / GitHub / our own server]_
+> and is visible to _[our team / anyone who can open this page]_ until we delete it. To have your
+> notes erased, write to _[address]_.
 
 If you turned `includeEnv` on, add "and your browser's name, version and language" to the first
 sentence. Remove the picture sentence if you supplied no `captureScreenshot`.

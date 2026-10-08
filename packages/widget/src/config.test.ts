@@ -55,6 +55,44 @@ describe('what a stored config cannot say (FRU-89)', () => {
   });
 });
 
+describe('the name a reporter asked to keep (FRU-91)', () => {
+  it('is absent until it is set, and absent again when it is forgotten', () => {
+    const storage = fakeStorage();
+    const store = createConfigStore({ defaults: DEFAULTS, storage });
+    assert.equal('reporterName' in store.get(), false);
+
+    store.set({ reporterName: '  Alice  ' });
+    assert.equal(store.get().reporterName, 'Alice');
+    assert.equal(createConfigStore({ defaults: DEFAULTS, storage }).get().reporterName, 'Alice');
+
+    store.set({ reporterName: undefined });
+    assert.equal('reporterName' in store.get(), false);
+    assert.equal((storage.getItem(CONFIG_STORAGE_KEY) ?? '').includes('Alice'), false, 'the name is still in storage');
+  });
+
+  it('survives a change of another preference', () => {
+    const store = createConfigStore({ defaults: DEFAULTS, storage: fakeStorage() });
+
+    store.set({ reporterName: 'Alice' });
+    store.set({ hiddenStages: ['ripe'] });
+
+    assert.equal(store.get().reporterName, 'Alice');
+  });
+
+  it('reads a stored name like the rest: a string, trimmed, short, or nothing', () => {
+    const read = (reporterName: unknown) =>
+      createConfigStore({
+        defaults: DEFAULTS,
+        storage: fakeStorage({ [CONFIG_STORAGE_KEY]: JSON.stringify({ reporterName }) }),
+      }).get().reporterName;
+
+    assert.equal(read(' Alice '), 'Alice');
+    assert.equal(read(42), undefined);
+    assert.equal(read('   '), undefined);
+    assert.equal(read('a'.repeat(5_000))?.length, 120);
+  });
+});
+
 describe('createConfigStore', () => {
   it('starts from the defaults when nothing was ever stored', () => {
     const store = createConfigStore({ defaults: DEFAULTS, storage: fakeStorage() });

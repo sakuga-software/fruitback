@@ -304,8 +304,14 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   `false`) is treated as a failure rather than a success.
 - **Losing what someone just wrote is the one failure this widget cannot afford.** Anything that
   would clear the field on an error path is a bug, however tidy it looks.
-- Name and e-mail are optional, behind a disclosure, and never `verified` — that flag is the worker's
-  to set.
+- **One field, the name, and no e-mail** (FRU-91). It is optional, behind a disclosure, and never
+  `verified` — that flag is the worker's to set. `reporter.email` stays in the seed contract, because
+  an identity token can carry one.
+- **The widget remembers a name only for a reporter who ticked the box.** `NameMemory` is a seam like
+  `onSubmit`: the composer does not know where the name is kept, and `embed.ts` gives it the config
+  store. The name is written before the send, so a failed send costs neither the name nor the
+  choice. Unticking the box erases at once. With `identityToken`, the composer asks for no name: the
+  worker would replace a typed one.
 - Popover on desktop, **sheet on a phone**. The anchored position goes through
   `--fruitback-composer-*` properties rather than inline `left`/`top`, because an inline style beats
   the media query and leaves the sheet offset.

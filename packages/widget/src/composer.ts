@@ -36,8 +36,24 @@ export type ComposerOptions = {
    */
   onSubmit: (note: string, reporter?: SeedReporter) => Promise<boolean | void>;
   onClose?: () => void;
+  /**
+   * Where the name of the reporter is kept between notes, when the reporter asks for it (FRU-91).
+   * If left out, the composer offers no box to remember the name.
+   */
+  memory?: NameMemory;
+  /**
+   * The worker names the reporter from a signed identity, so the composer asks for no name.
+   * A typed name would be replaced by the identity, and the reporter would not know.
+   */
+  identified?: boolean;
   /** The widget's words (FRU-37). Left out: English, with dates in this document's language. */
   translator?: Translator;
+};
+
+export type NameMemory = {
+  get(): string | undefined;
+  /** `undefined` forgets the name. */
+  set(name: string | undefined): void;
 };
 
 export type Composer = {
@@ -80,7 +96,10 @@ export function createComposer(options: ComposerOptions): Composer {
   const identify = root.querySelector('[data-fruitback-identify]') as HTMLButtonElement;
   const who = root.querySelector('[data-fruitback-who]') as HTMLElement;
   const name = root.querySelector('[data-fruitback-name]') as HTMLInputElement;
-  const email = root.querySelector('[data-fruitback-email]') as HTMLInputElement;
+  const rememberLabel = root.querySelector('[data-fruitback-remember-label]') as HTMLLabelElement;
+  const remember = root.querySelector('[data-fruitback-remember]') as HTMLInputElement;
+  const memory = options.memory;
+  const asksForName = options.identified !== true;
 
   // Set after parsing and never interpolated into TEMPLATE: a host translation is text, not markup.
   field.placeholder = t.text('composer.placeholder');
@@ -88,8 +107,9 @@ export function createComposer(options: ComposerOptions): Composer {
   identify.textContent = t.text('composer.identify');
   name.placeholder = t.text('composer.namePlaceholder');
   name.setAttribute('aria-label', t.text('composer.nameLabel'));
-  email.placeholder = t.text('composer.emailPlaceholder');
-  email.setAttribute('aria-label', t.text('composer.emailLabel'));
+  (rememberLabel.querySelector('span') as HTMLElement).textContent = t.text('composer.remember');
+  rememberLabel.hidden = memory === undefined;
+  identify.hidden = !asksForName;
   cancel.textContent = t.text('composer.cancel');
 
   let state: ComposerState = 'idle';
@@ -116,6 +136,8 @@ export function createComposer(options: ComposerOptions): Composer {
 
     const mine = session;
     setState('sending');
+    // Before the send, so a failed send costs neither the name nor the choice to keep it.
+    if (asksForName && remember.checked) memory?.set(typedName());
     try {
       const result = await options.onSubmit(field.value, reporterFromFields());
       if (result === false) throw new Error('refused');
@@ -143,6 +165,7 @@ export function createComposer(options: ComposerOptions): Composer {
 
     session += 1;
     field.value = '';
+    showRememberedName();
     setState('idle');
     focus.remember();
     root.hidden = false;
@@ -184,17 +207,31 @@ export function createComposer(options: ComposerOptions): Composer {
   /**
    * What the visitor said about themselves, or nothing at all.
    *
-   * Anonymous is the default and stays one click away: these fields are behind a disclosure, empty,
-   * and an empty one is absent rather than an empty string — the seed round-trip forbids a field
-   * nobody provided.
+   * Anonymous is the default and stays one click away: the field is behind a disclosure, empty, and
+   * an empty one is absent rather than an empty string — the seed round-trip forbids a field nobody
+   * provided. One field, and no e-mail (FRU-91): an address is not needed to read a note.
    */
   function reporterFromFields(): SeedReporter | undefined {
-    const reporter = {
-      ...(name.value.trim().length > 0 ? { name: name.value.trim() } : {}),
-      ...(email.value.trim().length > 0 ? { email: email.value.trim() } : {}),
-    };
+    const typed = asksForName ? typedName() : undefined;
 
-    return Object.keys(reporter).length > 0 ? reporter : undefined;
+    return typed === undefined ? undefined : { name: typed };
+  }
+
+  function typedName(): string | undefined {
+    const typed = name.value.trim();
+
+    return typed.length > 0 ? typed : undefined;
+  }
+
+  /** A reporter who asked to be remembered sees the name the next note is signed with. */
+  function showRememberedName(): void {
+    const remembered = asksForName ? memory?.get() : undefined;
+    if (remembered === undefined) return;
+
+    name.value = remembered;
+    remember.checked = true;
+    who.hidden = false;
+    identify.setAttribute('aria-expanded', 'true');
   }
 
   function close(): void {
@@ -210,6 +247,11 @@ export function createComposer(options: ComposerOptions): Composer {
     who.hidden = !shown;
     identify.setAttribute('aria-expanded', String(shown));
     if (shown) name.focus();
+  });
+
+  // Unticked, the box forgets at once. The reporter does not have to send a note to be forgotten.
+  remember.addEventListener('change', () => {
+    if (!remember.checked) memory?.set(undefined);
   });
 
   send.addEventListener('click', () => void submit());
@@ -251,7 +293,9 @@ const TEMPLATE = `
   <button type="button" data-fruitback-identify class="fruitback-composer-identify" aria-expanded="false"></button>
   <div data-fruitback-who class="fruitback-composer-who" hidden>
     <input data-fruitback-name type="text" name="fruitback-name" autocomplete="name" />
-    <input data-fruitback-email type="email" name="fruitback-email" autocomplete="email" />
+    <label data-fruitback-remember-label class="fruitback-composer-remember">
+      <input data-fruitback-remember type="checkbox" name="fruitback-remember" /><span></span>
+    </label>
   </div>
   <div class="fruitback-composer-foot">
     <span data-fruitback-status class="fruitback-composer-status" role="status" aria-live="polite"></span>
@@ -321,10 +365,27 @@ const STYLES = `
   text-decoration: underline;
   cursor: pointer;
 }
-.fruitback-composer-who { display: flex; gap: 6px; margin-top: 8px; }
+.fruitback-composer-who { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .fruitback-composer-who[hidden] { display: none; }
-.fruitback-composer-who input {
-  flex: 1;
+.fruitback-composer-identify[hidden] { display: none; }
+.fruitback-composer-remember {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--fruitback-color-text-muted);
+  cursor: pointer;
+}
+.fruitback-composer-remember[hidden] { display: none; }
+.fruitback-composer-remember input {
+  /* The reset of the host sets appearance to none, and a native box then draws nothing. */
+  appearance: auto;
+  -webkit-appearance: checkbox;
+  width: 14px;
+  height: 14px;
+  accent-color: var(--fruitback-color-accent);
+}
+.fruitback-composer-who input[type="text"] {
   min-width: 0;
   padding: 6px 8px;
   border: 1px solid var(--fruitback-color-border-strong);
@@ -334,7 +395,7 @@ const STYLES = `
   color: inherit;
   background: var(--fruitback-color-surface);
 }
-.fruitback-composer-who input:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 1px; }
+.fruitback-composer-who input[type="text"]:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 1px; }
 .fruitback-composer-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .fruitback-composer-status { flex: 1; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-composer-ghost, .fruitback-composer-send {

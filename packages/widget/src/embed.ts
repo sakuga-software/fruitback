@@ -233,6 +233,13 @@ export function init(options: FruitbackOptions): Fruitback {
     document,
     translator,
     host: host.panel,
+    // The name lives with the other preferences of this browser, under the same key.
+    memory: {
+      get: () => config.get().reporterName,
+      set: (name) => config.set({ reporterName: name }),
+    },
+    // A host that mints identity tokens names the reporter itself.
+    identified: options.identityToken !== undefined,
     onSubmit: async (note, reporter) => {
       const planted = await plant({ note, target, reporter, config: config.get(), options });
       if (!planted) return false;

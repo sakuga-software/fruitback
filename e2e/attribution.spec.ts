@@ -31,15 +31,56 @@ test('a typed name reaches Linear, and is stored as the claim it is', async ({ p
   await page.locator('[data-testid="card-latte"] .add').click();
   await page.getByRole('button', { name: /Add my name/ }).click();
   await page.getByLabel('Your name (optional)').fill('Alice');
-  await page.getByLabel('Your email (optional)').fill('alice@acme.test');
   await page.getByPlaceholder('What is wrong here?').fill('Signé Alice');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.locator('[data-fruitback-dev="status"]')).toHaveText(/^planté ·/);
 
   const [seed] = await storedSeeds(page);
-  expect(seed?.reporter).toEqual({ name: 'Alice', email: 'alice@acme.test' });
+  expect(seed?.reporter).toEqual({ name: 'Alice' });
   // No `verified`: the widget never claims it, whatever was typed.
   expect(seed?.reporter && 'verified' in seed.reporter).toBe(false);
+
+  // The box was not ticked, so this browser keeps no name (FRU-91).
+  expect(await page.evaluate(() => JSON.stringify({ ...localStorage }))).not.toContain('Alice');
+});
+
+test('a reporter who asks to be remembered signs the next note too, until the box is unticked (FRU-91)', async ({
+  page,
+}) => {
+  await openPlayground(page, 'attribution-remembered');
+  const latte = page.locator('[data-testid="card-latte"] .add');
+  const stored = () => page.evaluate(() => JSON.stringify({ ...localStorage }));
+
+  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await latte.click();
+  await page.getByRole('button', { name: /Add my name/ }).click();
+  await page.getByLabel('Your name (optional)').fill('Alice');
+  await page.getByLabel('Remember me on this site').check();
+  await page.getByPlaceholder('What is wrong here?').fill('Signé, et retenu');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.locator('[data-fruitback-dev="status"]')).toHaveText(/^planté ·/);
+  expect(await stored()).toContain('Alice');
+
+  // After a reload nothing of the first popover is left: the name comes from storage.
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Nos formules' })).toBeVisible();
+  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.locator('[data-testid="card-mocha"] .add').click();
+  await expect(page.getByLabel('Your name (optional)')).toHaveValue('Alice');
+  await expect(page.getByLabel('Remember me on this site')).toBeChecked();
+  await page.getByPlaceholder('What is wrong here?').fill('Signé sans rien retaper');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.locator('[data-fruitback-dev="status"]')).toHaveText(/^planté ·/);
+
+  const seeds = await storedSeeds(page);
+  expect(seeds.find((seed) => seed.note === 'Signé sans rien retaper')?.reporter).toEqual({ name: 'Alice' });
+
+  // Unticked, the name leaves storage at once.
+  await expect(page.getByRole('dialog', { name: 'Leave a note' })).toBeHidden({ timeout: 5_000 });
+  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await latte.click();
+  await page.getByLabel('Remember me on this site').uncheck();
+  expect(await stored()).not.toContain('Alice');
 });
 
 test('a browser cannot promote itself to a verified identity', async ({ page }) => {

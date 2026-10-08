@@ -97,6 +97,10 @@ export function Fruitback() {
 
     const composer = createComposer({
       host: host.panel,
+      memory: {
+        get: () => config.get().reporterName,
+        set: (name) => config.set({ reporterName: name }),
+      },
       onSubmit: async (note, reporter) => {
         const identifier = await plant(note, target.current, setStatus, reporter);
         if (identifier === null) return false;
