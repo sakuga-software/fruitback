@@ -507,7 +507,7 @@ describe('forgetting a reporter (FRU-85)', () => {
     reply(path, 1, 'une réponse', 'Team', '2026-01-01T00:00:00.000Z');
     reply(path, 2, 'une autre', 'Team', '2026-01-01T00:00:00.000Z');
 
-    const forgotten = await createSqliteStore({ path }).forgetReporter?.('ALICE@example.com', { dryRun: false });
+    const forgotten = await createSqliteStore({ path }).forget?.({ email: 'ALICE@example.com' }, { dryRun: false });
 
     assert.deepEqual(
       forgotten?.map((seed) => [seed.identifier, seed.note]),
@@ -525,13 +525,51 @@ describe('forgetting a reporter (FRU-85)', () => {
     const path = freshPath();
     await plant(path, 'sd_alice', 'alice@example.com');
 
-    const listed = await createSqliteStore({ path }).forgetReporter?.('alice@example.com', { dryRun: true });
+    const listed = await createSqliteStore({ path }).forget?.({ email: 'alice@example.com' }, { dryRun: true });
 
     assert.deepEqual(
       listed?.map((seed) => seed.identifier),
       ['FB-1'],
     );
     assert.equal(count(path, 'seeds'), 1);
+  });
+
+  it('deletes the seeds it is given by identifier, with their replies, and no other (FRU-111)', async () => {
+    const path = freshPath();
+    await plant(path, 'sd_one');
+    await plant(path, 'sd_two', 'bob@example.com');
+    await plant(path, 'sd_three');
+    closeSqliteConnections();
+    reply(path, 1, 'une réponse', 'Team', '2026-01-01T00:00:00.000Z');
+    reply(path, 2, 'une autre', 'Team', '2026-01-01T00:00:00.000Z');
+
+    const forgotten = await createSqliteStore({ path }).forget?.(
+      { identifiers: ['FB-1', 'FB-3', 'FB-99'] },
+      { dryRun: false },
+    );
+
+    assert.deepEqual(
+      forgotten?.map((seed) => seed.identifier),
+      ['FB-1', 'FB-3'],
+    );
+    assert.equal(count(path, 'seeds'), 1);
+    assert.equal(count(path, 'comments'), 1);
+  });
+
+  it('finds the seeds signed with a name, whatever its case and the spaces around it', async () => {
+    const path = freshPath();
+    const store = createSqliteStore({ path });
+    await store.create(seedFixture({ id: 'sd_a', note: 'a', reporter: { name: ' Alice ' } }), undefined, POLICY);
+    await store.create(seedFixture({ id: 'sd_b', note: 'b', reporter: { name: 'Alicia' } }), undefined, POLICY);
+    await store.create(seedFixture({ id: 'sd_c', note: 'c' }), undefined, POLICY);
+
+    const listed = await createSqliteStore({ path }).forget?.({ name: 'ALICE' }, { dryRun: true });
+
+    assert.deepEqual(
+      listed?.map((seed) => seed.identifier),
+      ['FB-1'],
+    );
+    assert.equal(count(path, 'seeds'), 3);
   });
 
   it('is not stopped by a row that is not JSON, and leaves that row alone', async () => {
@@ -544,7 +582,7 @@ describe('forgetting a reporter (FRU-85)', () => {
       .run(null, 'https://example.com/', 'seeded', '{not json', '2026-01-01', '2026-01-01');
     database.close();
 
-    const forgotten = await createSqliteStore({ path }).forgetReporter?.('alice@example.com', { dryRun: false });
+    const forgotten = await createSqliteStore({ path }).forget?.({ email: 'alice@example.com' }, { dryRun: false });
 
     assert.equal(forgotten?.length, 1);
     assert.equal(count(path, 'seeds'), 1);

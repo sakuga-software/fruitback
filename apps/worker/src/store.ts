@@ -59,13 +59,21 @@ export type SeedStore = {
   create(seed: Seed, client: ClientConfig | undefined, policy: ClientPolicy): Promise<CreatedIssue>;
   findForPage(query: SeedIssueQuery, client: ClientConfig | undefined, policy: ClientPolicy): Promise<SeedIssue[]>;
   /**
-   * Delete every seed whose reporter gave this address, and the replies to it (FRU-85).
+   * Delete the seeds that `which` selects, and the replies to them (FRU-85, FRU-111).
    *
    * Only a store that holds the rows itself has this. A tracker keeps the issues in the team's own
    * workspace, and the team deletes them there. `node server.mjs forget` refuses a store without it.
    */
-  forgetReporter?(email: string, options: { dryRun: boolean }): Promise<ForgottenSeed[]>;
+  forget?(which: ForgetSelector, options: { dryRun: boolean }): Promise<ForgottenSeed[]>;
 };
 
-/** One seed that `forgetReporter` found, as the operator reads it before it goes. */
+/**
+ * Which seeds to forget.
+ *
+ * An address and a name are what the reporter typed, so each one is a claim. An identifier names
+ * one seed, and it is what an operator uses after reading the list.
+ */
+export type ForgetSelector = { email: string } | { name: string } | { identifiers: readonly string[] };
+
+/** One seed that `forget` found, as the operator reads it before it goes. */
 export type ForgottenSeed = { identifier: string; createdAt: string; pageUrl: string; note: string };

@@ -2,7 +2,7 @@ import { type WorkerEnv, readConfig } from './env.ts';
 import { PAIRING_TTL_SECONDS } from './session.ts';
 import { createPairingCommand } from './app.ts';
 import { CACHE_TTL_MS } from './cache.ts';
-import type { ForgottenSeed } from './store.ts';
+import type { ForgetSelector, ForgottenSeed } from './store.ts';
 
 /**
  * Minting a pairing code, as a command rather than a route (FRU-42).
@@ -105,52 +105,98 @@ export async function runPair(argv: readonly string[], env: WorkerEnv): Promise<
 }
 
 /**
- * Deleting the notes of one reporter, as a command for the same reason as `pair` (FRU-85).
+ * Deleting notes, as a command for the same reason as `pair` (FRU-85, FRU-111).
  *
  * `docker exec <container> node server.mjs forget --email alice@acme.dev --dry-run`
+ * `docker exec <container> node server.mjs forget --name "Alice" --dry-run`
+ * `docker exec <container> node server.mjs forget --id FB-12 --id FB-13`
  *
  * It always lists what it found before it says what it did. A typed address is a claim: a reporter
- * can type somebody else's, and two reporters can type the same one. Run it with `--dry-run` first,
- * and read the list.
+ * can type somebody else's, and two reporters can type the same one. A typed name is a weaker claim,
+ * so `--name` only lists. Run it with `--dry-run` first, read the list, and delete by `--id`.
  */
 
-export type ForgetArgs = { email: string; dryRun: boolean };
+export type ForgetArgs = { which: ForgetSelector; dryRun: boolean };
 
 export type ForgetArgsResult = { ok: true; args: ForgetArgs } | { ok: false; error: string };
 
-const FORGET_USAGE = 'usage: forget --email <address> [--dry-run]';
+const FORGET_USAGE =
+  'usage: forget (--email <address> | --name <name> --dry-run | --id <FB-n> [--id <FB-n> ...]) [--dry-run]';
+
+const VALUE_FLAGS = ['--email', '--name', '--id'] as const;
+type ValueFlag = (typeof VALUE_FLAGS)[number];
 
 /** A note excerpt long enough to recognise it, short enough to keep one note on one line. */
 const NOTE_EXCERPT_LENGTH = 60;
 
 export function parseForgetArgs(argv: readonly string[]): ForgetArgsResult {
-  let email: string | undefined;
+  const refuse = (reason: string): ForgetArgsResult => ({ ok: false, error: `${FORGET_USAGE}\n${reason}` });
+  const given: Record<ValueFlag, string[]> = { '--email': [], '--name': [], '--id': [] };
   let dryRun = false;
 
   for (let index = 0; index < argv.length; index += 1) {
-    const flag = argv[index];
+    const flag = argv[index] ?? '';
 
     if (flag === '--dry-run') {
       dryRun = true;
-    } else if (flag === '--email') {
-      email = argv[index + 1];
+    } else if ((VALUE_FLAGS as readonly string[]).includes(flag)) {
+      const value = argv[index + 1];
       // `--email --dry-run` would otherwise read the flag as the address and run a real deletion.
-      if (email === undefined || email.startsWith('--')) {
-        return { ok: false, error: `${FORGET_USAGE}\n--email needs a value` };
-      }
+      if (value === undefined || value.startsWith('--') || value.trim() === '') return refuse(`${flag} needs a value`);
+      given[flag as ValueFlag].push(value.trim());
       index += 1;
     } else {
       // Refused rather than ignored: `--dryrun` must not delete what `--dry-run` would only list.
-      return { ok: false, error: `${FORGET_USAGE}\nunexpected: ${flag}` };
+      return refuse(`unexpected: ${flag}`);
     }
   }
 
-  if (email === undefined || email.trim() === '') return { ok: false, error: `${FORGET_USAGE}\n--email is required` };
+  const kinds = VALUE_FLAGS.filter((flag) => given[flag].length > 0);
+  if (kinds.length === 0) return refuse('one of --email, --name and --id is required');
+  // Two selectors in one command have two readings, all of them or any of them. Neither is asked for.
+  if (kinds.length > 1) return refuse(`use one of ${kinds.join(' and ')}, not both`);
 
-  return { ok: true, args: { email: email.trim(), dryRun } };
+  const [kind] = kinds;
+  if (kind === '--id') {
+    const malformed = given['--id'].filter((identifier) => !/^FB-[1-9]\d*$/.test(identifier));
+    if (malformed.length > 0) return refuse(`not an identifier of this store: ${malformed.join(', ')}`);
+
+    return { ok: true, args: { which: { identifiers: [...new Set(given['--id'])] }, dryRun } };
+  }
+
+  const values = given[kind as '--email' | '--name'];
+  if (values.length > 1) return refuse(`${kind} takes one value`);
+  const [value = ''] = values;
+
+  if (kind === '--name') {
+    // A name is not an identity: two reporters sign with the same one. It finds notes, and no more.
+    if (!dryRun) return refuse('--name only lists. Add --dry-run, read the list, then delete with --id');
+
+    return { ok: true, args: { which: { name: value }, dryRun } };
+  }
+
+  return { ok: true, args: { which: { email: value }, dryRun } };
 }
 
 export type ForgetOutcome = { ok: boolean; lines: string[] };
+
+/** The selector in the words of the three sentences that name it. */
+function describe(which: ForgetSelector): { that: string; none: string; search: string } {
+  if ('identifiers' in which) {
+    const listed = which.identifiers.join(', ');
+
+    return { that: `are ${listed}`, none: `no note is ${listed}.`, search: listed };
+  }
+  if ('name' in which) {
+    return { that: `are signed ${which.name}`, none: `no note is signed ${which.name}.`, search: which.name };
+  }
+
+  return {
+    that: `give ${which.email}`,
+    none: `no note gives ${which.email} as its reporter's address.`,
+    search: which.email,
+  };
+}
 
 export async function runForget(argv: readonly string[], env: WorkerEnv): Promise<ForgetOutcome> {
   const parsed = parseForgetArgs(argv);
@@ -159,8 +205,10 @@ export async function runForget(argv: readonly string[], env: WorkerEnv): Promis
   const config = readConfig(env);
   if (!config.ok) return { ok: false, lines: [`misconfigured: ${config.missing.join(', ')}`] };
 
+  const { which, dryRun } = parsed.args;
+  const { that, none, search } = describe(which);
   const store = config.config.store.create();
-  if (store.forgetReporter === undefined) {
+  if (store.forget === undefined) {
     const provider = config.config.store.provider;
 
     return {
@@ -169,28 +217,36 @@ export async function runForget(argv: readonly string[], env: WorkerEnv): Promis
         `the ${provider} store does not delete notes from this command.`,
         provider === 'memory'
           ? 'Its notes are in the memory of the worker, and they go when the worker stops.'
-          : `They are issues in your tracker: search them for ${parsed.args.email}, read them, and delete the ones that are this reporter's.`,
+          : `They are issues in your tracker: search them for ${search}, read them, and delete the ones that are this reporter's.`,
       ],
     };
   }
 
   let found: ForgottenSeed[];
   try {
-    found = await store.forgetReporter(parsed.args.email, { dryRun: parsed.args.dryRun });
+    // Listed first, whatever was asked: an identifier that names no note stops the deletion of the
+    // others, because a list with a typing error in it is not the list the operator read.
+    found = await store.forget(which, { dryRun: true });
+    const missing =
+      'identifiers' in which ? which.identifiers.filter((id) => !found.some((seed) => seed.identifier === id)) : [];
+    if (missing.length > 0) {
+      return { ok: false, lines: [`no note is ${missing.join(', ')}. Nothing was deleted.`] };
+    }
+    if (!dryRun && found.length > 0) found = await store.forget(which, { dryRun: false });
   } catch (error) {
     return { ok: false, lines: [String(error instanceof Error ? error.message : error)] };
   }
 
-  if (found.length === 0) return { ok: true, lines: [`no note gives ${parsed.args.email} as its reporter's address.`] };
+  if (found.length === 0) return { ok: true, lines: [none] };
 
   const listed = found.map((seed) => `  ${seed.identifier}  ${seed.createdAt}  ${seed.pageUrl}  ${excerpt(seed.note)}`);
 
   return {
     ok: true,
-    lines: parsed.args.dryRun
-      ? [`${found.length} note(s) give ${parsed.args.email}. Nothing was deleted (--dry-run):`, ...listed]
+    lines: dryRun
+      ? [`${found.length} note(s) ${that}. Nothing was deleted (--dry-run):`, ...listed]
       : [
-          `deleted ${found.length} note(s), with their replies, that give ${parsed.args.email}:`,
+          `deleted ${found.length} note(s), with their replies, that ${that}:`,
           ...listed,
           // The worker caches a read for this long, so a page can still show the note for a moment.
           `A page can still show them for ${Math.round(CACHE_TTL_MS / 1000)} seconds. Your backups still hold them.`,
