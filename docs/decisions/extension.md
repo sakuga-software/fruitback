@@ -91,7 +91,8 @@ it changes who is shown the feedback and never who may fetch it.
   so changing it in the popup would never take effect on a site the reporter had already set a
   preference on. `createConfigStore({ pinned })` is the fix — `endpoint` and `clientId` are the
   caller's word and are not restorable — and a mount that names its own key pins them. Raised in
-  review, mutation-tested.
+  review, mutation-tested. **Since FRU-89 the store holds neither field**, so there is nothing to
+  pin: see _The settings panel_ in [widget.md](widget.md).
 - **`apply` awaits in the middle, and three things call it**: the first run, the `ready` handshake,
   and every storage change. Two can be in flight, and the older read can post last — a site switched
   off that stays mounted. The `posted` signature made that **stick rather than heal**: the stale run

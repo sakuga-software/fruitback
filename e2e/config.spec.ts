@@ -17,18 +17,28 @@ test('the settings open from the floating button and survive a reload', async ({
   await page.getByLabel('Open Fruitback settings').click();
   await expect(page.locator(panel)).toBeVisible();
 
-  // The client id is what the worker routes on, so it is the setting worth proving persists.
-  const client = page.locator('[name="client"]');
-  await expect(client).toHaveValue('playground');
-  await client.fill('acme');
+  const closed = page.locator('[name="stage-composted"]');
+  await expect(closed).toBeChecked();
+  await closed.uncheck();
 
   await page.reload();
   await page.getByLabel('Open Fruitback settings').click();
 
-  await expect(page.locator('[name="client"]')).toHaveValue('acme');
+  await expect(page.locator('[name="stage-composted"]')).not.toBeChecked();
+});
 
-  // Put it back: the worker refuses an unknown client, and the suite shares one process.
-  await page.locator('[name="client"]').fill('playground');
+test('the panel holds no field to type in (FRU-89)', async ({ page }) => {
+  // Where the notes go is the word of the site, not of whoever opens the panel on it.
+  await openPlayground(page, 'config-no-field');
+  await page.getByLabel('Open Fruitback settings').click();
+
+  const controls = page.locator(`${panel} input`);
+  // The count first, or a panel with no control at all passes the check below.
+  await expect(controls).not.toHaveCount(0);
+  expect(
+    await controls.evaluateAll((nodes) => [...new Set(nodes.map((node) => (node as HTMLInputElement).type))]),
+  ).toEqual(['checkbox']);
+  await expect(page.locator(`${panel}`).getByRole('textbox')).toHaveCount(0);
 });
 
 test('hiding a stage takes its pin off the page, and showing it puts it back', async ({ page }) => {
@@ -53,12 +63,30 @@ test('hiding a stage takes its pin off the page, and showing it puts it back', a
 
 test('the panel belongs to the widget, so the page cannot restyle it', async ({ page }) => {
   await openPlayground(page, 'config-isolation');
-  await page.addStyleTag({ content: 'input { background: lime !important; border: 8px solid blue !important; }' });
+  await page.addStyleTag({ content: 'input { outline: 8px solid blue !important; margin: 40px !important; }' });
 
   await page.getByLabel('Open Fruitback settings').click();
-  const background = await page.locator('[name="client"]').evaluate((node) => getComputedStyle(node).backgroundColor);
+  const styles = (node: Element) => {
+    const computed = getComputedStyle(node);
 
-  expect(background).not.toBe('rgb(0, 255, 0)');
+    return { outline: computed.outlineWidth, margin: computed.marginTop };
+  };
+
+  // The rule is live: an input of the page takes it. Without this, the check below proves nothing.
+  const ofThePage = await page.evaluate(() => {
+    const input = document.createElement('input');
+    document.body.append(input);
+    const computed = getComputedStyle(input);
+    const seen = { outline: computed.outlineWidth, margin: computed.marginTop };
+    input.remove();
+
+    return seen;
+  });
+  expect(ofThePage).toEqual({ outline: '8px', margin: '40px' });
+
+  const ofThePanel = await page.locator('[name="stage-ripe"]').evaluate(styles);
+  expect(ofThePanel.outline).not.toBe('8px');
+  expect(ofThePanel.margin).not.toBe('40px');
 });
 
 test('pointing at the settings button never captures it', async ({ page }) => {
@@ -113,40 +141,4 @@ test('the checkboxes are actually drawn, and the gear does not sit on the launch
   expect(gear, 'the gear should be on screen').not.toBeNull();
   expect(launch).not.toBeNull();
   expect(gear!.x + gear!.width, 'the gear ends before the launch button starts').toBeLessThanOrEqual(launch!.x);
-});
-
-test('a slow read from an old endpoint never overwrites a newer one', async ({ page }) => {
-  // The panel writes on every keystroke, so correcting a client id fires several reads. Nothing
-  // makes them settle in the order they were sent — a wrong host can take longer to fail than a
-  // right one takes to answer — and the late one would then have the last word.
-  await openPlayground(page, 'config-race');
-  await plantPin(page, page.locator('[data-testid="card-latte"] .add'), 'Le pin qui doit rester');
-
-  // The stale read is made deliberately slow, which is what turns a race into a test.
-  await page.route('**/feedback?*', async (route) => {
-    if (route.request().url().includes('client=stale')) {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      await route.abort('failed');
-
-      return;
-    }
-    await route.continue();
-  });
-
-  await page.getByLabel('Open Fruitback settings').click();
-  const client = page.locator('[name="client"]');
-
-  // Far enough apart to be two reads rather than one debounced read.
-  await client.fill('stale');
-  await page.waitForTimeout(600);
-  await client.fill('playground');
-
-  // The correct read lands first and says so.
-  await expect(status(page)).toHaveText(/^1 pin$/);
-
-  // And the stale one, failing a second later, is ignored rather than allowed to report an
-  // unreachable worker over a page that is perfectly fine.
-  await page.waitForTimeout(2000);
-  await expect(status(page)).toHaveText(/^1 pin$/);
-  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 });

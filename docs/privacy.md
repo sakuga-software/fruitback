@@ -103,9 +103,8 @@ can read them, with or without the widget.
 
 ### What stays in the reporter's browser
 
-- `localStorage`, under `fruitback:config` (or the `configKey` the integrator chose): the worker
-  address, the client id, the stages the reporter hid and the screenshot switch. No name, no e-mail,
-  no note. In private mode the extension writes `fruitback:config:extension` into **the site's**
+- `localStorage`, under `fruitback:config` (or the `configKey` the integrator chose): the stages the
+  reporter hid and the screenshot switch. No name, no e-mail, no note. In private mode the extension writes `fruitback:config:extension` into **the site's**
   storage, so a site can see that a reviewer used the extension on it.
 - The extension keeps its rules and its session tokens in its own storage, which no page can read.
 - The widget sets no cookie.

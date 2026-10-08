@@ -7,17 +7,16 @@ import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
  * and they are deliberately absent: since FRU-15 the worker resolves those from the client id it is
  * given, and refuses an id it does not know. A browser that could name its own team would either be
  * ignored — a setting that does nothing is worse than no setting — or obeyed, which would let any
- * page write into any workspace. The client id is the one thing the reporter can say; what it routes
- * to stays server-side.
+ * page write into any workspace.
+ *
+ * **The worker and the client id are absent too** (FRU-89). They are the word of the caller of
+ * `init`, and a reporter cannot use them. A stored copy let a page that wrote this key choose where
+ * the notes go, so a stored `endpoint` or `clientId` is not read.
  *
  * Everything below is a preference of this browser on this site. None of it travels in a seed.
  */
 
 export type WidgetConfig = {
-  /** Where the worker answers. */
-  endpoint: string;
-  /** Which client this site is, as the worker's map knows it. */
-  clientId: string;
   /** Stages whose pins are not drawn. `ripe` and `composted` are what "resolved" means. */
   hiddenStages: SeedStage[];
   /**
@@ -44,18 +43,6 @@ export type ConfigStoreOptions = {
    */
   storage?: Storage | null;
   key?: string;
-  /**
-   * Fields the caller owns outright, which a stored config must never override.
-   *
-   * The store reads its key from the page's own `localStorage`, and the page can write it. For an
-   * ordinary embed that is the feature: the reporter's preferences outlive the reload, the endpoint
-   * included, because the panel is where it is edited. For a caller whose routing was decided
-   * somewhere else it is the opposite — a stored value wins over the new default for ever, so
-   * changing the endpoint in the extension's popup would never take effect on a site the reporter
-   * had already set a preference on, and a page that wrote that key would send the notes to a worker
-   * nobody chose. Raised in review.
-   */
-  pinned?: readonly (keyof WidgetConfig)[];
 };
 
 export const CONFIG_STORAGE_KEY = 'fruitback:config';
@@ -68,10 +55,7 @@ export function createConfigStore(options: ConfigStoreOptions): ConfigStore {
   const storage = options.storage === undefined ? defaultStorage() : options.storage;
   const listeners = new Set<(config: WidgetConfig) => void>();
 
-  const stored = readStored(storage, key);
-  for (const field of options.pinned ?? []) delete stored[field];
-
-  let config = seal({ ...options.defaults, ...stored });
+  let config = seal({ ...options.defaults, ...readStored(storage, key) });
 
   return {
     get: () => config,
@@ -132,8 +116,6 @@ function readStored(storage: Storage | null, key: string): Partial<WidgetConfig>
     const stored = parsed as Record<string, unknown>;
     const config: Partial<WidgetConfig> = {};
 
-    if (typeof stored.endpoint === 'string') config.endpoint = stored.endpoint;
-    if (typeof stored.clientId === 'string') config.clientId = stored.clientId;
     if (typeof stored.screenshot === 'boolean') config.screenshot = stored.screenshot;
     if (Array.isArray(stored.hiddenStages)) config.hiddenStages = stored.hiddenStages.filter(isStage);
 

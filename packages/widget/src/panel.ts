@@ -86,9 +86,6 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   root.setAttribute('aria-modal', 'true');
   root.setAttribute('aria-label', t.text('settings.dialog'));
 
-  const endpoint = field(document, 'endpoint', t.text('settings.endpoint'), 'https://…');
-  const clientId = field(document, 'client', t.text('settings.client'), 'acme');
-
   const stages = document.createElement('div');
   stages.className = 'fruitback-config-stages';
   const stageInputs = new Map<SeedStage, HTMLInputElement>();
@@ -128,7 +125,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   stagesTitle.className = 'fruitback-config-legend';
   stagesTitle.textContent = t.text('settings.stages');
 
-  root.append(head, endpoint.label, clientId.label, stagesTitle, stages, hideResolvedLabel);
+  root.append(head, stagesTitle, stages, hideResolvedLabel);
   if (options.screenshotSupported === true) root.append(screenshotLabel);
   options.host.append(style, root);
   const focus = holdFocus(root, () => panel.close());
@@ -137,8 +134,6 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   function paint(): void {
     const config = store.get();
     const available = offered.get();
-    endpoint.input.value = config.endpoint;
-    clientId.input.value = config.clientId;
 
     // A stage that the store cannot report gets no box. If the reporter hid that stage before, it
     // stays in the config, so a worker that reports it again shows the reporter's choice.
@@ -152,12 +147,16 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
     screenshot.checked = config.screenshot;
   }
 
+  /** The first stage that has a box, or the close button when the worker reports no stage. */
+  function firstControl(): HTMLElement {
+    const stage = SEED_STAGES.find((candidate) => stageLabels.get(candidate)?.hidden === false);
+
+    return (stage !== undefined ? stageInputs.get(stage) : undefined) ?? close;
+  }
+
   function hiddenFromInputs(): SeedStage[] {
     return SEED_STAGES.filter((stage) => stageInputs.get(stage)?.checked === false);
   }
-
-  endpoint.input.addEventListener('input', () => store.set({ endpoint: endpoint.input.value.trim() }));
-  clientId.input.addEventListener('input', () => store.set({ clientId: clientId.input.value.trim() }));
 
   for (const input of stageInputs.values()) {
     input.addEventListener('change', () => store.set({ hiddenStages: hiddenFromInputs() }));
@@ -190,7 +189,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
       paint();
       focus.remember();
       root.hidden = false;
-      endpoint.input.focus();
+      firstControl().focus();
     },
     close() {
       root.hidden = true;
@@ -213,30 +212,6 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
   };
 
   return panel;
-}
-
-function field(
-  document: Document,
-  name: string,
-  text: string,
-  placeholder: string,
-): { label: HTMLLabelElement; input: HTMLInputElement } {
-  const label = document.createElement('label');
-  label.className = 'fruitback-config-field';
-
-  const span = document.createElement('span');
-  span.textContent = text;
-
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.name = name;
-  input.placeholder = placeholder;
-  input.spellcheck = false;
-  input.autocomplete = 'off';
-
-  label.append(span, input);
-
-  return { label, input };
 }
 
 function checkbox(
@@ -289,22 +264,6 @@ const STYLES = `
   color: var(--fruitback-color-text-muted);
 }
 .fruitback-config-close:hover { color: var(--fruitback-color-text); }
-.fruitback-config-field { display: block; margin-top: 10px; }
-.fruitback-config-field span {
-  display: block;
-  margin-bottom: 3px;
-  font-size: 12px;
-  color: var(--fruitback-color-text-muted);
-}
-.fruitback-config-field input {
-  display: block;
-  width: 100%;
-  padding: 6px 8px;
-  border: 1px solid var(--fruitback-color-border-strong);
-  border-radius: var(--fruitback-radius-sm);
-  font: inherit; color: inherit; background: var(--fruitback-color-surface);
-}
-.fruitback-config-field input:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 1px; }
 .fruitback-config-legend { margin: 12px 0 4px; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-config-stages { display: flex; flex-direction: column; gap: 2px; }
 .fruitback-config-check { display: flex; align-items: center; gap: 6px; cursor: pointer; }

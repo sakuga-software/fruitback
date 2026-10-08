@@ -4,8 +4,6 @@ import type { SeedStage } from '@fruitback/shared';
 import { CONFIG_STORAGE_KEY, createConfigStore, type WidgetConfig } from './config.ts';
 
 const DEFAULTS: WidgetConfig = {
-  endpoint: 'http://localhost:8788',
-  clientId: 'playground',
   hiddenStages: [],
   screenshot: false,
 };
@@ -29,49 +27,31 @@ function fakeStorage(seed: Record<string, string> = {}): Storage & { throwOnWrit
   } as Storage;
 }
 
-describe('a config the caller owns', () => {
+describe('what a stored config cannot say (FRU-89)', () => {
   /**
-   * The store's key lives in the page's own `localStorage`, and the page can write it. For an
-   * ordinary embed that is the feature. For the extension it is not: the endpoint comes from the
-   * reviewer's popup, and a stored one winning would route the notes somewhere nobody chose.
+   * The key lives in the `localStorage` of the page, and the page can write it. The worker and the
+   * client id are the word of the caller of `init`, so the store does not hold them at all.
    */
-  it('does not let a stored value replace a pinned one', () => {
-    const storage = fakeStorage({
-      'fruitback:config:extension': JSON.stringify({ endpoint: 'https://evil.test', clientId: 'theirs' }),
-    });
+  it('does not read a stored endpoint or client id, under any key', () => {
+    for (const key of [CONFIG_STORAGE_KEY, 'fruitback:config:extension']) {
+      const storage = fakeStorage({
+        [key]: JSON.stringify({ endpoint: 'https://evil.test', clientId: 'theirs', hiddenStages: ['composted'] }),
+      });
 
-    const store = createConfigStore({
-      defaults: DEFAULTS,
-      storage,
-      key: 'fruitback:config:extension',
-      pinned: ['endpoint', 'clientId'],
-    });
+      const config = createConfigStore({ defaults: DEFAULTS, storage, key }).get();
 
-    assert.equal(store.get().endpoint, DEFAULTS.endpoint);
-    assert.equal(store.get().clientId, DEFAULTS.clientId);
+      assert.deepEqual(config, { hiddenStages: ['composted'], screenshot: false });
+    }
   });
 
-  it('still restores the preferences that are not pinned', () => {
+  it('writes the preferences only, so a config stored before loses its routing on the next change', () => {
     const storage = fakeStorage({
-      'fruitback:config:extension': JSON.stringify({ endpoint: 'https://evil.test', hiddenStages: ['composted'] }),
+      [CONFIG_STORAGE_KEY]: JSON.stringify({ endpoint: 'https://old.test', clientId: 'old', hiddenStages: [] }),
     });
 
-    const store = createConfigStore({
-      defaults: DEFAULTS,
-      storage,
-      key: 'fruitback:config:extension',
-      pinned: ['endpoint', 'clientId'],
-    });
+    createConfigStore({ defaults: DEFAULTS, storage }).set({ screenshot: true });
 
-    assert.deepEqual(store.get().hiddenStages, ['composted']);
-  });
-
-  it('restores everything when nothing is pinned, which is what an ordinary embed wants', () => {
-    const storage = fakeStorage({
-      [CONFIG_STORAGE_KEY]: JSON.stringify({ endpoint: 'https://theirs.test' }),
-    });
-
-    assert.equal(createConfigStore({ defaults: DEFAULTS, storage }).get().endpoint, 'https://theirs.test');
+    assert.deepEqual(JSON.parse(storage.getItem(CONFIG_STORAGE_KEY) ?? '{}'), { hiddenStages: [], screenshot: true });
   });
 });
 
@@ -84,43 +64,37 @@ describe('createConfigStore', () => {
 
   it('persists a change and reads it back into the next store', () => {
     const storage = fakeStorage();
-    createConfigStore({ defaults: DEFAULTS, storage }).set({
-      clientId: 'acme',
-      hiddenStages: ['composted'],
-      screenshot: false,
-    });
+    createConfigStore({ defaults: DEFAULTS, storage }).set({ hiddenStages: ['composted'] });
 
-    const next = createConfigStore({ defaults: DEFAULTS, storage });
+    const next = createConfigStore({ defaults: { ...DEFAULTS, screenshot: true }, storage });
 
-    assert.equal(next.get().clientId, 'acme');
     assert.deepEqual(next.get().hiddenStages, ['composted']);
-    // Untouched fields still come from the defaults rather than from an empty string.
-    assert.equal(next.get().endpoint, DEFAULTS.endpoint);
+    // The whole config was written, so the stored `screenshot` wins over the new default.
+    assert.equal(next.get().screenshot, false);
   });
 
   it('tells its listeners, and stops when they unsubscribe', () => {
     const store = createConfigStore({ defaults: DEFAULTS, storage: fakeStorage() });
-    const seen: string[] = [];
-    const stop = store.subscribe((config) => seen.push(config.clientId));
+    const seen: boolean[] = [];
+    const stop = store.subscribe((config) => seen.push(config.screenshot));
 
-    store.set({ clientId: 'one' });
+    store.set({ screenshot: true });
     stop();
-    store.set({ clientId: 'two' });
+    store.set({ screenshot: false });
 
-    assert.deepEqual(seen, ['one']);
+    assert.deepEqual(seen, [true]);
   });
 
   it('ignores a stored value someone edited into nonsense', () => {
     // This is a string a human can reach in devtools, so it is parsed the way a seed is: a bad one
     // costs the reporter their preferences, never the widget.
     const storage = fakeStorage({
-      [CONFIG_STORAGE_KEY]: JSON.stringify({ endpoint: 42, clientId: 'acme', hiddenStages: ['ripe', 'banana'] }),
+      [CONFIG_STORAGE_KEY]: JSON.stringify({ screenshot: 'yes', hiddenStages: ['ripe', 'banana'] }),
     });
 
     const store = createConfigStore({ defaults: DEFAULTS, storage });
 
-    assert.equal(store.get().endpoint, DEFAULTS.endpoint, 'a number is not an endpoint');
-    assert.equal(store.get().clientId, 'acme');
+    assert.equal(store.get().screenshot, false, 'a string is not a switch');
     assert.deepEqual(store.get().hiddenStages, ['ripe'], 'and `banana` is not a stage');
   });
 
@@ -140,17 +114,17 @@ describe('createConfigStore', () => {
     (storage as { throwOnWrite?: boolean }).throwOnWrite = true;
     const store = createConfigStore({ defaults: DEFAULTS, storage });
 
-    store.set({ clientId: 'acme' });
+    store.set({ screenshot: true });
 
-    assert.equal(store.get().clientId, 'acme');
+    assert.equal(store.get().screenshot, true);
   });
 
   it('runs with no storage at all', () => {
     const store = createConfigStore({ defaults: DEFAULTS, storage: null });
 
-    store.set({ clientId: 'acme' });
+    store.set({ screenshot: true });
 
-    assert.equal(store.get().clientId, 'acme');
+    assert.equal(store.get().screenshot, true);
   });
 });
 
@@ -174,9 +148,9 @@ describe('the config is nobody else’s to mutate', () => {
     const config = store.get();
 
     assert.throws(() => {
-      (config as { endpoint: string }).endpoint = 'https://elsewhere.test';
+      (config as { screenshot: boolean }).screenshot = true;
     }, TypeError);
     assert.throws(() => (config.hiddenStages as SeedStage[]).push('ripe'), TypeError);
-    assert.equal(store.get().endpoint, DEFAULTS.endpoint);
+    assert.equal(store.get().screenshot, false);
   });
 });

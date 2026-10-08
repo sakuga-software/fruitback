@@ -1,7 +1,7 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { init, plant } from './embed.ts';
-import type { TransportRequest } from './transport.ts';
+import type { TransportRequest, TransportResponse } from './transport.ts';
 import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
 import { type MountedPage, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
 import { readFile } from 'node:fs/promises';
@@ -65,11 +65,10 @@ describe('where a second instance keeps its preferences', () => {
   /**
    * The defect this seam exists for, written as the failure rather than as the fix.
    *
-   * The store lets what is in `localStorage` **override** what `init` was passed, which is right for
-   * one widget and wrong for two. The browser extension (FRU-41) mounts a second one on a site that
-   * may embed its own, and without a key of its own it would inherit the site's `endpoint` and
-   * `clientId` — the reviewer's notes going to a worker nobody chose, with nothing on screen to say
-   * so.
+   * The store used to let what is in `localStorage` **override** the `endpoint` and the `clientId`
+   * that `init` was passed. The browser extension (FRU-41) mounts a second widget on a site that
+   * may embed its own: the notes of the reviewer went to a worker nobody chose, with nothing on
+   * screen to say so. A key of its own was the first fix. Since FRU-89 no key holds them.
    */
   it('reads from the worker it was given, not the one the page remembered', async () => {
     const page = mountable();
@@ -95,8 +94,8 @@ describe('where a second instance keeps its preferences', () => {
     widget.destroy();
   });
 
-  it('still remembers under the default key when no other was named', async () => {
-    // The seam must change nothing for one widget on one page, which is every embed that exists.
+  it('reads from the worker it was given under the default key too (FRU-89)', async () => {
+    // The page can write this key. A stored endpoint used to win here, for every ordinary embed.
     const page = mountable();
     storageHolding({
       'fruitback:config': JSON.stringify({ endpoint: 'https://remembered.test', clientId: 'acme' }),
@@ -106,7 +105,7 @@ describe('where a second instance keeps its preferences', () => {
     const widget = init({ document: page.document, endpoint: 'https://fresh.test', clientId: 'acme' });
     await widget.refresh();
 
-    assert.ok(urls.at(-1)?.startsWith('https://remembered.test/'), `asked ${urls.at(-1)}`);
+    assert.ok(urls.at(-1)?.startsWith('https://fresh.test/'), `asked ${urls.at(-1)}`);
 
     widget.destroy();
   });
@@ -295,6 +294,40 @@ describe('reading pins', () => {
     await widget.refresh();
 
     assert.equal(shadowOf(page).querySelectorAll('[data-fruitback-pin]').length, 1, 'the 401 blanked the page');
+
+    widget.destroy();
+  });
+
+  it('ignores the answer of a read that a newer read replaced', async () => {
+    // Two reads can be in flight, and nothing makes them answer in the order they were sent.
+    const page = mountWithCta();
+    const answers: ((response: TransportResponse) => void)[] = [];
+    const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+    const answerWith = (issues: unknown[]): TransportResponse => ({
+      ok: true,
+      status: 200,
+      body: JSON.stringify({ issues }),
+    });
+
+    const widget = init({
+      document: page.document,
+      endpoint: ENDPOINT,
+      clientId: 'acme',
+      transport: () => new Promise((resolve) => answers.push(resolve)),
+    });
+    await settle();
+    const newer = widget.refresh();
+    await settle();
+    assert.equal(answers.length, 2, 'the two reads are not both in flight');
+
+    answers[1]?.(answerWith([onCta()]));
+    await newer;
+    assert.equal(shadowOf(page).querySelectorAll('[data-fruitback-pin]').length, 1);
+
+    answers[0]?.(answerWith([]));
+    await settle();
+
+    assert.equal(shadowOf(page).querySelectorAll('[data-fruitback-pin]').length, 1, 'the old read drew last');
 
     widget.destroy();
   });
@@ -547,7 +580,7 @@ describe('who carries the calls', () => {
       note: 'the price is wrong',
       target: { element: page.query('button'), source: undefined },
       reporter: undefined,
-      config: { endpoint: ENDPOINT, clientId: 'acme', hiddenStages: [], screenshot: false },
+      config: { hiddenStages: [], screenshot: false },
       options: {
         endpoint: ENDPOINT,
         clientId: 'acme',
@@ -582,7 +615,7 @@ describe('who carries the calls', () => {
       note: 'the price is wrong',
       target: { element: page.query('button'), source: undefined },
       reporter: undefined,
-      config: { endpoint: ENDPOINT, clientId: 'acme', hiddenStages: [], screenshot: false },
+      config: { hiddenStages: [], screenshot: false },
       options: {
         endpoint: ENDPOINT,
         clientId: 'acme',

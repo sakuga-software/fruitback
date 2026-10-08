@@ -339,16 +339,17 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
 **The settings panel**
 
 - **What is not configurable is the design** (FRU-14). The Linear team, project and labels are
-  absent: the client id is what the reporter can say, and what it routes to stays server-side.
+  absent, and since FRU-89 the worker and the client id are too. The panel holds no field to type in:
+  it is seen by a client on their own site, and where the notes go is not for a reporter to say.
 - `config.ts` is the store, `panel.ts` the UI. It writes on every change, and **reading
   `localStorage` can throw** rather than return `null` — Safari in private browsing raises on the
   property itself.
 - **The stored config is parsed like a seed**: tolerant, field by field. A malformed one costs the
   reporter their preferences, never the widget.
-- **`createConfigStore({ pinned })` is what stops a stored value overriding the caller's.** The store
-  restores its key from the page's own `localStorage`, so `endpoint` and `clientId` are pinned —
-  otherwise a page that wrote the key first chooses where the notes go, and a preference already set
-  beats a new default for ever.
+- **`endpoint` and `clientId` are not in the config store** (FRU-89). They are the word of the
+  caller of `init`. The store restores its key from the page's own `localStorage`, so a stored copy
+  let a page that wrote the key first choose where the notes go, and beat a new default for ever. A
+  `pinned` option covered that for a mount with its own key only; an ordinary embed stayed exposed.
 - **Filtering lives in the overlay, not in the embedder.** `shouldShow` plus `refilter` redraw from
   the issues already held, so hiding a stage costs no request.
 - **The panel offers a box only for the stages the worker reports** (FRU-32). `OfferedStages` is kept

@@ -282,9 +282,9 @@ describe('what the widget sends is what the relay allows', () => {
   const embed = readFileSync(fileURLToPath(new URL('../../../packages/widget/src/embed.ts', import.meta.url)), 'utf8');
 
   it('calls one path, and it is the one the relay allows', () => {
-    const paths = [...embed.matchAll(/\$\{config\.endpoint\}([^`?]*)/g)].map((match) => match[1]);
+    const paths = [...embed.matchAll(/\$\{options\.endpoint\}([^`?]*)/g)].map((match) => match[1]);
 
-    assert.ok(paths.length > 0, 'embed.ts no longer builds a URL from config.endpoint; this guard reads nothing');
+    assert.ok(paths.length > 0, 'embed.ts no longer builds a URL from options.endpoint; this guard reads nothing');
     for (const path of paths) assert.equal(path, FEEDBACK_PATH);
   });
 
