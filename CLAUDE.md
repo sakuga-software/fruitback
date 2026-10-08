@@ -107,7 +107,8 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   loses the component and the file of a note (measured: `bound qi`, and a chunk of the bundle), and
   those two are the product. `apps/playground/Dockerfile` therefore runs a development server. It
   must hold no secret and no volume. Anybody can write to that worker: it keeps its notes in SQLite,
-  holds no key of any tracker, and is emptied every night.
+  holds no key of any tracker, and is emptied every night by `apps/playground/demo/reset.sh`, from
+  the crontab of the host. Dokploy builds both applications from `main` on each push.
 
 **Deeper** — _The dev loop_, and why the playground is a React app:
 [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).

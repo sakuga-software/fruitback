@@ -137,7 +137,8 @@ page to try it on, the extension does nothing, and that is a refusal. The same i
 product to somebody without `pnpm dev`.
 
 - **`demo.fruitback.com` is the playground, `api.demo.fruitback.com` its worker**, on em-sakuga-01
-  through Dokploy, both built from `main` by their Dockerfiles.
+  through Dokploy (project `fruitback`). Dokploy builds both from `main` by their Dockerfiles. The
+  worker is not pulled from ghcr: that package is private, and it was two weeks old on that day.
 - **The playground runs in development mode, and that was measured, not preferred.** On a
   production build, a note planted on the « Ajouter » button carries
   `{ component: 'bound qi', file: '/assets/site-state-Bgn4uEnK.js' }`. In development mode the same
@@ -147,12 +148,25 @@ product to somebody without `pnpm dev`.
   nothing.** No secret in its environment, no volume, and its files are this public repository.
   Vite refuses a `Host` it does not know (`PLAYGROUND_ALLOWED_HOSTS`) and a path outside the
   workspace (`/@fs/etc/passwd` answers `403`, measured). Do not copy this Dockerfile for a real site.
-- **The worker holds no key.** SQLite on a volume, `FRUITBACK_READ=public`,
-  `RATE_LIMIT_PER_MINUTE=10`, `ALLOWED_ORIGINS=https://demo.fruitback.com`, and no session path: a
-  session needs an identity secret, and this instance must hold none.
-- **It is emptied every night**, by `sqlite3` in the running container, with
-  `PRAGMA foreign_keys = ON` so the replies go with their notes. Removing the file does nothing: the
-  worker keeps its connection, and the notes stay in a file that has no name.
+- **The worker holds no key.** SQLite, `FRUITBACK_READ=public`, `RATE_LIMIT_PER_MINUTE=10`,
+  `ALLOWED_ORIGINS=https://demo.fruitback.com`, and no session path: a session needs an identity
+  secret, and this instance must hold none. `TRUSTED_PROXY_HOPS=1`, because Traefik is in front:
+  with 0, every visitor is Traefik, and they all share one limit of 10.
+- **The store has no named volume, so a new deployment starts empty.** The image declares `/data`
+  as a volume, and Swarm gives each new container its own. That is accepted for a sandbox. Do not
+  copy it for a real worker.
+- **It is emptied every night at 04:00, Paris time in summer** (`0 2 * * *` UTC, in the crontab of `mheos` on the
+  host: Dokploy's MCP has no scheduled task). `apps/playground/demo/reset.sh` is the script. It
+  deletes the rows with `sqlite3` in the running container, with `PRAGMA foreign_keys = ON` so the
+  replies go with their notes (measured: 1 note and 1 reply before, 0 and 0 after). Removing the
+  file does nothing: the worker keeps its connection. A container that took no note has no table
+  yet, and the script says so and stops.
+- **The socket of Vite goes through the proxy.** The page is on 443 and the server on 5177. The
+  client opens its socket on the port of the server by default, which Traefik does not publish.
+  When `PLAYGROUND_ALLOWED_HOSTS` is set, `vite.config.ts` sets `hmr.clientPort` to 443.
+- **The name of the Swarm service is in the script.** Dokploy generates it. If the worker
+  application is created again, the name changes and the script finds no container: it then exits
+  1 and writes that in `reset.log`.
 - **The toolbar says what the page is** when `VITE_FRUITBACK_DEMO_NOTICE` is set. The dev loop and
   the E2E suite do not set it.
 - **What it does not show: team mode.** That mode needs sessions, and sessions need a secret.
