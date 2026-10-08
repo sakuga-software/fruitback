@@ -7,6 +7,7 @@ import {
 } from '@fruitback/shared';
 import { captureSeed } from './capture.ts';
 import { type WidgetConfig, createConfigStore } from './config.ts';
+import { feedbackAsText, placementOf } from './export.ts';
 import { type CaptureHost, type CaptureTarget, createCaptureHost } from './host.ts';
 import type { FruitbackTheme } from './theme.ts';
 import { type FruitbackTransport, fetchTransport } from './transport.ts';
@@ -137,6 +138,13 @@ export type Fruitback = {
   /** Re-read the pins for the current URL. Called for you on navigation. */
   refresh(): Promise<void>;
   /**
+   * The feedback on screen as plain text, for a ticket, a message or an agent (FRU-109).
+   *
+   * It holds what the reviewers wrote and where, and no instruction. It reads the notes the widget
+   * already holds, so it makes no request, and it leaves out the stages the reporter hid.
+   */
+  feedbackAsText(): string;
+  /**
    * The settings panel, in case the host wants its own way in — a menu item rather than the gear.
    *
    * The store behind it is deliberately not exposed: a host that could write preferences directly is
@@ -252,12 +260,19 @@ export function init(options: FruitbackOptions): Fruitback {
     },
   });
 
+  const asText = (): string =>
+    feedbackAsText(
+      overlay.resolutions().map((resolution) => ({ issue: resolution.issue, placement: placementOf(resolution) })),
+      { pageUrl: canonicalizePageUrl(view.location.href), translator },
+    );
+
   panel = createConfigPanel({
     document,
     translator,
     host: host.root,
     store: config,
     stages,
+    exportText: asText,
     screenshotSupported: options.captureScreenshot !== undefined,
   });
 
@@ -279,6 +294,7 @@ export function init(options: FruitbackOptions): Fruitback {
 
   return {
     refresh: () => read(),
+    feedbackAsText: asText,
     settings: panel,
     destroy() {
       stopWatchingUrl();

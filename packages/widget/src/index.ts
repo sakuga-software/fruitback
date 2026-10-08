@@ -5,6 +5,7 @@ export * from './config.ts';
 export * from './dom.ts';
 export * from './embed.ts';
 export * from './engine.ts';
+export * from './export.ts';
 export * from './host.ts';
 export * from './messages.ts';
 export * from './orphans.ts';

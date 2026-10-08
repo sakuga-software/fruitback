@@ -26,6 +26,11 @@ export type ConfigPanelOptions = {
   screenshotSupported?: boolean;
   /** The stages to offer a filter for. If left out, the panel offers every stage. */
   stages?: OfferedStages;
+  /**
+   * The feedback of the page as text (FRU-109). If left out, the panel has no button to copy it:
+   * a button that copies nothing is worse than no button.
+   */
+  exportText?: () => string;
   document?: Document;
   /** The widget's words (FRU-37). Left out: English, with dates in this document's language. */
   translator?: Translator;
@@ -127,6 +132,7 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
 
   root.append(head, stagesTitle, stages, hideResolvedLabel);
   if (options.screenshotSupported === true) root.append(screenshotLabel);
+  if (options.exportText !== undefined) root.append(copySection(options.exportText));
   options.host.append(style, root);
   const focus = holdFocus(root, () => panel.close());
 
@@ -145,6 +151,71 @@ export function createConfigPanel(options: ConfigPanelOptions): ConfigPanel {
       config.hiddenStages.includes(stage),
     );
     screenshot.checked = config.screenshot;
+  }
+
+  /**
+   * The button that copies the feedback, and what it says after.
+   *
+   * A clipboard can refuse: no permission, no secure context, or a browser that has none. The text
+   * then shows in a field with its content selected. A copy that fails with nothing to see reads as
+   * a copy that worked.
+   */
+  function copySection(exportText: () => string): HTMLElement {
+    const section = document.createElement('div');
+    section.className = 'fruitback-config-copy';
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'fruitback-config-copy-button';
+    button.textContent = t.text('settings.copy');
+
+    const status = document.createElement('span');
+    status.className = 'fruitback-config-copy-status';
+    status.setAttribute('role', 'status');
+
+    let manual: HTMLTextAreaElement | null = null;
+
+    button.addEventListener('click', () => {
+      const text = exportText();
+      status.textContent = '';
+      manual?.remove();
+      manual = null;
+
+      void writeToClipboard(text).then((copied) => {
+        if (copied) {
+          status.textContent = t.text('settings.copied');
+
+          return;
+        }
+
+        manual = document.createElement('textarea');
+        manual.className = 'fruitback-config-copy-text';
+        manual.readOnly = true;
+        manual.rows = 6;
+        manual.value = text;
+        manual.setAttribute('aria-label', t.text('settings.copyManually'));
+        status.textContent = t.text('settings.copyManually');
+        section.append(manual);
+        manual.focus();
+        manual.select();
+      });
+    });
+
+    section.append(button, status);
+
+    return section;
+  }
+
+  async function writeToClipboard(text: string): Promise<boolean> {
+    try {
+      const clipboard = document.defaultView?.navigator?.clipboard;
+      if (clipboard === undefined) return false;
+      await clipboard.writeText(text);
+
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /** The first stage that has a box, or the close button when the worker reports no stage. */
@@ -279,6 +350,37 @@ const STYLES = `
   width: 14px;
   height: 14px;
   accent-color: var(--fruitback-color-accent);
+}
+.fruitback-config-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--fruitback-color-border);
+}
+.fruitback-config-copy-button {
+  border: 1px solid var(--fruitback-color-border-strong);
+  border-radius: var(--fruitback-radius-pill);
+  padding: 6px 12px;
+  background: none;
+  color: var(--fruitback-color-text);
+  font: 600 12px/1 var(--fruitback-font-sans);
+  cursor: pointer;
+}
+.fruitback-config-copy-status { font-size: 12px; color: var(--fruitback-color-text-muted); }
+.fruitback-config-copy-text {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--fruitback-color-border-strong);
+  border-radius: var(--fruitback-radius-sm);
+  background: var(--fruitback-color-surface);
+  color: inherit;
+  font: 11px/1.4 ui-monospace, monospace;
+  resize: vertical;
 }
 .fruitback-panel-config > .fruitback-config-check {
   margin-top: 10px;

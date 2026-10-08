@@ -14,6 +14,7 @@ import { FRENCH } from './locale-fr.ts';
 import { createCaptureHost } from './host.ts';
 import { createComposer } from './composer.ts';
 import { createConfigPanel } from './panel.ts';
+import { feedbackAsText } from './export.ts';
 import { createConfigStore } from './config.ts';
 import { createOverlay } from './overlay.ts';
 import { mountPage, pressKey, setDocumentSize, setRect } from './dom.fixture.ts';
@@ -222,12 +223,14 @@ describe('every word the widget shows', () => {
       defaults: { hiddenStages: [], screenshot: false },
       storage: null,
     });
+    let exported = '';
     const panel = createConfigPanel({
       document: page.document,
       host: host.root,
       store,
       translator,
       screenshotSupported: true,
+      exportText: () => exported,
     });
     cleanup.push(() => panel.destroy());
     let answer: (planted: boolean) => void = () => {};
@@ -318,8 +321,45 @@ describe('every word the widget shows', () => {
     await settle();
     snapshots.push(...shown(host.root));
 
+    // The copy button, with a clipboard that takes the text and then with one that refuses it.
+    const copy = host.root.querySelector('.fruitback-config-copy-button') as HTMLButtonElement;
+    const clipboard = { writeText: async (): Promise<void> => {} };
+    Object.defineProperty(page.view.navigator, 'clipboard', { value: clipboard, configurable: true });
+    copy.click();
+    await settle();
+    snapshots.push(...shown(host.root));
+    clipboard.writeText = async () => {
+      throw new Error('refused');
+    };
+    copy.click();
+    await settle();
+    snapshots.push(...shown(host.root));
+
+    // The copied text is not in the DOM. `export.test.ts` checks its words; here it only has to
+    // show every key, so the list below stays complete.
+    const signed = seedIssueFixture({
+      seed: seedFixture({
+        reporter: { name: 'Alice' },
+        source: { component: 'Button', file: 'site.tsx', line: 4 },
+        screenshot: { url: 'https://cdn.test/shot.png' },
+      }),
+    });
+    const copied = [
+      feedbackAsText([], { pageUrl: 'https://acme.test/', translator }),
+      feedbackAsText(
+        [
+          { issue: signed, placement: 'found' },
+          { issue: detached, placement: 'detached' },
+          { issue: placedByPosition, placement: 'approximate' },
+        ],
+        { pageUrl: 'https://acme.test/', translator },
+      ),
+    ];
+
     // The detector first: a walk that finds no marker would pass the check below with nothing checked.
-    const markers = new Set(snapshots.flatMap((text) => [...text.matchAll(/⟦([^⟧]+)⟧/g)].map((match) => match[1])));
+    const markers = new Set(
+      [...snapshots, ...copied].flatMap((text) => [...text.matchAll(/⟦([^⟧]+)⟧/g)].map((match) => match[1])),
+    );
     assert.deepEqual(
       Object.keys(ENGLISH).filter((key) => !markers.has(key)),
       [],

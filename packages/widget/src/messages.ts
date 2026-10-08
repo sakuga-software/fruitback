@@ -38,6 +38,9 @@ export const ENGLISH = {
   'settings.stages': 'Pins shown',
   'settings.hideResolved': 'Hide resolved feedback',
   'settings.screenshot': 'Attach a picture of the element',
+  'settings.copy': 'Copy the feedback as text',
+  'settings.copied': 'Copied',
+  'settings.copyManually': 'Copy the text from here',
 
   'composer.placeholder': 'What is wrong here?',
   'composer.label': 'Your comment',
@@ -68,6 +71,18 @@ export const ENGLISH = {
 
   'orphans.count': { one: '{count} detached note', other: '{count} detached notes' },
   'orphans.entry': '{stage} · {note}',
+
+  // The words of the text a reviewer copies (FRU-109). They are labels in front of a value.
+  'export.title': 'Feedback on {url}',
+  'export.empty': 'No feedback on this page.',
+  'export.element': 'Element: {element}',
+  'export.component': 'Component: {component}',
+  'export.by': 'By: {name}',
+  'export.written': 'Written: {date}',
+  'export.approximate': 'Position: approximate — found by its place on the page, not by its identity',
+  'export.detached': 'Position: element not found on this page',
+  'export.picture': 'Picture: {url}',
+  'export.reply': 'Reply from {author}',
 
   'stage.seeded': 'New',
   'stage.green': 'To do',

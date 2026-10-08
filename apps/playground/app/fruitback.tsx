@@ -13,6 +13,10 @@ import {
   createConfigPanel,
   createConfigStore,
   createOverlay,
+  createTranslator,
+  feedbackAsText,
+  languageOf,
+  placementOf,
 } from '@fruitback/widget';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
@@ -115,7 +119,18 @@ export function Fruitback() {
       },
     });
 
-    const panel = createConfigPanel({ host: host.root, store: config });
+    const panel = createConfigPanel({
+      host: host.root,
+      store: config,
+      exportText: () =>
+        feedbackAsText(
+          overlay.resolutions().map((resolution) => ({ issue: resolution.issue, placement: placementOf(resolution) })),
+          {
+            pageUrl: canonicalizePageUrl(window.location.href),
+            translator: createTranslator({ language: languageOf(document) }),
+          },
+        ),
+    });
 
     // A preference change redraws from the issues already held.
     const unsubscribe = config.subscribe(() => overlay.refilter());

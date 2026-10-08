@@ -21,6 +21,9 @@ export const FRENCH: Catalog = {
   'settings.stages': 'Pins affichés',
   'settings.hideResolved': 'Masquer les feedbacks résolus',
   'settings.screenshot': 'Joindre une image de l’élément',
+  'settings.copy': 'Copier les feedbacks en texte',
+  'settings.copied': 'Copié',
+  'settings.copyManually': 'Copiez le texte d’ici',
 
   'composer.placeholder': "Qu'est-ce qui ne va pas ici ?",
   'composer.label': 'Votre commentaire',
@@ -51,6 +54,17 @@ export const FRENCH: Catalog = {
 
   'orphans.count': { one: '{count} note détachée', other: '{count} notes détachées' },
   'orphans.entry': '{stage} · {note}',
+
+  'export.title': 'Feedback sur {url}',
+  'export.empty': 'Aucun feedback sur cette page.',
+  'export.element': 'Élément : {element}',
+  'export.component': 'Composant : {component}',
+  'export.by': 'Par : {name}',
+  'export.written': 'Écrit le : {date}',
+  'export.approximate': 'Position : approximative — retrouvé par sa place dans la page, pas par son identité',
+  'export.detached': 'Position : élément introuvable sur cette page',
+  'export.picture': 'Image : {url}',
+  'export.reply': 'Réponse de {author}',
 
   'stage.seeded': 'Nouveau',
   'stage.green': 'À faire',
