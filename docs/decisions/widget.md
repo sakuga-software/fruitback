@@ -455,7 +455,7 @@ mock-up proposed, taken because every value measured above 4.5:1 with white text
 | `stage-seeded`    | `#a3b18a` | 2.28        | `#6a7950` | 4.70        |
 | `stage-green`     | `#7cb342` | 2.50        | `#56802e` | 4.64        |
 | `stage-ripening`  | `#fb8c00` | 2.37        | `#ac5f00` | 4.78        |
-| `stage-ripe`      | `#e53935` | 4.23        | `#dd2c27` | 4.70        |
+| `stage-ripe`      | `#e53935` | 4.23        | `#8c1d40` | 8.88        |
 | `stage-composted` | `#8d6e63` | 4.62        | unchanged | 4.62        |
 
 As text on the two light surfaces, the accent measures 4.70 and 4.63.
@@ -466,9 +466,9 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   lightness of both reds found none. So the dark scheme takes a lighter fill, `#ec6a65`, with
   `#1c1917` on it: 5.68 as a label, 5.12 as a link on the raised surface. The warning has the same
   two roles and takes `#a88a7e` with dark text, 5.50 both ways.
-- **The stage colours do not change in the dark scheme.** A pin sits on the page of the host, whose
+- **The stage colours do not change in the dark scheme, but one.** A pin sits on the page of the host, whose
   colour follows nothing here. The stage colour is also the mark of a detached note and the top
-  border of a thread, on the surface: a drawing, which needs 3:1, and measures 3.66 at least on the
+  border of a thread, on the surface: a drawing, which needs 3:1, and measures 3.27 at least on the
   dark surface. `contrast.test.ts` holds that pair now; it did not before.
 - **Axe found a defect in this very change.** While capturing, the launch button takes the chip as
   its background and kept the foreground of the accent. Both were white, so nothing showed. With a
@@ -479,9 +479,11 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   accent through and failed if no accent finding came back. With nothing to let through, an empty
   list would prove nothing, so the last step paints a grey label on the accent and expects axe to
   object. Not the colour of the button itself: axe reports a 1:1 pair for review, not as a failure.
-- **« Done » and the accent are the same red, as before.** A ripe fruit is red, and the stage is the
-  product's own image. It was already so with `#e53935`. A pin that reads as an alert when the work
-  is done is a possible objection, and a host can set `stage-ripe` alone.
+- **« Done » is a burgundy, and no longer the red of the accent.** The mock-up gave both `#dd2c27`,
+  as the first palette gave both `#e53935`: a ripe fruit is red. A pin that reads as an alert when
+  the work is done was the objection, and Mathieu chose burgundy: `#8c1d40` in the light scheme.
+  On the dark surface that measures 1.97 as the mark of a detached note, so the dark scheme takes
+  `#bd3a5c`: 3.27 there, and 5.35 under white text. It is the one stage with two values.
 - **The extension's icon keeps `#e53935`.** It is five committed PNG files, drawn on a toolbar the
   widget's tokens do not reach.
 

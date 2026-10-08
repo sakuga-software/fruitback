@@ -150,12 +150,15 @@ export const THEME_STYLES = `
 
   /*
     Ripening, not a rainbow. Each one holds white text at 4.5:1 or more (FRU-93), which the first
-    four did not. A pin sits on the page of the host, so the dark scheme keeps these values.
+    four did not. A pin sits on the page of the host, so the dark scheme keeps these values, except
+    the last stage but one: see the dark block.
+    Done is a burgundy and not the red of the accent. A finished note must not read as an alert, or
+    as the button that sends one.
   */
   --fruitback-stage-seeded: #6a7950;
   --fruitback-stage-green: #56802e;
   --fruitback-stage-ripening: #ac5f00;
-  --fruitback-stage-ripe: #dd2c27;
+  --fruitback-stage-ripe: #8c1d40;
   --fruitback-stage-composted: #8d6e63;
 
   /* Named for the elevation they belong to, not for a size, so a fifth one has to justify itself. */
@@ -192,6 +195,11 @@ export const THEME_STYLES = `
     --fruitback-color-on-accent: #1c1917;
     --fruitback-color-warning: #a88a7e;
     --fruitback-color-on-warning: #1c1917;
+    /*
+      The burgundy of the light scheme measures 1.97 on the dark surface, where it is the mark of a
+      detached note and the top border of a thread. This one holds 3:1 there and white text at 4.5:1.
+    */
+    --fruitback-stage-ripe: #bd3a5c;
     --fruitback-color-surface: #1c1917;
     --fruitback-color-surface-raised: #262220;
     --fruitback-color-border: #3a3532;
