@@ -8,7 +8,8 @@ import { closeSessionConnections, createSqliteSessionStore } from './session-sql
 import { createPairing } from './session.ts';
 import { handleRequest } from './app.ts';
 import { verifyIdentityToken } from './identity.ts';
-import { runPair } from './cli.ts';
+import { LOOPBACK, runPair } from './cli.ts';
+import { readFileSync } from 'node:fs';
 import { sessionConnectionsOpened } from './session-sqlite.ts';
 
 /** 32 characters, because `readConfig` refuses a shorter HMAC secret. */
@@ -357,6 +358,25 @@ describe('the pair command', () => {
       false,
     );
     assert.ok(outcome.lines.join('\n').includes('--endpoint'));
+  });
+
+  /**
+   * The command prints a link, and the extension decides whether it pairs there. Two lists of the
+   * hosts where plain http is allowed, in two packages, with nothing else to hold them together.
+   */
+  it('prints a link over plain http for the hosts the extension pairs with, and for no other', async () => {
+    const source = readFileSync(new URL('../../extension/src/endpoint.ts', import.meta.url), 'utf8');
+    const declared = /const LOOPBACK = \[(.+)\];/.exec(source)?.[1] ?? '';
+    const ofTheExtension = [...declared.matchAll(/'([^']+)'/g)].map((match) => match[1] ?? '');
+
+    assert.ok(ofTheExtension.length >= 3, 'the list of the extension was not read: this check compares nothing');
+    // The extension also names `::1` without brackets, a spelling `new URL` never answers.
+    assert.deepEqual([...LOOPBACK].sort(), ofTheExtension.filter((host) => host !== '::1').sort());
+
+    for (const host of LOOPBACK) {
+      const outcome = await runPair(['--subject', 'alice', '--endpoint', `http://${host}:8789`], envWith());
+      assert.ok(outcome.ok && outcome.lines.some((line) => line.includes(`http://${host}:8789/pair#`)), host);
+    }
   });
 
   it('refuses an address a pairing code must not cross, and mints nothing', async () => {

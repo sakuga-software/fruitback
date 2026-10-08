@@ -80,7 +80,13 @@ export function parsePairArgs(argv: readonly string[]): PairArgsResult {
   };
 }
 
-const LOOPBACK = ['localhost', '127.0.0.1', '[::1]'];
+/**
+ * The hosts where plain http is not on a wire. `new URL` keeps the brackets on an IPv6 host.
+ *
+ * The extension pairs on the same hosts and no other (`isSecureWorkerEndpoint`). A test compares the
+ * two lists: a link printed for a host the extension refuses is a link that pairs nothing.
+ */
+export const LOOPBACK = ['localhost', '127.0.0.1', '[::1]'];
 
 /**
  * The worker's public address with no query, no fragment and no slash at the end, or `undefined`
