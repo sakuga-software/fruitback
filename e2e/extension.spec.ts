@@ -170,6 +170,10 @@ test('private mode on a worker that wants a session: the popup says why the page
   const popup = await openPopup(extension, page);
 
   await expect(popup.getByText(/answers a signed-in reader only/)).toBeVisible();
+  // A session changes nothing in this mode, so the popup offers none (FRU-88). The team spec below
+  // pairs through the same field, which is the control for this absence.
+  await expect(popup.getByLabel('Pairing code')).toHaveCount(0);
+  await expect(popup.getByText(/Not paired/)).toHaveCount(0);
   const shot = test.info().outputPath('popup.png');
   await popup.screenshot({ path: shot });
   await test.info().attach('popup', { path: shot, contentType: 'image/png' });
@@ -233,4 +237,29 @@ test('team mode: paired from the popup, the site reads and writes through the re
   const access = tokens.find((token) => token.area === 'session')?.value;
   const [seed] = await seedsOn(page, AUTHENTICATED_WORKER_ORIGIN, access);
   expect(seed?.reporter).toMatchObject({ name: REVIEWER, verified: true });
+});
+
+test('a session held with the worker of a private-mode site stays on the popup, with its log out (FRU-88)', async ({
+  extension,
+}) => {
+  await addRule(extension, { mode: 'team', endpoint: AUTHENTICATED_WORKER_ORIGIN });
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'ext-private-held-session');
+  await pairFromPopup(extension, page, mintPairingCode(REVIEWER), REVIEWER);
+
+  // The same rule, moved to private mode from the popup. The session stays in storage.
+  const popup = await openPopup(extension, page);
+  await popup.getByRole('button', { name: 'Change' }).click();
+  await popup.getByLabel(/^Mode/).selectOption('private');
+  await popup.getByLabel('Client id', { exact: true }).fill('playground');
+  await popup.getByRole('button', { name: 'Save' }).click();
+
+  await expect(popup.getByText('On · playground', { exact: false })).toBeVisible();
+  await expect(popup.getByText(`Paired as ${REVIEWER}`)).toBeVisible();
+  await expect(popup.getByLabel('Pairing code')).toHaveCount(0);
+
+  await popup.getByRole('button', { name: 'Log out' }).click();
+  await expect(popup.getByText(`Paired as ${REVIEWER}`)).toHaveCount(0);
+  await expect(popup.getByLabel('Pairing code')).toHaveCount(0);
+  await expect(popup.getByText('On · playground', { exact: false })).toBeVisible();
 });

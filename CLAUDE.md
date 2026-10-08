@@ -522,6 +522,9 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   cannot be worked around per client**: `FRUITBACK_SESSION_PATH` alongside `FRUITBACK_CLIENTS` is
   refused at boot, so a worker holding sessions is single-tenant and its `read` is worker-wide. A
   private-mode client beside a team-mode one is two workers, or a worker left at `public`.
+- **The popup offers pairing in team mode only** (FRU-88). A session changes nothing in private mode,
+  and a form that does nothing reads as the fix for a page with no pins. A session the extension
+  already holds with that worker stays on the screen with its log out: a credential is never hidden.
 - **The guide's words are guarded against the popup's** (`reviewing-doc.test.ts`). `docs/reviewing.md`
   walks somebody through a screen by naming what is on it, and a renamed button leaves it describing
   a popup nobody has. The pairing failures and the mode labels are read **out of** `popup/main.ts`,
