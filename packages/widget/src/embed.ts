@@ -97,18 +97,16 @@ export type FruitbackOptions = {
   /**
    * Where this instance keeps the reporter's preferences, when the default key is not right.
    *
-   * The config store reads `fruitback:config` from `localStorage` and lets it **override** what is
-   * passed here — which is correct for one widget on one page and wrong the moment there are two.
-   * Two is not exotic: a site that embeds the widget, opened by a reviewer whose extension mounts
-   * its own, shares one key, so one instance silently takes over the other's `endpoint` and
-   * `clientId` and the notes go to a worker nobody chose.
+   * The config store reads `fruitback:config` from `localStorage`, which is correct for one widget
+   * on one page and wrong the moment there are two. Two is not exotic: a site that embeds the
+   * widget, opened by a reviewer whose extension mounts its own, shares one key, so a stage hidden
+   * in one is hidden in the other.
    *
    * Not extension-specific, and named for what it is: a second instance needs a second key.
    * Measured on the playground, which mounts its own widget.
    *
-   * A second key is not enough by itself, and the second half was missed the first time: the page
-   * can write *this* key too. So a mount that names its own key also pins `endpoint` and `clientId`
-   * — they are the caller's word, and no stored value replaces them. Raised in review.
+   * The key holds preferences only. `endpoint` and `clientId` are the caller's word, and no stored
+   * value replaces them, whatever the key (FRU-89).
    */
   configKey?: string;
   /**
@@ -148,9 +146,6 @@ export type Fruitback = {
   destroy(): void;
 };
 
-/** Where a mount routes to. A caller that named its own config key decided these, not the page. */
-const ROUTING_FIELDS = ['endpoint', 'clientId'] as const;
-
 /**
  * The transport this mount uses.
  *
@@ -161,9 +156,6 @@ const ROUTING_FIELDS = ['endpoint', 'clientId'] as const;
 function transportFor(options: FruitbackOptions): FruitbackTransport {
   return options.transport ?? fetchTransport;
 }
-
-/** The panel writes on every keystroke, so a typed endpoint must not become a request per character. */
-const REQUERY_DEBOUNCE_MS = 300;
 
 /**
  * How old the last read must be before a return to the tab reads again (FRU-87).
@@ -194,8 +186,8 @@ export function init(options: FruitbackOptions): Fruitback {
   const config = createConfigStore({
     // `screenshot` off at the start: it is the reporter's to turn on, and an image of the page they
     // are looking at is not something to start sending because a default said so.
-    defaults: { endpoint: options.endpoint, clientId: options.clientId, hiddenStages: [], screenshot: false },
-    ...(options.configKey !== undefined ? { key: options.configKey, pinned: ROUTING_FIELDS } : {}),
+    defaults: { hiddenStages: [], screenshot: false },
+    ...(options.configKey !== undefined ? { key: options.configKey } : {}),
   });
 
   let target: CaptureTarget | null = null;
@@ -231,10 +223,10 @@ export function init(options: FruitbackOptions): Fruitback {
   const stages = createOfferedStages();
   const reader = createReader(overlay, stages, view, options);
   let lastReadAt = Number.NEGATIVE_INFINITY;
-  const read = (current: WidgetConfig): Promise<void> => {
+  const read = (): Promise<void> => {
     lastReadAt = Date.now();
 
-    return reader(current);
+    return reader();
   };
 
   composer = createComposer({
@@ -247,7 +239,7 @@ export function init(options: FruitbackOptions): Fruitback {
 
       // Re-read rather than assume: the pin the reporter is about to see is the one the worker gave
       // back, which is also what proves the write landed somewhere the read path can find.
-      await read(config.get());
+      await read();
 
       return true;
     },
@@ -262,26 +254,10 @@ export function init(options: FruitbackOptions): Fruitback {
     screenshotSupported: options.captureScreenshot !== undefined,
   });
 
-  // A preference change redraws from the issues already held; only a change of endpoint or client
-  // means the pins belong to a different query. Debounced because the panel writes per keystroke —
-  // and `createReader`'s generation check is what makes it correct rather than merely cheap.
-  let previous = config.get();
-  let requery: ReturnType<typeof setTimeout> | undefined;
-  const unsubscribe = config.subscribe((next) => {
-    const requeried = next.endpoint !== previous.endpoint || next.clientId !== previous.clientId;
-    previous = next;
+  // A preference change redraws from the issues already held, so it costs no request.
+  const unsubscribe = config.subscribe(() => overlay.refilter());
 
-    if (!requeried) {
-      overlay.refilter();
-
-      return;
-    }
-
-    if (requery !== undefined) clearTimeout(requery);
-    requery = setTimeout(() => void read(next), REQUERY_DEBOUNCE_MS);
-  });
-
-  const stopWatchingUrl = watchUrl(view, () => void read(config.get()));
+  const stopWatchingUrl = watchUrl(view, () => void read());
 
   // The team changes the state of an issue while the reviewer is in another tab. `render` closes an
   // open thread, and somebody who comes back to a thread is reading it: that return reads nothing,
@@ -289,16 +265,15 @@ export function init(options: FruitbackOptions): Fruitback {
   const stopWatchingReturn = watchReturn(document, () => {
     if (overlay.threadOpen() || Date.now() - lastReadAt < REREAD_AFTER_MS) return;
 
-    void read(config.get());
+    void read();
   });
 
-  void read(config.get());
+  void read();
 
   return {
-    refresh: () => read(config.get()),
+    refresh: () => read(),
     settings: panel,
     destroy() {
-      if (requery !== undefined) clearTimeout(requery);
       stopWatchingUrl();
       stopWatchingReturn();
       unsubscribe();
@@ -313,9 +288,9 @@ export function init(options: FruitbackOptions): Fruitback {
 /**
  * Reads that ignore their own stale answers.
  *
- * Two can be in flight — a keystroke in the settings, then a navigation — and nothing makes them
- * settle in the order they were sent: a wrong host can take longer to fail than a right one takes to
- * answer. The late one would then draw pins fetched from the old endpoint over the correct ones.
+ * Two can be in flight — a return to the tab, then a navigation — and nothing makes them settle in
+ * the order they were sent. The late one would then draw the pins of the old page over the correct
+ * ones.
  * Each call takes a generation, and only the newest may touch the screen.
  */
 function createReader(
@@ -323,10 +298,10 @@ function createReader(
   stages: OfferedStages,
   view: Window & typeof globalThis,
   options: FruitbackOptions,
-): (config: WidgetConfig) => Promise<void> {
+): () => Promise<void> {
   let generation = 0;
 
-  return async function read(config: WidgetConfig): Promise<void> {
+  return async function read(): Promise<void> {
     const mine = ++generation;
     const url = canonicalizePageUrl(view.location.href);
 
@@ -339,7 +314,7 @@ function createReader(
       if (mine !== generation) return;
 
       const response = await transportFor(options)({
-        url: `${config.endpoint}/feedback?url=${encodeURIComponent(url)}&client=${encodeURIComponent(config.clientId)}`,
+        url: `${options.endpoint}/feedback?url=${encodeURIComponent(url)}&client=${encodeURIComponent(options.clientId)}`,
         method: 'GET',
         headers: token === undefined ? {} : { Authorization: `Bearer ${token}` },
       });
@@ -385,7 +360,7 @@ export async function plant({
   const seed = captureSeed({
     element: target.element,
     note,
-    client: { id: config.clientId },
+    client: { id: options.clientId },
     source: target.source,
     reporter,
     includeEnv: options.includeEnv,
@@ -397,7 +372,7 @@ export async function plant({
   const token = await options.identityToken?.();
 
   const response = await transportFor(options)({
-    url: `${config.endpoint}/feedback`,
+    url: `${options.endpoint}/feedback`,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

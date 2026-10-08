@@ -6,7 +6,6 @@ import {
   type Composer,
   type ConfigPanel,
   type ConfigStore,
-  type WidgetConfig,
   type Overlay,
   captureSeed,
   createCaptureHost,
@@ -35,8 +34,6 @@ import { redeploy, removeCard } from './site-state';
  */
 
 const CLIENT_ID = 'playground';
-/** The panel writes on every keystroke, so a typed endpoint must not become a request per character. */
-const REQUERY_DEBOUNCE_MS = 300;
 const WORKER_ORIGIN = import.meta.env.VITE_FRUITBACK_WORKER ?? 'http://localhost:8788';
 
 export function Fruitback() {
@@ -56,18 +53,18 @@ export function Fruitback() {
     composer: Composer;
     panel: ConfigPanel;
     config: ConfigStore;
-    refresh: (config: WidgetConfig) => Promise<void>;
+    refresh: () => Promise<void>;
   } | null>(null);
   const target = useRef<CaptureTarget | null>(null);
 
   useEffect(() => {
-    // The reporter's own preferences, kept in this browser (FRU-14). The endpoint and the client id
-    // start from the build's values and can be pointed elsewhere without a rebuild.
+    // The reporter's own preferences, kept in this browser (FRU-14). The worker comes from
+    // `VITE_FRUITBACK_WORKER`, never from here (FRU-89).
     const config = createConfigStore({
       // `screenshot` off: this harness gives the widget no way to capture one, so the toggle is not
       // even offered here — `e2e/screenshot.spec.ts` mounts the built bundle with a capture function
       // instead, which is what an embedder does.
-      defaults: { endpoint: WORKER_ORIGIN, clientId: CLIENT_ID, hiddenStages: [], screenshot: false },
+      defaults: { hiddenStages: [], screenshot: false },
     });
 
     const host = createCaptureHost({
@@ -101,12 +98,12 @@ export function Fruitback() {
     const composer = createComposer({
       host: host.panel,
       onSubmit: async (note, reporter) => {
-        const identifier = await plant(note, target.current, setStatus, config.get(), reporter);
+        const identifier = await plant(note, target.current, setStatus, reporter);
         if (identifier === null) return false;
 
         // Re-read first — that is what proves the read path answers — and let the confirmation have
         // the last word, or the status flips back to a pin count nobody asked for.
-        await refresh(config.get());
+        await refresh();
         setPlanted(identifier);
         setStatus(`planté · ${identifier}`);
 
@@ -116,32 +113,12 @@ export function Fruitback() {
 
     const panel = createConfigPanel({ host: host.root, store: config });
 
-    // A preference change redraws from the issues already held; only a change of endpoint or client
-    // means the pins belong to a different query and have to be fetched again.
-    //
-    // Debounced, because the panel writes on every keystroke rather than behind a Save button: typing
-    // an endpoint would otherwise fire one request per character. The debounce is why this is cheap;
-    // `createRefresher`'s generation check is why it is *correct* — the two are not the same thing.
-    let previous = config.get();
-    let requery: ReturnType<typeof setTimeout> | undefined;
-    const unsubscribe = config.subscribe((next) => {
-      const requeried = next.endpoint !== previous.endpoint || next.clientId !== previous.clientId;
-      previous = next;
-
-      if (!requeried) {
-        overlay.refilter();
-
-        return;
-      }
-
-      if (requery !== undefined) clearTimeout(requery);
-      requery = setTimeout(() => void refresh(next), REQUERY_DEBOUNCE_MS);
-    });
+    // A preference change redraws from the issues already held.
+    const unsubscribe = config.subscribe(() => overlay.refilter());
 
     widget.current = { host, overlay, composer, panel, config, refresh };
 
     return () => {
-      if (requery !== undefined) clearTimeout(requery);
       unsubscribe();
       panel.destroy();
       composer.destroy();
@@ -155,7 +132,7 @@ export function Fruitback() {
   // seeds belong on screen.
   useEffect(() => {
     const current = widget.current;
-    if (current !== null) void current.refresh(current.config.get());
+    if (current !== null) void current.refresh();
   }, [location.pathname, location.search]);
 
   return (
@@ -164,7 +141,7 @@ export function Fruitback() {
       planted={planted}
       onReload={() => {
         const current = widget.current;
-        if (current !== null) void current.refresh(current.config.get());
+        if (current !== null) void current.refresh();
       }}
     />
   );
@@ -175,7 +152,6 @@ async function plant(
   note: string,
   target: CaptureTarget | null,
   setStatus: (message: string) => void,
-  config: WidgetConfig,
   reporter: SeedReporter | undefined,
 ): Promise<string | null> {
   if (target === null) return null;
@@ -183,7 +159,7 @@ async function plant(
   const seed = captureSeed({
     element: target.element,
     note,
-    client: { id: config.clientId, name: 'Playground' },
+    client: { id: CLIENT_ID, name: 'Playground' },
     // What the visitor typed about themselves, and no more. The worker stores it as self-declared
     // and strips any `verified` flag — an identity would need a signed token this playground has no
     // reason to mint (FRU-9).
@@ -192,7 +168,7 @@ async function plant(
     source: target.source,
   });
 
-  const response = await fetch(`${config.endpoint}/feedback`, {
+  const response = await fetch(`${WORKER_ORIGIN}/feedback`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(seed),
@@ -212,28 +188,21 @@ async function plant(
 /**
  * Reads that ignore their own stale answers.
  *
- * A debounce is not enough on its own. Two reads can be in flight — a keystroke in the endpoint
- * field, then a navigation — and nothing makes them settle in the order they were sent: a wrong
- * host can take longer to fail than a right one takes to answer. The late one would then render pins
- * fetched from the old endpoint over the correct ones, or overwrite a good pin count with
- * `worker injoignable`. Each call takes a generation, and only the newest is allowed to touch the
+ * Two reads can be in flight — a note just planted, then a navigation — and nothing makes them
+ * settle in the order they were sent. The late one would then render the pins of the old page over
+ * the correct ones, or overwrite a good pin count with `worker injoignable`. Each call takes a generation, and only the newest is allowed to touch the
  * screen.
  */
-function createRefresher(
-  overlay: Overlay,
-  setStatus: (message: string) => void,
-): (config: WidgetConfig) => Promise<void> {
+function createRefresher(overlay: Overlay, setStatus: (message: string) => void): () => Promise<void> {
   let generation = 0;
 
-  return async function refresh(config: WidgetConfig): Promise<void> {
+  return async function refresh(): Promise<void> {
     const mine = ++generation;
     const current = () => mine === generation;
     const url = canonicalizePageUrl(window.location.href);
 
     try {
-      const response = await fetch(
-        `${config.endpoint}/feedback?url=${encodeURIComponent(url)}&client=${config.clientId}`,
-      );
+      const response = await fetch(`${WORKER_ORIGIN}/feedback?url=${encodeURIComponent(url)}&client=${CLIENT_ID}`);
       if (!current()) return;
 
       if (!response.ok) {
@@ -250,7 +219,7 @@ function createRefresher(
     } catch {
       if (!current()) return;
 
-      setStatus(`worker injoignable sur ${config.endpoint}`);
+      setStatus(`worker injoignable sur ${WORKER_ORIGIN}`);
     }
   };
 }

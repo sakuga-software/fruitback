@@ -6,8 +6,6 @@ import { createConfigStore, type WidgetConfig } from './config.ts';
 import { type MountedPage, mountPage } from './dom.fixture.ts';
 
 const DEFAULTS: WidgetConfig = {
-  endpoint: 'http://localhost:8788',
-  clientId: 'playground',
   hiddenStages: [],
   screenshot: false,
 };
@@ -27,12 +25,6 @@ function mount(defaults: WidgetConfig = DEFAULTS) {
   const input = (name: string) => page.document.querySelector(`[name="${name}"]`) as HTMLInputElement;
 
   return { page, store, input };
-}
-
-/** happy-dom does not fire input events by itself, so a typed value says so explicitly. */
-function type(input: HTMLInputElement, value: string, document: Document): void {
-  input.value = value;
-  input.dispatchEvent(new document.defaultView!.Event('input', { bubbles: true }));
 }
 
 function toggle(input: HTMLInputElement, checked: boolean, document: Document): void {
@@ -64,28 +56,31 @@ describe('createConfigPanel', () => {
   });
 
   it('shows what the store holds when it opens', () => {
-    const { input } = mount({
-      endpoint: 'https://fb.acme.test',
-      clientId: 'acme',
-      hiddenStages: ['composted'],
-      screenshot: false,
-    });
+    const { input } = mount({ hiddenStages: ['composted'], screenshot: false });
 
     panel?.open();
 
-    assert.equal(input('endpoint').value, 'https://fb.acme.test');
-    assert.equal(input('client').value, 'acme');
     assert.equal(input('stage-composted').checked, false, 'a hidden stage is an unticked box');
     assert.equal(input('stage-ripe').checked, true);
   });
 
-  it('writes a typed endpoint straight through, trimmed', () => {
-    const { page, store, input } = mount();
+  it('holds no field to type in: where the notes go is not for the reporter to say (FRU-89)', () => {
+    const { page } = mount();
     panel?.open();
 
-    type(input('endpoint'), '  https://fb.acme.test  ', page.document);
+    const inputs = [...page.document.querySelectorAll('[data-fruitback-config] input')] as HTMLInputElement[];
 
-    assert.equal(store.get().endpoint, 'https://fb.acme.test');
+    assert.ok(inputs.length > 0, 'the panel holds no control at all, so the check below proves nothing');
+    assert.deepEqual([...new Set(inputs.map((input) => input.type))], ['checkbox']);
+    assert.equal(page.document.querySelector('[data-fruitback-config] textarea, [data-fruitback-config] select'), null);
+  });
+
+  it('puts the focus on its first control when it opens', () => {
+    const { page, input } = mount();
+
+    panel?.open();
+
+    assert.ok(page.document.activeElement === input('stage-seeded'));
   });
 
   it('hides a stage when its box is unticked', () => {
@@ -122,9 +117,9 @@ describe('createConfigPanel', () => {
     const { store, input } = mount();
     panel?.open();
 
-    store.set({ clientId: 'acme' });
+    store.set({ hiddenStages: ['green'] });
 
-    assert.equal(input('client').value, 'acme');
+    assert.equal(input('stage-green').checked, false);
   });
 
   it('closes from its own button', () => {
@@ -253,8 +248,8 @@ describe('the panel as a dialog (FRU-51)', () => {
     gear.focus();
 
     panel?.open();
-    assert.ok(page.document.activeElement === input('endpoint'), 'the endpoint has no focus after the open');
-    keyOn(page, input('endpoint'), 'Escape');
+    assert.ok(page.document.activeElement === input('stage-seeded'), 'the first box has no focus after the open');
+    keyOn(page, input('stage-seeded'), 'Escape');
 
     assert.equal(panel?.isOpen, false);
     assert.ok(page.document.activeElement === gear, 'focus did not go back to the gear');

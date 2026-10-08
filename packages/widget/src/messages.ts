@@ -35,8 +35,6 @@ export const ENGLISH = {
   'settings.dialog': 'Fruitback settings',
   'settings.title': 'Settings',
   'settings.close': 'Close settings',
-  'settings.endpoint': 'Worker',
-  'settings.client': 'Client',
   'settings.stages': 'Pins shown',
   'settings.hideResolved': 'Hide resolved feedback',
   'settings.screenshot': 'Attach a picture of the element',

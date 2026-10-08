@@ -219,7 +219,7 @@ describe('every word the widget shows', () => {
     });
     cleanup.push(() => host.destroy());
     const store = createConfigStore({
-      defaults: { endpoint: 'https://worker.test', clientId: 'acme', hiddenStages: [], screenshot: false },
+      defaults: { hiddenStages: [], screenshot: false },
       storage: null,
     });
     const panel = createConfigPanel({

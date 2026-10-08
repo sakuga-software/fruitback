@@ -18,8 +18,6 @@ export const FRENCH: Catalog = {
   'settings.dialog': 'Réglages Fruitback',
   'settings.title': 'Réglages',
   'settings.close': 'Fermer les réglages',
-  'settings.endpoint': 'Worker',
-  'settings.client': 'Client',
   'settings.stages': 'Pins affichés',
   'settings.hideResolved': 'Masquer les feedbacks résolus',
   'settings.screenshot': 'Joindre une image de l’élément',

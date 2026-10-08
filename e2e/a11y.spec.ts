@@ -79,7 +79,7 @@ test('the settings dialog holds focus, and gives it back to the gear', async ({ 
   await page.keyboard.press('Enter');
   const dialog = page.getByRole('dialog', { name: 'Fruitback settings' });
   await expect(dialog).toBeVisible();
-  await expect(page.locator('[name="endpoint"]')).toBeFocused();
+  await expect(page.locator('[name="stage-seeded"]')).toBeFocused();
 
   await page.keyboard.press('Shift+Tab');
   await expect(dialog.getByRole('button', { name: 'Close settings' })).toBeFocused();

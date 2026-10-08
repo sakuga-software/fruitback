@@ -238,6 +238,24 @@ header when the host mints no token` compared `fetch`'s second argument to `unde
 - **Two elements must not share one accessible name.** The gear says `Open Fruitback settings`
   and the dialog `Fruitback settings`, and a host catalog must keep them apart too; giving both the same name is ambiguous to a screen reader and
   to any test that finds elements by name.
+- **The worker and the client id left the panel, and the store with it (FRU-89).** The panel showed
+  two text fields, « Worker » and « Client », above the stage filters. A client who reviews their own
+  staging site saw them, could not know what they were, and a change there sent the notes somewhere
+  else with nothing on screen to say so. They are the caller's word: `init`, the script tag, or the
+  extension's rule.
+  - **Removing the fields was not enough.** The store still read `endpoint` and `clientId` back from
+    `localStorage`, and the page can write that key. `pinned` closed it for a mount that named its
+    own key, which is the extension only. Every ordinary embed followed a stored endpoint: the test
+    that said so was named « still remembers under the default key », and it now asserts the
+    opposite. `WidgetConfig` holds `hiddenStages` and `screenshot`, and `pinned` is gone.
+  - **A config stored before is read field by field, so the two old fields cost nothing.** The next
+    change writes the config without them.
+  - **The panel opens on its first stage box.** It opened on the endpoint field. The close button is
+    the fallback, for a worker that reports no stage.
+  - **The read no longer debounces.** The debounce existed because a keystroke in the endpoint field
+    was a new query. A preference change now only redraws from the issues already held.
+  - **The dev loop changes worker with `VITE_FRUITBACK_WORKER`**, which is where the playground
+    always took its default from.
 
 ## The words, and the catalogs the bundle carries (FRU-37, FRU-38)
 
