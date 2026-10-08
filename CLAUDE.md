@@ -982,7 +982,10 @@ and _The team mode, and the call the page cannot make_:
   by whoever already sets the secrets.
 - **Forgetting a reporter is a command too** (FRU-85): `node server.mjs forget --email … [--dry-run]`.
   It lists before it says what it did, because a typed address is a claim. Only a store that holds
-  its rows implements `forgetReporter`; a tracker store is refused with where to delete instead.
+  its rows implements `forget`; a tracker store is refused with where to delete instead.
+  **`--name` only lists and `--id` deletes** (FRU-111): the widget asks for no address since FRU-91,
+  and a name is a weaker claim than an address. One selector in a command, and one identifier that
+  names no note stops the deletion of the others.
   `node:sqlite` turns foreign keys **on** by default, so deleting the pragma in `connect` is an
   equivalent mutant: test the cascade with the pragma set to `OFF`.
 - **An extension origin is exempt from `ALLOWED_ORIGINS`, on every route** (FRU-42, widened by

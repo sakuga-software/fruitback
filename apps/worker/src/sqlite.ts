@@ -12,7 +12,14 @@ import {
   seedSchema,
 } from '@fruitback/shared';
 import type { ClientPolicy } from './clients.ts';
-import { type CreatedIssue, type ForgottenSeed, type SeedIssueQuery, type SeedStore, StoreError } from './store.ts';
+import {
+  type CreatedIssue,
+  type ForgetSelector,
+  type ForgottenSeed,
+  type SeedIssueQuery,
+  type SeedStore,
+  StoreError,
+} from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
 
 /**
@@ -273,7 +280,7 @@ export function createSqliteStore(config: SqliteConfig): SeedStore {
     scope: () => config.path,
     create: (seed, _client, _policy) => insert(config, seed),
     findForPage: (query, _client, policy) => select(config, query, policy),
-    forgetReporter: (email, options) => forget(config, email, options),
+    forget: (which, options) => forget(config, which, options),
   };
 }
 
@@ -304,15 +311,20 @@ async function insert(config: SqliteConfig, seed: Seed): Promise<CreatedIssue> {
 }
 
 /**
- * The address is compared trimmed and in lower case, on both sides.
+ * An address and a name are compared trimmed and in lower case, on both sides. An identifier is
+ * compared as it is written, `FB-12`.
  *
  * The filter runs here and not in a `json_extract`: one row that is not JSON makes that query throw
  * for every row, and a row is parsed, never trusted. The deletion is one transaction, and the
  * connection has `foreign_keys` on, so the replies go with their seed.
  */
-async function forget(config: SqliteConfig, email: string, options: { dryRun: boolean }): Promise<ForgottenSeed[]> {
+async function forget(
+  config: SqliteConfig,
+  which: ForgetSelector,
+  options: { dryRun: boolean },
+): Promise<ForgottenSeed[]> {
   const database = connect(config.path);
-  const wanted = email.trim().toLowerCase();
+  const selects = selectorFor(which);
 
   try {
     const rows = database.prepare('SELECT id, page_url, seed, created_at FROM seeds ORDER BY id').all() as {
@@ -321,7 +333,7 @@ async function forget(config: SqliteConfig, email: string, options: { dryRun: bo
       seed: string;
       created_at: string;
     }[];
-    const found = rows.filter((row) => reporterEmailOf(row.seed) === wanted);
+    const found = rows.filter(selects);
 
     if (!options.dryRun && found.length > 0) {
       const remove = database.prepare('DELETE FROM seeds WHERE id = ?');
@@ -342,14 +354,27 @@ async function forget(config: SqliteConfig, email: string, options: { dryRun: bo
       note: noteOf(row.seed),
     }));
   } catch (error) {
-    throw new StoreError(`SQLite could not forget the reporter: ${String(error)}`);
+    throw new StoreError(`SQLite could not forget the notes: ${String(error)}`);
   }
 }
 
-function reporterEmailOf(text: string): string | undefined {
-  const email = (readJson(text) as { reporter?: { email?: unknown } } | undefined)?.reporter?.email;
+function selectorFor(which: ForgetSelector): (row: { id: number; seed: string }) => boolean {
+  if ('identifiers' in which) {
+    const wanted = new Set(which.identifiers);
 
-  return typeof email === 'string' ? email.trim().toLowerCase() : undefined;
+    return (row) => wanted.has(identifierFor(row.id));
+  }
+
+  const [field, value] = 'email' in which ? (['email', which.email] as const) : (['name', which.name] as const);
+  const wanted = value.trim().toLowerCase();
+
+  return (row) => reporterFieldOf(row.seed, field) === wanted;
+}
+
+function reporterFieldOf(text: string, field: 'email' | 'name'): string | undefined {
+  const value = (readJson(text) as { reporter?: Record<string, unknown> } | undefined)?.reporter?.[field];
+
+  return typeof value === 'string' ? value.trim().toLowerCase() : undefined;
 }
 
 function noteOf(text: string): string {

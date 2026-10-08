@@ -128,8 +128,9 @@ integrator's identity token gave it, or the note was written before. A typed nam
 so was a typed e-mail: a reporter can write somebody else's, and two reporters can write the same
 one. So list the notes first, read the list, and delete after.
 
-**A note signed with a name only has no address to search for.** Find it by its page, its date and
-its text, in your tracker or in the SQLite file.
+**A note signed with a name only has no address to search for**, and a note with no name has
+nothing to search for at all. Each note has an identifier, and the thread of its pin shows it on the
+page.
 
 - **SQLite:** the worker has a command for it. Run it in the container, like `pair`:
 
@@ -143,6 +144,18 @@ its text, in your tracker or in the SQLite file.
   address is compared without case and without the spaces around it. You do not have to stop the
   worker: the file is in WAL mode. A page can still show a deleted note for up to 15 seconds, from
   the cache. Then delete it from your backups too, or record when they expire.
+
+  For a note with no address, list by name, then delete by identifier:
+
+  ```bash
+  docker exec <container> node server.mjs forget --name "Alice" --dry-run
+  docker exec <container> node server.mjs forget --id FB-12 --id FB-15
+  ```
+
+  `--name` only lists, and the command refuses it without `--dry-run`: two reporters sign with the
+  same name, so a name finds notes and does not decide which ones go. `--id` deletes the notes you
+  name, with their replies. If one identifier of the list names no note, nothing is deleted. Use
+  one of `--email`, `--name` and `--id` in a command.
 
 - **Linear and GitHub:** the notes are issues in your own workspace, so you delete them there, and
   the command says so rather than deleting anything. Search the issues for the address, because the
