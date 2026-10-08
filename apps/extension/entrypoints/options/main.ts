@@ -5,8 +5,10 @@ import { STALE_TEAM_WILDCARD } from '../../src/site-form.ts';
 import { lendsSession, parseSitePattern } from '../../src/site-patterns.ts';
 import { injectIntoOpenTabs } from '../../src/tab-injection.ts';
 import { browserTabScripting as scripting } from '../../src/tab-scripting-browser.ts';
-import { type SitesImport, exportSites, importSites } from '../../src/site-transfer.ts';
+import { exportSites, importSites } from '../../src/site-transfer.ts';
 import { type SiteConfig, type SiteMode, readAll, removeSite, writeSite, writeSites } from '../../src/sites.ts';
+import { showProblem } from '../../src/problem-view.ts';
+import { IMPORT_PROBLEM } from '../../src/remedy.ts';
 
 /**
  * Every site entry, wildcards included, and the rules file a team hands around (FRU-43).
@@ -15,12 +17,6 @@ import { type SiteConfig, type SiteMode, readAll, removeSite, writeSite, writeSi
  * button does in `site-editor.ts`, and what a file holds in `site-transfer.ts`. This page builds the
  * elements.
  */
-
-const IMPORT_PROBLEM: Record<Extract<SitesImport, { ok: false }>['reason'], string> = {
-  'not-json': 'That file is not JSON.',
-  'not-a-sites-file': 'That file is not a Fruitback rules file.',
-  'newer-version': 'That file comes from a newer Fruitback. Update the extension, then import it again.',
-};
 
 /** What the list shows now. The add form checks for a duplicate here, because a storage read loses the click. */
 let current: Record<string, SiteConfig> = {};
@@ -105,14 +101,14 @@ async function row(pattern: string, site: SiteConfig): Promise<HTMLElement> {
   const buttons = document.createElement('span');
   buttons.className = 'buttons';
   if (!refused) {
-    if (!granted) buttons.append(button('Grant access', () => attempt(grant(pattern, site))));
+    if (!granted) buttons.append(button('Grant access', () => attempt(() => grant(pattern, site))));
     buttons.append(
       site.enabled
-        ? button('Turn off', () => attempt(writeSite(pattern, { ...site, enabled: false })))
-        : button('Turn on', () => attempt(editor.switchOn(pattern, site))),
+        ? button('Turn off', () => attempt(() => writeSite(pattern, { ...site, enabled: false })))
+        : button('Turn on', () => attempt(() => editor.switchOn(pattern, site))),
     );
   }
-  buttons.append(button('Remove', () => attempt(removeSite(pattern)), 'secondary'));
+  buttons.append(button('Remove', () => attempt(() => removeSite(pattern)), 'secondary'));
 
   const item = document.createElement('li');
   item.append(
@@ -140,22 +136,30 @@ async function grant(pattern: string, site: SiteConfig): Promise<boolean> {
 }
 
 /**
- * Runs a row's change and reports what did not happen under the list.
+ * Runs a row's change and reports what did not happen under the list, with what to do next (FRU-90).
  *
  * A click is fire-and-forget, so a rejection that is not handled here is reported nowhere. A change
  * that asks for access answers `false` when the reviewer refuses it, and that is said too.
+ *
+ * `change` is a function, so the remedy can run it again in its own click: a change that asks for
+ * access needs that click to show the prompt.
  */
-function attempt(change: Promise<boolean | void>): void {
-  notice.textContent = '';
-  change.then(
+function attempt(change: () => Promise<boolean | void>): void {
+  showProblem(notice, '');
+  change().then(
     (done) => {
-      if (done === false) notice.textContent = NO_ACCESS_PROBLEM;
+      if (done === false) showProblem(notice, NO_ACCESS_PROBLEM, { grant: () => attempt(change) });
     },
     (error: unknown) => {
       console.error('[fruitback] a site change was not confirmed', error);
-      notice.textContent = STORE_PROBLEM;
+      showProblem(notice, STORE_PROBLEM, { list: reloadList });
     },
   );
+}
+
+/** The list as storage holds it now, which is what a change that was not confirmed leaves in doubt. */
+function reloadList(): void {
+  void renderList();
 }
 
 function addForm(): HTMLElement {
@@ -163,7 +167,7 @@ function addForm(): HTMLElement {
   const mode = modeField();
   const endpoint = field('Worker endpoint', 'https://feedback.acme.dev');
   const clientId = field('Client id', 'acme');
-  const add = button('Add rule', () => {
+  const submit = (): void => {
     void editor
       .add({
         sites: sites.input.value,
@@ -172,10 +176,11 @@ function addForm(): HTMLElement {
         clientId: clientId.input.value.trim(),
       })
       .then((text) => {
-        problem.textContent = text;
+        showProblem(problem, text, { grant: submit, list: reloadList });
         if (text === '') for (const input of [sites.input, endpoint.input, clientId.input]) input.value = '';
       });
-  });
+  };
+  const add = button('Add rule', submit);
   add.disabled = true;
   needsList.push(add);
   const problem = element('p', '', 'problem');
@@ -219,7 +224,7 @@ function transfer(): HTMLElement {
       const parsed = importSites(await file.text());
       input.value = '';
       if (!parsed.ok) {
-        result.textContent = IMPORT_PROBLEM[parsed.reason];
+        showProblem(result, IMPORT_PROBLEM[parsed.reason]);
 
         return;
       }
@@ -228,7 +233,7 @@ function transfer(): HTMLElement {
         await writeSites(parsed.sites);
       } catch (error) {
         console.error('[fruitback] the import was not confirmed', error);
-        result.textContent = STORE_PROBLEM;
+        showProblem(result, STORE_PROBLEM, { list: reloadList });
         // The entries can be stored anyway, and the tabs open on them would hold no widget until
         // their next load (FRU-73).
         await activateStored(Object.keys(parsed.sites), readAll, (pattern) => injectIntoOpenTabs(scripting, pattern));

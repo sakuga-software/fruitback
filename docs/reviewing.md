@@ -93,18 +93,30 @@ get that far, under
 
 > Pairing needs https (localhost excepted): a session must not cross http.
 
-Otherwise, what a failed attempt answers:
+with **Change the worker** beside it, which opens the fields of the rule.
 
-|                                                              |                                                                                                                                                                                  |
-| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `That code has been used or has expired. Ask for a new one.` | Codes are single-use, and expire 15 minutes after they are minted.                                                                                                               |
-| `The worker did not answer. Try again.`                      | The worker is down or unreachable — the code is still good.                                                                                                                      |
-| `Fruitback needs permission to reach that worker.`           | The prompt for the **worker's** origin was refused. It is not the site's.                                                                                                        |
-| `That worker is on plain http. A session must not cross it.` | The same rule as the disabled button above, answered by `session.ts` rather than by the popup. You reach it only if something else asks for a pairing — the popup refuses first. |
+Otherwise, what a failed attempt answers. Each message has the one thing to do about it beside it:
+
+| The popup says                                               | Why                                                                                                                                                                              | Beside it                                     |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `That code has been used or has expired. Ask for a new one.` | Codes are single-use, and expire 15 minutes after they are minted.                                                                                                               | **How to get a code**, a link to this section |
+| `The worker did not answer. Try again.`                      | The worker is down or unreachable — the code is still good.                                                                                                                      | **Try again**, with the same code             |
+| `Fruitback needs permission to reach that worker.`           | The prompt for the **worker's** origin was refused. It is not the site's.                                                                                                        | **Grant access**, which asks again            |
+| `That worker is on plain http. A session must not cross it.` | The same rule as the disabled button above, answered by `session.ts` rather than by the popup. You reach it only if something else asks for a pairing — the popup refuses first. | **Change the worker**                         |
 
 Pairing asks for a permission on the worker's origin, which is a different grant from the site's. It
 is asked for at the click, so nothing is awaited before the prompt — a browser drops the gesture
 otherwise and no prompt ever appears.
+
+Two more messages can show on the popup and on the options page, for a site and not for a pairing:
+
+| The page says                                                              | Why                                                                                | Beside it                                                     |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `Fruitback needs access to those sites to run there. Nothing was saved.`   | You refused the browser's prompt for the site.                                     | **Grant access**, which asks again                            |
+| `Fruitback could not confirm that change. Check the list, then try again.` | The change went to the extension and no answer came back. It can be stored anyway. | **Check the list**: the options page, read again from storage |
+
+A message with no button is one the page cannot act on: a field to correct, which is beside the
+message, or a rules file that only another file replaces.
 
 ## 4. Many sites, from the options page
 

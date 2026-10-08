@@ -9,7 +9,9 @@ import { type SiteConfig, type SiteMode, findSite, readAll, writeSite } from '..
 import { injectIntoOpenTabs } from '../../src/tab-injection.ts';
 import { browserTabScripting } from '../../src/tab-scripting-browser.ts';
 import { createBrowserSessions } from '../../src/session-browser.ts';
-import { type PairFailure, describeIdentity } from '../../src/session.ts';
+import { describeIdentity } from '../../src/session.ts';
+import { showProblem } from '../../src/problem-view.ts';
+import { PAIRING_CODE_REQUIRED, PAIRING_NEEDS_HTTPS, PAIRING_PROBLEM } from '../../src/remedy.ts';
 
 /**
  * The switch for the tab you are looking at, and the two fields that make it work (FRU-41).
@@ -109,14 +111,6 @@ function optionsButton(): HTMLElement {
   return button;
 }
 
-/** What a failed pairing is, in the reporter's words. */
-const PAIRING_PROBLEM: Record<PairFailure | 'blocked', string> = {
-  'code-spent-or-expired': 'That code has been used or has expired. Ask for a new one.',
-  unavailable: 'The worker did not answer. Try again.',
-  'insecure-endpoint': 'That worker is on plain http. A session must not cross it.',
-  blocked: 'Fruitback needs permission to reach that worker.',
-};
-
 /**
  * Ask for the worker's own origin, which is not the site's.
  *
@@ -182,15 +176,24 @@ async function session(site: SiteConfig): Promise<HTMLElement[]> {
 
   // Pairing spends a code and is handed a refresh token — thirty days of access — so it does not
   // happen over plain http. Loopback excepted: that is the dev loop. Raised in review.
+  // The worker this rule names is what is wrong, so the way out is the fields of the rule.
+  const change = (): void => void render(true);
+
   if (!isSecureWorkerEndpoint(endpoint)) {
     submit.disabled = true;
-    problem.textContent = 'Pairing needs https (localhost excepted): a session must not cross http.';
+    showProblem(problem, PAIRING_NEEDS_HTTPS, { change });
   }
 
-  submit.addEventListener('click', () => {
+  /**
+   * One attempt, from the button or from the remedy under a failed one (FRU-90).
+   *
+   * Both are clicks, and that is the point: the attempt asks for a permission first, and a remedy
+   * that ran outside a click would ask for it with no gesture and get no prompt.
+   */
+  const attempt = (): void => {
     const value = code.input.value.trim();
-    problem.textContent = value === '' ? 'The pairing code is required.' : '';
-    if (problem.textContent !== '') return;
+    showProblem(problem, value === '' ? PAIRING_CODE_REQUIRED : '');
+    if (value === '') return;
 
     // A code is spendable once. A second click while the first is in flight would spend it, then be
     // told by the worker that it is spent — a success reported as a failure. Same rule as the
@@ -210,9 +213,15 @@ async function session(site: SiteConfig): Promise<HTMLElement[]> {
       }
 
       submit.disabled = false;
-      problem.textContent = PAIRING_PROBLEM[result === undefined ? 'blocked' : result.reason];
+      showProblem(problem, PAIRING_PROBLEM[result === undefined ? 'blocked' : result.reason], {
+        retry: attempt,
+        grant: attempt,
+        change,
+      });
     })();
-  });
+  };
+
+  submit.addEventListener('click', attempt);
 
   const row = document.createElement('div');
   row.className = 'row';
@@ -260,8 +269,9 @@ function form(origin: string, found?: ResolvedSite): HTMLElement {
     // Said out loud rather than refused in silence. The bridge applies the same rule before it
     // mounts, so an endpoint that fails here would have been stored, shown as **On**, and then
     // ignored by a page that reported nothing — which reads as a broken extension. Raised in review.
-    problem.textContent = complaint(values, pattern);
-    if (problem.textContent !== '') return;
+    const wrong = complaint(values, pattern);
+    showProblem(problem, wrong);
+    if (wrong !== '') return;
 
     // `enabled` is kept: changing the endpoint of a site that is switched off must not switch it on.
     const next = siteFrom(values, site?.enabled ?? true);
@@ -275,7 +285,8 @@ function form(origin: string, found?: ResolvedSite): HTMLElement {
       return;
     }
 
-    void turnOn(pattern, next).then(refused(problem), failed(problem));
+    const turn = (): void => void turnOn(pattern, next).then(refused(problem, turn), failed(problem));
+    turn();
   });
 
   const wrapper = document.createElement('div');
@@ -334,7 +345,9 @@ function status({ pattern, site }: ResolvedSite): HTMLElement {
       return;
     }
 
-    void turnOn(pattern, { ...site, enabled: true }).then(refused(problem), failed(problem));
+    const turn = (): void =>
+      void turnOn(pattern, { ...site, enabled: true }).then(refused(problem, turn), failed(problem));
+    turn();
   });
 
   const change = element('button', 'Change');
@@ -354,10 +367,14 @@ function status({ pattern, site }: ResolvedSite): HTMLElement {
   return wrapper;
 }
 
-/** A turn-on the reviewer refused: nothing was stored, and the screen says why. */
-function refused(problem: HTMLElement): (granted: boolean) => void {
+/**
+ * A turn-on the reviewer refused: nothing was stored, and the screen says why.
+ *
+ * `again` is the same turn-on. It runs in the click of the remedy, so the browser asks again.
+ */
+function refused(problem: HTMLElement, again: () => void): (granted: boolean) => void {
   return (granted) => {
-    if (!granted) problem.textContent = NO_ACCESS_PROBLEM;
+    showProblem(problem, granted ? '' : NO_ACCESS_PROBLEM, { grant: again });
   };
 }
 
@@ -370,7 +387,8 @@ function refused(problem: HTMLElement): (granted: boolean) => void {
 function failed(problem: HTMLElement): (error: unknown) => void {
   return (error) => {
     console.error('[fruitback] a site change was not confirmed', error);
-    problem.textContent = STORE_PROBLEM;
+    // The list is on the options page, and it says what storage holds now.
+    showProblem(problem, STORE_PROBLEM, { list: () => void browser.runtime.openOptionsPage() });
   };
 }
 

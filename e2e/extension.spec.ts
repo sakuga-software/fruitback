@@ -263,3 +263,43 @@ test('a session held with the worker of a private-mode site stays on the popup, 
   await expect(popup.getByLabel('Pairing code')).toHaveCount(0);
   await expect(popup.getByText('On · playground', { exact: false })).toBeVisible();
 });
+
+test('a failed pairing offers the one thing to do about it, and Try again pairs with the same code (FRU-90)', async ({
+  extension,
+}) => {
+  await addRule(extension, { mode: 'team', endpoint: AUTHENTICATED_WORKER_ORIGIN });
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'ext-remedies');
+  const popup = await openPopup(extension, page);
+  const shot = async (name: string): Promise<void> => {
+    const path = test.info().outputPath(`${name}.png`);
+    await popup.screenshot({ path, clip: { x: 0, y: 0, width: 520, height: 330 } });
+    await test.info().attach(name, { path, contentType: 'image/png' });
+  };
+
+  // A code nobody minted: the worker answers, so the popup must not offer to try it again.
+  await popup.getByLabel('Pairing code').fill('AAAA-BBBB-CCCC');
+  await popup.getByRole('button', { name: 'Pair with this worker' }).click();
+  await expect(popup.getByText('That code has been used or has expired. Ask for a new one.')).toBeVisible();
+  await expect(popup.getByRole('link', { name: 'How to get a code' })).toHaveAttribute(
+    'href',
+    'https://sakuga-software.github.io/fruitback/reviewing.html#3-pair-in-team-mode',
+  );
+  await expect(popup.getByRole('button', { name: 'Try again' })).toHaveCount(0);
+  await shot('code-spent');
+
+  // A worker that does not answer once. The code is not spent, so the same one must pair after.
+  let refused = 0;
+  await popup.route(`${AUTHENTICATED_WORKER_ORIGIN}/session/pair`, async (route) => {
+    if (refused++ === 0) await route.abort('connectionrefused');
+    else await route.continue();
+  });
+  await popup.getByLabel('Pairing code').fill(mintPairingCode(REVIEWER));
+  await popup.getByRole('button', { name: 'Pair with this worker' }).click();
+  await expect(popup.getByText('The worker did not answer. Try again.')).toBeVisible();
+  await shot('worker-down');
+
+  await popup.getByRole('button', { name: 'Try again' }).click();
+  await expect(popup.getByText(`Paired as ${REVIEWER}`)).toBeVisible();
+  expect(refused, 'the first attempt did not reach the route, so nothing was retried').toBe(2);
+});

@@ -35,3 +35,13 @@ h2 {
   gap: 6px;
   align-items: start;
 }
+
+/* The one thing to do about a problem, beside the words that state it (FRU-90). */
+button.remedy {
+  margin-inline-start: 4px;
+  padding: 2px 8px;
+  background: transparent;
+  color: inherit;
+  box-shadow: inset 0 0 0 1px currentColor;
+  font-weight: 600;
+}
