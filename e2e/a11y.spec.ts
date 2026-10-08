@@ -109,13 +109,8 @@ test('the thread takes focus, and gives it back to its pin', async ({ page }) =>
   await expect(badge).toBeFocused();
 });
 
-/** The accent fails 4.5:1 on white and on the dark surface, and waits for a design decision (`contrast.test.ts`). */
-const ACCENT = '#e53935';
-
 for (const scheme of ['light', 'dark'] as const) {
-  test(`axe-core finds nothing but the accent in the widget, in each state, in the ${scheme} scheme`, async ({
-    page,
-  }) => {
+  test(`axe-core finds nothing in the widget, in each state, in the ${scheme} scheme`, async ({ page }) => {
     // Axe reads the colours as painted, and an opening animation paints them at part opacity.
     await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
     await openPlayground(page, `axe-${scheme}`);
@@ -126,17 +121,13 @@ for (const scheme of ['light', 'dark'] as const) {
     await expect(page.getByRole('dialog', { name: 'Leave a note' })).toBeHidden({ timeout: 5_000 });
 
     const violations: string[] = [];
-    const accent: string[] = [];
     const scan = async (state: string) => {
       // Scoped to the widget: the playground's own markup is not what this ticket audits.
       const results = await new AxeBuilder({ page }).include('[data-fruitback-host]').analyze();
       for (const violation of results.violations) {
         for (const node of violation.nodes) {
           const data = node.any[0]?.data as { fgColor?: string; bgColor?: string } | undefined;
-          const line = `${state}: ${violation.id} on ${node.target.join(' ')} ${JSON.stringify(data ?? '')}`;
-          const onAccent = data?.fgColor === ACCENT || data?.bgColor === ACCENT;
-          if (violation.id === 'color-contrast' && onAccent) accent.push(line);
-          else violations.push(line);
+          violations.push(`${state}: ${violation.id} on ${node.target.join(' ')} ${JSON.stringify(data ?? '')}`);
         }
       }
     };
@@ -164,7 +155,13 @@ for (const scheme of ['light', 'dark'] as const) {
     await scan('composer');
 
     expect(violations).toEqual([]);
-    // The control for the filter: if the accent passes one day, the filter must go.
-    expect(accent.length, 'the accent passes now: remove ACCENT and its filter').toBeGreaterThan(0);
+
+    // The control for the empty list: with a grey label on the accent, axe must object. Not the
+    // colour of the button itself: axe reports a 1:1 pair as something to review, not as a failure.
+    await page.locator('[data-fruitback-host]').evaluate((host) => {
+      (host as HTMLElement).style.setProperty('--fruitback-color-on-accent', '#999');
+    });
+    await scan('control');
+    expect(violations.filter((line) => line.startsWith('control: color-contrast'))).not.toEqual([]);
   });
 }
