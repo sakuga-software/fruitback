@@ -1,7 +1,7 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { SeedReporter } from '@fruitback/shared';
-import { type Composer, createComposer } from './composer.ts';
+import { type Composer, type ComposerOptions, createComposer } from './composer.ts';
 import { type MountedPage, keyboardEventCtor, mountPage } from './dom.fixture.ts';
 import { createTranslator } from './messages.ts';
 
@@ -22,11 +22,14 @@ afterEach(() => {
 
 let mounted: MountedPage | null = null;
 
-function mount(onSubmit: (note: string, reporter?: SeedReporter) => Promise<boolean | void>) {
+function mount(
+  onSubmit: (note: string, reporter?: SeedReporter) => Promise<boolean | void>,
+  more: Pick<ComposerOptions, 'memory' | 'identified'> = {},
+) {
   const page = mountPage('<main><button id="cta">Commander</button></main>', { width: 1_000, height: 1_000 });
   const host = page.document.createElement('div');
   page.document.body.append(host);
-  composer = createComposer({ document: page.document, host, onSubmit });
+  composer = createComposer({ document: page.document, host, onSubmit, ...more });
   mounted = page;
 
   return { page, host };
@@ -389,13 +392,145 @@ describe('saying who you are, or not', () => {
     composer?.open(ANCHOR);
 
     (query(page, '[data-fruitback-name]') as HTMLInputElement).value = 'Alice';
-    (query(page, '[data-fruitback-email]') as HTMLInputElement).value = 'alice@acme.test';
     (query(page, '[data-fruitback-note]') as HTMLTextAreaElement).value = 'Une note';
     query(page, '[data-fruitback-send]').click();
     await Promise.resolve();
 
-    assert.deepEqual(seen, [{ name: 'Alice', email: 'alice@acme.test' }]);
+    assert.deepEqual(seen, [{ name: 'Alice' }]);
     assert.equal(seen[0] && 'verified' in seen[0], false);
+  });
+
+  it('asks for a name and for nothing else (FRU-91)', () => {
+    const { page } = mount(async () => true);
+    composer?.open(ANCHOR);
+    const typed = [...page.document.querySelectorAll('[data-fruitback-who] input')] as HTMLInputElement[];
+
+    assert.deepEqual(
+      typed.map((input) => input.type),
+      ['text', 'checkbox'],
+    );
+    assert.equal(page.document.querySelector('[type="email"]'), null);
+  });
+});
+
+describe('remembering the name, when the reporter asks (FRU-91)', () => {
+  const query = (page: MountedPage, selector: string) => page.document.querySelector(selector) as HTMLElement;
+  const input = (page: MountedPage, selector: string) => query(page, selector) as HTMLInputElement;
+
+  /** A memory that records every write, so a test can tell "wrote nothing" from "wrote the same". */
+  function memoryHolding(initial?: string) {
+    let held = initial;
+    const writes: (string | undefined)[] = [];
+
+    return {
+      writes,
+      held: () => held,
+      memory: {
+        get: () => held,
+        set(name: string | undefined) {
+          held = name;
+          writes.push(name);
+        },
+      },
+    };
+  }
+
+  function tick(page: MountedPage, box: HTMLInputElement, checked: boolean): void {
+    box.checked = checked;
+    box.dispatchEvent(new (page.view as unknown as { Event: typeof Event }).Event('change', { bubbles: true }));
+  }
+
+  async function send(page: MountedPage, note = 'Une note'): Promise<void> {
+    (query(page, '[data-fruitback-note]') as HTMLTextAreaElement).value = note;
+    query(page, '[data-fruitback-send]').click();
+    await Promise.resolve();
+  }
+
+  it('writes nothing when the box is not ticked, name typed or not', async () => {
+    const { memory, writes } = memoryHolding();
+    const { page } = mount(async () => true, { memory });
+    composer?.open(ANCHOR);
+
+    assert.equal(input(page, '[data-fruitback-remember]').checked, false, 'the box starts ticked');
+    input(page, '[data-fruitback-name]').value = 'Alice';
+    await send(page);
+
+    assert.deepEqual(writes, []);
+  });
+
+  it('keeps the trimmed name when the box is ticked, and shows it on the next note', async () => {
+    const { memory, held } = memoryHolding();
+    const { page } = mount(async () => true, { memory });
+    composer?.open(ANCHOR);
+    input(page, '[data-fruitback-name]').value = '  Alice  ';
+    tick(page, input(page, '[data-fruitback-remember]'), true);
+    await send(page);
+    assert.equal(held(), 'Alice');
+
+    composer?.close();
+    input(page, '[data-fruitback-name]').value = '';
+    input(page, '[data-fruitback-remember]').checked = false;
+    composer?.open(ANCHOR);
+
+    assert.equal(input(page, '[data-fruitback-name]').value, 'Alice');
+    assert.equal(input(page, '[data-fruitback-remember]').checked, true);
+    assert.equal(query(page, '[data-fruitback-who]').hidden, false, 'the name the note is signed with is hidden');
+    assert.equal(query(page, '[data-fruitback-identify]').getAttribute('aria-expanded'), 'true');
+  });
+
+  it('keeps the name when the send fails, because the choice was made before it', async () => {
+    const { memory, held } = memoryHolding();
+    const { page } = mount(async () => false, { memory });
+    composer?.open(ANCHOR);
+    input(page, '[data-fruitback-name]').value = 'Alice';
+    tick(page, input(page, '[data-fruitback-remember]'), true);
+    await send(page);
+    await Promise.resolve();
+
+    assert.equal(composer?.state(), 'failed');
+    assert.equal(held(), 'Alice');
+  });
+
+  it('forgets at once when the box is unticked, with no note sent', () => {
+    const { memory, writes, held } = memoryHolding('Alice');
+    const { page } = mount(async () => true, { memory });
+    composer?.open(ANCHOR);
+
+    tick(page, input(page, '[data-fruitback-remember]'), false);
+
+    assert.deepEqual(writes, [undefined]);
+    assert.equal(held(), undefined);
+  });
+
+  it('forgets when the box stays ticked and the name is emptied', async () => {
+    const { memory, held } = memoryHolding('Alice');
+    const { page } = mount(async () => true, { memory });
+    composer?.open(ANCHOR);
+    input(page, '[data-fruitback-name]').value = '   ';
+    await send(page);
+
+    assert.equal(held(), undefined);
+  });
+
+  it('offers no box when it was given nowhere to keep the name', () => {
+    const { page } = mount(async () => true);
+    composer?.open(ANCHOR);
+
+    assert.equal(query(page, '[data-fruitback-remember-label]').hidden, true);
+  });
+
+  it('asks for no name when the worker names the reporter, and sends none', async () => {
+    const seen: (SeedReporter | undefined)[] = [];
+    const { memory, writes } = memoryHolding('Alice');
+    const { page } = mount(async (_note, reporter) => void seen.push(reporter), { memory, identified: true });
+    composer?.open(ANCHOR);
+
+    assert.equal(query(page, '[data-fruitback-identify]').hidden, true);
+    assert.equal(query(page, '[data-fruitback-who]').hidden, true);
+    await send(page);
+
+    assert.deepEqual(seen, [undefined]);
+    assert.deepEqual(writes, []);
   });
 });
 

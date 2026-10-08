@@ -25,12 +25,20 @@ export type WidgetConfig = {
    * than no switch.
    */
   screenshot: boolean;
+  /**
+   * The name the reporter signs a note with, kept only when the reporter ticks the box that asks for
+   * it (FRU-91). Absent by default: the widget remembers nobody who did not ask.
+   */
+  reporterName?: string;
 };
+
+/** A change to the config. `reporterName: undefined` forgets the name. */
+export type ConfigPatch = Partial<Omit<WidgetConfig, 'reporterName'>> & { reporterName?: string | undefined };
 
 export type ConfigStore = {
   get(): WidgetConfig;
   /** Merge a change in, persist it, and tell whoever is listening. */
-  set(patch: Partial<WidgetConfig>): void;
+  set(patch: ConfigPatch): void;
   subscribe(listener: (config: WidgetConfig) => void): () => void;
 };
 
@@ -80,9 +88,20 @@ export function createConfigStore(options: ConfigStoreOptions): ConfigStore {
  * a caller who mutates the config — or the array they passed to `set` — into a `TypeError` here
  * rather than into state that changed without being persisted or announced.
  */
-function seal(config: WidgetConfig): WidgetConfig {
-  return Object.freeze({ ...config, hiddenStages: Object.freeze([...config.hiddenStages]) }) as WidgetConfig;
+function seal(config: Omit<WidgetConfig, 'reporterName'> & { reporterName?: string | undefined }): WidgetConfig {
+  const { reporterName, ...rest } = config;
+  const name = reporterName?.trim().slice(0, REPORTER_NAME_MAX) ?? '';
+
+  return Object.freeze({
+    ...rest,
+    hiddenStages: Object.freeze([...config.hiddenStages]),
+    // Absent, never empty: a key that stays in storage with no value reads as a name that was kept.
+    ...(name.length > 0 ? { reporterName: name } : {}),
+  }) as WidgetConfig;
 }
+
+/** A name is a few words. The limit keeps a page that wrote the key from storing a document here. */
+const REPORTER_NAME_MAX = 120;
 
 /**
  * Reading `localStorage` can throw rather than return null.
@@ -117,6 +136,7 @@ function readStored(storage: Storage | null, key: string): Partial<WidgetConfig>
     const config: Partial<WidgetConfig> = {};
 
     if (typeof stored.screenshot === 'boolean') config.screenshot = stored.screenshot;
+    if (typeof stored.reporterName === 'string') config.reporterName = stored.reporterName;
     if (Array.isArray(stored.hiddenStages)) config.hiddenStages = stored.hiddenStages.filter(isStage);
 
     return config;

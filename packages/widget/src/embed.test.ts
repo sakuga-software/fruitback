@@ -223,6 +223,25 @@ describe('reading pins', () => {
     widget.destroy();
   });
 
+  it('asks for no name when the host mints identity tokens (FRU-91)', () => {
+    // The worker replaces a typed name by the identity of the token, so the field would lie.
+    const named = mountWithCta();
+    stubReads(() => ok([]));
+    const withToken = init({
+      document: named.document,
+      endpoint: ENDPOINT,
+      clientId: 'acme',
+      identityToken: () => 't',
+    });
+    assert.equal((shadowOf(named).querySelector('[data-fruitback-identify]') as HTMLElement).hidden, true);
+    withToken.destroy();
+
+    const anonymous = mountWithCta();
+    const without = init({ document: anonymous.document, endpoint: ENDPOINT, clientId: 'acme' });
+    assert.equal((shadowOf(anonymous).querySelector('[data-fruitback-identify]') as HTMLElement).hidden, false);
+    without.destroy();
+  });
+
   it('sends no Authorization header when the host mints no token', async () => {
     // The anonymous case stays the default, and an empty header is not the same as none.
     //

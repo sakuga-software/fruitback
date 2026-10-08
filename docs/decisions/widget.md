@@ -151,6 +151,25 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
 - The pin is a drop: three round corners and one sharp, rotated to point at its element, with a
   squash-and-stretch entrance. The note moved to the badge's `aria-label` — that is what keeps it
   reachable by a screen reader, and by a test looking for it by role.
+- **One field to say who you are, and a box to be remembered (FRU-91).** The disclosure opened two
+  fields, a name and an e-mail, on every note, and kept neither.
+  - **The e-mail field is gone.** An address is not needed to read a note, and it is the piece of
+    personal data a reporter leaves without thinking. The cost is stated in
+    [privacy.md](../privacy.md): the team cannot answer an anonymous reporter outside the page, and
+    `forget --email` finds no note that carries a name only.
+  - **Nothing is kept by default.** A box, « Remember me on this site », keeps the name under the
+    config key, in the `localStorage` of the page. The page can read that key, which is why the box
+    is the reporter's to tick and not a default.
+  - **The name is written before the send, and erased when the box is unticked.** A write after a
+    successful send loses the choice on a failed one, which is when a reporter retries. A box that
+    forgets only at the next send keeps a name its owner asked to drop.
+  - **A stored name is read like the rest of the config**: a string, trimmed, at most 120
+    characters, or nothing. The key stays absent rather than empty.
+  - **With `identityToken`, the composer asks for no name.** The worker replaces a typed name by the
+    identity of the token, so the field would promise a signature that is not used. **Team mode is
+    not covered**: there the session names the reviewer, and the widget cannot know it — it is given
+    a transport and nothing about who is behind it. The field stays, and the worker still signs the
+    note with the session's name.
 
 ## Who carries the calls
 
