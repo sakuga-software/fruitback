@@ -17,8 +17,14 @@ const allowedHosts = (process.env.PLAYGROUND_ALLOWED_HOSTS ?? '')
   .map((host) => host.trim())
   .filter((host) => host !== '');
 
+/**
+ * Behind a proxy that ends TLS, the page is on port 443 and this server on 5177. The client of Vite
+ * opens its socket on the port of the server by default, which the proxy does not publish.
+ */
+const hmr = allowedHosts.length > 0 ? { protocol: 'wss', clientPort: 443 } : undefined;
+
 export default defineConfig({
-  server: { port: 5177, strictPort: true, allowedHosts },
+  server: { port: 5177, strictPort: true, allowedHosts, hmr },
   preview: { port: 5177, strictPort: true },
   /**
    * Pre-bundled at boot rather than discovered on the first navigation.
