@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { type TemSettings, parseTemCredentials } from './mail.ts';
 import { type ClientMap, originsFromClients, readClientMap, unreadableClients, workspacesOf } from './clients.ts';
 import { DEFAULT_LIMIT } from './rate-limit.ts';
 import type { StoreConfig } from './store-config.ts';
@@ -70,6 +71,18 @@ export type WorkerEnv = {
    * Absent, the worker serves the clients of its environment, as before.
    */
   FRUITBACK_ACCOUNTS_PATH?: string;
+  /**
+   * Where the console answers, for example `https://app.fruitback.com` (FRU-98). A sign-in link opens
+   * it, and it is the one origin the console routes answer with a cookie. Required with accounts.
+   */
+  FRUITBACK_CONSOLE_URL?: string;
+  /** The address the sign-in links come from, on a domain the mail provider verified (FRU-98). */
+  FRUITBACK_MAIL_FROM?: string;
+  /**
+   * Scaleway Transactional Email: `<project id>:<secret key>` of an API key that may send (FRU-98).
+   * Absent, the worker sends no e-mail and offers no sign-in by link.
+   */
+  FRUITBACK_SCALEWAY_TEM?: string;
   /**
    * The language of the prose in an issue description (FRU-39). A BCP-47 tag; English by default.
    *
@@ -146,6 +159,10 @@ const configSchema = z.object({
   sessionPath: z.string().min(1).optional(),
   /** Where the accounts, workspaces and sites live (FRU-96). Absent: the clients come from the env. */
   accountsPath: z.string().min(1).optional(),
+  /** The console's address, with no slash at the end (FRU-98). */
+  consoleUrl: z.string().min(1).optional(),
+  /** How the worker sends e-mail, or absent when it sends none (FRU-98). */
+  mail: z.custom<TemSettings | undefined>().optional(),
   /**
    * The language an issue description is written in (FRU-39), for the team that triages.
    *
@@ -191,6 +208,8 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     clients: clients.ok ? clients.clients : Number.NaN,
     sessionPath: env.FRUITBACK_SESSION_PATH || undefined,
     accountsPath: env.FRUITBACK_ACCOUNTS_PATH || undefined,
+    consoleUrl: readConsoleUrl(env.FRUITBACK_CONSOLE_URL),
+    mail: readMail(env),
     teamLocale: readTeamLocale(env.FRUITBACK_TEAM_LOCALE),
   };
 
@@ -272,6 +291,32 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     return { ok: false, missing: ['FRUITBACK_CLIENTS (FRUITBACK_ACCOUNTS_PATH is set, and the sites come from it)'] };
   }
 
+  if (env.FRUITBACK_CONSOLE_URL && result.data.consoleUrl === undefined) {
+    return { ok: false, missing: ['FRUITBACK_CONSOLE_URL (an https:// address, or http:// on localhost)'] };
+  }
+
+  // A sign-in link opens the console, so accounts with no console have nowhere to send a person.
+  if (result.data.accountsPath !== undefined && result.data.consoleUrl === undefined) {
+    return {
+      ok: false,
+      missing: ['FRUITBACK_CONSOLE_URL (FRUITBACK_ACCOUNTS_PATH is set, and a sign-in opens the console)'],
+    };
+  }
+
+  // Both or neither: an address with no way to send from it, or a key with no address to send as,
+  // would offer a sign-in by link that never arrives.
+  if (
+    Boolean(env.FRUITBACK_MAIL_FROM) !== Boolean(env.FRUITBACK_SCALEWAY_TEM) ||
+    (env.FRUITBACK_SCALEWAY_TEM && result.data.mail === undefined)
+  ) {
+    return {
+      ok: false,
+      missing: [
+        'FRUITBACK_MAIL_FROM and FRUITBACK_SCALEWAY_TEM (both, as an address and <project id>:<secret key>, or neither)',
+      ],
+    };
+  }
+
   // An account signs in to get a session, so accounts without sessions sign in to nothing.
   if (result.data.accountsPath !== undefined && result.data.sessionPath === undefined) {
     return {
@@ -281,6 +326,29 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   }
 
   return { ok: true, config: result.data };
+}
+
+/** The console's address with no slash at the end, or `undefined` when it cannot carry a sign-in. */
+function readConsoleUrl(value: string | undefined): string | undefined {
+  if (value === undefined || value.trim() === '') return undefined;
+
+  try {
+    const url = new URL(value.trim());
+    const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+    if (url.protocol !== 'https:' && !(url.protocol === 'http:' && local)) return undefined;
+
+    return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
+  } catch {
+    return undefined;
+  }
+}
+
+function readMail(env: WorkerEnv): TemSettings | undefined {
+  const credentials = env.FRUITBACK_SCALEWAY_TEM ? parseTemCredentials(env.FRUITBACK_SCALEWAY_TEM) : undefined;
+  const from = env.FRUITBACK_MAIL_FROM?.trim();
+  if (credentials === undefined || from === undefined || !from.includes('@')) return undefined;
+
+  return { ...credentials, from };
 }
 
 /**

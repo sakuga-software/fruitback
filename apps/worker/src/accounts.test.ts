@@ -179,6 +179,7 @@ describe('a worker that reads its clients from the accounts (FRU-96)', () => {
       FRUITBACK_IDENTITY_SECRET: SECRET,
       FRUITBACK_SESSION_PATH: join(directory, 'sessions.db'),
       FRUITBACK_ACCOUNTS_PATH: join(directory, 'accounts.db'),
+      FRUITBACK_CONSOLE_URL: 'https://app.fruitback.test',
       ...overrides,
     };
   }
