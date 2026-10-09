@@ -297,10 +297,10 @@ describe('the boot guards', () => {
   });
 
   /**
-   * A session signs with the worker-wide key, and a mapped worker ignores it — each client brings
-   * its own. Pairing would work, the reviewer would look logged in, and every read would answer 401.
+   * On a mapped worker a session reaches the clients of its workspace (FRU-95). With no workspace in
+   * the map, pairing would work, the reviewer would look logged in, and every read would answer 401.
    */
-  it('refuses sessions on a worker that routes by client', () => {
+  it('refuses sessions on a worker whose clients declare no workspace', () => {
     const result = readConfig({
       FRUITBACK_STORE: 'memory',
       ALLOWED_ORIGINS: '*',
@@ -311,8 +311,8 @@ describe('the boot guards', () => {
 
     assert.equal(result.ok, false);
     assert.ok(
-      result.ok === false && result.missing.some((name) => name.startsWith('FRUITBACK_SESSION_PATH')),
-      `expected the session path to be named, got ${result.ok === false ? result.missing.join(', ') : ''}`,
+      result.ok === false && result.missing.some((name) => name.startsWith('FRUITBACK_CLIENTS')),
+      `expected the client map to be named, got ${result.ok === false ? result.missing.join(', ') : ''}`,
     );
   });
 });

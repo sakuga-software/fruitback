@@ -571,10 +571,10 @@ verification stories: this one is fully covered by `node --test`, and the other 
 with an extension loaded, which FRU-45 exists to build and which does not exist yet. Shipping them
 together would let the half nobody can test ride in on the half that is.
 
-Per-client session minting is absent for a stated reason rather than an accidental one: a session
-signs with the worker-wide key, and a worker with `FRUITBACK_CLIENTS` ignores that key. The pair is
-refused at boot instead of shipping a feature that pairs successfully and then answers `401` to
-everything. That belongs with team mode (FRU-57), where a request carries a client id.
+Per-client session minting was absent for a stated reason rather than an accidental one: a session
+signed with the worker-wide key, and a worker with `FRUITBACK_CLIENTS` ignored that key. The pair was
+refused at boot instead of shipping a feature that paired successfully and then answered `401` to
+everything. FRU-95 lifted it, below.
 
 ## Rotation, and the grace that is not a clock (FRU-61)
 
@@ -716,3 +716,31 @@ written into `SECURITY.md` rather than left implicit, and the two tests that enc
 were rewritten rather than deleted — test:`ends the chain when an orphan is presented and something in it
 is still live`, and test:`serves whoever presents last inside the grace, until the earlier holder comes
 back`.
+
+## A session on a worker that serves several clients (FRU-95)
+
+The lock of the Cloud, and of a self-hosted worker with several clients. Until here, sessions and a
+client map were refused together at boot.
+
+- **A session belongs to one workspace.** The operator names it when the code is minted
+  (`pair --workspace acme`), the pairing row keeps it, the session copies it, and every rotation
+  copies it again. It is a column of `pairings` and of `sessions`, added by the third migration of
+  `session-sqlite.ts`. A row written before has none: that session belongs to a single-client worker.
+- **One key, and a claim.** The ticket asked: one signing key per workspace, or one key and a
+  workspace claim checked on every read. One key: a key per workspace is a secret per tenant to mint,
+  store and rotate, and the claim is checked anyway. The access token carries `ws`. Every session
+  token of every workspace verifies under the worker key, so **the signature proves nothing about
+  the workspace**, and `verifyForClient` in `app.ts` compares `ws` with the workspace of the client
+  after the signature. Mutated: without the comparison, six tests of `workspaces.test.ts` fail.
+- **The site's own key first.** A client that mints its own tokens (`identitySecret`) keeps doing so.
+  A token is tried with that key, then as a session token. A client whose own key **is** the worker
+  key would verify every session token as its own and skip the comparison, so that is refused at
+  boot.
+- **The relay needs no change.** It sends the session token of the stored endpoint, and the worker
+  is what refuses a client of another workspace. The test sends both reads from a page origin and
+  from an extension origin.
+- **What stays refused.** Sessions with a client map in which no client declares a workspace: a
+  session there reaches nothing. And `pair` with no workspace on a worker that has some, or with a
+  workspace no client declares.
+- **What `/health` says is unchanged.** It counts open reads and names no client, and a workspace is
+  the same kind of fact as a client id.

@@ -28,6 +28,12 @@ export type IdentityClaims = {
   exp: number;
   /** Optional; rejected when it is in the future, which is a clock or a forgery. */
   iat?: number;
+  /**
+   * The workspace a session belongs to (FRU-95). Only this worker writes it, on the access token of
+   * a session. A mapped client accepts a token signed with the worker key only when this names the
+   * workspace of that client.
+   */
+  ws?: string;
 };
 
 export type IdentityFailure =
@@ -38,7 +44,9 @@ export type IdentityFailure =
   | 'not-yet-valid'
   | 'invalid-claims';
 
-export type IdentityResult = { ok: true; reporter: SeedReporter } | { ok: false; reason: IdentityFailure };
+export type IdentityResult =
+  | { ok: true; reporter: SeedReporter; workspace?: string }
+  | { ok: false; reason: IdentityFailure };
 
 const encoder = new TextEncoder();
 
@@ -128,6 +136,9 @@ export async function verifyIdentityToken(
       ...(typeof claims.email === 'string' && claims.email.length > 0 ? { email: claims.email } : {}),
       verified: true,
     },
+    // Beside the reporter and not in it: the reporter is stored in the seed, and the workspace is a
+    // routing fact about the token.
+    ...(typeof claims.ws === 'string' && claims.ws.length > 0 ? { workspace: claims.ws } : {}),
   };
 }
 
