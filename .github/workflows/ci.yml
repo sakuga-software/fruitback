@@ -215,7 +215,10 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8082/fruitback.iife.js)" = 200
           docker rm -f console
           # Another address at run time would block every call of the bundle, so the container stops.
-          ! timeout 30 docker run --rm -e FRUITBACK_API=https://other.example fruitback-console:ci
+          # Exit 1 from the check, never 124 from a timeout: a container that started would also fail.
+          code=0
+          timeout 30 docker run --rm -e FRUITBACK_API=https://other.example fruitback-console:ci || code=$?
+          test "$code" = 1
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
