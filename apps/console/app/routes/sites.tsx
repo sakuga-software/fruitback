@@ -3,6 +3,7 @@ import { type Site, type Visibility, call } from '../api';
 import { Button, Card, Chip, Field, Problem } from '../ui';
 import { InstallOptions } from './setup';
 import { PageHead, useWorkspace } from './workspace';
+import { t } from '../i18n';
 
 /** The sites of the workspace: a site is an address and who sees its notes (P2, P3 of the design). */
 export default function Sites() {
@@ -24,7 +25,7 @@ export default function Sites() {
     event.preventDefault();
     setProblem(undefined);
     const added = await call<Site>('POST', `/console/workspaces/${workspace.id}/sites`, { url, visibility });
-    if (!added.ok) return setProblem('Paste the full address of the site, starting with https://.');
+    if (!added.ok) return setProblem(t('Paste the full address of the site, starting with https://.'));
     setSites((current) => [...(current ?? []).filter((site) => site.id !== added.data.id), added.data]);
     setOpen(added.data.id);
     setUrl('');
@@ -37,13 +38,13 @@ export default function Sites() {
 
   return (
     <>
-      <PageHead title="Sites" lead="The addresses you review. Adding a site is pasting its URL." />
+      <PageHead title={t('Sites')} lead={t('The addresses you review. Adding a site is pasting its URL.')} />
 
       {manages ? (
         <form onSubmit={add} className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end">
           <div className="flex-1">
             <Field
-              label="Site address"
+              label={t('Site address')}
               type="url"
               placeholder="https://staging.acme.dev"
               value={url}
@@ -51,18 +52,18 @@ export default function Sites() {
             />
           </div>
           <label className="block">
-            <span className="mb-1.5 block text-xs text-muted">Who sees the feedback</span>
+            <span className="mb-1.5 block text-xs text-muted">{t('Who sees the feedback')}</span>
             <select
               value={visibility}
               onChange={(event) => setVisibility(event.target.value as Visibility)}
               className="h-10 rounded-md border border-line bg-surface px-3 text-[15px]"
             >
-              <option value="members">Members</option>
-              <option value="everyone">Everyone</option>
+              <option value="members">{t('Members')}</option>
+              <option value="everyone">{t('Everyone')}</option>
             </select>
           </label>
           <Button type="submit" disabled={url.trim() === ''}>
-            Add the site
+            {t('Add the site')}
           </Button>
         </form>
       ) : null}
@@ -101,9 +102,9 @@ function SiteList({
   onRemove: (site: Site) => void;
   install: (site: Site) => ReactNode;
 }) {
-  if (sites === undefined) return <p className="p-5 text-sm text-muted">Loading…</p>;
+  if (sites === undefined) return <p className="p-5 text-sm text-muted">{t('Loading…')}</p>;
   if (sites.length === 0)
-    return <p className="p-5 text-sm text-muted">No site yet. Paste the address of the one you review.</p>;
+    return <p className="p-5 text-sm text-muted">{t('No site yet. Paste the address of the one you review.')}</p>;
 
   return (
     <ul>
@@ -115,14 +116,14 @@ function SiteList({
               <span className="block text-xs text-muted">{site.origin}</span>
             </span>
             <Chip tone={site.visibility === 'members' ? 'neutral' : 'accent'}>
-              {site.visibility === 'members' ? 'Members' : 'Everyone'}
+              {site.visibility === 'members' ? t('Members') : t('Everyone')}
             </Chip>
             <Button tone="outline" onClick={() => onToggle(site)}>
-              {open === site.id ? 'Close' : 'Install'}
+              {open === site.id ? t('Close') : t('Install')}
             </Button>
             {manages ? (
               <Button tone="quiet" onClick={() => onRemove(site)}>
-                Remove
+                {t('Remove')}
               </Button>
             ) : null}
           </div>

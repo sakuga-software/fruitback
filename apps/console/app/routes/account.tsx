@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { call, signOut } from '../api';
 import { Button, Card } from '../ui';
 import { PageHead, useWorkspace } from './workspace';
+import { LOCALES, locale, setLocale, t } from '../i18n';
 
 /** My account (design/boards/5-workspace.png): the profile, how I sign in, and the workspace's end. */
 export default function Account() {
@@ -22,37 +23,61 @@ export default function Account() {
 
   return (
     <>
-      <PageHead title="My account" lead="How you sign in, and the workspace you are in." />
+      <PageHead title={t('My account')} lead={t('How you sign in, and the workspace you are in.')} />
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="p-5">
-          <h2 className="mb-3 text-[15px] font-semibold">Profile</h2>
-          <p className="text-xs text-muted">Address</p>
+          <h2 className="mb-3 text-[15px] font-semibold">{t('Profile')}</h2>
+          <p className="text-xs text-muted">{t('Address')}</p>
           <p className="mb-4 text-[15px]">{me.account.email}</p>
-          <p className="mb-1 text-xs text-muted">Sign-in</p>
+          <p className="mb-1 text-xs text-muted">{t('Sign-in')}</p>
           <dl className="space-y-1.5 text-sm">
             <div className="flex justify-between">
-              <dt>Email link</dt>
-              <dd className="font-semibold text-done">On</dd>
+              <dt>{t('Email link')}</dt>
+              <dd className="font-semibold text-done">{t('On')}</dd>
             </div>
             <div className="flex justify-between">
-              <dt>GitHub</dt>
-              <dd className="text-muted">Soon</dd>
+              <dt>{t('GitHub')}</dt>
+              <dd className="text-muted">{t('Soon')}</dd>
             </div>
             <div className="flex justify-between">
-              <dt>Google</dt>
-              <dd className="text-muted">After the beta</dd>
+              <dt>{t('Google')}</dt>
+              <dd className="text-muted">{t('After the beta')}</dd>
             </div>
           </dl>
         </Card>
         <Card className="p-5">
-          <h2 className="mb-3 text-[15px] font-semibold">Where you are signed in</h2>
+          <label className="block">
+            <span className="mb-1 block text-[15px] font-semibold">{t('Language')}</span>
+            <span className="mb-3 block text-xs text-muted">
+              {t('The language of the console, and of the e-mails Fruitback sends you.')}
+            </span>
+            <select
+              value={locale()}
+              onChange={(event) => {
+                // The screen changes at once. The account keeps the choice for the e-mails and for
+                // the next browser; a worker that did not answer leaves it in this browser only.
+                setLocale(event.target.value);
+                void call('POST', '/console/me/locale', { locale: event.target.value });
+              }}
+              className="h-10 w-full rounded-md border border-line bg-surface px-3 text-[15px]"
+            >
+              {LOCALES.map((each) => (
+                <option key={each.tag} value={each.tag}>
+                  {each.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </Card>
+        <Card className="p-5">
+          <h2 className="mb-3 text-[15px] font-semibold">{t('Where you are signed in')}</h2>
           <div className="flex items-center justify-between">
             <span>
-              <span className="block text-sm font-semibold">Console · this browser</span>
-              <span className="block text-xs text-muted">Active now</span>
+              <span className="block text-sm font-semibold">{t('Console · this browser')}</span>
+              <span className="block text-xs text-muted">{t('Active now')}</span>
             </span>
             <Button tone="outline" onClick={() => void leave()}>
-              Sign out
+              {t('Sign out')}
             </Button>
           </div>
         </Card>
@@ -60,21 +85,21 @@ export default function Account() {
       {workspace.role === 'owner' ? (
         <Card className="mt-4 flex flex-col gap-3 border-accent/40 p-5 sm:flex-row sm:items-center">
           <span className="flex-1">
-            <span className="block text-[15px] font-semibold">Delete the workspace</span>
+            <span className="block text-[15px] font-semibold">{t('Delete the workspace')}</span>
             <span className="block text-sm text-muted">
-              Sites, members and pin positions go. Items already in your sources stay there.
+              {t('Sites, members and pin positions go. Items already in your sources stay there.')}
             </span>
           </span>
           {confirming ? (
             <span className="flex gap-2">
               <Button tone="quiet" onClick={() => setConfirming(false)}>
-                Keep it
+                {t('Keep it')}
               </Button>
-              <Button onClick={() => void destroy()}>Delete {workspace.name}</Button>
+              <Button onClick={() => void destroy()}>{t('Delete {workspace}', { workspace: workspace.name })}</Button>
             </span>
           ) : (
             <Button tone="danger" onClick={() => setConfirming(true)}>
-              Delete workspace
+              {t('Delete workspace')}
             </Button>
           )}
         </Card>

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { type Me, callUntilAnswered } from '../api';
+import { t } from '../i18n';
 
 /** The front door: the first workspace of a signed-in person, or the setup. */
 export default function Home() {
@@ -14,5 +15,5 @@ export default function Home() {
     });
   }, [navigate]);
 
-  return <p className="p-8 text-sm text-muted">Loading…</p>;
+  return <p className="p-8 text-sm text-muted">{t('Loading…')}</p>;
 }

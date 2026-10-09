@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate, useOutletContext, useParams } from 'react-router';
 import { type Me, type Workspace, callUntilAnswered } from '../api';
+import { adoptLanguage, msg, t } from '../i18n';
 
 /**
  * The frame of a workspace (design/boards/4-connectors.png, 5-workspace.png): its name in the corner,
@@ -14,10 +15,10 @@ export function useWorkspace(): WorkspaceContext {
 }
 
 const SECTIONS = [
-  { path: 'sites', label: 'Sites' },
-  { path: 'connectors', label: 'Connectors' },
-  { path: 'members', label: 'Members' },
-  { path: 'account', label: 'My account' },
+  { path: 'sites', label: msg('Sites') },
+  { path: 'connectors', label: msg('Connectors') },
+  { path: 'members', label: msg('Members') },
+  { path: 'account', label: msg('My account') },
 ] as const;
 
 export default function WorkspaceFrame() {
@@ -29,13 +30,14 @@ export default function WorkspaceFrame() {
   useEffect(() => {
     return callUntilAnswered<Me>('GET', '/console/me', (me) => {
       if (!me.ok) return navigate('/setup', { replace: true });
+      adoptLanguage(me.data.account);
       const workspace = me.data.workspaces.find((each) => each.id === id);
       if (workspace === undefined) return navigate('/', { replace: true });
       setContext({ me: me.data, workspace });
     });
   }, [id, navigate]);
 
-  if (context === undefined) return <p className="p-8 text-sm text-muted">Loading…</p>;
+  if (context === undefined) return <p className="p-8 text-sm text-muted">{t('Loading…')}</p>;
 
   return (
     <div className="mx-auto grid min-h-screen max-w-[1440px] gap-8 px-4 py-6 md:grid-cols-[224px_1fr] md:px-6">
@@ -46,10 +48,10 @@ export default function WorkspaceFrame() {
           </span>
           <span className="min-w-0">
             <span className="block truncate text-sm font-semibold">{context.workspace.name}</span>
-            <span className="block text-xs text-muted">Cloud workspace · beta</span>
+            <span className="block text-xs text-muted">{t('Cloud workspace · beta')}</span>
           </span>
         </div>
-        <nav aria-label="Workspace" className="flex gap-1 overflow-x-auto md:flex-col">
+        <nav aria-label={t('Workspace')} className="flex gap-1 overflow-x-auto md:flex-col">
           {SECTIONS.map((section) => (
             <NavLink
               key={section.path}
@@ -62,7 +64,7 @@ export default function WorkspaceFrame() {
                 }`
               }
             >
-              {section.label}
+              {t(section.label)}
             </NavLink>
           ))}
         </nav>

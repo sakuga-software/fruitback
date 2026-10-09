@@ -6,6 +6,8 @@
  * token and gets a new one from the cookie.
  */
 
+import { locale } from './i18n.ts';
+
 export const API =
   (import.meta.env?.VITE_FRUITBACK_API as string | undefined)?.replace(/\/+$/, '') ?? 'http://localhost:8788';
 
@@ -161,7 +163,7 @@ export function requestLink(email: string, locale: string): Promise<Answer<{ sen
 
 export async function redeemLink(code: string): Promise<Answer<{ account: Account }>> {
   const result = await answer<{ accessToken: string; account: Account }>(
-    await send('POST', '/auth/email/redeem', { code, locale: navigator.language }),
+    await send('POST', '/auth/email/redeem', { code, locale: locale() }),
   );
   if (result.ok) access = result.data.accessToken;
 
