@@ -7,6 +7,8 @@ node_modules/
 # Build outputs
 dist/
 build/
+# Copied from packages/widget when the element is built (FRU-126): the text has one home.
+packages/element/THIRD-PARTY-NOTICES.md
 tsconfig.tsbuildinfo
 
 # Testing

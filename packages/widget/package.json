@@ -60,7 +60,9 @@
           "^production",
           "{workspaceRoot}/README.md",
           "{workspaceRoot}/LICENSE",
-          "{workspaceRoot}/packages/fruitback/**/*"
+          "{workspaceRoot}/packages/fruitback/**/*",
+          "{workspaceRoot}/packages/element/**/*",
+          "{workspaceRoot}/packages/react/**/*"
         ]
       }
     }

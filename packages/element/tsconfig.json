@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    // Relative imports carry `.ts` so Node can run the sources directly, no build step, no loader.
+    "allowImportingTsExtensions": true,
+    // Browser + Worker runtimes both provide `URL`; nothing here touches `document`.
+    "lib": ["ES2022", "DOM"],
+    // Deliberately empty: this package is bundled into a browser widget, so reaching for `process`
+    // or `Buffer` has to be a compile error here, not a surprise at runtime. The tests need Node
+    // types, hence the separate `tsconfig.test.json`.
+    "types": [],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["src/**/*.test.ts"]
+}
