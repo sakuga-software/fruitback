@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readReactSource } from './source.ts';
+import { isBundleChunk, isMangledComponentName, readReactSource, sourceFromContext } from './source.ts';
 import { mountPage } from './dom.fixture.ts';
 
 /**
@@ -112,5 +112,80 @@ describe('readReactSource', () => {
     attachFiber(button, loop);
 
     assert.equal(readReactSource(button), undefined);
+  });
+});
+
+describe('what a bundler minted, in what the engine says (FRU-113)', () => {
+  it('refuses the minified name behind a bound prefix, the one a production build reported', () => {
+    assert.equal(isMangledComponentName('bound qi'), true);
+    assert.equal(isMangledComponentName('bound bound e2'), true);
+    assert.equal(isMangledComponentName('bound $7230ffa83bc0c2cf$var$DOMElement'), true);
+    assert.equal(isMangledComponentName('bound '), true);
+  });
+
+  it('keeps a name a person wrote, bound or not, and a component called Bound', () => {
+    assert.equal(isMangledComponentName('Bound'), false);
+    assert.equal(isMangledComponentName('BoundButton'), false);
+    assert.equal(isMangledComponentName('bound PricingCard'), false);
+    assert.equal(sourceFromContext({ componentName: 'bound PricingCard' })?.component, 'PricingCard');
+  });
+
+  it('sends nothing for the note a production build produced', () => {
+    const reported = {
+      componentName: 'bound qi',
+      filePath: '/assets/site-state-Bgn4uEnK.js',
+      lineNumber: 7,
+      columnNumber: 6774,
+    };
+
+    assert.equal(sourceFromContext(reported), undefined);
+  });
+
+  it('knows a chunk by the hash before its extension, and leaves a source file alone', () => {
+    for (const chunk of [
+      '/assets/site-state-Bgn4uEnK.js',
+      '/_next/static/chunks/main-0f3a9c1d2b.js',
+      'https://cdn.acme.dev/app.5e8f21ab.mjs',
+      '/assets/index-D4kq9XzP.js?v=2',
+      '/assets/main-k3j9x0qz.js',
+      '/static/js/vendor.a1b2c3d4e5.js',
+    ]) {
+      assert.equal(isBundleChunk(chunk), true, chunk);
+    }
+    for (const file of [
+      '/src/site-state.tsx',
+      '/Users/a/app/components/user-settings.js',
+      '/src/checkout-form.jsx',
+      '/src/pricing-calculator.js',
+      '/src/Feedback.tsx',
+      '/src/lib-sha256sum.js',
+      '/src/step-2-checkout1.js',
+      '/src/h264video.js',
+      '/src/utils.base64v2.js',
+    ]) {
+      assert.equal(isBundleChunk(file), false, file);
+    }
+  });
+
+  it('keeps the file when only the name is minted, and the name when only the file is a chunk', () => {
+    assert.deepEqual(
+      sourceFromContext({ componentName: 'bound qi', filePath: '/src/pricing.tsx', lineNumber: 12, columnNumber: 4 }),
+      {
+        file: '/src/pricing.tsx',
+        line: 12,
+        column: 4,
+      },
+    );
+    assert.deepEqual(
+      sourceFromContext({
+        componentName: 'PricingCard',
+        filePath: '/assets/index-D4kq9XzP.js',
+        lineNumber: 1,
+        columnNumber: 90210,
+      }),
+      {
+        component: 'PricingCard',
+      },
+    );
   });
 });

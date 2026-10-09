@@ -253,7 +253,13 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   react-grab gets `file`/`line` right and the component name wrong.
 - **A component name a bundler minted is worse than none.** `isMangledComponentName` drops them and
   the walk continues to the first name a human wrote. It deliberately does **not** climb to the app's
-  own component.
+  own component. **`bound qi` is `qi`**: a bound function carries a `bound ` prefix, and a production
+  build reported that name because two words did not look minified (FRU-113). The prefix is taken off
+  before the name is judged, and off a name that is kept.
+- **A file a bundler wrote is no source either** (FRU-113). On a production build the engine names
+  the chunk (`/assets/site-state-Bgn4uEnK.js`) with a line and a column of one minified line.
+  `isBundleChunk` knows it by the content hash before the extension, and `sourceFromContext` sends
+  no file, line or column for it. A line and a column go with their file.
 - **The owner chain ends in `null`, not `undefined`.** Both walks stop on either. Checking only for
   `undefined` dereferences the root, throws out of `captureSeed`, and a click silently stops planting
   anything.

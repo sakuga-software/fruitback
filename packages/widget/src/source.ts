@@ -77,8 +77,70 @@ export const MANGLED_COMPONENT_PATTERNS = [
   /^[a-z]{1,2}[0-9]*$/, // and one that had not yet: `t`, `e2`
 ];
 
+/**
+ * A bound function is named `bound <name>`, and the engine names a component so. The prefix is taken
+ * off before the name is judged: `bound qi` is the minified `qi` (FRU-113, measured on a production
+ * build), and it passed as a name of two words.
+ */
+const BOUND_PREFIX = /^(?:bound )+/;
+
 export function isMangledComponentName(name: string): boolean {
-  return MANGLED_COMPONENT_PATTERNS.some((pattern) => pattern.test(name));
+  const own = name.replace(BOUND_PREFIX, '');
+
+  return own === '' || MANGLED_COMPONENT_PATTERNS.some((pattern) => pattern.test(own));
+}
+
+/**
+ * A file a bundler wrote, not one a person did: `/assets/site-state-Bgn4uEnK.js`.
+ *
+ * On a production build the engine can only say which chunk an element came from, with a line and a
+ * column inside one minified line. Nobody opens that, and its name changes at each deploy. Like a
+ * minted component name, it is worse than nothing: it reads as a place to look.
+ *
+ * The mark is the content hash before the extension: eight characters or more with a digit, that
+ * also hold a capital, or are hexadecimal, or go from a letter to a digit and back four times or
+ * more (`k3j9x0qz`). A word with a number in it is a name a person wrote: `lib-sha256sum.js` and
+ * `utils.base64v2.js` are no chunk. The rule leans that way on purpose: a hash that looks like a word
+ * is sent as before, and a source file that looks like a hash would be lost.
+ */
+export function isBundleChunk(file: string): boolean {
+  const hash = /[-.]([A-Za-z0-9_]{8,})\.(?:m?js|cjs)(?:[?#].*)?$/.exec(file)?.[1];
+  if (hash === undefined) return false;
+  const digit = /[0-9]/.test(hash);
+
+  // How many times the hash goes from a letter to a digit, or back.
+  const turns = hash.match(/[0-9](?=[A-Za-z_])|[A-Za-z_](?=[0-9])/g)?.length ?? 0;
+
+  return digit && (/[A-Z]/.test(hash) || /^[0-9a-f]+$/.test(hash) || turns >= 4);
+}
+
+/** What the capture engine knows about an element, as it hands it over. */
+export type EngineContext = {
+  componentName?: string | null;
+  filePath?: string | null;
+  lineNumber?: number | null;
+  columnNumber?: number | null;
+};
+
+/**
+ * The source of an element from what the engine said, with what a bundler minted left out.
+ *
+ * Field by field: on a design system the engine gets the file right and the name wrong, so one bad
+ * field must not cost the others. A line and a column belong to their file, and go with it.
+ */
+export function sourceFromContext(context: EngineContext): SeedSource | undefined {
+  const source: SeedSource = {};
+
+  if (context.componentName && !isMangledComponentName(context.componentName)) {
+    source.component = context.componentName.replace(BOUND_PREFIX, '');
+  }
+  if (context.filePath && !isBundleChunk(context.filePath)) {
+    source.file = context.filePath;
+    if (typeof context.lineNumber === 'number') source.line = context.lineNumber;
+    if (typeof context.columnNumber === 'number') source.column = context.columnNumber;
+  }
+
+  return Object.keys(source).length > 0 ? source : undefined;
 }
 
 function findComponentName(fiber: Fiber): string | undefined {
@@ -86,7 +148,7 @@ function findComponentName(fiber: Fiber): string | undefined {
 
   for (let hop = 0; hop < MAX_OWNER_HOPS && current != null; hop += 1) {
     const name = componentNameOf(current.type) ?? componentNameOf(current.elementType);
-    if (name !== undefined && !isMangledComponentName(name)) return name;
+    if (name !== undefined && !isMangledComponentName(name)) return name.replace(BOUND_PREFIX, '');
 
     current = current._debugOwner;
   }
