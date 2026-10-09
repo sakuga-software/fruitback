@@ -45,17 +45,26 @@ rclone copy scaleway:backup-elastic-metal/20261009/fruitback-cloud-data.tar.gz /
 # 2. Stop the worker, put the three files back, start it.
 docker service scale fruitback-cloud-worker-a9zdeo=0 &&
   docker run --rm -v fruitback-cloud-data:/data -v /tmp/restore/data/snapshots:/from:ro alpine sh -c \
-    'for f in fb.db sessions.db accounts.db; do test -s /from/$f && rm -f /data/$f-wal /data/$f-shm && cp /from/$f /data/$f && chown 1000:1000 /data/$f; done' &&
+    'set -e; test -s /from/accounts.db; test -s /from/sessions.db;
+     for f in accounts.db sessions.db fb.db; do
+       if [ -s /from/$f ]; then rm -f /data/$f-wal /data/$f-shm; cp /from/$f /data/$f; chown 1000:1000 /data/$f; fi;
+     done' &&
   docker service scale fruitback-cloud-worker-a9zdeo=1
 ```
 
 Tried on 2026-10-09, on a scratch volume and never on the one in service: the archive the host makes
-was unpacked, its snapshots were put in an empty volume by the command above, and the restored
-accounts, workspaces, sites and sessions counted the same as the live ones.
+was unpacked, its snapshots were put in an empty volume, and the restored accounts, workspaces, sites
+and sessions counted the same as the live ones. That trial copied the files with the same `cp` and
+`chown`, before the check of the two required snapshots was added. The check was tried apart: with
+no snapshot of the accounts it answers 1 and reaches no copy. **The command as it is written now has
+not been run whole.** Run it once on a scratch volume before the day it is needed.
 
 **A snapshot is in WAL mode, like its source.** SQLite must create a `-shm` file beside it, so it does
 not open on a volume mounted read-only (measured: `unable to open database file`). Check a restored
 file on a writable mount.
 
 Each step is chained with `&&`, and `test -s` comes before a file is replaced: a missing file must
-stop the restore, not empty the database. Then check `https://api.fruitback.com/health`, and sign in.
+stop the restore, not empty the database. **The accounts and the sessions are required**: without
+either snapshot the command stops before it touches a file, and the worker stays stopped, which is
+the state to investigate from. Only `fb.db` can be absent, for a worker that had taken no note when
+the snapshot was made; the notes file in the volume is then left as it is. Then check `https://api.fruitback.com/health`, and sign in.
