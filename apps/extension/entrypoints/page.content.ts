@@ -137,6 +137,8 @@ export default defineContentScript({
         // a worker nobody picked, with nothing on screen to say so. Raised in review.
         configKey: 'fruitback:config:extension',
         ...(message.label !== undefined ? { label: message.label } : {}),
+        // The language of the reviewer's account. Left out, the widget reads the page's own.
+        ...(message.locale !== undefined ? { locale: message.locale } : {}),
         // FRU-101: a site of a workspace, read and written through the reviewer's session. The
         // background relays only for a site its own storage says is in team mode.
         ...(message.relay === true ? { transport: api.transport } : {}),

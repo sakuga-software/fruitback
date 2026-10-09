@@ -77,6 +77,16 @@ describe('the sites a session may turn on (FRU-101)', () => {
     assert.equal(response.headers.get('Access-Control-Allow-Origin'), EXTENSION);
   });
 
+  it('answers the language of the account, when it holds one (FRU-131)', async () => {
+    const env = envWith();
+    const { alice, token } = await setUp(env);
+    assert.equal('locale' in ((await (await ask(env, token)).json()) as object), false, 'no language yet: no field');
+
+    await createSqliteAccountStore(env.FRUITBACK_ACCOUNTS_PATH as string).setLocale(alice.id, 'fr');
+
+    assert.equal(((await (await ask(env, token)).json()) as { locale?: string }).locale, 'fr');
+  });
+
   it('answers nobody without a token, and nothing to a session that names no workspace', async () => {
     const env = envWith();
     const { alice } = await setUp(env);
@@ -103,6 +113,8 @@ describe('the sites a session may turn on (FRU-101)', () => {
 
     assert.equal((await ask(env, token, 'POST')).status, 405);
     const without = await ask(envWith(false), token);
-    assert.notEqual(without.status, 200, 'a worker with no accounts lists no site');
+    // The session routes take a POST, so this GET is a `405`. The extension reads it as « this worker
+    // keeps no accounts », which is an answer about a language (FRU-131): do not change it alone.
+    assert.equal(without.status, 405, 'a worker with no accounts has no such route');
   });
 });

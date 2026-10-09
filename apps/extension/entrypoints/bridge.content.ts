@@ -8,6 +8,7 @@ import {
 } from '../src/protocol.ts';
 import { createApply } from '../src/bridge.ts';
 import { readSite } from '../src/sites.ts';
+import { LANGUAGE_KEY, storedLanguage } from '../src/language.ts';
 import { BRIDGE_SCRIPT_FLAG } from '../src/page-api.ts';
 
 /**
@@ -43,7 +44,11 @@ export default defineContentScript({
       window.postMessage(message, window.location.origin);
     };
 
-    const apply = createApply({ readSite: () => readSite(origin), post });
+    const apply = createApply({
+      readSite: () => readSite(origin),
+      readLanguage: () => storedLanguage(browser.storage.local),
+      post,
+    });
 
     /**
      * Every request is answered, refusals included.
@@ -85,7 +90,7 @@ export default defineContentScript({
     // The popup writes to storage rather than messaging tabs, so the switch reaches every open tab
     // of that origin, including the ones the popup was never opened on.
     browser.storage.onChanged.addListener((changes, area) => {
-      if (area === 'local' && changes.sites !== undefined) void apply();
+      if (area === 'local' && (changes.sites !== undefined || changes[LANGUAGE_KEY] !== undefined)) void apply();
     });
 
     await apply();

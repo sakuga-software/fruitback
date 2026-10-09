@@ -111,6 +111,16 @@ describe('parseBridgeMessage', () => {
 
     assert.deepEqual(Object.keys(parsed ?? {}).sort(), ['channel', 'clientId', 'endpoint', 'kind']);
   });
+
+  /** A fifth field of a mount, on purpose (FRU-131). A locale tag is no credential. */
+  it('carries the language of the reviewer, and drops a value that is no tag', () => {
+    const mount = { channel: CHANNEL, kind: 'mount', endpoint: 'https://feedback.acme.dev', clientId: 'acme' };
+
+    assert.deepEqual(parseBridgeMessage({ ...mount, locale: 'fr' }), { ...mount, locale: 'fr' });
+    for (const locale of ['', 7, { tag: 'fr' }, 'x'.repeat(36)]) {
+      assert.deepEqual(parseBridgeMessage({ ...mount, locale }), mount);
+    }
+  });
 });
 
 /**

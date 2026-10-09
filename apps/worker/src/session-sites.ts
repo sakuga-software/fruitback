@@ -45,11 +45,14 @@ export async function handleSessionSites(
 
   const workspace = (await accounts.memberships(subject)).find((each) => each.workspace.id === workspaceId)?.workspace;
   const sites = await accounts.sites(workspaceId);
+  // The language the person reads (FRU-119), so the extension and its widget speak it too (FRU-131).
+  const locale = (await accounts.account(subject))?.locale;
 
   return json(
     200,
     {
       workspace: { id: workspaceId, name: workspace?.name ?? '' },
+      ...(locale === undefined ? {} : { locale }),
       sites: sites.map((site) => ({ id: site.id, origin: site.origin, visibility: site.visibility })),
     },
     headers,

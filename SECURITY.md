@@ -448,8 +448,9 @@ that signs a person in. Since FRU-121 it also holds the key of each connector, e
 
 **`GET /session/sites` lists the sites of the workspace a session belongs to** (FRU-101), to the
 holder of its access token, while that person is still a member: the extension turns such a site on in
-one click. It answers an origin, an id and a visibility per site, and nothing a member cannot already
-read in the console. A console session names no workspace, and gets `401`. The entry the extension
+one click. It answers an origin, an id and a visibility per site, and the language of the account
+(FRU-131), and nothing a member cannot already read in the console. The extension sends that language
+to a page where it mounts the widget: it is a locale tag, and the page can read it. A console session names no workspace, and gets `401`. The entry the extension
 stores is team mode, so the relay's refusals all apply: the widget it mounts calls through the relay,
 and the page never holds the token.
 

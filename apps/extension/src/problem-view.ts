@@ -1,4 +1,5 @@
 import { PAIRING_GUIDE, REMEDY_LABEL, type Remedy, remedyFor } from './remedy.ts';
+import { t } from './i18n.ts';
 
 /**
  * A problem and the one thing to do about it, drawn the same way on the popup and on the options
@@ -15,7 +16,8 @@ export type RemedyHandlers = Partial<Record<Exclude<Remedy, 'guide'>, () => void
  * before it awaits anything: the browser drops the gesture after an `await`, and no prompt shows.
  */
 export function showProblem(target: HTMLElement, text: string, handlers: RemedyHandlers = {}): void {
-  target.replaceChildren(text);
+  // The English text finds the remedy. The screen shows the sentence in the language of the reviewer.
+  target.replaceChildren(t(text));
   if (text === '') return;
 
   const remedy = remedyFor(text);
@@ -24,7 +26,7 @@ export function showProblem(target: HTMLElement, text: string, handlers: RemedyH
   const document = target.ownerDocument;
   if (remedy === 'guide') {
     const link = document.createElement('a');
-    link.textContent = REMEDY_LABEL.guide;
+    link.textContent = t(REMEDY_LABEL.guide);
     link.href = PAIRING_GUIDE;
     link.target = '_blank';
     link.rel = 'noreferrer';
@@ -39,7 +41,7 @@ export function showProblem(target: HTMLElement, text: string, handlers: RemedyH
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'remedy';
-  button.textContent = REMEDY_LABEL[remedy];
+  button.textContent = t(REMEDY_LABEL[remedy]);
   button.addEventListener('click', run);
   target.append(' ', button);
 }
