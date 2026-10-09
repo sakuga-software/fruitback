@@ -91,8 +91,9 @@ export function openCors(request: Request): CorsDecision {
     headers: {
       'Access-Control-Allow-Origin': origin,
       Vary: 'Origin',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      // GET and Authorization for `/session/sites`, which the extension asks with its access token.
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       'Access-Control-Max-Age': '86400',
     },
   };

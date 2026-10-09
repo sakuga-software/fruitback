@@ -29,7 +29,13 @@ run there.
 
 ## 2. Switch a site on
 
-Open the page you want to review and click the extension. The popup names the origin it is about,
+**With Fruitback Cloud, there is nothing to type.** Connect this browser from the console first (its
+**Connect this browser** button opens a pairing link). Then, on a site of your workspace, the popup
+says the site is in your workspace and offers **Turn on Fruitback here**. One click: the browser asks
+for access to that site only, and the widget appears, reading and writing as you. **Set up by hand**
+leads to the form below.
+
+On a worker you run yourself, or on a site of no workspace, open the page you want to review and click the extension. The popup names the origin it is about,
 and asks for three things:
 
 | Field               |                                             |                                                                |

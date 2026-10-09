@@ -32,7 +32,15 @@ export type SiteMode = 'private' | 'team';
 
 export type SiteConfig = { endpoint: string; enabled: boolean } & (
   | { mode: 'private'; clientId: string; label?: string }
-  | { mode: 'team' }
+  /**
+   * With `mount`, the site embeds nothing and the extension mounts the widget, relayed through the
+   * reviewer's session (FRU-101): a site of a Cloud workspace, turned on in one click. Without it, the
+   * site embeds its own dormant widget (FRU-57). The relay and its refusals are the same in both.
+   *
+   * A field of its own, and not a client id beside the mode: a stray client id on a team entry was
+   * always dropped, and reading it now would put a second widget on a site that has its own.
+   */
+  | { mode: 'team'; mount?: { clientId: string; workspace?: string } }
 );
 
 const KEY = 'sites';
@@ -111,7 +119,11 @@ export function parseSite(value: unknown): SiteConfig | undefined {
   // Absent reads as on: an entry exists because somebody added this site.
   const common = { endpoint, enabled: enabled !== false };
 
-  if (mode === 'team') return { ...common, mode: 'team' };
+  if (mode === 'team') {
+    const mount = parseMount(value.mount);
+
+    return { ...common, mode: 'team', ...(mount === undefined ? {} : { mount }) };
+  }
 
   if (typeof clientId !== 'string' || clientId.length === 0) return undefined;
 
@@ -120,6 +132,19 @@ export function parseSite(value: unknown): SiteConfig | undefined {
     mode: 'private',
     clientId,
     ...(typeof label === 'string' && label.length > 0 ? { label } : {}),
+  };
+}
+
+/**
+ * `workspace` is the name the popup shows, never a word of the widget: a `label` would replace the
+ * text of the launch button.
+ */
+function parseMount(value: unknown): { clientId: string; workspace?: string } | undefined {
+  if (!isRecord(value) || typeof value.clientId !== 'string' || value.clientId.trim() === '') return undefined;
+
+  return {
+    clientId: value.clientId.trim(),
+    ...(typeof value.workspace === 'string' && value.workspace.length > 0 ? { workspace: value.workspace } : {}),
   };
 }
 

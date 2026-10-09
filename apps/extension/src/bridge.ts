@@ -59,7 +59,18 @@ export function createApply({ readSite, post }: BridgeSeams): (force?: boolean) 
  */
 function decide(site: SiteConfig | undefined): BridgeMessage {
   if (site === undefined || !site.enabled) return { channel: CHANNEL, kind: 'unmount' };
-  if (site.mode === 'team') return { channel: CHANNEL, kind: 'announce' };
+  if (site.mode === 'team') {
+    if (site.mount === undefined) return { channel: CHANNEL, kind: 'announce' };
+
+    // FRU-101: the site embeds nothing, so the widget is ours, and its calls go through the relay.
+    return {
+      channel: CHANNEL,
+      kind: 'mount',
+      endpoint: site.endpoint,
+      clientId: site.mount.clientId,
+      relay: true,
+    };
+  }
 
   return {
     channel: CHANNEL,

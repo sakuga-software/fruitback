@@ -9,6 +9,7 @@ import {
   resolveClient,
 } from './clients.ts';
 import type { AccountStore } from './accounts.ts';
+import { SESSION_SITES_PATH, handleSessionSites } from './session-sites.ts';
 import { consoleCors, handleConsoleSession, isConsoleRoute } from './console-routes.ts';
 import { handleConsoleApi } from './console-api.ts';
 import { handleGitHub } from './github-oauth.ts';
@@ -286,6 +287,11 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
 
   if (session) {
     try {
+      // FRU-101: what the extension may turn on in one click, for a worker that keeps accounts.
+      if (pathname === SESSION_SITES_PATH && accounts !== undefined && served.identitySecret !== undefined) {
+        return await handleSessionSites(request, accounts, served.identitySecret, cors.headers);
+      }
+
       return await handleSession(request, pathname, served, context, cors.headers);
     } catch (error) {
       // A volume nobody mounted, a read-only disk, a file that is not a database. Answered like the
