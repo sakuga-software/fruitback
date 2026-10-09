@@ -10,7 +10,8 @@
     "format": "oxfmt --check .",
     "format:fix": "oxfmt .",
     "lint": "oxlint .",
-    "typecheck": "react-router typegen && tsc --noEmit"
+    "typecheck": "react-router typegen && tsc --noEmit",
+    "test": "node --test 'app/**/*.test.ts'"
   },
   "dependencies": {
     "isbot": "^5",
