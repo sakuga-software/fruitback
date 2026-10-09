@@ -55,6 +55,15 @@ export const FRENCH: Catalog = {
   'orphans.count': { one: '{count} note détachée', other: '{count} notes détachées' },
   'orphans.entry': '{stage} · {note}',
 
+  'sidebar.open': 'Afficher toutes les notes de cette page',
+  'sidebar.dialog': 'Toutes les notes de cette page',
+  'sidebar.title': 'Notes',
+  'sidebar.close': 'Fermer la liste',
+  'sidebar.empty': 'Aucune note sur cette page pour le moment.',
+  'sidebar.count': { one: '{count} note', other: '{count} notes' },
+  'sidebar.approximate': 'Position approximative',
+  'sidebar.detached': 'Élément introuvable sur cette page',
+
   'export.title': 'Feedback sur {url}',
   'export.empty': 'Aucun feedback sur cette page.',
   'export.element': 'Élément : {element}',
