@@ -65,7 +65,7 @@ describe('a worker that does not answer', () => {
     assert.equal(answers.length, 1);
 
     const quiet = down();
-    const stopped = callUntilAnswered('GET', '/console/me', () => answers.push('late'));
+    const stopped = callUntilAnswered('GET', '/console/me', () => void answers.push('late'));
     await new Promise((resolve) => setImmediate(resolve));
     stopped();
     const before = quiet.mock.calls.length;
