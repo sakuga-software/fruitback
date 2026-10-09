@@ -29,7 +29,7 @@ already uses (Linear, GitHub Issues) or in a SQLite file on a volume you own.
 ## The code
 
 The source is on [GitHub](https://github.com/sakuga-software/fruitback), under the MIT licence for
-the three published packages and AGPL-3.0-only for the worker and the browser extension. The
+the five published packages and AGPL-3.0-only for the worker and the browser extension. The
 [decisions](https://github.com/sakuga-software/fruitback/tree/main/docs/decisions) folder holds the
 per-ticket histories: the measurements, the first versions that failed, and the reviews that caught
 them.

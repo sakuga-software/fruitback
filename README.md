@@ -50,6 +50,21 @@ import { init } from 'fruitback';
 const widget = init({ endpoint: 'https://feedback.acme.dev', clientId: 'acme' });
 ```
 
+As a tag, for a page that prefers markup to a call (`@fruitback/element`):
+
+```html
+<script src="https://cdn.acme.dev/fruitback-element.iife.js" defer></script>
+<fruitback-widget endpoint="https://feedback.acme.dev" client-id="acme"></fruitback-widget>
+```
+
+Or as a component in a React application (`@fruitback/react`):
+
+```tsx
+import { Fruitback } from '@fruitback/react';
+
+<Fruitback endpoint="https://feedback.acme.dev" clientId="acme" />;
+```
+
 > **The packages are not on npm yet.** The lines above are the shape of the install, not something
 > that resolves today. The worker image _is_ published — see [docs/self-hosting.md](docs/self-hosting.md).
 
@@ -176,12 +191,12 @@ Work is tracked in Linear on the
 
 Two licences, split where the client/server boundary is (FRU-22).
 
-|                                                            |                   |
-| ---------------------------------------------------------- | ----------------- |
-| `packages/widget`, `packages/shared`, `packages/fruitback` | **MIT**           |
-| `apps/worker`                                              | **AGPL-3.0-only** |
+|                                                                                                  |                   |
+| ------------------------------------------------------------------------------------------------ | ----------------- |
+| `packages/widget`, `packages/shared`, `packages/fruitback`, `packages/element`, `packages/react` | **MIT**           |
+| `apps/worker`                                                                                    | **AGPL-3.0-only** |
 
-The three client-side packages are **MIT** because they are compiled into someone else's site: a
+The five client-side packages are **MIT** because they are compiled into someone else's site: a
 copyleft licence on code that ships inside a client's own bundle is one nobody can adopt, and the
 widget is worth nothing unadopted. (They are the three meant for npm — not three that are on it; see
 the install note above.) The worker is **AGPL-3.0-only** — it is the server, the only place

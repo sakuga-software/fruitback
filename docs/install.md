@@ -168,6 +168,42 @@ useEffect(() => {
 `init` is browser-only and says so if called while server-rendering, rather than failing somewhere
 inside a bundle.
 
+### A React component
+
+```bash
+npm i @fruitback/react
+```
+
+```tsx
+import { Fruitback } from '@fruitback/react';
+
+<Fruitback endpoint="https://feedback.acme.dev" clientId="acme" />;
+```
+
+It renders nothing, mounts the widget in an effect and destroys it when it unmounts. Its props are
+the options of `init`. A parent that renders again does not mount the widget again: an object such as
+`theme` is compared by its value, and a function such as `identityToken` is always the one of the
+last render. `onMount` hands you the widget, for `refresh()` or `feedbackAsText()`.
+
+### A custom element
+
+```bash
+npm i @fruitback/element
+```
+
+```ts
+import '@fruitback/element/auto'; // registers <fruitback-widget>
+```
+
+```html
+<fruitback-widget endpoint="https://feedback.acme.dev" client-id="acme"></fruitback-widget>
+```
+
+On a page with no build step, load `fruitback-element.iife.js` from the package's `dist` instead of
+the import. The element reads `endpoint`, `client-id`, `label`, `locale` and `include-env`. What an
+attribute cannot carry goes through a property: `element.options = { theme, identityToken }`. Without
+an `endpoint` and a `client-id` it mounts nothing, and it takes the widget away when it leaves the page.
+
 ### What else `init` takes
 
 | Option          | Why you would                                                                        |

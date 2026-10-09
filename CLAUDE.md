@@ -71,6 +71,8 @@ node --test src/seed.test.ts                 # one file, from the package direct
   (`createCaptureHost`), the note popover (`createComposer`) and the settings panel.
 - `packages/fruitback` — the front door a client installs. It re-exports the two above and defines
   nothing.
+- `packages/element` (`@fruitback/element`) and `packages/react` (`@fruitback/react`) — the widget as
+  a custom element and as a React component. Each wraps `init` and `destroy`.
 - `apps/worker` (`@fruitback/worker`) — the Node service. `POST /feedback` plants a seed,
   `GET /feedback?url=…` returns the seeds of that page. Still called "worker" because that is what
   everyone calls it, though it is no longer an edge worker.
@@ -157,7 +159,7 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
 
 ## The published package
 
-- **Three packages, and only one of them is the front door.** `fruitback` re-exports the two scoped
+- **Five packages, and only one of them is the front door.** `fruitback` re-exports the two scoped
   ones and **defines nothing** — anything declared there rather than forwarded is a third place for
   the contract to drift. It is not bundled either, so there is one copy of the widget on disk.
 - **`public.ts` is the contract, `index.ts` is the workspace.** Everything is exported somewhere
@@ -175,7 +177,7 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   closes the thread and somebody who comes back to a thread is reading it. The listener is on the
   page's own `document`, and `destroy` removes it.
 - **The `workspace` fields point at source; `publishConfig` swaps in `dist` when pnpm packs. All
-  three packages need `prepack`.** Miss either and the tarball ships `src` while `publishConfig`
+  five packages need `prepack`.** Miss either and the tarball ships `src` while `publishConfig`
   points at a `dist` that is not there — a failure that lands in a consumer's build and nowhere here.
 - **`rewriteRelativeImportExtensions` rewrites the JavaScript and not the declarations.** Both builds
   therefore post-process their `.d.ts` and then assert no `.ts` extension survived.
@@ -189,6 +191,15 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   install, or resolve a version conflict over, a library it never asked for. Bundling makes their MIT
   notices our obligation (FRU-22), and `packages/widget/THIRD-PARTY-NOTICES.md` is how they travel.
   Phosphor is in there for the same reason by a different route: two of its paths are compiled in.
+- **`@fruitback/element` and `@fruitback/react` wrap `init` and define nothing of the contract**
+  (FRU-126, FRU-127). The tag reads five attributes and takes the rest through `element.options`; the
+  component's props are the options of `init`. **Both exist to not mount twice**: a second mount closes
+  the composer and loses what somebody typed. The element mounts once for every change of one task
+  (a microtask). The component keys an object by its value and a function by its presence only, and
+  the widget calls the function of the last render through a stable one. `createFruitbackElement` is a
+  function, never a class at the top of the module: `HTMLElement` is a browser global, and a server
+  that renders the page must be able to import the package. The element's script holds the widget, so
+  its build copies the widget's `THIRD-PARTY-NOTICES.md` into the tarball, and the guard asserts it.
 - **102 kB gzipped (measured on FRU-38), guarded by a test that trips at 150 kB** — a tripwire for a dependency that should
   have been bundled out, not a budget.
 
@@ -196,7 +207,7 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
 
 ## Licences
 
-- **MIT on the three published packages, AGPL-3.0-only on the worker** (FRU-22). The split follows
+- **MIT on the five published packages, AGPL-3.0-only on the worker** (FRU-22). The split follows
   the client/server boundary: the widget is compiled into someone else's site, and copyleft on code
   that ships inside a client's bundle is a licence nobody adopts.
 - **The guard asserts the `license` field and the LICENSE text, not the presence of a file.** npm

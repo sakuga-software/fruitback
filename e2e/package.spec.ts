@@ -50,6 +50,50 @@ test('a script tag mounts the widget, with no build step on the page', async ({ 
   await expect(page.getByLabel('Open Fruitback settings')).toBeVisible();
 });
 
+test('the tag mounts the widget, follows its attributes, and takes it away with itself (FRU-126)', async ({ page }) => {
+  await page.goto('/?widget=off&case=element');
+  await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
+  // The script a page with no build step loads: it holds the widget and registers the tag.
+  await page.addScriptTag({ path: 'packages/element/dist/fruitback-element.iife.js' });
+  await page.evaluate((endpoint) => {
+    const element = document.createElement('fruitback-widget');
+    element.setAttribute('endpoint', endpoint);
+    element.setAttribute('client-id', 'playground');
+    element.setAttribute('locale', 'en-US');
+    element.setAttribute('label', 'From a tag');
+    document.body.append(element);
+  }, WORKER_ORIGIN);
+
+  await expect(page.getByRole('button', { name: 'From a tag' })).toBeVisible();
+  await expect(page.locator('[data-fruitback-host]')).toHaveCount(1);
+
+  await page.evaluate(() => document.querySelector('fruitback-widget')?.setAttribute('label', 'Renamed'));
+  await expect(page.getByRole('button', { name: 'Renamed' })).toBeVisible();
+  await expect(page.locator('[data-fruitback-host]')).toHaveCount(1);
+
+  // The control for the count above: with the element gone, nothing of the widget stays.
+  await page.evaluate(() => document.querySelector('fruitback-widget')?.remove());
+  await expect(page.locator('[data-fruitback-host]')).toHaveCount(0);
+});
+
+test('the tag keeps the options a page set before its script ran (FRU-126)', async ({ page }) => {
+  await page.goto('/?widget=off&case=element-early-options');
+  await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
+  // The tag is in the page first, as with a deferred script, and the page already gave it options.
+  await page.evaluate((endpoint) => {
+    const element = document.createElement('fruitback-widget') as HTMLElement & { options?: unknown };
+    element.setAttribute('endpoint', endpoint);
+    element.setAttribute('client-id', 'playground');
+    element.setAttribute('locale', 'en-US');
+    element.options = { messages: { en: { 'launch.label': 'Set before the script' } } };
+    document.body.append(element);
+  }, WORKER_ORIGIN);
+
+  await page.addScriptTag({ path: 'packages/element/dist/fruitback-element.iife.js' });
+
+  await expect(page.getByRole('button', { name: 'Set before the script' })).toBeVisible();
+});
+
 test('a host catalog reaches the built widget, over the bundled one, key by key (FRU-37, FRU-38)', async ({ page }) => {
   await page.goto('/?widget=off&case=script-tag-locale');
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();

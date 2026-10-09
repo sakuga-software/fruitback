@@ -1,0 +1,9 @@
+{
+  // The tests run on `node:test`, so they need Node types. The element itself must not.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["src/**/*"],
+  "exclude": []
+}

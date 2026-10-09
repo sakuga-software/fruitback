@@ -197,12 +197,18 @@ describe('a consumer installing this from npm', () => {
     const workspace = join(root, '..', '..');
 
     try {
-      for (const name of ['widget', 'shared', 'fruitback']) {
+      for (const name of ['widget', 'shared', 'fruitback', 'element', 'react']) {
         await rm(join(root, '..', name, 'dist'), { recursive: true, force: true });
       }
 
-      for (const pkg of ['@fruitback/shared', '@fruitback/widget', 'fruitback']) {
-        await run('pnpm', ['--filter', pkg, 'pack', '--pack-destination', scratch], { cwd: workspace, shell: true });
+      // By directory, never by name: the root project is named `fruitback` too, so `--filter fruitback`
+      // packs two projects into one file. The second write is shorter and leaves bytes of the first
+      // after it, which GNU tar refuses and bsdtar reads without a word.
+      for (const directory of ['shared', 'widget', 'fruitback', 'element', 'react']) {
+        await run('pnpm', ['--filter', `./packages/${directory}`, 'pack', '--pack-destination', scratch], {
+          cwd: workspace,
+          shell: true,
+        });
       }
 
       await writeFile(
@@ -235,6 +241,17 @@ describe('a consumer installing this from npm', () => {
           'export const key: MessageKey = "settings.open";',
           'export const mountFrench = () => init({ endpoint: "https://w.test", clientId: "acme", locale: "fr", messages: { fr: french } });',
           'export const mountScoped = () => initScoped({ endpoint: "https://w.test", clientId: "acme" });',
+          // The two wrappers (FRU-126, FRU-127). Each forwards the options of `init`, so a consumer must
+          // be able to name them through the wrapper alone.
+          'import { FRUITBACK_TAG, defineFruitbackElement, type ElementOptions, type FruitbackElement } from "@fruitback/element";',
+          'import "@fruitback/element/auto";',
+          'export const tag: string = FRUITBACK_TAG;',
+          'export const define = () => defineFruitbackElement();',
+          'export const more: ElementOptions = { theme: palette };',
+          'export const place = (element: FruitbackElement) => element.widget?.feedbackAsText();',
+          'import { Fruitback as FruitbackComponent, type FruitbackProps } from "@fruitback/react";',
+          'export const props: FruitbackProps = { endpoint: "https://w.test", clientId: "acme", theme: palette, onMount: (widget) => void widget.refresh() };',
+          'export const render = () => FruitbackComponent(props);',
           'export type Payload = Seed;',
           'export type Pin = SeedIssue;',
           '',
@@ -263,6 +280,9 @@ describe('a consumer installing this from npm', () => {
       // was wrong twice: once with `main` pointing at sources, once with no `dist` packed at all.
       // A type-check alone reports it as a missing module, three layers from the cause.
       const tarballs = (await import('node:fs')).readdirSync(scratch).filter((name) => name.endsWith('.tgz'));
+      assert.equal(tarballs.length, 5, `one tarball per package, and no other: ${tarballs.join(', ')}`);
+      // The whole file must be one archive. bsdtar reads past bytes left after it, so ask gzip.
+      for (const tarball of tarballs) await run('gzip', ['-t', join(scratch, tarball)]);
 
       for (const tarball of tarballs) {
         const { stdout } = await run('tar', ['-tzf', join(scratch, tarball)]);
@@ -301,11 +321,30 @@ describe('a consumer installing this from npm', () => {
         widgetFiles.includes('package/THIRD-PARTY-NOTICES.md'),
         'the widget bundles other people’s MIT code and ships none of their notices',
       );
+      // The element's script holds the widget, so it holds the same code of other people, and the
+      // same notices must travel with it (FRU-126).
+      const elementTarball = tarballs.find((name) => name.startsWith('fruitback-element-'));
+      assert.ok(elementTarball, `no element tarball among ${tarballs.join(', ')}`);
+      const { stdout: elementFiles } = await run('tar', ['-tzf', join(scratch, elementTarball)]);
+      assert.ok(
+        elementFiles.includes('package/dist/fruitback-element.iife.js'),
+        'the element ships no script for a page with no build step',
+      );
+      assert.ok(
+        elementFiles.includes('package/THIRD-PARTY-NOTICES.md'),
+        'the element bundles the widget and ships none of the notices the widget owes',
+      );
       // `./` matters: npm reads a bare name as a registry package, not a local file.
-      await run('npm', ['install', '--no-audit', '--no-fund', ...tarballs.map((name) => `./${name}`)], {
-        cwd: scratch,
-        shell: true,
-      });
+      // `--legacy-peer-deps`: `react` is the host's own, and fetching it here would make this guard
+      // depend on the registry. The declarations of `@fruitback/react` name no type of React.
+      await run(
+        'npm',
+        ['install', '--no-audit', '--no-fund', '--legacy-peer-deps', ...tarballs.map((name) => `./${name}`)],
+        {
+          cwd: scratch,
+          shell: true,
+        },
+      );
 
       await run(process.execPath, [join(workspace, 'node_modules/typescript/bin/tsc'), '-p', 'tsconfig.json'], {
         cwd: scratch,

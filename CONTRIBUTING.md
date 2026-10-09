@@ -38,6 +38,8 @@ for trying the widget, not the product: build features in `packages/widget`.
 | `packages/shared`    | the seed contract, shared by the browser and the server                        |
 | `packages/widget`    | everything that runs in the browser                                            |
 | `packages/fruitback` | the package a client installs; it re-exports the two above and defines nothing |
+| `packages/element`   | the widget as a custom element, `<fruitback-widget>`                           |
+| `packages/react`     | the widget as a React component, `<Fruitback />`                               |
 | `apps/worker`        | the Node service between the widget and the store                              |
 | `apps/extension`     | the browser extension                                                          |
 | `apps/playground`    | the dev loop, never shipped                                                    |
@@ -169,6 +171,8 @@ in the interface, and why.
 |                      |                                                   |
 | -------------------- | ------------------------------------------------- |
 | `packages/fruitback` | MIT                                               |
+| `packages/element`   | MIT                                               |
+| `packages/react`     | MIT                                               |
 | `packages/shared`    | MIT                                               |
 | `packages/widget`    | MIT                                               |
 | `apps/worker`        | AGPL-3.0-only                                     |
