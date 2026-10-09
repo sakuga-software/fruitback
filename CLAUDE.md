@@ -1067,7 +1067,9 @@ and _The team mode, and the call the page cannot make_:
   them from the accounts file on every request and lays them over the configuration as its client map
   and its allowed origins, so routing, CORS and the `ws` check run unchanged. **An empty map stays
   empty**: `undefined` would make it a single-client worker that answers every page. `accounts.ts`
-  holds the roles, and `can(role, action)` is the one table of who does what.
+  holds the roles, and `can(role, action)` is the one table of who does what. The boot log says so
+  too: `readExposureNotice` does not read a worker with accounts as « one client, public », which is
+  what it printed on the first day of the Cloud (FRU-116).
 - **Signing in ends in a pairing code, like every session** (FRU-98). `/auth/email` sends a link whose
   code is after the `#`; `/auth/email/redeem` spends it, makes the address an account, then mints and
   spends a pairing code for it. **The console's refresh token is an `HttpOnly` cookie** on

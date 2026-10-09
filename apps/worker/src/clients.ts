@@ -171,6 +171,35 @@ export function openReadClients(options: { read: ReadAccess; clients: ClientMap 
     .map(([id]) => id);
 }
 
+/**
+ * What the boot log says about who reads the pins, or `undefined` when there is nothing to say.
+ *
+ * With accounts the clients are the sites of a file read on every request, and each site says who
+ * reads it. The static configuration then holds no client, and reading it as « one client, public »
+ * told the operator of the Cloud that every pin was open (FRU-116). It was false, and the advice
+ * beside it, `FRUITBACK_READ`, does not apply to a site.
+ */
+export function readExposureNotice(options: {
+  read: ReadAccess;
+  clients: ClientMap | undefined;
+  accounts: boolean;
+}): string | undefined {
+  if (options.accounts) {
+    return (
+      '[fruitback] who reads a site is chosen site by site, in the console: members only, or everyone. ' +
+      'FRUITBACK_READ does not apply to a worker with accounts.'
+    );
+  }
+  const open = openReadClients(options);
+  if (open.length === 0) return undefined;
+
+  return (
+    `[fruitback] read is public for ${open.join(', ')}: their pins, authors and replies ` +
+    'are readable by anyone who can reach this worker. Set FRUITBACK_READ=authenticated, ' +
+    'or "read": "authenticated" per client, to require a token.'
+  );
+}
+
 export type ClientMapResult = { ok: true; clients: ClientMap | undefined } | { ok: false; reason: string };
 
 /**

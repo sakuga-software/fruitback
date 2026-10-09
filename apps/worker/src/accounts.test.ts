@@ -1,11 +1,12 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { ACTIONS, type Action, ROLES, type Role, can, clientOf, normalizeEmail, siteOrigin } from './accounts.ts';
 import { closeAccountConnections, createSqliteAccountStore } from './accounts-sqlite.ts';
+import { readExposureNotice } from './clients.ts';
 import { type WorkerEnv, readConfig } from './env.ts';
 import { closeSessionConnections, createSqliteSessionStore } from './session-sqlite.ts';
 import { createPairing, redeemPairing } from './session.ts';
@@ -261,5 +262,38 @@ describe('a worker that reads its clients from the accounts (FRU-96)', () => {
     });
 
     assert.deepEqual(await response.json(), { ok: true, store: 'memory' });
+  });
+});
+
+describe('what the boot log says about who reads the pins (FRU-116)', () => {
+  it('does not call a worker with accounts one public client', () => {
+    const notice = readExposureNotice({ read: 'public', clients: undefined, accounts: true });
+
+    assert.ok(notice !== undefined);
+    assert.equal(notice.includes('read is public'), false);
+    assert.equal(notice.includes('Set FRUITBACK_READ'), false, 'the advice does not apply to a site');
+    assert.match(notice, /site by site/);
+  });
+
+  it('still names the open clients of a worker with no accounts, and says nothing when none is open', () => {
+    assert.match(
+      readExposureNotice({ read: 'public', clients: undefined, accounts: false }) ?? '',
+      /read is public for <single client>/,
+    );
+    assert.match(
+      readExposureNotice({ read: 'authenticated', clients: { acme: { read: 'public' }, zen: {} }, accounts: false }) ??
+        '',
+      /read is public for acme:/,
+    );
+    assert.equal(readExposureNotice({ read: 'authenticated', clients: undefined, accounts: false }), undefined);
+  });
+
+  it('is what the server prints, with the accounts of its configuration', () => {
+    // `server.ts` has no test of its own: the cases above stay green with the call deleted.
+    const server = readFileSync(new URL('./server.ts', import.meta.url), 'utf8');
+
+    assert.match(server, /readExposureNotice\(\{[^}]*accounts: config\.config\.accountsPath !== undefined/s);
+    assert.match(server, /console\.warn\(exposure\)/);
+    assert.equal(server.includes('openReadClients('), false, 'the server holds no second copy of the rule');
   });
 });
