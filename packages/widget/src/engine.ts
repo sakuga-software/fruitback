@@ -1,5 +1,5 @@
 import type { SeedSource } from '@fruitback/shared';
-import { isMangledComponentName } from './source.ts';
+import { sourceFromContext } from './source.ts';
 import { getElementBounds, getElementContext, getElementAtPoint, isElementGrabbable } from 'react-grab/primitives';
 
 /**
@@ -47,22 +47,12 @@ export const reactGrabEngine: CaptureEngine = {
 
   async sourceOf(element) {
     try {
-      const context = await getElementContext(element);
-      const source: SeedSource = {};
-
       // The name is the one field react-grab gets wrong on a design system: pointing at a HeroUI
       // button reports `bound $7230ffa83bc0c2cf$var$DOMElement`, the react-aria internal that
       // rendered the host node, while `filePath`/`lineNumber` correctly point at the app's own JSX.
       // Dropping the name keeps the half that is right — and leaves `captureSeed`'s fiber walk free
-      // to supply a name someone can search for.
-      if (context.componentName && !isMangledComponentName(context.componentName)) {
-        source.component = context.componentName;
-      }
-      if (context.filePath) source.file = context.filePath;
-      if (typeof context.lineNumber === 'number') source.line = context.lineNumber;
-      if (typeof context.columnNumber === 'number') source.column = context.columnNumber;
-
-      return Object.keys(source).length > 0 ? source : undefined;
+      // to supply a name someone can search for. `sourceFromContext` holds the rule.
+      return sourceFromContext(await getElementContext(element));
     } catch {
       // A production build with no source metadata, or a page React never touched. A seed without a
       // `source` is a perfectly good seed; failing the capture over it would not be.
