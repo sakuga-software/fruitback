@@ -11,7 +11,7 @@ import {
   readLocaleTag,
 } from './accounts.ts';
 import { readBearerToken, verifyIdentityToken } from './identity.ts';
-import { LinearKeyRefused, listLinearTeams } from './linear.ts';
+import { LinearKeyForbidden, LinearKeyRefused, listLinearTeams } from './linear.ts';
 import { open, seal } from './secrets.ts';
 import { StoreError } from './store.ts';
 import { PAIRING_TTL_SECONDS, type SessionStore, createPairing } from './session.ts';
@@ -242,6 +242,7 @@ export async function handleConsoleApi(
       // Only a refusal of the key is the person's to fix. A Linear that is down answers `502`, and
       // the key is not kept either way.
       if (error instanceof LinearKeyRefused) return json(400, { error: 'key-refused' }, headers);
+      if (error instanceof LinearKeyForbidden) return json(400, { error: 'key-lacks-access' }, headers);
       if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, headers);
       throw error;
     }

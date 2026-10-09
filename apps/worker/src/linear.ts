@@ -54,6 +54,9 @@ export function linearRoutingFor(config: LinearConfig, client: ClientConfig | un
 /** Linear answered, and what it said is that this key is not one it accepts. */
 export class LinearKeyRefused extends StoreError {}
 
+/** Linear accepts the key, and the key does not have the rights for what was asked. */
+export class LinearKeyForbidden extends StoreError {}
+
 async function graphql<T>(config: LinearConfig, query: string, variables: Record<string, unknown>): Promise<T> {
   let response: Response;
   try {
@@ -83,9 +86,10 @@ async function graphql<T>(config: LinearConfig, query: string, variables: Record
   // Linear words a refusal as a status or as an error of the answer, so both are read.
   const refused =
     response.status === 401 ||
-    response.status === 403 ||
     payload?.errors?.some((error) => error.extensions?.code === 'AUTHENTICATION_ERROR') === true;
   if (refused) throw new LinearKeyRefused(message ?? `Linear responded ${response.status}`);
+  // A key Linear knows and that may not do this: typing it again changes nothing.
+  if (response.status === 403) throw new LinearKeyForbidden(message ?? 'Linear responded 403');
 
   if (!response.ok) {
     throw new StoreError(`Linear responded ${response.status}`);

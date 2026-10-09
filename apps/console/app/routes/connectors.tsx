@@ -19,6 +19,8 @@ const LATER = [
 const KEY_PROBLEMS: Record<string, string> = {
   'key-refused': 'Linear refused this key. Copy it again from Linear, in Settings, then Security and access.',
   'connectors-unavailable': 'This Fruitback cannot keep a key yet. Its operator must set FRUITBACK_SECRETS_KEY.',
+  'key-lacks-access':
+    'Linear knows this key, and it may not list your teams. Create a key with read and write access, then try again.',
   forbidden: 'Only an owner or an admin of the workspace connects a source.',
   unreachable: 'Fruitback did not answer. Try again.',
   'store-unavailable': 'Linear did not answer just now. Your key is not kept: try again in a minute.',

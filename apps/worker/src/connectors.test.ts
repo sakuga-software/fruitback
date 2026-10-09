@@ -249,6 +249,17 @@ describe('a workspace connects Linear (FRU-121)', () => {
     );
     const refused = await call(env, 'POST', `${world.base}/connectors`, { token: world.owner.token, body });
 
+    mock.restoreAll();
+    mock.method(globalThis, 'fetch', async () =>
+      Response.json({ errors: [{ message: 'Forbidden' }] }, { status: 403 }),
+    );
+    const forbidden = await call(env, 'POST', `${world.base}/connectors`, { token: world.owner.token, body });
+    assert.deepEqual(
+      await forbidden.json(),
+      { error: 'key-lacks-access' },
+      'a key Linear knows is not one to type again',
+    );
+
     assert.deepEqual([down.status, unreachable.status], [502, 502]);
     assert.deepEqual(await down.json(), { error: 'store-unavailable' });
     assert.deepEqual(
@@ -256,7 +267,7 @@ describe('a workspace connects Linear (FRU-121)', () => {
       { error: 'key-refused' },
       'a refusal Linear words as an error, under any status',
     );
-    assert.deepEqual(await world.accounts.connectors(world.workspace.id), [], 'no key is kept in any of the three');
+    assert.deepEqual(await world.accounts.connectors(world.workspace.id), [], 'no key is kept in any of the four');
   });
 
   it('sends the notes of a site to the team it chose, and reads them back from there', async () => {
