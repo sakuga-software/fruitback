@@ -204,7 +204,7 @@ function AddLinear({ base, onDone }: { base: string; onDone: (connector: Connect
     const added = await call<Connector>('POST', `${base}/connectors`, { kind: 'linear', apiKey });
     setBusy(false);
     if (added.ok) return onDone(added.data);
-    setProblem(t(KEY_PROBLEMS[added.error] ?? msg('The key could not be kept just now. Try again.')));
+    setProblem(KEY_PROBLEMS[added.error] ?? msg('The key could not be kept just now. Try again.'));
   }
 
   return (
@@ -218,7 +218,7 @@ function AddLinear({ base, onDone }: { base: string; onDone: (connector: Connect
         onChange={(event) => setApiKey(event.target.value)}
         hint={t('A personal API key, from Linear, Settings, Security and access. Fruitback keeps it encrypted.')}
       />
-      {problem === undefined ? null : <Problem>{problem}</Problem>}
+      {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
       <div className="flex gap-2">
         <Button type="submit" disabled={busy || apiKey.trim() === ''}>
           {busy ? t('Checking…') : t('Connect')}
@@ -267,7 +267,7 @@ function Detail({
     void call<{ teams: Team[] }>('GET', `${base}/connectors/${connector.id}/teams`).then((answer) => {
       if (answer.ok) return setTeams(answer.data.teams);
       setTeams([]);
-      setProblem(t('Linear did not answer with this key. Disconnect it, then connect a new key.'));
+      setProblem(msg('Linear did not answer with this key. Disconnect it, then connect a new key.'));
     });
   }, [base, connector.id, manages]);
 
@@ -279,14 +279,14 @@ function Detail({
         ? { connector: null }
         : { connector: connector.id, teamId, ...(projectId === undefined ? {} : { projectId }) };
     const set = await call('POST', `${base}/sites/${site.id}/destination`, body);
-    if (!set.ok) setProblem(t('The destination of this site did not change. Try again.'));
+    if (!set.ok) setProblem(msg('The destination of this site did not change. Try again.'));
     await onChanged();
   }
 
   async function disconnect() {
     const removed = await call('DELETE', `${base}/connectors/${connector.id}`);
     if (removed.ok) return onRemoved();
-    setProblem(t('This source is still connected. Try again.'));
+    setProblem(msg('This source is still connected. Try again.'));
   }
 
   return (
@@ -340,7 +340,7 @@ function Detail({
         </ul>
         {problem === undefined ? null : (
           <div className="mt-3">
-            <Problem>{problem}</Problem>
+            <Problem>{t(problem)}</Problem>
           </div>
         )}
       </div>

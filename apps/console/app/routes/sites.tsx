@@ -3,7 +3,7 @@ import { type Site, type Visibility, call } from '../api';
 import { Button, Card, Chip, Field, Problem } from '../ui';
 import { InstallOptions } from './setup';
 import { PageHead, useWorkspace } from './workspace';
-import { t } from '../i18n';
+import { msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
 
 /** The sites of the workspace: a site is an address and who sees its notes (P2, P3 of the design). */
@@ -27,7 +27,7 @@ export default function Sites() {
     event.preventDefault();
     setProblem(undefined);
     const added = await call<Site>('POST', `/console/workspaces/${workspace.id}/sites`, { url, visibility });
-    if (!added.ok) return setProblem(t('Paste the full address of the site, starting with https://.'));
+    if (!added.ok) return setProblem(msg('Paste the full address of the site, starting with https://.'));
     setSites((current) => [...(current ?? []).filter((site) => site.id !== added.data.id), added.data]);
     setOpen(added.data.id);
     setUrl('');
@@ -71,7 +71,7 @@ export default function Sites() {
       ) : null}
       {problem === undefined ? null : (
         <div className="mb-4">
-          <Problem>{problem}</Problem>
+          <Problem>{t(problem)}</Problem>
         </div>
       )}
 

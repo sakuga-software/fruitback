@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { nearest, translate } from './i18n.ts';
+import { type Kept, adoptLanguage, chooseLanguage, locale, nearest, setLocale, translate } from './i18n.ts';
 import { FRENCH } from './messages.fr.ts';
 
 /**
@@ -123,6 +123,72 @@ describe('a change of language', () => {
 
     assert.equal(/key=\{(?:tag|locale)/.test(root), false);
     assert.ok(root.includes('useLocale()'));
+  });
+});
+
+describe('a sentence kept in the state of a screen', () => {
+  it('is kept in English and translated where it is shown, so it follows a change of language', () => {
+    const translatedTooEarly: string[] = [];
+    for (const [name, source] of sources) {
+      // `setProblem(t(…))` and `useState(t(…))` freeze the words of the language of that moment.
+      for (const match of source.matchAll(/\b(?:set[A-Z]\w*|useState(?:<[^>]*>)?)\(\s*(?:\(\) => )?t\(/g)) {
+        translatedTooEarly.push(`${name}: ${match[0]}`);
+      }
+    }
+
+    assert.deepEqual(translatedTooEarly, []);
+  });
+});
+
+/** A storage a test can read, in place of the one of a browser. */
+function kept(): Kept & { values: Map<string, string> } {
+  const values = new Map<string, string>();
+
+  return {
+    values,
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => void values.set(key, value),
+    removeItem: (key) => void values.delete(key),
+  };
+}
+
+describe('a language the account did not hear', () => {
+  it('stays the language of this browser at the next visit, and is sent again', async () => {
+    const storage = kept();
+    setLocale('en', false);
+    const heard = await chooseLanguage('fr', async () => false, storage);
+    assert.equal(heard, false);
+    assert.equal(locale(), 'fr');
+
+    // The next visit: the account still says English, and it must not take the place of the choice.
+    setLocale('en', false);
+    const sent: string[] = [];
+    adoptLanguage({ locale: 'en' }, async (tag) => (sent.push(tag), true), storage);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.equal(locale(), 'fr');
+    assert.deepEqual(sent, ['fr']);
+
+    // Heard now: the account is the reference again.
+    adoptLanguage({ locale: 'en' }, async () => true, storage);
+    assert.equal(locale(), 'en');
+  });
+
+  it('leaves no mark when the account took the choice, so the account is read at the next visit', async () => {
+    const storage = kept();
+    assert.equal(await chooseLanguage('fr', async () => true, storage), true);
+    assert.equal(storage.values.size, 0);
+
+    adoptLanguage({ locale: 'en' }, undefined, storage);
+    assert.equal(locale(), 'en');
+  });
+
+  it('counts a save that throws as not heard', async () => {
+    const storage = kept();
+    const heard = await chooseLanguage('fr', async () => Promise.reject(new Error('down')), storage);
+
+    assert.equal(heard, false);
+    assert.equal(storage.values.size, 1);
   });
 });
 

@@ -11,6 +11,7 @@ import {
   rememberWorkspaceName,
   requestLink,
   takeWorkspaceName,
+  saveLanguage,
 } from '../api';
 import { Button, Field, Mark, Problem, WideButton } from '../ui';
 import { adoptLanguage, locale, msg, t } from '../i18n';
@@ -69,7 +70,7 @@ function resolveOnce(step: string | null): Promise<Stage> {
 async function resolveStage(step: string | null): Promise<Stage> {
   const me = await call<Me>('GET', '/console/me');
   if (!me.ok) return { kind: 'sign-in' };
-  adoptLanguage(me.data.account);
+  adoptLanguage(me.data.account, saveLanguage);
 
   const workspace = me.data.workspaces[0];
   if (workspace !== undefined) return step === 'site' ? { kind: 'site', workspace } : { kind: 'source', workspace };
@@ -228,11 +229,7 @@ function SignIn({ onSent }: { onSent: (email: string) => void }) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | undefined>(() => {
-    const refused = GITHUB_PROBLEMS[search.get('error') ?? ''];
-
-    return refused === undefined ? undefined : t(refused);
-  });
+  const [problem, setProblem] = useState<string | undefined>(GITHUB_PROBLEMS[search.get('error') ?? '']);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -243,7 +240,7 @@ function SignIn({ onSent }: { onSent: (email: string) => void }) {
     setBusy(false);
     if (sent.ok) return onSent(email.trim());
 
-    setProblem(t(SEND_PROBLEMS[sent.error] ?? msg('The link could not be sent just now. Try again in a minute.')));
+    setProblem(SEND_PROBLEMS[sent.error] ?? msg('The link could not be sent just now. Try again in a minute.'));
   }
 
   return (
@@ -291,7 +288,7 @@ function SignIn({ onSent }: { onSent: (email: string) => void }) {
         onChange={(event) => setName(event.target.value)}
         maxLength={80}
       />
-      {problem === undefined ? null : <Problem>{problem}</Problem>}
+      {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
     </Frame>
   );
 }
@@ -325,7 +322,7 @@ function NameIt({ onCreated }: { onCreated: (workspace: Workspace) => void }) {
     event.preventDefault();
     const created = await call<Workspace>('POST', '/console/workspaces', { name });
     if (created.ok) return onCreated(created.data);
-    setProblem(t('A workspace needs a name of one line, up to 80 characters.'));
+    setProblem(msg('A workspace needs a name of one line, up to 80 characters.'));
   }
 
   return (
@@ -347,7 +344,7 @@ function NameIt({ onCreated }: { onCreated: (workspace: Workspace) => void }) {
         onChange={(event) => setName(event.target.value)}
         maxLength={80}
       />
-      {problem === undefined ? null : <Problem>{problem}</Problem>}
+      {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
     </Frame>
   );
 }
@@ -408,7 +405,7 @@ function SiteStep({ workspace, onAdded }: { workspace: Workspace; onAdded: (site
     event.preventDefault();
     const added = await call<Site>('POST', `/console/workspaces/${workspace.id}/sites`, { url, visibility });
     if (added.ok) return onAdded(added.data);
-    setProblem(t('Paste the full address of the site, starting with https://.'));
+    setProblem(msg('Paste the full address of the site, starting with https://.'));
   }
 
   return (
@@ -461,7 +458,7 @@ function SiteStep({ workspace, onAdded }: { workspace: Workspace; onAdded: (site
           </label>
         ))}
       </fieldset>
-      {problem === undefined ? null : <Problem>{problem}</Problem>}
+      {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
     </Frame>
   );
 }

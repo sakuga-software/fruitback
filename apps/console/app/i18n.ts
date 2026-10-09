@@ -63,11 +63,79 @@ export function onLocale(listener: () => void): () => void {
   return () => void listeners.delete(listener);
 }
 
+/** What keeps a choice between two visits. A browser can refuse it: every use is guarded. */
+export type Kept = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+
+/** Sends a language to the account. `false` when the account did not take it. */
+export type SaveLanguage = (tag: LocaleTag) => Promise<boolean>;
+
+const UNSENT = 'fruitback:locale-unsent';
+
+function browserStorage(): Kept | undefined {
+  try {
+    return globalThis.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+function unsent(kept: Kept | undefined): LocaleTag | undefined {
+  try {
+    const tag = kept?.getItem(UNSENT);
+
+    return tag === null || tag === undefined ? undefined : nearest(tag);
+  } catch {
+    return undefined;
+  }
+}
+
+function markUnsent(kept: Kept | undefined, tag: LocaleTag | undefined): void {
+  try {
+    if (tag === undefined) kept?.removeItem(UNSENT);
+    else kept?.setItem(UNSENT, tag);
+  } catch {
+    // Not kept: the next visit reads the language of the account.
+  }
+}
+
+/**
+ * The person chose a language. The screen changes at once, and the account is told.
+ *
+ * WARNING: the account can fail to hear it. The choice is then marked as not sent, so the language
+ * of the account does not take the place of what the person chose at the next visit. `false` says so
+ * to the caller, for the screen.
+ */
+export async function chooseLanguage(tag: string, save: SaveLanguage, kept = browserStorage()): Promise<boolean> {
+  const chosen = nearest(tag);
+  setLocale(chosen);
+  markUnsent(kept, chosen);
+  const heard = await save(chosen).catch(() => false);
+  if (heard) markUnsent(kept, undefined);
+
+  return heard;
+}
+
 /**
  * Takes the language an account holds, when it holds one. The choice of a person follows them to a
  * browser that was set to another language.
+ *
+ * A choice the account never heard wins over the account, and is sent again: the person chose it
+ * after the account was last written.
  */
-export function adoptLanguage(account: { locale?: string }): void {
+export function adoptLanguage(account: { locale?: string }, save?: SaveLanguage, kept = browserStorage()): void {
+  const waiting = unsent(kept);
+  if (waiting !== undefined) {
+    setLocale(waiting);
+    if (save !== undefined) {
+      void save(waiting)
+        .catch(() => false)
+        .then((heard) => {
+          if (heard) markUnsent(kept, undefined);
+        });
+    }
+
+    return;
+  }
   if (account.locale !== undefined) setLocale(account.locale);
 }
 

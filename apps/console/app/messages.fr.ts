@@ -27,6 +27,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Language: 'Langue',
   'The language of the console, and of the e-mails Fruitback sends you.':
     'La langue de la console, et des e-mails que Fruitback vous envoie.',
+  'Your account did not take this language yet. It is kept in this browser, and sent again the next time you open the console.':
+    'Votre compte n’a pas encore pris cette langue. Elle est gardée dans ce navigateur, et renvoyée la prochaine fois que vous ouvrez la console.',
   'Where you are signed in': 'Où vous êtes connecté',
   'Console · this browser': 'Console · ce navigateur',
   'Active now': 'Actif maintenant',

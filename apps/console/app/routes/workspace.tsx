@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate, useOutletContext, useParams } from 'react-router';
-import { type Me, type Workspace, callUntilAnswered } from '../api';
+import { type Me, type Workspace, callUntilAnswered, saveLanguage } from '../api';
 import { adoptLanguage, msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
 
@@ -32,7 +32,7 @@ export default function WorkspaceFrame() {
   useEffect(() => {
     return callUntilAnswered<Me>('GET', '/console/me', (me) => {
       if (!me.ok) return navigate('/setup', { replace: true });
-      adoptLanguage(me.data.account);
+      adoptLanguage(me.data.account, saveLanguage);
       const workspace = me.data.workspaces.find((each) => each.id === id);
       if (workspace === undefined) return navigate('/', { replace: true });
       setContext({ me: me.data, workspace });

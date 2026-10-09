@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { call, signOut } from '../api';
-import { Button, Card } from '../ui';
+import { call, signOut, saveLanguage } from '../api';
+import { Button, Card, Problem } from '../ui';
 import { PageHead, useWorkspace } from './workspace';
-import { LOCALES, locale, setLocale, t } from '../i18n';
+import { LOCALES, chooseLanguage, locale, t } from '../i18n';
 import { useLocale } from '../use-locale';
 
 /** My account (design/boards/5-workspace.png): the profile, how I sign in, and the workspace's end. */
@@ -12,6 +12,7 @@ export default function Account() {
   const { me, workspace } = useWorkspace();
   const navigate = useNavigate();
   const [confirming, setConfirming] = useState(false);
+  const [unsent, setUnsent] = useState(false);
 
   async function leave() {
     await signOut();
@@ -57,9 +58,10 @@ export default function Account() {
               value={locale()}
               onChange={(event) => {
                 // The screen changes at once. The account keeps the choice for the e-mails and for
-                // the next browser; a worker that did not answer leaves it in this browser only.
-                setLocale(event.target.value);
-                void call('POST', '/console/me/locale', { locale: event.target.value });
+                // the next browser. When it did not hear it, say so: the choice stays in this browser
+                // and is sent again at the next visit.
+                setUnsent(false);
+                void chooseLanguage(event.target.value, saveLanguage).then((heard) => setUnsent(!heard));
               }}
               className="h-10 w-full rounded-md border border-line bg-surface px-3 text-[15px]"
             >
@@ -70,6 +72,15 @@ export default function Account() {
               ))}
             </select>
           </label>
+          {unsent ? (
+            <div className="mt-3">
+              <Problem>
+                {t(
+                  'Your account did not take this language yet. It is kept in this browser, and sent again the next time you open the console.',
+                )}
+              </Problem>
+            </div>
+          ) : null}
         </Card>
         <Card className="p-5">
           <h2 className="mb-3 text-[15px] font-semibold">{t('Where you are signed in')}</h2>
