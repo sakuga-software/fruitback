@@ -52,6 +52,28 @@ describe('a site asked for while the browser asks for access (FRU-118)', () => {
     assert.equal(stored.length, 1);
   });
 
+  it('leaves one entry when the background and the popup, two instances, finish it together', async () => {
+    const state = { value: undefined as unknown };
+    const sites = new Map<string, SiteConfig>();
+    const seams = {
+      read: async () => state.value,
+      write: async (value: unknown) => void (state.value = JSON.parse(JSON.stringify(value))),
+      clear: async () => void (state.value = undefined),
+      granted: async () => true,
+      // The one writer of the sites map: the same pattern twice is the same entry.
+      store: async (pattern: string, site: SiteConfig) => void sites.set(pattern, site),
+      activate: async () => undefined,
+    };
+    const background = createPending(seams);
+    const popup = createPending(seams);
+    await popup.remember(ORIGIN, SITE);
+
+    await Promise.all([background.settle(), popup.settle()]);
+
+    assert.deepEqual([...sites], [[ORIGIN, SITE]]);
+    assert.equal(state.value, undefined);
+  });
+
   it('keeps the intent when the entry could not be stored, so the next settle tries again', async () => {
     let fail = true;
     const kept: string[] = [];

@@ -66,7 +66,12 @@ export function createPending({ read, write, clear, granted, store, activate, no
     return pending;
   }
 
-  /** One at a time: the background and the popup can both hear that the access arrived. */
+  /**
+   * One at a time inside this context. The background and the popup each hold their own instance, so
+   * the two can still finish the same intent together. That is safe, and it is why `store` and
+   * `activate` must stay idempotent: the entry goes through the one writer of the sites map, which
+   * writes the same value twice, and both scripts refuse to run twice in one frame.
+   */
   let settling: Promise<string | undefined> | undefined;
 
   async function finish(): Promise<string | undefined> {
