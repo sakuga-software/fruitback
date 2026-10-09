@@ -101,7 +101,8 @@ export type DueDelivery = { id: string; connectorId: string; body: string; attem
 
 export type DeliveryOutcome =
   | { delivered: true }
-  | { delivered: false; at: number; status?: number; error?: string; nextAt?: number };
+  /** `attempts` is the count the attempt started from: see `settleDelivery`. */
+  | { delivered: false; attempts: number; at: number; status?: number; error?: string; nextAt?: number };
 
 /** A delivery as the console reads it. The body is not here: it holds a note. */
 export type PendingDelivery = {
@@ -172,7 +173,9 @@ export type AccountStore = {
   dueDeliveries(now: number, limit: number): Promise<DueDelivery[]>;
   /**
    * What an attempt answered. A delivery that arrived is removed: its body holds a note, and nothing
-   * reads it again. `nextAt` absent on a failure: no more attempt, and the console shows it.
+   * reads it again. `nextAt` absent on a failure: no more attempt, and the console shows it. A failure
+   * is written only while the count is the one the attempt started from: somebody who asked for a
+   * new attempt in that time set it to zero, and their request must not be written over.
    */
   settleDelivery(id: string, outcome: DeliveryOutcome): Promise<void>;
   /** The deliveries of a connector that did not arrive yet, newest first. */

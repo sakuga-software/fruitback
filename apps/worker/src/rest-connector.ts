@@ -1,7 +1,7 @@
 import { createHmac, randomBytes } from 'node:crypto';
 import { BlockList, isIP } from 'node:net';
 import type { Seed } from '@fruitback/shared';
-import type { AccountStore } from './accounts.ts';
+import type { AccountStore, DueDelivery } from './accounts.ts';
 import { open, seal } from './secrets.ts';
 
 /**
@@ -205,7 +205,8 @@ export async function deliverDue({
   let failed = 0;
   if (secretsKey === undefined) return { delivered, failed };
 
-  for (const delivery of await accounts.dueDeliveries(now(), limit)) {
+  /** One attempt. `true` when the note arrived. */
+  const attempt = async (delivery: DueDelivery): Promise<boolean> => {
     const kept = await accounts.sealedKey(delivery.connectorId);
     const target = kept?.kind === 'rest' ? openTarget(kept.sealed, secretsKey) : undefined;
 
@@ -236,20 +237,35 @@ export async function deliverDue({
 
     if (status !== undefined && status >= 200 && status < 300) {
       await accounts.settleDelivery(delivery.id, { delivered: true });
-      delivered += 1;
-      continue;
+      return true;
     }
 
     const wait = RETRY_AFTER_SECONDS[delivery.attempts];
     await accounts.settleDelivery(delivery.id, {
       delivered: false,
+      attempts: delivery.attempts,
       at: now(),
       ...(status === undefined ? {} : { status }),
       ...(error === undefined ? {} : { error }),
       ...(wait === undefined ? {} : { nextAt: now() + wait * 1_000 }),
     });
-    failed += 1;
-  }
+    return false;
+  };
+
+  // WARNING: the attempts of a pass run together. One after the other, a receiver that takes its 10
+  // seconds would hold the notes of every other workspace: twenty of them, more than three minutes.
+  const arrived = await Promise.all(
+    (await accounts.dueDeliveries(now(), limit)).map((delivery) =>
+      // An attempt that cannot write its result must not stop the others of the pass.
+      attempt(delivery).catch((error: unknown) => {
+        console.error('[fruitback] the result of a delivery was not kept', delivery.id, error);
+
+        return false;
+      }),
+    ),
+  );
+  delivered = arrived.filter(Boolean).length;
+  failed = arrived.length - delivered;
 
   await accounts.dropAbandonedDeliveries(now() - ABANDONED_KEPT_DAYS * 24 * 60 * 60 * 1_000);
 

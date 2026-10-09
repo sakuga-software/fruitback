@@ -519,9 +519,9 @@ export function createSqliteAccountStore(path: string): AccountStore {
       database
         .prepare(
           `UPDATE deliveries SET attempts = attempts + 1, next_at = ?, last_at = ?, last_status = ?, last_error = ?
-           WHERE id = ?`,
+           WHERE id = ? AND attempts = ?`,
         )
-        .run(outcome.nextAt ?? null, outcome.at, outcome.status ?? null, outcome.error ?? null, id);
+        .run(outcome.nextAt ?? null, outcome.at, outcome.status ?? null, outcome.error ?? null, id, outcome.attempts);
     },
 
     async deliveries(workspace, connector) {

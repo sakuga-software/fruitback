@@ -86,7 +86,7 @@ delivery waits for somebody to ask again. Asking starts the seven attempts again
 sends the note again. `X-Fruitback-Delivery` is the same for both: keep the ids you took, and answer
 `2xx` to one you already have.
 
-The first attempt leaves within about 15 seconds of the note. The reporter does not wait for it: the
+The first attempt usually leaves within about 15 seconds of the note. The reporter does not wait for it: the
 widget is answered when Fruitback keeps the note.
 
 ## The address and the secret

@@ -454,6 +454,50 @@ describe('a delivery that does not arrive (FRU-122)', () => {
     );
   });
 
+  it('sends the notes of a pass together: a slow receiver does not hold the others', async () => {
+    const { world, connector } = await queued();
+    await world.accounts.enqueueDelivery(connector.id, '{"version":1,"n":2}', 0);
+    await world.accounts.enqueueDelivery(connector.id, '{"version":1,"n":3}', 0);
+    // Each request answers only when the three are in flight. One after the other, none would.
+    let inFlight = 0;
+    let release: () => void = () => {};
+    const all = new Promise<void>((resolve) => (release = resolve));
+    const send: Send = async () => {
+      if ((inFlight += 1) === 3) release();
+      await all;
+
+      return { status: 204 };
+    };
+
+    const passed = await orLate(deliverDue({ accounts: world.accounts, secretsKey: SECRETS_KEY, send, now: () => 10 }));
+
+    assert.deepEqual(passed, { delivered: 3, failed: 0 });
+  });
+
+  it('does not write over a new attempt somebody asked for while one was in flight', async () => {
+    const { world, connector, id, late } = await queued();
+    // Two failures first, so the count is not the zero a request sets it to.
+    let clock = 0;
+    const failing = receiver(() => 500);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await deliverDue({ accounts: world.accounts, secretsKey: SECRETS_KEY, send: failing.send, now: () => clock });
+      clock += 400_000;
+    }
+    assert.equal((await late())[0]?.attempts, 2);
+
+    // The third attempt is in flight when the request lands. It then fails.
+    const send: Send = async () => {
+      assert.equal(await world.accounts.retryDelivery(world.workspace.id, connector.id, id, clock), true);
+
+      return { status: 500 };
+    };
+    await deliverDue({ accounts: world.accounts, secretsKey: SECRETS_KEY, send, now: () => clock });
+
+    const [waiting] = await late();
+    assert.equal(waiting?.attempts, 0, 'the series the request started is kept');
+    assert.equal(waiting?.nextAt, new Date(clock).toISOString(), 'and it is still due now');
+  });
+
   it('waits, and counts no failure, on a worker that lost the key that opens the address', async () => {
     const { world, late } = await queued();
     const { got, send } = receiver();

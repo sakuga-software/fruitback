@@ -1168,6 +1168,8 @@ and _The team mode, and the call the page cannot make_:
 - **A connector can be an address that only receives** (FRU-122). `rest` is no store: the note is
   kept in the worker's own store first, then `receivingStore` puts a row in `deliveries`, and the
   server's loop (`deliverPending`, every 15 seconds, one pass at a time) posts the rows that are due.
+  **The attempts of a pass run together**, and one deadline covers a whole exchange: the `timeout` of
+  a Node request is an idle time, which a receiver that sends a byte now and then never reaches.
   **The widget is answered when the note is kept**, and a queue that refuses the row is logged and
   does not fail the request: a `502` there would keep the note twice. A row goes when its note
   arrived, so the table holds what is late or given up.
