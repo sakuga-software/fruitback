@@ -3,12 +3,14 @@ import { Link, useNavigate } from 'react-router';
 import { redeemLink } from '../api';
 import { Mark } from '../ui';
 import { t } from '../i18n';
+import { useLocale } from '../use-locale';
 
 /**
  * Where a sign-in link lands. The code is after the `#`, so it never reached a server: it is read
  * here, spent once, and removed from the address bar so a reload or a shared screen does not show it.
  */
 export default function SignIn() {
+  useLocale();
   const navigate = useNavigate();
   const [failed, setFailed] = useState(false);
   // The code of a link the worker did not answer for. The link is not spent, so it can be tried again.

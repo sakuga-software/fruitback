@@ -14,6 +14,7 @@ import {
 } from '../api';
 import { Button, Field, Mark, Problem, WideButton } from '../ui';
 import { adoptLanguage, locale, msg, t } from '../i18n';
+import { useLocale } from '../use-locale';
 
 /**
  * « Create your workspace », the four steps of the setup (design/boards/2-onboarding.png).
@@ -82,6 +83,7 @@ async function resolveStage(step: string | null): Promise<Stage> {
 }
 
 export default function Setup() {
+  useLocale();
   const [stage, setStage] = useState<Stage>({ kind: 'loading' });
   const [search] = useSearchParams();
 
@@ -151,6 +153,7 @@ export default function Setup() {
 }
 
 function StageCard({ stage, onStage }: { stage: Stage; onStage: (stage: Stage) => void }) {
+  useLocale();
   if (stage.kind === 'loading') return <Frame step={1} title={t('Create your workspace')} />;
   if (stage.kind === 'sign-in') return <SignIn onSent={(email) => onStage({ kind: 'sent', email })} />;
 
@@ -185,6 +188,7 @@ function Frame({
   action?: ReactNode;
   onSubmit?: (event: FormEvent) => void;
 }) {
+  useLocale();
   return (
     <form
       onSubmit={onSubmit ?? ((event) => event.preventDefault())}
@@ -219,6 +223,7 @@ const GITHUB_PROBLEMS: Record<string, string> = {
 };
 
 function SignIn({ onSent }: { onSent: (email: string) => void }) {
+  useLocale();
   const [search] = useSearchParams();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
@@ -292,6 +297,7 @@ function SignIn({ onSent }: { onSent: (email: string) => void }) {
 }
 
 function Sent({ email, onBack }: { email: string; onBack: () => void }) {
+  useLocale();
   return (
     <Frame
       step={1}
@@ -311,6 +317,7 @@ function Sent({ email, onBack }: { email: string; onBack: () => void }) {
 }
 
 function NameIt({ onCreated }: { onCreated: (workspace: Workspace) => void }) {
+  useLocale();
   const [name, setName] = useState('');
   const [problem, setProblem] = useState<string | undefined>();
 
@@ -357,6 +364,7 @@ const SOURCES = [
 ] as const;
 
 function Source({ onNext }: { onNext: () => void }) {
+  useLocale();
   return (
     <Frame
       step={2}
@@ -391,6 +399,7 @@ function Source({ onNext }: { onNext: () => void }) {
 }
 
 function SiteStep({ workspace, onAdded }: { workspace: Workspace; onAdded: (site: Site) => void }) {
+  useLocale();
   const [url, setUrl] = useState('');
   const [visibility, setVisibility] = useState<Visibility>('members');
   const [problem, setProblem] = useState<string | undefined>();
@@ -470,6 +479,7 @@ export function snippetFor(site: Site): string {
 }
 
 function Install({ workspace, site }: { workspace: Workspace; site: Site }) {
+  useLocale();
   const navigate = useNavigate();
 
   return (
@@ -485,6 +495,7 @@ function Install({ workspace, site }: { workspace: Workspace; site: Site }) {
 }
 
 export function InstallOptions({ workspace, site }: { workspace: Workspace; site: Site }) {
+  useLocale();
   const [copied, setCopied] = useState(false);
   const [link, setLink] = useState<string | undefined>();
   const snippet = snippetFor(site);

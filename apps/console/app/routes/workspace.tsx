@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate, useOutletContext, useParams } from 'react-router';
 import { type Me, type Workspace, callUntilAnswered } from '../api';
 import { adoptLanguage, msg, t } from '../i18n';
+import { useLocale } from '../use-locale';
 
 /**
  * The frame of a workspace (design/boards/4-connectors.png, 5-workspace.png): its name in the corner,
@@ -22,6 +23,7 @@ const SECTIONS = [
 ] as const;
 
 export default function WorkspaceFrame() {
+  useLocale();
   const { workspace: id } = useParams();
   const navigate = useNavigate();
   const [context, setContext] = useState<WorkspaceContext | undefined>();

@@ -79,6 +79,53 @@ describe('the words of the console (FRU-120)', () => {
   });
 });
 
+/** The body of each component of a source: a function whose name starts with a capital. */
+function components(source: string): { name: string; body: string }[] {
+  const found: { name: string; body: string }[] = [];
+  for (const match of source.matchAll(/^(?:export default |export )?function ([A-Z]\w*)\(/gm)) {
+    // Past the parameters, to the brace that opens the body: the first one at depth 0 after `)`.
+    let index = (match.index ?? 0) + match[0].length - 1;
+    let depth = 0;
+    for (; index < source.length; index += 1) {
+      if (source[index] === '(') depth += 1;
+      if (source[index] === ')' && (depth -= 1) === 0) break;
+    }
+    const open = source.indexOf(') {', index) === index ? index + 2 : source.indexOf('{', source.indexOf(')', index));
+    let end = open + 1;
+    for (let braces = 1; end < source.length && braces > 0; end += 1) {
+      if (source[end] === '{') braces += 1;
+      if (source[end] === '}') braces -= 1;
+    }
+    found.push({ name: match[1] as string, body: source.slice(open, end) });
+  }
+
+  return found;
+}
+
+describe('a change of language', () => {
+  it('reaches every component that shows a sentence, because each one subscribes', () => {
+    const deaf: string[] = [];
+    let translating = 0;
+    for (const [name, source] of sources) {
+      for (const component of components(source)) {
+        if (!/\bt\(/.test(component.body)) continue;
+        translating += 1;
+        if (!component.body.includes('useLocale()')) deaf.push(`${name}: ${component.name}`);
+      }
+    }
+
+    assert.deepEqual(deaf, []);
+    assert.ok(translating > 15, `only ${translating} components were found, so the check above saw too little`);
+  });
+
+  it('never mounts a screen again: the root holds no key on the language', () => {
+    const root = sources.get('root.tsx') ?? '';
+
+    assert.equal(/key=\{(?:tag|locale)/.test(root), false);
+    assert.ok(root.includes('useLocale()'));
+  });
+});
+
 describe('the language of a person', () => {
   it('reads a regional tag as its language, and a language with no words as English', () => {
     assert.equal(nearest('fr-CA'), 'fr');

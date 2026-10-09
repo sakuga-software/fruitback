@@ -1,6 +1,7 @@
 import { Card, Chip, Initial } from '../ui';
 import { PageHead, useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
+import { useLocale } from '../use-locale';
 
 const ROLE_WORDS = {
   owner: msg('Owner'),
@@ -14,6 +15,7 @@ const ROLE_WORDS = {
  * form is drawn where the design puts it, and says so.
  */
 export default function Members() {
+  useLocale();
   const { me, workspace } = useWorkspace();
   const name = me.account.name ?? me.account.email.split('@')[0] ?? me.account.email;
 

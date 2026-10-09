@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router';
 import { onReachability } from './api';
 import './app.css';
-import { locale, onLocale, t } from './i18n';
+import { t } from './i18n';
+import { useLocale } from './use-locale';
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  useLocale();
   return (
     <html lang="en">
       <head>
@@ -25,19 +27,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function Root() {
-  const [tag, setTag] = useState(locale());
-  useEffect(() => onLocale(() => setTag(locale())), []);
+  const tag = useLocale();
   useEffect(() => {
     document.documentElement.lang = tag;
   }, [tag]);
 
-  // `t` reads the language when a screen renders. The key makes every screen render again in the new
-  // one, which happens when a person changes it, or when their account holds another than the browser.
+  // No `key` on the language here. A screen mounted again loses what somebody typed and runs its
+  // effects twice: each component renders again by itself, through `useLocale`.
   return (
-    <div key={tag}>
+    <>
       <Unreachable />
       <Outlet />
-    </div>
+    </>
   );
 }
 
@@ -46,6 +47,7 @@ export default function Root() {
  * nothing, or the form of somebody who is signed out.
  */
 function Unreachable() {
+  useLocale();
   const [reachable, setReachable] = useState(true);
   useEffect(() => onReachability(setReachable), []);
   if (reachable) return null;

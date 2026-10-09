@@ -4,9 +4,11 @@ import { call, signOut } from '../api';
 import { Button, Card } from '../ui';
 import { PageHead, useWorkspace } from './workspace';
 import { LOCALES, locale, setLocale, t } from '../i18n';
+import { useLocale } from '../use-locale';
 
 /** My account (design/boards/5-workspace.png): the profile, how I sign in, and the workspace's end. */
 export default function Account() {
+  useLocale();
   const { me, workspace } = useWorkspace();
   const navigate = useNavigate();
   const [confirming, setConfirming] = useState(false);

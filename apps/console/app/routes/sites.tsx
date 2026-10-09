@@ -4,9 +4,11 @@ import { Button, Card, Chip, Field, Problem } from '../ui';
 import { InstallOptions } from './setup';
 import { PageHead, useWorkspace } from './workspace';
 import { t } from '../i18n';
+import { useLocale } from '../use-locale';
 
 /** The sites of the workspace: a site is an address and who sees its notes (P2, P3 of the design). */
 export default function Sites() {
+  useLocale();
   const { workspace } = useWorkspace();
   const [sites, setSites] = useState<Site[] | undefined>();
   const [open, setOpen] = useState<string | undefined>();
@@ -102,6 +104,7 @@ function SiteList({
   onRemove: (site: Site) => void;
   install: (site: Site) => ReactNode;
 }) {
+  useLocale();
   if (sites === undefined) return <p className="p-5 text-sm text-muted">{t('Loading…')}</p>;
   if (sites.length === 0)
     return <p className="p-5 text-sm text-muted">{t('No site yet. Paste the address of the one you review.')}</p>;

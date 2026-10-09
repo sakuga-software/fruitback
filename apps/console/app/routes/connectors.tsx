@@ -3,6 +3,7 @@ import { type Connector, type Destination, type Site, type Team, call } from '..
 import { Button, Card, Field, Problem } from '../ui';
 import { PageHead, useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
+import { useLocale } from '../use-locale';
 
 /**
  * The sources (design/boards/4-connectors.png). Linear connects with an API key (FRU-121). The other
@@ -29,6 +30,7 @@ const KEY_PROBLEMS: Record<string, string> = {
 };
 
 export default function Connectors() {
+  useLocale();
   const { workspace } = useWorkspace();
   const base = `/console/workspaces/${workspace.id}`;
   const manages = workspace.role === 'owner' || workspace.role === 'admin';
@@ -179,6 +181,7 @@ function SourceMark({ children, small = false }: { children: string; small?: boo
 }
 
 function Working() {
+  useLocale();
   return (
     <span className="flex items-center gap-1.5 text-sm font-semibold text-done">
       <span className="h-2 w-2 rounded-full bg-done" />
@@ -189,6 +192,7 @@ function Working() {
 
 /** The key is typed once and sent once. Nothing here keeps it, and the worker never answers it. */
 function AddLinear({ base, onDone }: { base: string; onDone: (connector: Connector | undefined) => void }) {
+  useLocale();
   const [apiKey, setApiKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | undefined>();
@@ -254,6 +258,7 @@ function Detail({
   onChanged: () => Promise<void>;
   onRemoved: () => void;
 }) {
+  useLocale();
   const [teams, setTeams] = useState<Team[] | undefined>();
   const [problem, setProblem] = useState<string | undefined>();
 
