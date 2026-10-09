@@ -462,6 +462,17 @@ console routes answer one origin, `FRUITBACK_CONSOLE_URL`, with credentials. A s
 console can use the session while the page is open; it cannot carry the refresh token away. A
 console session names no workspace, so it reads no site.
 
+### Signing in with GitHub (FRU-97)
+
+An OAuth App, the authorization code, `state` and PKCE (S256). The worker asks only for the identity
+(`read:user user:email`), and **GitHub names the person, never the browser**: the account is the
+primary address GitHub says it verified. An unverified address creates no account and joins none,
+since it would join the account of whoever owns it. The `state` is bound to the browser that left by
+an `HttpOnly` cookie on the callback path (`SameSite=Lax`, because GitHub sends the person back with a
+top-level navigation from another site), must be one this worker issued, and is spent once, within ten
+minutes. The client secret never leaves the worker. GitHub's token is used for these two reads and
+kept nowhere. The session that follows is a console session, as for a link.
+
 ### What the console may change, and who (FRU-99)
 
 The console's routes under `/console/` take the access token of a console session, and read the role

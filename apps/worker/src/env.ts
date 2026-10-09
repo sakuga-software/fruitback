@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { type TemSettings, parseTemCredentials } from './mail.ts';
+import { type GitHubOAuth, parseGitHubOAuth } from './github-oauth.ts';
 import { type ClientMap, originsFromClients, readClientMap, unreadableClients, workspacesOf } from './clients.ts';
 import { DEFAULT_LIMIT } from './rate-limit.ts';
 import type { StoreConfig } from './store-config.ts';
@@ -84,6 +85,13 @@ export type WorkerEnv = {
    */
   FRUITBACK_SCALEWAY_TEM?: string;
   /**
+   * The worker's own public address, for example `https://api.fruitback.com` (FRU-97). GitHub sends
+   * a person back to it, and behind a proxy the worker cannot tell it from the request.
+   */
+  FRUITBACK_PUBLIC_URL?: string;
+  /** Sign-in with GitHub: `<client id>:<client secret>` of an OAuth App (FRU-97). Absent, no button. */
+  FRUITBACK_GITHUB_OAUTH?: string;
+  /**
    * The language of the prose in an issue description (FRU-39). A BCP-47 tag; English by default.
    *
    * **The team that triages reads it, never the reporter**, so it is configured here and never taken
@@ -163,6 +171,10 @@ const configSchema = z.object({
   consoleUrl: z.string().min(1).optional(),
   /** How the worker sends e-mail, or absent when it sends none (FRU-98). */
   mail: z.custom<TemSettings | undefined>().optional(),
+  /** The worker's public address, with no slash at the end (FRU-97). */
+  publicUrl: z.string().min(1).optional(),
+  /** The OAuth App GitHub signs people in with, or absent (FRU-97). */
+  github: z.custom<GitHubOAuth | undefined>().optional(),
   /**
    * The language an issue description is written in (FRU-39), for the team that triages.
    *
@@ -210,6 +222,8 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     accountsPath: env.FRUITBACK_ACCOUNTS_PATH || undefined,
     consoleUrl: readConsoleUrl(env.FRUITBACK_CONSOLE_URL),
     mail: readMail(env),
+    publicUrl: readConsoleUrl(env.FRUITBACK_PUBLIC_URL),
+    github: env.FRUITBACK_GITHUB_OAUTH ? parseGitHubOAuth(env.FRUITBACK_GITHUB_OAUTH) : undefined,
     teamLocale: readTeamLocale(env.FRUITBACK_TEAM_LOCALE),
   };
 
@@ -315,6 +329,25 @@ export function readConfig(env: WorkerEnv): ConfigResult {
         'FRUITBACK_MAIL_FROM and FRUITBACK_SCALEWAY_TEM (both, as an address and <project id>:<secret key>, or neither)',
       ],
     };
+  }
+
+  if (env.FRUITBACK_PUBLIC_URL && result.data.publicUrl === undefined) {
+    return { ok: false, missing: ['FRUITBACK_PUBLIC_URL (an https:// address, or http:// on localhost)'] };
+  }
+
+  // GitHub sends the person back to the worker's own address, and signs them into an account.
+  if (env.FRUITBACK_GITHUB_OAUTH) {
+    if (result.data.github === undefined) {
+      return { ok: false, missing: ['FRUITBACK_GITHUB_OAUTH (<client id>:<client secret> of a GitHub OAuth App)'] };
+    }
+    if (result.data.publicUrl === undefined || result.data.accountsPath === undefined) {
+      return {
+        ok: false,
+        missing: [
+          'FRUITBACK_PUBLIC_URL and FRUITBACK_ACCOUNTS_PATH (FRUITBACK_GITHUB_OAUTH signs a person into an account)',
+        ],
+      };
+    }
   }
 
   // An account signs in to get a session, so accounts without sessions sign in to nothing.

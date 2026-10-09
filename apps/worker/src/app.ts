@@ -11,6 +11,7 @@ import {
 import type { AccountStore } from './accounts.ts';
 import { consoleCors, handleConsoleSession, isConsoleRoute } from './console-routes.ts';
 import { handleConsoleApi } from './console-api.ts';
+import { handleGitHub } from './github-oauth.ts';
 import { type Mailer, createTemMailer } from './mail.ts';
 import { createSqliteAccountStore } from './accounts-sqlite.ts';
 import { type WorkerConfig, type WorkerEnv, readAllowedOrigins, readConfig } from './env.ts';
@@ -118,6 +119,8 @@ export type RequestContext = {
   accounts?: AccountStore;
   /** What sends the sign-in links (FRU-98). A suite hands over one that keeps what it was given. */
   mailer?: Mailer;
+  /** What reaches GitHub on a sign-in (FRU-97). A suite hands over a double of GitHub. */
+  fetcher?: typeof fetch;
   /**
    * Where the rate limiter and the read cache keep their state (FRU-49). When it is absent, the
    * handler uses `processKv`, which gives the one instance of this process and never a new empty one.
@@ -233,6 +236,21 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
       return json(404, { error: 'not-found' }, cors.headers);
 
     try {
+      // Top-level navigations to and from GitHub, not calls of the console (FRU-97).
+      if (served.github !== undefined && served.publicUrl !== undefined && served.consoleUrl !== undefined) {
+        const viaGitHub = await handleGitHub(request, pathname, {
+          oauth: served.github,
+          publicUrl: served.publicUrl,
+          consoleUrl: served.consoleUrl,
+          accounts,
+          sessions,
+          kv,
+          secret: served.identitySecret,
+          ...(context.fetcher === undefined ? {} : { fetcher: context.fetcher }),
+        });
+        if (viaGitHub !== undefined) return viaGitHub;
+      }
+
       const answer =
         (await handleConsoleSession(
           request,

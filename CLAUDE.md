@@ -1074,6 +1074,10 @@ and _The team mode, and the call the page cannot make_:
   `/console/session`, and `consoleCors` answers `FRUITBACK_CONSOLE_URL` and no other origin. A console
   session names no workspace: the `ws` check keeps it off every site. `mail.ts` is the seam, Scaleway
   Transactional Email over HTTP the one implementation.
+- **GitHub names the person, never the browser** (FRU-97). `github-oauth.ts`: `state` bound to the
+  browser by a `SameSite=Lax` cookie (a `Strict` one is not sent on the way back from github.com),
+  issued by this worker and spent once; PKCE; the account is GitHub's **verified primary** address.
+  `FRUITBACK_PUBLIC_URL` is the callback's base: behind the proxy the worker sees only `http://`.
 
 **The markdown codec**
 
