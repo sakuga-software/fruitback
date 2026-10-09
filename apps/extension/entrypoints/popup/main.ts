@@ -15,6 +15,9 @@ import { PAIRING_CODE_REQUIRED, PAIRING_NEEDS_HTTPS, PAIRING_PROBLEM } from '../
 import { type PairLink, parsePairLink } from '../../src/pair-link.ts';
 import { createBrowserPending } from '../../src/pending-site-browser.ts';
 import { type CloudSeams, type Offer, cloudEntry, offerFor } from '../../src/cloud.ts';
+import { language, msg, setLanguage, t } from '../../src/i18n.ts';
+import { storedLanguage } from '../../src/language.ts';
+import { rememberLanguage } from '../../src/language-sync.ts';
 
 /**
  * The switch for the tab you are looking at, and the two fields that make it work (FRU-41).
@@ -41,7 +44,16 @@ const pending = createBrowserPending(writeSite);
 
 const app = document.querySelector('#app');
 
-void render();
+/** The language of the account when the extension knows it, the browser's own otherwise. */
+const spoken = storedLanguage(browser.storage.local).then((kept) => {
+  setLanguage(kept ?? navigator.language);
+  document.documentElement.lang = language();
+});
+
+void spoken.then(() => render());
+// Not awaited, and no draw after it: a draw would lose what somebody types in the form. The next
+// popup reads what this one learned.
+void rememberLanguage(browser.storage.local, cloudSeams()).catch(() => undefined);
 
 /**
  * @param editing Show the fields for an origin that already has an entry.
@@ -60,7 +72,7 @@ async function render(editing = false): Promise<void> {
   if (origin === undefined) {
     // A `chrome://` page, the store, a PDF viewer. Nothing is wrong, and saying so is better than an
     // enabled-looking switch that silently does nothing.
-    app.textContent = 'Fruitback works on http and https pages.';
+    app.textContent = t('Fruitback works on http and https pages.');
 
     return;
   }
@@ -72,7 +84,7 @@ async function render(editing = false): Promise<void> {
     app.replaceChildren(element('h1', 'Fruitback'), element('p', origin, 'origin'), ...(await linked(link)));
     // An address of this shape is not proof of a worker: a page of a site to review can end in
     // `/pair` with a fragment that looks like a code. The way to the site's own screen stays open.
-    const site = element('button', NOT_A_LINK, 'secondary');
+    const site = element('button', t(NOT_A_LINK), 'secondary');
     site.addEventListener('click', () => void render(true));
     app.append(site, optionsButton());
 
@@ -99,7 +111,7 @@ async function render(editing = false): Promise<void> {
     element('h1', 'Fruitback'),
     element('p', origin, 'origin'),
     // FRU-43: why the widget does or does not appear here must be answerable from the toolbar.
-    element('p', found === undefined ? NO_RULE : `Rule: ${found.pattern}`, 'rule'),
+    element('p', found === undefined ? t(NO_RULE) : t('Rule: {pattern}', { pattern: found.pattern }), 'rule'),
     open || found === undefined ? form(origin, found, draft) : status(found),
   );
 
@@ -111,7 +123,7 @@ async function render(editing = false): Promise<void> {
   app.append(optionsButton());
 }
 
-const NO_RULE = 'No rule covers this origin, so Fruitback does nothing here.';
+const NO_RULE = msg('No rule covers this origin, so Fruitback does nothing here.');
 
 /** What `offerFor` needs, bound to the popup's one `Sessions`. */
 function cloudSeams(): CloudSeams {
@@ -122,8 +134,8 @@ function cloudSeams(): CloudSeams {
 }
 
 const IN_WORKSPACE = (name: string): string =>
-  name === '' ? 'This site is in your workspace.' : `This site is in the workspace ${name}.`;
-const TURN_ON_HERE = 'Turn on Fruitback here';
+  name === '' ? t('This site is in your workspace.') : t('This site is in the workspace {name}.', { name });
+const TURN_ON_HERE = msg('Turn on Fruitback here');
 
 /**
  * The one click (FRU-101). The browser asks for this site only, and the click is the gesture that
@@ -131,12 +143,12 @@ const TURN_ON_HERE = 'Turn on Fruitback here';
  */
 function oneClick(offer: Offer): HTMLElement {
   const wrapper = document.createElement('div');
-  const button = element('button', TURN_ON_HERE);
+  const button = element('button', t(TURN_ON_HERE));
   const problem = element('p', '', 'problem');
   const turn = (): void =>
     void turnOn(offer.site.origin, cloudEntry(offer)).then(refused(problem, turn), failed(problem));
   button.addEventListener('click', turn);
-  const byHand = element('button', 'Set up by hand', 'secondary');
+  const byHand = element('button', t('Set up by hand'), 'secondary');
   byHand.addEventListener('click', () => void render(true));
   wrapper.append(element('p', IN_WORKSPACE(offer.workspace.name), 'rule'), button, problem, byHand);
 
@@ -156,11 +168,11 @@ function readability(site: SiteConfig, pageUrl: string): HTMLElement {
   void probeRead(site, pageUrl, { fetch: (url, init) => fetch(url, init) }).then((answer) => {
     if (answer !== 'wants-a-session') return;
 
-    const guide = element('a', 'Which mode can read it');
+    const guide = element('a', t('Which mode can read it'));
     guide.href = MODES_GUIDE;
     guide.target = '_blank';
     guide.rel = 'noreferrer';
-    line.append(`${READ_NEEDS_SESSION} `, guide);
+    line.append(`${t(READ_NEEDS_SESSION)} `, guide);
   });
 
   return line;
@@ -168,7 +180,7 @@ function readability(site: SiteConfig, pageUrl: string): HTMLElement {
 
 /** Every entry, wildcards and the rules file included, on the options page (FRU-43). */
 function optionsButton(): HTMLElement {
-  const button = element('button', 'All sites and rules', 'secondary');
+  const button = element('button', t('All sites and rules'), 'secondary');
   button.addEventListener('click', () => void browser.runtime.openOptionsPage());
 
   return button;
@@ -203,14 +215,18 @@ async function grantWorkerOrigin(endpoint: string): Promise<boolean> {
 async function linked(link: PairLink): Promise<HTMLElement[]> {
   const held = (await sessions.list())[link.endpoint];
   if (held !== undefined) {
-    return [paired(link.endpoint, describeIdentity(held.identity)), element('p', LINK_ALREADY_PAIRED, 'state')];
+    return [paired(link.endpoint, describeIdentity(held.identity)), element('p', t(LINK_ALREADY_PAIRED), 'state')];
   }
 
-  const submit = element('button', 'Pair with this worker');
+  const submit = element('button', t('Pair with this worker'));
   const problem = element('p', '', 'problem');
   const wrapper = document.createElement('div');
   wrapper.className = 'session';
-  wrapper.append(element('p', `This page is a pairing link for ${link.endpoint}.`, 'state'), submit, problem);
+  wrapper.append(
+    element('p', t('This page is a pairing link for {worker}.', { worker: link.endpoint }), 'state'),
+    submit,
+    problem,
+  );
 
   if (!isSecureWorkerEndpoint(link.endpoint)) {
     submit.disabled = true;
@@ -225,13 +241,13 @@ async function linked(link: PairLink): Promise<HTMLElement[]> {
   return [wrapper];
 }
 
-const NOT_A_LINK = 'This is a site to review';
+const NOT_A_LINK = msg('This is a site to review');
 
-const LINK_ALREADY_PAIRED = 'This browser is already paired with that worker, so the link is not needed.';
+const LINK_ALREADY_PAIRED = msg('This browser is already paired with that worker, so the link is not needed.');
 
 /** Who this browser is paired as with a worker, and the way out. */
 function paired(endpoint: string, identity: string): HTMLElement {
-  const out = element('button', 'Log out');
+  const out = element('button', t('Log out'));
   out.addEventListener('click', () => {
     out.disabled = true;
     // `logout` revokes on the worker first and clears here whatever that answers. See its comment:
@@ -249,7 +265,7 @@ function paired(endpoint: string, identity: string): HTMLElement {
 
   const row = document.createElement('div');
   row.className = 'row';
-  row.append(element('span', `Paired as ${identity}`, 'state'), out);
+  row.append(element('span', t('Paired as {identity}', { identity }), 'state'), out);
 
   const wrapper = document.createElement('div');
   wrapper.className = 'session';
@@ -321,8 +337,8 @@ async function session(site: SiteConfig): Promise<HTMLElement[]> {
   if (held === undefined && site.mode !== 'team') return [];
   if (held !== undefined) return [paired(endpoint, describeIdentity(held.identity))];
 
-  const code = field('Pairing code', 'ABCD-EFGH-JKMN');
-  const submit = element('button', 'Pair with this worker');
+  const code = field(t('Pairing code'), 'ABCD-EFGH-JKMN');
+  const submit = element('button', t('Pair with this worker'));
   const problem = element('p', '', 'problem');
 
   // The worker this rule names is what is wrong, so the way out is the fields of the rule.
@@ -346,7 +362,7 @@ async function session(site: SiteConfig): Promise<HTMLElement[]> {
   typed.hidden = isSecureWorkerEndpoint(endpoint);
   typed.append(code.label, submit, problem);
 
-  const reveal = element('button', 'I have a code', 'secondary');
+  const reveal = element('button', t('I have a code'), 'secondary');
   reveal.hidden = typed.hidden === false;
   reveal.setAttribute('aria-expanded', 'false');
   reveal.addEventListener('click', () => {
@@ -361,16 +377,16 @@ async function session(site: SiteConfig): Promise<HTMLElement[]> {
   // Said plainly, because it is the difference between a page that shows this reviewer's pins and
   // one that shows nothing at all: the relay refuses a call it has no session for, rather than
   // making it without one.
-  row.append(element('span', 'Not paired — this site cannot reach the worker until you do', 'state'));
+  row.append(element('span', t('Not paired — this site cannot reach the worker until you do'), 'state'));
 
   const wrapper = document.createElement('div');
   wrapper.className = 'session';
-  wrapper.append(row, element('p', HOW_TO_PAIR, 'state'), reveal, typed);
+  wrapper.append(row, element('p', t(HOW_TO_PAIR), 'state'), reveal, typed);
 
   return [wrapper];
 }
 
-const HOW_TO_PAIR = 'Open the pairing link you were sent, then click this icon on that page.';
+const HOW_TO_PAIR = msg('Open the pairing link you were sent, then click this icon on that page.');
 
 /**
  * Ask for the mode, and for what that mode cannot work without.
@@ -385,9 +401,9 @@ function form(origin: string, found?: ResolvedSite, draft?: SiteConfig): HTMLEle
   // A wildcard entry is saved under its own pattern, so the change reaches every site it covers.
   const pattern = found?.pattern ?? origin;
   const mode = modeField(shown?.mode ?? 'private');
-  const endpoint = field('Worker endpoint', 'https://feedback.acme.dev');
-  const clientId = field('Client id', 'acme');
-  const save = element('button', site === undefined ? 'Turn on for this site' : 'Save');
+  const endpoint = field(t('Worker endpoint'), 'https://feedback.acme.dev');
+  const clientId = field(t('Client id'), 'acme');
+  const save = element('button', site === undefined ? t('Turn on for this site') : t('Save'));
   const problem = element('p', '', 'problem');
 
   endpoint.input.value = shown?.endpoint ?? '';
@@ -485,8 +501,8 @@ async function turnOn(pattern: string, site: SiteConfig): Promise<boolean> {
 function status({ pattern, site }: ResolvedSite): HTMLElement {
   // A wildcard entry switches every site it covers, so the button must not say "here".
   const wide = isWildcardPattern(pattern);
-  const off = wide ? 'Turn off for every site this rule covers' : 'Turn off here';
-  const on = wide ? 'Turn on for every site this rule covers' : 'Turn on here';
+  const off = wide ? t('Turn off for every site this rule covers') : t('Turn off here');
+  const on = wide ? t('Turn on for every site this rule covers') : t('Turn on here');
   const toggle = element('button', site.enabled ? off : on);
   const problem = element('p', '', 'problem');
   toggle.addEventListener('click', () => {
@@ -501,7 +517,7 @@ function status({ pattern, site }: ResolvedSite): HTMLElement {
     turn();
   });
 
-  const change = element('button', 'Change');
+  const change = element('button', t('Change'));
   change.className = 'secondary';
   change.addEventListener('click', () => void render(true));
 
@@ -510,7 +526,7 @@ function status({ pattern, site }: ResolvedSite): HTMLElement {
 
   const row = document.createElement('div');
   row.className = 'row';
-  row.append(element('span', `${site.enabled ? 'On' : 'Off'} · ${describeSite(site)}`, 'state'), buttons);
+  row.append(element('span', `${site.enabled ? t('On') : t('Off')} · ${describeSite(site)}`, 'state'), buttons);
 
   const wrapper = document.createElement('div');
   wrapper.append(row, problem);
@@ -546,9 +562,11 @@ function failed(problem: HTMLElement): (error: unknown) => void {
 /** What this entry is switching, in one phrase: a client id in private mode, the mode in team. */
 function describeSite(site: SiteConfig): string {
   if (site.mode === 'private') return site.clientId;
-  if (site.mount !== undefined) return `workspace · ${site.mount.workspace ?? site.mount.clientId}`;
+  if (site.mount !== undefined) {
+    return t('workspace · {name}', { name: site.mount.workspace ?? site.mount.clientId });
+  }
 
-  return "team mode · the site's own widget";
+  return t("team mode · the site's own widget");
 }
 
 function modeField(current: SiteMode): { label: HTMLLabelElement; select: HTMLSelectElement } {
@@ -559,14 +577,15 @@ function modeField(current: SiteMode): { label: HTMLLabelElement; select: HTMLSe
   ]) {
     const option = document.createElement('option');
     option.value = value as string;
-    option.textContent = text as string;
+    // The label stays English in the list above: the guide is checked against it.
+    option.textContent = t(text as string);
     select.append(option);
   }
 
   select.value = current;
 
   const wrapper = document.createElement('label');
-  wrapper.append('Mode', select);
+  wrapper.append(t('Mode'), select);
 
   return { label: wrapper, select };
 }

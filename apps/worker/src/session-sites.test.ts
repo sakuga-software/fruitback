@@ -77,6 +77,16 @@ describe('the sites a session may turn on (FRU-101)', () => {
     assert.equal(response.headers.get('Access-Control-Allow-Origin'), EXTENSION);
   });
 
+  it('answers the language of the account, when it holds one (FRU-131)', async () => {
+    const env = envWith();
+    const { alice, token } = await setUp(env);
+    assert.equal('locale' in ((await (await ask(env, token)).json()) as object), false, 'no language yet: no field');
+
+    await createSqliteAccountStore(env.FRUITBACK_ACCOUNTS_PATH as string).setLocale(alice.id, 'fr');
+
+    assert.equal(((await (await ask(env, token)).json()) as { locale?: string }).locale, 'fr');
+  });
+
   it('answers nobody without a token, and nothing to a session that names no workspace', async () => {
     const env = envWith();
     const { alice } = await setUp(env);

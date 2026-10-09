@@ -356,3 +356,53 @@ test('a pairing link pairs with one click, and the site then works through that 
   await expect(popup.getByText('That code has been used or has expired. Ask for a new one.')).toBeVisible();
   await expect(popup.getByRole('link', { name: 'How to get a code' })).toBeVisible();
 });
+
+test('the popup, the options page and the mounted widget speak the language of the account (FRU-131)', async ({
+  extension,
+}) => {
+  await addRule(extension, { mode: 'team', endpoint: AUTHENTICATED_WORKER_ORIGIN });
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'ext-language');
+  // The control: English, in the popup and then on the page.
+  await pairFromPopup(extension, page, mintPairingCode(REVIEWER), REVIEWER);
+  const setUp = await openPopup(extension, page);
+  await setUp.getByRole('button', { name: 'Change' }).click();
+  await setUp.getByLabel(/^Mode/).selectOption('private');
+  await setUp.getByLabel('Client id', { exact: true }).fill('playground');
+  await setUp.getByRole('button', { name: 'Save' }).click();
+  await expect(setUp.getByText('On · playground', { exact: false })).toBeVisible();
+  await setUp.close();
+  await expect(page.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
+
+  // What a popup keeps after the worker of the session said the account reads French. This worker
+  // keeps no accounts, so it says nothing, and a worker that says nothing changes nothing.
+  await extension.worker.evaluate(() => chrome.storage.local.set({ language: 'fr' }));
+
+  // The open tab gets the widget again, in French, with no reload.
+  await expect(page.getByRole('button', { name: 'Laisser un feedback' })).toBeVisible();
+
+  const popup = await openPopup(extension, page);
+  await expect(popup.getByText(`Appairé en tant que ${REVIEWER}`)).toBeVisible();
+  await expect(popup.getByText('Activé · playground', { exact: false })).toBeVisible();
+  await expect(popup.getByRole('button', { name: 'Tous les sites et les règles' })).toBeVisible();
+  expect(await popup.evaluate(() => document.documentElement.lang)).toBe('fr');
+
+  const options = await extension.context.newPage();
+  await options.goto(`chrome-extension://${extension.id}/options.html`);
+  await expect(options.getByRole('heading', { name: 'Sites Fruitback' })).toBeVisible();
+  await expect(options.getByRole('button', { name: 'Ajouter la règle' })).toBeVisible();
+  await options.close();
+
+  // The popup asked the worker, got no answer about a language, and kept what it had.
+  expect(await extension.worker.evaluate(() => chrome.storage.local.get('language'))).toEqual({ language: 'fr' });
+
+  // Logged out, no account is left to speak for: the next popup reads the browser's language again.
+  await popup.getByRole('button', { name: 'Se déconnecter' }).click();
+  await expect(popup.getByText(`Appairé en tant que ${REVIEWER}`)).toHaveCount(0);
+  await popup.close();
+  const after = await openPopup(extension, page);
+  await expect.poll(() => extension.worker.evaluate(() => chrome.storage.local.get('language'))).toEqual({});
+  await after.reload();
+  await expect(after.getByText('On · playground', { exact: false })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
+});

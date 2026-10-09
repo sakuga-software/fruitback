@@ -9,6 +9,8 @@ import { exportSites, importSites } from '../../src/site-transfer.ts';
 import { type SiteConfig, type SiteMode, readAll, removeSite, writeSite, writeSites } from '../../src/sites.ts';
 import { showProblem } from '../../src/problem-view.ts';
 import { IMPORT_PROBLEM } from '../../src/remedy.ts';
+import { language, setLanguage, t } from '../../src/i18n.ts';
+import { storedLanguage } from '../../src/language.ts';
 
 /**
  * Every site entry, wildcards included, and the rules file a team hands around (FRU-43).
@@ -38,6 +40,11 @@ const editor = createEditor({
 });
 const beginRender = latestOnly();
 
+// The language of the account when the extension knows it, the browser's own otherwise. Before the
+// first element: every sentence below is written once.
+setLanguage((await storedLanguage(browser.storage.local)) ?? navigator.language);
+document.documentElement.lang = language();
+
 const app = document.querySelector('#app');
 const list = document.createElement('div');
 /** Where a change made from a row reports that it was not confirmed. */
@@ -45,10 +52,10 @@ const notice = element('p', '', 'problem');
 
 if (app !== null) {
   app.append(
-    element('h1', 'Fruitback sites'),
+    element('h1', t('Fruitback sites')),
     element(
       'p',
-      'A rule says which worker, and which client, a site belongs to. A site that no rule covers mounts nothing.',
+      t('A rule says which worker, and which client, a site belongs to. A site that no rule covers mounts nothing.'),
     ),
     list,
     notice,
@@ -84,7 +91,7 @@ async function renderList(): Promise<void> {
   for (const control of needsList) control.disabled = false;
   list.replaceChildren(
     patterns.length === 0
-      ? element('p', 'No rules yet. Add one below, or turn a site on from the toolbar.', 'state')
+      ? element('p', t('No rules yet. Add one below, or turn a site on from the toolbar.'), 'state')
       : rows,
   );
 }
@@ -93,7 +100,7 @@ async function row(pattern: string, site: SiteConfig): Promise<HTMLElement> {
   // A permission does not travel with an imported rule, and it can be revoked in the browser's own
   // settings. The background registers nothing without it, so the row says so.
   const granted = await browser.permissions.contains({ origins: [matchPatternFor(pattern)] });
-  const client = site.mode === 'team' ? "team mode · the site's own widget" : site.clientId;
+  const client = site.mode === 'team' ? t("team mode · the site's own widget") : site.clientId;
 
   // A rule stored before FRU-75. It runs nowhere now, so the row offers only to remove it.
   const refused = lendsSession(pattern, site);
@@ -101,23 +108,23 @@ async function row(pattern: string, site: SiteConfig): Promise<HTMLElement> {
   const buttons = document.createElement('span');
   buttons.className = 'buttons';
   if (!refused) {
-    if (!granted) buttons.append(button('Grant access', () => attempt(() => grant(pattern, site))));
+    if (!granted) buttons.append(button(t('Grant access'), () => attempt(() => grant(pattern, site))));
     buttons.append(
       site.enabled
-        ? button('Turn off', () => attempt(() => writeSite(pattern, { ...site, enabled: false })))
-        : button('Turn on', () => attempt(() => editor.switchOn(pattern, site))),
+        ? button(t('Turn off'), () => attempt(() => writeSite(pattern, { ...site, enabled: false })))
+        : button(t('Turn on'), () => attempt(() => editor.switchOn(pattern, site))),
     );
   }
-  buttons.append(button('Remove', () => attempt(() => removeSite(pattern)), 'secondary'));
+  buttons.append(button(t('Remove'), () => attempt(() => removeSite(pattern)), 'secondary'));
 
   const item = document.createElement('li');
   item.append(
     element('span', pattern, 'pattern'),
     buttons,
-    element('span', `${site.enabled && !refused ? 'On' : 'Off'} · ${client} · ${site.endpoint}`, 'state'),
+    element('span', `${site.enabled && !refused ? t('On') : t('Off')} · ${client} · ${site.endpoint}`, 'state'),
     refused
-      ? element('span', STALE_TEAM_WILDCARD, 'problem')
-      : element('span', granted ? 'Access granted' : 'No access in this browser', granted ? 'state' : 'problem'),
+      ? element('span', t(STALE_TEAM_WILDCARD), 'problem')
+      : element('span', granted ? t('Access granted') : t('No access in this browser'), granted ? 'state' : 'problem'),
   );
 
   return item;
@@ -163,10 +170,10 @@ function reloadList(): void {
 }
 
 function addForm(): HTMLElement {
-  const sites = field('Sites', 'https://*.staging.acme.dev');
+  const sites = field(t('Sites'), 'https://*.staging.acme.dev');
   const mode = modeField();
-  const endpoint = field('Worker endpoint', 'https://feedback.acme.dev');
-  const clientId = field('Client id', 'acme');
+  const endpoint = field(t('Worker endpoint'), 'https://feedback.acme.dev');
+  const clientId = field(t('Client id'), 'acme');
   const submit = (): void => {
     void editor
       .add({
@@ -180,7 +187,7 @@ function addForm(): HTMLElement {
         if (text === '') for (const input of [sites.input, endpoint.input, clientId.input]) input.value = '';
       });
   };
-  const add = button('Add rule', submit);
+  const add = button(t('Add rule'), submit);
   add.disabled = true;
   needsList.push(add);
   const problem = element('p', '', 'problem');
@@ -192,13 +199,13 @@ function addForm(): HTMLElement {
   showFields();
 
   const wrapper = document.createElement('section');
-  wrapper.append(element('h2', 'Add a rule'), sites.label, mode.label, endpoint.label, clientId.label, add, problem);
+  wrapper.append(element('h2', t('Add a rule')), sites.label, mode.label, endpoint.label, clientId.label, add, problem);
 
   return wrapper;
 }
 
 function transfer(): HTMLElement {
-  const exporter = button('Export rules', () => {
+  const exporter = button(t('Export rules'), () => {
     const url = URL.createObjectURL(new Blob([exportSites(current)], { type: 'application/json' }));
     const link = document.createElement('a');
     link.href = url;
@@ -213,7 +220,7 @@ function transfer(): HTMLElement {
   input.type = 'file';
   input.accept = 'application/json,.json';
   const label = document.createElement('label');
-  label.append('Import a rules file', input);
+  label.append(t('Import a rules file'), input);
   const result = element('p', '', 'state');
 
   input.addEventListener('change', () => {
@@ -246,18 +253,23 @@ function transfer(): HTMLElement {
         if (site.enabled) await injectIntoOpenTabs(scripting, pattern);
       }
       const count = Object.keys(parsed.sites).length;
+      const imported = count === 1 ? t('Imported 1 rule.') : t('Imported {count} rules.', { count });
       const skipped =
-        parsed.skipped.length > 0 ? ` Skipped, because they are not valid: ${parsed.skipped.join(', ')}.` : '';
-      result.textContent = `Imported ${count} ${count === 1 ? 'rule' : 'rules'}.${skipped}`;
+        parsed.skipped.length > 0
+          ? ` ${t('Skipped, because they are not valid: {patterns}.', { patterns: parsed.skipped.join(', ') })}`
+          : '';
+      result.textContent = `${imported}${skipped}`;
     })();
   });
 
   const wrapper = document.createElement('section');
   wrapper.append(
-    element('h2', 'Share rules'),
+    element('h2', t('Share rules')),
     element(
       'p',
-      'A rules file holds patterns, modes, endpoints and client ids. It holds no session and no access. An imported rule replaces the rule with the same pattern, and the other rules stay.',
+      t(
+        'A rules file holds patterns, modes, endpoints and client ids. It holds no session and no access. An imported rule replaces the rule with the same pattern, and the other rules stay.',
+      ),
     ),
     exporter,
     label,
@@ -276,12 +288,13 @@ function modeField(): { label: HTMLLabelElement; select: HTMLSelectElement } {
   for (const [value, text] of modes) {
     const option = document.createElement('option');
     option.value = value;
-    option.textContent = text;
+    // The label stays English in the list above: the guide is checked against it.
+    option.textContent = t(text);
     select.append(option);
   }
 
   const wrapper = document.createElement('label');
-  wrapper.append('Mode', select);
+  wrapper.append(t('Mode'), select);
 
   return { label: wrapper, select };
 }

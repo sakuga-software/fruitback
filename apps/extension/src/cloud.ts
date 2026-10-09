@@ -12,7 +12,8 @@ import type { SiteConfig } from './sites.ts';
  */
 
 export type WorkspaceSite = { id: string; origin: string; visibility: 'members' | 'everyone' };
-export type WorkspaceSites = { workspace: { id: string; name: string }; sites: WorkspaceSite[] };
+/** `locale` is the language of the account behind the session, when it holds one (FRU-131). */
+export type WorkspaceSites = { workspace: { id: string; name: string }; sites: WorkspaceSite[]; locale?: string };
 export type Offer = { endpoint: string; workspace: { id: string; name: string }; site: WorkspaceSite };
 
 export type CloudSeams = {
@@ -24,12 +25,13 @@ export type CloudSeams = {
 /** The answer of `GET /session/sites`, parsed field by field: a bad entry costs that site. */
 export function parseWorkspaceSites(body: unknown): WorkspaceSites | undefined {
   if (typeof body !== 'object' || body === null) return undefined;
-  const { workspace, sites } = body as { workspace?: unknown; sites?: unknown };
+  const { workspace, sites, locale } = body as { workspace?: unknown; sites?: unknown; locale?: unknown };
   if (typeof workspace !== 'object' || workspace === null || !Array.isArray(sites)) return undefined;
   const { id, name } = workspace as { id?: unknown; name?: unknown };
   if (typeof id !== 'string' || id === '') return undefined;
 
   return {
+    ...(typeof locale === 'string' && locale !== '' && locale.length <= 35 ? { locale } : {}),
     workspace: { id, name: typeof name === 'string' ? name : '' },
     sites: sites.flatMap((site: unknown) => {
       if (typeof site !== 'object' || site === null) return [];
@@ -61,21 +63,52 @@ export async function offerFor(
     const access = await ensureAccess(endpoint).catch(() => undefined);
     if (access === undefined || !access.ok) continue;
 
-    try {
-      const response = await fetcher(`${endpoint}/session/sites`, {
-        headers: { Authorization: `Bearer ${access.grant.accessToken}` },
-        signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
-      });
-      if (!response.ok) continue;
-      const listed = parseWorkspaceSites(await response.json());
-      const site = listed?.sites.find((each) => each.origin === origin);
-      if (listed !== undefined && site !== undefined) return { endpoint, workspace: listed.workspace, site };
-    } catch {
-      continue;
-    }
+    const listed = await ask(endpoint, access.grant.accessToken, fetcher);
+    const site = listed?.sites.find((each) => each.origin === origin);
+    if (listed !== undefined && site !== undefined) return { endpoint, workspace: listed.workspace, site };
   }
 
   return undefined;
+}
+
+/** One bounded `GET /session/sites`. Nothing when the worker keeps no accounts, or does not answer. */
+async function ask(endpoint: string, accessToken: string, fetcher: typeof fetch): Promise<WorkspaceSites | undefined> {
+  try {
+    const response = await fetcher(`${endpoint}/session/sites`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
+    });
+
+    return response.ok ? parseWorkspaceSites(await response.json()) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The language of the reviewer's account, from the first session whose worker says one (FRU-131).
+ *
+ * `no-answer` is not « no language »: sessions exist and no worker answered. With no session at
+ * all, the answer is an account with no language.
+ */
+export async function accountLanguage({
+  endpoints,
+  ensureAccess,
+  fetcher = fetch,
+}: CloudSeams): Promise<{ locale?: string } | 'no-answer'> {
+  const paired = (await endpoints()).filter(isSecureWorkerEndpoint);
+  let answered = paired.length === 0;
+  for (const endpoint of paired) {
+    const access = await ensureAccess(endpoint).catch(() => undefined);
+    if (access === undefined || !access.ok) continue;
+
+    const listed = await ask(endpoint, access.grant.accessToken, fetcher);
+    if (listed === undefined) continue;
+    if (listed.locale !== undefined) return { locale: listed.locale };
+    answered = true;
+  }
+
+  return answered ? {} : 'no-answer';
 }
 
 /** The entry the one click stores. */

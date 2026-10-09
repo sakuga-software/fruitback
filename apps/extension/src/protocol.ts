@@ -72,6 +72,11 @@ export type MountMessage = {
   clientId: string;
   label?: string;
   /**
+   * The language of the reviewer's account (FRU-131). Left out, the widget reads the page's own. It
+   * is no secret: a locale tag, and the page can read it like the rest of this message.
+   */
+  locale?: string;
+  /**
    * The widget calls the worker through the relay of the reviewer's session (FRU-101): a team-mode
    * entry for a site that embeds nothing. The page can forge this flag, and it buys nothing: the
    * background relays only for a site its own storage says is in team mode.
@@ -160,7 +165,7 @@ export function parseBridgeMessage(data: unknown): BridgeMessage | undefined {
   if (data.kind === 'relay-response') return parseRelayResponseMessage(data);
   if (data.kind !== 'mount') return undefined;
 
-  const { endpoint, clientId, label, relay } = data;
+  const { endpoint, clientId, label, relay, locale } = data;
   if (!isWorkerEndpoint(endpoint) || !isNonEmptyString(clientId)) return undefined;
 
   return {
@@ -169,6 +174,7 @@ export function parseBridgeMessage(data: unknown): BridgeMessage | undefined {
     endpoint,
     clientId,
     ...(isNonEmptyString(label) ? { label } : {}),
+    ...(isNonEmptyString(locale) && locale.length <= 35 ? { locale } : {}),
     ...(relay === true ? { relay: true } : {}),
   };
 }

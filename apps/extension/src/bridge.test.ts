@@ -25,6 +25,46 @@ function gated() {
 }
 
 describe('createApply', () => {
+  it('sends the language of the account with a mount, and none when the extension knows none (FRU-131)', async () => {
+    const posts: BridgeMessage[] = [];
+    const post = (m: BridgeMessage): void => void posts.push(m);
+    await createApply({ readSite: async () => SITE, readLanguage: async () => 'fr', post })();
+    await createApply({ readSite: async () => SITE, readLanguage: async () => undefined, post })();
+    await createApply({ readSite: async () => SITE, readLanguage: async () => Promise.reject(new Error('x')), post })();
+
+    assert.deepEqual(posts, [{ ...MOUNT, locale: 'fr' }, MOUNT, MOUNT]);
+  });
+
+  it('posts again when the language changes, and not when it stays', async () => {
+    const posts: BridgeMessage[] = [];
+    let spoken: string | undefined = 'fr';
+    const apply = createApply({
+      readSite: async () => SITE,
+      readLanguage: async () => spoken,
+      post: (m) => void posts.push(m),
+    });
+    await apply();
+    await apply();
+    spoken = 'en';
+    await apply();
+
+    assert.deepEqual(posts, [
+      { ...MOUNT, locale: 'fr' },
+      { ...MOUNT, locale: 'en' },
+    ]);
+  });
+
+  it('sends no language to a site that embeds its own widget', async () => {
+    const posts: BridgeMessage[] = [];
+    await createApply({
+      readSite: async () => TEAM_SITE,
+      readLanguage: async () => 'fr',
+      post: (m) => void posts.push(m),
+    })();
+
+    assert.deepEqual(posts, [ANNOUNCE]);
+  });
+
   it('posts a mount for a site that is on', async () => {
     const posts: BridgeMessage[] = [];
     await createApply({ readSite: async () => SITE, post: (m) => void posts.push(m) })();

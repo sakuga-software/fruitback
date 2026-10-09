@@ -119,6 +119,9 @@ Since FRU-119 an account also holds the language its person reads, taken from th
   « Remember me on this site »**. No e-mail, no note. In private mode the extension writes `fruitback:config:extension` into **the site's**
   storage, so a site can see that a reviewer used the extension on it.
 - The extension keeps its rules and its session tokens in its own storage, which no page can read.
+  It also keeps the language of the reviewer's account there. That language goes to a page where
+  the extension mounts the widget, so the widget speaks it: a site a reviewer turned on can read
+  which language their account is set to.
 - The widget sets no cookie.
 
 ## How long a note is kept

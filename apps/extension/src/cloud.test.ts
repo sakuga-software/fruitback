@@ -1,7 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createApply } from './bridge.ts';
-import { cloudEntry, offerFor, parseWorkspaceSites } from './cloud.ts';
+import { accountLanguage, cloudEntry, offerFor, parseWorkspaceSites } from './cloud.ts';
+import { type LanguageArea, storedLanguage } from './language.ts';
+import { rememberLanguage } from './language-sync.ts';
 import { CHANNEL, type BridgeMessage, parseBridgeMessage } from './protocol.ts';
 import { parseSite } from './sites.ts';
 import type { AccessResult } from './session.ts';
@@ -154,5 +156,81 @@ describe('a site of the workspace, once on (FRU-101)', () => {
     const site = parseSite({ mode: 'team', endpoint: 'https://api.fruitback.test', mount: { clientId: '  ' } });
 
     assert.deepEqual(site, { mode: 'team', endpoint: 'https://api.fruitback.test', enabled: true });
+  });
+});
+
+/** A storage area a test can read. */
+function area(initial: Record<string, unknown> = {}): LanguageArea & { values: Record<string, unknown> } {
+  const values = { ...initial };
+
+  return {
+    values,
+    get: async (key) => (key in values ? { [key]: values[key] } : {}),
+    set: async (items) => void Object.assign(values, items),
+    remove: async (key) => void delete values[key],
+  };
+}
+
+const PAIRED = { endpoints: async () => ['https://api.fruitback.test'], ensureAccess: async () => GRANTED };
+
+describe('the language of the account (FRU-131)', () => {
+  it('is read from the answer of the worker, and a value that is no tag is left out', () => {
+    assert.equal(parseWorkspaceSites({ ...LISTED, locale: 'fr' })?.locale, 'fr');
+    assert.equal(parseWorkspaceSites({ ...LISTED, locale: 7 })?.locale, undefined);
+    assert.equal(parseWorkspaceSites({ ...LISTED, locale: 'x'.repeat(36) })?.locale, undefined);
+    assert.equal(parseWorkspaceSites(LISTED)?.locale, undefined);
+  });
+
+  it('comes from the first session whose worker says one', async () => {
+    const { fetcher } = worker({ ...LISTED, locale: 'fr' });
+
+    assert.deepEqual(await accountLanguage({ ...PAIRED, fetcher }), { locale: 'fr' });
+  });
+
+  it('is asked over https only, like every call that carries the token', async () => {
+    const { fetcher, asked } = worker({ ...LISTED, locale: 'fr' });
+    const answer = await accountLanguage({ ...PAIRED, endpoints: async () => ['http://worker.acme.dev'], fetcher });
+
+    assert.deepEqual(answer, {});
+    assert.deepEqual(asked, []);
+  });
+
+  it('is kept for the next popup', async () => {
+    const kept = area();
+    await rememberLanguage(kept, { ...PAIRED, fetcher: worker({ ...LISTED, locale: 'fr' }).fetcher });
+
+    assert.equal(await storedLanguage(kept), 'fr');
+  });
+
+  it('is removed when the account holds none, and when no session is left', async () => {
+    const answered = area({ language: 'fr' });
+    await rememberLanguage(answered, { ...PAIRED, fetcher: worker(LISTED).fetcher });
+    assert.equal(await storedLanguage(answered), undefined);
+
+    const loggedOut = area({ language: 'fr' });
+    await rememberLanguage(loggedOut, { ...PAIRED, endpoints: async () => [], fetcher: worker().fetcher });
+    assert.equal(await storedLanguage(loggedOut), undefined);
+  });
+
+  it('stays when no worker answers: an outage does not change the language', async () => {
+    const down = area({ language: 'fr' });
+    await rememberLanguage(down, { ...PAIRED, fetcher: worker({}, 502).fetcher });
+    assert.equal(await storedLanguage(down), 'fr');
+
+    const refused = area({ language: 'fr' });
+    await rememberLanguage(refused, {
+      ...PAIRED,
+      ensureAccess: async () => ({ ok: false, reason: 'unavailable' }) as AccessResult,
+      fetcher: worker().fetcher,
+    });
+    assert.equal(await storedLanguage(refused), 'fr');
+  });
+
+  it('reads nothing from a stored value that is no tag, and nothing when storage throws', async () => {
+    assert.equal(await storedLanguage(area({ language: { tag: 'fr' } })), undefined);
+    assert.equal(
+      await storedLanguage({ ...area(), get: async () => Promise.reject(new Error('no storage')) }),
+      undefined,
+    );
   });
 });

@@ -638,6 +638,18 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   person is not named before the code is spent: a name in a link is the word of its writer.
   **A click on the toolbar icon cannot be automated**, so the E2E spec proves the flow with a host
   permission on the worker; the `activeTab` grant of a real click is the one step checked by hand.
+- **The popup and the options page speak English and French** (FRU-131). `i18n.ts` keys a sentence
+  by its English text, like the console. **A constant keeps its English sentence, and `t` runs where
+  the text goes on the screen**: `remedyFor` finds a problem by its English text, and the guide is
+  checked against the English words of the popup. A problem translated before `showProblem` loses its
+  button with nothing to see. `messages.test.ts` reads the two pages and fails on a word outside the
+  catalog, on a sentence with no French and on a French entry no page shows.
+- **The language is the account's, then the browser's.** `GET /session/sites` answers `locale`, and
+  `rememberLanguage` keeps it under `language` in `chrome.storage.local`. It is a tag and no
+  credential, so the bridge reads it and `mount` carries it to the widget. **A worker that does not
+  answer changes nothing; no session left removes it.** The popup learns it without a draw, because
+  a draw loses what somebody types: the next popup shows it. A change of language builds the mounted
+  widget again, like a change of worker.
 - **A problem is shown with the one thing to do about it** (FRU-90). `remedy.ts` lists every problem
   the popup and the options page can say, each with a remedy or with the reason it has none, and
   `showProblem` draws the button from that list on both pages. `remedy.test.ts` fails on a problem
@@ -690,7 +702,8 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   the main world and no handoff closes it — it is stated rather than defended, because a reviewer
   grants an origin precisely because they trust that origin's code. **Nothing secret travels there,
   and an identity token is not sent at all.** `worlds.test.ts` is what keeps that true, and
-  `protocol.test.ts` pins that a parsed message carries only the four fields it declares.
+  `protocol.test.ts` pins that a parsed message carries only the fields it declares: four, and since
+  FRU-131 the language of the reviewer, a locale tag of 35 characters at most.
 - **`registerContentScripts` reaches the _next_ page load, never the open one.** The popup injects
   both files into the current tab after the grant.
 - **An unchanged decision is never re-posted**, because a re-posted `mount` destroys and rebuilds the
