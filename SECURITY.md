@@ -189,10 +189,15 @@ then lives in that site's own page. Team mode is the one where the **reviewer** 
 page never holds it, attached in the extension's background. Private mode can supply neither, so
 worker-wide `authenticated` locks its widget out of its own reads.
 
-That cannot be worked around per client on a worker that serves team mode: `FRUITBACK_SESSION_PATH`
-alongside `FRUITBACK_CLIENTS` is **refused at boot**, because a session signs with the worker-wide
-key a mapped worker ignores. A worker holding sessions is single-tenant, and its `read` is
-worker-wide. See [docs/modes.md](docs/modes.md).
+A worker that serves team mode can hold several clients (FRU-95). **A session belongs to one
+workspace**, named by the operator when the code is minted (`pair --workspace`), and its access
+token carries it as the `ws` claim. Every session token is signed with the one worker key, so the
+signature does not separate two workspaces: **the claim does**. A client that declares a `workspace`
+accepts a token signed with the worker key only when `ws` names that workspace, on the read and on
+the write, from a page and through the relay. A client with no workspace accepts no session token.
+Two boot refusals hold this: sessions with a client map in which no client declares a workspace, and
+a client whose own `identitySecret` is the worker key, which would verify every session token as the
+site's own and skip the check. See [docs/modes.md](docs/modes.md).
 
 ### The extension's page bridge can be forged by the page
 

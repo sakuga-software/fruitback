@@ -30,6 +30,12 @@ export type SessionIdentity = {
   subject: string;
   name?: string;
   email?: string;
+  /**
+   * The workspace the session reads and writes for (FRU-95). The operator names it with the
+   * pairing, and every access token of the session carries it as `ws`. Absent on a worker that
+   * serves one client.
+   */
+  workspace?: string;
 };
 
 /**
@@ -321,6 +327,7 @@ async function mintAccessToken(identity: SessionIdentity, secret: string, now: n
     sub: identity.subject,
     ...(identity.name === undefined ? {} : { name: identity.name }),
     ...(identity.email === undefined ? {} : { email: identity.email }),
+    ...(identity.workspace === undefined ? {} : { ws: identity.workspace }),
     iat: seconds,
     exp: seconds + ACCESS_TTL_SECONDS,
   };

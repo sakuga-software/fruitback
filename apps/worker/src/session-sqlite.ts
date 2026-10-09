@@ -69,6 +69,12 @@ const MIGRATIONS: readonly string[] = [
 
   CREATE INDEX sessions_by_root ON sessions (root_hash);
   `,
+  // The workspace of a pairing, copied to its session and to every successor (FRU-95). NULL on every
+  // row written before: that session belongs to no workspace, which is a single-client worker.
+  `
+  ALTER TABLE pairings ADD COLUMN workspace TEXT;
+  ALTER TABLE sessions ADD COLUMN workspace TEXT;
+  `,
 ];
 
 /**
@@ -139,7 +145,7 @@ export function closeSessionConnections(): void {
   opened = 0;
 }
 
-type IdentityRow = { subject: unknown; name: unknown; email: unknown };
+type IdentityRow = { subject: unknown; name: unknown; email: unknown; workspace: unknown };
 
 /**
  * A row is parsed, never trusted — the same rule the seed store follows, and for the same reason.
@@ -159,6 +165,7 @@ function identityOf(row: IdentityRow): SessionIdentity | undefined {
     subject: row.subject,
     ...(typeof row.name === 'string' && row.name !== '' ? { name: row.name } : {}),
     ...(typeof row.email === 'string' && row.email !== '' ? { email: row.email } : {}),
+    ...(typeof row.workspace === 'string' && row.workspace !== '' ? { workspace: row.workspace } : {}),
   };
 }
 
@@ -295,13 +302,14 @@ function decide(
 
   database
     .prepare(
-      'INSERT INTO sessions (token_hash, subject, name, email, created_at, expires_at, predecessor_hash, root_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO sessions (token_hash, subject, name, email, workspace, created_at, expires_at, predecessor_hash, root_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
     )
     .run(
       successorHash,
       identity.subject,
       identity.name ?? null,
       identity.email ?? null,
+      identity.workspace ?? null,
       now,
       row.expires_at,
       tokenHash,
@@ -329,9 +337,17 @@ export function createSqliteSessionStore(path: string): SessionStore {
     async createPairing({ codeHash, identity, expiresAt }) {
       connect(path)
         .prepare(
-          'INSERT INTO pairings (code_hash, subject, name, email, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
+          'INSERT INTO pairings (code_hash, subject, name, email, workspace, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
         )
-        .run(codeHash, identity.subject, identity.name ?? null, identity.email ?? null, Date.now(), expiresAt);
+        .run(
+          codeHash,
+          identity.subject,
+          identity.name ?? null,
+          identity.email ?? null,
+          identity.workspace ?? null,
+          Date.now(),
+          expiresAt,
+        );
     },
 
     /**
@@ -365,9 +381,9 @@ export function createSqliteSessionStore(path: string): SessionStore {
           return undefined;
         }
 
-        const row = database.prepare('SELECT subject, name, email FROM pairings WHERE code_hash = ?').get(codeHash) as
-          | IdentityRow
-          | undefined;
+        const row = database
+          .prepare('SELECT subject, name, email, workspace FROM pairings WHERE code_hash = ?')
+          .get(codeHash) as IdentityRow | undefined;
         const identity = row === undefined ? undefined : identityOf(row);
 
         if (identity === undefined) {
@@ -378,9 +394,17 @@ export function createSqliteSessionStore(path: string): SessionStore {
 
         database
           .prepare(
-            'INSERT INTO sessions (token_hash, subject, name, email, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
+            'INSERT INTO sessions (token_hash, subject, name, email, workspace, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
           )
-          .run(tokenHash, identity.subject, identity.name ?? null, identity.email ?? null, now, expiresAt);
+          .run(
+            tokenHash,
+            identity.subject,
+            identity.name ?? null,
+            identity.email ?? null,
+            identity.workspace ?? null,
+            now,
+            expiresAt,
+          );
 
         database.exec('COMMIT');
 
@@ -422,7 +446,7 @@ export function createSqliteSessionStore(path: string): SessionStore {
       try {
         const row = database
           .prepare(
-            'SELECT subject, name, email, expires_at, revoked_at, rotated_at, predecessor_hash, root_hash FROM sessions WHERE token_hash = ?',
+            'SELECT subject, name, email, workspace, expires_at, revoked_at, rotated_at, predecessor_hash, root_hash FROM sessions WHERE token_hash = ?',
           )
           .get(tokenHash) as SessionRow | undefined;
 

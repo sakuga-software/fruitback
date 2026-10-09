@@ -555,10 +555,9 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   reads `401`. The page shows no pin and no reason, so the popup asks the same read and says so
   (`read-probe.ts`, FRU-66): only a `401` is a statement, and a worker that is down or slow gets no
   line. The probe was measured from an extension page with **no** host permission on the worker,
-  because the E2E copy holds one and its fetch skips CORS. **And that
-  cannot be worked around per client**: `FRUITBACK_SESSION_PATH` alongside `FRUITBACK_CLIENTS` is
-  refused at boot, so a worker holding sessions is single-tenant and its `read` is worker-wide. A
-  private-mode client beside a team-mode one is two workers, or a worker left at `public`.
+  because the E2E copy holds one and its fetch skips CORS. **A client keeps its own `read`** since
+  FRU-95: a worker holding sessions can serve several clients, grouped in workspaces, so a
+  private-mode client can stay `public` beside a team-mode one.
 - **The popup offers pairing in team mode only** (FRU-88). A session changes nothing in private mode,
   and a form that does nothing reads as the fix for a page with no pins. A session the extension
   already holds with that worker stays on the screen with its log out: a credential is never hidden.
@@ -1046,9 +1045,15 @@ and _The team mode, and the call the page cannot make_:
 - **`checkRateLimit` runs above the path dispatch**, so a route added later is metered by default. It
   used to sit below the `404`, which would have left `/session/pair` an unmetered guessing oracle.
   `/health` stays free — a readiness probe that can be rate-limited takes the container out.
-- **Two boot refusals, both loud rather than silent.** A session path with no `FRUITBACK_IDENTITY_SECRET`
-  mints nothing; a session path alongside `FRUITBACK_CLIENTS` mints tokens no client accepts, because
-  a mapped worker ignores the worker-wide key.
+- **Three boot refusals, all loud rather than silent.** A session path with no
+  `FRUITBACK_IDENTITY_SECRET` mints nothing; a session path with a client map in which no client
+  declares a `workspace` mints tokens no client accepts; a client whose own key is the worker key
+  would verify every session token as its own.
+- **A session belongs to one workspace, and the `ws` claim is what separates them** (FRU-95). Every
+  session token of every workspace is signed with the one worker key, so the signature proves
+  nothing about the workspace. `verifyForClient` compares `ws` with the client's `workspace` after
+  the signature, on the read and on the write. `pair --workspace` names it, and it travels through
+  every rotation.
 
 **The markdown codec**
 

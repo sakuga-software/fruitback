@@ -1,3 +1,4 @@
+import { workspacesOf } from './clients.ts';
 import { type WorkerEnv, readConfig } from './env.ts';
 import { PAIRING_TTL_SECONDS } from './session.ts';
 import { createPairingCommand } from './app.ts';
@@ -19,13 +20,14 @@ import type { ForgetSelector, ForgottenSeed } from './store.ts';
  * path is a command an operator cannot run. Raised in review, and checked against a real build.
  */
 
-export type PairArgs = { subject: string; name?: string; email?: string; endpoint?: string };
+export type PairArgs = { subject: string; name?: string; email?: string; endpoint?: string; workspace?: string };
 
 export type PairArgsResult = { ok: true; args: PairArgs } | { ok: false; error: string };
 
-const USAGE = 'usage: pair --subject <id> [--name "<full name>"] [--email <address>] [--endpoint <worker URL>]';
+const USAGE =
+  'usage: pair --subject <id> [--workspace <id>] [--name "<full name>"] [--email <address>] [--endpoint <worker URL>]';
 
-const KNOWN_FLAGS = new Set(['subject', 'name', 'email', 'endpoint']);
+const KNOWN_FLAGS = new Set(['subject', 'workspace', 'name', 'email', 'endpoint']);
 
 /**
  * `--flag value` only.
@@ -57,6 +59,7 @@ export function parsePairArgs(argv: readonly string[]): PairArgsResult {
 
   const name = values.get('name')?.trim();
   const email = values.get('email')?.trim();
+  const workspace = values.get('workspace')?.trim();
 
   // The address the reviewer reaches this worker at. The container does not know it, so the
   // operator gives it, and the command then prints a link instead of a code to copy (FRU-92).
@@ -75,6 +78,7 @@ export function parsePairArgs(argv: readonly string[]): PairArgsResult {
       subject: subject.trim(),
       ...(name === undefined || name === '' ? {} : { name }),
       ...(email === undefined || email === '' ? {} : { email }),
+      ...(workspace === undefined || workspace === '' ? {} : { workspace }),
       ...(endpoint === undefined ? {} : { endpoint }),
     },
   };
@@ -108,6 +112,23 @@ function publicEndpoint(value: string | undefined): string | undefined | null {
   }
 }
 
+/**
+ * Why this workspace cannot carry a session on this worker, or nothing when it can (FRU-95).
+ *
+ * On a worker with workspaces, a session must name one: a session with none reaches no client. On a
+ * worker with none, a workspace is a word that nothing reads, and the operator would believe it did.
+ */
+export function checkWorkspace(workspace: string | undefined, declared: readonly string[]): string | undefined {
+  if (declared.length === 0) {
+    return workspace === undefined ? undefined : '--workspace needs FRUITBACK_CLIENTS with a client that declares it';
+  }
+  if (workspace === undefined) return `--workspace is required: one of ${declared.join(', ')}`;
+  if (!declared.includes(workspace))
+    return `no client declares the workspace ${workspace}: one of ${declared.join(', ')}`;
+
+  return undefined;
+}
+
 export type PairOutcome = { ok: true; lines: string[] } | { ok: false; lines: string[] };
 
 /**
@@ -120,6 +141,9 @@ export async function runPair(argv: readonly string[], env: WorkerEnv): Promise<
 
   const config = readConfig(env);
   if (!config.ok) return { ok: false, lines: [`misconfigured: ${config.missing.join(', ')}`] };
+
+  const workspaceProblem = checkWorkspace(parsed.args.workspace, workspacesOf(config.config.clients));
+  if (workspaceProblem !== undefined) return { ok: false, lines: [`${USAGE}\n${workspaceProblem}`] };
 
   let minted: { code: string; expiresAt: number };
   try {
@@ -140,10 +164,12 @@ export async function runPair(argv: readonly string[], env: WorkerEnv): Promise<
           '',
         ];
 
+  const where = parsed.args.workspace === undefined ? '' : ` in the workspace ${parsed.args.workspace}`;
+
   return {
     ok: true,
     lines: [
-      `pairing code for ${parsed.args.subject}${who === '' ? '' : ` (${who})`}:`,
+      `pairing code for ${parsed.args.subject}${who === '' ? '' : ` (${who})`}${where}:`,
       '',
       `    ${minted.code}`,
       '',

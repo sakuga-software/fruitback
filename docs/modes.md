@@ -83,12 +83,12 @@ mounts sends no token, so the read answers `401` and the page shows no pins — 
 worker that is down. The popup tells the two apart: it asks the worker the same read, and on a `401`
 it says that the worker wants a session that private mode does not carry.
 
-**And one worker cannot serve team mode and a client map at the same time.** `FRUITBACK_SESSION_PATH`
-alongside `FRUITBACK_CLIENTS` is refused at boot: a session signs its access token with the
-worker-wide key, and a mapped worker ignores that key because each client brings its own — so pairing
-would work, the reviewer would look signed in, and every read would answer `401`. A worker that holds
-sessions is therefore single-tenant today, and its `read` is worker-wide. If you need a private-mode
-client beside a team-mode one, that is two workers, or a worker left at `public`.
+**One worker can serve team mode for several clients, grouped in workspaces** (FRU-95). Give each
+client of `FRUITBACK_CLIENTS` a `workspace`, and mint each code for one of them:
+`pair --subject alice --workspace acme`. The session of that code reads and writes on the clients of
+`acme` and on no other. A client keeps its own `read`, so a private-mode client can stay `public` beside
+a team-mode one on `authenticated`. A map in which no client declares a workspace, with
+`FRUITBACK_SESSION_PATH` set, is refused at boot: a session there would reach no client.
 
 ## `showComments` is an editorial switch, not an access control
 

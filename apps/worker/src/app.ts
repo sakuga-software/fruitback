@@ -1,5 +1,5 @@
 import { SEED_STAGES, canonicalizePageUrl, parseSeed, type SeedReporter } from '@fruitback/shared';
-import { readBearerToken, stripClaimedVerification, verifyIdentityToken } from './identity.ts';
+import { type IdentityResult, readBearerToken, stripClaimedVerification, verifyIdentityToken } from './identity.ts';
 import {
   type ClientPolicy,
   type ClientResolution,
@@ -289,7 +289,7 @@ async function handleSession(
 /** Mints a pairing code. Not reachable over HTTP — see `handleSession` and `main.ts`. */
 export async function createPairingCommand(
   config: WorkerConfig,
-  identity: { subject: string; name?: string; email?: string },
+  identity: { subject: string; name?: string; email?: string; workspace?: string },
 ): Promise<{ code: string; expiresAt: number }> {
   const store = sessionStoreFor(config);
   if (store === undefined) throw new Error('FRUITBACK_SESSION_PATH is not set, so this worker keeps no sessions');
@@ -333,7 +333,28 @@ function routeFor(request: Request, config: WorkerConfig, clientId: string | und
       read: config.read,
       locale: config.teamLocale,
     },
+    ...(config.sessionPath !== undefined && config.identitySecret !== undefined
+      ? { sessionSecret: config.identitySecret }
+      : {}),
   });
+}
+
+/**
+ * Verifies a token for one client: as the site's own, or as a session of the client's workspace.
+ *
+ * The site's key comes first. A session token then verifies only with the worker key **and** a `ws`
+ * that names the workspace of this client (FRU-95). The signature alone is not enough: every session
+ * of every workspace is signed with that one key.
+ */
+async function verifyForClient(token: string, policy: ClientPolicy): Promise<IdentityResult | undefined> {
+  const asSite =
+    policy.identitySecret === undefined ? undefined : await verifyIdentityToken(token, policy.identitySecret);
+  if (asSite?.ok === true || policy.sessions === undefined) return asSite;
+
+  const asSession = await verifyIdentityToken(token, policy.sessions.secret);
+  if (!asSession.ok) return asSite ?? asSession;
+
+  return asSession.workspace === policy.sessions.workspace ? asSession : { ok: false, reason: 'invalid-claims' };
 }
 
 /**
@@ -358,9 +379,9 @@ async function authorizeRead(
 
   const token = readBearerToken(request.headers.get('Authorization'));
   if (token === undefined) return { ok: false, reason: 'identity-required' };
-  if (policy.identitySecret === undefined) return { ok: false, reason: 'identity-not-configured' };
 
-  const verified = await verifyIdentityToken(token, policy.identitySecret);
+  const verified = await verifyForClient(token, policy);
+  if (verified === undefined) return { ok: false, reason: 'identity-not-configured' };
 
   return verified.ok ? { ok: true } : { ok: false, reason: verified.reason };
 }
@@ -375,14 +396,14 @@ async function authorizeRead(
  */
 async function attributionFor(
   request: Request,
-  secret: string | undefined,
+  policy: ClientPolicy,
   claimed: SeedReporter | undefined,
 ): Promise<{ ok: true; reporter: SeedReporter | undefined } | { ok: false; reason: string }> {
   const token = readBearerToken(request.headers.get('Authorization'));
   if (token === undefined) return { ok: true, reporter: stripClaimedVerification(claimed) };
-  if (secret === undefined) return { ok: false, reason: 'identity-not-configured' };
 
-  const verified = await verifyIdentityToken(token, secret);
+  const verified = await verifyForClient(token, policy);
+  if (verified === undefined) return { ok: false, reason: 'identity-not-configured' };
   if (!verified.ok) return { ok: false, reason: verified.reason };
 
   return { ok: true, reporter: verified.reporter };
@@ -525,7 +546,7 @@ async function postFeedback(
 
   // Whose word the attribution is (FRU-9). The claimed reporter loses `verified` whatever it said,
   // and only a token this worker checked can put it back.
-  const identity = await attributionFor(request, route.policy.identitySecret, seed.reporter);
+  const identity = await attributionFor(request, route.policy, seed.reporter);
   if (!identity.ok) {
     return json(401, { error: 'invalid-identity', reason: identity.reason }, corsHeaders);
   }

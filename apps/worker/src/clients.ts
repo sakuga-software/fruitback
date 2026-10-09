@@ -94,6 +94,14 @@ const clientSchema = z.object({
    * this map.
    */
   read: z.enum(['public', 'authenticated']).optional(),
+  /**
+   * The workspace this client belongs to (FRU-95).
+   *
+   * A session is opened for one workspace, and its access token says which. This client accepts such
+   * a token only when that workspace is this one, so a session of workspace A reads and writes on the
+   * sites of A and on no other. A client with no workspace accepts no session token.
+   */
+  workspace: z.string().min(1).optional(),
 });
 
 export const clientMapSchema = z.record(z.string().min(1), clientSchema);
@@ -119,16 +127,32 @@ export function unreadableClients(options: {
   read: ReadAccess;
   clients: ClientMap | undefined;
   identitySecret: string | undefined;
+  /** Whether this worker opens sessions. A client in a workspace is then read with a session token. */
+  sessions?: boolean;
 }): string[] {
-  const { read, clients, identitySecret } = options;
+  const { read, clients, identitySecret, sessions = false } = options;
 
   if (clients === undefined) {
     return read === 'authenticated' && identitySecret === undefined ? ['<single client>'] : [];
   }
 
   return Object.entries(clients)
-    .filter(([, client]) => (client.read ?? read) === 'authenticated' && client.identitySecret === undefined)
+    .filter(
+      ([, client]) =>
+        (client.read ?? read) === 'authenticated' &&
+        client.identitySecret === undefined &&
+        !(sessions && client.workspace !== undefined && identitySecret !== undefined),
+    )
     .map(([id]) => id);
+}
+
+/** The workspaces the clients of this map belong to, each once. */
+export function workspacesOf(clients: ClientMap | undefined): string[] {
+  if (clients === undefined) return [];
+
+  return [
+    ...new Set(Object.values(clients).flatMap((client) => (client.workspace === undefined ? [] : [client.workspace]))),
+  ];
 }
 
 /**
@@ -196,6 +220,14 @@ export type ClientPolicy = {
    * description is read where the issues are, not where the note was written.
    */
   locale: string;
+  /**
+   * How a session token reaches this client (FRU-95): the worker key that signs it, and the workspace
+   * it must name. Absent on a client that belongs to no workspace, and on a worker with no sessions.
+   *
+   * On a worker that serves one client, `identitySecret` is already the worker key, and a session token
+   * verifies through it whatever workspace it names: there is only one site to reach.
+   */
+  sessions?: { secret: string; workspace: string };
 };
 
 /**
@@ -219,6 +251,8 @@ export type ResolveClientOptions = {
   /** The browser's `Origin`, or null for a request that is not one (curl, server-to-server). */
   origin: string | null;
   fallback: ClientPolicy;
+  /** The key that signs session tokens, on a worker that opens sessions. */
+  sessionSecret?: string;
 };
 
 /**
@@ -237,7 +271,13 @@ export function normalizeClientId(value: string | null | undefined): string | un
   return trimmed === undefined || trimmed === '' ? undefined : trimmed;
 }
 
-export function resolveClient({ clients, clientId, origin, fallback }: ResolveClientOptions): ClientResolution {
+export function resolveClient({
+  clients,
+  clientId,
+  origin,
+  fallback,
+  sessionSecret,
+}: ResolveClientOptions): ClientResolution {
   // Single-tenant: the map is what turns this worker multi-client, and without it nothing changes.
   // `client: undefined` is what the store reads as "no per-client entry, use your own defaults".
   if (clients === undefined) return { ok: true, policy: fallback, client: undefined };
@@ -274,6 +314,9 @@ export function resolveClient({ clients, clientId, origin, fallback }: ResolveCl
       // is what stops the inheritance from producing a client nobody can ever read.
       read: client.read ?? fallback.read,
       locale: fallback.locale,
+      ...(sessionSecret !== undefined && client.workspace !== undefined
+        ? { sessions: { secret: sessionSecret, workspace: client.workspace } }
+        : {}),
     },
     // `teamId` and `projectId` are not resolved here any more: falling back to the worker's team is
     // the Linear connector's rule, and it is the one that owns those fields now.

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { type ClientMap, originsFromClients, readClientMap, unreadableClients } from './clients.ts';
+import { type ClientMap, originsFromClients, readClientMap, unreadableClients, workspacesOf } from './clients.ts';
 import { DEFAULT_LIMIT } from './rate-limit.ts';
 import type { StoreConfig } from './store-config.ts';
 import { readStoreConfig } from './stores.ts';
@@ -210,6 +210,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     read: result.data.read,
     clients: result.data.clients,
     identitySecret: result.data.identitySecret,
+    sessions: result.data.sessionPath !== undefined,
   });
 
   if (unreadable.length > 0) {
@@ -228,15 +229,31 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     };
   }
 
-  // A session's access token is signed with the worker-wide key, and a worker with a client map
-  // ignores that key — each client brings its own. So on a mapped worker a session would mint tokens
-  // no client accepts: pairing works, the reviewer looks logged in, and every read answers 401.
-  // Refused loudly rather than shipped as a feature that quietly does nothing. Per-client session
-  // minting belongs with team mode (FRU-57), where a client id is what a request carries.
-  if (result.data.sessionPath !== undefined && result.data.clients !== undefined) {
+  // On a mapped worker a session reaches the clients of its workspace and no other (FRU-95). A map in
+  // which no client declares a workspace leaves a session nothing to open: pairing would work, the
+  // reviewer would look signed in, and every read would answer 401. Refused loudly instead.
+  if (
+    result.data.sessionPath !== undefined &&
+    workspacesOf(result.data.clients).length === 0 &&
+    result.data.clients !== undefined
+  ) {
     return {
       ok: false,
-      missing: ['FRUITBACK_SESSION_PATH (sessions sign with the worker key, which FRUITBACK_CLIENTS replaces)'],
+      missing: ['FRUITBACK_CLIENTS (FRUITBACK_SESSION_PATH is set, and no client declares a workspace for a session)'],
+    };
+  }
+
+  // WARNING: a client key equal to the worker key verifies every session token as the site's own,
+  // and the workspace check is skipped. A session of workspace A would then reach this client.
+  const sharedKey = Object.entries(result.data.clients ?? {}).filter(
+    ([, client]) => client.identitySecret !== undefined && client.identitySecret === result.data.identitySecret,
+  );
+  if (result.data.sessionPath !== undefined && sharedKey.length > 0) {
+    return {
+      ok: false,
+      missing: [
+        `FRUITBACK_CLIENTS (${sharedKey.map(([id]) => id).join(', ')} uses FRUITBACK_IDENTITY_SECRET as its own key)`,
+      ],
     };
   }
 
