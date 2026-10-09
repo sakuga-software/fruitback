@@ -17,7 +17,8 @@ The export holds five boards. `boards/` holds a picture of each, rendered at 160
 
 **What has no board.** The name of the export says « overlay, sidebar, extension, landing », and that
 is the name of the project, not a list of screens: there is no board for the sidebar, the popup or the
-landing page. Those take the language of the boards above.
+landing page. Those take the language of the boards above. The list of every note of the
+page (FRU-129) was built that way, on the tokens of the widget.
 
 ## The tokens
 

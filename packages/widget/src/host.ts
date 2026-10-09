@@ -44,6 +44,11 @@ export type CaptureHostOptions = {
    */
   onConfigure?: () => void;
   /**
+   * Adds a button for the list of every note of the page, and calls this when it is pressed
+   * (FRU-129). Left out, there is no button, for the same reason as the gear.
+   */
+  onList?: () => void;
+  /**
    * Anything else the pointer must skip. The widget already excludes itself; a page that mounts its
    * own chrome around the widget — a dev toolbar, the config panel of FRU-14 — says so here, or the
    * reporter ends up leaving feedback about the feedback button.
@@ -122,6 +127,13 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   configure.setAttribute('aria-label', t.text('settings.open'));
   configure.append(createIcon(document, 'gear'));
 
+  const listing = document.createElement('button');
+  listing.type = 'button';
+  listing.className = 'fruitback-listing';
+  listing.dataset.fruitbackHostList = '';
+  listing.setAttribute('aria-label', t.text('sidebar.open'));
+  listing.append(createIcon(document, 'list'));
+
   const highlight = document.createElement('div');
   highlight.className = 'fruitback-highlight';
   highlight.dataset.fruitbackHostHighlight = '';
@@ -135,6 +147,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   // the launch button until a recording showed it.
   const dock = document.createElement('div');
   dock.className = 'fruitback-dock';
+  if (options.onList !== undefined) dock.append(listing);
   if (options.onConfigure !== undefined) dock.append(configure);
   dock.append(button);
 
@@ -152,6 +165,14 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     // The settings dialog must own the keys, and the capture mode takes the arrows and Enter.
     stop();
     options.onConfigure?.();
+  });
+
+  listing.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    // Like the gear: the list must own the keys, and the capture mode takes the arrows and Enter.
+    stop();
+    options.onList?.();
   });
 
   let capturing = false;
@@ -448,7 +469,8 @@ li { display: list-item; }
   box-shadow: var(--fruitback-shadow-md);
   cursor: pointer;
 }
-.fruitback-configure {
+.fruitback-configure,
+.fruitback-listing {
   display: grid;
   place-items: center;
   width: 30px;

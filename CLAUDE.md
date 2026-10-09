@@ -420,6 +420,20 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
 - **A clipboard can refuse.** The panel then shows the text in a field, selected. The field is made
   on demand: at rest the panel holds no field to type in (FRU-89).
 
+**The list of every note** (FRU-129)
+
+- **`sidebar.ts` lists what `overlay.resolutions()` holds**, so it costs no request and leaves out a
+  stage the reporter hid, like the copied text. A third button of the dock opens it. Choosing a note
+  calls `overlay.select`, which scrolls to the element, or to the pin of a detached note, and opens
+  the thread.
+- **It is a dialog that is not modal**, like the thread: the page stays usable beside it and a
+  reviewer goes from note to note. It takes focus, gives it back to what opened it, and keeps its
+  own Escape: the thread closes on an Escape of the document, and one key must close one thing.
+- **Its name must not start like the thread's.** The two are open at once. « Feedback of this page »
+  beside « Feedback DEV-3 » made one locator find two dialogs, in the first run of its spec.
+- **The playground does not have it**: it assembles the widget part by part. `e2e/sidebar.spec.ts`
+  loads the built script, like `package.spec.ts`, and runs axe in both schemes with its own control.
+
 **The keyboard and the screen reader** (FRU-51)
 
 - **The popover and the panel are modal dialogs, and `aria-modal` ships only with the trap.** The

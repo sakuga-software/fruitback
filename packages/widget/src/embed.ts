@@ -7,7 +7,8 @@ import {
 } from '@fruitback/shared';
 import { captureSeed } from './capture.ts';
 import { type WidgetConfig, createConfigStore } from './config.ts';
-import { feedbackAsText, placementOf } from './export.ts';
+import { type FeedbackEntry, feedbackAsText, placementOf } from './export.ts';
+import { type Sidebar, createSidebar } from './sidebar.ts';
 import { type CaptureHost, type CaptureTarget, createCaptureHost } from './host.ts';
 import type { FruitbackTheme } from './theme.ts';
 import { type FruitbackTransport, fetchTransport } from './transport.ts';
@@ -201,6 +202,7 @@ export function init(options: FruitbackOptions): Fruitback {
   let target: CaptureTarget | null = null;
   let composer: Composer;
   let panel: ConfigPanel;
+  let sidebar: Sidebar;
 
   const host: CaptureHost = createCaptureHost({
     document,
@@ -209,6 +211,7 @@ export function init(options: FruitbackOptions): Fruitback {
     ignore: options.ignore,
     ...(options.theme !== undefined ? { theme: options.theme } : {}),
     onConfigure: () => panel.toggle(),
+    onList: () => sidebar.toggle(),
     onSelect: (selected) => {
       target = selected;
       const rect = selected.element.getBoundingClientRect();
@@ -226,6 +229,8 @@ export function init(options: FruitbackOptions): Fruitback {
     translator,
     host: host.root,
     shouldShow: (issue) => !config.get().hiddenStages.includes(issue.stage),
+    // The page changed under the pins: the list says what each one resolved to now.
+    onResolve: () => sidebar.refresh(),
   });
 
   const stages = createOfferedStages();
@@ -234,7 +239,7 @@ export function init(options: FruitbackOptions): Fruitback {
   const read = (): Promise<void> => {
     lastReadAt = Date.now();
 
-    return reader();
+    return reader().then(() => sidebar.refresh());
   };
 
   composer = createComposer({
@@ -260,11 +265,20 @@ export function init(options: FruitbackOptions): Fruitback {
     },
   });
 
+  /** The notes the overlay draws now, with how each one was found. The list and the copied text read it. */
+  const entries = (): FeedbackEntry[] =>
+    overlay.resolutions().map((resolution) => ({ issue: resolution.issue, placement: placementOf(resolution) }));
+
   const asText = (): string =>
-    feedbackAsText(
-      overlay.resolutions().map((resolution) => ({ issue: resolution.issue, placement: placementOf(resolution) })),
-      { pageUrl: canonicalizePageUrl(view.location.href), translator },
-    );
+    feedbackAsText(entries(), { pageUrl: canonicalizePageUrl(view.location.href), translator });
+
+  sidebar = createSidebar({
+    document,
+    translator,
+    host: host.root,
+    entries,
+    onSelect: (id) => void overlay.select(id),
+  });
 
   panel = createConfigPanel({
     document,
@@ -277,7 +291,10 @@ export function init(options: FruitbackOptions): Fruitback {
   });
 
   // A preference change redraws from the issues already held, so it costs no request.
-  const unsubscribe = config.subscribe(() => overlay.refilter());
+  const unsubscribe = config.subscribe(() => {
+    overlay.refilter();
+    sidebar.refresh();
+  });
 
   const stopWatchingUrl = watchUrl(view, () => void read());
 
@@ -301,6 +318,7 @@ export function init(options: FruitbackOptions): Fruitback {
       stopWatchingReturn();
       unsubscribe();
       panel.destroy();
+      sidebar.destroy();
       composer.destroy();
       overlay.destroy();
       host.destroy();

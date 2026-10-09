@@ -14,7 +14,7 @@ import { readFile } from 'node:fs/promises';
  * `e2e/direction.spec.ts` is the proof in a browser.
  */
 
-const FILES = ['host.ts', 'overlay.ts', 'composer.ts', 'panel.ts', 'orphans.ts'] as const;
+const FILES = ['host.ts', 'overlay.ts', 'composer.ts', 'panel.ts', 'orphans.ts', 'sidebar.ts'] as const;
 
 /** Positions against the page: document coordinates, or a shape that points at an element. */
 const GEOMETRY: Record<(typeof FILES)[number], readonly string[]> = {
@@ -23,6 +23,7 @@ const GEOMETRY: Record<(typeof FILES)[number], readonly string[]> = {
   'composer.ts': ['.fruitback-composer'],
   'panel.ts': [],
   'orphans.ts': [],
+  'sidebar.ts': [],
 };
 
 const LOGICAL = /\b(inset-inline|inset-block|margin-inline|padding-inline|border-inline)|text-align:\s*(start|end)\b/;
@@ -81,6 +82,7 @@ describe('the stylesheets and the reading direction (FRU-38)', () => {
       ['host.ts', '.fruitback-dock'],
       ['panel.ts', '.fruitback-panel-config'],
       ['orphans.ts', '.fruitback-orphans'],
+      ['sidebar.ts', '.fruitback-sidebar'],
     ] as const) {
       const bodies = (await rulesOf(file)).filter((rule) => rule.selector === selector).map((rule) => rule.body);
       assert.ok(

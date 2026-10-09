@@ -89,6 +89,11 @@ export type Overlay = {
   resolutions(): { issue: SeedIssue; strategy: AnchorResolution['strategy']; confident: boolean }[];
   /** Whether a thread is open. `render` closes it, so a caller that can wait asks first. */
   threadOpen(): boolean;
+  /**
+   * Scrolls to the pin of this note and opens its thread (FRU-129). `false` when the note is not
+   * drawn: a stage the reporter hid, or a note that is gone.
+   */
+  select(id: string): boolean;
   destroy(): void;
 };
 
@@ -427,6 +432,18 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     refilter,
     resolutions,
     threadOpen: () => thread !== null,
+    select(id) {
+      const entry = placed.find((candidate) => candidate.issue.seed.id === id);
+      if (entry === undefined) return false;
+      // The element when the page still has it, the pin otherwise: a detached note has only its pin.
+      // No smooth scroll: it is an animation, and nothing here reads `prefers-reduced-motion`.
+      const element = entry.resolution.element;
+      const target = element !== null && element.isConnected ? element : entry.pin;
+      target.scrollIntoView?.({ block: 'center', inline: 'nearest' });
+      openThread(entry);
+
+      return true;
+    },
     destroy() {
       if (frame !== 0) view?.cancelAnimationFrame(frame);
       if (resolveTimer !== undefined) clearTimeout(resolveTimer);

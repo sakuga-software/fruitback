@@ -34,7 +34,7 @@ import { ICON_DATA, type IconShape } from './icon-data.ts';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-export type IconName = 'gear' | 'close' | 'drop' | 'dropDashed';
+export type IconName = 'gear' | 'close' | 'drop' | 'dropDashed' | 'list';
 
 /** The pin's silhouette, rotated so the sharp corner points down. */
 const DROP = 'M8.00 14.51 L4.75 11.25 A4.6 4.6 0 0 1 4.75 4.75 A4.6 4.6 0 0 1 11.25 4.75 A4.6 4.6 0 0 1 11.25 11.25 Z';
@@ -45,6 +45,19 @@ const ICONS: Record<IconName, IconShape> = {
   drop: { viewBox: '0 0 16 16', paths: [{ fill: 'currentColor', d: DROP }] },
   // Dashed, because that is how the overlay draws a pin it could not re-anchor. The chip and the pin
   // then say the same thing in the same language, which an emoji could not do.
+  // Three lines, drawn here. It is no path of somebody else, so it adds no notice to carry.
+  list: {
+    viewBox: '0 0 16 16',
+    paths: [
+      {
+        d: 'M3 4.5 H13 M3 8 H13 M3 11.5 H13',
+        fill: 'none',
+        stroke: 'currentColor',
+        'stroke-width': '1.5',
+        'stroke-linecap': 'round',
+      },
+    ],
+  },
   dropDashed: {
     viewBox: '0 0 16 16',
     paths: [

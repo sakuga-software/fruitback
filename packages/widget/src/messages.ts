@@ -72,6 +72,19 @@ export const ENGLISH = {
   'orphans.count': { one: '{count} detached note', other: '{count} detached notes' },
   'orphans.entry': '{stage} · {note}',
 
+  // The list of every note of the page (FRU-129). `sidebar.open` and `sidebar.dialog` must stay
+  // different: they name the button and its dialog.
+  // And `sidebar.dialog` must not start like `thread.dialog`: both are open at once, and a reader
+  // or a test that looks for « Feedback … » must find one.
+  'sidebar.open': 'Show every note of this page',
+  'sidebar.dialog': 'Every note of this page',
+  'sidebar.title': 'Notes',
+  'sidebar.close': 'Close the list',
+  'sidebar.empty': 'No note on this page yet.',
+  'sidebar.count': { one: '{count} note', other: '{count} notes' },
+  'sidebar.approximate': 'Approximate position',
+  'sidebar.detached': 'Element not found on this page',
+
   // The words of the text a reviewer copies (FRU-109). They are labels in front of a value.
   'export.title': 'Feedback on {url}',
   'export.empty': 'No feedback on this page.',
