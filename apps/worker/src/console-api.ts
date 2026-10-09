@@ -2,6 +2,7 @@ import {
   type AccountStore,
   type Action,
   type Connector,
+  type ConnectorKind,
   type Destination,
   type Site,
   VISIBILITIES,
@@ -12,6 +13,7 @@ import {
 } from './accounts.ts';
 import { readBearerToken, verifyIdentityToken } from './identity.ts';
 import { LinearKeyForbidden, LinearKeyRefused, listLinearTeams } from './linear.ts';
+import { isAcceptableSecret, newSecret, parseTargetUrl, sealTarget, targetLabel } from './rest-connector.ts';
 import { open, seal } from './secrets.ts';
 import { StoreError } from './store.ts';
 import { PAIRING_TTL_SECONDS, type SessionStore, createPairing } from './session.ts';
@@ -89,11 +91,19 @@ function connectorView(connector: Connector): { id: string; kind: string; label:
 
 const ID = /^[A-Za-z0-9_-]{1,80}$/;
 
-function destinationOf(body: Record<string, unknown> | undefined): Destination | undefined {
+/**
+ * The destination a body asks for, for a connector of this kind.
+ *
+ * A tracker has teams, so a team is required. An address that only receives has none, and a team
+ * given for one is refused: it would be kept and mean nothing.
+ */
+function destinationOf(body: Record<string, unknown> | undefined, kind: ConnectorKind): Destination | undefined {
   const { connector, teamId, projectId } = body ?? {};
-  if (typeof connector !== 'string' || !ID.test(connector) || typeof teamId !== 'string' || !ID.test(teamId)) {
-    return undefined;
-  }
+  if (typeof connector !== 'string' || !ID.test(connector)) return undefined;
+  // `null` is « none », as the route takes it for the project of a tracker.
+  if (kind === 'rest')
+    return (teamId ?? undefined) === undefined && (projectId ?? undefined) === undefined ? { connector } : undefined;
+  if (typeof teamId !== 'string' || !ID.test(teamId)) return undefined;
   if (projectId !== undefined && projectId !== null && (typeof projectId !== 'string' || !ID.test(projectId))) {
     return undefined;
   }
@@ -208,7 +218,13 @@ export async function handleConsoleApi(
     if (!allowed('manage-sites')) return forbidden();
 
     const body = await readBody(request);
-    const wanted = body?.connector === null ? undefined : destinationOf(body);
+    // The kind of the connector says what a destination holds. A connector of another workspace
+    // answers like one that does not exist.
+    const named = typeof body?.connector === 'string' ? await context.accounts.sealedKey(body.connector) : undefined;
+    if (typeof body?.connector === 'string' && ID.test(body.connector) && named?.workspaceId !== workspaceId) {
+      return json(404, { error: 'not-found' }, headers);
+    }
+    const wanted = body?.connector === null || named === undefined ? undefined : destinationOf(body, named.kind);
     if (body?.connector !== null && wanted === undefined) return json(400, { error: 'invalid-destination' }, headers);
     const set = await context.accounts.setDestination(workspaceId as string, destination[1] as string, wanted);
 
@@ -231,6 +247,23 @@ export async function handleConsoleApi(
     if (context.secretsKey === undefined) return json(404, CONNECTORS_UNAVAILABLE, headers);
 
     const body = await readBody(request);
+    if (body?.kind === 'rest') {
+      // FRU-122: an address that receives each note. Nothing is asked of it now: it is called when a
+      // note is written, and the console shows a delivery that did not arrive.
+      const url = parseTargetUrl(body.url);
+      if (url === undefined) return json(400, { error: 'invalid-address' }, headers);
+      const given = typeof body.secret === 'string' && body.secret !== '' ? body.secret : undefined;
+      if (given !== undefined && !isAcceptableSecret(given)) return json(400, { error: 'invalid-secret' }, headers);
+      const secret = given ?? newSecret();
+      const connector = await context.accounts.addConnector(workspaceId as string, {
+        kind: 'rest',
+        label: targetLabel(url),
+        sealed: sealTarget({ url, secret }, context.secretsKey),
+      });
+
+      // A secret the worker made is answered here, once. No route answers it again.
+      return json(201, { ...connectorView(connector), ...(given === undefined ? { secret } : {}) }, headers);
+    }
     const apiKey = typeof body?.apiKey === 'string' ? body.apiKey.trim() : '';
     if (body?.kind !== 'linear' || apiKey === '') return json(400, { error: 'invalid-connector' }, headers);
 
@@ -255,6 +288,25 @@ export async function handleConsoleApi(
     return json(201, connectorView(connector), headers);
   }
 
+  // The deliveries of a receiving connector that did not arrive, and a new attempt (FRU-122).
+  const late = /^\/connectors\/([A-Za-z0-9_-]+)\/deliveries(?:\/([A-Za-z0-9_-]+)\/retry)?$/.exec(rest);
+  if (late !== null) {
+    const id = late[1] as string;
+    if (late[2] === undefined) {
+      if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
+      if (!allowed('see-tracker')) return forbidden();
+      const kept = await context.accounts.sealedKey(id);
+      if (kept === undefined || kept.workspaceId !== workspaceId) return json(404, { error: 'not-found' }, headers);
+
+      return json(200, { deliveries: await context.accounts.deliveries(workspaceId as string, id) }, headers);
+    }
+    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+    if (!allowed('manage-sites')) return forbidden();
+    const due = await context.accounts.retryDelivery(workspaceId as string, id, late[2], context.now ?? Date.now());
+
+    return due ? new Response(null, { status: 204, headers }) : json(404, { error: 'not-found' }, headers);
+  }
+
   const connector = /^\/connectors\/([A-Za-z0-9_-]+)(\/teams)?$/.exec(rest);
   if (connector !== null) {
     const id = connector[1] as string;
@@ -273,6 +325,8 @@ export async function handleConsoleApi(
     const kept = await context.accounts.sealedKey(id);
     // A connector of another workspace answers like one that does not exist.
     if (kept === undefined || kept.workspaceId !== workspaceId) return json(404, { error: 'not-found' }, headers);
+    // An address that only receives has no team to choose.
+    if (kept.kind !== 'linear') return json(404, { error: 'not-found' }, headers);
     const apiKey = open(kept.sealed, context.secretsKey);
     if (apiKey === undefined) return json(502, { error: 'store-unavailable' }, headers);
 

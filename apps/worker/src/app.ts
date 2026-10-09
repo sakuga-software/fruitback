@@ -14,6 +14,7 @@ import { consoleCors, handleConsoleSession, isConsoleRoute } from './console-rou
 import { handleConsoleApi } from './console-api.ts';
 import { handleGitHub } from './github-oauth.ts';
 import { type ConnectorStores, createConnectorStores, createRoutedStore } from './connectors.ts';
+import { type Send, deliverDue } from './rest-connector.ts';
 import { type Mailer, createTemMailer } from './mail.ts';
 import { createSqliteAccountStore } from './accounts-sqlite.ts';
 import { type WorkerConfig, type WorkerEnv, readAllowedOrigins, readConfig } from './env.ts';
@@ -95,6 +96,20 @@ async function withSites(config: WorkerConfig, accounts: AccountStore): Promise<
     clients,
     allowedOrigins: [...new Set([...config.allowedOrigins, ...originsFromClients(clients)])],
   };
+}
+
+/**
+ * One pass over the notes that wait to be sent to the address a workspace connected (FRU-122).
+ *
+ * The server calls it on a timer. It is here and not in `server.ts` so a test reaches it with no
+ * socket: it reads the same configuration as a request does.
+ */
+export async function deliverPending(env: WorkerEnv, send: Send, now?: () => number): Promise<void> {
+  const config = readConfig(env);
+  const accounts = config.ok ? accountStoreFor(config.config) : undefined;
+  if (!config.ok || accounts === undefined) return;
+
+  await deliverDue({ accounts, secretsKey: config.config.secretsKey, send, ...(now === undefined ? {} : { now }) });
 }
 
 /** One set of connector stores per accounts file and key, so a key is opened once and not per request. */
