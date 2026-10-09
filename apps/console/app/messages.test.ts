@@ -63,7 +63,9 @@ describe('the words of the console (FRU-120)', () => {
           // An attribute alone on its line (`disabled`) starts with a small letter and has no space.
           /^\s+(?:[A-Z][A-Za-z ,.'’-]*|[a-z]+(?: [A-Za-z,.'’-]+){2,})[a-z.?!…]$/.test(rest) ||
           // A sentence in an attribute a person reads or hears.
-          /\b(?:title|lead|label|hint|aria-label|alt)="[^"]*[A-Za-z]{3}/.test(rest);
+          /\b(?:title|lead|label|hint|note|detail|heading|description|errorMessage|aria-label|alt)="[^"]*[A-Za-z]{3}/.test(
+            rest,
+          );
         if (text) loose.push(`${name}:${index + 1}: ${code}`);
       });
     }
@@ -202,6 +204,43 @@ describe('a language the account did not hear', () => {
 
     assert.equal(heard, false);
     assert.equal(storage.values.size, 1);
+  });
+});
+
+describe('the controls of a screen (FRU-125)', () => {
+  /**
+   * One native control stays: the row of a connector, which opens its panel. It is a whole card that
+   * is pressed, and the kit has no such control.
+   */
+  const NATIVE_ON_PURPOSE = [/^routes\/connectors\.tsx: <button$/];
+
+  it('come from the kit, which draws them with HeroUI, and not from a native element', () => {
+    const native: string[] = [];
+    for (const [name, source] of sources) {
+      if (name === 'ui.tsx') continue;
+      for (const match of source.matchAll(/<(?:button|input|select|textarea|option|fieldset)\b/g)) {
+        native.push(`${name}: ${match[0]}`);
+      }
+    }
+
+    assert.deepEqual(
+      native.filter((found) => !NATIVE_ON_PURPOSE.some((allowed) => allowed.test(found))),
+      [],
+    );
+    assert.equal(native.length, NATIVE_ON_PURPOSE.length, 'an exception that no screen uses must go');
+  });
+
+  it('are built on HeroUI in the kit, with no native control there either', () => {
+    const kit = sources.get('ui.tsx') ?? '';
+
+    assert.match(kit, /from '@heroui\/react';/);
+    assert.equal(/<(?:button|input|select|textarea|option)\b/.test(kit), false);
+  });
+
+  it('take no tooltip for a reason: a disabled control opens none', () => {
+    for (const [name, source] of sources) {
+      assert.equal(/<(?:Button|WideButton)\b[^>]*\btitle=/.test(source), false, `${name} gives a button a title`);
+    }
   });
 });
 

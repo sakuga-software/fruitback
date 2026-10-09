@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { redeemLink } from '../api';
-import { Mark } from '../ui';
+import { Button, Mark } from '../ui';
 import { t } from '../i18n';
 import { useLocale } from '../use-locale';
 
@@ -42,13 +42,9 @@ export default function SignIn() {
         <div className="w-full max-w-sm rounded-[14px] border border-line bg-surface p-7 text-center">
           <h1 className="text-lg font-bold">{t('You are not signed in yet')}</h1>
           <p className="mt-2 text-sm text-muted">{t('Fruitback did not answer. Your link still works.')}</p>
-          <button
-            type="button"
-            className="mt-5 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white"
-            onClick={() => redeem(waiting)}
-          >
+          <Button className="mt-5" onClick={() => redeem(waiting)}>
             {t('Try again')}
-          </button>
+          </Button>
         </div>
       </main>
     );

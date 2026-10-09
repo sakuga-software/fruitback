@@ -1,6 +1,6 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
 import { type Site, type Visibility, call } from '../api';
-import { Button, Card, Chip, Field, Problem } from '../ui';
+import { Button, Card, Chip, Choice, Field, Problem } from '../ui';
 import { InstallOptions } from './setup';
 import { PageHead, useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
@@ -53,17 +53,17 @@ export default function Sites() {
               onChange={(event) => setUrl(event.target.value)}
             />
           </div>
-          <label className="block">
-            <span className="mb-1.5 block text-xs text-muted">{t('Who sees the feedback')}</span>
-            <select
+          <div className="sm:w-56">
+            <Choice
+              label={t('Who sees the feedback')}
               value={visibility}
-              onChange={(event) => setVisibility(event.target.value as Visibility)}
-              className="h-10 rounded-md border border-line bg-surface px-3 text-[15px]"
-            >
-              <option value="members">{t('Members')}</option>
-              <option value="everyone">{t('Everyone')}</option>
-            </select>
-          </label>
+              onChange={(value) => setVisibility(value as Visibility)}
+              options={[
+                { value: 'members', label: t('Members') },
+                { value: 'everyone', label: t('Everyone') },
+              ]}
+            />
+          </div>
           <Button type="submit" disabled={url.trim() === ''}>
             {t('Add the site')}
           </Button>

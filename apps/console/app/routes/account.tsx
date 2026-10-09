@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { call, signOut, saveLanguage } from '../api';
-import { Button, Card, Problem } from '../ui';
+import { Button, Card, Choice, Problem } from '../ui';
 import { PageHead, useWorkspace } from './workspace';
 import { LOCALES, chooseLanguage, locale, t } from '../i18n';
 import { useLocale } from '../use-locale';
@@ -49,29 +49,19 @@ export default function Account() {
           </dl>
         </Card>
         <Card className="p-5">
-          <label className="block">
-            <span className="mb-1 block text-[15px] font-semibold">{t('Language')}</span>
-            <span className="mb-3 block text-xs text-muted">
-              {t('The language of the console, and of the e-mails Fruitback sends you.')}
-            </span>
-            <select
-              value={locale()}
-              onChange={(event) => {
-                // The screen changes at once. The account keeps the choice for the e-mails and for
-                // the next browser. When it did not hear it, say so: the choice stays in this browser
-                // and is sent again at the next visit.
-                setUnsent(false);
-                void chooseLanguage(event.target.value, saveLanguage).then((heard) => setUnsent(!heard));
-              }}
-              className="h-10 w-full rounded-md border border-line bg-surface px-3 text-[15px]"
-            >
-              {LOCALES.map((each) => (
-                <option key={each.tag} value={each.tag}>
-                  {each.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <Choice
+            label={t('Language')}
+            hint={t('The language of the console, and of the e-mails Fruitback sends you.')}
+            value={locale()}
+            options={LOCALES.map((each) => ({ value: each.tag, label: each.name }))}
+            onChange={(tag) => {
+              // The screen changes at once. The account keeps the choice for the e-mails and for
+              // the next browser. When it did not hear it, say so: the choice stays in this browser
+              // and is sent again at the next visit.
+              setUnsent(false);
+              void chooseLanguage(tag, saveLanguage).then((heard) => setUnsent(!heard));
+            }}
+          />
           {unsent ? (
             <div className="mt-3">
               <Problem>

@@ -1157,6 +1157,14 @@ and _The team mode, and the call the page cannot make_:
   be invisible to the team. The key is sealed by `secrets.ts` with `FRUITBACK_SECRETS_KEY`, and no
   route answers it. The workspace of the client is compared with the workspace of the connector at the
   request too, because the row of a site is only a row.
+- **The console draws its controls with HeroUI v3, through its own kit** (FRU-125). `ui.tsx` is the
+  one file that imports `@heroui/react`: `Button`, `Field`, `Choice` (a select), `Pick` (radios),
+  `Chip` and `Problem`. A screen uses the kit, and `messages.test.ts` fails on a native control in a
+  screen. **HeroUI takes the theme**: `app.css` gives its variables the tokens of `design/README.md`,
+  and HeroUI names `--color-accent`, `--color-muted` and `--color-surface` from them, so those three
+  are no longer in our `@theme`. **A button takes no `title`**: a tooltip does not open on a disabled
+  control, so the reason is written beside it. The overlays of React Aria position with inline
+  styles, which the console's CSP allows (`style-src 'unsafe-inline'`); its scripts stay hashed.
 - **An e-mail is written in the language of its reader** (FRU-119). An account holds a `locale`: the
   browser that opened its first link, then what the person chose (`POST /console/me/locale`). A later
   sign-in from another browser does not change it. For a mail, the account's language wins, then the

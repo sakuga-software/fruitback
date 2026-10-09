@@ -29,6 +29,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'La langue de la console, et des e-mails que Fruitback vous envoie.',
   'Your account did not take this language yet. It is kept in this browser, and sent again the next time you open the console.':
     'Votre compte n’a pas encore pris cette langue. Elle est gardée dans ce navigateur, et renvoyée la prochaine fois que vous ouvrez la console.',
+  'Address of the person to invite': 'Adresse de la personne à inviter',
   'Where you are signed in': 'Où vous êtes connecté',
   'Console · this browser': 'Console · ce navigateur',
   'Active now': 'Actif maintenant',
@@ -95,7 +96,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Members: 'Membres',
   'Who can see and leave feedback, and who can change the workspace.':
     'Qui peut voir et laisser des retours, et qui peut modifier le workspace.',
-  'Invitations come after the beta': 'Les invitations arrivent après la bêta',
   'Invitations come after the beta. Until then, each person signs in and makes their own workspace.':
     'Les invitations arrivent après la bêta. D’ici là, chacun se connecte et crée son propre workspace.',
   Invite: 'Inviter',

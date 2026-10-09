@@ -4,6 +4,7 @@ import { onReachability } from './api';
 import './app.css';
 import { t } from './i18n';
 import { useLocale } from './use-locale';
+import { Button } from './ui';
 
 /** The name of the product, in the title of the page. A name, not a sentence: it is not translated. */
 const PRODUCT = 'Fruitback';
@@ -62,13 +63,13 @@ function Unreachable() {
   return (
     <div role="alert" className="flex flex-wrap items-center justify-center gap-3 bg-ink px-4 py-2 text-sm text-white">
       <span>{t('Fruitback cannot reach its server. Check your connection.')}</span>
-      <button
-        type="button"
-        className="rounded-full border border-white px-3 py-1 font-semibold"
+      <Button
+        tone="outline"
+        className="border-white bg-transparent text-white hover:bg-white/10"
         onClick={() => window.location.reload()}
       >
         {t('Try again')}
-      </button>
+      </Button>
     </div>
   );
 }
