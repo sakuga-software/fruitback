@@ -79,6 +79,9 @@ node --test src/seed.test.ts                 # one file, from the package direct
   with the widget mounted on it, built as a React Router 8 + Vite app with HeroUI because the
   widget's clients are React apps. Not shipped. It is deployed once, as the public demonstration
   (FRU-79), and nowhere else.
+- `design/` — the reference mockups of the Cloud and the simplified extension (a Claude Design
+  export, 2026-10-07), with a picture of each board. **Build a screen that has a board to its board**:
+  layout, words and tokens. `design/README.md` says which board belongs to which ticket.
 
 ## The dev loop
 
