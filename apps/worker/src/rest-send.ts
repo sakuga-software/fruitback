@@ -19,9 +19,8 @@ export type SenderSeams = {
   timeoutMs?: number;
 };
 
+/** From the start of a request to the status of its answer. Not an idle time: see `createSender`. */
 export const DELIVERY_TIMEOUT_MS = 10_000;
-/** The answer is read to its end so the socket is free, up to this many bytes. Its content is not used. */
-export const ANSWER_MAX_BYTES = 64 * 1_024;
 
 export function guardedLookup(lookup: typeof dnsLookup, allows: (address: string) => boolean): LookupFunction {
   return (hostname, options, callback) => {
@@ -61,26 +60,29 @@ export function createSender({
         return;
       }
 
+      // WARNING: one deadline for the whole exchange, from here to the status. The `timeout` of a
+      // request is an idle time: a receiver that sends one byte now and then never reaches it, and
+      // one such receiver would hold the loop that sends the notes of every workspace.
+      const deadline = setTimeout(() => sent.destroy(new Error('The receiver did not answer in time')), timeoutMs);
       const sent = request(
         url,
         {
           method: 'POST',
           headers: { ...headers, 'Content-Length': Buffer.byteLength(body) },
           lookup: guardedLookup(lookup, allows),
-          timeout: timeoutMs,
         },
         (answer) => {
-          // A redirect is an answer like another: it is not followed, so it cannot lead inside.
-          let read = 0;
-          answer.on('data', (chunk: Buffer) => {
-            read += chunk.length;
-            if (read > ANSWER_MAX_BYTES) answer.destroy();
-          });
-          answer.on('close', () => resolve({ status: answer.statusCode ?? 0 }));
+          // The status is all the worker reads, so the exchange ends here. The body is not read: it
+          // can be endless. A redirect is an answer like another: it is not followed.
+          clearTimeout(deadline);
+          resolve({ status: answer.statusCode ?? 0 });
+          answer.destroy();
         },
       );
-      sent.on('timeout', () => sent.destroy(new Error('The receiver did not answer in time')));
-      sent.on('error', reject);
+      sent.on('error', (error) => {
+        clearTimeout(deadline);
+        reject(error);
+      });
       sent.end(body);
     });
 }

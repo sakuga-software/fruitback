@@ -513,7 +513,8 @@ chose it. The notes stay in the worker: this is one more copy, sent out.
   It goes when it arrives. One that never arrives is given up after seven attempts, and removed
   30 days after its last attempt. The route that lists the waiting deliveries answers no body.
 - The reporter is answered when the note is kept. A receiver that is down, slow or hostile costs the
-  widget nothing, and each attempt is bounded at 10 seconds and 64 kB of answer.
+  widget nothing. Each attempt is bounded at 10 seconds from its start to the status of the answer,
+  whatever the receiver sends in that time, and the body of the answer is not read.
 - A workspace can make the worker send requests to a third party: one per note its own sites
   receive, and six more attempts at most. The notes are rate-limited where they come in.
 

@@ -4,7 +4,7 @@ import { createHmac } from 'node:crypto';
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { type IncomingMessage, type Server, createServer, request as httpRequest } from 'node:http';
 import type { request as httpsRequest } from 'node:https';
-import type { AddressInfo } from 'node:net';
+import { type AddressInfo, type Socket, createServer as createTcpServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
@@ -29,7 +29,7 @@ import {
   sealTarget,
   signature,
 } from './rest-connector.ts';
-import { ANSWER_MAX_BYTES, DELIVERY_TIMEOUT_MS, createSender } from './rest-send.ts';
+import { DELIVERY_TIMEOUT_MS, createSender } from './rest-send.ts';
 import { DELIVERY_PASS_MS } from './server.ts';
 import { closeSessionConnections } from './session-sqlite.ts';
 
@@ -601,6 +601,16 @@ describe('who may connect an address and read its deliveries (FRU-122)', () => {
   });
 });
 
+/** A sender that never gives up must fail its test, not hang the suite: a clock of the test answers first. */
+function orLate<Answer>(sending: Promise<Answer>): Promise<Answer> {
+  let clock: NodeJS.Timeout;
+  const late = new Promise<never>((_resolve, reject) => {
+    clock = setTimeout(() => reject(new Error('the sender was still waiting after 2 seconds')), 2_000);
+  });
+
+  return Promise.race([sending, late]).finally(() => clearTimeout(clock));
+}
+
 describe('the request of a delivery, on a socket (FRU-122)', () => {
   /** A local server, and a sender that may call it. The production sender may not. */
   async function local(
@@ -657,7 +667,69 @@ describe('the request of a delivery, on a socket (FRU-122)', () => {
   it('gives up on a receiver that takes the request and never answers', async () => {
     const { url, send } = await local(() => 'hang');
 
-    await assert.rejects(send(`${url}/in`, {}, '{}'), /did not answer in time/);
+    await assert.rejects(orLate(send(`${url}/in`, {}, '{}')), /did not answer in time/);
+  });
+
+  it('answers the status at once when the receiver sends its body a byte at a time, for ever', async () => {
+    const dripping: NodeJS.Timeout[] = [];
+    const server = createServer((_request, response) => {
+      response.writeHead(200);
+      dripping.push(setInterval(() => response.write('.'), 20));
+    });
+    servers.push(server);
+    await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
+    const send = createSender({
+      request: httpRequest as unknown as typeof httpsRequest,
+      allows: () => true,
+      timeoutMs: 300,
+    });
+    const started = Date.now();
+    try {
+      // Against a clock of the test: a sender that waits for the end of the body must fail here, not hang.
+      const late = new Promise<'late'>((resolve) => setTimeout(() => resolve('late'), 1_000).unref());
+      const answered = await Promise.race([
+        send(`http://localhost:${(server.address() as AddressInfo).port}/in`, {}, '{}'),
+        late,
+      ]);
+
+      assert.deepEqual(answered, { status: 200 });
+    } finally {
+      for (const drip of dripping) clearInterval(drip);
+    }
+
+    assert.ok(Date.now() - started < 250, 'the status was known before the deadline, and the body was not waited for');
+  });
+
+  it('gives up at the deadline on a receiver that never stops sending headers', async () => {
+    // The socket is never idle: a byte arrives every 20 ms. Only a deadline for the whole exchange ends it.
+    const sockets: Socket[] = [];
+    const dripping: NodeJS.Timeout[] = [];
+    const server = createTcpServer((socket) => {
+      sockets.push(socket);
+      socket.on('error', () => {});
+      socket.write('HTTP/1.1 200 OK\r\n');
+      dripping.push(setInterval(() => socket.writable && socket.write('X-Slow: 1\r\n'), 20));
+    });
+    await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
+    const send = createSender({
+      request: httpRequest as unknown as typeof httpsRequest,
+      allows: () => true,
+      timeoutMs: 300,
+    });
+    const started = Date.now();
+    try {
+      await assert.rejects(
+        orLate(send(`http://localhost:${(server.address() as AddressInfo).port}/in`, {}, '{}')),
+        /did not answer in time/,
+      );
+    } finally {
+      for (const drip of dripping) clearInterval(drip);
+      for (const socket of sockets) socket.destroy();
+      await new Promise((done) => server.close(done));
+    }
+
+    const took = Date.now() - started;
+    assert.ok(took >= 280 && took < 1_500, `gave up after ${took} ms, for a deadline of 300`);
   });
 
   it('refuses, as the production sender, a name that resolves to the worker itself', async () => {
@@ -767,8 +839,8 @@ describe('the contract a receiver is written against (FRU-122)', () => {
 
     assert.ok(stated.length > 500, 'the section was not found');
     assert.ok(stated.includes(`\`${MESH_RANGE[0]}/${MESH_RANGE[1]}\``));
-    assert.ok(stated.includes(`bounded at ${DELIVERY_TIMEOUT_MS / 1_000} seconds`));
-    assert.ok(stated.includes(`${ANSWER_MAX_BYTES / 1_024} kB of answer`));
+    assert.ok(stated.includes(`bounded at ${DELIVERY_TIMEOUT_MS / 1_000} seconds from its start to the status`));
+    assert.ok(stated.includes('the body of the answer is not read'));
     assert.ok(stated.includes(`removed ${ABANDONED_KEPT_DAYS} days after its last attempt`));
     assert.ok(stated.includes('given up after seven attempts') && stated.includes('six more attempts at most'));
     assert.equal(RETRY_AFTER_SECONDS.length, 6);
