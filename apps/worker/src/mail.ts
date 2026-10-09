@@ -57,30 +57,45 @@ export function createTemMailer(settings: TemSettings, fetcher: typeof fetch = f
   };
 }
 
+/** The languages of the sign-in message. Any other tag falls back to English. */
+const SIGN_IN_WORDS = {
+  en: {
+    subject: 'Your Fruitback sign-in link',
+    title: 'Sign in to Fruitback',
+    lead: 'Sign in to Fruitback with this link:',
+    button: 'Sign in',
+    once: (minutes: number) => `It works once, for ${minutes} minutes.`,
+    ignore: 'If you did not ask to sign in, ignore this message: nothing happens without the link.',
+  },
+  fr: {
+    subject: 'Votre lien de connexion à Fruitback',
+    title: 'Connexion à Fruitback',
+    lead: 'Connectez-vous à Fruitback avec ce lien :',
+    button: 'Se connecter',
+    once: (minutes: number) => `Il ne sert qu'une fois, pendant ${minutes} minutes.`,
+    ignore: "Si vous n'avez pas demandé à vous connecter, ignorez ce message : rien ne se passe sans le lien.",
+  },
+} as const;
+
 /**
- * The sign-in message. The link is the whole of it.
+ * The sign-in message. The link is the whole of it, and it carries no picture: an image that loads
+ * from a server says when the message was opened.
  *
  * It says what happens when somebody did not ask: nothing. An address anybody can type receives this,
  * and the person who reads it must know that ignoring it is safe.
  */
-export function signInMessage(to: string, link: string, minutes: number): MailMessage {
-  const text = [
-    'Sign in to Fruitback with this link:',
-    '',
-    link,
-    '',
-    `It works once, for ${minutes} minutes.`,
-    'If you did not ask to sign in, ignore this message: nothing happens without the link.',
-  ].join('\n');
+export function signInMessage(to: string, link: string, minutes: number, locale = 'en'): MailMessage {
+  const words = locale.toLowerCase().startsWith('fr') ? SIGN_IN_WORDS.fr : SIGN_IN_WORDS.en;
+  const text = [words.lead, '', link, '', words.once(minutes), words.ignore].join('\n');
   const href = escapeHtml(link);
   const html = `<!doctype html><html><body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#1c1917;background:#faf9f5;padding:32px">
-<p style="font-size:16px;font-weight:600">Sign in to Fruitback</p>
-<p><a href="${href}" style="display:inline-block;background:#dd2c27;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none;font-weight:600">Sign in</a></p>
-<p style="color:#78716c;font-size:13px">It works once, for ${minutes} minutes. If you did not ask to sign in, ignore this message: nothing happens without the link.</p>
+<p style="font-size:16px;font-weight:600">${escapeHtml(words.title)}</p>
+<p><a href="${href}" style="display:inline-block;background:#dd2c27;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none;font-weight:600">${escapeHtml(words.button)}</a></p>
+<p style="color:#78716c;font-size:13px">${escapeHtml(words.once(minutes))} ${escapeHtml(words.ignore)}</p>
 <p style="color:#a8a29e;font-size:12px;word-break:break-all">${href}</p>
 </body></html>`;
 
-  return { to, subject: 'Your Fruitback sign-in link', text, html };
+  return { to, subject: words.subject, text, html };
 }
 
 function escapeHtml(value: string): string {

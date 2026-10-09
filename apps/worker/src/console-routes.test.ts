@@ -1,4 +1,4 @@
-import { afterEach, describe, it } from 'node:test';
+import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -184,6 +184,44 @@ describe('signing in by a link (FRU-98)', () => {
 
   it('does not exist on a worker that sends no e-mail', async () => {
     assert.equal((await call(envWith(), '/auth/email', { body: { email: 'alice@acme.dev' } })).status, 404);
+  });
+});
+
+describe('what a sign-in leaves behind (FRU-98)', () => {
+  it('writes no code to any log, when the mail goes and when it fails', async () => {
+    const written: string[] = [];
+    for (const method of ['log', 'info', 'warn', 'error', 'debug'] as const) {
+      mock.method(console, method, (...args: unknown[]) => {
+        written.push(args.map(String).join(' '));
+      });
+    }
+
+    try {
+      const env = envWith();
+      const mail = inbox();
+      await call(env, '/auth/email', { body: { email: 'alice@acme.dev' } }, { mailer: mail });
+      const code = codeIn(mail.sent[0]);
+      await call(env, '/auth/email/redeem', { body: { code } });
+      await call(env, '/auth/email/redeem', { body: { code } });
+      await call(env, '/auth/email', { body: { email: 'bob@acme.dev' } }, { mailer: inbox(true) });
+
+      assert.ok(written.length > 0, 'the control: the failure path does write a line');
+      assert.equal(written.join('\n').includes(code), false);
+    } finally {
+      mock.restoreAll();
+    }
+  });
+
+  it('writes the message in the language of the console that asked', async () => {
+    const mail = inbox();
+    await call(envWith(), '/auth/email', { body: { email: 'alice@acme.dev', locale: 'fr-FR' } }, { mailer: mail });
+
+    assert.equal(mail.sent[0]?.subject, 'Votre lien de connexion à Fruitback');
+    assert.match(mail.sent[0]?.text ?? '', /Connectez-vous/);
+  });
+
+  it('carries no image a server could count the opening with', () => {
+    assert.equal(/<img/i.test(signInMessage('a@b.c', 'https://x/sign-in#y', 15).html), false);
   });
 });
 

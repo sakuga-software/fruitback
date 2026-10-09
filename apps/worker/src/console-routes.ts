@@ -153,6 +153,8 @@ export async function handleConsoleSession(
 
     const body = await readBody(request);
     const email = typeof body?.email === 'string' ? normalizeEmail(body.email) : undefined;
+    // The language of the console that asked, for the words of the message. Never the link.
+    const locale = typeof body?.locale === 'string' ? body.locale.slice(0, 16) : 'en';
     if (email === undefined) return json(400, { error: 'invalid-email' }, headers);
 
     const sent = await context.kv.incr(`fruitback:mail:${email}`, EMAIL_LINK_WINDOW_MS);
@@ -168,7 +170,7 @@ export async function handleConsoleSession(
     // The code is after the `#`: a fragment is never sent to a server, so no proxy logs it.
     const link = `${config.consoleUrl}/sign-in#${code}`;
     try {
-      await context.mailer.send(signInMessage(email, link, EMAIL_LINK_TTL_SECONDS / 60));
+      await context.mailer.send(signInMessage(email, link, EMAIL_LINK_TTL_SECONDS / 60, locale));
     } catch (error) {
       if (error instanceof MailError) {
         console.error(`[fruitback] ${error.message}`);
