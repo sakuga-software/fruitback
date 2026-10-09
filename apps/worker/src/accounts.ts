@@ -85,6 +85,15 @@ export type AccountStore = {
   deleteWorkspace(workspace: string): Promise<void>;
   /** Every site, as the client map the routing reads. */
   clientMap(): Promise<ClientMap>;
+  /**
+   * Keeps a sign-in link for an address (FRU-98): the digest of its code, never the code.
+   *
+   * The account does not exist yet, and is not created here: an address is proven when its link is
+   * opened, and only then does `signIn` make it an account.
+   */
+  createEmailLink(link: { codeHash: string; email: string; expiresAt: number }): Promise<void>;
+  /** Spends a link once and answers its address, or `undefined` for a link spent, expired or unknown. */
+  spendEmailLink(codeHash: string, now: number): Promise<string | undefined>;
 };
 
 /**

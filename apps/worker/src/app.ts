@@ -9,6 +9,8 @@ import {
   resolveClient,
 } from './clients.ts';
 import type { AccountStore } from './accounts.ts';
+import { consoleCors, handleConsoleSession, isConsoleRoute } from './console-routes.ts';
+import { type Mailer, createTemMailer } from './mail.ts';
 import { createSqliteAccountStore } from './accounts-sqlite.ts';
 import { type WorkerConfig, type WorkerEnv, readAllowedOrigins, readConfig } from './env.ts';
 import { type SeedStore, StoreError } from './store.ts';
@@ -65,6 +67,11 @@ export function sessionStoreFor(config: WorkerConfig): SessionStore | undefined 
   return config.sessionPath === undefined ? undefined : createSqliteSessionStore(config.sessionPath);
 }
 
+/** What sends the e-mail of this worker, or `undefined` when it sends none (FRU-98). */
+export function mailerFor(config: WorkerConfig): Mailer | undefined {
+  return config.mail === undefined ? undefined : createTemMailer(config.mail);
+}
+
 /** The accounts of this worker, or `undefined` when its clients come from the env (FRU-96). */
 export function accountStoreFor(config: WorkerConfig): AccountStore | undefined {
   return config.accountsPath === undefined ? undefined : createSqliteAccountStore(config.accountsPath);
@@ -108,6 +115,8 @@ export type RequestContext = {
   sessionStore?: SessionStore;
   /** Same reason, for the accounts, the workspaces and their sites (FRU-96). */
   accounts?: AccountStore;
+  /** What sends the sign-in links (FRU-98). A suite hands over one that keeps what it was given. */
+  mailer?: Mailer;
   /**
    * Where the rate limiter and the read cache keep their state (FRU-49). When it is absent, the
    * handler uses `processKv`, which gives the one instance of this process and never a new empty one.
@@ -177,7 +186,10 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
   const pairing = pathname === PAIR_PATH;
   const site = (): CorsDecision => resolveCors(request, served.allowedOrigins);
   const extension = (): CorsDecision => (session ? openCors(request) : site());
-  const cors: CorsDecision = pairing ? { allowed: true, headers: {} } : extension();
+  // The console's routes answer the console and no site, with the cookie of its session (FRU-98).
+  const consoleRoute = served.accountsPath !== undefined && isConsoleRoute(pathname);
+  const chosen = (): CorsDecision => (consoleRoute ? consoleCors(request, served) : extension());
+  const cors: CorsDecision = pairing ? { allowed: true, headers: {} } : chosen();
   if (!cors.allowed) {
     return json(403, { error: 'origin-not-allowed' });
   }
@@ -210,6 +222,27 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
 
   if (!allowed) {
     return json(429, { error: 'rate-limited' }, cors.headers);
+  }
+
+  if (consoleRoute && accounts !== undefined) {
+    const sessions = context.sessionStore ?? sessionStoreFor(served);
+    if (sessions === undefined || served.identitySecret === undefined)
+      return json(404, { error: 'not-found' }, cors.headers);
+
+    try {
+      const answer = await handleConsoleSession(
+        request,
+        pathname,
+        served,
+        { accounts, sessions, mailer: context.mailer ?? mailerFor(served), kv, secret: served.identitySecret },
+        cors.headers,
+      );
+
+      return answer ?? json(404, { error: 'not-found' }, cors.headers);
+    } catch (error) {
+      if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, cors.headers);
+      throw error;
+    }
   }
 
   if (pairing) {

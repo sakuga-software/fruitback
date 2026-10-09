@@ -1062,6 +1062,12 @@ and _The team mode, and the call the page cannot make_:
   and its allowed origins, so routing, CORS and the `ws` check run unchanged. **An empty map stays
   empty**: `undefined` would make it a single-client worker that answers every page. `accounts.ts`
   holds the roles, and `can(role, action)` is the one table of who does what.
+- **Signing in ends in a pairing code, like every session** (FRU-98). `/auth/email` sends a link whose
+  code is after the `#`; `/auth/email/redeem` spends it, makes the address an account, then mints and
+  spends a pairing code for it. **The console's refresh token is an `HttpOnly` cookie** on
+  `/console/session`, and `consoleCors` answers `FRUITBACK_CONSOLE_URL` and no other origin. A console
+  session names no workspace: the `ws` check keeps it off every site. `mail.ts` is the seam, Scaleway
+  Transactional Email over HTTP the one implementation.
 
 **The markdown codec**
 

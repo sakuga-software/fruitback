@@ -446,6 +446,22 @@ client**: an empty map is not the absence of a map, which would answer every pag
 file holds addresses, names and the id each provider gives a person, and no password and no provider
 token. `FRUITBACK_CLIENTS` is refused beside it, so one map has one source.
 
+### Signing in to the console (FRU-98)
+
+`POST /auth/email` sends a link to the address it is given, and answers the same whether that address
+has an account or not. It is limited to 3 links per address per 15 minutes, on top of the limit per IP
+of every route. The link carries 256 random bits after a `#`, so no server and no proxy log sees it;
+the accounts file keeps a SHA-256 digest of it, never the code. A link works once, for 15 minutes,
+and the first redemption wins.
+
+Opening the link proves the address, and only then does it become an account. The worker then mints a
+pairing code for that account and spends it at once: the console's session is an ordinary session,
+with the same rotation and the same replay detection. **Its refresh token is a cookie the console's
+script cannot read** (`HttpOnly`, `Secure`, `SameSite=Strict`, on `/console/session` only), and the
+console routes answer one origin, `FRUITBACK_CONSOLE_URL`, with credentials. A script injected into the
+console can use the session while the page is open; it cannot carry the refresh token away. A
+console session names no workspace, so it reads no site.
+
 ### Personal data
 
 The widget can send, from a third party's page: a hand-written note, a name, an address, the user
