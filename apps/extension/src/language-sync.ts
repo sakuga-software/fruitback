@@ -16,7 +16,16 @@ export async function rememberLanguage(area: LanguageArea, seams: CloudSeams): P
 
   // WARNING: the answer took a call to the worker, and a log out can land in that time. The sessions
   // are read again here: the language of an account must not be kept for a browser that left it.
-  const locale = answer.locale !== undefined && (await seams.endpoints()).length === 0 ? undefined : answer.locale;
+  let locale = answer.locale;
+  if (answer.from !== undefined) {
+    const paired = await seams.endpoints();
+    if (!paired.includes(answer.from)) {
+      // The session that said this language is gone. With another session left, nothing is known
+      // about its language: the log out asks again, and that answer decides.
+      if (paired.length > 0) return;
+      locale = undefined;
+    }
+  }
 
   const kept = await storedLanguage(area);
   if (locale === kept) return;

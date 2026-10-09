@@ -112,7 +112,7 @@ export async function accountLanguage({
   endpoints,
   ensureAccess,
   fetcher = fetch,
-}: CloudSeams): Promise<{ locale?: string } | 'no-answer'> {
+}: CloudSeams): Promise<{ locale?: string; from?: string } | 'no-answer'> {
   // WARNING: one worker that did not answer is enough to say nothing. The worker that is down can be
   // the one that holds the account, and « the others say no language » would then erase a language
   // that is still true.
@@ -124,7 +124,8 @@ export async function accountLanguage({
       silent = true;
       continue;
     }
-    if (listed !== NO_ACCOUNTS && listed.locale !== undefined) return { locale: listed.locale };
+    // `from` is the worker that said it: the caller checks that its session is still there.
+    if (listed !== NO_ACCOUNTS && listed.locale !== undefined) return { locale: listed.locale, from: endpoint };
   }
 
   return silent ? 'no-answer' : {};

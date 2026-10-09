@@ -184,7 +184,10 @@ describe('the language of the account (FRU-131)', () => {
   it('comes from the first session whose worker says one', async () => {
     const { fetcher } = worker({ ...LISTED, locale: 'fr' });
 
-    assert.deepEqual(await accountLanguage({ ...PAIRED, fetcher }), { locale: 'fr' });
+    assert.deepEqual(await accountLanguage({ ...PAIRED, fetcher }), {
+      locale: 'fr',
+      from: 'https://api.fruitback.test',
+    });
   });
 
   it('is asked over https only, like every call that carries the token', async () => {
@@ -247,6 +250,21 @@ describe('the language of the account (FRU-131)', () => {
     });
 
     assert.equal(offer, undefined);
+  });
+
+  it('is not kept from a session that ended while it answered, when another session is left', async () => {
+    const kept = area();
+    let paired = ['https://api.fruitback.test', 'https://self.hosted.test'];
+    const fetcher = (async (url: string) => {
+      if (!url.startsWith('https://api.fruitback.test')) return new Response('{}', { status: 405 });
+      // The log out of this worker lands while it answers. The other session stays.
+      paired = ['https://self.hosted.test'];
+
+      return new Response(JSON.stringify({ ...LISTED, locale: 'fr' }), { status: 200 });
+    }) as typeof fetch;
+    await rememberLanguage(kept, { ...PAIRED, endpoints: async () => paired, fetcher });
+
+    assert.equal(await storedLanguage(kept), undefined);
   });
 
   it('stays when the worker of the account is down and another worker keeps no accounts', async () => {
