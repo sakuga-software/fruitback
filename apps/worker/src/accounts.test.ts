@@ -295,6 +295,8 @@ describe('what the boot log says about who reads the pins (FRU-116)', () => {
     assert.match(server, /readExposureNotice\(\{[^}]*accounts: config\.config\.accountsPath !== undefined/s);
     assert.match(server, /console\.warn\(exposure\)/);
     assert.equal(server.includes('openReadClients('), false, 'the server holds no second copy of the rule');
+  });
+});
 
 describe('the accounts file of a version before (FRU-119)', () => {
   it('keeps an account written before the language column, with no language', async () => {
