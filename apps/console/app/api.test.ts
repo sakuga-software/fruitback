@@ -56,7 +56,7 @@ describe('a worker that does not answer', () => {
     const answers: unknown[] = [];
     const stop = callUntilAnswered('GET', '/console/me', (answer) => answers.push(answer));
     await new Promise((resolve) => setImmediate(resolve));
-    assert.deepEqual(answers, [], 'no answer is not handed over');
+    assert.equal(answers.length, 0, 'no answer is not handed over');
 
     mock.restoreAll();
     mock.method(globalThis, 'fetch', async () => Response.json({ workspaces: [] }));
