@@ -65,6 +65,12 @@ export type WorkerEnv = {
    */
   FRUITBACK_SESSION_PATH?: string;
   /**
+   * SQLite file holding the accounts, the workspaces and their sites (FRU-96). Set, the worker reads
+   * its clients from that file, and the console writes them: `FRUITBACK_CLIENTS` is then refused.
+   * Absent, the worker serves the clients of its environment, as before.
+   */
+  FRUITBACK_ACCOUNTS_PATH?: string;
+  /**
    * The language of the prose in an issue description (FRU-39). A BCP-47 tag; English by default.
    *
    * **The team that triages reads it, never the reporter**, so it is configured here and never taken
@@ -138,6 +144,8 @@ const configSchema = z.object({
    * `404`, exactly as they did before this feature existed.
    */
   sessionPath: z.string().min(1).optional(),
+  /** Where the accounts, workspaces and sites live (FRU-96). Absent: the clients come from the env. */
+  accountsPath: z.string().min(1).optional(),
   /**
    * The language an issue description is written in (FRU-39), for the team that triages.
    *
@@ -182,6 +190,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     // team — which is precisely the leak the map exists to prevent.
     clients: clients.ok ? clients.clients : Number.NaN,
     sessionPath: env.FRUITBACK_SESSION_PATH || undefined,
+    accountsPath: env.FRUITBACK_ACCOUNTS_PATH || undefined,
     teamLocale: readTeamLocale(env.FRUITBACK_TEAM_LOCALE),
   };
 
@@ -254,6 +263,20 @@ export function readConfig(env: WorkerEnv): ConfigResult {
       missing: [
         `FRUITBACK_CLIENTS (${sharedKey.map(([id]) => id).join(', ')} uses FRUITBACK_IDENTITY_SECRET as its own key)`,
       ],
+    };
+  }
+
+  // A worker with accounts reads its clients from the file the console writes. Two sources for one
+  // map would let a site exist in one and not in the other.
+  if (result.data.accountsPath !== undefined && result.data.clients !== undefined) {
+    return { ok: false, missing: ['FRUITBACK_CLIENTS (FRUITBACK_ACCOUNTS_PATH is set, and the sites come from it)'] };
+  }
+
+  // An account signs in to get a session, so accounts without sessions sign in to nothing.
+  if (result.data.accountsPath !== undefined && result.data.sessionPath === undefined) {
+    return {
+      ok: false,
+      missing: ['FRUITBACK_SESSION_PATH (FRUITBACK_ACCOUNTS_PATH is set, and signing in opens a session)'],
     };
   }
 

@@ -1,0 +1,314 @@
+import { DatabaseSync } from 'node:sqlite';
+import {
+  type Account,
+  type AccountStore,
+  ROLES,
+  type Role,
+  type Site,
+  VISIBILITIES,
+  type Visibility,
+  type Workspace,
+  clientOf,
+  normalizeEmail,
+} from './accounts.ts';
+import type { ClientMap } from './clients.ts';
+import { StoreError } from './store.ts';
+
+/**
+ * Where the accounts live (FRU-96): its own file, for the reason `session-sqlite.ts` gives.
+ *
+ * `sqlite.ts` drives `PRAGMA user_version` with the migrations of the seeds, and `session-sqlite.ts`
+ * with those of the sessions. A third schema in one of those files would fight over its counter. An
+ * account is also not a credential: the session file can be lost and every reviewer pairs again,
+ * but this file holds who owns which workspace.
+ */
+
+/** Append; never edit an entry that has shipped. */
+const MIGRATIONS: readonly string[] = [
+  `
+  CREATE TABLE accounts (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    name TEXT,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE logins (
+    provider TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    account_id TEXT NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (provider, subject)
+  );
+
+  CREATE TABLE workspaces (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE members (
+    workspace_id TEXT NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
+    account_id TEXT NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
+    role TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (workspace_id, account_id)
+  );
+
+  CREATE INDEX members_by_account ON members (account_id);
+
+  CREATE TABLE sites (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
+    origin TEXT NOT NULL,
+    visibility TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    UNIQUE (workspace_id, origin)
+  );
+  `,
+];
+
+const connections = new Map<string, DatabaseSync>();
+
+function connect(path: string): DatabaseSync {
+  const open = connections.get(path);
+  if (open !== undefined) return open;
+
+  let database: DatabaseSync;
+  try {
+    database = new DatabaseSync(path);
+  } catch (error) {
+    throw new StoreError(`Account store could not open ${path}: ${String(error)}`);
+  }
+
+  try {
+    database.exec('PRAGMA journal_mode = WAL');
+    // Deleting a workspace removes its members and its sites through the cascade. `node:sqlite`
+    // turns this on by default, and it is written anyway: the cascade is the rule, not a default.
+    database.exec('PRAGMA foreign_keys = ON');
+    migrate(database);
+  } catch (error) {
+    database.close();
+    throw new StoreError(`Account store could not initialise ${path}: ${String(error)}`);
+  }
+
+  connections.set(path, database);
+
+  return database;
+}
+
+function migrate(database: DatabaseSync): void {
+  const row = database.prepare('PRAGMA user_version').get() as { user_version: number } | undefined;
+  const version = row?.user_version ?? 0;
+
+  for (let index = version; index < MIGRATIONS.length; index += 1) {
+    database.exec('BEGIN');
+    try {
+      database.exec(MIGRATIONS[index] as string);
+      database.exec(`PRAGMA user_version = ${index + 1}`);
+      database.exec('COMMIT');
+    } catch (error) {
+      database.exec('ROLLBACK');
+      throw error;
+    }
+  }
+}
+
+export function closeAccountConnections(): void {
+  for (const database of connections.values()) database.close();
+  connections.clear();
+}
+
+/** An opaque id with a prefix that says what it names, so a log line can be read. */
+function newId(prefix: string): string {
+  return `${prefix}_${crypto.randomUUID().replaceAll('-', '').slice(0, 20)}`;
+}
+
+/** A row is parsed, never trusted: the file is on a volume an operator can edit. */
+function accountOf(row: Record<string, unknown> | undefined): Account | undefined {
+  if (row === undefined || typeof row.id !== 'string' || typeof row.email !== 'string') return undefined;
+
+  return {
+    id: row.id,
+    email: row.email,
+    ...(typeof row.name === 'string' && row.name !== '' ? { name: row.name } : {}),
+  };
+}
+
+function workspaceOf(row: Record<string, unknown>): Workspace | undefined {
+  return typeof row.id === 'string' && typeof row.name === 'string' ? { id: row.id, name: row.name } : undefined;
+}
+
+function roleOf(value: unknown): Role | undefined {
+  return (ROLES as readonly unknown[]).includes(value) ? (value as Role) : undefined;
+}
+
+function siteOf(row: Record<string, unknown>): Site | undefined {
+  const visibility = (VISIBILITIES as readonly unknown[]).includes(row.visibility)
+    ? (row.visibility as Visibility)
+    : undefined;
+  if (typeof row.id !== 'string' || typeof row.workspace_id !== 'string' || typeof row.origin !== 'string') {
+    return undefined;
+  }
+  if (visibility === undefined) return undefined;
+
+  return { id: row.id, workspaceId: row.workspace_id, origin: row.origin, visibility };
+}
+
+export function createSqliteAccountStore(path: string): AccountStore {
+  return {
+    async signIn({ provider, subject, email, name }) {
+      const address = normalizeEmail(email);
+      if (address === undefined) throw new StoreError('A sign-in needs a valid address');
+
+      const database = connect(path);
+      const now = Date.now();
+
+      database.exec('BEGIN IMMEDIATE');
+      try {
+        const known = database
+          .prepare(
+            'SELECT a.id, a.email, a.name FROM logins l JOIN accounts a ON a.id = l.account_id WHERE l.provider = ? AND l.subject = ?',
+          )
+          .get(provider, subject) as Record<string, unknown> | undefined;
+        let account = accountOf(known);
+
+        // The same proven address from another provider is the same person: join, do not duplicate.
+        account ??= accountOf(
+          database.prepare('SELECT id, email, name FROM accounts WHERE email = ?').get(address) as
+            | Record<string, unknown>
+            | undefined,
+        );
+
+        if (account === undefined) {
+          account = { id: newId('acc'), email: address, ...(name === undefined || name === '' ? {} : { name }) };
+          database
+            .prepare('INSERT INTO accounts (id, email, name, created_at) VALUES (?, ?, ?, ?)')
+            .run(account.id, account.email, account.name ?? null, now);
+        } else if (account.name === undefined && name !== undefined && name !== '') {
+          database.prepare('UPDATE accounts SET name = ? WHERE id = ?').run(name, account.id);
+          account = { ...account, name };
+        }
+
+        database
+          .prepare('INSERT OR IGNORE INTO logins (provider, subject, account_id, created_at) VALUES (?, ?, ?, ?)')
+          .run(provider, subject, account.id, now);
+        database.exec('COMMIT');
+
+        return account;
+      } catch (error) {
+        database.exec('ROLLBACK');
+        throw error;
+      }
+    },
+
+    async account(id) {
+      return accountOf(
+        connect(path).prepare('SELECT id, email, name FROM accounts WHERE id = ?').get(id) as
+          | Record<string, unknown>
+          | undefined,
+      );
+    },
+
+    async createWorkspace(name, owner) {
+      const database = connect(path);
+      const workspace = { id: newId('ws'), name: name.trim() };
+      const now = Date.now();
+
+      database.exec('BEGIN IMMEDIATE');
+      try {
+        database
+          .prepare('INSERT INTO workspaces (id, name, created_at) VALUES (?, ?, ?)')
+          .run(workspace.id, workspace.name, now);
+        database
+          .prepare('INSERT INTO members (workspace_id, account_id, role, created_at) VALUES (?, ?, ?, ?)')
+          .run(workspace.id, owner, 'owner', now);
+        database.exec('COMMIT');
+      } catch (error) {
+        database.exec('ROLLBACK');
+        throw error;
+      }
+
+      return workspace;
+    },
+
+    async memberships(account) {
+      const rows = connect(path)
+        .prepare(
+          'SELECT w.id, w.name, m.role FROM members m JOIN workspaces w ON w.id = m.workspace_id WHERE m.account_id = ? ORDER BY m.created_at, w.id',
+        )
+        .all(account) as Record<string, unknown>[];
+
+      return rows.flatMap((row) => {
+        const workspace = workspaceOf(row);
+        const role = roleOf(row.role);
+
+        return workspace === undefined || role === undefined ? [] : [{ workspace, role }];
+      });
+    },
+
+    async role(workspace, account) {
+      const row = connect(path)
+        .prepare('SELECT role FROM members WHERE workspace_id = ? AND account_id = ?')
+        .get(workspace, account) as { role: unknown } | undefined;
+
+      return roleOf(row?.role);
+    },
+
+    async addSite(workspace, { origin, visibility }) {
+      const database = connect(path);
+      const existing = database
+        .prepare('SELECT id, workspace_id, origin, visibility FROM sites WHERE workspace_id = ? AND origin = ?')
+        .get(workspace, origin) as Record<string, unknown> | undefined;
+      const known = existing === undefined ? undefined : siteOf(existing);
+
+      // Adding the same address twice is the same site, with the visibility asked for last.
+      if (known !== undefined) {
+        database.prepare('UPDATE sites SET visibility = ? WHERE id = ?').run(visibility, known.id);
+
+        return { ...known, visibility };
+      }
+
+      const site: Site = { id: newId('site'), workspaceId: workspace, origin, visibility };
+      database
+        .prepare('INSERT INTO sites (id, workspace_id, origin, visibility, created_at) VALUES (?, ?, ?, ?, ?)')
+        .run(site.id, workspace, origin, visibility, Date.now());
+
+      return site;
+    },
+
+    async sites(workspace) {
+      const rows = connect(path)
+        .prepare(
+          'SELECT id, workspace_id, origin, visibility FROM sites WHERE workspace_id = ? ORDER BY created_at, id',
+        )
+        .all(workspace) as Record<string, unknown>[];
+
+      return rows.flatMap((row) => siteOf(row) ?? []);
+    },
+
+    async removeSite(workspace, site) {
+      const result = connect(path).prepare('DELETE FROM sites WHERE workspace_id = ? AND id = ?').run(workspace, site);
+
+      return result.changes === 1;
+    },
+
+    async deleteWorkspace(workspace) {
+      connect(path).prepare('DELETE FROM workspaces WHERE id = ?').run(workspace);
+    },
+
+    async clientMap() {
+      const rows = connect(path).prepare('SELECT id, workspace_id, origin, visibility FROM sites').all() as Record<
+        string,
+        unknown
+      >[];
+      const map: ClientMap = {};
+      for (const row of rows) {
+        const site = siteOf(row);
+        if (site !== undefined) map[site.id] = clientOf(site);
+      }
+
+      return map;
+    },
+  };
+}

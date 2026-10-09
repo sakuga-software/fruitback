@@ -1057,6 +1057,11 @@ and _The team mode, and the call the page cannot make_:
   nothing about the workspace. `verifyForClient` compares `ws` with the client's `workspace` after
   the signature, on the read and on the write. `pair --workspace` names it, and it travels through
   every rotation.
+- **With `FRUITBACK_ACCOUNTS_PATH`, the sites are the clients** (FRU-96). `withSites` in `app.ts` reads
+  them from the accounts file on every request and lays them over the configuration as its client map
+  and its allowed origins, so routing, CORS and the `ws` check run unchanged. **An empty map stays
+  empty**: `undefined` would make it a single-client worker that answers every page. `accounts.ts`
+  holds the roles, and `can(role, action)` is the one table of who does what.
 
 **The markdown codec**
 

@@ -102,6 +102,11 @@ can read them, with or without the widget.
   subject, name and e-mail the operator gave when minting the pairing code, its dates, and a SHA-256
   digest of the code or token, never the token itself. Expired rows are removed when a new code is
   redeemed.
+- **The accounts, on disk**, when `FRUITBACK_ACCOUNTS_PATH` is set (FRU-96). For each person: the
+  address a provider or a link proved, the name the provider gave, and which provider signed them in
+  with the id it gives them. For each workspace: its name, its members and their roles, and the address
+  of each site it reviews. No password, and no token of a provider. Deleting a workspace removes its
+  members and its sites; the notes already in a tracker stay there.
 
 ### What stays in the reporter's browser
 
