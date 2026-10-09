@@ -497,6 +497,11 @@ describe('a delivery that does not arrive (FRU-122)', () => {
 
     assert.equal((await call(env, 'POST', `${world.base}${path}`, { token: world.owner.token })).status, 204);
     assert.notEqual((await late())[0]?.nextAt, undefined);
+    // The series starts again: a first failure after the request waits, and does not give up.
+    assert.equal((await late())[0]?.attempts, 0);
+    await deliverDue({ accounts: world.accounts, secretsKey: SECRETS_KEY, send, now: () => Date.now() + 1_000 });
+    assert.equal((await late())[0]?.attempts, 1);
+    assert.notEqual((await late())[0]?.nextAt, undefined, 'one more failure is not the end');
     assert.equal(
       (
         await call(env, 'POST', `${world.base}/connectors/${connector.id}/deliveries/dlv_unknown/retry`, {
@@ -730,6 +735,27 @@ describe('the request of a delivery, on a socket (FRU-122)', () => {
 
     const took = Date.now() - started;
     assert.ok(took >= 280 && took < 1_500, `gave up after ${took} ms, for a deadline of 300`);
+  });
+
+  it('rejects, and leaves no timer behind, when the request cannot be made at all', async () => {
+    const thrown: unknown[] = [];
+    const listen = (error: unknown): void => void thrown.push(error);
+    process.on('uncaughtException', listen);
+    const request = (() => {
+      throw new TypeError('Invalid character in header content');
+    }) as unknown as typeof httpsRequest;
+    try {
+      await assert.rejects(
+        createSender({ request, timeoutMs: 20 })('https://hooks.acme.dev/in', {}, '{}'),
+        /Invalid character/,
+      );
+      // Past the deadline: a timer that was set before the request would run here, on nothing.
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    } finally {
+      process.off('uncaughtException', listen);
+    }
+
+    assert.deepEqual(thrown, []);
   });
 
   it('refuses, as the production sender, a name that resolves to the worker itself', async () => {

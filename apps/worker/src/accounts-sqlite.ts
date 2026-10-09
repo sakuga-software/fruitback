@@ -553,7 +553,9 @@ export function createSqliteAccountStore(path: string): AccountStore {
       // One statement: the delivery must be of a connector of this workspace.
       const set = connect(path)
         .prepare(
-          `UPDATE deliveries SET next_at = ?
+          // The count starts again: somebody asked, so the delivery gets the whole series of
+          // attempts, and not one attempt that gives up at its first failure.
+          `UPDATE deliveries SET next_at = ?, attempts = 0
            WHERE id = ? AND connector_id = ?
              AND EXISTS (SELECT 1 FROM connectors WHERE id = ? AND workspace_id = ?)`,
         )

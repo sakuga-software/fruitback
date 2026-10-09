@@ -63,7 +63,8 @@ export function createSender({
       // WARNING: one deadline for the whole exchange, from here to the status. The `timeout` of a
       // request is an idle time: a receiver that sends one byte now and then never reaches it, and
       // one such receiver would hold the loop that sends the notes of every workspace.
-      const deadline = setTimeout(() => sent.destroy(new Error('The receiver did not answer in time')), timeoutMs);
+      // Set after the request exists: a request that throws when it is made must leave no timer behind.
+      let deadline: NodeJS.Timeout | undefined;
       const sent = request(
         url,
         {
@@ -83,6 +84,7 @@ export function createSender({
         clearTimeout(deadline);
         reject(error);
       });
+      deadline = setTimeout(() => sent.destroy(new Error('The receiver did not answer in time')), timeoutMs);
       sent.end(body);
     });
 }

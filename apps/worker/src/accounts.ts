@@ -177,7 +177,10 @@ export type AccountStore = {
   settleDelivery(id: string, outcome: DeliveryOutcome): Promise<void>;
   /** The deliveries of a connector that did not arrive yet, newest first. */
   deliveries(workspace: string, connector: string): Promise<PendingDelivery[]>;
-  /** Makes a delivery due now. `false` when it is not of this workspace and connector. */
+  /**
+   * Makes a delivery due now, with its whole series of attempts again. `false` when it is not of this
+   * workspace and connector.
+   */
   retryDelivery(workspace: string, connector: string, delivery: string, now: number): Promise<boolean>;
   /** Removes the deliveries that were given up before `before`. Answers how many. */
   dropAbandonedDeliveries(before: number): Promise<number>;

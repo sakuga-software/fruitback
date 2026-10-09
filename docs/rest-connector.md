@@ -79,7 +79,7 @@ Answer any `2xx` when the note is yours. The body of your answer is not read.
 Anything else is a delivery that did not arrive: another status, a redirect (it is not followed), no
 answer in 10 seconds. Fruitback then tries again after 1 minute, 5 minutes, 30 minutes, 2 hours,
 6 hours and 24 hours: seven attempts in about a day and a half. After the last one it stops, and the
-delivery waits for somebody to ask for a new attempt. A delivery nobody asks for is removed after
+delivery waits for somebody to ask again. Asking starts the seven attempts again. A delivery nobody asks for is removed after
 30 days.
 
 **One note can arrive twice.** Your answer can be lost on the way back, and the next attempt then
