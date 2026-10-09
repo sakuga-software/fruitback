@@ -436,6 +436,16 @@ surface, so:
 It is a small amount of cryptography and it is reviewed as such. If you find a flaw in it, that is
 squarely a vulnerability and we want to hear about it.
 
+### The accounts, and what decides who reads a site (FRU-96)
+
+With `FRUITBACK_ACCOUNTS_PATH` the clients of the worker are the sites the console wrote, read from
+that file on every request. A site is a client of one workspace, so a session reaches it only through
+the `ws` check above. A site read by `members` is `read: 'authenticated'`; one read by `everyone` is
+`public`, with the exposure that section describes. **A worker with accounts and no site serves no
+client**: an empty map is not the absence of a map, which would answer every page to anybody. The
+file holds addresses, names and the id each provider gives a person, and no password and no provider
+token. `FRUITBACK_CLIENTS` is refused beside it, so one map has one source.
+
 ### Personal data
 
 The widget can send, from a third party's page: a hand-written note, a name, an address, the user

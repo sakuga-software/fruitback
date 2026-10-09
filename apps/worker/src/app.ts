@@ -5,8 +5,11 @@ import {
   type ClientResolution,
   normalizeClientId,
   openReadClients,
+  originsFromClients,
   resolveClient,
 } from './clients.ts';
+import type { AccountStore } from './accounts.ts';
+import { createSqliteAccountStore } from './accounts-sqlite.ts';
 import { type WorkerConfig, type WorkerEnv, readAllowedOrigins, readConfig } from './env.ts';
 import { type SeedStore, StoreError } from './store.ts';
 import { type CorsDecision, diagnosticCorsHeaders, openCors, resolveCors } from './cors.ts';
@@ -62,6 +65,27 @@ export function sessionStoreFor(config: WorkerConfig): SessionStore | undefined 
   return config.sessionPath === undefined ? undefined : createSqliteSessionStore(config.sessionPath);
 }
 
+/** The accounts of this worker, or `undefined` when its clients come from the env (FRU-96). */
+export function accountStoreFor(config: WorkerConfig): AccountStore | undefined {
+  return config.accountsPath === undefined ? undefined : createSqliteAccountStore(config.accountsPath);
+}
+
+/**
+ * The configuration with the sites of every workspace as its clients, and their origins allowed.
+ *
+ * An empty map stays an empty map: a worker with accounts and no site yet serves no client, and an
+ * `undefined` here would turn it into a single-client worker that answers anybody.
+ */
+async function withSites(config: WorkerConfig, accounts: AccountStore): Promise<WorkerConfig> {
+  const clients = await accounts.clientMap();
+
+  return {
+    ...config,
+    clients,
+    allowedOrigins: [...new Set([...config.allowedOrigins, ...originsFromClients(clients)])],
+  };
+}
+
 /** What the transport knows and the request itself cannot say. */
 export type RequestContext = {
   /** Already resolved against the trusted proxy chain — see `resolveClientIp`. */
@@ -82,6 +106,8 @@ export type RequestContext = {
   store?: SeedStore;
   /** Same reason as `store`, for the sessions (FRU-42). A suite hands over a fresh file per case. */
   sessionStore?: SessionStore;
+  /** Same reason, for the accounts, the workspaces and their sites (FRU-96). */
+  accounts?: AccountStore;
   /**
    * Where the rate limiter and the read cache keep their state (FRU-49). When it is absent, the
    * handler uses `processKv`, which gives the one instance of this process and never a new empty one.
@@ -109,7 +135,11 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
     //
     // A count and not the ids: `/health` needs no authentication either, and listing client ids
     // would hand over the map this worker serves.
-    const openRead = openReadClients({ read: config.config.read, clients: config.config.clients }).length;
+    // With accounts the clients are in a file, and this probe never opens one: it says nothing of them.
+    const openRead =
+      config.config.accountsPath === undefined
+        ? openReadClients({ read: config.config.read, clients: config.config.clients }).length
+        : 0;
 
     return json(200, {
       ok: true,
@@ -128,13 +158,24 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
     return json(500, { error: 'misconfigured', missing: config.missing }, headers);
   }
 
+  // With accounts, the sites the console wrote are this worker's clients (FRU-96), read per request so
+  // a site added a second ago is served now. Everything below reads the served map and nothing else.
+  const accounts = context.accounts ?? accountStoreFor(config.config);
+  let served: WorkerConfig;
+  try {
+    served = accounts === undefined ? config.config : await withSites(config.config, accounts);
+  } catch (error) {
+    if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, diagnosticCorsHeaders(request));
+    throw error;
+  }
+
   // The session routes answer the extension, which is not a site on the allowlist and cannot be put
   // on one — see `openCors`. Resolved before the gate, so the preflight succeeds too.
   const session = pathname.startsWith('/session/');
   // The pairing page is opened from a link, by a browser, as a document. No site reads it through
   // CORS, so the list of client sites does not apply and it answers with no CORS header at all.
   const pairing = pathname === PAIR_PATH;
-  const site = (): CorsDecision => resolveCors(request, config.config.allowedOrigins);
+  const site = (): CorsDecision => resolveCors(request, served.allowedOrigins);
   const extension = (): CorsDecision => (session ? openCors(request) : site());
   const cors: CorsDecision = pairing ? { allowed: true, headers: {} } : extension();
   if (!cors.allowed) {
@@ -157,7 +198,7 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
   let allowed: boolean;
 
   try {
-    allowed = await checkRateLimit(kv, context.clientIp, { limit: config.config.rateLimitPerMinute });
+    allowed = await checkRateLimit(kv, context.clientIp, { limit: served.rateLimitPerMinute });
   } catch (error) {
     if (!(error instanceof KvError)) throw error;
     // Refused, not let through (FRU-49). A limiter that opens whenever its `Kv` does not answer is a
@@ -174,7 +215,7 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
   if (pairing) {
     // It exists only where the sessions do, like the three routes below: a worker without the
     // extension does not advertise the page.
-    if (context.sessionStore === undefined && config.config.sessionPath === undefined) {
+    if (context.sessionStore === undefined && served.sessionPath === undefined) {
       return json(404, { error: 'not-found' });
     }
     if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' });
@@ -184,7 +225,7 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
 
   if (session) {
     try {
-      return await handleSession(request, pathname, config.config, context, cors.headers);
+      return await handleSession(request, pathname, served, context, cors.headers);
     } catch (error) {
       // A volume nobody mounted, a read-only disk, a file that is not a database. Answered like the
       // seed path's outage rather than as a bare `500`, so the extension can tell "retry later" from
@@ -199,11 +240,11 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
   }
 
   // Resolved once here, not inside each handler: see `RequestContext.store`.
-  const store = context.store ?? storeFor(config.config);
+  const store = context.store ?? storeFor(served);
 
   return request.method === 'GET'
-    ? getFeedback(request, config.config, store, kv, cors.headers)
-    : postFeedback(request, config.config, store, kv, cors.headers);
+    ? getFeedback(request, served, store, kv, cors.headers)
+    : postFeedback(request, served, store, kv, cors.headers);
 }
 
 /**

@@ -63,6 +63,7 @@ services:
       FRUITBACK_HIDE_COMMENTS: ${FRUITBACK_HIDE_COMMENTS:-}
       FRUITBACK_TEAM_LOCALE: ${FRUITBACK_TEAM_LOCALE:-}
       FRUITBACK_SESSION_PATH: ${FRUITBACK_SESSION_PATH:-}
+      FRUITBACK_ACCOUNTS_PATH: ${FRUITBACK_ACCOUNTS_PATH:-}
 
 volumes:
   # Compose prefixes this volume with the project name, so two stacks on one host keep separate data
