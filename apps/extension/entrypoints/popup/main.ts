@@ -14,6 +14,7 @@ import { showProblem } from '../../src/problem-view.ts';
 import { PAIRING_CODE_REQUIRED, PAIRING_NEEDS_HTTPS, PAIRING_PROBLEM } from '../../src/remedy.ts';
 import { type PairLink, parsePairLink } from '../../src/pair-link.ts';
 import { createBrowserPending } from '../../src/pending-site-browser.ts';
+import { type CloudSeams, type Offer, cloudEntry, offerFor } from '../../src/cloud.ts';
 
 /**
  * The switch for the tab you are looking at, and the two fields that make it work (FRU-41).
@@ -86,6 +87,14 @@ async function render(editing = false): Promise<void> {
   // What somebody typed before a prompt they refused, or that closed this popup (FRU-117).
   const draft = found === undefined ? await pending.draft(origin).catch(() => undefined) : undefined;
 
+  // FRU-101: a site of the reviewer's workspace needs no form. One click, and nothing typed.
+  const offer = found === undefined && !editing ? await offerFor(origin, cloudSeams()) : undefined;
+  if (offer !== undefined) {
+    app.replaceChildren(element('h1', 'Fruitback'), element('p', origin, 'origin'), oneClick(offer), optionsButton());
+
+    return;
+  }
+
   app.replaceChildren(
     element('h1', 'Fruitback'),
     element('p', origin, 'origin'),
@@ -103,6 +112,36 @@ async function render(editing = false): Promise<void> {
 }
 
 const NO_RULE = 'No rule covers this origin, so Fruitback does nothing here.';
+
+/** What `offerFor` needs, bound to the popup's one `Sessions`. */
+function cloudSeams(): CloudSeams {
+  return {
+    endpoints: async () => Object.keys(await sessions.list()),
+    ensureAccess: (endpoint) => sessions.ensureAccess(endpoint),
+  };
+}
+
+const IN_WORKSPACE = (name: string): string =>
+  name === '' ? 'This site is in your workspace.' : `This site is in the workspace ${name}.`;
+const TURN_ON_HERE = 'Turn on Fruitback here';
+
+/**
+ * The one click (FRU-101). The browser asks for this site only, and the click is the gesture that
+ * permission needs: nothing is awaited before `turnOn` asks.
+ */
+function oneClick(offer: Offer): HTMLElement {
+  const wrapper = document.createElement('div');
+  const button = element('button', TURN_ON_HERE);
+  const problem = element('p', '', 'problem');
+  const turn = (): void =>
+    void turnOn(offer.site.origin, cloudEntry(offer)).then(refused(problem, turn), failed(problem));
+  button.addEventListener('click', turn);
+  const byHand = element('button', 'Set up by hand', 'secondary');
+  byHand.addEventListener('click', () => void render(true));
+  wrapper.append(element('p', IN_WORKSPACE(offer.workspace.name), 'rule'), button, problem, byHand);
+
+  return wrapper;
+}
 
 /**
  * Why a private-mode site shows no note on a worker that reads `authenticated` (FRU-66).
@@ -375,7 +414,13 @@ function form(origin: string, found?: ResolvedSite, draft?: SiteConfig): HTMLEle
     if (wrong !== '') return;
 
     // `enabled` is kept: changing the endpoint of a site that is switched off must not switch it on.
-    const next = siteFrom(values, site?.enabled ?? true);
+    const formed = siteFrom(values, site?.enabled ?? true);
+    // The form knows two modes and no mount (FRU-101). Saving a site of a workspace with its endpoint
+    // unchanged keeps the widget the extension mounts there, which the form cannot show.
+    const next: SiteConfig =
+      formed.mode === 'team' && site?.mode === 'team' && site.mount !== undefined && formed.endpoint === site.endpoint
+        ? { ...formed, mount: site.mount }
+        : formed;
 
     // And a site that stays off must not ask for access or run anything. `turnOn` requests the host
     // permission and injects both scripts into the open tab, neither of which belongs to saving an
@@ -500,7 +545,10 @@ function failed(problem: HTMLElement): (error: unknown) => void {
 
 /** What this entry is switching, in one phrase: a client id in private mode, the mode in team. */
 function describeSite(site: SiteConfig): string {
-  return site.mode === 'team' ? "team mode · the site's own widget" : site.clientId;
+  if (site.mode === 'private') return site.clientId;
+  if (site.mount !== undefined) return `workspace · ${site.mount.workspace ?? site.mount.clientId}`;
+
+  return "team mode · the site's own widget";
 }
 
 function modeField(current: SiteMode): { label: HTMLLabelElement; select: HTMLSelectElement } {

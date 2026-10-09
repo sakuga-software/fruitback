@@ -446,6 +446,13 @@ client**: an empty map is not the absence of a map, which would answer every pag
 file holds addresses, names and the id each provider gives a person, and no password and no provider
 token. `FRUITBACK_CLIENTS` is refused beside it, so one map has one source.
 
+**`GET /session/sites` lists the sites of the workspace a session belongs to** (FRU-101), to the
+holder of its access token, while that person is still a member: the extension turns such a site on in
+one click. It answers an origin, an id and a visibility per site, and nothing a member cannot already
+read in the console. A console session names no workspace, and gets `401`. The entry the extension
+stores is team mode, so the relay's refusals all apply: the widget it mounts calls through the relay,
+and the page never holds the token.
+
 ### Signing in to the console (FRU-98)
 
 `POST /auth/email` sends a link to the address it is given, and answers the same whether that address

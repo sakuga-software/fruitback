@@ -572,6 +572,12 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   again. A refused prompt leaves it as a draft, and the form shows the values again (FRU-117). It is
   ten minutes old at most: an old intent must not turn a site on by surprise. Automation cannot answer
   a prompt, so the E2E copy never met this: the wiring is asserted on the sources.
+- **A site of the reviewer's workspace is turned on in one click** (FRU-101). The popup asks
+  `GET /session/sites` of each session it holds and offers a tab whose origin is listed. The entry is
+  team mode with a `mount` field: the extension mounts the widget, `relay: true` on the bridge, and the
+  page's widget calls through the relay. **`mount` is a field of its own**, never a client id beside the
+  mode: a stray client id on a team entry was always dropped. `mount.workspace` is for the popup only:
+  a `label` would replace the text of the launch button (measured).
 - **The rules stay in `chrome.storage.local`.** The ticket asked for `sync`; a host permission does
   not travel with a synced rule, and moving the key is a storage-shape change. That is FRU-72.
 

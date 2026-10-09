@@ -71,6 +71,12 @@ export type MountMessage = {
   endpoint: string;
   clientId: string;
   label?: string;
+  /**
+   * The widget calls the worker through the relay of the reviewer's session (FRU-101): a team-mode
+   * entry for a site that embeds nothing. The page can forge this flag, and it buys nothing: the
+   * background relays only for a site its own storage says is in team mode.
+   */
+  relay?: true;
 };
 
 export type UnmountMessage = {
@@ -154,7 +160,7 @@ export function parseBridgeMessage(data: unknown): BridgeMessage | undefined {
   if (data.kind === 'relay-response') return parseRelayResponseMessage(data);
   if (data.kind !== 'mount') return undefined;
 
-  const { endpoint, clientId, label } = data;
+  const { endpoint, clientId, label, relay } = data;
   if (!isWorkerEndpoint(endpoint) || !isNonEmptyString(clientId)) return undefined;
 
   return {
@@ -163,6 +169,7 @@ export function parseBridgeMessage(data: unknown): BridgeMessage | undefined {
     endpoint,
     clientId,
     ...(isNonEmptyString(label) ? { label } : {}),
+    ...(relay === true ? { relay: true } : {}),
   };
 }
 
