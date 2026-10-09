@@ -37,6 +37,11 @@ const clientSchema = z.object({
   /** The GitHub repository for this client's issues (FRU-32). Falls back to `FRUITBACK_GITHUB_REPOSITORY`. */
   repository: z.string().regex(REPOSITORY_PATTERN).optional(),
   /**
+   * The connector of a workspace this client's notes go through (FRU-121). Written by the accounts,
+   * for a site that chose a destination. On a worker with no accounts nothing reads it.
+   */
+  connector: z.string().min(1).optional(),
+  /**
    * Sites this client may be embedded on. When present, a request claiming this client from another
    * origin is refused. Cheap, and independent of whether the visitor is identified.
    */

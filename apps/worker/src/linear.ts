@@ -51,6 +51,12 @@ export function linearRoutingFor(config: LinearConfig, client: ClientConfig | un
   return { teamId: client?.teamId ?? config.teamId, projectId: client?.projectId ?? config.projectId };
 }
 
+/** Linear answered, and what it said is that this key is not one it accepts. */
+export class LinearKeyRefused extends StoreError {}
+
+/** Linear accepts the key, and the key does not have the rights for what was asked. */
+export class LinearKeyForbidden extends StoreError {}
+
 async function graphql<T>(config: LinearConfig, query: string, variables: Record<string, unknown>): Promise<T> {
   let response: Response;
   try {
@@ -69,14 +75,27 @@ async function graphql<T>(config: LinearConfig, query: string, variables: Record
     throw new StoreError('Linear could not be reached');
   }
 
+  const payload = (await response.json().catch(() => null)) as {
+    data?: T;
+    errors?: { message: string; extensions?: { code?: unknown } }[];
+  } | null;
+  const message = payload?.errors?.map((error) => error.message).join('; ');
+
+  // A key Linear does not accept, told apart from a Linear that is down (FRU-121): the first is for
+  // the person who typed the key, the second is not their fault and not a reason to type it again.
+  // Linear words a refusal as a status or as an error of the answer, so both are read.
+  const refused =
+    response.status === 401 ||
+    payload?.errors?.some((error) => error.extensions?.code === 'AUTHENTICATION_ERROR') === true;
+  if (refused) throw new LinearKeyRefused(message ?? `Linear responded ${response.status}`);
+  // A key Linear knows and that may not do this: typing it again changes nothing.
+  if (response.status === 403) throw new LinearKeyForbidden(message ?? 'Linear responded 403');
+
   if (!response.ok) {
     throw new StoreError(`Linear responded ${response.status}`);
   }
-
-  const payload = (await response.json().catch(() => null)) as { data?: T; errors?: { message: string }[] } | null;
-
-  if (payload?.errors?.length) {
-    throw new StoreError(payload.errors.map((error) => error.message).join('; '));
+  if (message !== undefined && message !== '') {
+    throw new StoreError(message);
   }
   if (!payload?.data) {
     throw new StoreError('Linear returned no data');
@@ -408,6 +427,55 @@ export function toSeedIssue(
   const result = seedIssueSchema.safeParse(candidate);
 
   return result.success ? result.data : null;
+}
+
+export type LinearTeam = { id: string; name: string; key: string; projects: { id: string; name: string }[] };
+
+const TEAMS_QUERY = `
+  query FruitbackTeams {
+    viewer { name }
+    teams(first: 100) {
+      nodes { id name key projects(first: 50) { nodes { id name } } }
+    }
+  }
+`;
+
+/**
+ * Who this key belongs to and the teams it reaches (FRU-121): what the console needs to offer a
+ * destination. Throws a `StoreError` for a key Linear refuses.
+ */
+export async function listLinearTeams(apiKey: string): Promise<{ viewer: string; teams: LinearTeam[] }> {
+  const data = await graphql<{
+    viewer?: { name?: unknown };
+    teams?: {
+      nodes?: {
+        id?: unknown;
+        name?: unknown;
+        key?: unknown;
+        projects?: { nodes?: { id?: unknown; name?: unknown }[] };
+      }[];
+    };
+  }>({ apiKey, teamId: 'none' }, TEAMS_QUERY, {});
+
+  return {
+    viewer: typeof data.viewer?.name === 'string' ? data.viewer.name : '',
+    teams: (data.teams?.nodes ?? []).flatMap((team) => {
+      if (typeof team.id !== 'string' || typeof team.name !== 'string') return [];
+
+      return [
+        {
+          id: team.id,
+          name: team.name,
+          key: typeof team.key === 'string' ? team.key : '',
+          projects: (team.projects?.nodes ?? []).flatMap((project) =>
+            typeof project.id === 'string' && typeof project.name === 'string'
+              ? [{ id: project.id, name: project.name }]
+              : [],
+          ),
+        },
+      ];
+    }),
+  };
 }
 
 /**

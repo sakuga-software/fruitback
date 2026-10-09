@@ -13,6 +13,7 @@ import { SESSION_SITES_PATH, handleSessionSites } from './session-sites.ts';
 import { consoleCors, handleConsoleSession, isConsoleRoute } from './console-routes.ts';
 import { handleConsoleApi } from './console-api.ts';
 import { handleGitHub } from './github-oauth.ts';
+import { type ConnectorStores, createConnectorStores, createRoutedStore } from './connectors.ts';
 import { type Mailer, createTemMailer } from './mail.ts';
 import { createSqliteAccountStore } from './accounts-sqlite.ts';
 import { type WorkerConfig, type WorkerEnv, readAllowedOrigins, readConfig } from './env.ts';
@@ -94,6 +95,18 @@ async function withSites(config: WorkerConfig, accounts: AccountStore): Promise<
     clients,
     allowedOrigins: [...new Set([...config.allowedOrigins, ...originsFromClients(clients)])],
   };
+}
+
+/** One set of connector stores per accounts file and key, so a key is opened once and not per request. */
+const connectorStores = new WeakMap<AccountStore, Map<string, ConnectorStores>>();
+
+function connectorStoresFor(accounts: AccountStore, secretsKey: string | undefined): ConnectorStores {
+  const byKey = connectorStores.get(accounts) ?? new Map<string, ConnectorStores>();
+  connectorStores.set(accounts, byKey);
+  const kept = byKey.get(secretsKey ?? '') ?? createConnectorStores(accounts, secretsKey);
+  byKey.set(secretsKey ?? '', kept);
+
+  return kept;
 }
 
 /** What the transport knows and the request itself cannot say. */
@@ -263,7 +276,12 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
         (await handleConsoleApi(
           request,
           pathname,
-          { accounts, sessions, secret: served.identitySecret },
+          {
+            accounts,
+            sessions,
+            secret: served.identitySecret,
+            ...(served.secretsKey === undefined ? {} : { secretsKey: served.secretsKey }),
+          },
           cors.headers,
         ));
 
@@ -307,7 +325,9 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
   }
 
   // Resolved once here, not inside each handler: see `RequestContext.store`.
-  const store = context.store ?? storeFor(served);
+  const own = context.store ?? storeFor(served);
+  // FRU-121: a site that chose a destination writes and reads through the connector of its workspace.
+  const store = accounts === undefined ? own : createRoutedStore(own, connectorStoresFor(accounts, served.secretsKey));
 
   return request.method === 'GET'
     ? getFeedback(request, served, store, kv, cors.headers)

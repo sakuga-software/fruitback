@@ -75,7 +75,24 @@ export function can(role: Role, action: Action): boolean {
 export const VISIBILITIES = ['members', 'everyone'] as const;
 export type Visibility = (typeof VISIBILITIES)[number];
 
-export type Site = { id: string; workspaceId: string; origin: string; visibility: Visibility };
+/** Where the notes of a site go: a connector of its workspace, and the place inside it. */
+export type Destination = { connector: string; teamId: string; projectId?: string };
+
+export type Site = {
+  id: string;
+  workspaceId: string;
+  origin: string;
+  visibility: Visibility;
+  /** Absent: the notes stay in the worker's own store. */
+  destination?: Destination;
+};
+
+/** The trackers a workspace can connect. One for now. */
+export const CONNECTOR_KINDS = ['linear'] as const;
+export type ConnectorKind = (typeof CONNECTOR_KINDS)[number];
+
+/** A connector as the console reads it. The key is not here, and no route answers it. */
+export type Connector = { id: string; workspaceId: string; kind: ConnectorKind; label: string; createdAt: string };
 
 /** How a sign-in method names the person. `email` is the link, and its subject is the address. */
 export const PROVIDERS = ['email', 'github', 'google', 'linear'] as const;
@@ -108,6 +125,21 @@ export type AccountStore = {
   addSite(workspace: string, site: { origin: string; visibility: Visibility }): Promise<Site>;
   sites(workspace: string): Promise<Site[]>;
   removeSite(workspace: string, site: string): Promise<boolean>;
+  /** `sealed` is the key as `secrets.ts` encrypts it: the store never sees the plain value. */
+  addConnector(
+    workspace: string,
+    connector: { kind: ConnectorKind; label: string; sealed: string },
+  ): Promise<Connector>;
+  connectors(workspace: string): Promise<Connector[]>;
+  /** Removes the connector. Its sites lose their destination, and their notes stay in the worker again. */
+  removeConnector(workspace: string, connector: string): Promise<boolean>;
+  /** The encrypted key of a connector, for the worker's own calls. */
+  sealedKey(connector: string): Promise<{ kind: ConnectorKind; sealed: string; workspaceId: string } | undefined>;
+  /**
+   * Where the notes of a site go. `false` when the site or the connector is not of this workspace:
+   * a site must not write through the key of another team.
+   */
+  setDestination(workspace: string, site: string, destination: Destination | undefined): Promise<boolean>;
   /** Removes the workspace, its members and its sites. Notes already in a tracker stay there. */
   deleteWorkspace(workspace: string): Promise<void>;
   /** Every site, as the client map the routing reads. */
@@ -133,6 +165,13 @@ export function clientOf(site: Site): ClientMap[string] {
     workspace: site.workspaceId,
     origins: [site.origin],
     read: site.visibility === 'members' ? 'authenticated' : 'public',
+    ...(site.destination === undefined
+      ? {}
+      : {
+          connector: site.destination.connector,
+          teamId: site.destination.teamId,
+          ...(site.destination.projectId === undefined ? {} : { projectId: site.destination.projectId }),
+        }),
   };
 }
 

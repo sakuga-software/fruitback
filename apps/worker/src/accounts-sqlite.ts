@@ -2,6 +2,9 @@ import { DatabaseSync } from 'node:sqlite';
 import {
   type Account,
   type AccountStore,
+  CONNECTOR_KINDS,
+  type Connector,
+  type ConnectorKind,
   ROLES,
   type Role,
   type Site,
@@ -79,6 +82,24 @@ const MIGRATIONS: readonly string[] = [
   // The language a person reads (FRU-119). Absent means nobody chose: the sender's default applies.
   `
   ALTER TABLE accounts ADD COLUMN locale TEXT;
+  `,
+  // The connectors of a workspace, and where each site sends its notes (FRU-121). `sealed` is the
+  // key encrypted with FRUITBACK_SECRETS_KEY: a copy of this file is not a set of working keys.
+  `
+  CREATE TABLE connectors (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    label TEXT NOT NULL,
+    sealed TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX connectors_by_workspace ON connectors (workspace_id);
+
+  ALTER TABLE sites ADD COLUMN connector_id TEXT REFERENCES connectors (id) ON DELETE SET NULL;
+  ALTER TABLE sites ADD COLUMN team_id TEXT;
+  ALTER TABLE sites ADD COLUMN project_id TEXT;
   `,
 ];
 
@@ -167,7 +188,41 @@ function siteOf(row: Record<string, unknown>): Site | undefined {
   }
   if (visibility === undefined) return undefined;
 
-  return { id: row.id, workspaceId: row.workspace_id, origin: row.origin, visibility };
+  // A destination needs its connector: a connector that was removed leaves `connector_id` null.
+  const destination =
+    typeof row.connector_id === 'string' && typeof row.team_id === 'string' && row.team_id !== ''
+      ? {
+          connector: row.connector_id,
+          teamId: row.team_id,
+          ...(typeof row.project_id === 'string' && row.project_id !== '' ? { projectId: row.project_id } : {}),
+        }
+      : undefined;
+
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    origin: row.origin,
+    visibility,
+    ...(destination === undefined ? {} : { destination }),
+  };
+}
+
+const SITE_COLUMNS = 'id, workspace_id, origin, visibility, connector_id, team_id, project_id';
+
+function connectorOf(row: Record<string, unknown> | undefined): Connector | undefined {
+  const kind = (CONNECTOR_KINDS as readonly unknown[]).includes(row?.kind) ? (row?.kind as ConnectorKind) : undefined;
+  if (row === undefined || kind === undefined) return undefined;
+  if (typeof row.id !== 'string' || typeof row.workspace_id !== 'string' || typeof row.label !== 'string') {
+    return undefined;
+  }
+
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    kind,
+    label: row.label,
+    createdAt: new Date(typeof row.created_at === 'number' ? row.created_at : 0).toISOString(),
+  };
 }
 
 export function createSqliteAccountStore(path: string): AccountStore {
@@ -301,7 +356,7 @@ export function createSqliteAccountStore(path: string): AccountStore {
     async addSite(workspace, { origin, visibility }) {
       const database = connect(path);
       const existing = database
-        .prepare('SELECT id, workspace_id, origin, visibility FROM sites WHERE workspace_id = ? AND origin = ?')
+        .prepare(`SELECT ${SITE_COLUMNS} FROM sites WHERE workspace_id = ? AND origin = ?`)
         .get(workspace, origin) as Record<string, unknown> | undefined;
       const known = existing === undefined ? undefined : siteOf(existing);
 
@@ -322,9 +377,7 @@ export function createSqliteAccountStore(path: string): AccountStore {
 
     async sites(workspace) {
       const rows = connect(path)
-        .prepare(
-          'SELECT id, workspace_id, origin, visibility FROM sites WHERE workspace_id = ? ORDER BY created_at, id',
-        )
+        .prepare(`SELECT ${SITE_COLUMNS} FROM sites WHERE workspace_id = ? ORDER BY created_at, id`)
         .all(workspace) as Record<string, unknown>[];
 
       return rows.flatMap((row) => siteOf(row) ?? []);
@@ -334,6 +387,76 @@ export function createSqliteAccountStore(path: string): AccountStore {
       const result = connect(path).prepare('DELETE FROM sites WHERE workspace_id = ? AND id = ?').run(workspace, site);
 
       return result.changes === 1;
+    },
+
+    async addConnector(workspace, { kind, label, sealed }) {
+      const id = newId('con');
+      const now = Date.now();
+      connect(path)
+        .prepare('INSERT INTO connectors (id, workspace_id, kind, label, sealed, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(id, workspace, kind, label, sealed, now);
+
+      return { id, workspaceId: workspace, kind, label, createdAt: new Date(now).toISOString() };
+    },
+
+    async connectors(workspace) {
+      const rows = connect(path)
+        .prepare(
+          'SELECT id, workspace_id, kind, label, created_at FROM connectors WHERE workspace_id = ? ORDER BY created_at, id',
+        )
+        .all(workspace) as Record<string, unknown>[];
+
+      return rows.flatMap((row) => connectorOf(row) ?? []);
+    },
+
+    async removeConnector(workspace, connector) {
+      const result = connect(path)
+        .prepare('DELETE FROM connectors WHERE workspace_id = ? AND id = ?')
+        .run(workspace, connector);
+
+      return result.changes === 1;
+    },
+
+    async sealedKey(connector) {
+      const row = connect(path)
+        .prepare('SELECT id, workspace_id, kind, label, sealed, created_at FROM connectors WHERE id = ?')
+        .get(connector) as Record<string, unknown> | undefined;
+      const known = connectorOf(row);
+      if (known === undefined || typeof row?.sealed !== 'string') return undefined;
+
+      return { kind: known.kind, sealed: row.sealed, workspaceId: known.workspaceId };
+    },
+
+    async setDestination(workspace, site, destination) {
+      const database = connect(path);
+      if (destination === undefined) {
+        const cleared = database
+          .prepare(
+            'UPDATE sites SET connector_id = NULL, team_id = NULL, project_id = NULL WHERE workspace_id = ? AND id = ?',
+          )
+          .run(workspace, site);
+
+        return cleared.changes === 1;
+      }
+
+      // One statement: the connector must be of the same workspace as the site.
+      const set = database
+        .prepare(
+          `UPDATE sites SET connector_id = ?, team_id = ?, project_id = ?
+           WHERE workspace_id = ? AND id = ?
+             AND EXISTS (SELECT 1 FROM connectors WHERE id = ? AND workspace_id = ?)`,
+        )
+        .run(
+          destination.connector,
+          destination.teamId,
+          destination.projectId ?? null,
+          workspace,
+          site,
+          destination.connector,
+          workspace,
+        );
+
+      return set.changes === 1;
     },
 
     async deleteWorkspace(workspace) {
@@ -366,10 +489,7 @@ export function createSqliteAccountStore(path: string): AccountStore {
     },
 
     async clientMap() {
-      const rows = connect(path).prepare('SELECT id, workspace_id, origin, visibility FROM sites').all() as Record<
-        string,
-        unknown
-      >[];
+      const rows = connect(path).prepare(`SELECT ${SITE_COLUMNS} FROM sites`).all() as Record<string, unknown>[];
       const map: ClientMap = {};
       for (const row of rows) {
         const site = siteOf(row);

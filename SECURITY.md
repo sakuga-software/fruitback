@@ -443,8 +443,8 @@ that file on every request. A site is a client of one workspace, so a session re
 the `ws` check above. A site read by `members` is `read: 'authenticated'`; one read by `everyone` is
 `public`, with the exposure that section describes. **A worker with accounts and no site serves no
 client**: an empty map is not the absence of a map, which would answer every page to anybody. The
-file holds addresses, names and the id each provider gives a person, and no password and no provider
-token. `FRUITBACK_CLIENTS` is refused beside it, so one map has one source.
+file holds addresses, names and the id each provider gives a person, no password, and no token of a provider
+that signs a person in. Since FRU-121 it also holds the key of each connector, encrypted: see below. `FRUITBACK_CLIENTS` is refused beside it, so one map has one source.
 
 **`GET /session/sites` lists the sites of the workspace a session belongs to** (FRU-101), to the
 holder of its access token, while that person is still a member: the extension turns such a site on in
@@ -468,6 +468,28 @@ script cannot read** (`HttpOnly`, `Secure`, `SameSite=Strict`, on `/console/sess
 console routes answer one origin, `FRUITBACK_CONSOLE_URL`, with credentials. A script injected into the
 console can use the session while the page is open; it cannot carry the refresh token away. A
 console session names no workspace, so it reads no site.
+
+### The key of a connector (FRU-121)
+
+A workspace can hand the worker the API key of its Linear, and the notes of the sites that choose it
+go there. **This is the first secret of a customer that the Cloud holds.**
+
+- The accounts file keeps the key encrypted (AES-256-GCM) with `FRUITBACK_SECRETS_KEY`, which stays
+  in the environment. A copy of the file alone opens nothing; a copy of the file **and** of the
+  environment opens every key. A value changed in the file does not decrypt.
+- No route answers a key, in the clear or encrypted. The console sends it once, and the worker asks
+  Linear who it belongs to before it keeps anything: a refused key is never stored.
+- The worker sends the key to Linear on every write and read of a site that chose it. It cannot be a
+  digest, unlike a pairing code.
+- A personal API key reaches **everything its person reaches in Linear**, not one team. The worker
+  uses the team a site chose; the limit is the worker's code, not Linear's. An OAuth application
+  with a narrow scope is the fix, and it is not built.
+- A site writes only through a connector of its own workspace. The store refuses the row, and the
+  request checks the workspace again before it opens a key.
+- An owner or an admin connects and disconnects. A member sees that a source is connected. A guest
+  sees nothing of the tracker: not the connector, not the destination of a site.
+- A connector that cannot be used answers `502`, and the widget keeps the note. The note is never
+  written to the worker's own store in its place: its team would not see it.
 
 ### Signing in with GitHub (FRU-97)
 

@@ -105,8 +105,9 @@ can read them, with or without the widget.
 - **The accounts, on disk**, when `FRUITBACK_ACCOUNTS_PATH` is set (FRU-96). For each person: the
   address a provider or a link proved, the name the provider gave, and which provider signed them in
   with the id it gives them, and the language they read (the browser that opened their first sign-in
-  link, or their own choice), which their e-mails are written in. For each workspace: its name, its members and their roles, and the address
-  of each site it reviews. No password, and no token of a provider. Deleting a workspace removes its
+  link, or their own choice), which their e-mails are written in. For each workspace: the key of each
+  tracker it connected, encrypted (FRU-121), and where each site sends its notes; its name, its members and their roles, and the address
+  of each site it reviews. No password, and no token of a provider that signs a person in. Deleting a workspace removes its
   members and its sites; the notes already in a tracker stay there.
 
 ### What stays in the reporter's browser
