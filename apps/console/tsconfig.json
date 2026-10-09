@@ -11,6 +11,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "rootDirs": [".", "./.react-router/types"],
     "paths": { "~/*": ["./app/*"] }
   },

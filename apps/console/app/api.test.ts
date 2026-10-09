@@ -1,0 +1,53 @@
+import { afterEach, describe, it, mock } from 'node:test';
+import assert from 'node:assert/strict';
+import { UNREACHABLE, call, onReachability, redeemLink, refresh, requestLink, signOut } from './api.ts';
+
+afterEach(() => mock.restoreAll());
+
+/** A worker nobody reaches: no name, no network. `fetch` rejects, as a browser's does. */
+function down() {
+  return mock.method(globalThis, 'fetch', async () => {
+    throw new TypeError('Failed to fetch');
+  });
+}
+
+describe('a worker that does not answer', () => {
+  it('answers every call instead of rejecting, so no screen waits for ever', async () => {
+    down();
+
+    assert.deepEqual(await call('GET', '/console/me'), UNREACHABLE);
+    assert.deepEqual(await requestLink('a@b.dev', 'en'), UNREACHABLE);
+    assert.deepEqual(await redeemLink('code'), UNREACHABLE);
+    assert.equal(await refresh(), false);
+    await signOut();
+  });
+
+  it('says so to whoever listens, and says when the worker is back', async () => {
+    const seen: boolean[] = [];
+    const stop = onReachability((reachable) => seen.push(reachable));
+    mock.method(globalThis, 'fetch', async () =>
+      Response.json({ account: { id: 'a', email: 'a@b.dev' }, workspaces: [] }),
+    );
+    await call('GET', '/console/me');
+    mock.restoreAll();
+    down();
+    await call('GET', '/console/me');
+    mock.restoreAll();
+    mock.method(globalThis, 'fetch', async () => Response.json({ error: 'identity-required' }, { status: 401 }));
+    await call('GET', '/console/me');
+    stop();
+
+    assert.deepEqual(seen.slice(-2), [false, true], 'a refusal is still an answer');
+    assert.equal(seen.includes(false), true);
+  });
+
+  it('bounds each request, so a worker that accepts and never answers is not waited for', async () => {
+    const fetched = mock.method(globalThis, 'fetch', async () => Response.json({}));
+    await call('GET', '/console/me');
+
+    for (const each of fetched.mock.calls) {
+      assert.ok((each.arguments[1] as RequestInit).signal instanceof AbortSignal);
+    }
+    assert.ok(fetched.mock.calls.length > 0);
+  });
+});

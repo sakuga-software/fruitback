@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react';
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router';
+import { onReachability } from './api';
 import './app.css';
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -22,7 +24,35 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function Root() {
-  return <Outlet />;
+  return (
+    <>
+      <Unreachable />
+      <Outlet />
+    </>
+  );
+}
+
+/**
+ * Says so when the worker does not answer. Without it a screen that waits for the worker shows
+ * nothing, or the form of somebody who is signed out.
+ */
+function Unreachable() {
+  const [reachable, setReachable] = useState(true);
+  useEffect(() => onReachability(setReachable), []);
+  if (reachable) return null;
+
+  return (
+    <div role="alert" className="flex flex-wrap items-center justify-center gap-3 bg-ink px-4 py-2 text-sm text-white">
+      <span>Fruitback cannot reach its server. Check your connection.</span>
+      <button
+        type="button"
+        className="rounded-full border border-white px-3 py-1 font-semibold"
+        onClick={() => window.location.reload()}
+      >
+        Try again
+      </button>
+    </div>
+  );
 }
 
 export function HydrateFallback() {

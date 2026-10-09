@@ -27,6 +27,8 @@ export default function WorkspaceFrame() {
 
   useEffect(() => {
     void call<Me>('GET', '/console/me').then((me) => {
+      // No answer is not a signed-out person: stay here, under the banner that says so.
+      if (!me.ok && me.status === 0) return;
       if (!me.ok) return navigate('/setup', { replace: true });
       const workspace = me.data.workspaces.find((each) => each.id === id);
       if (workspace === undefined) return navigate('/', { replace: true });

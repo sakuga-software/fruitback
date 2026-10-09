@@ -8,6 +8,8 @@ export default function Home() {
 
   useEffect(() => {
     void call<Me>('GET', '/console/me').then((me) => {
+      // No answer is not a signed-out person: stay here, under the banner that says so.
+      if (!me.ok && me.status === 0) return;
       const workspace = me.ok ? me.data.workspaces[0] : undefined;
       navigate(workspace === undefined ? '/setup' : `/w/${workspace.id}/sites`, { replace: true });
     });
