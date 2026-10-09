@@ -249,6 +249,38 @@ describe('the language of the account (FRU-131)', () => {
     assert.equal(offer, undefined);
   });
 
+  it('stays when the worker of the account is down and another worker keeps no accounts', async () => {
+    // Paired with the Cloud, which is down, and with a self-hosted worker, which answers 405.
+    for (const order of [
+      ['https://api.fruitback.test', 'https://self.hosted.test'],
+      ['https://self.hosted.test', 'https://api.fruitback.test'],
+    ]) {
+      const kept = area({ language: 'fr' });
+      const fetcher = (async (url: string) =>
+        url.startsWith('https://self.hosted.test')
+          ? new Response('{}', { status: 405 })
+          : new Response('{}', { status: 503 })) as typeof fetch;
+      await rememberLanguage(kept, { ...PAIRED, endpoints: async () => order, fetcher });
+
+      assert.equal(await storedLanguage(kept), 'fr', order.join(', then '));
+    }
+  });
+
+  it('takes the language one worker says, when another one is down', async () => {
+    const kept = area();
+    const fetcher = (async (url: string) =>
+      url.startsWith('https://down.test')
+        ? new Response('{}', { status: 503 })
+        : new Response(JSON.stringify({ ...LISTED, locale: 'fr' }), { status: 200 })) as typeof fetch;
+    await rememberLanguage(kept, {
+      ...PAIRED,
+      endpoints: async () => ['https://down.test', 'https://api.fruitback.test'],
+      fetcher,
+    });
+
+    assert.equal(await storedLanguage(kept), 'fr');
+  });
+
   it('stays when no worker answers: an outage does not change the language', async () => {
     const down = area({ language: 'fr' });
     await rememberLanguage(down, { ...PAIRED, fetcher: worker({}, 502).fetcher });

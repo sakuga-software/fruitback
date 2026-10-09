@@ -104,27 +104,30 @@ async function ask(
 /**
  * The language of the reviewer's account, from the first session whose worker says one (FRU-131).
  *
- * `no-answer` is not « no language »: sessions exist and no worker answered. With no session at
- * all, or with only workers that keep no accounts, the answer is no language.
+ * `no-answer` is not « no language »: a worker this browser is paired with did not answer, and no
+ * other one said a language. The answer is no language only when every worker answered: with no
+ * session at all, or with only workers that keep no accounts or hold no language.
  */
 export async function accountLanguage({
   endpoints,
   ensureAccess,
   fetcher = fetch,
 }: CloudSeams): Promise<{ locale?: string } | 'no-answer'> {
-  const paired = (await endpoints()).filter(isSecureWorkerEndpoint);
-  let answered = paired.length === 0;
-  for (const endpoint of paired) {
+  // WARNING: one worker that did not answer is enough to say nothing. The worker that is down can be
+  // the one that holds the account, and « the others say no language » would then erase a language
+  // that is still true.
+  let silent = false;
+  for (const endpoint of (await endpoints()).filter(isSecureWorkerEndpoint)) {
     const access = await ensureAccess(endpoint).catch(() => undefined);
-    if (access === undefined || !access.ok) continue;
-
-    const listed = await ask(endpoint, access.grant.accessToken, fetcher);
-    if (listed === undefined) continue;
+    const listed = access?.ok === true ? await ask(endpoint, access.grant.accessToken, fetcher) : undefined;
+    if (listed === undefined) {
+      silent = true;
+      continue;
+    }
     if (listed !== NO_ACCOUNTS && listed.locale !== undefined) return { locale: listed.locale };
-    answered = true;
   }
 
-  return answered ? {} : 'no-answer';
+  return silent ? 'no-answer' : {};
 }
 
 /** The entry the one click stores. */
