@@ -79,8 +79,9 @@ const NO_ACCOUNTS = 'no-accounts';
  * One bounded `GET /session/sites`.
  *
  * `405` is a worker with no such route: it keeps no accounts, and its session routes take a POST
- * (measured; `session-sites.test.ts` of the worker pins it). `404` is read the same way. Any other
- * failure is no answer: a `401` is about the token, a `429` and a `5xx` are about the moment.
+ * (measured; `session-sites.test.ts` of the worker pins it). Any other failure is no answer: a `401`
+ * is about the token, and a `404`, a `429` and a `5xx` are about the moment. A proxy that routes
+ * wrong while a worker deploys answers `404`, and that must not read as « no accounts ».
  */
 async function ask(
   endpoint: string,
@@ -93,7 +94,7 @@ async function ask(
       signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
     });
 
-    if (response.status === 405 || response.status === 404) return NO_ACCOUNTS;
+    if (response.status === 405) return NO_ACCOUNTS;
 
     return response.ok ? parseWorkspaceSites(await response.json()) : undefined;
   } catch {
