@@ -260,7 +260,12 @@ function paired(endpoint: string, identity: string): HTMLElement {
       // holds nothing, with a dead button. And a click is fire-and-forget, so a failure nobody
       // logs here is logged nowhere at all. Raised in review.
       .catch((error: unknown) => console.error('[fruitback] the log out did not finish', error))
-      .then(() => render());
+      .then(() => {
+        // The account of that session spoke for the language. Ask who is left to speak for it.
+        void rememberLanguage(browser.storage.local, cloudSeams()).catch(() => undefined);
+
+        return render();
+      });
   });
 
   const row = document.createElement('div');

@@ -212,6 +212,24 @@ describe('the language of the account (FRU-131)', () => {
     assert.equal(await storedLanguage(loggedOut), undefined);
   });
 
+  it('is not kept when the log out lands while the worker answers', async () => {
+    const kept = area();
+    let paired = ['https://api.fruitback.test'];
+    const { fetcher } = worker({ ...LISTED, locale: 'fr' });
+    await rememberLanguage(kept, {
+      ...PAIRED,
+      endpoints: async () => paired,
+      fetcher: (async (...call: Parameters<typeof fetch>) => {
+        const answer = await fetcher(...call);
+        paired = [];
+
+        return answer;
+      }) as typeof fetch,
+    });
+
+    assert.equal(await storedLanguage(kept), undefined);
+  });
+
   it('stays when no worker answers: an outage does not change the language', async () => {
     const down = area({ language: 'fr' });
     await rememberLanguage(down, { ...PAIRED, fetcher: worker({}, 502).fetcher });

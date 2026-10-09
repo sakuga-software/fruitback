@@ -13,8 +13,12 @@ export async function rememberLanguage(area: LanguageArea, seams: CloudSeams): P
   const answer = await accountLanguage(seams);
   if (answer === 'no-answer') return;
 
+  // WARNING: the answer took a call to the worker, and a log out can land in that time. The sessions
+  // are read again here: the language of an account must not be kept for a browser that left it.
+  const locale = answer.locale !== undefined && (await seams.endpoints()).length === 0 ? undefined : answer.locale;
+
   const kept = await storedLanguage(area);
-  if (answer.locale === kept) return;
-  if (answer.locale === undefined) await area.remove(LANGUAGE_KEY);
-  else await area.set({ [LANGUAGE_KEY]: answer.locale });
+  if (locale === kept) return;
+  if (locale === undefined) await area.remove(LANGUAGE_KEY);
+  else await area.set({ [LANGUAGE_KEY]: locale });
 }
