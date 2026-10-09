@@ -151,6 +151,7 @@ export default function Setup() {
 function StageCard({ stage, onStage }: { stage: Stage; onStage: (stage: Stage) => void }) {
   if (stage.kind === 'loading') return <Frame step={1} title="Create your workspace" />;
   if (stage.kind === 'sign-in') return <SignIn onSent={(email) => onStage({ kind: 'sent', email })} />;
+
   if (stage.kind === 'sent') return <Sent email={stage.email} onBack={() => onStage({ kind: 'sign-in' })} />;
   if (stage.kind === 'name') return <NameIt onCreated={(workspace) => onStage({ kind: 'source', workspace })} />;
   if (stage.kind === 'source') return <Source onNext={() => onStage({ kind: 'site', workspace: stage.workspace })} />;
@@ -206,11 +207,20 @@ const SEND_PROBLEMS: Record<string, string> = {
   'too-many-links': 'Several links went to this address already. Use the last one, or wait fifteen minutes.',
 };
 
+/** What the worker says when a sign-in with GitHub comes back without a session (FRU-97). */
+const GITHUB_PROBLEMS: Record<string, string> = {
+  'github-declined': 'GitHub did not sign you in: the access was declined. Try again, or use an email link.',
+  'github-unverified':
+    'GitHub has no verified primary address for this account. Verify it on GitHub, or use an email link.',
+  'github-failed': 'The sign-in with GitHub did not finish. Try again, or use an email link.',
+};
+
 function SignIn({ onSent }: { onSent: (email: string) => void }) {
+  const [search] = useSearchParams();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | undefined>();
+  const [problem, setProblem] = useState<string | undefined>(GITHUB_PROBLEMS[search.get('error') ?? '']);
 
   async function submit(event: FormEvent) {
     event.preventDefault();

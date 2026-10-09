@@ -67,6 +67,8 @@ services:
       FRUITBACK_CONSOLE_URL: ${FRUITBACK_CONSOLE_URL:-}
       FRUITBACK_MAIL_FROM: ${FRUITBACK_MAIL_FROM:-}
       FRUITBACK_SCALEWAY_TEM: ${FRUITBACK_SCALEWAY_TEM:-}
+      FRUITBACK_PUBLIC_URL: ${FRUITBACK_PUBLIC_URL:-}
+      FRUITBACK_GITHUB_OAUTH: ${FRUITBACK_GITHUB_OAUTH:-}
 
 volumes:
   # Compose prefixes this volume with the project name, so two stacks on one host keep separate data

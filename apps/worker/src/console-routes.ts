@@ -94,7 +94,7 @@ function json(status: number, body: unknown, headers: Record<string, string>): R
   });
 }
 
-function sessionCookie(token: string): string {
+export function sessionCookie(token: string): string {
   return `${COOKIE}=${token}; Path=${COOKIE_PATH}; Max-Age=${REFRESH_TTL_SECONDS}; HttpOnly; Secure; SameSite=Strict`;
 }
 
@@ -228,18 +228,33 @@ export async function handleConsoleSession(
   return undefined;
 }
 
-/**
- * A session for an account, opened by a code the worker mints and spends itself.
- *
- * The session names no workspace. A console session reads the account's own data through the console
- * routes, which check the role on every call, and reads no site: the `ws` check refuses it there.
- */
+/** The console's session as an answer: the access token in the body, the refresh token as the cookie. */
 export async function openConsoleSession(
   context: ConsoleContext,
   account: { id: string; email: string; name?: string },
   headers: Record<string, string>,
   now: number,
 ): Promise<Response> {
+  const session = await mintConsoleSession(context, account, now);
+
+  return json(
+    200,
+    { accessToken: session.accessToken, expiresIn: ACCESS_TTL_SECONDS, account },
+    { ...headers, 'Set-Cookie': sessionCookie(session.refreshToken) },
+  );
+}
+
+/**
+ * A session for an account, opened by a code the worker mints and spends itself.
+ *
+ * The session names no workspace. A console session reads the account's own data through the console
+ * routes, which check the role on every call, and reads no site: the `ws` check refuses it there.
+ */
+export async function mintConsoleSession(
+  context: Pick<ConsoleContext, 'sessions' | 'secret'>,
+  account: { id: string; email: string; name?: string },
+  now: number,
+): Promise<{ accessToken: string; refreshToken: string }> {
   const { code } = await createPairing(
     context.sessions,
     { subject: account.id, email: account.email, ...(account.name === undefined ? {} : { name: account.name }) },
@@ -248,9 +263,5 @@ export async function openConsoleSession(
   const redeemed = await redeemPairing(context.sessions, code, context.secret, now);
   if (!redeemed.ok) throw new Error('A code minted a moment ago could not be spent');
 
-  return json(
-    200,
-    { accessToken: redeemed.session.accessToken, expiresIn: ACCESS_TTL_SECONDS, account },
-    { ...headers, 'Set-Cookie': sessionCookie(redeemed.session.refreshToken) },
-  );
+  return { accessToken: redeemed.session.accessToken, refreshToken: redeemed.session.refreshToken };
 }
