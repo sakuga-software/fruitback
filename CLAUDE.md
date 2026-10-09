@@ -40,6 +40,12 @@ were dropped.
 managed platform primitives. When something needs infrastructure, reach for what a single container
 behind Traefik can do.
 
+**Fruitback Cloud is one such deployment**, and `apps/worker/cloud/README.md` is its runbook
+(FRU-106, FRU-128): where it runs, what is backed up, and how to restore. The host archives every
+Docker volume each night, and `snapshot.sh` writes a copy of each database with SQLite's own backup
+just before, because a file SQLite holds open is not a copy to trust. The two secrets of the worker
+are in no backup.
+
 **Deeper** — _Project_, _Layout_, and what this file said about itself before FRU-31:
 [docs/decisions/project.md](docs/decisions/project.md).
 
