@@ -44,8 +44,9 @@ function inbox(fail = false): Mailer & { sent: MailMessage[] } {
   return {
     sent,
     async send(message) {
-      if (fail) throw new MailError('refused: 401');
+      // Kept before the failure too: a test looks for the code of a message that did not go.
       sent.push(message);
+      if (fail) throw new MailError('refused: 401');
     },
   };
 }
@@ -203,10 +204,12 @@ describe('what a sign-in leaves behind (FRU-98)', () => {
       const code = codeIn(mail.sent[0]);
       await call(env, '/auth/email/redeem', { body: { code } });
       await call(env, '/auth/email/redeem', { body: { code } });
-      await call(env, '/auth/email', { body: { email: 'bob@acme.dev' } }, { mailer: inbox(true) });
+      const failing = inbox(true);
+      await call(env, '/auth/email', { body: { email: 'bob@acme.dev' } }, { mailer: failing });
+      const codes = [code, codeIn(failing.sent[0])];
 
       assert.ok(written.length > 0, 'the control: the failure path does write a line');
-      assert.equal(written.join('\n').includes(code), false);
+      for (const each of codes) assert.equal(written.join('\n').includes(each), false);
     } finally {
       mock.restoreAll();
     }
