@@ -614,6 +614,9 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   else publishes a number nobody chose. **This workflow restores no cache.** A cache entry is
   writable by any run of the repository, and what this job builds is shipped — `zizmor` fails on the
   pair, and `ci.yml` keeps its cache because it ships nothing.
+  **The archives are under `.output`, and `upload-artifact` leaves out a hidden directory** unless
+  `include-hidden-files` says otherwise. The first tag, `v0.1.0`, built both archives and uploaded
+  none. `workflows.test.ts` fails on an upload through a dot directory that does not ask for it.
 - **The bridge is `window.postMessage`, and the page can forge on it.** `parseBridgeMessage` refuses
   a _malformed_ message and cannot refuse a **well-formed** one the page wrote. That is inherent to
   the main world and no handoff closes it — it is stated rather than defended, because a reviewer

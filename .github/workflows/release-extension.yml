@@ -73,6 +73,9 @@ jobs:
         with:
           name: extension-archives
           path: apps/extension/.output/*.zip
+          # wxt writes under .output, and the action counts a file under a dot directory as hidden
+          # and leaves it out. Without this line the first tag built both archives and uploaded none.
+          include-hidden-files: true
           # A run that uploads nothing is a run that built nothing, and it would pass in silence.
           if-no-files-found: error
 
