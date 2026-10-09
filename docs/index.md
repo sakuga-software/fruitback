@@ -1,14 +1,18 @@
+---
+layout: landing
+---
+
 # Fruitback
 
-**Visual feedback on a live site, without a backend to host.**
+**Feedback on the page, issues in your tracker.**
 
 A client opens their staging site, clicks the element that bothers them, and types a note. It lands
-as a triaged issue carrying the CSS selector, the React component and the source file behind that
-element. Coming back to the page, they see their pins again, coloured by that issue's status.
+as an issue carrying the CSS selector, the React component and the source file behind that element.
+Coming back to the page, they see their pins again, coloured by that issue's status.
 
-Fruitback runs no service that holds your feedback: it lands in the tracker your team already uses —
-Linear, GitHub Issues — or in a SQLite file on a volume you own. The one piece you run is a worker,
-because a tracker's API key cannot ship in client-side JavaScript.
+Two ways to run it. **Fruitback Cloud** runs the server for you, in Europe, and keeps the notes in
+your workspace. **Self-hosted**, you run one container, and the notes land in the tracker your team
+already uses (Linear, GitHub Issues) or in a SQLite file on a volume you own.
 
 ## The guides
 
