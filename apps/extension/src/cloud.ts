@@ -64,20 +64,36 @@ export async function offerFor(
     if (access === undefined || !access.ok) continue;
 
     const listed = await ask(endpoint, access.grant.accessToken, fetcher);
-    const site = listed?.sites.find((each) => each.origin === origin);
-    if (listed !== undefined && site !== undefined) return { endpoint, workspace: listed.workspace, site };
+    if (listed === undefined || listed === NO_ACCOUNTS) continue;
+    const site = listed.sites.find((each) => each.origin === origin);
+    if (site !== undefined) return { endpoint, workspace: listed.workspace, site };
   }
 
   return undefined;
 }
 
-/** One bounded `GET /session/sites`. Nothing when the worker keeps no accounts, or does not answer. */
-async function ask(endpoint: string, accessToken: string, fetcher: typeof fetch): Promise<WorkspaceSites | undefined> {
+/** The worker answered, and it keeps no accounts: a self-hosted worker. It is an answer, not an outage. */
+const NO_ACCOUNTS = 'no-accounts';
+
+/**
+ * One bounded `GET /session/sites`.
+ *
+ * `405` is a worker with no such route: it keeps no accounts, and its session routes take a POST
+ * (measured; `session-sites.test.ts` of the worker pins it). `404` is read the same way. Any other
+ * failure is no answer: a `401` is about the token, a `429` and a `5xx` are about the moment.
+ */
+async function ask(
+  endpoint: string,
+  accessToken: string,
+  fetcher: typeof fetch,
+): Promise<WorkspaceSites | typeof NO_ACCOUNTS | undefined> {
   try {
     const response = await fetcher(`${endpoint}/session/sites`, {
       headers: { Authorization: `Bearer ${accessToken}` },
       signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
     });
+
+    if (response.status === 405 || response.status === 404) return NO_ACCOUNTS;
 
     return response.ok ? parseWorkspaceSites(await response.json()) : undefined;
   } catch {
@@ -89,7 +105,7 @@ async function ask(endpoint: string, accessToken: string, fetcher: typeof fetch)
  * The language of the reviewer's account, from the first session whose worker says one (FRU-131).
  *
  * `no-answer` is not « no language »: sessions exist and no worker answered. With no session at
- * all, the answer is an account with no language.
+ * all, or with only workers that keep no accounts, the answer is no language.
  */
 export async function accountLanguage({
   endpoints,
@@ -104,7 +120,7 @@ export async function accountLanguage({
 
     const listed = await ask(endpoint, access.grant.accessToken, fetcher);
     if (listed === undefined) continue;
-    if (listed.locale !== undefined) return { locale: listed.locale };
+    if (listed !== NO_ACCOUNTS && listed.locale !== undefined) return { locale: listed.locale };
     answered = true;
   }
 

@@ -230,10 +230,35 @@ describe('the language of the account (FRU-131)', () => {
     assert.equal(await storedLanguage(kept), undefined);
   });
 
+  it('is removed when the only worker left keeps no accounts', async () => {
+    // Logged out of the Cloud, still paired with a self-hosted worker: nobody speaks for a language.
+    for (const status of [405, 404]) {
+      const kept = area({ language: 'fr' });
+      await rememberLanguage(kept, { ...PAIRED, fetcher: worker({ error: 'no-route' }, status).fetcher });
+
+      assert.equal(await storedLanguage(kept), undefined, `a ${status} is a worker with no accounts`);
+    }
+  });
+
+  it('offers no site from a worker that keeps no accounts', async () => {
+    const offer = await offerFor('https://staging.acme.dev', {
+      ...PAIRED,
+      fetcher: worker({ error: 'not-found' }, 404).fetcher,
+    });
+
+    assert.equal(offer, undefined);
+  });
+
   it('stays when no worker answers: an outage does not change the language', async () => {
     const down = area({ language: 'fr' });
     await rememberLanguage(down, { ...PAIRED, fetcher: worker({}, 502).fetcher });
     assert.equal(await storedLanguage(down), 'fr');
+
+    for (const status of [401, 429]) {
+      const later = area({ language: 'fr' });
+      await rememberLanguage(later, { ...PAIRED, fetcher: worker({}, status).fetcher });
+      assert.equal(await storedLanguage(later), 'fr', `a ${status} is no answer about a language`);
+    }
 
     const refused = area({ language: 'fr' });
     await rememberLanguage(refused, {

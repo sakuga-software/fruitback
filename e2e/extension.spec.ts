@@ -374,9 +374,22 @@ test('the popup, the options page and the mounted widget speak the language of t
   await setUp.close();
   await expect(page.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
 
-  // What a popup keeps after the worker of the session said the account reads French. This worker
-  // keeps no accounts, so it says nothing, and a worker that says nothing changes nothing.
-  await extension.worker.evaluate(() => chrome.storage.local.set({ language: 'fr' }));
+  // The worker of the session says the account reads French. The E2E workers keep no accounts, so
+  // the answer of that one route is given here; the popup asks it with its real session.
+  const asked: (string | undefined)[] = [];
+  await extension.context.route(`${AUTHENTICATED_WORKER_ORIGIN}/session/sites`, (route) => {
+    asked.push(route.request().headers().authorization);
+
+    return route.fulfill({ json: { workspace: { id: 'ws_1', name: 'Acme' }, sites: [], locale: 'fr' } });
+  });
+  // This popup learns the language and does not draw again: it is still English.
+  const learner = await openPopup(extension, page);
+  await expect
+    .poll(() => extension.worker.evaluate(() => chrome.storage.local.get('language')))
+    .toEqual({ language: 'fr' });
+  expect(asked[0]).toMatch(/^Bearer .+/);
+  await expect(learner.getByText(`Paired as ${REVIEWER}`)).toBeVisible();
+  await learner.close();
 
   // The open tab gets the widget again, in French, with no reload.
   await expect(page.getByRole('button', { name: 'Laisser un feedback' })).toBeVisible();
@@ -393,16 +406,12 @@ test('the popup, the options page and the mounted widget speak the language of t
   await expect(options.getByRole('button', { name: 'Ajouter la règle' })).toBeVisible();
   await options.close();
 
-  // The popup asked the worker, got no answer about a language, and kept what it had.
-  expect(await extension.worker.evaluate(() => chrome.storage.local.get('language'))).toEqual({ language: 'fr' });
-
-  // Logged out, no account is left to speak for: the next popup reads the browser's language again.
+  // Logged out, no account is left to speak for: the language goes at once, and the open tab is
+  // English again with no reload.
   await popup.getByRole('button', { name: 'Se déconnecter' }).click();
-  await expect(popup.getByText(`Appairé en tant que ${REVIEWER}`)).toHaveCount(0);
+  await expect.poll(() => extension.worker.evaluate(() => chrome.storage.local.get('language'))).toEqual({});
+  await expect(page.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
   await popup.close();
   const after = await openPopup(extension, page);
-  await expect.poll(() => extension.worker.evaluate(() => chrome.storage.local.get('language'))).toEqual({});
-  await after.reload();
   await expect(after.getByText('On · playground', { exact: false })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Leave feedback' })).toBeVisible();
 });
