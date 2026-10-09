@@ -1157,6 +1157,12 @@ and _The team mode, and the call the page cannot make_:
   be invisible to the team. The key is sealed by `secrets.ts` with `FRUITBACK_SECRETS_KEY`, and no
   route answers it. The workspace of the client is compared with the workspace of the connector at the
   request too, because the row of a site is only a row.
+- **The console connects an address, and shows the notes that did not arrive** (FRU-132). A source is
+  drawn by its `kind`: a tracker has teams to choose, an address has none, so a site sends there or
+  does not. **A secret that the worker made is on the screen once**, in the form that made the
+  connector, and in no state after it. An address says « Connected », never « Working »: the list
+  cannot know that its notes arrive. **No list of deliveries is not an empty list**: a worker that did
+  not answer must not read as « every note arrived ».
 - **The console draws its controls with HeroUI v3, through its own kit** (FRU-125). `ui.tsx` is the
   one file that imports `@heroui/react`: `Button`, `Field`, `Choice` (a select), `Pick` (radios),
   `Chip` and `Problem`. A screen uses the kit, and `messages.test.ts` fails on a native control in a
