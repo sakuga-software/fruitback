@@ -1100,6 +1100,14 @@ and _The team mode, and the call the page cannot make_:
   `/console/session`, and `consoleCors` answers `FRUITBACK_CONSOLE_URL` and no other origin. A console
   session names no workspace: the `ws` check keeps it off every site. `mail.ts` is the seam, Scaleway
   Transactional Email over HTTP the one implementation.
+- **A workspace connects its own tracker, and a site chooses where its notes go** (FRU-121).
+  `connectors.ts` wraps the worker's store: a client with no `connector` uses it as before, a client
+  with one uses a Linear store built from the key of that connector. `clientOf` puts the connector and
+  the team on the client entry, so the Linear store routes as it always did. **A connector that cannot
+  be used is a store that is down (`502`), never a fall back**: a note in the worker's own store would
+  be invisible to the team. The key is sealed by `secrets.ts` with `FRUITBACK_SECRETS_KEY`, and no
+  route answers it. The workspace of the client is compared with the workspace of the connector at the
+  request too, because the row of a site is only a row.
 - **An e-mail is written in the language of its reader** (FRU-119). An account holds a `locale`: the
   browser that opened its first link, then what the person chose (`POST /console/me/locale`). A later
   sign-in from another browser does not change it. For a mail, the account's language wins, then the

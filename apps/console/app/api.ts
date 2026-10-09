@@ -62,7 +62,11 @@ export type Account = { id: string; email: string; name?: string; locale?: strin
 export type Role = 'owner' | 'admin' | 'member' | 'guest';
 export type Workspace = { id: string; name: string; role: Role };
 export type Visibility = 'members' | 'everyone';
-export type Site = { id: string; origin: string; visibility: Visibility };
+/** Where the notes of a site go. Absent: they stay in the workspace. Only a member reads it. */
+export type Destination = { connector: string; teamId: string; projectId?: string };
+export type Site = { id: string; origin: string; visibility: Visibility; destination?: Destination };
+export type Connector = { id: string; kind: 'linear'; label: string; createdAt: string };
+export type Team = { id: string; name: string; key: string; projects: { id: string; name: string }[] };
 export type Me = { account: Account; workspaces: Workspace[] };
 
 export type Answer<T> = { ok: true; data: T } | { ok: false; status: number; error: string };

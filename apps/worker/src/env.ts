@@ -92,6 +92,12 @@ export type WorkerEnv = {
   /** Sign-in with GitHub: `<client id>:<client secret>` of an OAuth App (FRU-97). Absent, no button. */
   FRUITBACK_GITHUB_OAUTH?: string;
   /**
+   * What encrypts the keys of the connectors in the accounts file (FRU-121). At least 32 characters,
+   * and not the identity secret. Absent, a workspace connects no tracker. WARNING: losing it loses
+   * every connector, and changing it does the same.
+   */
+  FRUITBACK_SECRETS_KEY?: string;
+  /**
    * The language of the prose in an issue description (FRU-39). A BCP-47 tag; English by default.
    *
    * **The team that triages reads it, never the reporter**, so it is configured here and never taken
@@ -175,6 +181,8 @@ const configSchema = z.object({
   publicUrl: z.string().min(1).optional(),
   /** The OAuth App GitHub signs people in with, or absent (FRU-97). */
   github: z.custom<GitHubOAuth | undefined>().optional(),
+  /** What encrypts the connector keys at rest, or absent (FRU-121). */
+  secretsKey: z.string().min(32).optional(),
   /**
    * The language an issue description is written in (FRU-39), for the team that triages.
    *
@@ -202,6 +210,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   const candidate = {
     store: store.ok ? store.config : undefined,
     identitySecret: env.FRUITBACK_IDENTITY_SECRET || undefined,
+    secretsKey: env.FRUITBACK_SECRETS_KEY || undefined,
     showComments: env.FRUITBACK_HIDE_COMMENTS !== '1',
     read: readAccess(env.FRUITBACK_READ),
     // A client's own `origins` are sites that must be able to reach this worker, so they join the
@@ -259,6 +268,17 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     return {
       ok: false,
       missing: [`FRUITBACK_IDENTITY_SECRET (read is "authenticated" but ${unreadable.join(', ')} has no key)`],
+    };
+  }
+
+  // One key that signs identities and opens the connector keys is one leak for both.
+  if (result.data.secretsKey !== undefined && result.data.secretsKey === result.data.identitySecret) {
+    return { ok: false, missing: ['FRUITBACK_SECRETS_KEY (it must differ from FRUITBACK_IDENTITY_SECRET)'] };
+  }
+  if (result.data.secretsKey !== undefined && result.data.accountsPath === undefined) {
+    return {
+      ok: false,
+      missing: ['FRUITBACK_ACCOUNTS_PATH (FRUITBACK_SECRETS_KEY encrypts the connectors of a workspace)'],
     };
   }
 
@@ -407,6 +427,7 @@ const NAMES_BY_FIELD: Record<string, string> = {
   // name, and answered `503 misconfigured, missing:` with nothing after the colon. Every field that
   // can fail validation needs an entry here — asserted by `answers no empty diagnostic`.
   identitySecret: 'FRUITBACK_IDENTITY_SECRET',
+  secretsKey: 'FRUITBACK_SECRETS_KEY',
 };
 
 function missingFrom(result: z.ZodSafeParseResult<unknown>): string[] {

@@ -1,6 +1,8 @@
 import {
   type AccountStore,
   type Action,
+  type Connector,
+  type Destination,
   type Site,
   VISIBILITIES,
   type Visibility,
@@ -9,6 +11,9 @@ import {
   readLocaleTag,
 } from './accounts.ts';
 import { readBearerToken, verifyIdentityToken } from './identity.ts';
+import { listLinearTeams } from './linear.ts';
+import { open, seal } from './secrets.ts';
+import { StoreError } from './store.ts';
 import { PAIRING_TTL_SECONDS, type SessionStore, createPairing } from './session.ts';
 
 /**
@@ -21,7 +26,14 @@ import { PAIRING_TTL_SECONDS, type SessionStore, createPairing } from './session
  * them.
  */
 
-export type ConsoleApiContext = { accounts: AccountStore; sessions: SessionStore; secret: string; now?: number };
+export type ConsoleApiContext = {
+  accounts: AccountStore;
+  sessions: SessionStore;
+  secret: string;
+  now?: number;
+  /** What opens and closes the connector keys (FRU-121). Absent, a workspace connects no tracker. */
+  secretsKey?: string;
+};
 
 function json(status: number, body: unknown, headers: Record<string, string>): Response {
   return new Response(JSON.stringify(body), {
@@ -57,8 +69,36 @@ function visibilityOf(value: unknown): Visibility | undefined {
 }
 
 /** The fields of a site the console shows, and the client id a script tag names. */
-function siteView(site: Site): { id: string; origin: string; visibility: Visibility } {
-  return { id: site.id, origin: site.origin, visibility: site.visibility };
+type SiteView = { id: string; origin: string; visibility: Visibility; destination?: Destination };
+
+/** WARNING: the destination names the tracker, so it is for a role that may see the tracker only. */
+function siteView(site: Site, seesTracker: boolean): SiteView {
+  return {
+    id: site.id,
+    origin: site.origin,
+    visibility: site.visibility,
+    ...(seesTracker && site.destination !== undefined ? { destination: site.destination } : {}),
+  };
+}
+
+const CONNECTORS_UNAVAILABLE = { error: 'connectors-unavailable' } as const;
+
+function connectorView(connector: Connector): { id: string; kind: string; label: string; createdAt: string } {
+  return { id: connector.id, kind: connector.kind, label: connector.label, createdAt: connector.createdAt };
+}
+
+const ID = /^[A-Za-z0-9_-]{1,80}$/;
+
+function destinationOf(body: Record<string, unknown> | undefined): Destination | undefined {
+  const { connector, teamId, projectId } = body ?? {};
+  if (typeof connector !== 'string' || !ID.test(connector) || typeof teamId !== 'string' || !ID.test(teamId)) {
+    return undefined;
+  }
+  if (projectId !== undefined && projectId !== null && (typeof projectId !== 'string' || !ID.test(projectId))) {
+    return undefined;
+  }
+
+  return { connector, teamId, ...(typeof projectId === 'string' ? { projectId } : {}) };
 }
 
 const WORKSPACE_PATH = /^\/console\/workspaces\/([A-Za-z0-9_-]+)(\/.*)?$/;
@@ -132,7 +172,10 @@ export async function handleConsoleApi(
     if (request.method === 'GET') {
       if (!allowed('read-feedback')) return forbidden();
 
-      return json(200, { sites: (await context.accounts.sites(workspaceId as string)).map(siteView) }, headers);
+      const seesTracker = allowed('see-tracker');
+      const sites = await context.accounts.sites(workspaceId as string);
+
+      return json(200, { sites: sites.map((site) => siteView(site, seesTracker)) }, headers);
     }
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
     if (!allowed('manage-sites')) return forbidden();
@@ -145,7 +188,7 @@ export async function handleConsoleApi(
 
     const site = await context.accounts.addSite(workspaceId as string, { origin, visibility });
 
-    return json(201, siteView(site), headers);
+    return json(201, siteView(site, allowed('see-tracker')), headers);
   }
 
   const removal = /^\/sites\/([A-Za-z0-9_-]+)$/.exec(rest);
@@ -156,6 +199,80 @@ export async function handleConsoleApi(
     const removed = await context.accounts.removeSite(workspaceId as string, removal[1] as string);
 
     return removed ? new Response(null, { status: 204, headers }) : json(404, { error: 'not-found' }, headers);
+  }
+
+  // Where the notes of a site go (FRU-121): a connector of this workspace, or the worker's own store.
+  const destination = /^\/sites\/([A-Za-z0-9_-]+)\/destination$/.exec(rest);
+  if (destination !== null) {
+    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+    if (!allowed('manage-sites')) return forbidden();
+
+    const body = await readBody(request);
+    const wanted = body?.connector === null ? undefined : destinationOf(body);
+    if (body?.connector !== null && wanted === undefined) return json(400, { error: 'invalid-destination' }, headers);
+    const set = await context.accounts.setDestination(workspaceId as string, destination[1] as string, wanted);
+
+    return set ? json(200, { destination: wanted ?? null }, headers) : json(404, { error: 'not-found' }, headers);
+  }
+
+  if (rest === '/connectors') {
+    if (request.method === 'GET') {
+      if (!allowed('see-tracker')) return forbidden();
+      const connectors = await context.accounts.connectors(workspaceId as string);
+
+      return json(
+        200,
+        { connectors: connectors.map(connectorView), available: context.secretsKey !== undefined },
+        headers,
+      );
+    }
+    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+    if (!allowed('manage-workspace')) return forbidden();
+    if (context.secretsKey === undefined) return json(404, CONNECTORS_UNAVAILABLE, headers);
+
+    const body = await readBody(request);
+    const apiKey = typeof body?.apiKey === 'string' ? body.apiKey.trim() : '';
+    if (body?.kind !== 'linear' || apiKey === '') return json(400, { error: 'invalid-connector' }, headers);
+
+    // Asked before anything is kept: a key the tracker refuses is never stored.
+    let viewer: string;
+    try {
+      viewer = (await listLinearTeams(apiKey)).viewer;
+    } catch (error) {
+      if (error instanceof StoreError) return json(400, { error: 'key-refused' }, headers);
+      throw error;
+    }
+    const connector = await context.accounts.addConnector(workspaceId as string, {
+      kind: 'linear',
+      label: viewer === '' ? 'Linear' : `Linear · ${viewer}`,
+      sealed: seal(apiKey, context.secretsKey),
+    });
+
+    return json(201, connectorView(connector), headers);
+  }
+
+  const connector = /^\/connectors\/([A-Za-z0-9_-]+)(\/teams)?$/.exec(rest);
+  if (connector !== null) {
+    const id = connector[1] as string;
+    if (connector[2] === undefined) {
+      if (request.method !== 'DELETE') return json(405, { error: 'method-not-allowed' }, headers);
+      if (!allowed('manage-workspace')) return forbidden();
+      const removed = await context.accounts.removeConnector(workspaceId as string, id);
+
+      return removed ? new Response(null, { status: 204, headers }) : json(404, { error: 'not-found' }, headers);
+    }
+
+    // The teams the key reaches, for the person who chooses a destination.
+    if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
+    if (!allowed('manage-sites')) return forbidden();
+    if (context.secretsKey === undefined) return json(404, CONNECTORS_UNAVAILABLE, headers);
+    const kept = await context.accounts.sealedKey(id);
+    // A connector of another workspace answers like one that does not exist.
+    if (kept === undefined || kept.workspaceId !== workspaceId) return json(404, { error: 'not-found' }, headers);
+    const apiKey = open(kept.sealed, context.secretsKey);
+    if (apiKey === undefined) return json(502, { error: 'store-unavailable' }, headers);
+
+    return json(200, { teams: (await listLinearTeams(apiKey)).teams }, headers);
   }
 
   if (rest === '/connect') {

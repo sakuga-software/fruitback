@@ -410,6 +410,55 @@ export function toSeedIssue(
   return result.success ? result.data : null;
 }
 
+export type LinearTeam = { id: string; name: string; key: string; projects: { id: string; name: string }[] };
+
+const TEAMS_QUERY = `
+  query FruitbackTeams {
+    viewer { name }
+    teams(first: 100) {
+      nodes { id name key projects(first: 50) { nodes { id name } } }
+    }
+  }
+`;
+
+/**
+ * Who this key belongs to and the teams it reaches (FRU-121): what the console needs to offer a
+ * destination. Throws a `StoreError` for a key Linear refuses.
+ */
+export async function listLinearTeams(apiKey: string): Promise<{ viewer: string; teams: LinearTeam[] }> {
+  const data = await graphql<{
+    viewer?: { name?: unknown };
+    teams?: {
+      nodes?: {
+        id?: unknown;
+        name?: unknown;
+        key?: unknown;
+        projects?: { nodes?: { id?: unknown; name?: unknown }[] };
+      }[];
+    };
+  }>({ apiKey, teamId: 'none' }, TEAMS_QUERY, {});
+
+  return {
+    viewer: typeof data.viewer?.name === 'string' ? data.viewer.name : '',
+    teams: (data.teams?.nodes ?? []).flatMap((team) => {
+      if (typeof team.id !== 'string' || typeof team.name !== 'string') return [];
+
+      return [
+        {
+          id: team.id,
+          name: team.name,
+          key: typeof team.key === 'string' ? team.key : '',
+          projects: (team.projects?.nodes ?? []).flatMap((project) =>
+            typeof project.id === 'string' && typeof project.name === 'string'
+              ? [{ id: project.id, name: project.name }]
+              : [],
+          ),
+        },
+      ];
+    }),
+  };
+}
+
 /**
  * Linear, as a `SeedStore` (FRU-29).
  *
