@@ -118,6 +118,30 @@ async function spend(): Promise<boolean> {
   return true;
 }
 
+const RETRY_MS = 5_000;
+
+/**
+ * A call that a screen cannot draw without: asked again until the worker answers. `onAnswer` gets
+ * every answer but `unreachable`. Returns how to stop, for the cleanup of an effect.
+ */
+export function callUntilAnswered<T>(method: string, path: string, onAnswer: (answer: Answer<T>) => void): () => void {
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const ask = (): void => {
+    void call<T>(method, path).then((answer) => {
+      if (stopped) return;
+      if (!answer.ok && answer.status === 0) timer = setTimeout(ask, RETRY_MS);
+      else onAnswer(answer);
+    });
+  };
+  ask();
+
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+  };
+}
+
 /** A call with the access token, refreshed once when the worker says it expired. */
 export async function call<T>(method: string, path: string, body?: unknown): Promise<Answer<T>> {
   if (access === undefined) await refresh();

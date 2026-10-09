@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate, useOutletContext, useParams } from 'react-router';
-import { type Me, type Workspace, call } from '../api';
+import { type Me, type Workspace, callUntilAnswered } from '../api';
 
 /**
  * The frame of a workspace (design/boards/4-connectors.png, 5-workspace.png): its name in the corner,
@@ -25,10 +25,9 @@ export default function WorkspaceFrame() {
   const navigate = useNavigate();
   const [context, setContext] = useState<WorkspaceContext | undefined>();
 
+  // No answer is not a signed-out person: the call waits under the banner and asks again.
   useEffect(() => {
-    void call<Me>('GET', '/console/me').then((me) => {
-      // No answer is not a signed-out person: stay here, under the banner that says so.
-      if (!me.ok && me.status === 0) return;
+    return callUntilAnswered<Me>('GET', '/console/me', (me) => {
       if (!me.ok) return navigate('/setup', { replace: true });
       const workspace = me.data.workspaces.find((each) => each.id === id);
       if (workspace === undefined) return navigate('/', { replace: true });

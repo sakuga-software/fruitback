@@ -1,6 +1,15 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { UNREACHABLE, call, onReachability, redeemLink, refresh, requestLink, signOut } from './api.ts';
+import {
+  UNREACHABLE,
+  call,
+  callUntilAnswered,
+  onReachability,
+  redeemLink,
+  refresh,
+  requestLink,
+  signOut,
+} from './api.ts';
 
 afterEach(() => mock.restoreAll());
 
@@ -39,6 +48,33 @@ describe('a worker that does not answer', () => {
 
     assert.deepEqual(seen.slice(-2), [false, true], 'a refusal is still an answer');
     assert.equal(seen.includes(false), true);
+  });
+
+  it('asks again until the worker answers, and stops when told to', async () => {
+    mock.timers.enable({ apis: ['setTimeout'] });
+    const fetched = down();
+    const answers: unknown[] = [];
+    const stop = callUntilAnswered('GET', '/console/me', (answer) => answers.push(answer));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(answers, [], 'no answer is not handed over');
+
+    mock.restoreAll();
+    mock.method(globalThis, 'fetch', async () => Response.json({ workspaces: [] }));
+    mock.timers.tick(5_000);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(answers.length, 1);
+
+    const quiet = down();
+    const stopped = callUntilAnswered('GET', '/console/me', () => answers.push('late'));
+    await new Promise((resolve) => setImmediate(resolve));
+    stopped();
+    const before = quiet.mock.calls.length;
+    mock.timers.tick(20_000);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(quiet.mock.calls.length, before, 'a stopped call asks nothing more');
+    assert.ok(fetched.mock.calls.length > 0);
+    stop();
+    mock.timers.reset();
   });
 
   it('bounds each request, so a worker that accepts and never answers is not waited for', async () => {
