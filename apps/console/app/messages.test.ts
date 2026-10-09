@@ -118,6 +118,19 @@ describe('a change of language', () => {
     assert.ok(translating > 15, `only ${translating} components were found, so the check above saw too little`);
   });
 
+  it('translates nothing in what is rendered when the console is built', () => {
+    // `t` reads the language of the browser, and these two are also rendered in English at the build.
+    const built = components(sources.get('root.tsx') ?? '').filter(({ name }) =>
+      ['Layout', 'HydrateFallback'].includes(name),
+    );
+
+    assert.deepEqual(built.map(({ name }) => name).sort(), ['HydrateFallback', 'Layout']);
+    assert.deepEqual(
+      built.filter(({ body }) => /\bt\(/.test(body)).map(({ name }) => name),
+      [],
+    );
+  });
+
   it('never mounts a screen again: the root holds no key on the language', () => {
     const root = sources.get('root.tsx') ?? '';
 

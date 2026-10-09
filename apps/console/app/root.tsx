@@ -5,14 +5,21 @@ import './app.css';
 import { t } from './i18n';
 import { useLocale } from './use-locale';
 
+/** The name of the product, in the title of the page. A name, not a sentence: it is not translated. */
+const PRODUCT = 'Fruitback';
+
+/**
+ * WARNING: no `t` here. This is rendered once in English when the console is built, and again in the
+ * browser. `t` reads the language of the browser, so a sentence here would not match the page that
+ * was built. `messages.test.ts` fails on a `t` in this function or in `HydrateFallback`.
+ */
 export function Layout({ children }: { children: React.ReactNode }) {
-  useLocale();
   return (
     <html lang="en">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>{t('Fruitback')}</title>
+        <title>{PRODUCT}</title>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <Meta />
         <Links />
