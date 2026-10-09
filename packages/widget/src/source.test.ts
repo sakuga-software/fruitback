@@ -147,6 +147,8 @@ describe('what a bundler minted, in what the engine says (FRU-113)', () => {
       '/_next/static/chunks/main-0f3a9c1d2b.js',
       'https://cdn.acme.dev/app.5e8f21ab.mjs',
       '/assets/index-D4kq9XzP.js?v=2',
+      '/assets/main-k3j9x0qz.js',
+      '/static/js/vendor.a1b2c3d4e5.js',
     ]) {
       assert.equal(isBundleChunk(chunk), true, chunk);
     }
@@ -156,6 +158,10 @@ describe('what a bundler minted, in what the engine says (FRU-113)', () => {
       '/src/checkout-form.jsx',
       '/src/pricing-calculator.js',
       '/src/Feedback.tsx',
+      '/src/lib-sha256sum.js',
+      '/src/step-2-checkout1.js',
+      '/src/h264video.js',
+      '/src/utils.base64v2.js',
     ]) {
       assert.equal(isBundleChunk(file), false, file);
     }

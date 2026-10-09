@@ -97,15 +97,21 @@ export function isMangledComponentName(name: string): boolean {
  * column inside one minified line. Nobody opens that, and its name changes at each deploy. Like a
  * minted component name, it is worse than nothing: it reads as a place to look.
  *
- * The mark is the content hash before the extension: eight characters or more that hold a digit and
- * a capital, or that are hexadecimal with a digit. `user-settings.js` has neither.
+ * The mark is the content hash before the extension: eight characters or more with a digit, that
+ * also hold a capital, or are hexadecimal, or go from a letter to a digit and back four times or
+ * more (`k3j9x0qz`). A word with a number in it is a name a person wrote: `lib-sha256sum.js` and
+ * `utils.base64v2.js` are no chunk. The rule leans that way on purpose: a hash that looks like a word
+ * is sent as before, and a source file that looks like a hash would be lost.
  */
 export function isBundleChunk(file: string): boolean {
   const hash = /[-.]([A-Za-z0-9_]{8,})\.(?:m?js|cjs)(?:[?#].*)?$/.exec(file)?.[1];
   if (hash === undefined) return false;
   const digit = /[0-9]/.test(hash);
 
-  return digit && (/[A-Z]/.test(hash) || /^[0-9a-f]+$/.test(hash));
+  // How many times the hash goes from a letter to a digit, or back.
+  const turns = hash.match(/[0-9](?=[A-Za-z_])|[A-Za-z_](?=[0-9])/g)?.length ?? 0;
+
+  return digit && (/[A-Z]/.test(hash) || /^[0-9a-f]+$/.test(hash) || turns >= 4);
 }
 
 /** What the capture engine knows about an element, as it hands it over. */
