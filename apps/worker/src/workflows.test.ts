@@ -138,6 +138,47 @@ export function ghStepsWithoutRepository(source: string): string[] {
   });
 }
 
+/**
+ * Every `upload-artifact` step whose path goes through a hidden directory without asking for it.
+ *
+ * Since its v4.4 the action leaves out every hidden file, and a file under a directory whose name
+ * starts with a dot counts as hidden. The step then finds nothing. With `if-no-files-found: error`
+ * the run fails, and without it the run uploads nothing and passes. The extension writes its
+ * archives under `.output`: the first tag `v0.1.0` built them and uploaded none (2026-10-09).
+ */
+export function uploadsMissingHiddenFiles(source: string): string[] {
+  const document = parseDocument(source);
+  const jobs = document.get('jobs', true);
+  if (!isMap(jobs)) return [];
+
+  return jobs.items.flatMap((pair) => {
+    if (!isScalar(pair.key) || !isMap(pair.value)) return [];
+    const job = String(pair.key.value);
+    const steps = pair.value.get('steps', true);
+    if (!isSeq(steps)) return [];
+
+    return steps.items.flatMap((step, index) => {
+      if (!isMap(step)) return [];
+      const uses = step.get('uses');
+      if (typeof uses !== 'string' || !uses.startsWith('actions/upload-artifact@')) return [];
+      const inputs = step.get('with', true);
+      if (!isMap(inputs)) return [];
+      const path = inputs.get('path');
+      const hidden = String(inputs.get('include-hidden-files') ?? 'false').trim() === 'true';
+      const throughHidden = String(path ?? '')
+        .split('\n')
+        .some((line) =>
+          line
+            .trim()
+            .split('/')
+            .some((segment) => /^\.[^./]/.test(segment)),
+        );
+
+      return throughHidden && !hidden ? [`${job}: step ${index + 1}`] : [];
+    });
+  });
+}
+
 /** Whether this `env` mapping names a repository for `gh`: the key, holding something. */
 function namedRepository(env: unknown): boolean {
   if (!isMap(env)) return false;
@@ -193,6 +234,34 @@ describe('the GitHub workflows', () => {
    * none. `release-extension.yml`'s publish job only downloads an artefact: its first upload failed
    * for that, and the tag it would have failed on does not exist yet. Raised in review.
    */
+  it('upload a hidden directory only when they ask for hidden files', () => {
+    const missing = workflows().flatMap(({ file, source }) =>
+      uploadsMissingHiddenFiles(source).map((step) => `${file}: ${step}`),
+    );
+
+    assert.deepEqual(missing, [], 'these uploads go through a hidden directory and would find nothing');
+  });
+
+  it('see an upload under a hidden directory, and let one that asks for it pass', () => {
+    const upload = (inputs: string) =>
+      [
+        'jobs:',
+        '  package:',
+        '    steps:',
+        '      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1',
+        '        with:',
+        ...inputs.split('\n').map((line) => `          ${line}`),
+      ].join('\n');
+
+    assert.deepEqual(uploadsMissingHiddenFiles(upload('path: apps/extension/.output/*.zip')), ['package: step 1']);
+    assert.deepEqual(uploadsMissingHiddenFiles(upload('path: |\n  dist/\n  .cache/report')), ['package: step 1']);
+    assert.deepEqual(
+      uploadsMissingHiddenFiles(upload('path: apps/extension/.output/*.zip\ninclude-hidden-files: true')),
+      [],
+    );
+    assert.deepEqual(uploadsMissingHiddenFiles(upload('path: ./playwright-report/\npath2: ../x')), []);
+  });
+
   it('name the repository at every step that runs gh', () => {
     const blind = workflows().flatMap(({ file, source }) =>
       ghStepsWithoutRepository(source).map((step) => `${file}: ${step}`),
