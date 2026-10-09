@@ -498,11 +498,14 @@ A workspace can also connect an address of its own, and the worker posts each no
 chose it. The notes stay in the worker: this is one more copy, sent out.
 
 - **The worker calls an address a customer chose, so it must not be a way in.** The address is
-  https only. The worker does not call its own host, a private network, a link-local address or a
-  mesh range (`100.64.0.0/10`): an IP address written in the address is refused when the connector
+  https only. The worker does not call the machine it runs on (loopback), a private network, a
+  link-local address or a mesh range (`100.64.0.0/10`): an IP address written in the address is refused when the connector
   is made, and a name is checked **when the socket resolves it**, at each attempt, so a name that
   changes its answer between a check and the call gains nothing. One internal address among the
   answers of a name refuses the name. A redirect is not followed.
+- **The worker can be given its own public address**, or a name that points at it. Nothing refuses
+  that: the request then arrives like any other from the internet, with no credential of the worker
+  in it, and under the rate limit. It reaches nothing a stranger cannot reach.
 - The request is signed with a secret of the connector: HMAC-SHA256 of a timestamp, a dot and the
   body. The timestamp is signed, so a receiver that refuses an old one refuses a replay. **The
   signature proves the sender, and the body is not encrypted beyond TLS.**

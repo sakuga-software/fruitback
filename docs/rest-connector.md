@@ -91,8 +91,8 @@ widget is answered when Fruitback keeps the note.
 
 ## The address and the secret
 
-- The address is `https://`, with no name and password in it. Fruitback does not call its own host,
-  a private network or `localhost`, and it checks that when the name is resolved, at each attempt.
+- The address is `https://`, with no name and password in it. Fruitback does not call `localhost`,
+  the machine it runs on or a private network, and it checks that when the name is resolved, at each attempt.
 - The secret is 16 to 256 characters with no space. Give none and Fruitback makes one, and shows it
   **once**. Fruitback keeps the address and the secret encrypted, and answers neither again.
 - To change the address or the secret, disconnect the connector and connect a new one. The
