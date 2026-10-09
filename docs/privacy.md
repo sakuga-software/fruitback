@@ -73,6 +73,10 @@ store it is configured with:
 | `github` | an issue in your GitHub repository, the seed in its body | GitHub, outside your infrastructure |
 | `sqlite` | a row in a database file on your volume                  | you                                 |
 
+On the Cloud, a workspace can also connect **an address of its own** (FRU-122). The note is then kept
+in the worker and a copy is posted to that address, whole and signed. Who runs that address decides
+who reads the copy. [Receiving notes on your own address](rest-connector.md) is the request.
+
 In the two trackers, the issue description also states the reporter's name and e-mail in a line
 your team reads, and the seed below it repeats them. [SECURITY.md](../SECURITY.md#a-seed-is-stored-in-the-clear-in-your-issue-tracker)
 says who can read each store. **On a public GitHub repository, that is everyone.**
@@ -109,6 +113,9 @@ can read them, with or without the widget.
   tracker it connected, encrypted (FRU-121), and where each site sends its notes; its name, its members and their roles, and the address
   of each site it reviews. No password, and no token of a provider that signs a person in. Deleting a workspace removes its
   members and its sites; the notes already in a tracker stay there.
+
+- **The notes that wait to be sent to a connected address, on disk** (FRU-122), in the accounts file.
+  A note goes from there when it arrives, and 30 days after its last attempt when it never does.
 
 ### What stays in the reporter's browser
 

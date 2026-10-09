@@ -75,8 +75,11 @@ export function can(role: Role, action: Action): boolean {
 export const VISIBILITIES = ['members', 'everyone'] as const;
 export type Visibility = (typeof VISIBILITIES)[number];
 
-/** Where the notes of a site go: a connector of its workspace, and the place inside it. */
-export type Destination = { connector: string; teamId: string; projectId?: string };
+/**
+ * Where the notes of a site go: a connector of its workspace, and the place inside it. A tracker has
+ * teams, so `teamId` is required for one. An address that only receives has none (FRU-122).
+ */
+export type Destination = { connector: string; teamId?: string; projectId?: string };
 
 export type Site = {
   id: string;
@@ -87,9 +90,29 @@ export type Site = {
   destination?: Destination;
 };
 
-/** The trackers a workspace can connect. One for now. */
-export const CONNECTOR_KINDS = ['linear'] as const;
+/**
+ * What a workspace can connect. `linear` is a tracker: the notes live there. `rest` is an address
+ * that receives each note, while the notes stay in the worker (FRU-122).
+ */
+export const CONNECTOR_KINDS = ['linear', 'rest'] as const;
 export type ConnectorKind = (typeof CONNECTOR_KINDS)[number];
+
+export type DueDelivery = { id: string; connectorId: string; body: string; attempts: number };
+
+export type DeliveryOutcome =
+  | { delivered: true }
+  | { delivered: false; at: number; status?: number; error?: string; nextAt?: number };
+
+/** A delivery as the console reads it. The body is not here: it holds a note. */
+export type PendingDelivery = {
+  id: string;
+  createdAt: string;
+  attempts: number;
+  /** Absent: the worker gave up, and somebody must ask for a new attempt. */
+  nextAt?: string;
+  lastStatus?: number;
+  lastError?: string;
+};
 
 /** A connector as the console reads it. The key is not here, and no route answers it. */
 export type Connector = { id: string; workspaceId: string; kind: ConnectorKind; label: string; createdAt: string };
@@ -140,6 +163,24 @@ export type AccountStore = {
    * a site must not write through the key of another team.
    */
   setDestination(workspace: string, site: string, destination: Destination | undefined): Promise<boolean>;
+  /**
+   * Keeps a note to send to the address of a connector (FRU-122). `body` is the request body, kept
+   * as it is sent, so each attempt sends the same bytes.
+   */
+  enqueueDelivery(connector: string, body: string, now: number): Promise<string>;
+  /** The deliveries to attempt now, oldest first. */
+  dueDeliveries(now: number, limit: number): Promise<DueDelivery[]>;
+  /**
+   * What an attempt answered. A delivery that arrived is removed: its body holds a note, and nothing
+   * reads it again. `nextAt` absent on a failure: no more attempt, and the console shows it.
+   */
+  settleDelivery(id: string, outcome: DeliveryOutcome): Promise<void>;
+  /** The deliveries of a connector that did not arrive yet, newest first. */
+  deliveries(workspace: string, connector: string): Promise<PendingDelivery[]>;
+  /** Makes a delivery due now. `false` when it is not of this workspace and connector. */
+  retryDelivery(workspace: string, connector: string, delivery: string, now: number): Promise<boolean>;
+  /** Removes the deliveries that were given up before `before`. Answers how many. */
+  dropAbandonedDeliveries(before: number): Promise<number>;
   /** Removes the workspace, its members and its sites. Notes already in a tracker stay there. */
   deleteWorkspace(workspace: string): Promise<void>;
   /** Every site, as the client map the routing reads. */
@@ -169,7 +210,7 @@ export function clientOf(site: Site): ClientMap[string] {
       ? {}
       : {
           connector: site.destination.connector,
-          teamId: site.destination.teamId,
+          ...(site.destination.teamId === undefined ? {} : { teamId: site.destination.teamId }),
           ...(site.destination.projectId === undefined ? {} : { projectId: site.destination.projectId }),
         }),
   };

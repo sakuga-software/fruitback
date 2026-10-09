@@ -1,7 +1,7 @@
 import { type IncomingMessage, type Server, type ServerResponse, createServer } from 'node:http';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { handleRequest, storeFor } from './app.ts';
+import { handleRequest, storeFor, deliverPending } from './app.ts';
 import type { SeedStore } from './store.ts';
 import { readExposureNotice } from './clients.ts';
 import { DEFAULT_HOST, DEFAULT_TRUSTED_PROXY_HOPS, type WorkerEnv, readConfig, readPort } from './env.ts';
@@ -9,6 +9,10 @@ import { fakeLinearDeprecationNotice, fakeLinearIgnoredReason } from './store-co
 import { isDevOnlyProvider } from './stores.ts';
 import { resolveClientIp } from './rate-limit.ts';
 import { type Kv, processKv } from './kv.ts';
+import { createSender } from './rest-send.ts';
+
+/** How often the worker looks for a delivery that is due. A first attempt waits this long at most. */
+export const DELIVERY_PASS_MS = 15_000;
 
 /**
  * Node entry point: adapts `node:http` onto the web-standard handler in `app.ts`.
@@ -139,6 +143,23 @@ export function startServer(env: WorkerEnv = process.env): Server {
   const flagDeprecated = fakeLinearDeprecationNotice(env);
   if (flagDeprecated !== undefined) {
     console.warn(`[fruitback] FRUITBACK_FAKE_LINEAR is deprecated: ${flagDeprecated}`);
+  }
+
+  // FRU-122: the notes that wait for an address a workspace connected. One pass at a time: a slow
+  // receiver must not start a second pass over the same rows. One container, so one loop.
+  if (config.ok && config.config.accountsPath !== undefined) {
+    const send = createSender();
+    let passing = false;
+    const pass = setInterval(() => {
+      if (passing) return;
+      passing = true;
+      void deliverPending(env, send)
+        .catch((error: unknown) => console.error('[fruitback] a pass over the deliveries did not finish', error))
+        .finally(() => (passing = false));
+    }, DELIVERY_PASS_MS);
+    // The loop must not keep the process open after the server closed.
+    pass.unref();
+    server.on('close', () => clearInterval(pass));
   }
 
   server.listen(port, host, () => {

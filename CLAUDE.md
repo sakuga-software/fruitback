@@ -1165,6 +1165,20 @@ and _The team mode, and the call the page cannot make_:
   are no longer in our `@theme`. **A button takes no `title`**: a tooltip does not open on a disabled
   control, so the reason is written beside it. The overlays of React Aria position with inline
   styles, which the console's CSP allows (`style-src 'unsafe-inline'`); its scripts stay hashed.
+- **A connector can be an address that only receives** (FRU-122). `rest` is no store: the note is
+  kept in the worker's own store first, then `receivingStore` puts a row in `deliveries`, and the
+  server's loop (`deliverPending`, every 15 seconds, one pass at a time) posts the rows that are due.
+  **The widget is answered when the note is kept**, and a queue that refuses the row is logged and
+  does not fail the request: a `502` there would keep the note twice. A row goes when its note
+  arrived, so the table holds what is late or given up.
+- **`rest-send.ts` checks the address when the socket resolves it**, through the `lookup` of the
+  request. A check before the request is passed by a name that answers twice. `isPublicAddress`
+  refuses the private, link-local and mesh ranges, and one internal answer refuses the name. The
+  sender takes `request`, `lookup` and `allows` as seams, so the tests reach the real code on a
+  local socket: the production sender, given the same local server, must refuse it.
+- **`docs/rest-connector.md` is a contract**, and `rest-connector.test.ts` holds its waits, its
+  timeout, its headers, its body and its `openssl` example to the code. A `Destination` has a team
+  for a tracker and none for an address, and `destinationOf` asks the kind of the connector.
 - **An e-mail is written in the language of its reader** (FRU-119). An account holds a `locale`: the
   browser that opened its first link, then what the person chose (`POST /console/me/locale`). A later
   sign-in from another browser does not change it. For a mail, the account's language wins, then the

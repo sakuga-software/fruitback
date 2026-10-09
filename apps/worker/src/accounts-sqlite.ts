@@ -101,6 +101,25 @@ const MIGRATIONS: readonly string[] = [
   ALTER TABLE sites ADD COLUMN team_id TEXT;
   ALTER TABLE sites ADD COLUMN project_id TEXT;
   `,
+  // The notes to send to an address a workspace connected (FRU-122). `body` is the request as it is
+  // sent. A row goes when its note arrived, so the table holds what is late or was given up.
+  // `next_at` NULL: the worker gave up, and the console offers a new attempt.
+  `
+  CREATE TABLE deliveries (
+    id TEXT PRIMARY KEY,
+    connector_id TEXT NOT NULL REFERENCES connectors (id) ON DELETE CASCADE,
+    body TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_at INTEGER,
+    last_at INTEGER,
+    last_status INTEGER,
+    last_error TEXT
+  );
+
+  CREATE INDEX deliveries_due ON deliveries (next_at);
+  CREATE INDEX deliveries_by_connector ON deliveries (connector_id);
+  `,
 ];
 
 const connections = new Map<string, DatabaseSync>();
@@ -190,10 +209,10 @@ function siteOf(row: Record<string, unknown>): Site | undefined {
 
   // A destination needs its connector: a connector that was removed leaves `connector_id` null.
   const destination =
-    typeof row.connector_id === 'string' && typeof row.team_id === 'string' && row.team_id !== ''
+    typeof row.connector_id === 'string'
       ? {
           connector: row.connector_id,
-          teamId: row.team_id,
+          ...(typeof row.team_id === 'string' && row.team_id !== '' ? { teamId: row.team_id } : {}),
           ...(typeof row.project_id === 'string' && row.project_id !== '' ? { projectId: row.project_id } : {}),
         }
       : undefined;
@@ -448,7 +467,7 @@ export function createSqliteAccountStore(path: string): AccountStore {
         )
         .run(
           destination.connector,
-          destination.teamId,
+          destination.teamId ?? null,
           destination.projectId ?? null,
           workspace,
           site,
@@ -457,6 +476,98 @@ export function createSqliteAccountStore(path: string): AccountStore {
         );
 
       return set.changes === 1;
+    },
+
+    async enqueueDelivery(connector, body, now) {
+      const id = newId('dlv');
+      connect(path)
+        .prepare('INSERT INTO deliveries (id, connector_id, body, created_at, next_at) VALUES (?, ?, ?, ?, ?)')
+        .run(id, connector, body, now, now);
+
+      return id;
+    },
+
+    async dueDeliveries(now, limit) {
+      const rows = connect(path)
+        .prepare(
+          `SELECT id, connector_id, body, attempts FROM deliveries
+           WHERE next_at IS NOT NULL AND next_at <= ? ORDER BY next_at, created_at LIMIT ?`,
+        )
+        .all(now, limit) as Record<string, unknown>[];
+
+      return rows.flatMap((row) =>
+        typeof row.id === 'string' && typeof row.connector_id === 'string' && typeof row.body === 'string'
+          ? [
+              {
+                id: row.id,
+                connectorId: row.connector_id,
+                body: row.body,
+                attempts: typeof row.attempts === 'number' ? row.attempts : 0,
+              },
+            ]
+          : [],
+      );
+    },
+
+    async settleDelivery(id, outcome) {
+      const database = connect(path);
+      if (outcome.delivered) {
+        database.prepare('DELETE FROM deliveries WHERE id = ?').run(id);
+
+        return;
+      }
+      database
+        .prepare(
+          `UPDATE deliveries SET attempts = attempts + 1, next_at = ?, last_at = ?, last_status = ?, last_error = ?
+           WHERE id = ?`,
+        )
+        .run(outcome.nextAt ?? null, outcome.at, outcome.status ?? null, outcome.error ?? null, id);
+    },
+
+    async deliveries(workspace, connector) {
+      const rows = connect(path)
+        .prepare(
+          `SELECT d.id, d.created_at, d.attempts, d.next_at, d.last_status, d.last_error
+           FROM deliveries d JOIN connectors c ON c.id = d.connector_id
+           WHERE c.workspace_id = ? AND c.id = ? ORDER BY d.created_at DESC, d.id LIMIT 100`,
+        )
+        .all(workspace, connector) as Record<string, unknown>[];
+
+      return rows.flatMap((row) =>
+        typeof row.id === 'string'
+          ? [
+              {
+                id: row.id,
+                createdAt: new Date(typeof row.created_at === 'number' ? row.created_at : 0).toISOString(),
+                attempts: typeof row.attempts === 'number' ? row.attempts : 0,
+                ...(typeof row.next_at === 'number' ? { nextAt: new Date(row.next_at).toISOString() } : {}),
+                ...(typeof row.last_status === 'number' ? { lastStatus: row.last_status } : {}),
+                ...(typeof row.last_error === 'string' ? { lastError: row.last_error } : {}),
+              },
+            ]
+          : [],
+      );
+    },
+
+    async retryDelivery(workspace, connector, delivery, now) {
+      // One statement: the delivery must be of a connector of this workspace.
+      const set = connect(path)
+        .prepare(
+          `UPDATE deliveries SET next_at = ?
+           WHERE id = ? AND connector_id = ?
+             AND EXISTS (SELECT 1 FROM connectors WHERE id = ? AND workspace_id = ?)`,
+        )
+        .run(now, delivery, connector, connector, workspace);
+
+      return set.changes === 1;
+    },
+
+    async dropAbandonedDeliveries(before) {
+      const dropped = connect(path)
+        .prepare('DELETE FROM deliveries WHERE next_at IS NULL AND COALESCE(last_at, created_at) < ?')
+        .run(before);
+
+      return Number(dropped.changes);
     },
 
     async deleteWorkspace(workspace) {

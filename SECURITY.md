@@ -492,6 +492,31 @@ go there. **This is the first secret of a customer that the Cloud holds.**
 - A connector that cannot be used answers `502`, and the widget keeps the note. The note is never
   written to the worker's own store in its place: its team would not see it.
 
+### An address that receives the notes (FRU-122)
+
+A workspace can also connect an address of its own, and the worker posts each note of a site that
+chose it. The notes stay in the worker: this is one more copy, sent out.
+
+- **The worker calls an address a customer chose, so it must not be a way in.** The address is
+  https only. The worker does not call its own host, a private network, a link-local address or a
+  mesh range (`100.64.0.0/10`): an IP address written in the address is refused when the connector
+  is made, and a name is checked **when the socket resolves it**, at each attempt, so a name that
+  changes its answer between a check and the call gains nothing. One internal address among the
+  answers of a name refuses the name. A redirect is not followed.
+- The request is signed with a secret of the connector: HMAC-SHA256 of a timestamp, a dot and the
+  body. The timestamp is signed, so a receiver that refuses an old one refuses a replay. **The
+  signature proves the sender, and the body is not encrypted beyond TLS.**
+- The address and the secret are kept like a tracker key: encrypted with `FRUITBACK_SECRETS_KEY`,
+  and answered by no route. A secret the worker made is answered once, when the connector is made.
+  The console shows the host of the address only: its path and query can hold a token.
+- **A note that waits to be sent is kept in the accounts file, in the clear**, as the request body.
+  It goes when it arrives. One that never arrives is given up after seven attempts, and removed
+  30 days after its last attempt. The route that lists the waiting deliveries answers no body.
+- The reporter is answered when the note is kept. A receiver that is down, slow or hostile costs the
+  widget nothing, and each attempt is bounded at 10 seconds and 64 kB of answer.
+- A workspace can make the worker send requests to a third party: one per note its own sites
+  receive, and six more attempts at most. The notes are rate-limited where they come in.
+
 ### Signing in with GitHub (FRU-97)
 
 An OAuth App, the authorization code, `state` and PKCE (S256). The worker asks only for the identity
