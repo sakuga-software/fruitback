@@ -462,6 +462,19 @@ console routes answer one origin, `FRUITBACK_CONSOLE_URL`, with credentials. A s
 console can use the session while the page is open; it cannot carry the refresh token away. A
 console session names no workspace, so it reads no site.
 
+### What the console may change, and who (FRU-99)
+
+The console's routes under `/console/` take the access token of a console session, and read the role
+of its account in the workspace **on every call**, from the accounts file: a token says who, never
+what they may do, so a member removed a minute ago is refused at once. `can(role, action)` in
+`accounts.ts` is the one table. A workspace somebody is not a member of answers `404`, like one that
+does not exist. Adding a site keeps the origin of the pasted address and nothing else.
+
+`POST /console/workspaces/<id>/connect` mints a pairing code for the person, in that workspace
+(FRU-100). The console puts it after the `#` of the worker's pairing page, and the extension spends it
+as it spends a code an operator minted. **A guest's session reaches every site of its workspace
+today**: sharing one site with one guest is FRU-104, and until it lands the console creates no guest.
+
 ### Personal data
 
 The widget can send, from a third party's page: a hand-written note, a name, an address, the user

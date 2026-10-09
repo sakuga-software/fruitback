@@ -185,6 +185,35 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.example' http://127.0.0.1:5177/)" = 403
           docker rm -f playground
 
+      - name: Build the image of the console
+        # FRU-99. Dokploy builds this Dockerfile too, for app.fruitback.com.
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: apps/console/Dockerfile
+          push: false
+          load: true
+          tags: fruitback-console:ci
+          build-args: VITE_FRUITBACK_API=https://api.fruitback.example
+          cache-from: type=gha,scope=console
+          cache-to: type=gha,mode=max,scope=console
+
+      - name: Boot the console, and check what it serves
+        # The policy must name the worker and allow the inline scripts by hash, never as unsafe-inline.
+        run: |
+          docker run -d --name console -p 8082:80 -e FRUITBACK_API=https://api.fruitback.example fruitback-console:ci
+          for attempt in $(seq 1 30); do
+            if curl -sf -o /dev/null http://127.0.0.1:8082/; then break; fi
+            sleep 1
+          done
+          policy=$(curl -s -D - -o /dev/null http://127.0.0.1:8082/w/any/sites | grep -i '^content-security-policy:')
+          echo "$policy"
+          echo "$policy" | grep -q "connect-src 'self' https://api.fruitback.example"
+          echo "$policy" | grep -q "'sha256-"
+          ! echo "$policy" | grep -q "script-src[^;]*unsafe-inline"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8082/fruitback.iife.js)" = 200
+          docker rm -f console
+
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
