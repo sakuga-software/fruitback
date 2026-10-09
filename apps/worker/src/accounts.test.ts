@@ -297,3 +297,39 @@ describe('what the boot log says about who reads the pins (FRU-116)', () => {
     assert.equal(server.includes('openReadClients('), false, 'the server holds no second copy of the rule');
   });
 });
+
+describe('the accounts file of a version before (FRU-119)', () => {
+  it('keeps an account written before the language column, with no language', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'fruitback-accounts-old-'));
+    directories.push(directory);
+    const path = join(directory, 'accounts.db');
+    // The shape of the file at version 2, as FRU-98 left it: no `locale` on an account.
+    const old = new DatabaseSync(path);
+    old.exec(`
+      CREATE TABLE accounts (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT, created_at INTEGER NOT NULL);
+      CREATE TABLE logins (provider TEXT NOT NULL, subject TEXT NOT NULL, account_id TEXT NOT NULL REFERENCES accounts (id) ON DELETE CASCADE, created_at INTEGER NOT NULL, PRIMARY KEY (provider, subject));
+      CREATE TABLE workspaces (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at INTEGER NOT NULL);
+      CREATE TABLE members (workspace_id TEXT NOT NULL, account_id TEXT NOT NULL, role TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (workspace_id, account_id));
+      CREATE TABLE sites (id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, origin TEXT NOT NULL UNIQUE, visibility TEXT NOT NULL, created_at INTEGER NOT NULL);
+      CREATE TABLE email_links (code_hash TEXT PRIMARY KEY, email TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, spent_at INTEGER);
+      INSERT INTO accounts VALUES ('acc_old', 'alice@acme.dev', 'Alice', 1);
+      INSERT INTO logins VALUES ('email', 'alice@acme.dev', 'acc_old', 1);
+      PRAGMA user_version = 2;
+    `);
+    old.close();
+
+    const accounts = createSqliteAccountStore(path);
+
+    assert.deepEqual(await accounts.account('acc_old'), { id: 'acc_old', email: 'alice@acme.dev', name: 'Alice' });
+    assert.equal(await accounts.localeOf('alice@acme.dev'), undefined);
+    await accounts.setLocale('acc_old', 'fr-FR');
+    assert.equal((await accounts.account('acc_old'))?.locale, 'fr-FR');
+    const again = await accounts.signIn({
+      provider: 'email',
+      subject: 'alice@acme.dev',
+      email: 'alice@acme.dev',
+      locale: 'en-US',
+    });
+    assert.equal(again.locale, 'fr-FR', 'a later sign-in does not change a language somebody has');
+  });
+});

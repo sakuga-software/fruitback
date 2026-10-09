@@ -58,7 +58,7 @@ async function reach(path: string, init: RequestInit): Promise<Response | undefi
 
 let access: string | undefined;
 
-export type Account = { id: string; email: string; name?: string };
+export type Account = { id: string; email: string; name?: string; locale?: string };
 export type Role = 'owner' | 'admin' | 'member' | 'guest';
 export type Workspace = { id: string; name: string; role: Role };
 export type Visibility = 'members' | 'everyone';
@@ -157,7 +157,7 @@ export function requestLink(email: string, locale: string): Promise<Answer<{ sen
 
 export async function redeemLink(code: string): Promise<Answer<{ account: Account }>> {
   const result = await answer<{ accessToken: string; account: Account }>(
-    await send('POST', '/auth/email/redeem', { code }),
+    await send('POST', '/auth/email/redeem', { code, locale: navigator.language }),
   );
   if (result.ok) access = result.data.accessToken;
 

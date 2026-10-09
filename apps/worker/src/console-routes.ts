@@ -1,5 +1,5 @@
 import type { AccountStore } from './accounts.ts';
-import { normalizeEmail } from './accounts.ts';
+import { normalizeEmail, readLocaleTag } from './accounts.ts';
 import type { WorkerConfig } from './env.ts';
 import type { Kv } from './kv.ts';
 import { MailError, type Mailer, signInMessage } from './mail.ts';
@@ -153,9 +153,14 @@ export async function handleConsoleSession(
 
     const body = await readBody(request);
     const email = typeof body?.email === 'string' ? normalizeEmail(body.email) : undefined;
-    // The language of the console that asked, for the words of the message. Never the link.
-    const locale = typeof body?.locale === 'string' ? body.locale.slice(0, 16) : 'en';
     if (email === undefined) return json(400, { error: 'invalid-email' }, headers);
+    // The words of the message, never the link (FRU-119). The language the person chose wins, then the
+    // console that asked, then the browser's own header. The answer is the same in every case.
+    const locale =
+      (await context.accounts.localeOf(email)) ??
+      readLocaleTag(body?.locale) ??
+      readLocaleTag(request.headers.get('Accept-Language')?.split(',')[0]?.split(';')[0]) ??
+      'en';
 
     const sent = await context.kv.incr(`fruitback:mail:${email}`, EMAIL_LINK_WINDOW_MS);
     if (sent > EMAIL_LINKS_PER_WINDOW) return json(429, { error: 'too-many-links' }, headers);
@@ -193,7 +198,14 @@ export async function handleConsoleSession(
     const email = await context.accounts.spendEmailLink(await digest(code), now);
     if (email === undefined) return json(401, { error: 'link-spent-or-expired' }, headers);
 
-    const account = await context.accounts.signIn({ provider: 'email', subject: email, email });
+    // The language of the browser that opened the link, kept if the account has none yet.
+    const locale = readLocaleTag(body?.locale);
+    const account = await context.accounts.signIn({
+      provider: 'email',
+      subject: email,
+      email,
+      ...(locale === undefined ? {} : { locale }),
+    });
 
     return openConsoleSession(context, account, headers, now);
   }

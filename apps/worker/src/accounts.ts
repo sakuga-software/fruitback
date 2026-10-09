@@ -13,7 +13,23 @@ import type { ClientMap } from './clients.ts';
  */
 
 /** An account is a person, known by an address a provider or a link proved they read. */
-export type Account = { id: string; email: string; name?: string };
+/** `locale` is the language the person reads: their e-mails are written in it (FRU-119). */
+export type Account = { id: string; email: string; name?: string; locale?: string };
+
+/**
+ * A language tag as `Intl` writes it, or `undefined` for a value that is not one.
+ *
+ * The value comes from a browser. It is stored and later chooses the words of an e-mail, so it is
+ * parsed here and never kept as typed.
+ */
+export function readLocaleTag(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value.trim() === '' || value.length > 35) return undefined;
+  try {
+    return new Intl.Locale(value.trim()).toString();
+  } catch {
+    return undefined;
+  }
+}
 
 export type Workspace = { id: string; name: string };
 
@@ -72,8 +88,19 @@ export type AccountStore = {
    * **Two providers that prove the same address are one account.** A provider that did not verify
    * the address must not call this: an unverified address would join the account of its owner.
    */
-  signIn(login: { provider: Provider; subject: string; email: string; name?: string }): Promise<Account>;
+  signIn(login: {
+    provider: Provider;
+    subject: string;
+    email: string;
+    name?: string;
+    /** Kept only for an account that has no language yet: a sign-in from another browser changes nothing. */
+    locale?: string;
+  }): Promise<Account>;
   account(id: string): Promise<Account | undefined>;
+  /** The language the person chose. `undefined` removes the choice. */
+  setLocale(account: string, locale: string | undefined): Promise<void>;
+  /** The language of the account behind this address, if there is one and it has one. */
+  localeOf(email: string): Promise<string | undefined>;
   createWorkspace(name: string, owner: string): Promise<Workspace>;
   /** Every workspace this account belongs to, with its role there, oldest first. */
   memberships(account: string): Promise<{ workspace: Workspace; role: Role }[]>;

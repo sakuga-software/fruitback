@@ -6,6 +6,7 @@ import {
   type Visibility,
   can,
   siteOrigin,
+  readLocaleTag,
 } from './accounts.ts';
 import { readBearerToken, verifyIdentityToken } from './identity.ts';
 import { PAIRING_TTL_SECONDS, type SessionStore, createPairing } from './session.ts';
@@ -72,7 +73,11 @@ export async function handleConsoleApi(
   context: ConsoleApiContext,
   headers: Record<string, string>,
 ): Promise<Response | undefined> {
-  const isApi = pathname === '/console/me' || pathname === '/console/workspaces' || WORKSPACE_PATH.test(pathname);
+  const isApi =
+    pathname === '/console/me' ||
+    pathname === '/console/me/locale' ||
+    pathname === '/console/workspaces' ||
+    WORKSPACE_PATH.test(pathname);
   if (!isApi) return undefined;
 
   const token = readBearerToken(request.headers.get('Authorization'));
@@ -94,6 +99,17 @@ export async function handleConsoleApi(
       { account, workspaces: memberships.map(({ workspace, role }) => ({ ...workspace, role })) },
       headers,
     );
+  }
+
+  // The language the person reads (FRU-119). Their own account only: the subject of the token.
+  if (pathname === '/console/me/locale') {
+    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+    const body = (await request.json().catch(() => undefined)) as { locale?: unknown } | undefined;
+    const locale = body?.locale === null ? undefined : readLocaleTag(body?.locale);
+    if (body?.locale !== null && locale === undefined) return json(400, { error: 'invalid-locale' }, headers);
+    await context.accounts.setLocale(account.id, locale);
+
+    return json(200, { account: { ...account, locale } }, headers);
   }
 
   if (pathname === '/console/workspaces') {

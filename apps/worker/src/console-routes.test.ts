@@ -368,3 +368,92 @@ describe('the Scaleway mailer', () => {
     assert.equal(message.html.includes('<script>'), false);
   });
 });
+
+describe('the language of a person (FRU-119)', () => {
+  const FRENCH = 'Votre lien de connexion à Fruitback';
+  const ENGLISH = 'Your Fruitback sign-in link';
+
+  /** Signs in by a link opened in a browser of that language, and answers the access token. */
+  async function signedIn(env: WorkerEnv, locale: string | undefined): Promise<string> {
+    const mail = inbox();
+    await call(env, '/auth/email', { body: { email: 'alice@acme.dev' } }, { mailer: mail });
+    const redeemed = await call(env, '/auth/email/redeem', { body: { code: codeIn(mail.sent[0]), locale } });
+
+    return ((await redeemed.json()) as { accessToken: string }).accessToken;
+  }
+
+  function withToken(env: WorkerEnv, path: string, token: string, body?: unknown, method = 'POST'): Promise<Response> {
+    return handleRequest(
+      new Request(`https://api.fruitback.test${path}`, {
+        method,
+        headers: { Origin: CONSOLE, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      }),
+      env,
+      { clientIp: '203.0.113.251', kv: createMemoryKv() },
+    );
+  }
+
+  it('keeps the language of the browser that opened the first link, and writes the next mail in it', async () => {
+    const env = envWith();
+    await signedIn(env, 'fr-FR');
+
+    const next = inbox();
+    await call(env, '/auth/email', { body: { email: 'alice@acme.dev', locale: 'en-US' } }, { mailer: next });
+
+    assert.equal(next.sent[0]?.subject, FRENCH, 'the language the person has wins over the console that asked');
+  });
+
+  it('does not change it on a sign-in from a browser of another language', async () => {
+    const env = envWith();
+    await signedIn(env, 'fr-FR');
+    const token = await signedIn(env, 'en-US');
+
+    const me = (await (await withToken(env, '/console/me', token, undefined, 'GET')).json()) as {
+      account: { locale?: string };
+    };
+    assert.equal(me.account.locale, 'fr-FR');
+  });
+
+  it('is set by the person, for their own account, and the mail follows', async () => {
+    const env = envWith();
+    const token = await signedIn(env, 'fr-FR');
+
+    const set = await withToken(env, '/console/me/locale', token, { locale: 'en-GB' });
+    assert.equal(set.status, 200);
+    assert.deepEqual(((await set.json()) as { account: { locale?: string } }).account.locale, 'en-GB');
+
+    const next = inbox();
+    await call(env, '/auth/email', { body: { email: 'alice@acme.dev', locale: 'fr-FR' } }, { mailer: next });
+    assert.equal(next.sent[0]?.subject, ENGLISH);
+  });
+
+  it('refuses a value that is not a language, and a call with no session', async () => {
+    const env = envWith();
+    const token = await signedIn(env, undefined);
+
+    assert.equal((await withToken(env, '/console/me/locale', token, { locale: 'not a tag!' })).status, 400);
+    assert.equal((await call(env, '/console/me/locale', { body: { locale: 'fr' } })).status, 401);
+  });
+
+  it('falls back to the header of the browser, then to English, for an address with no account', async () => {
+    const env = envWith();
+    const mail = inbox();
+    await handleRequest(
+      new Request('https://api.fruitback.test/auth/email', {
+        method: 'POST',
+        headers: { Origin: CONSOLE, 'Content-Type': 'application/json', 'Accept-Language': 'fr-CA,fr;q=0.9,en;q=0.8' },
+        body: JSON.stringify({ email: 'bob@acme.dev' }),
+      }),
+      env,
+      { clientIp: '203.0.113.252', kv: createMemoryKv(), mailer: mail },
+    );
+    await call(env, '/auth/email', { body: { email: 'carol@acme.dev', locale: 'not a tag!' } }, { mailer: mail });
+    await call(env, '/auth/email', { body: { email: 'dave@acme.dev', locale: 'ja-JP' } }, { mailer: mail });
+
+    assert.deepEqual(
+      mail.sent.map((message) => message.subject),
+      [FRENCH, ENGLISH, ENGLISH],
+    );
+  });
+});

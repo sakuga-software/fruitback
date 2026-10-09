@@ -104,11 +104,14 @@ can read them, with or without the widget.
   redeemed.
 - **The accounts, on disk**, when `FRUITBACK_ACCOUNTS_PATH` is set (FRU-96). For each person: the
   address a provider or a link proved, the name the provider gave, and which provider signed them in
-  with the id it gives them. For each workspace: its name, its members and their roles, and the address
+  with the id it gives them, and the language they read (the browser that opened their first sign-in
+  link, or their own choice), which their e-mails are written in. For each workspace: its name, its members and their roles, and the address
   of each site it reviews. No password, and no token of a provider. Deleting a workspace removes its
   members and its sites; the notes already in a tracker stay there.
 
 ### What stays in the reporter's browser
+
+Since FRU-119 an account also holds the language its person reads, taken from the browser that opened their first sign-in link, or chosen by them: the e-mails to that address are written in it.
 
 - `localStorage`, under `fruitback:config` (or the `configKey` the integrator chose): the stages the
   reporter hid and the screenshot switch. The reporter's name too, **only if the reporter ticked
