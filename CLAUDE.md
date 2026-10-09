@@ -1252,6 +1252,11 @@ the caption above it (FRU-24)` is what keeps that true.
   site. `docs/_config.yml` excludes `decisions/`, which is written for whoever works on this
   repository. `docs-site.test.ts` fails on a guide the home page links from nowhere and on a link
   that names no file. The markdown stays the source: every other guard reads the files.
+  **Its home page is the landing of `fruitback.com`** (`docs/CNAME`): `docs/index.md` takes
+  `layout: landing`, and `docs/_layouts/landing.html` draws the hero and the two offers of
+  `design/boards/3-offers.png` around it. A layout is HTML, so its links name the `.html` page
+  through `relative_url`. Say only what exists: a price the beta has not set is « Free during the
+  beta ».
 - **[SECURITY.md](SECURITY.md) states the threat model, and a change to any of it lands there too.**
   Every number in it — the rate-limit default, the proxy hops, the token lifetimes — is asserted
   against the code by `security.test.ts`, so a constant that moves without the file fails the suite.

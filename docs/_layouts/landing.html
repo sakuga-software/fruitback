@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fruitback · visual feedback on a live site</title>
+    <meta name="description" content="{{ site.description }}" />
+    <link rel="icon" href="{{ '/assets/favicon.svg' | relative_url }}" type="image/svg+xml" />
+    <link rel="stylesheet" href="{{ '/assets/landing.css' | relative_url }}" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="wrap top-row">
+        <a class="brand" href="{{ '/' | relative_url }}">
+          <svg width="16" height="16" viewBox="0 0 128 128" aria-hidden="true">
+            <path d="M 64 121.9 L 30.1 87.9 A 48 48 0 1 1 97.9 87.9 Z" fill="#dd2c27" />
+          </svg>
+          Fruitback
+        </a>
+        <nav class="top-nav" aria-label="Site">
+          <a href="#how">How it works</a>
+          <a href="#plans">Plans</a>
+          <a href="#guides">Guides</a>
+          <a href="https://github.com/sakuga-software/fruitback">GitHub</a>
+          <a class="button button-small" href="https://app.fruitback.com">Open the console</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero wrap">
+        <p class="eyebrow">Free during the beta · Hosted in Europe</p>
+        <h1>Feedback on the page.<br />Issues in your tracker.</h1>
+        <p class="lead">
+          Your client clicks the element that bothers them and writes a note. It becomes an issue with the CSS selector,
+          the React component and the source file. Back on the page, the pin is still there, coloured by the state of
+          its issue.
+        </p>
+        <div class="actions">
+          <a class="button" href="https://app.fruitback.com">Create a workspace</a>
+          <a class="button button-outline" href="https://demo.fruitback.com">Try the demo</a>
+        </div>
+        <figure class="frame">
+          <div class="frame-bar"><span></span><span></span><span></span><em>staging.acme.dev</em></div>
+          <img
+            src="{{ '/assets/landing-pin.png' | relative_url }}"
+            width="1088"
+            height="562"
+            alt="A pin on the button of a pricing page, with its note, its status In progress, and the reply of the team."
+          />
+        </figure>
+      </section>
+
+      <section id="how" class="wrap section">
+        <h2>How it works</h2>
+        <ol class="steps">
+          <li>
+            <img
+              src="{{ '/assets/step-pick.png' | relative_url }}"
+              width="528"
+              height="392"
+              alt="The element under the pointer is outlined on the page."
+              loading="lazy"
+            />
+            <h3>Point at it</h3>
+            <p>
+              A reviewer clicks any element of the page. Nothing to describe: the selector, the component and the file
+              come with it.
+            </p>
+          </li>
+          <li>
+            <img
+              src="{{ '/assets/step-write.png' | relative_url }}"
+              width="528"
+              height="392"
+              alt="A note written in the popover beside the element."
+              loading="lazy"
+            />
+            <h3>Write the note</h3>
+            <p>One field. The note becomes an issue in Linear, in GitHub Issues, or in the workspace itself.</p>
+          </li>
+          <li>
+            <img
+              src="{{ '/assets/step-pin.png' | relative_url }}"
+              width="528"
+              height="392"
+              alt="The pin stays on the page with the status of its issue."
+              loading="lazy"
+            />
+            <h3>See it move</h3>
+            <p>
+              The pin stays on the page, coloured by the state of its issue, with the team's replies under the note.
+            </p>
+          </li>
+        </ol>
+        <p class="note">
+          On a site that embeds nothing, the <a href="{{ '/reviewing.html' | relative_url }}">browser extension</a> puts
+          the same widget on the page, for you only.
+        </p>
+      </section>
+
+      <section id="plans" class="wrap section">
+        <h2 class="center">Two ways to run Fruitback. The same product in both.</h2>
+        <p class="lead center">Same widget, same extension, same trackers. The only question is who runs the server.</p>
+        <div class="plans">
+          <article class="plan plan-main">
+            <h3>Fruitback Cloud</h3>
+            <p class="muted">We run it. You sign in and paste the address of your site.</p>
+            <p class="price"><strong>Free</strong> during the beta</p>
+            <a class="button button-block" href="https://app.fruitback.com">Create a workspace</a>
+            <ul class="checks">
+              <li>Ready in minutes, nothing to deploy</li>
+              <li>Sign in with a link sent by e-mail</li>
+              <li>Hosted in Europe, updates included</li>
+              <li>The notes stay in your workspace</li>
+            </ul>
+          </article>
+          <article class="plan">
+            <h3>Self-hosted</h3>
+            <p class="muted">You run one container. Everything stays on your server.</p>
+            <p class="price"><strong>Free</strong> open source, MIT and AGPL</p>
+            <a class="button button-outline button-block" href="{{ '/self-hosting.html' | relative_url }}"
+              >Read the install guide</a
+            >
+            <ul class="checks">
+              <li>One Docker image, for amd64 and arm64</li>
+              <li>Linear, GitHub Issues or SQLite</li>
+              <li>Feedback can stay in SQLite, on your volume</li>
+              <li>Your own keys, on your server only</li>
+            </ul>
+          </article>
+        </div>
+
+        <h3 class="table-title">Side by side</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th></th>
+                <th>Cloud</th>
+                <th>Self-hosted</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Who runs the server</td>
+                <td>Sakuga, in Europe</td>
+                <td>You</td>
+              </tr>
+              <tr>
+                <td>Where notes land</td>
+                <td>Your workspace</td>
+                <td>Linear, GitHub Issues or SQLite</td>
+              </tr>
+              <tr>
+                <td>Accounts</td>
+                <td>Sign in by e-mail link</td>
+                <td>Pairing codes, minted by you</td>
+              </tr>
+              <tr>
+                <td>Updates</td>
+                <td>Automatic</td>
+                <td><code>docker compose pull</code></td>
+              </tr>
+              <tr>
+                <td>Price</td>
+                <td>Free during the beta</td>
+                <td>Free</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="faq">
+          <div>
+            <h4>Does the extension work with both?</h4>
+            <p>Yes. It talks to the worker you name: the Cloud's, or your own.</p>
+          </div>
+          <div>
+            <h4>Who reads the notes?</h4>
+            <p>You choose per site: the members of your workspace only, or everyone who visits it.</p>
+          </div>
+          <div>
+            <h4>What does the Cloud keep?</h4>
+            <p>
+              Accounts, workspaces, the addresses of your sites, and the notes.
+              <a href="{{ '/privacy.html' | relative_url }}">Every field is listed.</a>
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="guides" class="wrap section guides">{{ content }}</section>
+    </main>
+
+    <footer class="wrap foot">
+      <span>Fruitback, by Sakuga Software</span>
+      <span
+        ><a href="{{ '/privacy.html' | relative_url }}">Privacy</a> ·
+        <a href="https://github.com/sakuga-software/fruitback">Source</a></span
+      >
+    </footer>
+  </body>
+</html>
