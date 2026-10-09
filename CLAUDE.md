@@ -83,6 +83,16 @@ node --test src/seed.test.ts                 # one file, from the package direct
   `GET /feedback?url=…` returns the seeds of that page. Still called "worker" because that is what
   everyone calls it, though it is no longer an edge worker.
 - `apps/extension` — the browser extension (FRU-41): the widget on a site that embeds nothing.
+- **The console speaks the language of its person** (FRU-120). `apps/console/app/i18n.ts`: the
+  English sentence is the key (`t('Create your workspace')`), and `messages.fr.ts` maps it to French.
+  A sentence in a table is marked with `msg` and translated where it is shown. `messages.test.ts`
+  reads the screens: every sentence has French, the map holds no sentence no screen shows, and no text
+  is shown that did not go through `t`. The language is the account's, then this browser's last
+  choice, then the browser's own. **Every component that calls `t` calls `useLocale()` first**, and
+  the guard fails on one that does not: `t` reads the language at render, so a component with no
+  subscription keeps the old words. The root holds no `key` on the language: a screen mounted again
+  loses what somebody typed and runs its effects twice. **`HydrateFallback` holds no word**: it is rendered when the console
+  is built, and a word in another language is a hydration error in the browser.
 - `apps/playground` (`@fruitback/playground`) — the dev loop: a deliberately hostile fake client site
   with the widget mounted on it, built as a React Router 8 + Vite app with HeroUI because the
   widget's clients are React apps. Not shipped. It is deployed once, as the public demonstration

@@ -1,9 +1,12 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { type Me, callUntilAnswered } from '../api';
+import { t } from '../i18n';
+import { useLocale } from '../use-locale';
 
 /** The front door: the first workspace of a signed-in person, or the setup. */
 export default function Home() {
+  useLocale();
   const navigate = useNavigate();
 
   // No answer is not a signed-out person: the call waits under the banner and asks again.
@@ -14,5 +17,5 @@ export default function Home() {
     });
   }, [navigate]);
 
-  return <p className="p-8 text-sm text-muted">Loading…</p>;
+  return <p className="p-8 text-sm text-muted">{t('Loading…')}</p>;
 }
