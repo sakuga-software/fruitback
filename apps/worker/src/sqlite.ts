@@ -206,23 +206,6 @@ function stageOf(value: string): SeedStage {
 }
 
 /**
- * What this store calls each of its states, for `stateName` (FRU-24).
- *
- * It read `SEED_STAGE_STYLES[stage].label` until the contract stopped carrying words at all, and the
- * replacement belongs **here** rather than in a shared helper: `stateName` is by definition the
- * store's own word. Linear reports whatever a team named its workflow column; this store's states are
- * the stages themselves, so these are the stages, capitalised. A second store agreeing with this one
- * by accident is not something to factor out.
- */
-const STATE_NAMES: Record<SeedStage, string> = {
-  seeded: 'Seeded',
-  green: 'Green',
-  ripening: 'Ripening',
-  ripe: 'Ripe',
-  composted: 'Composted',
-};
-
-/**
  * A row back into the read envelope.
  *
  * Parsed through `seedSchema` rather than trusted: the column holds JSON this worker wrote, but a
@@ -255,8 +238,9 @@ function toSeedIssue(row: SeedRow, comments: SeedComment[] | undefined): SeedIss
     // No `url`: there is no interface to open. See the field's own note in the contract.
     title: buildIssueTitle(seed.data),
     stage,
-    // The state and the stage are the same thing in this store, so this names the stage.
-    stateName: STATE_NAMES[stage],
+    // Nobody named the states of this store: they are the stages. An empty name makes the widget
+    // write the stage in the words of its catalog, in the language of the reader (FRU-114).
+    stateName: '',
     updatedAt: row.updated_at,
     ...(comments === undefined ? {} : { comments }),
     seed: seed.data,

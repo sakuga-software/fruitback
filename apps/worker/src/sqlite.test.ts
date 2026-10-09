@@ -95,9 +95,9 @@ describe('a seed in a file', () => {
     assert.equal(issues[0]?.url, undefined);
   });
 
-  it('answers with the stage as the state, because the vocabulary is already ours', async () => {
-    // Linear needs a projection because its states are its own. Here there is nothing to translate,
-    // and this asserts the absence of a translation layer rather than its behaviour.
+  it('names no state, so the widget writes the stage in its own words (FRU-114)', async () => {
+    // Linear reports the name a team gave its column. Here nobody named anything: a word from this
+    // store would be an English word the widget cannot translate, beside a badge that says New.
     const store = createSqliteStore({ path: freshPath() });
     const seed = seedFixture();
 
@@ -105,7 +105,7 @@ describe('a seed in a file', () => {
     const issues = await store.findForPage({ url: seed.page.url, clientId: undefined }, undefined, POLICY);
 
     assert.equal(issues[0]?.stage, 'seeded');
-    assert.equal(issues[0]?.stateName, 'Seeded');
+    assert.equal(issues[0]?.stateName, '');
   });
 
   it('finds a page exactly, where a substring filter would mix two pages', async () => {
