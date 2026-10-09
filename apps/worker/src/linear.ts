@@ -51,6 +51,9 @@ export function linearRoutingFor(config: LinearConfig, client: ClientConfig | un
   return { teamId: client?.teamId ?? config.teamId, projectId: client?.projectId ?? config.projectId };
 }
 
+/** Linear answered, and what it said is that this key is not one it accepts. */
+export class LinearKeyRefused extends StoreError {}
+
 async function graphql<T>(config: LinearConfig, query: string, variables: Record<string, unknown>): Promise<T> {
   let response: Response;
   try {
@@ -69,14 +72,26 @@ async function graphql<T>(config: LinearConfig, query: string, variables: Record
     throw new StoreError('Linear could not be reached');
   }
 
+  const payload = (await response.json().catch(() => null)) as {
+    data?: T;
+    errors?: { message: string; extensions?: { code?: unknown } }[];
+  } | null;
+  const message = payload?.errors?.map((error) => error.message).join('; ');
+
+  // A key Linear does not accept, told apart from a Linear that is down (FRU-121): the first is for
+  // the person who typed the key, the second is not their fault and not a reason to type it again.
+  // Linear words a refusal as a status or as an error of the answer, so both are read.
+  const refused =
+    response.status === 401 ||
+    response.status === 403 ||
+    payload?.errors?.some((error) => error.extensions?.code === 'AUTHENTICATION_ERROR') === true;
+  if (refused) throw new LinearKeyRefused(message ?? `Linear responded ${response.status}`);
+
   if (!response.ok) {
     throw new StoreError(`Linear responded ${response.status}`);
   }
-
-  const payload = (await response.json().catch(() => null)) as { data?: T; errors?: { message: string }[] } | null;
-
-  if (payload?.errors?.length) {
-    throw new StoreError(payload.errors.map((error) => error.message).join('; '));
+  if (message !== undefined && message !== '') {
+    throw new StoreError(message);
   }
   if (!payload?.data) {
     throw new StoreError('Linear returned no data');

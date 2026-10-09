@@ -228,6 +228,37 @@ describe('a workspace connects Linear (FRU-121)', () => {
     assert.deepEqual(await world.accounts.connectors(world.workspace.id), []);
   });
 
+  it('says Linear is down, not that the key is refused, when Linear does not answer', async () => {
+    const env = envWith();
+    const world = await acme(env);
+    const body = { kind: 'linear', apiKey: LINEAR_KEY };
+
+    mock.method(globalThis, 'fetch', async () => new Response('bad gateway', { status: 502 }));
+    const down = await call(env, 'POST', `${world.base}/connectors`, { token: world.owner.token, body });
+    mock.restoreAll();
+    mock.method(globalThis, 'fetch', async () => {
+      throw new TypeError('fetch failed');
+    });
+    const unreachable = await call(env, 'POST', `${world.base}/connectors`, { token: world.owner.token, body });
+    mock.restoreAll();
+    mock.method(globalThis, 'fetch', async () =>
+      Response.json(
+        { errors: [{ message: 'Authentication required', extensions: { code: 'AUTHENTICATION_ERROR' } }] },
+        { status: 400 },
+      ),
+    );
+    const refused = await call(env, 'POST', `${world.base}/connectors`, { token: world.owner.token, body });
+
+    assert.deepEqual([down.status, unreachable.status], [502, 502]);
+    assert.deepEqual(await down.json(), { error: 'store-unavailable' });
+    assert.deepEqual(
+      await refused.json(),
+      { error: 'key-refused' },
+      'a refusal Linear words as an error, under any status',
+    );
+    assert.deepEqual(await world.accounts.connectors(world.workspace.id), [], 'no key is kept in any of the three');
+  });
+
   it('sends the notes of a site to the team it chose, and reads them back from there', async () => {
     const env = envWith();
     const linear = fakeLinear();

@@ -21,6 +21,7 @@ const KEY_PROBLEMS: Record<string, string> = {
   'connectors-unavailable': 'This Fruitback cannot keep a key yet. Its operator must set FRUITBACK_SECRETS_KEY.',
   forbidden: 'Only an owner or an admin of the workspace connects a source.',
   unreachable: 'Fruitback did not answer. Try again.',
+  'store-unavailable': 'Linear did not answer just now. Your key is not kept: try again in a minute.',
 };
 
 export default function Connectors() {
