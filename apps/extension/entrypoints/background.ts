@@ -1,5 +1,6 @@
 import { browser } from 'wxt/browser';
 import { readAll, readSite, replaceAll } from '../src/sites.ts';
+import { createBrowserPending } from '../src/pending-site-browser.ts';
 import { createSiteOwner, isExtensionPage, parseSiteMutation } from '../src/site-writes.ts';
 import { lendsSession, parseSitePattern } from '../src/site-patterns.ts';
 import { matchPatternFor, serialize, syncRegistration } from '../src/registration.ts';
@@ -116,6 +117,7 @@ export default defineBackground(() => {
   /** The only writer of the sites map, so a change from the popup and one from the options page cannot drop each other (FRU-43). */
   const ownSites = createSiteOwner({ read: readAll, replace: replaceAll });
   const extensionRoot = browser.runtime.getURL('/popup.html').replace(/popup\.html$/, '');
+  const pending = createBrowserPending((pattern, site) => ownSites({ kind: 'write', entries: { [pattern]: site } }));
 
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const mutation = parseSiteMutation(message);
@@ -166,7 +168,13 @@ export default defineBackground(() => {
   });
   browser.permissions.onRemoved.addListener(() => void sync());
   // The options page grants access to an entry that is already stored, so no storage change follows.
-  browser.permissions.onAdded.addListener(() => void sync());
+  browser.permissions.onAdded.addListener(() => {
+    // FRU-118: the prompt can close the popup that asked, so the site it asked for is finished here.
+    void pending
+      .settle()
+      .catch((error: unknown) => console.error('[fruitback] could not turn on the site that was asked for', error))
+      .then(() => sync());
+  });
   browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === SESSION_ALARM) void refreshSessions();
   });

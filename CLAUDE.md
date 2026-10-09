@@ -554,6 +554,13 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   the one predicate: `resolveSite` skips such an entry, so the bridge, the relay and the popup all
   refuse it, `complaint` takes the pattern and refuses it in the form and in the import, and the
   background does not register it. A wildcard stays valid in private mode, which carries no token.
+- **A site asked for is remembered before the browser asks for access** (FRU-118). The permission
+  prompt can close the popup, and the code after `permissions.request` then never runs: the grant
+  exists and no entry does. `pending-site.ts` writes the intent first, **not awaited** (an await loses
+  the gesture). The background finishes it on `permissions.onAdded`, and the popup when it opens
+  again. A refused prompt leaves it as a draft, and the form shows the values again (FRU-117). It is
+  ten minutes old at most: an old intent must not turn a site on by surprise. Automation cannot answer
+  a prompt, so the E2E copy never met this: the wiring is asserted on the sources.
 - **The rules stay in `chrome.storage.local`.** The ticket asked for `sync`; a host permission does
   not travel with a synced rule, and moving the key is a storage-shape change. That is FRU-72.
 

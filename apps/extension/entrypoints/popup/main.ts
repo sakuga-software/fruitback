@@ -13,6 +13,7 @@ import { describeIdentity } from '../../src/session.ts';
 import { showProblem } from '../../src/problem-view.ts';
 import { PAIRING_CODE_REQUIRED, PAIRING_NEEDS_HTTPS, PAIRING_PROBLEM } from '../../src/remedy.ts';
 import { type PairLink, parsePairLink } from '../../src/pair-link.ts';
+import { createBrowserPending } from '../../src/pending-site-browser.ts';
 
 /**
  * The switch for the tab you are looking at, and the two fields that make it work (FRU-41).
@@ -33,6 +34,9 @@ import { type PairLink, parsePairLink } from '../../src/pair-link.ts';
  * they can each spend the same refresh token.
  */
 const sessions = createBrowserSessions();
+
+/** The site somebody asked for, kept across a permission prompt that can close this popup (FRU-118). */
+const pending = createBrowserPending(writeSite);
 
 const app = document.querySelector('#app');
 
@@ -74,15 +78,20 @@ async function render(editing = false): Promise<void> {
     return;
   }
 
+  // The prompt closed the popup before it could store the site: finish it now if the background did not.
+  await pending.settle().catch(() => undefined);
+
   const found = await findSite(origin);
   const open = found === undefined || editing;
+  // What somebody typed before a prompt they refused, or that closed this popup (FRU-117).
+  const draft = found === undefined ? await pending.draft(origin).catch(() => undefined) : undefined;
 
   app.replaceChildren(
     element('h1', 'Fruitback'),
     element('p', origin, 'origin'),
     // FRU-43: why the widget does or does not appear here must be answerable from the toolbar.
     element('p', found === undefined ? NO_RULE : `Rule: ${found.pattern}`, 'rule'),
-    open || found === undefined ? form(origin, found) : status(found),
+    open || found === undefined ? form(origin, found, draft) : status(found),
   );
 
   // Pairing is against the **worker**, not the site, so there is nothing to ask for until one is
@@ -330,18 +339,20 @@ const HOW_TO_PAIR = 'Open the pairing link you were sent, then click this icon o
  * The client id is asked for in private mode only. In team mode the site embeds its own widget and
  * declares its own client id, and a second one stored here would be a value nothing reads.
  */
-function form(origin: string, found?: ResolvedSite): HTMLElement {
+function form(origin: string, found?: ResolvedSite, draft?: SiteConfig): HTMLElement {
   const site = found?.site;
+  // The fields show the entry, or what was typed for a site that has none yet.
+  const shown = site ?? draft;
   // A wildcard entry is saved under its own pattern, so the change reaches every site it covers.
   const pattern = found?.pattern ?? origin;
-  const mode = modeField(site?.mode ?? 'private');
+  const mode = modeField(shown?.mode ?? 'private');
   const endpoint = field('Worker endpoint', 'https://feedback.acme.dev');
   const clientId = field('Client id', 'acme');
   const save = element('button', site === undefined ? 'Turn on for this site' : 'Save');
   const problem = element('p', '', 'problem');
 
-  endpoint.input.value = site?.endpoint ?? '';
-  clientId.input.value = site !== undefined && site.mode === 'private' ? site.clientId : '';
+  endpoint.input.value = shown?.endpoint ?? '';
+  clientId.input.value = shown !== undefined && shown.mode === 'private' ? shown.clientId : '';
 
   const showFields = (): void => {
     clientId.label.hidden = mode.select.value === 'team';
@@ -401,7 +412,11 @@ function activateOpenTabs(pattern: string): Promise<void> {
  * Answers whether access was granted, so a refusal is said on the screen.
  */
 async function turnOn(pattern: string, site: SiteConfig): Promise<boolean> {
+  // WARNING: not awaited. An await before `permissions.request` loses the gesture, and the prompt
+  // can close this popup: the background then finishes what is remembered here.
+  void pending.remember(pattern, site).catch(() => undefined);
   const granted = await browser.permissions.request({ origins: [matchPatternFor(pattern)] });
+  // A refusal keeps the values as a draft, so the form shows them again (FRU-117).
   if (!granted) return false;
 
   try {
@@ -414,6 +429,7 @@ async function turnOn(pattern: string, site: SiteConfig): Promise<boolean> {
   }
   // `registerContentScripts` only reaches future page loads. Every tab already open on the pattern
   // gets the scripts now, this one included, and both files refuse to run twice in one frame.
+  await pending.forget().catch(() => undefined);
   await activateOpenTabs(pattern);
   await render();
 
