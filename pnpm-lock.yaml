@@ -57,6 +57,46 @@ importers:
         specifier: 'catalog:'
         version: 7.0.2
 
+  apps/console:
+    dependencies:
+      isbot:
+        specifier: ^5
+        version: 5.2.1
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.2.8
+        version: 19.2.8(react@19.2.8)
+      react-router:
+        specifier: ^8.3.0
+        version: 8.3.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+    devDependencies:
+      '@react-router/dev':
+        specifier: ^8.3.0
+        version: 8.3.0(@react-router/serve@8.3.0(react-router@8.3.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(supports-color@7.2.0)(typescript@7.0.2))(react-router@8.3.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(supports-color@7.2.0)(typescript@7.0.2)(vite@8.2.1(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+      '@tailwindcss/vite':
+        specifier: ^4.3.3
+        version: 4.3.3(vite@8.2.1(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.1.1
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.2.4
+        version: 19.2.4(@types/react@19.2.18)
+      tailwindcss:
+        specifier: ^4.3.3
+        version: 4.3.3
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vite:
+        specifier: ^8.2.1
+        version: 8.2.1(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
+
   apps/extension:
     dependencies:
       '@fruitback/shared':
@@ -4042,7 +4082,7 @@ snapshots:
       p-map: 7.0.6
       pathe: 2.0.3
       picocolors: 1.1.1
-      pkg-types: 2.3.1
+      pkg-types: 2.3.3
       prettier: 3.9.6
       react-refresh: 0.18.0
       react-router: 8.3.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -4643,7 +4683,7 @@ snapshots:
 
   compressible@2.0.18:
     dependencies:
-      mime-db: 1.52.0
+      mime-db: 1.54.0
 
   compression@1.8.1(supports-color@7.2.0):
     dependencies:
@@ -5232,7 +5272,7 @@ snapshots:
   local-pkg@1.2.1:
     dependencies:
       mlly: 1.8.2
-      pkg-types: 2.3.1
+      pkg-types: 2.3.3
       quansync: 0.2.11
 
   lodash.merge@4.6.2: {}
@@ -6052,12 +6092,12 @@ snapshots:
   unplugin-utils@0.3.2:
     dependencies:
       pathe: 2.0.3
-      picomatch: 4.0.5
+      picomatch: 4.0.7
 
   unplugin@3.3.0(esbuild@0.28.1)(rolldown@1.2.4)(vite@8.2.1(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)):
     dependencies:
       '@jridgewell/remapping': 2.3.5
-      picomatch: 4.0.5
+      picomatch: 4.0.7
       webpack-virtual-modules: 0.6.2
     optionalDependencies:
       esbuild: 0.28.1

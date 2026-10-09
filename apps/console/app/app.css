@@ -1,0 +1,34 @@
+@import 'tailwindcss';
+
+/*
+  The tokens of the design reference (design/README.md), which are the widget's own. Named once here,
+  so a screen writes bg-surface and never a colour.
+*/
+@theme {
+  --color-ink: #1c1917;
+  --color-muted: #78716c;
+  --color-faint: #a8a29e;
+  --color-line: #e7e5e4;
+  --color-page: #faf9f5;
+  --color-setup: #f6f4f1;
+  --color-surface: #ffffff;
+  --color-accent: #dd2c27;
+  --color-accent-strong: #b91c1c;
+  --color-done: #56802e;
+  --color-chip: #f5f5f4;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html,
+body {
+  background: var(--color-page);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}

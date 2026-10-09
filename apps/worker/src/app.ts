@@ -10,6 +10,7 @@ import {
 } from './clients.ts';
 import type { AccountStore } from './accounts.ts';
 import { consoleCors, handleConsoleSession, isConsoleRoute } from './console-routes.ts';
+import { handleConsoleApi } from './console-api.ts';
 import { type Mailer, createTemMailer } from './mail.ts';
 import { createSqliteAccountStore } from './accounts-sqlite.ts';
 import { type WorkerConfig, type WorkerEnv, readAllowedOrigins, readConfig } from './env.ts';
@@ -198,7 +199,9 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
     return new Response(null, { status: 204, headers: cors.headers });
   }
 
-  if (request.method !== 'GET' && request.method !== 'POST') {
+  // The console removes a site or a workspace with DELETE, and no other route takes one.
+  const deletes = consoleRoute && request.method === 'DELETE';
+  if (request.method !== 'GET' && request.method !== 'POST' && !deletes) {
     return json(405, { error: 'method-not-allowed' }, cors.headers);
   }
 
@@ -230,13 +233,20 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
       return json(404, { error: 'not-found' }, cors.headers);
 
     try {
-      const answer = await handleConsoleSession(
-        request,
-        pathname,
-        served,
-        { accounts, sessions, mailer: context.mailer ?? mailerFor(served), kv, secret: served.identitySecret },
-        cors.headers,
-      );
+      const answer =
+        (await handleConsoleSession(
+          request,
+          pathname,
+          served,
+          { accounts, sessions, mailer: context.mailer ?? mailerFor(served), kv, secret: served.identitySecret },
+          cors.headers,
+        )) ??
+        (await handleConsoleApi(
+          request,
+          pathname,
+          { accounts, sessions, secret: served.identitySecret },
+          cors.headers,
+        ));
 
       return answer ?? json(404, { error: 'not-found' }, cors.headers);
     } catch (error) {

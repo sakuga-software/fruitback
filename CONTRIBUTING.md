@@ -173,6 +173,7 @@ in the interface, and why.
 | `packages/widget`    | MIT                                               |
 | `apps/worker`        | AGPL-3.0-only                                     |
 | `apps/extension`     | AGPL-3.0-only                                     |
+| `apps/console`       | AGPL-3.0-only                                     |
 | `apps/playground`    | not published, under the repository's MIT licence |
 
 A contribution is made under the licence of the package it changes.
