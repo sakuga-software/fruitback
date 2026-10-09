@@ -21,7 +21,7 @@ export type SenderSeams = {
 
 export const DELIVERY_TIMEOUT_MS = 10_000;
 /** The answer is read to its end so the socket is free, up to this many bytes. Its content is not used. */
-const ANSWER_MAX_BYTES = 64 * 1_024;
+export const ANSWER_MAX_BYTES = 64 * 1_024;
 
 export function guardedLookup(lookup: typeof dnsLookup, allows: (address: string) => boolean): LookupFunction {
   return (hostname, options, callback) => {

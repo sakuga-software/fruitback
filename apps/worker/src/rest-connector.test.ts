@@ -16,6 +16,7 @@ import { createMemoryKv } from './kv.ts';
 import {
   ABANDONED_KEPT_DAYS,
   DELIVERY_HEADER,
+  MESH_RANGE,
   RETRY_AFTER_SECONDS,
   SECRET_MIN_LENGTH,
   SIGNATURE_HEADER,
@@ -28,7 +29,7 @@ import {
   sealTarget,
   signature,
 } from './rest-connector.ts';
-import { DELIVERY_TIMEOUT_MS, createSender } from './rest-send.ts';
+import { ANSWER_MAX_BYTES, DELIVERY_TIMEOUT_MS, createSender } from './rest-send.ts';
 import { DELIVERY_PASS_MS } from './server.ts';
 import { closeSessionConnections } from './session-sqlite.ts';
 
@@ -736,6 +737,20 @@ describe('the contract a receiver is written against (FRU-122)', () => {
     assert.ok(flat.includes(`within about ${DELIVERY_PASS_MS / 1_000} seconds`));
     assert.ok(flat.includes(`removed after ${ABANDONED_KEPT_DAYS} days`));
     assert.ok(flat.includes(`The secret is ${SECRET_MIN_LENGTH} to 256 characters`));
+  });
+
+  it('is described in SECURITY.md with the numbers the code holds', () => {
+    const security = readFileSync(new URL('../../../SECURITY.md', import.meta.url), 'utf8');
+    const section = security.slice(security.indexOf('### An address that receives the notes'));
+    const stated = section.slice(0, section.indexOf('\n### ', 4)).replace(/\s+/g, ' ');
+
+    assert.ok(stated.length > 500, 'the section was not found');
+    assert.ok(stated.includes(`\`${MESH_RANGE[0]}/${MESH_RANGE[1]}\``));
+    assert.ok(stated.includes(`bounded at ${DELIVERY_TIMEOUT_MS / 1_000} seconds`));
+    assert.ok(stated.includes(`${ANSWER_MAX_BYTES / 1_024} kB of answer`));
+    assert.ok(stated.includes(`removed ${ABANDONED_KEPT_DAYS} days after its last attempt`));
+    assert.ok(stated.includes('given up after seven attempts') && stated.includes('six more attempts at most'));
+    assert.equal(RETRY_AFTER_SECONDS.length, 6);
   });
 
   it('shows a body with the fields the worker sends, and no other', () => {

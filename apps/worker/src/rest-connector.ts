@@ -56,11 +56,14 @@ export function isAcceptableSecret(secret: string): boolean {
  * the worker read a service that only the worker can reach. `100.64.0.0/10` is in the list: it is
  * the range of a mesh network such as Tailscale, which the host of the Cloud is on.
  */
+/** The range of a mesh network. `SECURITY.md` names it, and a test holds the two together. */
+export const MESH_RANGE = ['100.64.0.0', 10] as const;
+
 const INTERNAL = new BlockList();
 for (const [network, prefix] of [
   ['0.0.0.0', 8],
   ['10.0.0.0', 8],
-  ['100.64.0.0', 10],
+  MESH_RANGE,
   ['127.0.0.0', 8],
   ['169.254.0.0', 16],
   ['172.16.0.0', 12],
