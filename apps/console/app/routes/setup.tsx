@@ -462,11 +462,20 @@ export function InstallOptions({ workspace, site }: { workspace: Workspace; site
   const snippet = snippetFor(site);
 
   async function connect() {
+    // Open the tab in the click, before the await: a browser blocks a window opened after one.
+    // The tab loses its `opener` before it loads the pairing page.
+    const tab = window.open('', '_blank');
     const minted = await call<{ code: string }>('POST', `/console/workspaces/${workspace.id}/connect`, {});
-    if (!minted.ok) return;
+    if (!minted.ok) {
+      tab?.close();
+      return;
+    }
     const target = pairingLink(minted.data.code);
     setLink(target);
-    window.open(target, '_blank', 'noopener');
+    if (tab !== null) {
+      tab.opener = null;
+      tab.location.href = target;
+    }
   }
 
   return (

@@ -24,11 +24,16 @@ ARG VITE_FRUITBACK_GITHUB
 RUN test -n "$VITE_FRUITBACK_API" || (echo "VITE_FRUITBACK_API is required: the console calls that worker" >&2 && exit 1)
 RUN pnpm --filter @fruitback/widget build && pnpm --filter @fruitback/console build
 RUN node apps/console/csp.mjs apps/console/nginx.conf.template apps/console/build/nginx.conf.template
+RUN printf '%s' "$VITE_FRUITBACK_API" > apps/console/build/fruitback-api
 
 FROM nginx:1.29-alpine AS runtime
 
-# The worker's address again, at run time, for the Content-Security-Policy the template writes.
-ENV FRUITBACK_API=""
+# The worker's address for the Content-Security-Policy the template writes. It defaults to the address
+# the bundle was built with, and `check-api.sh` stops the container when a run sets another one.
+ARG VITE_FRUITBACK_API
+ENV FRUITBACK_API=${VITE_FRUITBACK_API}
+COPY --from=build /repo/apps/console/build/fruitback-api /etc/fruitback-api
+COPY apps/console/check-api.sh /docker-entrypoint.d/05-check-api.sh
 COPY --from=build /repo/apps/console/build/nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /repo/apps/console/build/client /usr/share/nginx/html
 # The script a site embeds, from the console's own address until the script has a CDN (FRU-106).
