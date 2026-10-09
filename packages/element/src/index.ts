@@ -82,7 +82,24 @@ export function createFruitbackElement(
     }
 
     connectedCallback(): void {
+      this.#adoptOwnOptions();
       this.#schedule();
+    }
+
+    /**
+     * Takes back an `options` set before the tag was defined.
+     *
+     * A page can write `element.options = …` while the script that defines the tag is still loading.
+     * The value then lands on the element itself, as an own property that hides the accessor below
+     * for ever: the setter never runs and the options are lost with no error. It is read, removed,
+     * and given to the setter.
+     */
+    #adoptOwnOptions(): void {
+      if (!Object.hasOwn(this, 'options')) return;
+      const own = this as unknown as { options?: ElementOptions };
+      const early = own.options;
+      delete own.options;
+      if (early !== undefined) this.options = early;
     }
 
     disconnectedCallback(): void {

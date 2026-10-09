@@ -201,14 +201,14 @@ describe('a consumer installing this from npm', () => {
         await rm(join(root, '..', name, 'dist'), { recursive: true, force: true });
       }
 
-      for (const pkg of [
-        '@fruitback/shared',
-        '@fruitback/widget',
-        'fruitback',
-        '@fruitback/element',
-        '@fruitback/react',
-      ]) {
-        await run('pnpm', ['--filter', pkg, 'pack', '--pack-destination', scratch], { cwd: workspace, shell: true });
+      // By directory, never by name: the root project is named `fruitback` too, so `--filter fruitback`
+      // packs two projects into one file. The second write is shorter and leaves bytes of the first
+      // after it, which GNU tar refuses and bsdtar reads without a word.
+      for (const directory of ['shared', 'widget', 'fruitback', 'element', 'react']) {
+        await run('pnpm', ['--filter', `./packages/${directory}`, 'pack', '--pack-destination', scratch], {
+          cwd: workspace,
+          shell: true,
+        });
       }
 
       await writeFile(
@@ -280,6 +280,9 @@ describe('a consumer installing this from npm', () => {
       // was wrong twice: once with `main` pointing at sources, once with no `dist` packed at all.
       // A type-check alone reports it as a missing module, three layers from the cause.
       const tarballs = (await import('node:fs')).readdirSync(scratch).filter((name) => name.endsWith('.tgz'));
+      assert.equal(tarballs.length, 5, `one tarball per package, and no other: ${tarballs.join(', ')}`);
+      // The whole file must be one archive. bsdtar reads past bytes left after it, so ask gzip.
+      for (const tarball of tarballs) await run('gzip', ['-t', join(scratch, tarball)]);
 
       for (const tarball of tarballs) {
         const { stdout } = await run('tar', ['-tzf', join(scratch, tarball)]);

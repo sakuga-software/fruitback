@@ -113,6 +113,34 @@ describe('<fruitback-widget> (FRU-126)', () => {
     assert.equal(mounted.length, 1);
   });
 
+  /**
+   * happy-dom upgrades a tag by building a new element, so the own property of a real upgrade cannot
+   * be made here by defining the tag late. It is made by hand, and `e2e/package.spec.ts` does the
+   * real thing in Chromium.
+   */
+  it('takes back an options that hides its accessor, as one set before the tag was defined does', async () => {
+    const { mounted, settled, add, view } = page();
+    const element = add('<fruitback-widget endpoint="https://a.dev" client-id="acme"></fruitback-widget>');
+    await settled();
+    element.remove();
+    Object.defineProperty(element, 'options', {
+      value: { theme: { 'color-accent': '#0055ff' } },
+      configurable: true,
+      enumerable: true,
+      writable: true,
+    });
+
+    view.document.body.append(element as unknown as Node);
+    await settled();
+
+    assert.deepEqual(mounted.at(-1), {
+      theme: { 'color-accent': '#0055ff' },
+      endpoint: 'https://a.dev',
+      clientId: 'acme',
+    });
+    assert.equal(Object.hasOwn(element, 'options'), false, 'the accessor is reachable again');
+  });
+
   it('turns the environment on for the word true only, as the script tag does', () => {
     const read = (value: string) => (name: string) =>
       ({ endpoint: 'https://a.dev', 'client-id': 'acme', 'include-env': value })[name] ?? null;

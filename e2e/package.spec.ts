@@ -76,6 +76,24 @@ test('the tag mounts the widget, follows its attributes, and takes it away with 
   await expect(page.locator('[data-fruitback-host]')).toHaveCount(0);
 });
 
+test('the tag keeps the options a page set before its script ran (FRU-126)', async ({ page }) => {
+  await page.goto('/?widget=off&case=element-early-options');
+  await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
+  // The tag is in the page first, as with a deferred script, and the page already gave it options.
+  await page.evaluate((endpoint) => {
+    const element = document.createElement('fruitback-widget') as HTMLElement & { options?: unknown };
+    element.setAttribute('endpoint', endpoint);
+    element.setAttribute('client-id', 'playground');
+    element.setAttribute('locale', 'en-US');
+    element.options = { messages: { en: { 'launch.label': 'Set before the script' } } };
+    document.body.append(element);
+  }, WORKER_ORIGIN);
+
+  await page.addScriptTag({ path: 'packages/element/dist/fruitback-element.iife.js' });
+
+  await expect(page.getByRole('button', { name: 'Set before the script' })).toBeVisible();
+});
+
 test('a host catalog reaches the built widget, over the bundled one, key by key (FRU-37, FRU-38)', async ({ page }) => {
   await page.goto('/?widget=off&case=script-tag-locale');
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
