@@ -3,7 +3,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { handleRequest, storeFor } from './app.ts';
 import type { SeedStore } from './store.ts';
-import { openReadClients } from './clients.ts';
+import { readExposureNotice } from './clients.ts';
 import { DEFAULT_HOST, DEFAULT_TRUSTED_PROXY_HOPS, type WorkerEnv, readConfig, readPort } from './env.ts';
 import { fakeLinearDeprecationNotice, fakeLinearIgnoredReason } from './store-config.ts';
 import { isDevOnlyProvider } from './stores.ts';
@@ -163,14 +163,12 @@ export function startServer(env: WorkerEnv = process.env): Server {
       // `public` stays the default so an upgrade never blanks a working deployment — but an operator
       // should not have to infer their exposure from a field they did not write (FRU-40). Named
       // here, where only they can see it; `/health` carries a count and no ids.
-      const openRead = openReadClients({ read: config.config.read, clients: config.config.clients });
-      if (openRead.length > 0) {
-        console.warn(
-          `[fruitback] read is public for ${openRead.join(', ')}: their pins, authors and replies ` +
-            'are readable by anyone who can reach this worker. Set FRUITBACK_READ=authenticated, ' +
-            'or "read": "authenticated" per client, to require a token.',
-        );
-      }
+      const exposure = readExposureNotice({
+        read: config.config.read,
+        clients: config.config.clients,
+        accounts: config.config.accountsPath !== undefined,
+      });
+      if (exposure !== undefined) console.warn(exposure);
     } else {
       // Loud, but still serving: /health reports 503 with the same list, so the platform can see it.
       console.error(`[fruitback] misconfigured, missing: ${config.missing.join(', ')} — /health will report 503`);
