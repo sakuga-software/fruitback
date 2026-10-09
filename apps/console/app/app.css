@@ -1,4 +1,39 @@
 @import 'tailwindcss';
+/* HeroUI 3 has no provider: its theme is this stylesheet (FRU-125). */
+@import '@heroui/react/styles';
+
+/*
+  HeroUI takes the theme, it does not set it: its variables get the tokens of design/README.md. It
+  also names --color-accent, --color-muted and --color-surface from these, so a screen that writes
+  bg-accent and a button of HeroUI paint the same red.
+*/
+:root {
+  color-scheme: light;
+  --background: #faf9f5;
+  --foreground: #1c1917;
+  --surface: #ffffff;
+  --overlay: #ffffff;
+  /* The board says #78716c. On the board's own tinted surfaces that is 4.37:1, under the 4.5 a
+     small text needs, so the tone is five steps darker: 4.7:1 there, and the eye sees no change. */
+  --muted: #736c67;
+  --default: #f5f5f4;
+  --default-foreground: #1c1917;
+  --accent: #dd2c27;
+  --accent-foreground: #ffffff;
+  --danger: #b91c1c;
+  --danger-foreground: #ffffff;
+  --success: #56802e;
+  --success-foreground: #ffffff;
+  --border: #e7e5e4;
+  --separator: #e7e5e4;
+  --focus: #dd2c27;
+  --field-background: #ffffff;
+  --field-foreground: #1c1917;
+  --field-placeholder: #a8a29e;
+  --field-border: #d6d3d1;
+  --field-border-width: 1px;
+  --radius: 0.5rem;
+}
 
 /*
   The tokens of the design reference (design/README.md), which are the widget's own. Named once here,
@@ -6,13 +41,10 @@
 */
 @theme {
   --color-ink: #1c1917;
-  --color-muted: #78716c;
   --color-faint: #a8a29e;
   --color-line: #e7e5e4;
   --color-page: #faf9f5;
   --color-setup: #f6f4f1;
-  --color-surface: #ffffff;
-  --color-accent: #dd2c27;
   --color-accent-strong: #b91c1c;
   --color-done: #56802e;
   --color-chip: #f5f5f4;

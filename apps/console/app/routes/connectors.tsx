@@ -1,6 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { type Connector, type Destination, type Site, type Team, call } from '../api';
-import { Button, Card, Field, Problem } from '../ui';
+import { Button, Card, Choice, Field, Problem } from '../ui';
 import { PageHead, useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
@@ -125,11 +125,13 @@ export default function Connectors() {
                   tone="outline"
                   className="self-start"
                   disabled={!manages || !available}
-                  title={manages ? undefined : t('An owner or an admin connects a source')}
                   onClick={() => setAdding(true)}
                 >
                   {t('Connect')}
                 </Button>
+              )}
+              {manages ? null : (
+                <p className="mt-2 text-xs text-muted">{t('An owner or an admin connects a source')}</p>
               )}
               {available ? null : (
                 <p className="mt-2 text-xs text-muted">{t(KEY_PROBLEMS['connectors-unavailable'] ?? '')}</p>
@@ -142,7 +144,7 @@ export default function Connectors() {
                   <span className="text-[15px] font-semibold">{source.name}</span>
                 </div>
                 <p className="mb-4 flex-1 text-sm text-muted">{t(source.detail)}</p>
-                <Button tone="outline" disabled className="self-start" title={t('After the beta')}>
+                <Button tone="outline" disabled className="self-start">
                   {t('After the beta')}
                 </Button>
               </Card>
@@ -313,27 +315,26 @@ function Detail({
 
             return (
               <li key={site.id} className="rounded-md bg-chip px-3 py-2">
-                <label className="block">
-                  <span className="mb-1 block text-sm font-semibold">{new URL(site.origin).host}</span>
-                  <select
-                    value={current}
-                    disabled={!manages || teams === undefined}
-                    onChange={(event) => void place(site, event.target.value)}
-                    className="h-9 w-full rounded-md border border-line bg-surface px-2 text-sm"
-                  >
-                    <option value={HERE}>{elsewhere ? t('Another source') : t('Fruitback, in this workspace')}</option>
-                    {(teams ?? []).map((team) => (
-                      <optgroup key={team.id} label={team.name}>
-                        <option value={team.id}>{t('{team}, no project', { team: team.name })}</option>
-                        {team.projects.map((project) => (
-                          <option key={project.id} value={`${team.id}/${project.id}`}>
-                            {team.name} · {project.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                </label>
+                <Choice
+                  label={new URL(site.origin).host}
+                  labelStrong
+                  value={current}
+                  disabled={!manages || teams === undefined}
+                  onChange={(value) => void place(site, value)}
+                  options={[
+                    { value: HERE, label: elsewhere ? t('Another source') : t('Fruitback, in this workspace') },
+                    ...(teams ?? []).map((team) => ({
+                      heading: team.name,
+                      options: [
+                        { value: team.id, label: t('{team}, no project', { team: team.name }) },
+                        ...team.projects.map((project) => ({
+                          value: `${team.id}/${project.id}`,
+                          label: `${team.name} · ${project.name}`,
+                        })),
+                      ],
+                    })),
+                  ]}
+                />
               </li>
             );
           })}

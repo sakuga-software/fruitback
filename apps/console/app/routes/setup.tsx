@@ -13,7 +13,7 @@ import {
   takeWorkspaceName,
   saveLanguage,
 } from '../api';
-import { Button, Field, Mark, Problem, WideButton } from '../ui';
+import { Button, Field, Mark, Pick, Problem, WideButton } from '../ui';
 import { adoptLanguage, locale, msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
 
@@ -255,7 +255,7 @@ function SignIn({ onSent }: { onSent: (email: string) => void }) {
         </Button>
       }
     >
-      <WideButton disabled title={t('Google sign-in comes after the beta')}>
+      <WideButton disabled note={t('Google sign-in comes after the beta')}>
         {t('Continue with Google')}
       </WideButton>
       {GITHUB ? (
@@ -263,7 +263,7 @@ function SignIn({ onSent }: { onSent: (email: string) => void }) {
           {t('Continue with GitHub')}
         </WideButton>
       ) : (
-        <WideButton disabled title={t('GitHub sign-in arrives with its OAuth app')}>
+        <WideButton disabled note={t('GitHub sign-in arrives with its OAuth app')}>
           {t('Continue with GitHub')}
         </WideButton>
       )}
@@ -427,37 +427,23 @@ function SiteStep({ workspace, onAdded }: { workspace: Workspace; onAdded: (site
         value={url}
         onChange={(event) => setUrl(event.target.value)}
       />
-      <fieldset>
-        <legend className="mb-1.5 text-xs text-muted">{t('Who sees the feedback?')}</legend>
-        {(
-          [
-            [
-              'members',
-              t('The members of {workspace}', { workspace: workspace.name }),
-              t('Visitors of the site see no note.'),
-            ],
-            ['everyone', t('Everyone who visits the site'), t('For a public « report a problem ».')],
-          ] as const
-        ).map(([value, label, detail]) => (
-          <label
-            key={value}
-            className="mb-2 flex cursor-pointer items-start gap-3 rounded-[10px] border border-line px-4 py-3 has-[:checked]:border-ink"
-          >
-            <input
-              type="radio"
-              name="visibility"
-              value={value}
-              checked={visibility === value}
-              onChange={() => setVisibility(value)}
-              className="mt-1 accent-[#dd2c27]"
-            />
-            <span>
-              <span className="block text-sm font-semibold">{label}</span>
-              <span className="block text-xs text-muted">{detail}</span>
-            </span>
-          </label>
-        ))}
-      </fieldset>
+      <Pick
+        label={t('Who sees the feedback?')}
+        value={visibility}
+        onChange={setVisibility}
+        options={[
+          {
+            value: 'members',
+            label: t('The members of {workspace}', { workspace: workspace.name }),
+            detail: t('Visitors of the site see no note.'),
+          },
+          {
+            value: 'everyone',
+            label: t('Everyone who visits the site'),
+            detail: t('For a public « report a problem ».'),
+          },
+        ]}
+      />
       {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
     </Frame>
   );

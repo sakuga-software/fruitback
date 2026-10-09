@@ -34,3 +34,6 @@ export:
 | Green (done) | `#56802e`                                                |
 | Font         | the system font (`-apple-system, BlinkMacSystemFont`)    |
 | Radius       | 6 px controls, 8 to 10 px fields, 14 px cards, 999 px pills |
+
+**One value is not the board's.** The console writes muted text in `#736c67`. The board's `#78716c` is
+4.37:1 on the board's own tinted surfaces, under the 4.5:1 a small text needs (axe, FRU-125).

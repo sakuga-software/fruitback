@@ -1,4 +1,4 @@
-import { Card, Chip, Initial } from '../ui';
+import { Button, Card, Chip, Field, Initial } from '../ui';
 import { PageHead, useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
@@ -23,19 +23,10 @@ export default function Members() {
     <>
       <PageHead title={t('Members')} lead={t('Who can see and leave feedback, and who can change the workspace.')} />
       <div className="mb-3 flex flex-col gap-2 sm:flex-row">
-        <input
-          disabled
-          placeholder="name@company.com"
-          className="h-10 flex-1 rounded-md border border-line bg-surface px-3 text-[15px] placeholder:text-faint"
-        />
-        <button
-          type="button"
-          disabled
-          className="h-10 rounded-full bg-faint px-5 text-sm font-semibold text-white"
-          title={t('Invitations come after the beta')}
-        >
-          {t('Invite')}
-        </button>
+        <div className="flex-1">
+          <Field label={t('Address of the person to invite')} labelHidden placeholder="name@company.com" disabled />
+        </div>
+        <Button disabled>{t('Invite')}</Button>
       </div>
       <p className="mb-4 text-xs text-muted">
         {t('Invitations come after the beta. Until then, each person signs in and makes their own workspace.')}
