@@ -1,6 +1,6 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
@@ -25,6 +25,8 @@ const RELAY_ORIGIN = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
 
 const CLIENTS = {
   a: { workspace: 'ws-a', origins: ['https://a.test'], read: 'authenticated' },
+  /** A site that mints its own tokens and also belongs to a workspace. */
+  both: { workspace: 'ws-a', origins: ['https://both.test'], read: 'authenticated', identitySecret: SITE_KEY },
   b: { workspace: 'ws-b', origins: ['https://b.test'], read: 'authenticated' },
   loose: { origins: ['https://loose.test'], read: 'authenticated', identitySecret: SITE_KEY },
 };
@@ -148,6 +150,34 @@ describe('a session belongs to one workspace (FRU-95)', () => {
 
     assert.equal((await read(env, 'loose', 'https://loose.test', access)).status, 401);
     assert.equal((await read(env, 'loose', 'https://loose.test', ownToken)).status, 200, 'its own key still works');
+  });
+
+  it('takes its own tokens and the sessions of its workspace, on a site that has both, and no other session', async () => {
+    const env = envWith();
+    const own = await signIdentityToken({ sub: 'carol', exp: Math.floor(Date.now() / 1000) + 600 }, SITE_KEY);
+    const ofA = (await sessionOf(env, { subject: 'alice', workspace: 'ws-a' })).access;
+    const ofB = (await sessionOf(env, { subject: 'bob', workspace: 'ws-b' })).access;
+
+    assert.equal((await read(env, 'both', 'https://both.test', own)).status, 200);
+    assert.equal((await read(env, 'both', 'https://both.test', ofA)).status, 200);
+    assert.equal((await read(env, 'both', 'https://both.test', ofB)).status, 401);
+  });
+
+  /**
+   * The workspace check holds only if every token goes through it. A second caller of the verifier in
+   * the request path would accept any session token whose signature is good. Raised in review.
+   */
+  it('verifies every token of a request in one place, the one that checks the workspace', () => {
+    const source = readFileSync(new URL('./app.ts', import.meta.url), 'utf8');
+    const body = source.slice(source.indexOf('async function verifyForClient('));
+    const end = body.indexOf('\n}\n');
+
+    assert.equal(source.split('verifyIdentityToken(').length - 1, 2, 'the verifier is called twice in app.ts');
+    assert.equal(
+      body.slice(0, end).split('verifyIdentityToken(').length - 1,
+      2,
+      'and both calls are in verifyForClient',
+    );
   });
 
   it('refuses a token signed with the worker key that names no workspace', async () => {
