@@ -1094,6 +1094,11 @@ and _The team mode, and the call the page cannot make_:
   `/console/session`, and `consoleCors` answers `FRUITBACK_CONSOLE_URL` and no other origin. A console
   session names no workspace: the `ws` check keeps it off every site. `mail.ts` is the seam, Scaleway
   Transactional Email over HTTP the one implementation.
+- **An e-mail is written in the language of its reader** (FRU-119). An account holds a `locale`: the
+  browser that opened its first link, then what the person chose (`POST /console/me/locale`). A later
+  sign-in from another browser does not change it. For a mail, the account's language wins, then the
+  console that asked, then `Accept-Language`, then English. `readLocaleTag` parses every one with
+  `Intl.Locale`: a value from a browser is never kept as typed.
 - **GitHub names the person, never the browser** (FRU-97). `github-oauth.ts`: `state` bound to the
   browser by a `SameSite=Lax` cookie (a `Strict` one is not sent on the way back from github.com),
   issued by this worker and spent once; PKCE; the account is GitHub's **verified primary** address.

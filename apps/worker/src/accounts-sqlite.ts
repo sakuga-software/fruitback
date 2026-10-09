@@ -76,6 +76,10 @@ const MIGRATIONS: readonly string[] = [
     spent_at INTEGER
   );
   `,
+  // The language a person reads (FRU-119). Absent means nobody chose: the sender's default applies.
+  `
+  ALTER TABLE accounts ADD COLUMN locale TEXT;
+  `,
 ];
 
 const connections = new Map<string, DatabaseSync>();
@@ -142,6 +146,7 @@ function accountOf(row: Record<string, unknown> | undefined): Account | undefine
     id: row.id,
     email: row.email,
     ...(typeof row.name === 'string' && row.name !== '' ? { name: row.name } : {}),
+    ...(typeof row.locale === 'string' && row.locale !== '' ? { locale: row.locale } : {}),
   };
 }
 
@@ -167,7 +172,7 @@ function siteOf(row: Record<string, unknown>): Site | undefined {
 
 export function createSqliteAccountStore(path: string): AccountStore {
   return {
-    async signIn({ provider, subject, email, name }) {
+    async signIn({ provider, subject, email, name, locale }) {
       const address = normalizeEmail(email);
       if (address === undefined) throw new StoreError('A sign-in needs a valid address');
 
@@ -178,26 +183,38 @@ export function createSqliteAccountStore(path: string): AccountStore {
       try {
         const known = database
           .prepare(
-            'SELECT a.id, a.email, a.name FROM logins l JOIN accounts a ON a.id = l.account_id WHERE l.provider = ? AND l.subject = ?',
+            'SELECT a.id, a.email, a.name, a.locale FROM logins l JOIN accounts a ON a.id = l.account_id WHERE l.provider = ? AND l.subject = ?',
           )
           .get(provider, subject) as Record<string, unknown> | undefined;
         let account = accountOf(known);
 
         // The same proven address from another provider is the same person: join, do not duplicate.
         account ??= accountOf(
-          database.prepare('SELECT id, email, name FROM accounts WHERE email = ?').get(address) as
+          database.prepare('SELECT id, email, name, locale FROM accounts WHERE email = ?').get(address) as
             | Record<string, unknown>
             | undefined,
         );
 
         if (account === undefined) {
-          account = { id: newId('acc'), email: address, ...(name === undefined || name === '' ? {} : { name }) };
+          account = {
+            id: newId('acc'),
+            email: address,
+            ...(name === undefined || name === '' ? {} : { name }),
+            ...(locale === undefined ? {} : { locale }),
+          };
           database
-            .prepare('INSERT INTO accounts (id, email, name, created_at) VALUES (?, ?, ?, ?)')
-            .run(account.id, account.email, account.name ?? null, now);
-        } else if (account.name === undefined && name !== undefined && name !== '') {
-          database.prepare('UPDATE accounts SET name = ? WHERE id = ?').run(name, account.id);
-          account = { ...account, name };
+            .prepare('INSERT INTO accounts (id, email, name, locale, created_at) VALUES (?, ?, ?, ?, ?)')
+            .run(account.id, account.email, account.name ?? null, account.locale ?? null, now);
+        } else {
+          if (account.name === undefined && name !== undefined && name !== '') {
+            database.prepare('UPDATE accounts SET name = ? WHERE id = ?').run(name, account.id);
+            account = { ...account, name };
+          }
+          // Only when nobody chose: a sign-in from a borrowed browser must not change the language.
+          if (account.locale === undefined && locale !== undefined) {
+            database.prepare('UPDATE accounts SET locale = ? WHERE id = ?').run(locale, account.id);
+            account = { ...account, locale };
+          }
         }
 
         database
@@ -212,9 +229,25 @@ export function createSqliteAccountStore(path: string): AccountStore {
       }
     },
 
+    async setLocale(account, locale) {
+      connect(path)
+        .prepare('UPDATE accounts SET locale = ? WHERE id = ?')
+        .run(locale ?? null, account);
+    },
+
+    async localeOf(email) {
+      const address = normalizeEmail(email);
+      if (address === undefined) return undefined;
+      const row = connect(path).prepare('SELECT locale FROM accounts WHERE email = ?').get(address) as
+        | { locale: unknown }
+        | undefined;
+
+      return typeof row?.locale === 'string' && row.locale !== '' ? row.locale : undefined;
+    },
+
     async account(id) {
       return accountOf(
-        connect(path).prepare('SELECT id, email, name FROM accounts WHERE id = ?').get(id) as
+        connect(path).prepare('SELECT id, email, name, locale FROM accounts WHERE id = ?').get(id) as
           | Record<string, unknown>
           | undefined,
       );
