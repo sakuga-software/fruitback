@@ -668,6 +668,27 @@ describe('the request of a delivery, on a socket (FRU-122)', () => {
     assert.equal(seen.length, 0, 'no byte reached the server');
   });
 
+  it('refuses, as the production sender, an internal address written in the URL: no lookup sees it', async () => {
+    const { seen, url } = await local(() => ({ status: 200 }));
+    let looked = 0;
+    const lookup = ((...call: unknown[]) => {
+      looked += 1;
+      (call.at(-1) as (error: null, addresses: unknown) => void)(null, [{ address: '93.184.216.34', family: 4 }]);
+    }) as unknown as NonNullable<Parameters<typeof createSender>[0]>['lookup'];
+    const send = createSender({ request: httpRequest as unknown as typeof httpsRequest, lookup });
+    const port = new URL(url).port;
+
+    for (const literal of [
+      `http://127.0.0.1:${port}/in`,
+      `http://[::1]:${port}/in`,
+      `http://[::ffff:127.0.0.1]:${port}/in`,
+    ]) {
+      await assert.rejects(send(literal, {}, '{}'), /resolves to a network the worker does not call/, literal);
+    }
+    assert.equal(seen.length, 0);
+    assert.equal(looked, 0, 'an address is not resolved, so only the check on the URL stands here');
+  });
+
   it('refuses a name when one of its addresses is internal, whatever the others are', async () => {
     const { seen, url } = await local(() => ({ status: 200 }));
     const lookup = ((_host: string, _options: unknown, done: (error: null, addresses: unknown) => void) =>

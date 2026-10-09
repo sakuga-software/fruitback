@@ -1,6 +1,6 @@
 import { lookup as dnsLookup } from 'node:dns';
 import { request as httpsRequest } from 'node:https';
-import type { LookupFunction } from 'node:net';
+import { type LookupFunction, isIP } from 'node:net';
 import { type Send, isPublicAddress } from './rest-connector.ts';
 
 /**
@@ -51,6 +51,16 @@ export function createSender({
 }: SenderSeams = {}): Send {
   return (url, headers, body) =>
     new Promise((resolve, reject) => {
+      // WARNING: a socket does not resolve an IP address, so the lookup below never sees one. An
+      // address written in the URL is checked here. The console refuses one when a connector is
+      // made; this is for a row that did not come through the console.
+      const literal = new URL(url).hostname.replace(/^\[|\]$/g, '');
+      if (isIP(literal) !== 0 && !allows(literal)) {
+        reject(new Error('The address resolves to a network the worker does not call'));
+
+        return;
+      }
+
       const sent = request(
         url,
         {
