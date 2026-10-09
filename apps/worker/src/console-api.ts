@@ -100,7 +100,9 @@ const ID = /^[A-Za-z0-9_-]{1,80}$/;
 function destinationOf(body: Record<string, unknown> | undefined, kind: ConnectorKind): Destination | undefined {
   const { connector, teamId, projectId } = body ?? {};
   if (typeof connector !== 'string' || !ID.test(connector)) return undefined;
-  if (kind === 'rest') return teamId === undefined && projectId === undefined ? { connector } : undefined;
+  // `null` is « none », as the route takes it for the project of a tracker.
+  if (kind === 'rest')
+    return (teamId ?? undefined) === undefined && (projectId ?? undefined) === undefined ? { connector } : undefined;
   if (typeof teamId !== 'string' || !ID.test(teamId)) return undefined;
   if (projectId !== undefined && projectId !== null && (typeof projectId !== 'string' || !ID.test(projectId))) {
     return undefined;

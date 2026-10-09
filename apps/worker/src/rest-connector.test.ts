@@ -608,6 +608,8 @@ describe('who may connect an address and read its deliveries (FRU-122)', () => {
       call(env, 'POST', `${world.base}/sites/${world.site.id}/destination`, { token: world.owner.token, body });
 
     assert.equal((await place({ connector: connector.id, teamId: 'team_design' })).status, 400);
+    assert.equal((await place({ connector: connector.id, teamId: null, projectId: null })).status, 200, 'null is none');
+    assert.equal((await place({ connector: connector.id, projectId: 'proj_site' })).status, 400);
     assert.equal((await place({ connector: 'con_unknown' })).status, 404);
     assert.equal(
       (await call(env, 'GET', `${world.base}/connectors/${connector.id}/teams`, { token: world.owner.token })).status,
