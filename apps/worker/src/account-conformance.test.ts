@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { accountCases } from './account-conformance.fixture.ts';
 import type { AccountStore } from './accounts.ts';
+import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { closeAccountConnections, createSqliteAccountStore } from './accounts-sqlite.ts';
 import type { ClientMap } from './clients.ts';
 import {
@@ -15,6 +16,7 @@ import {
   onFile,
   turn,
 } from './conformance.fixture.ts';
+import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase, onDatabase } from './postgres.fixture.ts';
 
 /**
  * Each `AccountStore` against the conformance suite (FRU-140). A new implementation adds a subject
@@ -26,7 +28,23 @@ const SQLITE = onFile<AccountStore>('the SQLite account store', 'createSqliteAcc
   close: closeAccountConnections,
 }));
 
-const SUBJECTS: Subject<AccountStore>[] = [SQLITE];
+const SUBJECTS: Subject<AccountStore>[] = [
+  SQLITE,
+  onDatabase(
+    'the PostgreSQL account store, on PGlite',
+    'createPostgresAccountStore',
+    createPgliteDatabase,
+    createPostgresAccountStore,
+  ),
+  // The same store on a server, where the calls of a case run on several connections.
+  onDatabase(
+    'the PostgreSQL account store, on a real server',
+    'createPostgresAccountStore',
+    createRealDatabase,
+    createPostgresAccountStore,
+    NO_REAL_POSTGRES,
+  ),
+];
 
 for (const subject of SUBJECTS) describeConformance('AccountStore', accountCases, subject);
 
@@ -351,6 +369,6 @@ describeControls('AccountStore', accountCases, VIOLATIONS, SQLITE, async (change
 
 describe('the AccountStore conformance suite', () => {
   it('runs for every implementation the worker exports', () => {
-    assert.deepEqual(SUBJECTS.map((subject) => subject.factory).sort(), factoriesOf('AccountStore'));
+    assert.deepEqual([...new Set(SUBJECTS.map((subject) => subject.factory))].sort(), factoriesOf('AccountStore'));
   });
 });

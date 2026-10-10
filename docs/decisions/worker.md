@@ -582,6 +582,99 @@ alone when its predecessor is retired` checked the answer of the rotation and no
 - **Not covered, on purpose**: the 100 rows that `deliveries` answers at most, and the walk of the
   `SITE_COLUMNS` of a row that somebody edited by hand.
 
+## The accounts in PostgreSQL (FRU-141)
+
+The first slice of FRU-139 that touches production code. **Nothing changes for a worker that does not
+set `FRUITBACK_DATABASE_URL`**: SQLite stays the default, and the sessions stay in their file.
+
+### The rules, in short
+
+- **`FRUITBACK_DATABASE_URL` puts the accounts in PostgreSQL, in place of `FRUITBACK_ACCOUNTS_PATH`.**
+  Both together are refused at boot: the accounts have one source, as the clients have. Ask
+  `hasAccounts(config)` and never one of the two fields: a route that reads `accountsPath` is off
+  for a worker on a database.
+- **`postgres.ts` is the one file that names the driver**, as types, and it loads `pg` at the first
+  query. A lint rule holds the import, and test:`loads no file of the driver for a worker without
+the variable` holds the rest in a process of its own. `/health` opens no database.
+- **`Database` is the seam**: `query`, `transaction` and `close`. `createPgDatabase` is the one
+  implementation that ships. The tests have a second one on PGlite, in `postgres.fixture.ts`.
+- **A `BIGINT` is answered as a number.** Every instant is a `BIGINT` of milliseconds that the worker
+  gives, as in the SQLite files, and the driver answers a string for that type by default. Both
+  adapters convert it, so `account-rows.ts` parses a row of either database.
+- **No message holds the address of the database.** It carries the password. A value that is refused
+  is named by its variable, and `withoutAddress` takes the address and the password out of what the
+  driver says. A database that does not answer is `StoreError`, so `502`, and the reason is in the log.
+- **One list of migrations for the whole database**, `MIGRATIONS` in `postgres-migrations.ts`:
+  append, never edit. `migrate` gives each one its own transaction and an advisory lock, and writes
+  its number and its name in `schema_migrations`. A build that edited an entry is refused by the
+  name. A database with more migrations than the build is left alone: that is a roll back.
+- **PGlite is the PostgreSQL of `node --test`, and it cannot show a race.** It has one connection, so
+  a transaction holds every other call back. The CI job `postgres` runs the same cases on a server,
+  and `test:postgres` fails when the address of that server is missing: a suite that is skipped
+  proves nothing.
+- **The sites are still read on every request, on purpose**: see the numbers below before you add a
+  cache.
+
+### The reasons, and the measurements
+
+- **What SQLite did without saying it.** One connection that does one thing at a time made a read
+  followed by a write safe. `accounts-postgres.ts` writes each of those on purpose, and its header
+  lists them: `ON CONFLICT … DO NOTHING` for `INSERT OR IGNORE`, an insert that names its conflict
+  for a new account, one `INSERT … ON CONFLICT … DO UPDATE` for `addSite`, `IS DISTINCT FROM` for
+  `IS NOT ?` with a null, one `UPDATE … RETURNING` for a link.
+- **The race that only a server shows is planted.** An insert of an account that reads first and
+  names no conflict is correct one call after the other. It passes the 32 cases on PGlite, and on a
+  server test:`fails on a real server when the insert names no conflict` gets `23505`.
+  test:`passes on PGlite with an insert that names no conflict` is the other half, kept so the sentence
+  about PGlite stays measured.
+- **Two processes on an empty database.** test:`applies each migration once when two processes start
+together` starts two Node processes, and the first migration sleeps so the second arrives inside
+  it. Without the advisory lock the test fails with a duplicate key in the catalogue of PostgreSQL
+  (measured, by removing the line).
+- **`CREATE TABLE IF NOT EXISTS schema_migrations` is inside the lock too.** Two sessions that create
+  one table at the same moment both pass the « if not exists », and one fails.
+- **The driver is CommonJS in an ESM bundle.** esbuild keeps its `require('events')` as a dynamic
+  require, which an ESM file does not have. Measured on the bundle against a server: without the
+  `createRequire` banner of the build script, the first read answers `502`, and `/health` answers
+  `200`. With it the worker applies its migration and answers. The `docker image` job boots the image
+  on a database for that reason, and probes a read, not `/health`.
+- **The bundle went from 731,224 to 940,220 bytes** with `pg` 8.23.1 and its six packages. PGlite is
+  not in it: no shipped file may import it.
+- **An outage of the accounts is in the log now.** `handleRequest` answered `502` and wrote nothing,
+  for SQLite too. That is how the missing banner looked like a database that was down.
+
+### The sites are read on every request, and that was measured
+
+`withSites` reads every site on every request, `/feedback` included. On a file that is free. On a
+database it is one exchange with the server. Measured on 2026-10-10, on one machine, PostgreSQL 17
+in a container reached through a published port, 500 calls after 50 to warm up, median and p95:
+
+| Sites | `clientMap`, SQLite | `clientMap`, PostgreSQL | `GET /feedback`, SQLite | `GET /feedback`, PostgreSQL |
+| ----- | ------------------- | ----------------------- | ----------------------- | --------------------------- |
+| 1     | 0.007 ms, 0.010 ms  | 0.188 ms, 0.419 ms      | 0.039 ms, 0.158 ms      | 0.182 ms, 0.625 ms          |
+| 100   | 0.081 ms, 0.086 ms  | 0.474 ms, 0.746 ms      | 0.115 ms, 0.135 ms      | 1.079 ms, 5.395 ms          |
+| 1000  | 0.801 ms, 8.569 ms  | 0.709 ms, 0.950 ms      | 0.922 ms, 1.526 ms      | 1.190 ms, 2.379 ms          |
+
+The read of a pin is on the memory store with a warm cache: the fastest read there is, so the
+database is the largest share it can be.
+
+**Decision: no cache in this slice.** The ticket offered a short cache, or a version in the `Kv`.
+Neither was taken, for three reasons:
+
+- The cost is about one millisecond for 1,000 sites, on the same host. A read whose cache is cold
+  calls a tracker, which is hundreds of times that.
+- A cache changes what is observable. Today a site is served the moment it is added and refused the
+  moment it is removed, and a test holds it on both databases. A short cache serves a removed site
+  until it ends. A version in the `Kv` is exact only while the `Kv` is in the process: on two
+  replicas it is a short cache again, and two replicas are what PostgreSQL is for.
+- What grows with the number of sites is not the exchange, it is reading the whole table to route one
+  client. The answer to that is to read one site by its id, and the origins for CORS apart. That is
+  a change to `withSites`, not a cache.
+
+**Not measured: a database on another host.** There the cost is the round trip of that network on
+every request, and this decision must be measured again before such a deployment. The same holds
+above a few thousand sites.
+
 ## The markdown codec, and the file that outlived its name
 
 ### The rules, in short
@@ -768,8 +861,9 @@ alone when its predecessor is retired` checked the answer of the rotation and no
   nothing about the workspace. `verifyForClient` compares `ws` with the client's `workspace` after
   the signature, on the read and on the write. `pair --workspace` names it, and it travels through
   every rotation.
-- **With `FRUITBACK_ACCOUNTS_PATH`, the sites are the clients** (FRU-96). `withSites` in `app.ts` reads
-  them from the accounts file on every request and lays them over the configuration as its client map
+- **With `FRUITBACK_ACCOUNTS_PATH`, or `FRUITBACK_DATABASE_URL` (FRU-141), the sites are the clients**
+  (FRU-96). `withSites` in `app.ts` reads
+  them from the accounts on every request and lays them over the configuration as its client map
   and its allowed origins, so routing, CORS and the `ws` check run unchanged. **An empty map stays
   empty**: `undefined` would make it a single-client worker that answers every page. `accounts.ts`
   holds the roles, and `can(role, action)` is the one table of who does what. The boot log says so

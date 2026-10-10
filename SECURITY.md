@@ -446,6 +446,28 @@ client**: an empty map is not the absence of a map, which would answer every pag
 file holds addresses, names and the id each provider gives a person, no password, and no token of a provider
 that signs a person in. Since FRU-121 it also holds the key of each connector, encrypted: see below. `FRUITBACK_CLIENTS` is refused beside it, so one map has one source.
 
+**With `FRUITBACK_DATABASE_URL` the same accounts are in a PostgreSQL database** (FRU-141), in place
+of that file, and the worker refuses to start with both. The database holds what the file holds, in
+tables of the same names, and nothing more: addresses, names, the id each provider gives a person,
+the roles, the sites, the digest of each sign-in link, the key of each connector encrypted with
+`FRUITBACK_SECRETS_KEY`, and the notes that wait for an address that receives them. It holds no
+session: those stay in `FRUITBACK_SESSION_PATH`. Three things change with a database on a network,
+and each has its condition:
+
+- **The address holds the password of the database.** No diagnostic of the worker quotes it: a value
+  that is refused is named by its variable, and the message of a database that does not answer has
+  the address and the password taken out. This holds for what the worker writes. A log of the
+  platform that prints the environment of the container prints it.
+- **The worker does not encrypt the connection by itself.** It is encrypted when the address asks for
+  it (`?sslmode=require`), and what the address asks is the choice of the operator. On the private
+  network of one host, between two containers, it is in the clear.
+- **Whoever can connect to the database reads every account, and can write a site or a role.** The
+  file was reachable by whoever reads the volume. The database is reachable by whoever has its
+  address and its password, from wherever its port is open. Do not publish that port.
+
+A copy of the database is a copy of the file: no working login and no working key of a tracker,
+while `FRUITBACK_SECRETS_KEY` is not with it.
+
 **`GET /session/sites` lists the sites of the workspace a session belongs to** (FRU-101), to the
 holder of its access token, while that person is still a member: the extension turns such a site on in
 one click. It answers an origin, an id and a visibility per site, and the language of the account
