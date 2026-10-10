@@ -14,12 +14,6 @@ which part of the widget.
 
 ### The rules, in short
 
-### The reasons, and the history
-
-Fruitback is a visual feedback widget: a client clicks an element on their staging site, writes a
-note, and it becomes an issue carrying the CSS selector, the React component and the source file.
-Coming back to the page, they see their pins again, coloured by that issue's status.
-
 **It is three products sharing one core, and they differ on what the site ships** (FRU-46):
 **public**, where the site embeds the widget and every visitor can leave a note; **private**, where
 the site embeds nothing and the extension mounts the widget for one reviewer; **team**, where the
@@ -51,6 +45,8 @@ Docker volume each night, and `snapshot.sh` writes a copy of each database with 
 just before, because a file SQLite holds open is not a copy to trust. The two secrets of the worker
 are in no backup.
 
+### The reasons, and the history
+
 Fruitback is a visual feedback widget: a client clicks an element on their staging site, writes a
 note, and it becomes an issue carrying the CSS selector, the React component and the source file.
 Coming back to the page, they see their pins again, coloured by that issue's status.
@@ -75,11 +71,6 @@ behind Traefik can do.
 
 ### The rules, in short
 
-### The reasons, and the history
-
-- `packages/shared` (`@fruitback/shared`) — the seed contract. Browser- and server-safe: no Node API,
-  no DOM API beyond `URL`. Also exports `@fruitback/shared/seed.fixture`, so every package tests
-  against the same seed instead of keeping a drifting copy.
 - `packages/widget` (`@fruitback/widget`) — the browser half, and the whole of it: capture
   (`captureSeed`), the overlay (`resolveAnchor` + `createOverlay`), the Shadow DOM host
   (`createCaptureHost`), the note popover (`createComposer`) and the settings panel.
@@ -87,14 +78,13 @@ behind Traefik can do.
   nothing.
 - `packages/element` (`@fruitback/element`) and `packages/react` (`@fruitback/react`) — the widget as
   a custom element and as a React component. Each wraps `init` and `destroy`.
-- `apps/worker` (`@fruitback/worker`) — the Node service. `POST /feedback` plants a seed,
-  `GET /feedback?url=…` returns the seeds of that page. Still called "worker" because that is what
-  everyone calls it, though it is no longer an edge worker.
 - `apps/extension` — the browser extension (FRU-41): the widget on a site that embeds nothing.
 - `apps/playground` (`@fruitback/playground`) — the dev loop: a deliberately hostile fake client site
   with the widget mounted on it, built as a React Router 8 + Vite app with HeroUI because the
   widget's clients are React apps. Not shipped. It is deployed once, as the public demonstration
   (FRU-79), and nowhere else.
+
+### The reasons, and the history
 
 - `packages/shared` (`@fruitback/shared`) — the seed contract. Browser- and server-safe: no Node API,
   no DOM API beyond `URL`. Also exports `@fruitback/shared/seed.fixture`, so every package tests

@@ -137,6 +137,19 @@ describe('CLAUDE.md is what no machine holds, and an index of the rest', () => {
     }
   });
 
+  /**
+   * A page opens a section with its rules, then gives the reasons. A rules heading with nothing under
+   * it sends a reader past the rules: it happened to three sections when the text was moved, because
+   * the first moved paragraph began with the first line of the text that was already there.
+   */
+  it('leaves no rules heading with nothing under it', () => {
+    for (const page of decisionPages()) {
+      const empty = [...read(new URL(page, DECISIONS)).matchAll(/^(#{2,6}) The rules, in short\n+(?=#|$(?![\s\S]))/gm)];
+
+      assert.equal(empty.length, 0, `docs/decisions/${page} holds ${empty.length} empty « The rules, in short »`);
+    }
+  });
+
   it('slugs a heading as GitHub does', () => {
     assert.equal(slugOf('The widget'), 'the-widget');
     assert.equal(slugOf('One prefix, and it is `fruitback`'), 'one-prefix-and-it-is-fruitback');
