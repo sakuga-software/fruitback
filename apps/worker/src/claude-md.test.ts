@@ -52,7 +52,9 @@ function relativeLinks(source: string): string[] {
 /**
  * The anchor GitHub gives a heading: lower case, punctuation removed, each space a hyphen.
  *
- * Inline markup is taken off first, because GitHub slugs the rendered text.
+ * Inline markup is taken off first, because GitHub slugs the rendered text. Measured on 2026-10-10
+ * against the anchors GitHub renders for `CLAUDE.md` and every decisions page: 184 headings, and
+ * every one the same. A heading that holds an underscore inside a code span was not among them.
  */
 export function slugOf(heading: string): string {
   return heading
@@ -63,8 +65,23 @@ export function slugOf(heading: string): string {
     .replace(/\s/g, '-');
 }
 
-function anchorsOf(source: string): Set<string> {
-  return new Set([...withoutFences(source).matchAll(/^#{1,6} +(.+)$/gm)].map((match) => slugOf(match[1] as string)));
+/**
+ * The anchors of a document. A heading that repeats takes a number, as on GitHub: the second
+ * `The rules, in short` of a page is `the-rules-in-short-1`.
+ */
+export function anchorsOf(source: string): Set<string> {
+  const seen = new Map<string, number>();
+  const anchors = new Set<string>();
+
+  for (const match of withoutFences(source).matchAll(/^#{1,6} +(.+)$/gm)) {
+    const slug = slugOf(match[1] as string);
+    const count = seen.get(slug) ?? 0;
+
+    seen.set(slug, count + 1);
+    anchors.add(count === 0 ? slug : `${slug}-${count}`);
+  }
+
+  return anchors;
 }
 
 /** What is wrong with each relative link of one document: a file that is not there, or a heading. */
@@ -124,5 +141,15 @@ describe('CLAUDE.md is what no machine holds, and an index of the rest', () => {
     assert.equal(slugOf('The widget'), 'the-widget');
     assert.equal(slugOf('One prefix, and it is `fruitback`'), 'one-prefix-and-it-is-fruitback');
     assert.equal(slugOf('The feedback as text (FRU-109)'), 'the-feedback-as-text-fru-109');
+    assert.equal(
+      slugOf('The session, and the token that never goes down (FRU-60)'),
+      'the-session-and-the-token-that-never-goes-down-fru-60',
+    );
+  });
+
+  it('numbers a heading that repeats, as GitHub does', () => {
+    const anchors = anchorsOf('# The widget\n\n## The widget\n\n### The rules, in short\n\n### The rules, in short\n');
+
+    assert.deepEqual([...anchors], ['the-widget', 'the-widget-1', 'the-rules-in-short', 'the-rules-in-short-1']);
   });
 });
