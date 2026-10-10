@@ -85,6 +85,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Google sign-in is not set up on this Fruitback': 'La connexion Google n’est pas configurée sur ce Fruitback',
   'GitHub sign-in is not set up on this Fruitback': 'La connexion GitHub n’est pas configurée sur ce Fruitback',
   'Not set up': 'Non configuré',
+  'Could not check': 'Vérification impossible',
   'Where you are signed in': 'Où vous êtes connecté',
   'Console · this browser': 'Console · ce navigateur',
   'Active now': 'Actif maintenant',

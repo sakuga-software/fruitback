@@ -3,8 +3,21 @@ import { useNavigate } from 'react-router';
 import { type Providers, call, saveLanguage, signInProviders, signOut } from '../api';
 import { Button, Card, Choice, Problem } from '../ui';
 import { PageHead, useWorkspace } from './workspace';
-import { LOCALES, chooseLanguage, locale, t } from '../i18n';
+import { LOCALES, chooseLanguage, locale, msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
+
+/** `asking`: the worker has not answered yet. `silent`: it did not say, and nothing is in flight. */
+type Asked = Providers | 'asking' | 'silent';
+
+const ON = msg('On');
+
+/** What the page says of one provider. WARNING: « Not set up » only when the worker said so. */
+function providerWord(asked: Asked, provider: keyof Providers): string {
+  if (asked === 'asking') return msg('Checking…');
+  if (asked === 'silent') return msg('Could not check');
+
+  return asked[provider] ? ON : msg('Not set up');
+}
 
 /** My account (design/boards/5-workspace.png): the profile, how I sign in, and the workspace's end. */
 export default function Account() {
@@ -12,13 +25,13 @@ export default function Account() {
   const { me, workspace } = useWorkspace();
   const navigate = useNavigate();
   const [confirming, setConfirming] = useState(false);
-  // What the worker signs people in with (FRU-135). `undefined` until it says: a provider is then
-  // neither on nor "not set up", because a slow or absent answer proves neither.
-  const [providers, setProviders] = useState<Providers | undefined>();
+  // What the worker signs people in with (FRU-135). A provider is on or "not set up" only when the
+  // worker said so: a slow answer and no answer prove neither, and each has its own word.
+  const [providers, setProviders] = useState<Asked>('asking');
   useEffect(() => {
     let asked = true;
     void signInProviders().then((has) => {
-      if (asked) setProviders(has);
+      if (asked) setProviders(has ?? 'silent');
     });
 
     return () => {
@@ -52,15 +65,12 @@ export default function Account() {
               <dd className="font-semibold text-done">{t('On')}</dd>
             </div>
             {(['GitHub', 'Google'] as const).map((provider) => {
-              const on = providers?.[provider === 'GitHub' ? 'github' : 'google'];
-              const said = on === true ? t('On') : t('Not set up');
+              const word = providerWord(providers, provider === 'GitHub' ? 'github' : 'google');
 
               return (
                 <div key={provider} className="flex justify-between">
                   <dt>{provider}</dt>
-                  <dd className={on === true ? 'font-semibold text-done' : 'text-muted'}>
-                    {on === undefined ? t('Checking…') : said}
-                  </dd>
+                  <dd className={word === ON ? 'font-semibold text-done' : 'text-muted'}>{t(word)}</dd>
                 </div>
               );
             })}
