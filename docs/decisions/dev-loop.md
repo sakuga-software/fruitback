@@ -59,14 +59,10 @@ builds `dist` first, because `package.spec.ts` loads the real file.
 
 ### The reasons, and the history
 
-`pnpm e2e` (Playwright, `e2e/`) starts both servers itself and runs its specs against Chromium.
-
 - It exists for the two things happy-dom cannot vouch for: a **real selector engine** and **real
   layout**. Everything else stays in `node --test`, which is where it is faster and clearer.
 - Specs share one worker process, so each captures on **its own page URL** (`/?case=…`) — the seed's
   page identity is what keeps them apart. There is no reset between specs.
-- Synchronise on the harness's status line, not on a pin count: the old pins are still in the DOM
-  while the new set is being fetched, so counting races.
 - **A cold Vite cache is the difference between your machine and CI.** Vite binds its port — so it
   answers Playwright's readiness probe — before it has optimized dependencies, and it discovers most
   of them only when a browser asks for the module graph. The first navigation then triggers a

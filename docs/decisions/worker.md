@@ -32,8 +32,6 @@ connector's environment, and what a second connector with no markdown body actua
 
 ### The reasons, and the history
 
-- It exists for exactly one reason: the Linear API key cannot ship in client-side JS. Resist putting
-  logic here that belongs in the widget or in Linear.
 - **`app.ts` is transport-agnostic** — a `handleRequest(request, env, context)` over web
   `Request`/`Response`. `server.ts` adapts `node:http` onto it and `main.ts` starts it. Keep new
   behaviour in `app.ts` so it stays testable without opening a socket.
@@ -553,8 +551,6 @@ any store` asks it of every spec rather than of Linear.
   every language — the test runs over several. A value that is not a locale tag is refused at boot; a
   valid tag this build has no words for degrades to English. The note and the name the reporter typed
   are never translated.
-- `packages/shared/src/linear.ts` became `issue.ts`; `apps/worker/src/linear.ts` keeps its name,
-  because over there a team really is Linear's.
 
 ### The reasons, and the history
 
@@ -572,7 +568,7 @@ any store` asks it of every spec rather than of Linear.
   ticket asked for and what makes the move provable: 44 shared tests before, 44 after, and
   `parseSeedFromDescription(buildIssueDescription(seed)) === seed` is still the same assertion on the
   same fixture.
-- **`linear.ts` became `issue.ts`, because the name had outlived what it described.** FRU-23 took
+- **`packages/shared/src/linear.ts` became `issue.ts`, because the name had outlived what it described.** FRU-23 took
   Linear's workflow states out of it, FRU-24 took the words a human reads, and this ticket took the
   codec. What was left — a label, a ripeness, and the shape of what a read answers — names no
   provider at all. `apps/worker/src/linear.ts` keeps its name: over there, a team really is Linear's.
@@ -782,6 +778,34 @@ any store` asks it of every spec rather than of Linear.
   browser by a `SameSite=Lax` cookie (a `Strict` one is not sent on the way back from github.com),
   issued by this worker and spent once; PKCE; the account is GitHub's **verified primary** address.
   `FRUITBACK_PUBLIC_URL` is the callback's base: behind the proxy the worker sees only `http://`.
+- **The store of a connector is built for the request, and nothing is kept between two** (FRU-102).
+  A map of the stores existed, under a `WeakMap` by the object of the accounts. A request makes a new
+  object of the accounts, so the map never found anything, while its comment said that a key was
+  opened once. A cache that worked would hold the key of each tracker in the clear for the life of
+  the process. A connector whose store costs something to build (GitHub mints a token) must bring
+  its own cache, with a way out. `connector-stores.test.ts` holds two workspaces with two trackers,
+  and it fails when one store serves the whole process.
+- **A connector that its tracker refuses says « Needs attention »** (FRU-102). `connector-health.ts`:
+  `watchedStore` notes on the connector what each call through it answered, and the console draws the
+  state from that field, with what to do. **Only a refusal is kept**: a key that is refused, a key
+  that may not do this, a connection that Linear ended. A tracker that is down answers `502` too, and
+  nobody of the workspace can fix it. The first call that the tracker answers clears the state.
+  **Keeping the state never changes the answer**: the note exists when it runs, and an error there
+  would have the widget send the note again.
+- **A delivery that comes back to a worker is refused by its header, not by its host** (FRU-133).
+  `handleRequest` answers `508` to every request that carries `X-Fruitback-Delivery`, before the
+  readiness probe: `/health` answered 200 to a delivery, and the sender counted the note as arrived.
+  A list of the worker's own hosts was not taken: another name on the same IP passes it. `deliverDue`
+  gives up on a `508` at once, with `LOOP_ERROR` for the console. **That answer is above the rate
+  limit, and not metered, on purpose**: it reads no configuration, no `Kv` and no provider, and below
+  the limit a loop would get `429`, which the sender tries again seven times.
+- **Google signs a person in like GitHub, and the steps are written once** (FRU-135).
+  `oauth-sign-in.ts` holds the start, the callback, the cookie and the `state`; a provider is its
+  addresses, its scope and `identify`. The provider is in the key of the `state`, so a state of one
+  does not finish the flow of the other. Google's address is used only when `email_verified` is the
+  boolean `true`. **The console asks `GET /auth/providers` before it draws a button**: a button for a
+  provider the worker does not have leads to a `404`. The build argument of FRU-97 still turns
+  GitHub on at once.
 
 ### The reasons, and the history
 

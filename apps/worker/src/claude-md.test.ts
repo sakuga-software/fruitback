@@ -23,8 +23,8 @@ import { describe, it } from 'node:test';
 const ROOT = new URL('../../../', import.meta.url);
 const DECISIONS = new URL('docs/decisions/', ROOT);
 
-const MAX_LINES = 190;
-const MAX_BYTES = 12_500;
+const MAX_LINES = 90;
+const MAX_BYTES = 6_200;
 
 function read(url: URL): string {
   return readFileSync(url, 'utf8');

@@ -83,6 +83,11 @@ it changes who is shown the feedback and never who may fetch it.
 - **A site that embeds the widget _and_ a reviewer who has the extension get two docks.** Known,
   harmless, and not solved here. It is the private mode's defect only: in team mode there is one
   widget and it is the site's.
+- **A rule that is switched off gives its access back** (FRU-115), with `permissions.remove`, from the
+  background after it stores the change. The access to a worker goes with its last site that is on,
+  and not while a session needs it. Only the accesses of the rule that changed are candidates: a sweep
+  of what the browser holds would take back a grant that a prompt has just given (FRU-118). Not
+  verified in a browser. See `docs/decisions/extension.md`.
 
 ### The reasons, and the history
 
@@ -637,8 +642,6 @@ Three things make it hold, and each is a way it could have been got wrong:
 - **The epoch is minted before the clear, not after.** The other order leaves a gap where the keys
   are gone and the run is not yet over, and a refresh landing in it writes a session that agrees with
   what it read.
-- **A pairing mints one too.** A logout leaves an epoch on an endpoint holding nothing, so an
-  endpoint paired again after a logout would read as signed out for ever.
 
 Absent on both sides compares equal, which is the rule `matches` already follows: a session stored
 before this marker existed is kept rather than signing the reviewer out on an update.

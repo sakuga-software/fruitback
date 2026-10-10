@@ -5,8 +5,8 @@ that caught them.
 
 **[CLAUDE.md](../../CLAUDE.md) is loaded into every session; this directory is not.** That is the
 split. `CLAUDE.md` holds what an agent has to know before it writes a line **and that no machine
-catches**: the project in a few lines, the commands, the map, the ports, and the traps that bite in
-silence, one line each. Everything here is a lookup: read the page when you are about to change the
+catches**: what the project is, the commands, the ports, the index of these pages, the commit
+convention, and the few traps that apply everywhere and bite in silence. Everything here is a lookup: read the page when you are about to change the
 thing it describes, or when a rule looks arbitrary and you are about to reason your way past it.
 
 Each section of a page opens with **the rules, in short** — the text `CLAUDE.md` carried until it
@@ -44,8 +44,9 @@ A rule has three possible homes, and they are tried in this order:
    alone. The rule then needs no line in `CLAUDE.md`.
 2. **A page here**, under _The rules, in short_ of its section, with its reason. That is the home of
    everything an agent needs only when it changes that area.
-3. **`CLAUDE.md`, as one line**, only when the rule breaks in silence, no machine can hold it, and an
-   agent would break it before it knew which page to open.
+3. **`CLAUDE.md`, as one line**, only when the rule applies everywhere, breaks in silence, no machine
+   can hold it, and an agent would break it before it knew which page to open. A rule of one area is
+   never there: the index leads to its page.
 
 A paragraph belongs here when losing it costs an anecdote, and in `CLAUDE.md` when losing it means
 somebody writes broken code that nothing reports (FRU-59). `claude-md.test.ts` holds `CLAUDE.md` to a

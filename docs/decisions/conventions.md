@@ -107,3 +107,9 @@ How this repository is formatted, tested and documented, and which test holds ea
   `FRU`). Reference tickets as `FRU-xxx` in commits. Every `FRU-` number in this repository was an
   `SKG-` number until 2026-10-06, when the tickets left the Sakuga-software team; Linear still
   redirects the old keys, and merged commit messages keep them.
+- **Run the tests with `LC_ALL=en_US.UTF-8` when the shell has another locale.** Four tests of
+  `packages/widget` fail under `fr_FR.UTF-8` and pass under `en_US.UTF-8` and `C` (measured on
+  2026-10-10, on `main` too). CI is not affected.
+- The Linear MCP server is declared in `.mcp.json` at the project scope. If its tools are missing in a
+  session, it needs to be approved and authorized (`/mcp` in an interactive session) — it cannot be
+  authorized from a non-interactive one.
