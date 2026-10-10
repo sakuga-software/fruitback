@@ -17,7 +17,7 @@ import { handleGoogle } from './google-oauth.ts';
 import { SIGN_IN_PROVIDERS } from './oauth-sign-in.ts';
 import { type LinearOAuth, handleLinearOAuth } from './linear-oauth.ts';
 import { type ConnectorStores, createConnectorStores, createRoutedStore } from './connectors.ts';
-import { type Send, deliverDue } from './rest-connector.ts';
+import { DELIVERY_HEADER, LOOP_STATUS, type Send, deliverDue } from './rest-connector.ts';
 import { type Mailer, createTemMailer } from './mail.ts';
 import { createSqliteAccountStore } from './accounts-sqlite.ts';
 import { type WorkerConfig, type WorkerEnv, readAllowedOrigins, readConfig } from './env.ts';
@@ -166,6 +166,16 @@ export type RequestContext = {
 };
 
 export async function handleRequest(request: Request, env: WorkerEnv, context: RequestContext): Promise<Response> {
+  // FRU-133: a delivery of the REST connector that came back to a worker. Before everything, the
+  // readiness probe included: `/health` would answer 200, and the sender would count the note as
+  // arrived.
+  //
+  // WARNING: this answer is not metered, and it must stay above the rate limit. It is the one
+  // exception to « metered before the dispatch » that is not a probe or a refusal of the transport.
+  // It reads no configuration, no `Kv` and no provider, so there is nothing to protect. Below the
+  // limit it would answer `429` to a loop, and a `429` is tried again seven times.
+  if (request.headers.has(DELIVERY_HEADER)) return json(LOOP_STATUS, { error: 'delivery-loop' });
+
   const { pathname } = new URL(request.url);
 
   // Read straight from the env, before validation: a misconfigured service still has to answer with

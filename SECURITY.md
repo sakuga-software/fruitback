@@ -524,9 +524,13 @@ chose it. The notes stay in the worker: this is one more copy, sent out.
   is made, and a name is checked **when the socket resolves it**, at each attempt, so a name that
   changes its answer between a check and the call gains nothing. One internal address among the
   answers of a name refuses the name. A redirect is not followed.
-- **The worker can be given its own public address**, or a name that points at it. Nothing refuses
-  that: the request then arrives like any other from the internet, with no credential of the worker
-  in it, and under the rate limit. It reaches nothing a stranger cannot reach.
+- **A delivery that comes back to a worker is refused** (FRU-133). A workspace can give the public
+  address of the worker itself, or another name that points at it, and no list of hosts can name
+  every such address. So the refusal is on the request and not on the address: each delivery carries
+  `X-Fruitback-Delivery`, and a worker answers `508` to every request that carries it, on every
+  route, before it reads its configuration. The sender gives up on a `508` at once, with no other
+  attempt, and the console says why. A request without the header arrives like any other from the
+  internet, with no credential of the worker in it, and under the rate limit.
 - The request is signed with a secret of the connector: HMAC-SHA256 of a timestamp, a dot and the
   body. The timestamp is signed, so a receiver that refuses an old one refuses a replay. **The
   signature proves the sender, and the body is not encrypted beyond TLS.**

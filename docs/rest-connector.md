@@ -82,6 +82,11 @@ answer in 10 seconds. Fruitback then tries again after 1 minute, 5 minutes, 30 m
 delivery waits for somebody to ask again. Asking starts the seven attempts again. A delivery nobody asks for is removed after
 30 days.
 
+**A `508` stops at once.** Fruitback itself answers `508` to a request that carries
+`X-Fruitback-Delivery`: an address that is a Fruitback worker would send the note back to its sender.
+There is no second attempt, and the delivery waits for somebody to ask again. If your receiver passes
+a request on to a Fruitback worker, do not pass that header on.
+
 **One note can arrive twice.** Your answer can be lost on the way back, and the next attempt then
 sends the note again. `X-Fruitback-Delivery` is the same for both: keep the ids you took, and answer
 `2xx` to one you already have.
