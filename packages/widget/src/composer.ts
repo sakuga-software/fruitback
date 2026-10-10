@@ -1,5 +1,6 @@
 import type { SeedReporter } from '@fruitback/shared';
-import { holdFocus } from './focus.ts';
+import type { Destination } from './destinations.ts';
+import { deepActiveElement, holdFocus } from './focus.ts';
 import { createIcon } from './icons.ts';
 import { type MessageKey, type Translator, createTranslator, languageOf } from './messages.ts';
 
@@ -33,8 +34,11 @@ export type ComposerOptions = {
    * `reporter` is what the visitor optionally typed about themselves (FRU-9). It is a **claim**:
    * the worker stores it as self-declared unless the embedder also sends a signed identity token,
    * and it strips any `verified` flag that arrives from a browser.
+   *
+   * `destination` is the id of the place the line shows (FRU-123). It is absent when the composer
+   * shows no line, which is every composer but the one of a member of a site with several places.
    */
-  onSubmit: (note: string, reporter?: SeedReporter) => Promise<boolean | void>;
+  onSubmit: (note: string, reporter?: SeedReporter, destination?: string) => Promise<boolean | void>;
   onClose?: () => void;
   /**
    * Where the name of the reporter is kept between notes, when the reporter asks for it (FRU-91).
@@ -46,6 +50,12 @@ export type ComposerOptions = {
    * A typed name would be replaced by the identity, and the reporter would not know.
    */
   identified?: boolean;
+  /**
+   * The places this note can go, and where the last choice is kept (FRU-123). If left out, or while
+   * it offers fewer than two places, the composer is the one of FRU-89: it holds no line about where
+   * the note goes.
+   */
+  destinations?: DestinationChoice;
   /** The widget's words (FRU-37). Left out: English, with dates in this document's language. */
   translator?: Translator;
 };
@@ -54,6 +64,20 @@ export type NameMemory = {
   get(): string | undefined;
   /** `undefined` forgets the name. */
   set(name: string | undefined): void;
+};
+
+/**
+ * A seam like `NameMemory`: the composer does not know who offers the places or where the choice is
+ * kept. `offered` is asked again at each change, because a read can change the list under an open
+ * popover.
+ */
+export type DestinationChoice = {
+  /** In the order of the worker: the first place is where a note goes when nobody chooses. */
+  offered(): readonly Destination[];
+  subscribe(listener: () => void): () => void;
+  /** The id of the place chosen last, if any. It is followed only while it is offered. */
+  remembered(): string | undefined;
+  remember(id: string): void;
 };
 
 export type Composer = {
@@ -98,8 +122,12 @@ export function createComposer(options: ComposerOptions): Composer {
   const name = root.querySelector('[data-fruitback-name]') as HTMLInputElement;
   const rememberLabel = root.querySelector('[data-fruitback-remember-label]') as HTMLLabelElement;
   const remember = root.querySelector('[data-fruitback-remember]') as HTMLInputElement;
+  const destination = root.querySelector('[data-fruitback-destination]') as HTMLButtonElement;
+  const placeList = root.querySelector('[data-fruitback-destinations]') as HTMLElement;
+  const gone = root.querySelector('[data-fruitback-destination-gone]') as HTMLElement;
   const memory = options.memory;
   const asksForName = options.identified !== true;
+  const choice = options.destinations;
 
   // Set after parsing and never interpolated into TEMPLATE: a host translation is text, not markup.
   field.placeholder = t.text('composer.placeholder');
@@ -111,6 +139,11 @@ export function createComposer(options: ComposerOptions): Composer {
   rememberLabel.hidden = memory === undefined;
   identify.hidden = !asksForName;
   cancel.textContent = t.text('composer.cancel');
+  placeList.setAttribute('aria-label', t.text('composer.destinations'));
+
+  /** The places as the line was last drawn from them, and the id of the one it shows. */
+  let places: readonly Destination[] = [];
+  let selected: string | undefined;
 
   let state: ComposerState = 'idle';
   let closing = 0;
@@ -139,7 +172,7 @@ export function createComposer(options: ComposerOptions): Composer {
     // Before the send, so a failed send costs neither the name nor the choice to keep it.
     if (asksForName && remember.checked) memory?.set(typedName());
     try {
-      const result = await options.onSubmit(field.value, reporterFromFields());
+      const result = await options.onSubmit(field.value, reporterFromFields(), selected);
       if (result === false) throw new Error('refused');
     } catch {
       // Abandoned mid-flight: say nothing, focus nothing. The note was let go of on purpose.
@@ -166,6 +199,12 @@ export function createComposer(options: ComposerOptions): Composer {
     session += 1;
     field.value = '';
     showRememberedName();
+    // Folded at each open, on the place chosen last. The line says where, and that is enough for
+    // the many notes that go where the one before went.
+    selected = undefined;
+    gone.textContent = '';
+    foldPlaces(true);
+    drawDestinations();
     setState('idle');
     focus.remember();
     root.hidden = false;
@@ -234,6 +273,74 @@ export function createComposer(options: ComposerOptions): Composer {
     identify.setAttribute('aria-expanded', 'true');
   }
 
+  /** What a member reads for a place: the name the worker gave, or its rank when it gave none. */
+  function nameOf(place: Destination, index: number): string {
+    return place.label ?? t.text('composer.destinationUnnamed', { position: index + 1 });
+  }
+
+  function foldPlaces(folded: boolean): void {
+    placeList.hidden = folded;
+    destination.setAttribute('aria-expanded', String(!folded));
+  }
+
+  /**
+   * Draw the line from what is offered now (FRU-123).
+   *
+   * With fewer than two places nothing is drawn, and `selected` is nothing, so the send names no
+   * place. Otherwise the line shows the place chosen in this popover, then the one remembered, then
+   * the first one. A remembered id that is not offered is not followed: the list is the worker's
+   * word about this reader now.
+   */
+  function drawDestinations(): void {
+    const shownBefore = places.findIndex((place) => place.id === selected);
+    const before = places[shownBefore];
+    places = choice?.offered() ?? [];
+    const offered = places.length >= 2 ? places : [];
+
+    if (!offered.some((place) => place.id === selected)) {
+      // The open popover named a place, and the note will not go there. The line changes under the
+      // reporter's eyes or goes away, so words say it: a note in the wrong tracker is found late.
+      // A list that kept only that place still sends there: one place is the default.
+      if (before !== undefined && !root.hidden && !places.some((place) => place.id === before.id)) {
+        gone.textContent = t.text('composer.destinationGone', { destination: nameOf(before, shownBefore) });
+      }
+      const remembered = choice?.remembered();
+      selected = (offered.find((place) => place.id === remembered) ?? offered[0])?.id;
+    }
+
+    const hadFocus = placeList.contains(deepActiveElement(document));
+    destination.hidden = offered.length === 0;
+    if (offered.length === 0) foldPlaces(true);
+    placeList.replaceChildren(
+      ...offered.map((place, index) => {
+        const label = document.createElement('label');
+        label.className = 'fruitback-composer-place';
+        const input = document.createElement('input');
+        input.type = 'radio';
+        input.name = 'fruitback-destination';
+        input.value = place.id;
+        input.checked = place.id === selected;
+        const text = document.createElement('span');
+        // The name comes from a tracker, through the worker. It is text, like every word here.
+        text.textContent = nameOf(place, index);
+        label.append(input, text);
+
+        return label;
+      }),
+    );
+    showSelected();
+    if (hadFocus) checkedPlace()?.focus();
+  }
+
+  function showSelected(): void {
+    const index = places.findIndex((place) => place.id === selected);
+    const place = places[index];
+    destination.textContent =
+      place === undefined ? '' : t.text('composer.destination', { destination: nameOf(place, index) });
+  }
+
+  const checkedPlace = () => placeList.querySelector('input:checked') as HTMLInputElement | null;
+
   function close(): void {
     session += 1;
     root.hidden = true;
@@ -254,6 +361,24 @@ export function createComposer(options: ComposerOptions): Composer {
     if (!remember.checked) memory?.set(undefined);
   });
 
+  destination.addEventListener('click', () => {
+    foldPlaces(!placeList.hidden);
+    if (!placeList.hidden) checkedPlace()?.focus();
+  });
+
+  // Kept at the choice and not at the send, like every preference: a failed send does not lose it.
+  placeList.addEventListener('change', (event) => {
+    const input = event.target as HTMLInputElement;
+    if (!input.checked) return;
+
+    selected = input.value;
+    gone.textContent = '';
+    showSelected();
+    choice?.remember(input.value);
+  });
+
+  const stopFollowingPlaces = choice?.subscribe(drawDestinations);
+
   send.addEventListener('click', () => void submit());
   cancel.addEventListener('click', close);
   field.addEventListener('keydown', (event) => {
@@ -272,6 +397,7 @@ export function createComposer(options: ComposerOptions): Composer {
     destroy() {
       if (closing !== 0) view?.clearTimeout(closing);
       focus.destroy();
+      stopFollowingPlaces?.();
       root.remove();
       style.remove();
     },
@@ -297,6 +423,9 @@ const TEMPLATE = `
       <input data-fruitback-remember type="checkbox" name="fruitback-remember" /><span></span>
     </label>
   </div>
+  <button type="button" data-fruitback-destination class="fruitback-composer-identify" aria-expanded="false" hidden></button>
+  <div data-fruitback-destinations class="fruitback-composer-places" role="radiogroup" hidden></div>
+  <div data-fruitback-destination-gone class="fruitback-composer-notice" role="status" aria-live="polite"></div>
   <div class="fruitback-composer-foot">
     <span data-fruitback-status class="fruitback-composer-status" role="status" aria-live="polite"></span>
     <button type="button" data-fruitback-cancel class="fruitback-composer-ghost"></button>
@@ -377,7 +506,7 @@ const STYLES = `
   cursor: pointer;
 }
 .fruitback-composer-remember[hidden] { display: none; }
-.fruitback-composer-remember input {
+.fruitback-composer-remember input, .fruitback-composer-place input {
   /* The reset of the host sets appearance to none, and a native box then draws nothing. */
   appearance: auto;
   -webkit-appearance: checkbox;
@@ -385,6 +514,26 @@ const STYLES = `
   height: 14px;
   accent-color: var(--fruitback-color-accent);
 }
+/* Where the note goes (FRU-123). No board draws this line, so it is made of what the composer has:
+   the disclosure of the name above it, and the row of the box that remembers the name. */
+.fruitback-composer-places { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.fruitback-composer-places[hidden] { display: none; }
+.fruitback-composer-place {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--fruitback-color-text-muted);
+  cursor: pointer;
+}
+.fruitback-composer-place input { flex: none; -webkit-appearance: radio; }
+/* A name comes from a tracker and can be one long word. */
+.fruitback-composer-place span, .fruitback-composer-identify { overflow-wrap: anywhere; }
+.fruitback-composer-identify { text-align: start; }
+/* Always in the tree, because a live region that was hidden announces nothing. Empty, it has no
+   height, and the margin comes with the words. */
+.fruitback-composer-notice { font-size: 12px; color: var(--fruitback-color-accent); }
+.fruitback-composer-notice:not(:empty) { margin-top: 8px; }
 .fruitback-composer-who input[type="text"] {
   min-width: 0;
   padding: 6px 8px;

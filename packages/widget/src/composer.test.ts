@@ -1,7 +1,9 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { SeedReporter } from '@fruitback/shared';
-import { type Composer, type ComposerOptions, createComposer } from './composer.ts';
+import { type Composer, type ComposerOptions, type DestinationChoice, createComposer } from './composer.ts';
+import type { Destination } from './destinations.ts';
+import { deepActiveElement, focusables } from './focus.ts';
 import { type MountedPage, keyboardEventCtor, mountPage } from './dom.fixture.ts';
 import { createTranslator } from './messages.ts';
 
@@ -680,5 +682,297 @@ describe('the popover as a dialog (FRU-51)', () => {
 
     assert.equal(keyOn(outside, 'Tab').defaultPrevented, false);
     assert.ok(active() === outside, 'a closed popover took focus');
+  });
+});
+
+describe('where the note goes (FRU-123)', () => {
+  const WEB = { id: 'dst_web', label: 'Linear · Web' };
+  const DESIGN = { id: 'dst_design', label: 'Linear · Design' };
+  const OLD = { id: 'dst_old' };
+
+  /** The seam as `embed.ts` fills it: a list a read can change, and a choice that is kept. */
+  function choiceOf(initial: readonly Destination[], remembered?: string) {
+    let offered = initial;
+    let kept = remembered;
+    const writes: string[] = [];
+    const listeners = new Set<() => void>();
+
+    return {
+      writes,
+      offer(next: readonly Destination[]) {
+        offered = next;
+        for (const listener of listeners) listener();
+      },
+      listeners,
+      destinations: {
+        offered: () => offered,
+        subscribe(listener: () => void) {
+          listeners.add(listener);
+
+          return () => listeners.delete(listener);
+        },
+        remembered: () => kept,
+        remember(id: string) {
+          kept = id;
+          writes.push(id);
+        },
+      } satisfies DestinationChoice,
+    };
+  }
+
+  function mountWith(choice?: ReturnType<typeof choiceOf>, onSubmit: ComposerOptions['onSubmit'] = async () => {}) {
+    const page = mountPage('<main><button id="cta">Commander</button></main>', { width: 1_000, height: 1_000 });
+    const host = page.document.createElement('div');
+    page.document.body.append(host);
+    composer = createComposer({
+      document: page.document,
+      host,
+      onSubmit,
+      ...(choice === undefined ? {} : { destinations: choice.destinations }),
+    });
+    mounted = page;
+
+    return page;
+  }
+
+  const line = () => composer?.element.querySelector('[data-fruitback-destination]') as HTMLButtonElement;
+  const list = () => composer?.element.querySelector('[data-fruitback-destinations]') as HTMLElement;
+  const radios = () => [...list().querySelectorAll('input')] as HTMLInputElement[];
+  const notice = () => composer?.element.querySelector('[data-fruitback-destination-gone]')?.textContent ?? '';
+  const names = () => [...list().querySelectorAll('label')].map((label) => label.textContent);
+
+  function choose(id: string): void {
+    const radio = radios().find((each) => each.value === id) as HTMLInputElement;
+    radio.checked = true;
+    const EventCtor = (mounted as MountedPage).view as unknown as { Event: typeof Event };
+    radio.dispatchEvent(new EventCtor.Event('change', { bubbles: true }));
+  }
+
+  async function sent(choice: ReturnType<typeof choiceOf> | undefined): Promise<(string | undefined)[]> {
+    const seen: (string | undefined)[] = [];
+    mountWith(choice, async (_note, _reporter, destination) => void seen.push(destination));
+    composer?.open(ANCHOR);
+    sendButton().click();
+    await Promise.resolve();
+
+    return seen;
+  }
+
+  it('is the composer of FRU-89 when nothing offers a place: no line, and the send names none', async () => {
+    assert.deepEqual(await sent(undefined), [undefined]);
+    assert.equal(line().hidden, true);
+    assert.equal(list().hidden, true);
+    assert.equal(radios().length, 0);
+    assert.equal(notice(), '');
+  });
+
+  it('shows no line for one place, which is every site that sends to one tracker', async () => {
+    assert.deepEqual(await sent(choiceOf([WEB])), [undefined]);
+    assert.equal(line().hidden, true);
+    assert.equal(radios().length, 0);
+  });
+
+  it('draws a folded line on the first place, from two places', () => {
+    mountWith(choiceOf([WEB, DESIGN]));
+    composer?.open(ANCHOR);
+
+    assert.equal(line().hidden, false);
+    assert.equal(line().textContent, 'Send to: Linear · Web');
+    assert.equal(line().getAttribute('aria-expanded'), 'false');
+    assert.equal(list().hidden, true);
+  });
+
+  it('unfolds to one radio for each place, in the order of the worker, with the first one checked', () => {
+    mountWith(choiceOf([WEB, DESIGN, OLD]));
+    composer?.open(ANCHOR);
+    line().click();
+
+    assert.equal(line().getAttribute('aria-expanded'), 'true');
+    assert.equal(list().hidden, false);
+    assert.equal(list().getAttribute('role'), 'radiogroup');
+    assert.equal(list().getAttribute('aria-label'), 'Where this note goes');
+    // A place set before the worker wrote labels has none, and is named by its rank.
+    assert.deepEqual(names(), ['Linear · Web', 'Linear · Design', 'Destination 3']);
+    assert.deepEqual(
+      radios().map((radio) => radio.checked),
+      [true, false, false],
+    );
+    assert.equal(new Set(radios().map((radio) => radio.name)).size, 1, 'the radios are not one group');
+
+    line().click();
+    assert.equal(list().hidden, true);
+    assert.equal(line().getAttribute('aria-expanded'), 'false');
+  });
+
+  it('sends the place chosen, says it on the line, and keeps it at the choice', async () => {
+    const choice = choiceOf([WEB, DESIGN]);
+    const seen: (string | undefined)[] = [];
+    mountWith(choice, async (_note, _reporter, destination) => void seen.push(destination));
+    composer?.open(ANCHOR);
+    line().click();
+    choose(DESIGN.id);
+
+    assert.equal(line().textContent, 'Send to: Linear · Design');
+    // Before any send, so a failed send does not lose the choice.
+    assert.deepEqual(choice.writes, [DESIGN.id]);
+
+    sendButton().click();
+    await Promise.resolve();
+    assert.deepEqual(seen, [DESIGN.id]);
+  });
+
+  it('opens the next note on the place chosen last, folded', () => {
+    mountWith(choiceOf([WEB, DESIGN], DESIGN.id));
+    composer?.open(ANCHOR);
+
+    assert.equal(line().textContent, 'Send to: Linear · Design');
+    assert.equal(list().hidden, true);
+    assert.deepEqual(
+      radios().map((radio) => radio.checked),
+      [false, true],
+    );
+  });
+
+  it('does not follow a remembered place that is not offered', async () => {
+    // The key is in the localStorage of the page. What it holds chooses among the places the worker
+    // offers this reader, and nothing more.
+    const seen = await sent(choiceOf([WEB, DESIGN], 'dst_of_another_site'));
+
+    assert.equal(line().textContent, 'Send to: Linear · Web');
+    assert.deepEqual(seen, [WEB.id]);
+  });
+
+  it('keeps the note and the choice when the send is refused', async () => {
+    const choice = choiceOf([WEB, DESIGN]);
+    mountWith(choice, async () => false);
+    composer?.open(ANCHOR);
+    choose(DESIGN.id);
+    field().value = 'Une note pour le design';
+
+    sendButton().click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(composer?.state(), 'failed');
+    assert.equal(field().value, 'Une note pour le design');
+    assert.equal(line().textContent, 'Send to: Linear · Design');
+  });
+
+  it('follows a list that a read changed under the open popover, and says when its place is gone', () => {
+    const choice = choiceOf([WEB, DESIGN, OLD]);
+    mountWith(choice);
+    composer?.open(ANCHOR);
+    choose(DESIGN.id);
+    assert.equal(notice(), '');
+
+    // A new place, and the chosen one still there: the choice holds, and there is nothing to say.
+    choice.offer([WEB, DESIGN, OLD, { id: 'dst_new', label: 'Linear · Support' }]);
+    assert.equal(line().textContent, 'Send to: Linear · Design');
+    assert.equal(radios().length, 4);
+    assert.equal(notice(), '');
+
+    // An admin took the place off the list. The line goes back to the first one, in words.
+    choice.offer([WEB, OLD]);
+    assert.equal(line().textContent, 'Send to: Linear · Web');
+    assert.match(notice(), /Sending to Linear · Design is no longer possible/);
+
+    // A choice made after that is an answer to the notice.
+    choose(OLD.id);
+    assert.equal(notice(), '');
+  });
+
+  it('removes the line when the reader may no longer choose, and the send then names no place', async () => {
+    const choice = choiceOf([WEB, DESIGN]);
+    const seen: (string | undefined)[] = [];
+    mountWith(choice, async (_note, _reporter, destination) => void seen.push(destination));
+    composer?.open(ANCHOR);
+    line().click();
+    choose(DESIGN.id);
+
+    choice.offer([]);
+
+    assert.equal(line().hidden, true);
+    assert.equal(list().hidden, true);
+    assert.equal(radios().length, 0);
+    assert.match(notice(), /Sending to Linear · Design is no longer possible/);
+
+    sendButton().click();
+    await Promise.resolve();
+    assert.deepEqual(seen, [undefined]);
+  });
+
+  it('says nothing when the list keeps only the place the line showed: one place is the default', () => {
+    const choice = choiceOf([WEB, DESIGN]);
+    mountWith(choice);
+    composer?.open(ANCHOR);
+    choose(DESIGN.id);
+
+    choice.offer([DESIGN]);
+
+    assert.equal(line().hidden, true);
+    assert.equal(notice(), '');
+  });
+
+  it('says nothing about a list that changed while the popover was closed, or at the next open', () => {
+    const choice = choiceOf([WEB, DESIGN]);
+    mountWith(choice);
+    composer?.open(ANCHOR);
+    choose(DESIGN.id);
+    composer?.close();
+
+    choice.offer([WEB, OLD]);
+    assert.equal(notice(), '');
+
+    composer?.open(ANCHOR);
+    assert.equal(notice(), '');
+    assert.equal(line().textContent, 'Send to: Linear · Web');
+  });
+
+  it('writes the name of a place as text, never as markup', () => {
+    // The name is what somebody called a team in a tracker.
+    mountWith(choiceOf([{ id: 'dst_x', label: '<img src=x onerror=alert(1)>' }, DESIGN]));
+    composer?.open(ANCHOR);
+
+    assert.equal(composer?.element.querySelector('img'), null);
+    assert.equal(line().textContent, 'Send to: <img src=x onerror=alert(1)>');
+    assert.equal(names()[0], '<img src=x onerror=alert(1)>');
+  });
+
+  it('keeps the unfolded list in the Tab cycle of the dialog, and out of it while folded', () => {
+    const page = mountWith(choiceOf([WEB, DESIGN]));
+    composer?.open(ANCHOR);
+    const cycle = () => focusables(composer?.element as HTMLElement);
+
+    assert.equal(cycle().includes(line()), true);
+    assert.equal(
+      cycle().some((element) => radios().includes(element as HTMLInputElement)),
+      false,
+    );
+
+    line().click();
+    assert.equal(
+      cycle().some((element) => radios().includes(element as HTMLInputElement)),
+      true,
+    );
+    // Unfolding puts the reader on the place that is chosen.
+    assert.equal(deepActiveElement(page.document), radios()[0]);
+  });
+
+  it('stops following the list when it is destroyed', () => {
+    const choice = choiceOf([WEB, DESIGN]);
+    mountWith(choice);
+    assert.equal(choice.listeners.size, 1);
+
+    composer?.destroy();
+    composer = null;
+    assert.equal(choice.listeners.size, 0);
+  });
+
+  it('hides the folded line and list with a rule of their own, because their class sets a display', () => {
+    // happy-dom does no layout. A class that sets `display` beats the browser's rule for `hidden`.
+    mountWith(choiceOf([WEB, DESIGN]));
+    const styles = (mounted as MountedPage).document.querySelector('style')?.textContent ?? '';
+
+    assert.match(styles, /\.fruitback-composer-places\[hidden\] \{ display: none; \}/);
+    assert.match(styles, /\.fruitback-composer-identify\[hidden\] \{ display: none; \}/);
   });
 });

@@ -1,5 +1,6 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { parseSeed } from '@fruitback/shared';
 import { init, plant } from './embed.ts';
 import type { TransportRequest, TransportResponse } from './transport.ts';
 import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
@@ -289,6 +290,66 @@ describe('reading pins', () => {
 
     const box = shadowOf(page).querySelector('[name="stage-green"]')?.closest('label') as HTMLLabelElement;
     assert.equal(box.hidden, false);
+
+    widget.destroy();
+  });
+
+  it('shows where a note goes only while the worker offers this reader two places or more (FRU-123)', async () => {
+    const page = mountWithCta();
+    const places = [
+      { id: 'dst_web', label: 'Linear · Web' },
+      { id: 'dst_design', label: 'Linear · Design' },
+    ];
+    const answer = (more: object) => () => new Response(JSON.stringify({ issues: [], ...more }), { status: 200 });
+    stubReads(
+      // A worker older than the list, or any reader who is not a member: the composer of FRU-89.
+      answer({}),
+      answer({ destinations: places }),
+      // One bad entry costs the list: the default on screen must be the default of the worker.
+      answer({ destinations: [{ label: 'No id' }, ...places] }),
+      answer({ destinations: places }),
+      // A site that kept one place.
+      answer({ destinations: places.slice(0, 1) }),
+      answer({ destinations: places }),
+      // The reader left the team: the field is gone, and the names with it.
+      answer({}),
+    );
+    const widget = init({ document: page.document, endpoint: ENDPOINT, clientId: 'acme' });
+    const line = () => shadowOf(page).querySelector('[data-fruitback-destination]') as HTMLButtonElement;
+    const radios = () => shadowOf(page).querySelectorAll('[data-fruitback-destinations] input').length;
+    const shown = async () => {
+      await widget.refresh();
+
+      return { line: !line().hidden, radios: radios() };
+    };
+
+    assert.deepEqual(await shown(), { line: false, radios: 0 });
+    assert.deepEqual(await shown(), { line: true, radios: 2 });
+    assert.equal(line().textContent, 'Send to: Linear · Web');
+    assert.deepEqual(await shown(), { line: false, radios: 0 });
+    assert.deepEqual(await shown(), { line: true, radios: 2 });
+    assert.deepEqual(await shown(), { line: false, radios: 0 });
+    assert.deepEqual(await shown(), { line: true, radios: 2 });
+    assert.deepEqual(await shown(), { line: false, radios: 0 });
+
+    widget.destroy();
+  });
+
+  it('keeps the places on screen when a read fails, like the pins', async () => {
+    const page = mountWithCta();
+    stubReads(
+      () =>
+        new Response(JSON.stringify({ issues: [], destinations: [{ id: 'dst_web' }, { id: 'dst_design' }] }), {
+          status: 200,
+        }),
+      () => new Response('{"error":"invalid-token"}', { status: 401 }),
+    );
+    const widget = init({ document: page.document, endpoint: ENDPOINT, clientId: 'acme' });
+    await widget.refresh();
+    await widget.refresh();
+
+    const line = shadowOf(page).querySelector('[data-fruitback-destination]') as HTMLButtonElement;
+    assert.equal(line.hidden, false);
 
     widget.destroy();
   });
@@ -648,6 +709,75 @@ describe('who carries the calls', () => {
     assert.equal(request?.headers['Content-Type'], 'application/json');
     assert.equal(request?.headers.Authorization, 'Bearer a-token');
     assert.equal((JSON.parse(request?.body ?? '{}') as { note: string }).note, 'the price is wrong');
+  });
+
+  it('names the place a member chose in the query, and leaves the body the seed it was (FRU-123)', async () => {
+    const page = mountPage('<main><button id="cta">Commander</button></main>');
+    setDocumentSize(page.document, 1_000, 1_000);
+    setRect(page.query('button'), { left: 100, top: 200, width: 200, height: 40 });
+    forbidFetch();
+
+    const seen: TransportRequest[] = [];
+    const send = (destination?: string) =>
+      plant({
+        note: 'the price is wrong',
+        target: { element: page.query('button'), source: undefined },
+        reporter: undefined,
+        ...(destination === undefined ? {} : { destination }),
+        config: { hiddenStages: [], screenshot: false },
+        options: {
+          endpoint: ENDPOINT,
+          clientId: 'acme',
+          transport: async (request) => {
+            seen.push(request);
+
+            return { ok: true, status: 201, body: '{}' };
+          },
+        },
+      });
+
+    assert.equal(await send(), true);
+    // An id is opaque: whatever it holds, it stays one value of one parameter.
+    assert.equal(await send('dst_1a2b&client=other#x'), true);
+
+    const [plain, chosen] = seen;
+    assert.equal(plain?.url, `${ENDPOINT}/feedback`);
+    assert.equal(chosen?.url, `${ENDPOINT}/feedback?destination=dst_1a2b%26client%3Dother%23x`);
+    assert.equal(new URL(chosen?.url ?? '').searchParams.get('destination'), 'dst_1a2b&client=other#x');
+    // The choice adds no header: the relay of the extension would drop one in silence.
+    assert.deepEqual(Object.keys(chosen?.headers ?? {}), ['Content-Type']);
+
+    // The body is the seed and nothing more. Two captures differ by their id and their time only.
+    const fields = (request: TransportRequest | undefined) => {
+      const { id: _id, createdAt: _createdAt, ...rest } = JSON.parse(request?.body ?? '{}') as Record<string, unknown>;
+
+      return rest;
+    };
+    assert.deepEqual(fields(chosen), fields(plain));
+    assert.equal(chosen?.body?.includes('destination'), false);
+    assert.equal(parseSeed(JSON.parse(chosen?.body ?? '{}')).ok, true);
+  });
+
+  it('keeps the note when the worker refuses the place with a 403, like any other refusal (FRU-123)', async () => {
+    const page = mountPage('<main><button id="cta">Commander</button></main>');
+    setDocumentSize(page.document, 1_000, 1_000);
+    setRect(page.query('button'), { left: 100, top: 200, width: 200, height: 40 });
+    forbidFetch();
+
+    const planted = await plant({
+      note: 'the price is wrong',
+      target: { element: page.query('button'), source: undefined },
+      reporter: undefined,
+      destination: 'dst_gone',
+      config: { hiddenStages: [], screenshot: false },
+      options: {
+        endpoint: ENDPOINT,
+        clientId: 'acme',
+        transport: async () => ({ ok: false, status: 403, body: '{"error":"destination-not-allowed"}' }),
+      },
+    });
+
+    assert.equal(planted, false);
   });
 
   it('reports a refused write as a failure, so the composer keeps the note', async () => {

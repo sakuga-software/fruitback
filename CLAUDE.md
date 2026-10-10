@@ -362,6 +362,17 @@ suite has caught: [docs/decisions/dev-loop.md](docs/decisions/dev-loop.md).
   store. The name is written before the send, so a failed send costs neither the name nor the
   choice. Unticking the box erases at once. With `identityToken`, the composer asks for no name: the
   worker would replace a typed one.
+- **A line says where the note goes, only to a reader the worker offers two places or more**
+  (FRU-123). The worker names the places in `destinations` on a read, to a member of the workspace
+  and to nobody else, so every other composer is the one of FRU-89. `offeredDestinations` reads the
+  field like `offeredStages`, with one difference: **one bad entry costs the whole list**, because
+  the first place is the default by its position. The list lives in `OfferedDestinations` and never
+  in `ConfigStore`; the id chosen last does (`destination`), and it is followed only while the worker
+  offers it. `DestinationChoice` is a seam like `NameMemory`.
+- **The choice travels as `POST /feedback?destination=<id>`, and only when it is not the first
+  place** (`destinationToSend`). The body stays the seed. `apps/extension/src/relay.test.ts` reads
+  the paths of `embed.ts` up to the `?`: write the two addresses as two whole templates. A refusal
+  with a choice reads again, so the composer shows the list of now and says which place is gone.
 - Popover on desktop, **sheet on a phone**. The anchored position goes through
   `--fruitback-composer-*` properties rather than inline `left`/`top`, because an inline style beats
   the media query and leaves the sheet offset.

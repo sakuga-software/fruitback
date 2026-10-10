@@ -41,7 +41,7 @@ const PAIRS: Pair[] = [
     foreground: 'color-text-muted',
     background: 'color-surface-raised',
     minimum: 4.5,
-    where: 'the composer status, Cancel and the name disclosure',
+    where: 'the composer status, Cancel, the name disclosure, and the line and the list of where a note goes',
   },
   {
     foreground: 'color-text-subtle',
@@ -50,7 +50,12 @@ const PAIRS: Pair[] = [
     where: 'the thread line that says no reply yet',
   },
   { foreground: 'color-success', background: 'color-surface-raised', minimum: 4.5, where: 'the sent status' },
-  { foreground: 'color-accent', background: 'color-surface-raised', minimum: 4.5, where: 'the failed status' },
+  {
+    foreground: 'color-accent',
+    background: 'color-surface-raised',
+    minimum: 4.5,
+    where: 'the failed status, and the notice of a place that is gone',
+  },
   {
     foreground: 'color-accent',
     background: 'color-surface',
