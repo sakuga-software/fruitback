@@ -139,6 +139,16 @@ export const TIMESTAMP_HEADER = 'X-Fruitback-Timestamp';
 export const DELIVERY_HEADER = 'X-Fruitback-Delivery';
 
 /**
+ * What a worker answers to a request that carries `DELIVERY_HEADER` (FRU-133): `508 Loop Detected`.
+ *
+ * A connector can name the public address of the worker itself, or another name that points at it.
+ * No list of hosts can refuse that, and the header can: only a worker sends it, so a request that
+ * arrives with it is a delivery that came back. `deliverDue` gives up at once on this status.
+ */
+export const LOOP_STATUS = 508;
+export const LOOP_ERROR = 'The address is a Fruitback worker: it refuses a delivery, because it would be a loop';
+
+/**
  * `sha256=` and the HMAC-SHA256, in hexadecimal, of the timestamp, a dot and the body.
  *
  * The timestamp is signed with the body so a receiver can refuse an old request: a copy of a request
@@ -240,7 +250,11 @@ export async function deliverDue({
       return true;
     }
 
-    const wait = RETRY_AFTER_SECONDS[delivery.attempts];
+    // A loop is final (FRU-133): the address will answer the same at each of the attempts that are
+    // left. The delivery is given up now, and the console says why.
+    const looped = status === LOOP_STATUS;
+    if (looped) error = LOOP_ERROR;
+    const wait = looped ? undefined : RETRY_AFTER_SECONDS[delivery.attempts];
     await accounts.settleDelivery(delivery.id, {
       delivered: false,
       attempts: delivery.attempts,

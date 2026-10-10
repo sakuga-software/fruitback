@@ -15,7 +15,7 @@ import { handleConsoleApi } from './console-api.ts';
 import { handleGitHub } from './github-oauth.ts';
 import { type LinearOAuth, handleLinearOAuth } from './linear-oauth.ts';
 import { type ConnectorStores, createConnectorStores, createRoutedStore } from './connectors.ts';
-import { type Send, deliverDue } from './rest-connector.ts';
+import { DELIVERY_HEADER, LOOP_STATUS, type Send, deliverDue } from './rest-connector.ts';
 import { type Mailer, createTemMailer } from './mail.ts';
 import { createSqliteAccountStore } from './accounts-sqlite.ts';
 import { type WorkerConfig, type WorkerEnv, readAllowedOrigins, readConfig } from './env.ts';
@@ -164,6 +164,11 @@ export type RequestContext = {
 };
 
 export async function handleRequest(request: Request, env: WorkerEnv, context: RequestContext): Promise<Response> {
+  // FRU-133: a delivery of the REST connector that came back to a worker. Before everything, the
+  // readiness probe included: `/health` would answer 200, and the sender would count the note as
+  // arrived. It reads no configuration and costs nothing of the rate limit.
+  if (request.headers.has(DELIVERY_HEADER)) return json(LOOP_STATUS, { error: 'delivery-loop' });
+
   const { pathname } = new URL(request.url);
 
   // Read straight from the env, before validation: a misconfigured service still has to answer with

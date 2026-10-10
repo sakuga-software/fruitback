@@ -16,6 +16,8 @@ import { createMemoryKv } from './kv.ts';
 import {
   ABANDONED_KEPT_DAYS,
   DELIVERY_HEADER,
+  LOOP_ERROR,
+  LOOP_STATUS,
   MESH_RANGE,
   RETRY_AFTER_SECONDS,
   SECRET_MIN_LENGTH,
@@ -438,6 +440,32 @@ describe('a delivery that does not arrive (FRU-122)', () => {
     }
   });
 
+  it('is given up at once when the address is a Fruitback worker: a loop has no next attempt (FRU-133)', async () => {
+    const { env, world, late } = await queued();
+    // The receiver is the worker: what the sender posts goes into `handleRequest`, on its `/health`,
+    // the route that answered 200 to a delivery and so counted the note as arrived.
+    let sent = 0;
+    const send: Send = async (_url, headers, body) => {
+      sent += 1;
+      const request = new Request('https://api.fruitback.test/health', { method: 'POST', headers, body });
+
+      return { status: (await handleRequest(request, env, { clientIp: '203.0.113.9', kv: createMemoryKv() })).status };
+    };
+    let clock = 0;
+    const pass = () => deliverDue({ accounts: world.accounts, secretsKey: SECRETS_KEY, send, now: () => clock });
+
+    assert.deepEqual(await pass(), { delivered: 0, failed: 1 });
+    const [given] = await late();
+    assert.equal(given?.lastStatus, LOOP_STATUS);
+    assert.equal(given?.lastError, LOOP_ERROR);
+    assert.equal(given?.attempts, 1);
+    assert.equal(given?.nextAt, undefined, 'no more attempt: the console offers one');
+
+    clock += 365 * 24 * 60 * 60 * 1_000;
+    assert.deepEqual(await pass(), { delivered: 0, failed: 0 });
+    assert.equal(sent, 1);
+  });
+
   it('does not stop the notes of the others', async () => {
     const { world, connector, late } = await queued();
     const second = await world.accounts.enqueueDelivery(connector.id, '{"version":1,"n":2}', 1);
@@ -580,6 +608,47 @@ describe('a delivery that does not arrive (FRU-122)', () => {
     await world.accounts.removeConnector(world.workspace.id, connector.id);
 
     assert.deepEqual(await world.accounts.dueDeliveries(10, 10), []);
+  });
+});
+
+describe('a delivery that comes back to a worker (FRU-133)', () => {
+  const arriving = (env: WorkerEnv, method: string, path: string, headers: Record<string, string>) =>
+    handleRequest(new Request(`https://api.fruitback.test${path}`, { method, headers }), env, {
+      clientIp: '203.0.113.9',
+      kv: createMemoryKv(),
+    });
+
+  it('is refused on every route, the readiness probe included, whatever the case of the header', async () => {
+    const env = envWith();
+    const routes = [
+      ['GET', '/health'],
+      ['POST', '/health'],
+      ['POST', '/feedback'],
+      ['GET', `/feedback?url=${encodeURIComponent(SITE)}`],
+      ['GET', '/console/me'],
+      ['POST', '/session/pair'],
+      ['GET', '/a-path-nothing-serves'],
+    ] as const;
+
+    for (const [method, path] of routes) {
+      for (const name of [DELIVERY_HEADER, DELIVERY_HEADER.toLowerCase()]) {
+        const answer = await arriving(env, method, path, { [name]: 'dl_1' });
+
+        assert.equal(answer.status, LOOP_STATUS, `${method} ${path}`);
+        assert.deepEqual(await answer.json(), { error: 'delivery-loop' });
+      }
+    }
+  });
+
+  it('is refused by a worker that is misconfigured too, and a request without the header is served', async () => {
+    assert.equal((await arriving({} as WorkerEnv, 'GET', '/health', { [DELIVERY_HEADER]: 'dl_1' })).status, 508);
+    assert.equal((await arriving(envWith(), 'GET', '/health', {})).status, 200);
+    // The two other headers of a delivery are not the mark of one: a receiver may send them on.
+    assert.equal(
+      (await arriving(envWith(), 'GET', '/health', { [SIGNATURE_HEADER]: 'sha256=00', [TIMESTAMP_HEADER]: '1' }))
+        .status,
+      200,
+    );
   });
 });
 
