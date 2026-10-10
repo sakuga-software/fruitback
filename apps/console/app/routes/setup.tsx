@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import {
   API,
   type Me,
+  type Providers,
   type Site,
   type Visibility,
   type Workspace,
@@ -10,8 +11,9 @@ import {
   pairingLink,
   rememberWorkspaceName,
   requestLink,
-  takeWorkspaceName,
   saveLanguage,
+  signInProviders,
+  takeWorkspaceName,
 } from '../api';
 import { Button, Field, Mark, Pick, Problem, WideButton } from '../ui';
 import { adoptLanguage, locale, msg, t } from '../i18n';
@@ -33,8 +35,11 @@ const STEPS = [
 
 const DOCS = 'https://fruitback.com';
 
-/** On when the worker this console calls has a GitHub OAuth app (FRU-97). */
-const GITHUB = import.meta.env.VITE_FRUITBACK_GITHUB === '1';
+/**
+ * The providers before the worker says which it has (FRU-135). The build argument of FRU-97 still
+ * turns GitHub on at once, so its button does not wait for an answer where it was already shown.
+ */
+const PROVIDERS_AT_FIRST: Providers = { github: import.meta.env.VITE_FRUITBACK_GITHUB === '1', google: false };
 
 type Stage =
   | { kind: 'loading' }
@@ -214,8 +219,11 @@ const SEND_PROBLEMS: Record<string, string> = {
   'too-many-links': msg('Several links went to this address already. Use the last one, or wait fifteen minutes.'),
 };
 
-/** What the worker says when a sign-in with GitHub comes back without a session (FRU-97). */
-const GITHUB_PROBLEMS: Record<string, string> = {
+/** What the worker says when a sign-in with a provider comes back without a session (FRU-97, FRU-135). */
+const PROVIDER_PROBLEMS: Record<string, string> = {
+  'google-declined': msg('Google did not sign you in: the access was declined. Try again, or use an email link.'),
+  'google-unverified': msg('Google has no verified address for this account. Use an email link.'),
+  'google-failed': msg('The sign-in with Google did not finish. Try again, or use an email link.'),
   'github-declined': msg('GitHub did not sign you in: the access was declined. Try again, or use an email link.'),
   'github-unverified': msg(
     'GitHub has no verified primary address for this account. Verify it on GitHub, or use an email link.',
@@ -229,7 +237,22 @@ function SignIn({ onSent }: { onSent: (email: string) => void }) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | undefined>(GITHUB_PROBLEMS[search.get('error') ?? '']);
+  const [problem, setProblem] = useState<string | undefined>(PROVIDER_PROBLEMS[search.get('error') ?? '']);
+  const [providers, setProviders] = useState(PROVIDERS_AT_FIRST);
+
+  useEffect(() => {
+    let asked = true;
+    void signInProviders().then((has) => {
+      // A worker that does not answer keeps what the build said: no button is taken away by an outage.
+      if (asked && has !== undefined) {
+        setProviders((before) => ({ github: before.github || has.github, google: has.google }));
+      }
+    });
+
+    return () => {
+      asked = false;
+    };
+  }, []);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -255,15 +278,21 @@ function SignIn({ onSent }: { onSent: (email: string) => void }) {
         </Button>
       }
     >
-      <WideButton disabled note={t('Google sign-in comes after the beta')}>
-        {t('Continue with Google')}
-      </WideButton>
-      {GITHUB ? (
+      {providers.google ? (
+        <WideButton onClick={() => (window.location.href = `${API}/auth/google`)}>
+          {t('Continue with Google')}
+        </WideButton>
+      ) : (
+        <WideButton disabled note={t('Google sign-in is not set up on this Fruitback')}>
+          {t('Continue with Google')}
+        </WideButton>
+      )}
+      {providers.github ? (
         <WideButton onClick={() => (window.location.href = `${API}/auth/github`)}>
           {t('Continue with GitHub')}
         </WideButton>
       ) : (
-        <WideButton disabled note={t('GitHub sign-in arrives with its OAuth app')}>
+        <WideButton disabled note={t('GitHub sign-in is not set up on this Fruitback')}>
           {t('Continue with GitHub')}
         </WideButton>
       )}

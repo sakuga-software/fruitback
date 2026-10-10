@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { type TemSettings, parseTemCredentials } from './mail.ts';
 import { type GitHubOAuth, parseGitHubOAuth } from './github-oauth.ts';
+import { type GoogleOAuth, parseGoogleOAuth } from './google-oauth.ts';
 import { type LinearOAuth, parseLinearOAuth } from './linear-oauth.ts';
 import { type ClientMap, originsFromClients, readClientMap, unreadableClients, workspacesOf } from './clients.ts';
 import { DEFAULT_LIMIT } from './rate-limit.ts';
@@ -92,6 +93,8 @@ export type WorkerEnv = {
   FRUITBACK_PUBLIC_URL?: string;
   /** Sign-in with GitHub: `<client id>:<client secret>` of an OAuth App (FRU-97). Absent, no button. */
   FRUITBACK_GITHUB_OAUTH?: string;
+  /** The OAuth client Google signs people in with (FRU-135): `<client id>:<client secret>`. */
+  FRUITBACK_GOOGLE_OAUTH?: string;
   /** The Linear application a workspace connects its Linear with (FRU-134): `<client id>:<client secret>`. */
   FRUITBACK_LINEAR_OAUTH?: string;
   /**
@@ -184,6 +187,8 @@ const configSchema = z.object({
   publicUrl: z.string().min(1).optional(),
   /** The OAuth App GitHub signs people in with, or absent (FRU-97). */
   github: z.custom<GitHubOAuth | undefined>().optional(),
+  /** The OAuth client Google signs people in with, or absent (FRU-135). */
+  google: z.custom<GoogleOAuth | undefined>().optional(),
   /** The application a workspace connects its Linear with, or absent: a personal key then (FRU-134). */
   linearOAuth: z.custom<LinearOAuth | undefined>().optional(),
   /** What encrypts the connector keys at rest, or absent (FRU-121). */
@@ -238,6 +243,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     mail: readMail(env),
     publicUrl: readConsoleUrl(env.FRUITBACK_PUBLIC_URL),
     github: env.FRUITBACK_GITHUB_OAUTH ? parseGitHubOAuth(env.FRUITBACK_GITHUB_OAUTH) : undefined,
+    google: env.FRUITBACK_GOOGLE_OAUTH ? parseGoogleOAuth(env.FRUITBACK_GOOGLE_OAUTH) : undefined,
     linearOAuth: env.FRUITBACK_LINEAR_OAUTH ? parseLinearOAuth(env.FRUITBACK_LINEAR_OAUTH) : undefined,
     teamLocale: readTeamLocale(env.FRUITBACK_TEAM_LOCALE),
   };
@@ -378,6 +384,21 @@ export function readConfig(env: WorkerEnv): ConfigResult {
         ok: false,
         missing: [
           'FRUITBACK_PUBLIC_URL, FRUITBACK_ACCOUNTS_PATH and FRUITBACK_SECRETS_KEY (FRUITBACK_LINEAR_OAUTH connects the Linear of a workspace, and keeps its token sealed)',
+        ],
+      };
+    }
+  }
+
+  // Google sends the person back to the worker's own address, and signs them into an account.
+  if (env.FRUITBACK_GOOGLE_OAUTH) {
+    if (result.data.google === undefined) {
+      return { ok: false, missing: ['FRUITBACK_GOOGLE_OAUTH (<client id>:<client secret> of a Google OAuth client)'] };
+    }
+    if (result.data.publicUrl === undefined || result.data.accountsPath === undefined) {
+      return {
+        ok: false,
+        missing: [
+          'FRUITBACK_PUBLIC_URL and FRUITBACK_ACCOUNTS_PATH (FRUITBACK_GOOGLE_OAUTH signs a person into an account)',
         ],
       };
     }

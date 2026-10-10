@@ -8,6 +8,7 @@ import {
   redeemLink,
   refresh,
   requestLink,
+  signInProviders,
   signOut,
 } from './api.ts';
 
@@ -85,5 +86,22 @@ describe('a worker that does not answer', () => {
       assert.ok((each.arguments[1] as RequestInit).signal instanceof AbortSignal);
     }
     assert.ok(fetched.mock.calls.length > 0);
+  });
+});
+
+describe('the providers the worker signs people in with (FRU-135)', () => {
+  it('says which are on when the worker answers, and takes nothing but true for on', async () => {
+    mock.method(globalThis, 'fetch', async () => Response.json({ github: true, google: 'true' }));
+
+    assert.deepEqual(await signInProviders(), { github: true, google: false });
+  });
+
+  it('says nothing when the worker did not say, so no screen calls a provider not set up', async () => {
+    down();
+    assert.equal(await signInProviders(), undefined);
+
+    mock.restoreAll();
+    mock.method(globalThis, 'fetch', async () => Response.json({ error: 'not-found' }, { status: 404 }));
+    assert.equal(await signInProviders(), undefined);
   });
 });

@@ -76,14 +76,18 @@ Each value below is `<client id>:<client secret>`, in the environment of the wor
 the Keychain of the operator. `saveEnvironment` replaces the whole environment: build it again from
 the Keychain entries, and add these two.
 
-| Variable                 | Where the application is made                       | Its callback                                     |
-| ------------------------ | --------------------------------------------------- | ------------------------------------------------ |
-| `FRUITBACK_GITHUB_OAUTH` | GitHub, the organisation's settings, « OAuth Apps » | `https://api.fruitback.com/auth/github/callback` |
-| `FRUITBACK_LINEAR_OAUTH` | Linear, Settings, API, « OAuth applications »       | `https://api.fruitback.com/auth/linear/callback` |
+| Variable                 | Where the application is made                                                                   | Its callback                                     |
+| ------------------------ | ----------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `FRUITBACK_GITHUB_OAUTH` | GitHub, the organisation's settings, « OAuth Apps »                                             | `https://api.fruitback.com/auth/github/callback` |
+| `FRUITBACK_GOOGLE_OAUTH` | Google Cloud, « APIs & Services », « Credentials », an OAuth client of type « Web application » | `https://api.fruitback.com/auth/google/callback` |
+| `FRUITBACK_LINEAR_OAUTH` | Linear, Settings, API, « OAuth applications »                                                   | `https://api.fruitback.com/auth/linear/callback` |
 
 - **GitHub** signs a person in (FRU-97). The console shows its button only when it is built with
   `VITE_FRUITBACK_GITHUB=1`: set that build argument of the console when the worker has the variable,
   and not before, or the button leads to a `404`.
+- **Google** signs a person in (FRU-135). The console asks the worker which providers it has, so it
+  needs no build argument. The consent screen of the Google project must be published (« In
+  production »), or only its test users can sign in.
 - **Linear** connects the Linear of a workspace (FRU-134). The console asks the worker whether it has
   the application, so it needs no build argument. The Cloud serves workspaces of Linear other than
   ours: if the form of the application has a « Public » switch, turn it on. This was not tried yet
