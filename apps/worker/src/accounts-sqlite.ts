@@ -436,6 +436,10 @@ export function createSqliteAccountStore(path: string): AccountStore {
       return result.changes === 1;
     },
 
+    async resealConnector(connector, sealed) {
+      connect(path).prepare('UPDATE connectors SET sealed = ? WHERE id = ?').run(sealed, connector);
+    },
+
     async sealedKey(connector) {
       const row = connect(path)
         .prepare('SELECT id, workspace_id, kind, label, sealed, created_at FROM connectors WHERE id = ?')

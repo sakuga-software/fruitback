@@ -157,6 +157,8 @@ export type AccountStore = {
   connectors(workspace: string): Promise<Connector[]>;
   /** Removes the connector. Its sites lose their destination, and their notes stay in the worker again. */
   removeConnector(workspace: string, connector: string): Promise<boolean>;
+  /** Replaces what a connector keeps sealed: a refreshed token takes the place of the one it spent. */
+  resealConnector(connector: string, sealed: string): Promise<void>;
   /** The encrypted key of a connector, for the worker's own calls. */
   sealedKey(connector: string): Promise<{ kind: ConnectorKind; sealed: string; workspaceId: string } | undefined>;
   /**

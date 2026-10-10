@@ -68,3 +68,23 @@ stop the restore, not empty the database. **The accounts and the sessions are re
 either snapshot the command stops before it touches a file, and the worker stays stopped, which is
 the state to investigate from. Only `fb.db` can be absent, for a worker that had taken no note when
 the snapshot was made; the notes file in the volume is then left as it is. Then check `https://api.fruitback.com/health`, and sign in.
+
+## The two OAuth applications
+
+Both send a person back to the worker, so `FRUITBACK_PUBLIC_URL` is `https://api.fruitback.com`.
+Each value below is `<client id>:<client secret>`, in the environment of the worker in Dokploy and in
+the Keychain of the operator. `saveEnvironment` replaces the whole environment: build it again from
+the Keychain entries, and add these two.
+
+| Variable                 | Where the application is made                       | Its callback                                     |
+| ------------------------ | --------------------------------------------------- | ------------------------------------------------ |
+| `FRUITBACK_GITHUB_OAUTH` | GitHub, the organisation's settings, « OAuth Apps » | `https://api.fruitback.com/auth/github/callback` |
+| `FRUITBACK_LINEAR_OAUTH` | Linear, Settings, API, « OAuth applications »       | `https://api.fruitback.com/auth/linear/callback` |
+
+- **GitHub** signs a person in (FRU-97). The console shows its button only when it is built with
+  `VITE_FRUITBACK_GITHUB=1`: set that build argument of the console when the worker has the variable,
+  and not before, or the button leads to a `404`.
+- **Linear** connects the Linear of a workspace (FRU-134). The console asks the worker whether it has
+  the application, so it needs no build argument. The Cloud serves workspaces of Linear other than
+  ours: if the form of the application has a « Public » switch, turn it on. This was not tried yet
+  with a second workspace of Linear.

@@ -1,4 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { type Connector, type Delivery, type Destination, type Site, type Team, call } from '../api';
 import { Button, Card, Choice, Field, Problem } from '../ui';
 import { PageHead, useWorkspace } from './workspace';
@@ -37,6 +38,13 @@ const ADDRESS_PROBLEMS: Record<string, string> = {
   unreachable: msg('Fruitback did not answer. Try again.'),
 };
 
+/** What the way back from Linear says, as the worker words it in the address (FRU-134). */
+const LINEAR_RETURNS: Record<string, string> = {
+  declined: msg('Linear was not connected: the consent was refused there.'),
+  forbidden: msg('Only an owner or an admin of the workspace connects a source.'),
+  failed: msg('Linear was not connected. Start again from « Connect with Linear ».'),
+};
+
 /** What a refused key means for the person, and what to do. */
 const KEY_PROBLEMS: Record<string, string> = {
   'key-refused': msg('Linear refused this key. Copy it again from Linear, in Settings, then Security and access.'),
@@ -56,21 +64,51 @@ export default function Connectors() {
   const manages = workspace.role === 'owner' || workspace.role === 'admin';
   const [connectors, setConnectors] = useState<Connector[] | undefined>();
   const [available, setAvailable] = useState(true);
+  // Whether this worker has a Linear application: the consent at Linear then takes the place of a key.
+  const [oauth, setOauth] = useState(false);
+  const [search, setSearch] = useSearchParams();
+  const [leaving, setLeaving] = useState(false);
+  const [problem, setProblem] = useState<string | undefined>(LINEAR_RETURNS[search.get('linear') ?? '']);
   const [sites, setSites] = useState<Site[]>([]);
   const [selected, setSelected] = useState<string | undefined>();
   const [adding, setAdding] = useState<Connector['kind'] | undefined>();
 
   const load = useCallback(async () => {
     const [listed, placed] = await Promise.all([
-      call<{ connectors: Connector[]; available: boolean }>('GET', `${base}/connectors`),
+      call<{ connectors: Connector[]; available: boolean; linearOAuth?: boolean }>('GET', `${base}/connectors`),
       call<{ sites: Site[] }>('GET', `${base}/sites`),
     ]);
     setConnectors(listed.ok ? listed.data.connectors : []);
     setAvailable(listed.ok ? listed.data.available : true);
-    setSites(placed.ok ? placed.data.sites : []);
-  }, [base]);
+    setOauth(listed.ok && listed.data.linearOAuth === true);
 
-  useEffect(() => void load(), [load]);
+    setSites(placed.ok ? placed.data.sites : []);
+
+    return listed.ok ? listed.data.connectors : [];
+  }, [base]);
+  /** The same read, for a panel that only needs it done. */
+  const reload = useCallback(async (): Promise<void> => void (await load()), [load]);
+
+  useEffect(() => {
+    void load().then((found) => {
+      // Back from Linear with a new connector: its panel opens, and the word leaves the address.
+      const word = search.get('linear');
+      if (word === null) return;
+      if (word === 'connected') setSelected(found.at(-1)?.id);
+      setSearch({}, { replace: true });
+    });
+    // Once, when the screen opens: the word in the address is read one time.
+  }, [load]);
+
+  /** The worker says where to go, and the browser goes there: the consent is at Linear. */
+  async function connectLinear() {
+    setLeaving(true);
+    setProblem(undefined);
+    const asked = await call<{ url: string }>('POST', `${base}/connectors/linear/oauth`);
+    if (asked.ok) return window.location.assign(asked.data.url);
+    setLeaving(false);
+    setProblem(KEY_PROBLEMS[asked.error] ?? msg('Fruitback could not start the connection to Linear. Try again.'));
+  }
 
   const open = connectors?.find((connector) => connector.id === selected);
   const countOf = (connector: Connector): number =>
@@ -113,10 +151,7 @@ export default function Connectors() {
                 <span className="flex-1">
                   <span className="block text-[15px] font-semibold">{t(KINDS[connector.kind].name)}</span>
                   <span className="block text-xs text-muted">
-                    {connector.kind === 'rest'
-                      ? hostOf(connector)
-                      : t('Key of {person}', { person: personOf(connector) })}{' '}
-                    · {siteCount(countOf(connector))}
+                    {sourceLine(connector)} · {siteCount(countOf(connector))}
                   </span>
                 </span>
                 <Working connected={connector.kind === 'rest'} />
@@ -144,14 +179,29 @@ export default function Connectors() {
                   }}
                 />
               ) : (
-                <Button
-                  tone="outline"
-                  className="self-start"
-                  disabled={!manages || !available}
-                  onClick={() => setAdding('linear')}
-                >
-                  {t('Connect')}
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {oauth ? (
+                    <Button
+                      tone="outline"
+                      disabled={!manages || !available || leaving}
+                      onClick={() => void connectLinear()}
+                    >
+                      {leaving ? t('Going to Linear…') : t('Connect with Linear')}
+                    </Button>
+                  ) : null}
+                  <Button
+                    tone={oauth ? 'quiet' : 'outline'}
+                    disabled={!manages || !available}
+                    onClick={() => setAdding('linear')}
+                  >
+                    {oauth ? t('Use an API key') : t('Connect')}
+                  </Button>
+                </div>
+              )}
+              {problem === undefined ? null : (
+                <div className="mt-2">
+                  <Problem>{t(problem)}</Problem>
+                </div>
               )}
               {manages ? null : (
                 <p className="mt-2 text-xs text-muted">{t('An owner or an admin connects a source')}</p>
@@ -208,7 +258,7 @@ export default function Connectors() {
             connector={open}
             sites={sites}
             manages={manages}
-            onChanged={load}
+            onChanged={reload}
             onRemoved={() => {
               setSelected(undefined);
               void load();
@@ -571,6 +621,19 @@ function personOf(connector: Connector): string {
   return connector.label.replace(/^Linear · /, '');
 }
 
+/** A Linear connected with OAuth is named after its workspace of Linear: `Linear OAuth · Acme`. */
+const OAUTH_LABEL = /^Linear OAuth · /;
+
+/** How a source is connected, in one line under its name. */
+function sourceLine(connector: Connector): string {
+  if (connector.kind === 'rest') return hostOf(connector);
+  if (OAUTH_LABEL.test(connector.label)) {
+    return t('Workspace {name}', { name: connector.label.replace(OAUTH_LABEL, '') });
+  }
+
+  return t('Key of {person}', { person: personOf(connector) });
+}
+
 function siteCount(count: number): string {
   return count === 1 ? t('{count} site', { count }) : t('{count} sites', { count });
 }
@@ -600,7 +663,7 @@ function Detail({
     void call<{ teams: Team[] }>('GET', `${base}/connectors/${connector.id}/teams`).then((answer) => {
       if (answer.ok) return setTeams(answer.data.teams);
       setTeams([]);
-      setProblem(msg('Linear did not answer with this key. Disconnect it, then connect a new key.'));
+      setProblem(msg('Linear did not answer for this connection. Disconnect it, then connect Linear again.'));
     });
   }, [base, connector.id, manages]);
 
@@ -629,7 +692,9 @@ function Detail({
         <div>
           <h2 className="text-[17px] font-bold">{t('Linear')}</h2>
           <p className="text-xs text-muted">
-            {t('Connected with the key of {person}', { person: personOf(connector) })}
+            {OAUTH_LABEL.test(connector.label)
+              ? t('Connected to the workspace {name}', { name: connector.label.replace(OAUTH_LABEL, '') })
+              : t('Connected with the key of {person}', { person: personOf(connector) })}
           </p>
         </div>
       </div>

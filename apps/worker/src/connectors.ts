@@ -2,7 +2,7 @@ import type { AccountStore, ConnectorKind } from './accounts.ts';
 import type { ClientConfig } from './clients.ts';
 import { createLinearStore } from './linear.ts';
 import { deliveryBody } from './rest-connector.ts';
-import { open } from './secrets.ts';
+import { type LinearOAuth, linearAuthorization } from './linear-oauth.ts';
 import { type SeedStore, StoreError } from './store.ts';
 
 /**
@@ -71,8 +71,9 @@ export function createConnectorStores(
   accounts: AccountStore,
   secretsKey: string | undefined,
   now: () => number = Date.now,
+  oauth?: LinearOAuth,
 ): ConnectorStores {
-  const built = new Map<string, { sealed: string; store: SeedStore }>();
+  const built = new Map<string, { authorization: string; store: SeedStore }>();
 
   return async (connector, workspace, own) => {
     const kept = await accounts.sealedKey(connector);
@@ -80,15 +81,13 @@ export function createConnectorStores(
       throw new StoreError('The connector of this site is gone');
     // Nothing is opened to keep a note and queue it: the key is for the loop that sends.
     if (kept.kind === 'rest') return receivingStore(own, accounts, connector, now);
-    if (secretsKey === undefined) throw new StoreError('This worker has no key to open a connector with');
-
+    // A token of OAuth near its end is refreshed here, and the store is built again with the new one.
+    const authorization = await linearAuthorization(connector, kept.sealed, { accounts, secretsKey, oauth, now });
     const known = built.get(connector);
-    if (known?.sealed === kept.sealed) return known.store;
+    if (known?.authorization === authorization) return known.store;
 
-    const apiKey = open(kept.sealed, secretsKey);
-    if (apiKey === undefined) throw new StoreError('The key of this connector could not be opened');
-    const store = TRACKERS[kept.kind](apiKey);
-    built.set(connector, { sealed: kept.sealed, store });
+    const store = TRACKERS[kept.kind](authorization);
+    built.set(connector, { authorization, store });
 
     return store;
   };
