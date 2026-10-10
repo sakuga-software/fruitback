@@ -483,14 +483,35 @@ go there. **This is the first secret of a customer that the Cloud holds.**
 - The worker sends the key to Linear on every write and read of a site that chose it. It cannot be a
   digest, unlike a pairing code.
 - A personal API key reaches **everything its person reaches in Linear**, not one team. The worker
-  uses the team a site chose; the limit is the worker's code, not Linear's. An OAuth application
-  with a narrow scope is the fix, and it is not built.
+  uses the team a site chose; the limit is the worker's code, not Linear's. Connecting with OAuth
+  (below) takes the place of a personal key where the worker has a Linear application.
 - A site writes only through a connector of its own workspace. The store refuses the row, and the
   request checks the workspace again before it opens a key.
 - An owner or an admin connects and disconnects. A member sees that a source is connected. A guest
   sees nothing of the tracker: not the connector, not the destination of a site.
 - A connector that cannot be used answers `502`, and the widget keeps the note. The note is never
   written to the worker's own store in its place: its team would not see it.
+
+### Linear, connected with OAuth (FRU-134)
+
+Where the worker has a Linear application (`FRUITBACK_LINEAR_OAUTH`), a workspace connects its Linear
+by consent at Linear, and no personal key is typed.
+
+- **The token is the application's** (`actor=app`), with the scopes `read,write`: the worker creates
+  issues and labels and reads issues and their comments. It is not narrower than a key inside the
+  workspace of Linear. What it changes: no person's key is held, the connection does not stop when
+  its person leaves, an admin of Linear revokes it in one place, and the token lasts a day.
+- **The Linear of one person must not land in the workspace of another.** The flow starts with a
+  ticket that only an owner or an admin gets with their access token, spent once and good for a
+  minute. The `state` is bound to the browser that started by a cookie, issued by this worker and
+  spent once, with PKCE. The role is asked again when Linear sends the person back.
+- The access token and the refresh token are kept like a key: sealed with `FRUITBACK_SECRETS_KEY`,
+  and answered by no route. Nothing Linear says is echoed to the console: the way back carries one
+  word of ours.
+- The refresh token changes at each refresh. One refresh runs at a time for a connector, and the
+  new pair is written before it is used. A refresh that Linear refuses answers `502`: the note stays
+  in the widget, and the workspace connects Linear again.
+- Disconnecting revokes the token at Linear, and removes the connector whatever Linear answers.
 
 ### An address that receives the notes (FRU-122)
 

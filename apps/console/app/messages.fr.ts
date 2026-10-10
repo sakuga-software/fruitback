@@ -66,6 +66,19 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Try now': 'Essayer maintenant',
   'Its sites keep their notes in the workspace, and the notes that waited are not sent.':
     'Ses sites gardent leurs notes dans le workspace, et les notes qui attendaient ne sont pas envoyées.',
+  'Linear did not answer for this connection. Disconnect it, then connect Linear again.':
+    'Linear n’a pas répondu pour cette connexion. Déconnectez-la, puis connectez Linear de nouveau.',
+  'Linear was not connected: the consent was refused there.':
+    'Linear n’a pas été connecté : le consentement y a été refusé.',
+  'Linear was not connected. Start again from « Connect with Linear ».':
+    'Linear n’a pas été connecté. Recommencez depuis « Connecter avec Linear ».',
+  'Fruitback could not start the connection to Linear. Try again.':
+    'Fruitback n’a pas pu démarrer la connexion à Linear. Réessayez.',
+  'Going to Linear…': 'Direction Linear…',
+  'Connect with Linear': 'Connecter avec Linear',
+  'Use an API key': 'Utiliser une clé d’API',
+  'Workspace {name}': 'Workspace {name}',
+  'Connected to the workspace {name}': 'Connecté au workspace {name}',
   'Where you are signed in': 'Où vous êtes connecté',
   'Console · this browser': 'Console · ce navigateur',
   'Active now': 'Actif maintenant',
@@ -112,8 +125,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Working: 'En service',
   '{count} site': '{count} site',
   '{count} sites': '{count} sites',
-  'Linear did not answer with this key. Disconnect it, then connect a new key.':
-    'Linear n’a pas répondu avec cette clé. Déconnectez-la, puis connectez une nouvelle clé.',
   'The destination of this site did not change. Try again.': 'La destination de ce site n’a pas changé. Réessayez.',
   'This source is still connected. Try again.': 'Cette source est toujours connectée. Réessayez.',
   'Connected with the key of {person}': 'Connectée avec la clé de {person}',

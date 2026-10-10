@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { type TemSettings, parseTemCredentials } from './mail.ts';
 import { type GitHubOAuth, parseGitHubOAuth } from './github-oauth.ts';
+import { type LinearOAuth, parseLinearOAuth } from './linear-oauth.ts';
 import { type ClientMap, originsFromClients, readClientMap, unreadableClients, workspacesOf } from './clients.ts';
 import { DEFAULT_LIMIT } from './rate-limit.ts';
 import type { StoreConfig } from './store-config.ts';
@@ -91,6 +92,8 @@ export type WorkerEnv = {
   FRUITBACK_PUBLIC_URL?: string;
   /** Sign-in with GitHub: `<client id>:<client secret>` of an OAuth App (FRU-97). Absent, no button. */
   FRUITBACK_GITHUB_OAUTH?: string;
+  /** The Linear application a workspace connects its Linear with (FRU-134): `<client id>:<client secret>`. */
+  FRUITBACK_LINEAR_OAUTH?: string;
   /**
    * What encrypts the keys of the connectors in the accounts file (FRU-121). At least 32 characters,
    * and not the identity secret. Absent, a workspace connects no tracker. WARNING: losing it loses
@@ -181,6 +184,8 @@ const configSchema = z.object({
   publicUrl: z.string().min(1).optional(),
   /** The OAuth App GitHub signs people in with, or absent (FRU-97). */
   github: z.custom<GitHubOAuth | undefined>().optional(),
+  /** The application a workspace connects its Linear with, or absent: a personal key then (FRU-134). */
+  linearOAuth: z.custom<LinearOAuth | undefined>().optional(),
   /** What encrypts the connector keys at rest, or absent (FRU-121). */
   secretsKey: z.string().min(32).optional(),
   /**
@@ -233,6 +238,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     mail: readMail(env),
     publicUrl: readConsoleUrl(env.FRUITBACK_PUBLIC_URL),
     github: env.FRUITBACK_GITHUB_OAUTH ? parseGitHubOAuth(env.FRUITBACK_GITHUB_OAUTH) : undefined,
+    linearOAuth: env.FRUITBACK_LINEAR_OAUTH ? parseLinearOAuth(env.FRUITBACK_LINEAR_OAUTH) : undefined,
     teamLocale: readTeamLocale(env.FRUITBACK_TEAM_LOCALE),
   };
 
@@ -353,6 +359,28 @@ export function readConfig(env: WorkerEnv): ConfigResult {
 
   if (env.FRUITBACK_PUBLIC_URL && result.data.publicUrl === undefined) {
     return { ok: false, missing: ['FRUITBACK_PUBLIC_URL (an https:// address, or http:// on localhost)'] };
+  }
+
+  // Linear sends the person back to the worker's own address, and the token it gives is kept sealed.
+  if (env.FRUITBACK_LINEAR_OAUTH) {
+    if (result.data.linearOAuth === undefined) {
+      return {
+        ok: false,
+        missing: ['FRUITBACK_LINEAR_OAUTH (<client id>:<client secret> of a Linear OAuth application)'],
+      };
+    }
+    if (
+      result.data.publicUrl === undefined ||
+      result.data.accountsPath === undefined ||
+      result.data.secretsKey === undefined
+    ) {
+      return {
+        ok: false,
+        missing: [
+          'FRUITBACK_PUBLIC_URL, FRUITBACK_ACCOUNTS_PATH and FRUITBACK_SECRETS_KEY (FRUITBACK_LINEAR_OAUTH connects the Linear of a workspace, and keeps its token sealed)',
+        ],
+      };
+    }
   }
 
   // GitHub sends the person back to the worker's own address, and signs them into an account.

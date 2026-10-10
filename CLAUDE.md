@@ -1157,6 +1157,15 @@ and _The team mode, and the call the page cannot make_:
   be invisible to the team. The key is sealed by `secrets.ts` with `FRUITBACK_SECRETS_KEY`, and no
   route answers it. The workspace of the client is compared with the workspace of the connector at the
   request too, because the row of a site is only a row.
+- **A workspace connects Linear with OAuth where the worker has the application** (FRU-134).
+  `linear-oauth.ts`: the console gets a ticket with its token and sends the browser to
+  `/auth/linear/start`; a navigation carries no `Authorization`, so the ticket says who starts, once.
+  The `state` is bound to the browser by a `SameSite=Lax` cookie, like GitHub's: without it, somebody
+  could get a victim's consent on their own `state`, and the victim's Linear would land in their
+  workspace. **A Linear connector keeps a key or a pair of tokens**, and `linearAuthorization` is the
+  one way to the header: it refreshes a token near its end, one refresh at a time for a connector,
+  and writes the new pair before it uses it. A personal key goes raw, a token goes with `Bearer`.
+  The connector is named `Linear OAuth · <workspace>`, and the console reads that prefix.
 - **The console connects an address, and shows the notes that did not arrive** (FRU-132). A source is
   drawn by its `kind`: a tracker has teams to choose, an address has none, so a site sends there or
   does not. **A secret that the worker made is on the screen once**, in the form that made the

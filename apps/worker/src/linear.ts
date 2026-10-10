@@ -63,7 +63,8 @@ async function graphql<T>(config: LinearConfig, query: string, variables: Record
     response = await fetch(LINEAR_GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
-        // Personal API keys go in `Authorization` raw — no `Bearer` prefix (that is for OAuth tokens).
+        // The value of the header as it goes: a personal API key raw, a token of OAuth with `Bearer`
+        // in front (FRU-134). `linear-oauth.ts` builds the second.
         Authorization: config.apiKey,
         'Content-Type': 'application/json',
       },
@@ -434,6 +435,7 @@ export type LinearTeam = { id: string; name: string; key: string; projects: { id
 const TEAMS_QUERY = `
   query FruitbackTeams {
     viewer { name }
+    organization { name }
     teams(first: 100) {
       nodes { id name key projects(first: 50) { nodes { id name } } }
     }
@@ -444,9 +446,12 @@ const TEAMS_QUERY = `
  * Who this key belongs to and the teams it reaches (FRU-121): what the console needs to offer a
  * destination. Throws a `StoreError` for a key Linear refuses.
  */
-export async function listLinearTeams(apiKey: string): Promise<{ viewer: string; teams: LinearTeam[] }> {
+export async function listLinearTeams(
+  apiKey: string,
+): Promise<{ viewer: string; organization: string; teams: LinearTeam[] }> {
   const data = await graphql<{
     viewer?: { name?: unknown };
+    organization?: { name?: unknown };
     teams?: {
       nodes?: {
         id?: unknown;
@@ -459,6 +464,8 @@ export async function listLinearTeams(apiKey: string): Promise<{ viewer: string;
 
   return {
     viewer: typeof data.viewer?.name === 'string' ? data.viewer.name : '',
+    // The workspace of Linear. A connector made with OAuth is named after it: its actor is the application.
+    organization: typeof data.organization?.name === 'string' ? data.organization.name : '',
     teams: (data.teams?.nodes ?? []).flatMap((team) => {
       if (typeof team.id !== 'string' || typeof team.name !== 'string') return [];
 

@@ -13,6 +13,7 @@ import { SESSION_SITES_PATH, handleSessionSites } from './session-sites.ts';
 import { consoleCors, handleConsoleSession, isConsoleRoute } from './console-routes.ts';
 import { handleConsoleApi } from './console-api.ts';
 import { handleGitHub } from './github-oauth.ts';
+import { type LinearOAuth, handleLinearOAuth } from './linear-oauth.ts';
 import { type ConnectorStores, createConnectorStores, createRoutedStore } from './connectors.ts';
 import { type Send, deliverDue } from './rest-connector.ts';
 import { type Mailer, createTemMailer } from './mail.ts';
@@ -115,11 +116,16 @@ export async function deliverPending(env: WorkerEnv, send: Send, now?: () => num
 /** One set of connector stores per accounts file and key, so a key is opened once and not per request. */
 const connectorStores = new WeakMap<AccountStore, Map<string, ConnectorStores>>();
 
-function connectorStoresFor(accounts: AccountStore, secretsKey: string | undefined): ConnectorStores {
+function connectorStoresFor(
+  accounts: AccountStore,
+  secretsKey: string | undefined,
+  oauth: LinearOAuth | undefined,
+): ConnectorStores {
   const byKey = connectorStores.get(accounts) ?? new Map<string, ConnectorStores>();
   connectorStores.set(accounts, byKey);
-  const kept = byKey.get(secretsKey ?? '') ?? createConnectorStores(accounts, secretsKey);
-  byKey.set(secretsKey ?? '', kept);
+  const name = `${secretsKey ?? ''}\n${oauth?.clientId ?? ''}`;
+  const kept = byKey.get(name) ?? createConnectorStores(accounts, secretsKey, Date.now, oauth);
+  byKey.set(name, kept);
 
   return kept;
 }
@@ -280,6 +286,24 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
         if (viaGitHub !== undefined) return viaGitHub;
       }
 
+      // The way to Linear and back, for a workspace that connects it (FRU-134). Navigations too.
+      if (
+        served.linearOAuth !== undefined &&
+        served.publicUrl !== undefined &&
+        served.consoleUrl !== undefined &&
+        served.secretsKey !== undefined
+      ) {
+        const viaLinear = await handleLinearOAuth(request, pathname, {
+          oauth: served.linearOAuth,
+          publicUrl: served.publicUrl,
+          consoleUrl: served.consoleUrl,
+          accounts,
+          kv,
+          secretsKey: served.secretsKey,
+        });
+        if (viaLinear !== undefined) return viaLinear;
+      }
+
       const answer =
         (await handleConsoleSession(
           request,
@@ -296,6 +320,9 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
             sessions,
             secret: served.identitySecret,
             ...(served.secretsKey === undefined ? {} : { secretsKey: served.secretsKey }),
+            kv,
+            ...(served.linearOAuth === undefined ? {} : { linearOAuth: served.linearOAuth }),
+            ...(served.publicUrl === undefined ? {} : { publicUrl: served.publicUrl }),
           },
           cors.headers,
         ));
@@ -342,7 +369,10 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
   // Resolved once here, not inside each handler: see `RequestContext.store`.
   const own = context.store ?? storeFor(served);
   // FRU-121: a site that chose a destination writes and reads through the connector of its workspace.
-  const store = accounts === undefined ? own : createRoutedStore(own, connectorStoresFor(accounts, served.secretsKey));
+  const store =
+    accounts === undefined
+      ? own
+      : createRoutedStore(own, connectorStoresFor(accounts, served.secretsKey, served.linearOAuth));
 
   return request.method === 'GET'
     ? getFeedback(request, served, store, kv, cors.headers)

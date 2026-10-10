@@ -14,7 +14,9 @@ import {
 import { readBearerToken, verifyIdentityToken } from './identity.ts';
 import { LinearKeyForbidden, LinearKeyRefused, listLinearTeams } from './linear.ts';
 import { isAcceptableSecret, newSecret, parseTargetUrl, sealTarget, targetLabel } from './rest-connector.ts';
-import { open, seal } from './secrets.ts';
+import type { Kv } from './kv.ts';
+import { type LinearOAuth, linearAuthorization, linearTicket, revokeLinear } from './linear-oauth.ts';
+import { seal } from './secrets.ts';
 import { StoreError } from './store.ts';
 import { PAIRING_TTL_SECONDS, type SessionStore, createPairing } from './session.ts';
 
@@ -35,6 +37,11 @@ export type ConsoleApiContext = {
   now?: number;
   /** What opens and closes the connector keys (FRU-121). Absent, a workspace connects no tracker. */
   secretsKey?: string;
+  /** Where a ticket for the way to Linear is kept (FRU-134). */
+  kv?: Kv;
+  /** The Linear application, when this worker has one: a workspace then connects Linear with no key. */
+  linearOAuth?: LinearOAuth;
+  publicUrl?: string;
 };
 
 function json(status: number, body: unknown, headers: Record<string, string>): Response {
@@ -84,6 +91,11 @@ function siteView(site: Site, seesTracker: boolean): SiteView {
 }
 
 const CONNECTORS_UNAVAILABLE = { error: 'connectors-unavailable' } as const;
+
+/** Whether a workspace can connect Linear with OAuth here: the application, a key to seal with, an address. */
+function linearOAuthReady(context: ConsoleApiContext): boolean {
+  return context.linearOAuth !== undefined && context.secretsKey !== undefined && context.publicUrl !== undefined;
+}
 
 function connectorView(connector: Connector): { id: string; kind: string; label: string; createdAt: string } {
   return { id: connector.id, kind: connector.kind, label: connector.label, createdAt: connector.createdAt };
@@ -238,7 +250,12 @@ export async function handleConsoleApi(
 
       return json(
         200,
-        { connectors: connectors.map(connectorView), available: context.secretsKey !== undefined },
+        {
+          connectors: connectors.map(connectorView),
+          available: context.secretsKey !== undefined,
+          // The console offers « Connect with Linear » only where the worker can do it.
+          linearOAuth: linearOAuthReady(context),
+        },
         headers,
       );
     }
@@ -288,6 +305,21 @@ export async function handleConsoleApi(
     return json(201, connectorView(connector), headers);
   }
 
+  // FRU-134: where the browser goes to connect Linear with OAuth. The console sends it there.
+  if (rest === '/connectors/linear/oauth') {
+    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+    if (!allowed('manage-workspace')) return forbidden();
+    if (!linearOAuthReady(context) || context.kv === undefined || context.publicUrl === undefined) {
+      return json(404, CONNECTORS_UNAVAILABLE, headers);
+    }
+    const url = await linearTicket(
+      { kv: context.kv, publicUrl: context.publicUrl },
+      { workspace: workspaceId as string, account: account.id },
+    );
+
+    return json(201, { url }, headers);
+  }
+
   // The deliveries of a receiving connector that did not arrive, and a new attempt (FRU-122).
   const late = /^\/connectors\/([A-Za-z0-9_-]+)\/deliveries(?:\/([A-Za-z0-9_-]+)\/retry)?$/.exec(rest);
   if (late !== null) {
@@ -313,7 +345,13 @@ export async function handleConsoleApi(
     if (connector[2] === undefined) {
       if (request.method !== 'DELETE') return json(405, { error: 'method-not-allowed' }, headers);
       if (!allowed('manage-workspace')) return forbidden();
+      // A token of OAuth is revoked at Linear before the connector goes. Linear's answer changes
+      // nothing: the connector goes, and a token nobody holds ends in a day.
+      const leaving = await context.accounts.sealedKey(id);
       const removed = await context.accounts.removeConnector(workspaceId as string, id);
+      if (removed && leaving?.kind === 'linear' && leaving.workspaceId === workspaceId) {
+        await revokeLinear(leaving.sealed, context.secretsKey);
+      }
 
       return removed ? new Response(null, { status: 204, headers }) : json(404, { error: 'not-found' }, headers);
     }
@@ -327,10 +365,14 @@ export async function handleConsoleApi(
     if (kept === undefined || kept.workspaceId !== workspaceId) return json(404, { error: 'not-found' }, headers);
     // An address that only receives has no team to choose.
     if (kept.kind !== 'linear') return json(404, { error: 'not-found' }, headers);
-    const apiKey = open(kept.sealed, context.secretsKey);
-    if (apiKey === undefined) return json(502, { error: 'store-unavailable' }, headers);
+    // A key goes as it is. A token of OAuth near its end is refreshed first.
+    const authorization = await linearAuthorization(id, kept.sealed, {
+      accounts: context.accounts,
+      secretsKey: context.secretsKey,
+      oauth: context.linearOAuth,
+    });
 
-    return json(200, { teams: (await listLinearTeams(apiKey)).teams }, headers);
+    return json(200, { teams: (await listLinearTeams(authorization)).teams }, headers);
   }
 
   if (rest === '/connect') {
