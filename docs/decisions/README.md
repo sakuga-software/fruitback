@@ -64,6 +64,8 @@ file or a heading that is not there.
 | `no-restricted-imports`: `node:*` and `@fruitback/*`, from `packages/shared/src`                     | the seed contract is browser- and server-safe                                              |
 | `no-restricted-imports`: `@heroui/*` outside `apps/console/app/ui.tsx`                               | a screen uses the kit                                                                      |
 | `no-restricted-imports`: `sqlite.ts`, from `session-sqlite.ts`                                       | that `connect` applies the seeds migrations                                                |
+| `no-restricted-imports`: `pg`, in `apps/worker/src` but `postgres.ts`                                | one file names the driver, as types, and loads it at the first query                       |
+| `no-restricted-imports`: `@electric-sql/pglite` outside `*.test.ts`, `*.fixture.ts`                  | PGlite is the PostgreSQL of the tests, and must not enter the bundle                       |
 | `unicorn/no-instanceof-builtins`, in `packages/widget/src`                                           | `instanceof Element` reads a class off one realm; use `isElement` from `dom.ts`            |
 | `no-restricted-globals`: `MutationObserver`, `ResizeObserver`, `navigator`, in `packages/widget/src` | take them off the document's own window, never off `globalThis`                            |
 | `no-restricted-globals`: `fetch`, in `packages/widget/src` but `transport.ts`                        | every call goes through the transport                                                      |

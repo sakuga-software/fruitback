@@ -69,15 +69,16 @@ workers, so stop `pnpm dev` first.
 
 CI runs each of these as its own check on every pull request to `main`. Run them first:
 
-| Check          | Locally                                                                                                                                                              |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lint`         | `pnpm lint`                                                                                                                                                          |
-| `format`       | `pnpm format`, and `pnpm format:fix` to rewrite the files                                                                                                            |
-| `typecheck`    | `pnpm typecheck`                                                                                                                                                     |
-| `test`         | `pnpm test`                                                                                                                                                          |
-| `e2e`          | `pnpm e2e`                                                                                                                                                           |
-| `docker image` | builds the worker image and plants a pin through `docker-compose.yml`, see [docs/self-hosting.md](docs/self-hosting.md)                                              |
-| `zizmor`       | `uvx zizmor==1.30.1 --offline .github/workflows`, the version CI runs, if you changed a workflow: it fails on an unpinned action or a permission a job does not need |
+| Check          | Locally                                                                                                                                                                                                                        |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `lint`         | `pnpm lint`                                                                                                                                                                                                                    |
+| `format`       | `pnpm format`, and `pnpm format:fix` to rewrite the files                                                                                                                                                                      |
+| `typecheck`    | `pnpm typecheck`                                                                                                                                                                                                               |
+| `test`         | `pnpm test`                                                                                                                                                                                                                    |
+| `e2e`          | `pnpm e2e`                                                                                                                                                                                                                     |
+| `postgres`     | `FRUITBACK_TEST_DATABASE_URL=postgres://… pnpm --filter @fruitback/worker test:postgres`, with a PostgreSQL of your own, if you changed the accounts in PostgreSQL. `pnpm test` runs the same cases on PGlite, with no service |
+| `docker image` | builds the worker image and plants a pin through `docker-compose.yml`, see [docs/self-hosting.md](docs/self-hosting.md)                                                                                                        |
+| `zizmor`       | `uvx zizmor==1.30.1 --offline .github/workflows`, the version CI runs, if you changed a workflow: it fails on an unpinned action or a permission a job does not need                                                           |
 
 Then:
 

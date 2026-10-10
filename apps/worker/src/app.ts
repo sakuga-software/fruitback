@@ -19,8 +19,9 @@ import { type LinearOAuth, handleLinearOAuth } from './linear-oauth.ts';
 import { type ConnectorStores, createConnectorStores, createRoutedStore } from './connectors.ts';
 import { DELIVERY_HEADER, LOOP_STATUS, type Send, deliverDue } from './rest-connector.ts';
 import { type Mailer, createTemMailer } from './mail.ts';
+import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { createSqliteAccountStore } from './accounts-sqlite.ts';
-import { type WorkerConfig, type WorkerEnv, readAllowedOrigins, readConfig } from './env.ts';
+import { type WorkerConfig, type WorkerEnv, hasAccounts, readAllowedOrigins, readConfig } from './env.ts';
 import { type SeedStore, StoreError } from './store.ts';
 import { watchedStore } from './connector-health.ts';
 import { type CorsDecision, diagnosticCorsHeaders, openCors, resolveCors } from './cors.ts';
@@ -28,6 +29,7 @@ import { PAIR_PATH, pairPage } from './pair-page.ts';
 import { checkRateLimit } from './rate-limit.ts';
 import { cached, invalidate } from './cache.ts';
 import { type Kv, KvError, processKv } from './kv.ts';
+import { databaseFor } from './postgres.ts';
 import {
   type SessionStore,
   createPairing as openPairing,
@@ -83,6 +85,9 @@ export function mailerFor(config: WorkerConfig): Mailer | undefined {
 
 /** The accounts of this worker, or `undefined` when its clients come from the env (FRU-96). */
 export function accountStoreFor(config: WorkerConfig): AccountStore | undefined {
+  // `readConfig` refuses the two together, so the order here decides nothing.
+  if (config.databaseUrl !== undefined) return createPostgresAccountStore(databaseFor(config.databaseUrl));
+
   return config.accountsPath === undefined ? undefined : createSqliteAccountStore(config.accountsPath);
 }
 
@@ -179,11 +184,11 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
     //
     // A count and not the ids: `/health` needs no authentication either, and listing client ids
     // would hand over the map this worker serves.
-    // With accounts the clients are in a file, and this probe never opens one: it says nothing of them.
-    const openRead =
-      config.config.accountsPath === undefined
-        ? openReadClients({ read: config.config.read, clients: config.config.clients }).length
-        : 0;
+    // With accounts the clients are in a file or in a database, and this probe opens neither: it says
+    // nothing of them.
+    const openRead = hasAccounts(config.config)
+      ? 0
+      : openReadClients({ read: config.config.read, clients: config.config.clients }).length;
 
     return json(200, {
       ok: true,
@@ -209,7 +214,13 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
   try {
     served = accounts === undefined ? config.config : await withSites(config.config, accounts);
   } catch (error) {
-    if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, diagnosticCorsHeaders(request));
+    if (error instanceof StoreError) {
+      // Said in the log, because the answer says nothing: a database on a network fails in more ways
+      // than a file, and the message of the store holds no address (FRU-141).
+      console.error(`[fruitback] the accounts did not answer: ${error.message}`);
+
+      return json(502, { error: 'store-unavailable' }, diagnosticCorsHeaders(request));
+    }
     throw error;
   }
 
@@ -222,7 +233,7 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
   const site = (): CorsDecision => resolveCors(request, served.allowedOrigins);
   const extension = (): CorsDecision => (session ? openCors(request) : site());
   // The console's routes answer the console and no site, with the cookie of its session (FRU-98).
-  const consoleRoute = served.accountsPath !== undefined && isConsoleRoute(pathname);
+  const consoleRoute = hasAccounts(served) && isConsoleRoute(pathname);
   const chosen = (): CorsDecision => (consoleRoute ? consoleCors(request, served) : extension());
   const cors: CorsDecision = pairing ? { allowed: true, headers: {} } : chosen();
   if (!cors.allowed) {

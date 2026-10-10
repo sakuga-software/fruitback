@@ -83,6 +83,16 @@ immutable.
   weeks behind `main` and nobody saw it: the failure is a red run of a workflow that no pull request
   shows. After the removal the same scan finds nothing (measured with Trivy 0.70.0 on the local
   build), and `server.mjs pair` and `forget` still run in the image.
+- **The bundle has a `createRequire` banner since FRU-141**, in the `build` script of the worker. `pg`
+  is CommonJS, and esbuild leaves its `require('events')` as a dynamic require that an ESM file does
+  not have. `/health` opens no database, so a bundle without the banner is green there and answers
+  `502` to every read (measured). The `docker image` job therefore boots the image a second time,
+  beside a PostgreSQL container, and probes a read: `{"error":"unknown-client"}` says that the
+  bundle reached the database and applied its migration.
+- **The scan of the image does not see what is inside the bundle, and that gap is open.** Trivy reads
+  the packages of the image, and `server.mjs` is one file: it never saw `zod`, and it does not see
+  `pg` and its six packages. A check of the lockfile in CI is what closes it. It is named in FRU-139
+  and is in no slice yet: until it is, a vulnerability of the driver reaches nobody's screen.
 - **Trivy runs with `ignore-unfixed`.** An Alpine CVE with no patch available reddens every release
   for something nobody can act on, and a gate that cannot be satisfied is a gate somebody deletes.
 - **Every action is pinned to a commit SHA, with its version as a comment (FRU-69).** A tag can be
