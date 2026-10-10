@@ -111,8 +111,23 @@ const clientSchema = z.object({
 
 export const clientMapSchema = z.record(z.string().min(1), clientSchema);
 
-export type ClientConfig = z.infer<typeof clientSchema>;
-export type ClientMap = z.infer<typeof clientMapSchema>;
+/**
+ * One place the notes of a client can go (FRU-123). `id` is the name the widget of a member holds.
+ */
+export type ClientDestination = {
+  id: string;
+  connector: string;
+  teamId?: string;
+  projectId?: string;
+  label?: string;
+};
+
+/**
+ * `destinations` is not in the schema: the environment cannot write it. Only the accounts do, for a
+ * site of a workspace, and the first one is also the `connector` and the team of the client.
+ */
+export type ClientConfig = z.infer<typeof clientSchema> & { destinations?: readonly ClientDestination[] };
+export type ClientMap = Record<string, ClientConfig>;
 
 /** Who may read a client's pins. See `read` on the client, and `FRUITBACK_READ` for the fallback. */
 export type ReadAccess = 'public' | 'authenticated';

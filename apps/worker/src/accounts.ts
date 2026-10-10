@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { ClientMap } from './clients.ts';
 
 /**
@@ -79,16 +80,42 @@ export type Visibility = (typeof VISIBILITIES)[number];
  * Where the notes of a site go: a connector of its workspace, and the place inside it. A tracker has
  * teams, so `teamId` is required for one. An address that only receives has none (FRU-122).
  */
-export type Destination = { connector: string; teamId?: string; projectId?: string };
+export type Destination = {
+  connector: string;
+  teamId?: string;
+  projectId?: string;
+  /** How a member reads this place when they choose it (FRU-123): « Linear · Design ». */
+  label?: string;
+};
+
+/**
+ * How many places a site can send to (FRU-123). A read asks each one, so the number is the cost of
+ * a page that opens: it stays small.
+ */
+export const MAX_DESTINATIONS = 5;
 
 export type Site = {
   id: string;
   workspaceId: string;
   origin: string;
   visibility: Visibility;
-  /** Absent: the notes stay in the worker's own store. */
-  destination?: Destination;
+  /**
+   * Where the notes of this site can go, in the order an admin gave (FRU-123). The first one is
+   * where a note goes when nobody chose. Empty: the notes stay in the worker's own store.
+   */
+  destinations: Destination[];
 };
+
+/**
+ * The name of a destination outside the worker (FRU-123): the widget of a member holds it, and sends
+ * it back to choose. It says nothing of the connector or of the team, whose ids stay in the worker.
+ * It is the same for as long as the site sends to that place.
+ */
+export function destinationId(site: string, destination: Destination): string {
+  const named = [site, destination.connector, destination.teamId ?? '', destination.projectId ?? ''].join('\n');
+
+  return `dst_${createHash('sha256').update(named).digest('hex').slice(0, 20)}`;
+}
 
 /**
  * What a workspace can connect. `linear` is a tracker: the notes live there. `rest` is an address
@@ -197,6 +224,11 @@ export type AccountStore = {
    */
   setDestination(workspace: string, site: string, destination: Destination | undefined): Promise<boolean>;
   /**
+   * Every place a site can send to, in order (FRU-123). `false` when the site or one connector is
+   * not of this workspace, and then nothing changes. The caller bounds the list.
+   */
+  setDestinations(workspace: string, site: string, destinations: readonly Destination[]): Promise<boolean>;
+  /**
    * Keeps a note to send to the address of a connector (FRU-122). `body` is the request body, kept
    * as it is sent, so each attempt sends the same bytes.
    */
@@ -240,16 +272,27 @@ export type AccountStore = {
  * Exported because this projection is the whole contract between the accounts and the read path.
  */
 export function clientOf(site: Site): ClientMap[string] {
+  const places = site.destinations.map((destination) => ({
+    id: destinationId(site.id, destination),
+    connector: destination.connector,
+    ...(destination.teamId === undefined ? {} : { teamId: destination.teamId }),
+    ...(destination.projectId === undefined ? {} : { projectId: destination.projectId }),
+    ...(destination.label === undefined ? {} : { label: destination.label }),
+  }));
+  const first = places[0];
+
   return {
     workspace: site.workspaceId,
     origins: [site.origin],
     read: site.visibility === 'members' ? 'authenticated' : 'public',
-    ...(site.destination === undefined
+    // The first place is where the client routes, as when a site had one destination.
+    ...(first === undefined
       ? {}
       : {
-          connector: site.destination.connector,
-          ...(site.destination.teamId === undefined ? {} : { teamId: site.destination.teamId }),
-          ...(site.destination.projectId === undefined ? {} : { projectId: site.destination.projectId }),
+          connector: first.connector,
+          ...(first.teamId === undefined ? {} : { teamId: first.teamId }),
+          ...(first.projectId === undefined ? {} : { projectId: first.projectId }),
+          destinations: places,
         }),
   };
 }
