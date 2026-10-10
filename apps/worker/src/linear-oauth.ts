@@ -106,6 +106,19 @@ export type LinearAccess = {
   now?: () => number;
 };
 
+/** The pair of tokens the store holds for a connector now, or nothing for a connector that holds a key or is gone. */
+async function current(
+  accounts: AccountStore,
+  connector: string,
+  secretsKey: string,
+): Promise<Extract<LinearCredential, { via: 'oauth' }> | undefined> {
+  const kept = await accounts.sealedKey(connector);
+  const plain = kept === undefined ? undefined : open(kept.sealed, secretsKey);
+  const credential = plain === undefined ? undefined : readCredential(plain);
+
+  return credential?.via === 'oauth' ? credential : undefined;
+}
+
 /** One refresh at a time for a connector: two would spend one refresh token, and the second is refused. */
 const refreshing = new Map<string, Promise<string>>();
 
@@ -134,13 +147,19 @@ export async function linearAuthorization(
   if (running !== undefined) return running;
 
   const refresh = (async (): Promise<string> => {
+    // WARNING: the caller read `sealed` before it came here, and another refresh can have finished
+    // in that time. What the store holds now is read again: a pair that is fresh is used as it is,
+    // and a refresh spends the refresh token of the store, never one that was spent already.
+    const latest = await current(accounts, connector, secretsKey);
+    if (latest === undefined) throw new StoreError('The connector of this site is gone');
+    if (latest.expiresAt - now() > REFRESH_MARGIN_MS) return authorizationOf(latest);
     if (oauth === undefined) throw new StoreError('This worker has no Linear application to refresh a token with');
     let answer: Awaited<ReturnType<typeof askTokens>>;
     try {
       answer = await askTokens(
         {
           grant_type: 'refresh_token',
-          refresh_token: credential.refreshToken,
+          refresh_token: latest.refreshToken,
           client_id: oauth.clientId,
           client_secret: oauth.clientSecret,
         },

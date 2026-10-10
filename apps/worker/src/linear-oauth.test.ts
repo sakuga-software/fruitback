@@ -489,6 +489,26 @@ describe('a token of Linear that ends (FRU-134)', () => {
     assert.equal(linear.tokenCalls.filter((form) => form.grant_type === 'refresh_token').length, 1);
   });
 
+  it('does not spend a refresh token twice for a caller that read the connector before the refresh', async () => {
+    const { linear, world, connector } = await nearTheEnd();
+    const { linearAuthorization } = await import('./linear-oauth.ts');
+    const access = {
+      accounts: world.accounts,
+      secretsKey: SECRETS_KEY,
+      oauth: { clientId: 'linear-client', clientSecret: 'the-linear-client-secret' },
+    };
+    // Both callers read the same sealed pair. The first one refreshes and finishes.
+    const stale = (await world.accounts.sealedKey(connector))?.sealed as string;
+    assert.equal(await linearAuthorization(connector, stale, access), 'Bearer access-2');
+
+    // The second one comes with what it read before: it gets the pair of the store, and asks Linear nothing.
+    assert.equal(await linearAuthorization(connector, stale, access), 'Bearer access-2');
+    assert.deepEqual(
+      linear.tokenCalls.filter((form) => form.grant_type === 'refresh_token').map((form) => form.refresh_token),
+      ['refresh-1'],
+    );
+  });
+
   it('answers 502, and writes nowhere else, when Linear ended the connection or cannot be reached', async () => {
     for (const answer of [400, 401, 500, 'down'] as const) {
       const { env, linear, world, connector } = await nearTheEnd();
