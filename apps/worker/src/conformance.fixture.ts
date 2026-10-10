@@ -168,6 +168,12 @@ export function describeControls<Store>(
         }
 
         assert.ok(failure !== undefined, 'the case passed on the broken store, so it holds nothing');
+        // A store that throws fails every case, and proves nothing of this one: the failure must be
+        // an assertion of the case.
+        assert.ok(
+          failure instanceof assert.AssertionError,
+          `the broken store threw, and no assertion of the case failed: ${String(failure)}`,
+        );
       });
     }
   });

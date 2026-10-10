@@ -34,11 +34,11 @@ for (const subject of SUBJECTS) describeConformance('AccountStore', accountCases
 const VIOLATIONS: Violation<AccountStore>[] = [
   {
     breaks: 'makes one account of two providers that prove the same address',
-    by: 'does not look for the address of a new sign-in',
-    replace: {
-      from: "'SELECT id, email, name, locale FROM accounts WHERE email = ?').get(address)",
-      to: "'SELECT id, email, name, locale FROM accounts WHERE email = ?').get('')",
-    },
+    by: 'makes an account for each provider',
+    wrap: (real) => ({
+      ...real,
+      signIn: (login) => real.signIn({ ...login, email: `${login.provider}.${login.email}` }),
+    }),
   },
   {
     breaks: 'makes one account of two providers that prove the same address',

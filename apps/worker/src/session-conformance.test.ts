@@ -107,8 +107,15 @@ const VIOLATIONS: Violation<SessionStore>[] = [
   },
   {
     breaks: 'refuses a refresh token that was never issued',
-    by: 'reads a row that is not there',
-    replace: { from: EXPIRED_OR_UNKNOWN, to: "if (typeof row?.expires_at === 'number' && row.expires_at <= now) {" },
+    by: 'rotates a token it does not know',
+    wrap: (real) => ({
+      ...real,
+      async rotateSession(rotation) {
+        const answer = await real.rotateSession(rotation);
+
+        return answer.outcome === 'gone' ? { outcome: 'rotated', identity: { subject: 'anybody' } } : answer;
+      },
+    }),
   },
   {
     breaks: 'refuses a session past its expiry',
