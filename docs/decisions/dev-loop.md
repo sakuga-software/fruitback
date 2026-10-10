@@ -1,8 +1,8 @@
 # The dev loop and the E2E suite
 
 Why the playground is a React app, what a cold Vite cache does to CI, and the four defects the
-browser suite has already caught. The rules an agent needs before it writes a spec are in
-[CLAUDE.md](../../CLAUDE.md); this is the reasoning behind them.
+browser suite has already caught. Each section opens with the rules an agent needs before
+it writes a spec, in short; the reasoning behind them follows.
 
 ## The dev loop
 
@@ -44,14 +44,25 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 
 ## The E2E suite
 
-`pnpm e2e` (Playwright, `e2e/`) starts both servers itself and runs its specs against Chromium.
+### The rules, in short
+
+`pnpm e2e` (Playwright, `e2e/`) starts both servers itself and runs its specs against Chromium. It
+builds `dist` first, because `package.spec.ts` loads the real file.
+
+- **Assert on what you measured, never on a second measurement.** Poll until a value satisfies the
+  check and keep _that_ value: a computed colour read mid-transition is the interpolated one (which
+  Chromium serializes in another colour space), and the composer clears its confirmation 1.1s after
+  showing it. Synchronise on the harness's status line rather than on a pin count — the old pins are
+  still in the DOM while the new set is being fetched, so counting races.
+- **An absence needs a control.** The no-rule spec then adds the rule and sees the widget; the token
+  search fails unless it finds a token in both storage areas. A spec that counts zero proves nothing alone.
+
+### The reasons, and the history
 
 - It exists for the two things happy-dom cannot vouch for: a **real selector engine** and **real
   layout**. Everything else stays in `node --test`, which is where it is faster and clearer.
 - Specs share one worker process, so each captures on **its own page URL** (`/?case=…`) — the seed's
   page identity is what keeps them apart. There is no reset between specs.
-- Synchronise on the harness's status line, not on a pin count: the old pins are still in the DOM
-  while the new set is being fetched, so counting races.
 - **A cold Vite cache is the difference between your machine and CI.** Vite binds its port — so it
   answers Playwright's readiness probe — before it has optimized dependencies, and it discovers most
   of them only when a browser asks for the module graph. The first navigation then triggers a
@@ -76,6 +87,21 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   the `null` owner React ends every tree with, which stopped a click from planting anything at all.
 
 ## The extension under Playwright (FRU-45)
+
+### The rules, in short
+
+- **`extension.spec.ts` loads the built extension into a real Chromium** (FRU-45), and `pnpm e2e`
+  builds it first. The fixture launches `channel: 'chromium'`: the headless shell Playwright uses by
+  default loads no extension (measured). Automation cannot answer a host permission prompt, so it
+  loads a **copy** whose manifest declares the playground and both workers. The shipped manifest still asks for
+  nothing at install, and the no-rule spec runs with that grant.
+- **The worker holds extension sessions during the suite** (`e2e/worker-sessions.ts`), and the team
+  spec mints its code with the real `pair` command. The suite never reuses a worker already on its port: one started without
+  that env holds no session store, or not that one. Stop `pnpm dev` before `pnpm e2e`. The team spec
+  pairs with a **second worker on `8789`, with `FRUITBACK_READ=authenticated`**: on `public` a pin read
+  back proves nothing about the relay, because the page could read it with no credential.
+
+### The reasons, and the history
 
 `e2e/extension.spec.ts` loads `apps/extension/.output/chrome-mv3`, which `pnpm e2e` now builds, into a
 persistent Chromium context. Measured on Chromium 151 before the specs were written:
@@ -131,6 +157,18 @@ world from `registerContentScripts`, so the `world` in the entrypoint does not r
 `worlds.test.ts` finds the main-world files by that declaration, so it is the check that fails.
 
 ## The public demonstration (FRU-79)
+
+### The rules, in short
+
+- **The public demonstration is this playground, served in development mode** (FRU-79):
+  `demo.fruitback.com`, with its worker on `api.demo.fruitback.com`. A production build of the page
+  loses the component and the file of a note (measured: `bound qi`, and a chunk of the bundle), and
+  those two are the product. `apps/playground/Dockerfile` therefore runs a development server. It
+  must hold no secret and no volume. Anybody can write to that worker: it keeps its notes in SQLite,
+  holds no key of any tracker, and is emptied every night by `apps/playground/demo/reset.sh`, from
+  the crontab of the host. Dokploy builds both applications from `main` on each push.
+
+### The reasons, and the history
 
 A reviewer of a browser store installs the extension and tries it. With no worker to reach and no
 page to try it on, the extension does nothing, and that is a refusal. The same instance shows the

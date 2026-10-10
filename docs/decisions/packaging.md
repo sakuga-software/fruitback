@@ -5,6 +5,37 @@ Plus the licence split and the two measurements that decided how it is asserted.
 
 ## The published package
 
+### The rules, in short
+
+- **Five packages, and only one of them is the front door.** `fruitback` re-exports the two scoped
+  ones and **defines nothing** — anything declared there rather than forwarded is a third place for
+  the contract to drift. It is not bundled either, so there is one copy of the widget on disk.
+- **`init` reads the pins again when the tab is visible again** (FRU-87), if the last read is older
+  than the 15 seconds the worker caches a read. That is what replaced a webhook: nothing pushes a
+  change of state to an open page. **It does not read while a thread is open**, because `render`
+  closes the thread and somebody who comes back to a thread is reading it. The listener is on the
+  page's own `document`, and `destroy` removes it.
+- **The `workspace` fields point at source; `publishConfig` swaps in `dist` when pnpm packs. All
+  five packages need `prepack`.** Miss either and the tarball ships `src` while `publishConfig`
+  points at a `dist` that is not there — a failure that lands in a consumer's build and nowhere here.
+- **The guard that matters is `package.test.ts`'s test:`type-checks an import with no special tsconfig`.**
+  It deletes every `dist`, packs all three, asserts each tarball contains one, installs them into a
+  scratch project and type-checks an import from **each** package, with `skipLibCheck` **off**. Every
+  clause is there because something without it shipped green. **Read the file after editing this
+  guard**: two of those clauses were described here, and in a PR reply, while the edit that would
+  have added them had silently not applied.
+- **`@fruitback/element` and `@fruitback/react` wrap `init` and define nothing of the contract**
+  (FRU-126, FRU-127). The tag reads five attributes and takes the rest through `element.options`; the
+  component's props are the options of `init`. **Both exist to not mount twice**: a second mount closes
+  the composer and loses what somebody typed. The element mounts once for every change of one task
+  (a microtask). The component keys an object by its value and a function by its presence only, and
+  the widget calls the function of the last render through a stable one. `createFruitbackElement` is a
+  function, never a class at the top of the module: `HTMLElement` is a browser global, and a server
+  that renders the page must be able to import the package. The element's script holds the widget, so
+  its build copies the widget's `THIRD-PARTY-NOTICES.md` into the tarball, and the guard asserts it.
+
+### The reasons, and the history
+
 - **Three packages, and only one of them is the front door.** `fruitback` is what a client installs:
   it depends on `@fruitback/widget` and `@fruitback/shared` and re-exports both, so mounting the
   widget and naming what it stores is one install and one import.
@@ -58,6 +89,22 @@ Plus the licence split and the two measurements that decided how it is asserted.
   is compiled by `tsc` rather than bundled, keeps `zod` as an ordinary dependency, and owes nothing.
 
 ## Licences
+
+### The rules, in short
+
+- **The guard asserts the `license` field and the LICENSE text, not the presence of a file.** npm
+  force-includes a `LICENSE` whatever `files` says, and pnpm copies the workspace root's into any
+  package with none of its own — so "the tarball contains a LICENSE" is true even for a package that
+  never declared one. `THIRD-PARTY-NOTICES.md` is the opposite case: nothing force-includes it, so
+  its `files` entry **is** load-bearing.
+- **The README snippet is read from the README and checked against the build** (`package.test.ts`,
+  FRU-26). Every `data-fruitback-*` attribute the landing page tells a reader to write must be one
+  the built script actually reads. Before that, the claim in `CLAUDE.md` was an overclaim: the test
+  asserted the _build_ named one attribute and nothing had ever opened the file a reader copies from,
+  so a renamed attribute left the landing page quietly wrong with a green suite. The built global is
+  separately _executed_ on a real page by `e2e/package.spec.ts`.
+
+### The reasons, and the history
 
 - **MIT on the three published packages, AGPL-3.0-only on the worker** (FRU-22). The split follows
   the client/server boundary: the widget is compiled into someone else's site, and copyleft on code

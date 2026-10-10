@@ -35,6 +35,15 @@ function read(path: string): string {
   return readFileSync(path, 'utf8');
 }
 
+/** Every source file the extension ships, under `src/` and `entrypoints/`. No test, no fixture. */
+function sourceFiles(root: string): string[] {
+  return ['src', 'entrypoints'].flatMap((folder) =>
+    readdirSync(resolve(root, folder), { recursive: true, encoding: 'utf8' })
+      .filter((file) => /\.tsx?$/.test(file) && !/\.(test|fixture)\.ts$/.test(file))
+      .map((file) => resolve(root, folder, file)),
+  );
+}
+
 /**
  * The entrypoints that run in the page's own realm.
  *
@@ -128,5 +137,30 @@ describe('the page world can reach nothing that holds a session', () => {
         }
       }
     }
+  });
+});
+
+/**
+ * The session area keeps the access level a browser gives it.
+ *
+ * `chrome.storage.session` is closed to content scripts by default, and that default is the boundary
+ * between the access token and the page's world. One call to `setAccessLevel` opens it, in any file
+ * and far from here, and nothing would look wrong: the widget still mounts and the relay still
+ * answers. So the call is refused everywhere, and no file is listed.
+ */
+describe('nothing opens the session area to a content script', () => {
+  const sources = sourceFiles(ROOT);
+
+  /** A guard over an empty set passes. */
+  it('finds the sources it is written to guard', () => {
+    assert.ok(sources.length > 20, `only ${sources.length} source files found under apps/extension`);
+  });
+
+  it('calls setAccessLevel nowhere', () => {
+    const offenders = sources
+      .filter((path) => codeOf(read(path)).includes('setAccessLevel'))
+      .map((path) => relative(ROOT, path));
+
+    assert.deepEqual(offenders, [], 'the default of the session area excludes content scripts: keep it');
   });
 });

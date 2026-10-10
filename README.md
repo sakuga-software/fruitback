@@ -169,20 +169,20 @@ It also says how to report a vulnerability.
 
 ## Documentation
 
-|                                              |                                                                                 |
-| -------------------------------------------- | ------------------------------------------------------------------------------- |
-| [docs/modes.md](docs/modes.md)               | The three modes, what each protects, and which one you want                     |
-| [docs/install.md](docs/install.md)           | Putting the widget on a site, end to end                                        |
-| [docs/translating.md](docs/translating.md)   | Adding a language to the widget's bundle                                        |
-| [docs/reviewing.md](docs/reviewing.md)       | The reviewer's side: the extension, switching a site on, pairing                |
-| [docs/self-hosting.md](docs/self-hosting.md) | Running the worker: the image, the tags, a deployment                           |
-| [docs/privacy.md](docs/privacy.md)           | What a note carries, where it goes, how to delete it. Not legal advice          |
-| [docs/architecture.md](docs/architecture.md) | Why this shape, the seed contract, the layout, the commands                     |
-| [docs/decisions/](docs/decisions/)           | Per-subject histories: what was measured, what failed first                     |
-| [SECURITY.md](SECURITY.md)                   | The threat model, stated rather than implied                                    |
-| [CONTRIBUTING.md](CONTRIBUTING.md)           | Running the project, what must pass, the conventions, adding a connector        |
-| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)     | The Contributor Covenant, and where to report a breach                          |
-| [CLAUDE.md](CLAUDE.md)                       | The conventions and invariants, for anyone — human or agent — writing code here |
+|                                              |                                                                                        |
+| -------------------------------------------- | -------------------------------------------------------------------------------------- |
+| [docs/modes.md](docs/modes.md)               | The three modes, what each protects, and which one you want                            |
+| [docs/install.md](docs/install.md)           | Putting the widget on a site, end to end                                               |
+| [docs/translating.md](docs/translating.md)   | Adding a language to the widget's bundle                                               |
+| [docs/reviewing.md](docs/reviewing.md)       | The reviewer's side: the extension, switching a site on, pairing                       |
+| [docs/self-hosting.md](docs/self-hosting.md) | Running the worker: the image, the tags, a deployment                                  |
+| [docs/privacy.md](docs/privacy.md)           | What a note carries, where it goes, how to delete it. Not legal advice                 |
+| [docs/architecture.md](docs/architecture.md) | Why this shape, the seed contract, the layout, the commands                            |
+| [docs/decisions/](docs/decisions/)           | Per-subject rules and histories: what was measured, what failed first                  |
+| [SECURITY.md](SECURITY.md)                   | The threat model, stated rather than implied                                           |
+| [CONTRIBUTING.md](CONTRIBUTING.md)           | Running the project, what must pass, the conventions, adding a connector               |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)     | The Contributor Covenant, and where to report a breach                                 |
+| [CLAUDE.md](CLAUDE.md)                       | What no lint rule and no test catches, for anyone — human or agent — writing code here |
 
 Work is tracked in Linear on the
 [Fruitback](https://linear.app/sakuga-software/project/fruitback-ed574263d8d6) project (team Fruitback, key `FRU`).

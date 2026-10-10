@@ -1,9 +1,9 @@
 # Contributing to Fruitback
 
 This page is what you need before a first pull request: how to run the project, what must pass, and
-the conventions a reviewer will hold you to. It is short on purpose. The full set of rules is in
-[CLAUDE.md](CLAUDE.md) — written for coding agents, and just as binding for people — and the reasons
-behind each rule are in [docs/decisions/](docs/decisions/). If this page and `CLAUDE.md` disagree,
+the conventions a reviewer will hold you to. It is short on purpose. What no lint rule and no test checks for you is in
+[CLAUDE.md](CLAUDE.md), one line each — written for coding agents, and just as binding for people — and
+the rules of each area, with the reasons behind them, are in [docs/decisions/](docs/decisions/). If this page and `CLAUDE.md` disagree,
 `CLAUDE.md` is right and this page has a bug.
 
 By taking part, you agree to the [code of conduct](CODE_OF_CONDUCT.md). To report a vulnerability,

@@ -6,6 +6,38 @@ immutable.
 
 ## The published image
 
+### The rules, in short
+
+- **`ghcr.io/<owner>/fruitback-worker`** (FRU-47), for `linux/amd64` and `linux/arm64`. A Raspberry
+  Pi and an ARM VPS are ordinary self-hosting.
+- **The build stage is pinned to `--platform=$BUILDPLATFORM`.** It produces one bundled JavaScript
+  file whose bytes are identical on every platform, so emulating the install and the bundle buys
+  nothing. Only the runtime stage is emulated.
+- **`latest` moves on a `v*` tag and never on a merge to `main`**; `main` publishes `edge`, and
+  `sha-<commit>` is always written. **No tag is immutable**, `sha-<commit>` included — a tag names a
+  commit, only a digest names a build.
+- **The runtime stage holds no npm** (FRU-79). The base image carries npm, npx and corepack, the
+  worker runs none of them, and the release gate scans npm's own dependencies: every build of `main`
+  was refused for two weeks on a package inside npm, so `edge` stayed two weeks old. `apk upgrade`
+  does not reach those files. **A release that fails publishes nothing and says so only in the
+  Actions tab**: look at `release-image.yml` after a merge, not only at `ci.yml`.
+- **Trivy runs with `ignore-unfixed`**, and its version carries the `v` (`# v0.36.0`). One tag out
+  of seventy-five is unprefixed, so the wrong form looks valid until the next bump.
+- **Every `uses:` is pinned to a 40-character commit SHA, with its version as a trailing comment**
+  (FRU-69). A tag can move to other code, and the `publish` job of `release-image.yml` holds
+  `packages: write`.
+  `.github/dependabot.yml` moves an existing pin, SHA and comment together. It does not pin a new step:
+  `workflows.test.ts` fails on any `uses:` that is not a SHA followed by its version.
+- **`persist-credentials: false` on every checkout** — `actions/checkout` otherwise writes the token
+  into `.git/config`, where any later step reads it.
+- **Only the `publish` job holds the write permissions** (FRU-70). The workflow grants
+  `contents: read`, and `packages`, `id-token` and `attestations` are declared on `publish` alone, so
+  `check` builds, emulates and scans with a token that cannot publish. `ci.yml`'s `zizmor` job audits
+  the workflows offline on every pull request and fails on any finding: a permission widened back or
+  an unpinned action is a red check, not a review comment.
+
+### The reasons, and the history
+
 - **`ghcr.io/<owner>/fruitback-worker`, and self-hosting stops needing this repository** (FRU-47).
   Building from source on a small VPS means a clone, a pnpm install and a full compilation, which
   fails for lack of memory about as often as it succeeds.
@@ -84,6 +116,19 @@ immutable.
 
 ## The compose file (FRU-48)
 
+### The rules, in short
+
+- **`docker-compose.yml` pulls the image, and `compose.test.ts` holds it to the worker** (FRU-48).
+  The `worker` service passes exactly `WorkerEnv` plus every store's `envNames`, except `NODE_ENV`,
+  `HOST` and `FRUITBACK_FAKE_LINEAR`. Each value comes from `.env`, except `PORT`, which is the literal
+  `8080`; the host side reads `FRUITBACK_PORT`. `.env.example` assigns exactly what the file
+  interpolates. A new variable in the worker fails the suite until both files carry it.
+- **CI's `image` job plants a pin through the compose file from an empty directory**, with the fresh
+  build tagged under the name the file pulls. A variable exported in the shell wins over `.env`, so
+  run the same check locally under `env -i`.
+
+### The reasons, and the history
+
 - **It pulls the image, and it is the one file a stranger downloads.** It used to build from the
   repository, and called itself a reference to keep in step by hand with a Dokploy deployment that
   never reads it.
@@ -130,6 +175,24 @@ immutable.
   `docker compose config` with `.env` empty. The local run of the same check used `env -i`.
 
 ## The self-hosting guide (FRU-50)
+
+### The rules, in short
+
+- **`docs/self-hosting.md` is held to the same list** (FRU-50). Its _Every environment variable_
+  section must name exactly the worker's variables and the compose file's, one table row each, with
+  the code's defaults for `PORT`, `TRUSTED_PROXY_HOPS` and `RATE_LIMIT_PER_MINUTE`. What a wrong value
+  breaks is written from measurements on the image; re-measure a row before changing it.
+- **A documented `sqlite3 .restore` must check its file first** (FRU-50). A missing file restores as an
+  empty database and exits `0`, which erased every pin in a measurement. Chain the steps with `&&`,
+  put `test -s` before `.restore`, and stop the worker while it runs.
+- **`/health` checks the configuration and never the store** (measured, FRU-50): a SQLite directory
+  that does not exist, or a refused Linear key, answers `200` there and `502` on the first read. Do
+  not describe `/health` as proof the worker can serve.
+- **The compose file sets `TRUSTED_PROXY_HOPS` to 0; the code defaults to 1.** The file publishes the
+  port directly, and 1 there lets a forged `X-Forwarded-For` escape the rate limit (measured). Keep
+  the two defaults apart in prose: `security.test.ts` pins the code's.
+
+### The reasons, and the history
 
 The ticket turned moved material into a guide that someone who did not write the code can follow.
 What it took was mostly measuring, because four things the documentation said were not true.
