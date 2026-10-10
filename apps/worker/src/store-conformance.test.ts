@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, it, mock } from 'node:test';
 import { DEFAULT_SEED_STAGE, SEED_STAGES } from '@fruitback/shared';
+import { seedFixture } from '@fruitback/shared/seed.fixture';
 import type { ClientPolicy } from './clients.ts';
 import { COMMENTS_PER_ISSUE as GITHUB_REPLY_CAP, createGithubStore } from './github.ts';
 import { createMemoryStore, resetMemoryLinear } from './linear-memory.ts';
@@ -28,10 +29,13 @@ function json(status: number, body: unknown): Response {
 
 /**
  * Linear, as far as the Linear store uses it. It keeps the labels and the issues it receives, and
- * applies the filter of `FruitbackIssues`: the team, every label, and a substring of the description.
+ * applies the filter of `FruitbackIssues`: the team and a substring of the description.
  * A label belongs to one team, as on Linear, and an issue refuses a label of another team.
+ *
+ * `refuseLabels`: a team that lets this key create no label, as Linear answers an application that
+ * is a member of no team (FRU-138, measured).
  */
-function fakeLinear(): { node(id: string): IssueNode } {
+function fakeLinear({ refuseLabels = false } = {}): { node(id: string): IssueNode } {
   const labels = new Map<string, Map<string, string>>();
   let labelCount = 0;
   const labelsOf = (teamId: string) => {
@@ -59,6 +63,9 @@ function fakeLinear(): { node(id: string): IssueNode } {
 
     if (operation === 'FruitbackCreateLabel') {
       const { name, teamId } = variables.input as { name: string; teamId: string };
+      if (refuseLabels) {
+        return json(200, { errors: [{ message: 'not allowed to take action', extensions: { code: 'FORBIDDEN' } }] });
+      }
       labelCount += 1;
       const id = `label_${labelCount}`;
       labelsOf(teamId).set(name, id);
@@ -97,14 +104,20 @@ function fakeLinear(): { node(id: string): IssueNode } {
     if (operation === 'FruitbackIssues') {
       const filter = variables.filter as {
         team: { id: { eq: string } };
-        and: { labels: { some: { name: { eq: string } } } }[];
-        description: { contains: string };
+        and: { description?: { contains: string }; labels?: unknown }[];
       };
-      const required = filter.and.map((clause) => labelsOf(filter.team.id.eq).get(clause.labels.some.name.eq));
+      // A clause on the labels would hide every note of a team that refuses them.
+      assert.equal(
+        filter.and.some((clause) => clause.labels !== undefined),
+        false,
+        'the read must not select by label',
+      );
+      const wanted = filter.and.flatMap((clause) =>
+        clause.description === undefined ? [] : [clause.description.contains],
+      );
       const nodes = issues
         .filter((issue) => issue.teamId === filter.team.id.eq)
-        .filter((issue) => required.every((id) => id !== undefined && issue.labelIds.includes(id)))
-        .filter((issue) => (issue.node.description ?? '').includes(filter.description.contains))
+        .filter((issue) => wanted.every((text) => (issue.node.description ?? '').includes(text)))
         .map((issue) => ({
           ...issue.node,
           comments: { nodes: (issue.node.comments?.nodes ?? []).slice(0, variables.comments as number) },
@@ -477,4 +490,31 @@ describe('the store matrix in docs/self-hosting.md', () => {
       assert.equal(cells[5], isDevOnlyProvider(subject.provider) ? 'no' : 'yes');
     });
   }
+});
+
+describe('Linear, in a team that refuses the labels (FRU-138)', () => {
+  const seedOf = (id: string, client: string | undefined) => {
+    const seed = seedFixture({ id });
+
+    return client === undefined ? { ...seed, client: undefined } : { ...seed, client: { id: client } };
+  };
+
+  it('reads a note back, and keeps the notes of two clients of one team apart', async () => {
+    fakeLinear({ refuseLabels: true });
+    const store = createLinearStore(LINEAR_CONFIG);
+    try {
+      const mine = seedOf('sd_mine00000001', 'acme');
+      const theirs = seedOf('sd_theirs000001', 'globex');
+      await store.create(mine, undefined, POLICY);
+      await store.create(theirs, undefined, POLICY);
+      const read = async (clientId: string | undefined) =>
+        (await store.findForPage({ url: mine.page.url, clientId }, undefined, POLICY)).map((issue) => issue.seed.id);
+
+      assert.deepEqual(await read('acme'), ['sd_mine00000001']);
+      assert.deepEqual(await read('globex'), ['sd_theirs000001']);
+      assert.deepEqual((await read(undefined)).sort(), ['sd_mine00000001', 'sd_theirs000001']);
+    } finally {
+      mock.restoreAll();
+    }
+  });
 });
