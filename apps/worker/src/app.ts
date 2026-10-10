@@ -730,9 +730,14 @@ async function getFeedback(
         return cached(kv, url, key, () => store.findForPage({ url, clientId }, target, route.policy));
       }),
     );
-    // Two places of one team are one read of the tracker, so a note can come back twice.
+    // Two places of one team are one read of the tracker, so a note can come back twice. A site
+    // that is read in one place gets what its store answers, as it is: nothing there comes back
+    // twice, and two notes can hold one seed id.
     const seen = new Set<string>();
-    const issues = found.flat().filter((issue) => !seen.has(issue.seed.id) && seen.add(issue.seed.id));
+    const issues =
+      found.length < 2
+        ? found.flat()
+        : found.flat().filter((issue) => !seen.has(issue.seed.id) && seen.add(issue.seed.id));
 
     // WARNING: asked at each request, and never in the cached answer. The entry of the cache is
     // shared by everybody who may read the page, and the places are for a member only.

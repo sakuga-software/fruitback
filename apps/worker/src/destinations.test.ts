@@ -45,6 +45,15 @@ function envWith(): WorkerEnv {
   } as WorkerEnv;
 }
 
+/** Every text a filter of Linear looks for in a description, wherever the clause is. */
+function wanted(filter: unknown): string[] {
+  if (typeof filter !== 'object' || filter === null) return [];
+
+  return Object.entries(filter).flatMap(([key, value]) =>
+    key === 'contains' && typeof value === 'string' ? [value] : wanted(value),
+  );
+}
+
 /** Linear with two teams. It keeps each issue with its team, and a read answers one team only. */
 function twoTeams() {
   const issues: { teamId: string; projectId?: string; description: string }[] = [];
@@ -98,12 +107,12 @@ function twoTeams() {
       });
     }
     if (operation === 'FruitbackIssues') {
-      const filter = variables.filter as { team: { id: { eq: string } }; description: { contains: string } };
+      const filter = variables.filter as { team: { id: { eq: string } } };
       reads.push(filter.team.id.eq);
       const nodes = issues
         .map((issue, index) => ({ issue, identifier: `LIN-${index + 1}` }))
         .filter(({ issue }) => issue.teamId === filter.team.id.eq)
-        .filter(({ issue }) => issue.description.includes(filter.description.contains))
+        .filter(({ issue }) => wanted(variables.filter).every((text) => issue.description.includes(text)))
         .map(({ issue, identifier }) => ({
           id: identifier,
           identifier,
