@@ -5,6 +5,26 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
 
 ## The widget
 
+### The rules, in short
+
+- **`env` is off unless the integrator asks** (FRU-84): `includeEnv` defaults to `false`, and on the
+  `<script>` tag only `data-fruitback-include-env="true"` turns it on. A reporter who does nothing is
+  anonymous, and a user agent with a language narrows down who they are. `docs/privacy.md` and its
+  notice template say what is sent, so a change to this default changes them too.
+- `page.url` is canonicalized here too, which is what makes the widget query the read path with the
+  key its seeds were stored under.
+- **A component name a bundler minted is worse than none.** `isMangledComponentName` drops them and
+  the walk continues to the first name a human wrote. It deliberately does **not** climb to the app's
+  own component. **`bound qi` is `qi`**: a bound function carries a `bound ` prefix, and a production
+  build reported that name because two words did not look minified (FRU-113). The prefix is taken off
+  before the name is judged, and off a name that is kept.
+- **A file a bundler wrote is no source either** (FRU-113). On a production build the engine names
+  the chunk (`/assets/site-state-Bgn4uEnK.js`) with a line and a column of one minified line.
+  `isBundleChunk` knows it by the content hash before the extension, and `sourceFromContext` sends
+  no file, line or column for it. A line and a column go with their file.
+
+### The reasons, and the history
+
 - **`captureSeed` is the only place a seed is built.** It goes through `createSeed`, so a malformed
   anchor fails in the reporter's browser instead of as a `400` after the note was typed.
 - The anchor is deliberately redundant — selector, `domPath`, text, attrs, bounds — because the site
@@ -34,6 +54,26 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   anything — which is what happened the first time the widget met a real React tree.
 
 ## The host, and why everything lives in one Shadow root
+
+### The rules, in short
+
+- `:host { all: initial }`, because a Shadow root blocks the page's _selectors_ but not its
+  **inherited** properties. Four consequences, all of them load-bearing:
+  - `style, script { display: none }` — `all: initial` undoes the browser's own rule and renders the
+    stylesheet as visible text on the client's page.
+  - `display` is restored at the reset in `host.ts` — every block element is otherwise inline, and
+    vertical margins on it silently do nothing.
+  - the reset is `*:not(svg, svg *)`. Since SVG2 a path's geometry is a CSS property, so a bare star
+    computes `d: none` and every icon renders as an empty box, with nothing in the console and
+    nothing a unit test can see.
+  - the reset declares `color`, `font` and `letter-spacing` as `inherit`, and `:host` gives the first
+    values. `all: initial` stops inheritance too: an element with no rule of its own painted black at
+    16px, and the panel and the thread were 1.2:1 on the dark surface until axe measured them (FRU-51).
+    `contrast.test.ts` compares tokens and cannot see it.
+- **Hit testing has to be told to ignore us.** `ignore` extends that to chrome the _page_ mounts
+  around the widget.
+
+### The reasons, and the history
 
 - `createCaptureHost` owns the widget's DOM: the floating button, the hover highlight, and — through
   `host.root` — the overlay's pins and whatever the note UI turns out to be.
@@ -78,6 +118,18 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   plausibly pick.
 
 ## One prefix, and it is `fruitback`
+
+### The rules, in short
+
+- **`theme.ts` owns every colour, shadow, radius, font family and duration.** Each module injects its
+  own `<style>` into the one Shadow root, so a token on `:host` reaches all of them. **The base
+  `:host` block must declare every settable token** — a token declared only under
+  `prefers-color-scheme: dark` is undefined in light mode, and the test that checks this is scoped to
+  that block for exactly that reason.
+- The pin's silhouette is **not** in the radius scale: `border-radius: 50% 50% 50% 0` is a shape, not
+  a corner size. Spacing is still literal on purpose.
+
+### The reasons, and the history
 
 - **`--fruitback-*` tokens, `.fruitback-*` classes, `data-fruitback-*` attributes.** One word
   everywhere (FRU-53), including the names on the `<script>` tag the README documents.
@@ -126,6 +178,19 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   and the panel spelled the same intention two ways.
 
 ## The popover
+
+### The rules, in short
+
+- **One field, the name, and no e-mail** (FRU-91). It is optional, behind a disclosure, and never
+  `verified` — that flag is the worker's to set. `reporter.email` stays in the seed contract, because
+  an identity token can carry one.
+- **The widget remembers a name only for a reporter who ticked the box.** `NameMemory` is a seam like
+  `onSubmit`: the composer does not know where the name is kept, and `embed.ts` gives it the config
+  store. The name is written before the send, so a failed send costs neither the name nor the
+  choice. Unticking the box erases at once. With `identityToken`, the composer asks for no name: the
+  worker would replace a typed one.
+
+### The reasons, and the history
 
 - **`createComposer` owns the states, not the transport.** `onSubmit` is awaited, so an embedder
   posts through whatever it set up while the widget stays ignorant of the worker's URL and of auth.
@@ -211,6 +276,13 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
 
 ## Who carries the calls
 
+### The rules, in short
+
+- **`fetchTransport` does not catch.** A worker nobody can reach rejects, and `embed.ts` treats a
+  rejection and a failed status identically.
+
+### The reasons, and the history
+
 - **`transport` is a seam, and it is the same one twice** (FRU-56). The widget stays dormant when a
   host has nothing to reach the worker with, and the extension relays the calls when it does. Those
   looked like two features; they are one question — _who carries this_ — asked once.
@@ -267,6 +339,28 @@ header when the host mints no token` compared `fetch`'s second argument to `unde
 
 ## The settings panel
 
+### The rules, in short
+
+- **What is not configurable is the design** (FRU-14). The Linear team, project and labels are
+  absent, and since FRU-89 the worker and the client id are too. The panel holds no field to type in:
+  it is seen by a client on their own site, and where the notes go is not for a reporter to say.
+- **`endpoint` and `clientId` are not in the config store** (FRU-89). They are the word of the
+  caller of `init`. The store restores its key from the page's own `localStorage`, so a stored copy
+  let a page that wrote the key first choose where the notes go, and beat a new default for ever. A
+  `pinned` option covered that for a mount with its own key only; an ordinary embed stayed exposed.
+- **Do not use generic tags in the widget's chrome.** Playwright's selectors pierce open shadow
+  roots, so a `<header>` in the panel made the page's own `header button` ambiguous. And inside the
+  widget's region landmark a `<header>` is a banner, which axe refuses (FRU-51).
+- **Two elements must not share one accessible name.** The gear says `Open Fruitback settings`
+  and the dialog `Fruitback settings`. A host catalog must keep `settings.open` and `settings.dialog` apart
+  too.
+- **The panel offers a box only for the stages the worker reports** (FRU-32). `OfferedStages` is kept
+  out of `ConfigStore`, because a copy in `localStorage` would outlive a change of store. A stage the
+  reporter hid stays hidden in the config. `.fruitback-config-check[hidden]` needs its own
+  `display: none`: the class sets `display: flex`, which beats the browser's rule for `hidden`.
+
+### The reasons, and the history
+
 - **What is not configurable is the design** (FRU-14). The ticket asked for the Linear team, project
   and labels; they are absent. Since FRU-15 the worker resolves those from the client id and refuses
   an id it does not know, so a browser naming its own team would either be ignored — a setting that
@@ -316,6 +410,25 @@ header when the host mints no token` compared `fetch`'s second argument to `unde
 
 ## The feedback as text (FRU-109)
 
+### The rules, in short
+
+- **`export.ts` is one pure function, and `feedbackAsText()` on what `init` returns is the same
+  text the panel's button copies.** It reads `overlay.resolutions()`, so it costs no request and
+  leaves out a stage the reporter hid. It is an addition to the contract in `public.ts`.
+- **The text holds no instruction and no introduction.** It is what the reviewers wrote and where.
+  A sentence that tells a reader what to do with it belongs to whoever pastes it.
+- **Every line a reviewer wrote is quoted, and every value of ours is one line.** A note is text
+  from anybody who can reach the page. Unquoted, a line of it can pass for a heading of this
+  format, or for the note after it. A selector goes in a code span one backtick longer than its
+  longest run. The quote stops a forged structure. It does not make the text safe to obey.
+- **The words are catalog keys, the dates are not.** `2026-10-06` reads the same in every language.
+  `messages.test.ts` holds a key that never rendered as a failure, so the copied text is pushed
+  into that check by hand: it is in no DOM node.
+- **A clipboard can refuse.** The panel then shows the text in a field, selected. The field is made
+  on demand: at rest the panel holds no field to type in (FRU-89).
+
+### The reasons, and the history
+
 Asked for as a « basic » text mode: the comments of a page in a form somebody can paste to an agent,
 with no context and no instruction added.
 
@@ -349,6 +462,32 @@ with no context and no instruction added.
   so a host can do that itself.
 
 ## The words, and the catalogs the bundle carries (FRU-37, FRU-38)
+
+### The rules, in short
+
+- **`messages.ts` holds every word, behind a key. English and French are bundled** and maintained
+  here; English is the default. No i18n library. A host passes `init({ locale, messages })`. For
+  `fr-CA` a key comes from the host's `fr-CA`, the bundled `fr-CA`, the host's `fr`, the bundled `fr`,
+  then English.
+- **A bundled catalog is exhaustive** (`Catalog`) and keeps English's placeholders — a test compares
+  them. A host catalog is parsed field by field: a bad entry costs that entry, and a locale tag `Intl`
+  refuses costs the translation, never the mount: `Intl` throws on it, and `validLocale` catches that
+  and drops the catalog.
+- **Plural rules and number formats follow the catalog that supplied the message.** Bylines are
+  relative dates in the language of the words, with the absolute date in `title`.
+- **Layout follows the reading direction; geometry never does.** `dir` and `lang` go on the host
+  element, from the language of the words. The dock, the panel and the drawer sit at
+  `inset-inline-end`. The pin, its badge and the document-coordinate containers stay physical, and the
+  popover and the thread keep a physical `left` computed from the element's start edge.
+  `direction.test.ts` reads the stylesheets and enforces the split; `e2e/direction.spec.ts` checks it
+  in Arabic.
+- **`languageOf(document)` reads the mounted page's navigator.** Node's global one also says `en-US`,
+  so a binding that read `globalThis` passes every test that expects English.
+- **A message is text.** Set it with `textContent` or an attribute, never inside an `innerHTML`
+  template — the composer sets its words after the template is parsed.
+- **The E2E suite pins `locale: 'en-US'`**, because the specs find the chrome by its English names.
+
+### The reasons, and the history
 
 - **`messages.ts` holds every word the widget shows, behind a key.** No i18n library ships: a record
   of strings and `Intl.PluralRules` cost a few hundred bytes, under a size guard that trips at 150 kB.
@@ -418,6 +557,46 @@ with no context and no instruction added.
   guard is not widened.
 
 ## The keyboard, the screen reader and the contrast (FRU-51)
+
+### The rules, in short
+
+- **The popover and the panel are modal dialogs, and `aria-modal` ships only with the trap.** The
+  page gets no `inert`, so `holdFocus` in `focus.ts` makes the claim true: Tab stays inside, Escape
+  closes and stops at the dialog, and focus goes back to what had it before the open, unless the
+  reporter moved it. A capture-phase listener on the document brings a Tab from the page back in,
+  because the page is not inert. **Only the dialog opened last keeps Tab**: the gear opens the panel
+  over an open popover. The thread is a dialog that is not modal: it takes focus and gives it back to
+  what opened it, its badge or a detached-note entry, and a render moves focus to the rebuilt badge.
+- **The reset removes the focus ring too**, and `host.ts` restores one on `:focus-visible`. **The gear
+  stops the capture mode**, and the capture mode leaves the keys to a dialog of the widget that has
+  focus: both take the arrows and Enter from the document. While no widget dialog has focus, the
+  capture mode consumes the arrow keys, and it consumes Escape only when Escape cancels the capture.
+  Enter on a widget control other than the launch button presses that control.
+- **`document.activeElement` answers the host element for anything in the Shadow root.**
+  `deepActiveElement` reads through it. A focus test that reads the document's answer passes for free.
+- **The capture mode works without a pointer.** Down and Up walk the page in document order, Left
+  goes to the parent and Right to the first child, and the two swap in a right-to-left language.
+  Enter or Space selects. `CaptureEngine.grabbable` filters the walk, and `isOurs` still applies.
+  **Enter is taken only while an element is highlighted**: otherwise it presses the launch button,
+  which is how a keyboard stops the mode. The walk stays in the light DOM of the document; the
+  pointer also reaches shadow roots and iframes.
+- **A live region inside a hidden element announces nothing.** The host has its own announcer. The
+  announcer for detached notes is a sibling of the list's root, which hides while empty, and `owns`
+  must include it: otherwise its new text reads as a page change and schedules a resolve.
+- **The host container is a landmark**, `role="region"` named by `widget.label`. A screen reader meets
+  the widget in the middle of the host's content, and the landmark says what it is.
+- **`contrast.test.ts` measures every pair a module paints, in both schemes, and no pair fails**
+  (FRU-93). A pin sits on the host's page, so no test can promise its contrast. `e2e/a11y.spec.ts`
+  runs axe-core in both schemes, scoped to `[data-fruitback-host]`, with animations off, and finds
+  nothing. Its control repaints a label grey and expects a finding: an empty list proves nothing
+  alone. Axe finds what the token test cannot, because that test compares the tokens a pair names and
+  not the rule that paints them: text that the reset painted black, and a label that kept the
+  foreground of the accent on the chip.
+- **In the dark scheme the accent and the warning are light fills with dark text on them.** Each one
+  is a fill under text and also text on the surface, and no single red does both with white text.
+  A style that changes a background must change the foreground with it.
+
+### The reasons, and the history
 
 The widget lays itself over somebody else's page, which may have been audited. An accessibility
 defect of ours is a defect of theirs.
@@ -598,6 +777,16 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 
 ## Re-anchoring, and why a pin says how sure it is
 
+### The rules, in short
+
+- **It watches the page, because nothing announces a re-render** (FRU-21). A `MutationObserver` on
+  `childList`/`subtree`, debounced, plus a `ResizeObserver` per anchored element. Deliberately **not**
+  `attributes`: a design system toggles classes on every hover, and what must be caught is the element
+  being _replaced_.
+- The overlay positions in **document coordinates** and re-measures on scroll and resize.
+
+### The reasons, and the history
+
 - `resolveAnchor` walks the anchor's claims in the order `SEED_ANCHOR_STRATEGIES` declares:
   **selector → testId → text → domPath → bounds**. That order is the contract's, and it puts `text`
   ahead of `domPath` deliberately.
@@ -647,3 +836,19 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   uniqueness and sibling questions cannot be answered honestly by a hand-rolled fake. Nothing outside
   `*.test.ts` and `*.fixture.ts` may import it, and `tsconfig.json` excludes both so the shipped code
   still compiles with `types: []`.
+
+## The list of every note (FRU-129)
+
+### The rules, in short
+
+- **`sidebar.ts` lists what `overlay.resolutions()` holds**, so it costs no request and leaves out a
+  stage the reporter hid, like the copied text. A third button of the dock opens it. Choosing a note
+  calls `overlay.select`, which scrolls to the element, or to the pin of a detached note, and opens
+  the thread.
+- **It is a dialog that is not modal**, like the thread: the page stays usable beside it and a
+  reviewer goes from note to note. It takes focus, gives it back to what opened it, and keeps its
+  own Escape: the thread closes on an Escape of the document, and one key must close one thing.
+- **Its name must not start like the thread's.** The two are open at once. « Feedback of this page »
+  beside « Feedback DEV-3 » made one locator find two dialogs, in the first run of its spec.
+- **The playground does not have it**: it assembles the widget part by part. `e2e/sidebar.spec.ts`
+  loads the built script, like `package.spec.ts`, and runs axe in both schemes with its own control.

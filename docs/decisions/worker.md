@@ -5,6 +5,35 @@ connector's environment, and what a second connector with no markdown body actua
 
 ## The worker
 
+### The rules, in short
+
+- It exists because a store's API key cannot ship in client-side JS — and, since FRU-31, because
+  somebody has to hold the SQLite file too. **Resist putting logic here that belongs in the widget or
+  in the store.** The rule is the point; "exactly one reason" was the wording until FRU-26, and it
+  stopped being true when a store with no API key shipped.
+- The env is validated up front (`readConfig`), so a missing secret surfaces at boot and on
+  `/health`, not as an opaque error per request.
+- **Both paths canonicalize the page URL** — `POST /feedback` re-does `seed.page.url` server-side and
+  `GET /feedback` its `url` parameter. A client that skipped normalization would plant a pin nobody
+  can find again.
+- **The rate limiter and the read cache keep their state in a `Kv`** (FRU-49), and this process
+  holds one, in memory. Two replicas are therefore two ceilings — the configured limit multiplied by
+  the container count — and the deployment is one container. A Redis implementation was built,
+  reviewed and removed before merging: it is FRU-67, with what it learned. `kv.ts` is the seam and
+  the memory store. **Values are strings**, so a value a remote store cannot hold fails here too.
+- The read cache is two layers. **The in-flight promise stays in this process**, so a burst on one
+  replica costs one call and N replicas cost at most N. The settled answer goes in the `Kv` for
+  `CACHE_TTL_MS`. A failure is never written: an outage must not be served for the whole TTL.
+- **A write invalidates by writing a new page version, never by scanning keys** — a `Kv` cannot be
+  asked which keys match. The version is part of the cache key, so a read that was in flight while
+  the pin was planted stores its stale answer under a version nobody will read.
+- **The limiter refuses when the `Kv` does not answer** (`503 limiter-unavailable`): a limiter that
+  opens during an outage is one anybody can open. `/health` never touches the `Kv`, because a
+  readiness probe that depends on the `Kv` takes every replica out at once. A failed invalidation after
+  a write is the opposite call — the issue exists, and a `502` would have the widget plant it twice.
+
+### The reasons, and the history
+
 - It exists for exactly one reason: the Linear API key cannot ship in client-side JS. Resist putting
   logic here that belongs in the widget or in Linear.
 - **`app.ts` is transport-agnostic** — a `handleRequest(request, env, context)` over web
@@ -114,6 +143,15 @@ degradation the ticket asked to have written down rather than discovered.
 
 ## Who may read a pin
 
+### The rules, in short
+
+- **`read: 'public' | 'authenticated'`** (FRU-40), per client or worker-wide. `public` stays the
+  default — that is compatibility, not security, and the exposure is made _sayable_ instead: the boot
+  log names every client whose pins anyone can read, and `/health` **counts** them without listing
+  the ids.
+
+### The reasons, and the history
+
 - **`GET /feedback` used to answer anyone who could build the URL.** Every note, its author and the
   team's replies were readable by any visitor of the client's site, and by `curl` — which is why
   hiding pins in the browser was never the fix. `read: 'public' | 'authenticated'` is (FRU-40), per
@@ -164,6 +202,71 @@ degradation the ticket asked to have written down rather than discovered.
   checked.
 
 ## Where a seed is stored
+
+### The rules, in short
+
+- **`store.ts` is the interface.** `findForPage` states the _intention_, not the method — Linear
+  filters by substring, SQL does a `WHERE`, and exposing a `contains` filter would have made
+  Linear's trick the contract.
+- **`store.scope(client)` is what keeps the read cache key store-agnostic.** Only the store knows
+  what identifies a tenant. The client id stays in the key regardless, which is what stops two
+  clients sharing one team from sharing an entry.
+- **The store is built once per process, by the transport**, and every request gets it through
+  `RequestContext`. Building it per handler would open a SQLite connection per request. The tests
+  assert the handler used the store it was **given**.
+- **Every state the deprecated flag can be in says something at boot** (FRU-54).
+  `fakeLinearIgnoredReason` answers when the flag lost — to `NODE_ENV=production`, or to an explicit
+  `FRUITBACK_STORE`. `fakeLinearDeprecationNotice` answers when it selected the memory store, and
+  when `FRUITBACK_STORE` took precedence over it and the flag is a stale line somebody can delete —
+  **precedence, never that the store is in use**, because an explicit `memory` is still refused under
+  `NODE_ENV=production` and the notice would otherwise print one line above the boot failure that
+  says so. The two are mutually exclusive by construction, and a test pins that over every
+  environment it enumerates. **FRU-33 shipped only the first**, which reached every operator except the ones
+  still relying on the flag — the inverse of who a deprecation notice is for. `server.ts` has no test
+  of its own, so the boot line is asserted on its **source**: the notice's own cases all stay green
+  with the call deleted, and the warning then reaches nobody.
+- **`/health` answers `store: '<provider>'`**, always, and it is compared exactly in `app.test.ts`
+  because the endpoint is public.
+- **A row is parsed, never trusted**, in every connector. A malformed one costs that pin; the page
+  keeps its other notes. `sqlite.ts`'s `insert` and `select` are `async` so a failure to open the
+  file rejects rather than throwing synchronously.
+- **Every store passes `store-conformance.test.ts`** (FRU-34). The cases live in
+  `store-conformance.fixture.ts`; each store gives a subject that opens it against a double that keeps
+  what it receives. A step a store cannot do is a string reason, reported as skipped, never as passed.
+  The outage case goes through `handleRequest`, because the promise is the `502`, not the throw. The
+  store matrix in `docs/self-hosting.md` is compared with each store's `stages`, reply cap and `devOnly`.
+  On a worker without `FRUITBACK_CLIENTS`, a read that names no client gets every seed on the page, on
+  every store. A store that routes by client is tested with a second tenant, and a remote store with a
+  rejected `fetch` and an unreadable body as well as an error status.
+- **`linear-memory.ts` keeps its name and its import of `toSeedIssue` on purpose.** That coupling is
+  the feature.
+- **`github.ts` signs in as a GitHub App, never with a personal token** (FRU-32). An RS256 JWT from
+  `node:crypto` buys an installation token narrowed to **one repository**, cached per repository until
+  five minutes before it expires. Concurrent reads share one mint, a failed mint is not kept, and a
+  `401` drops the token. The installation is found from the repository, so there is no variable for it.
+- **GitHub's `labels=a,b` is AND** (measured on `cli/cli`: 42 for one label, 22 for the pair). It is
+  what keeps one client's pins off another's site. A count at the
+  page size proves nothing: the first check compared three counts of 100. GitHub also splits the value
+  on commas, caps a label at 50 characters and ignores case, so `githubLabelName` hashes any client
+  label that is not plain lowercase, or that already has the shape of a hash — on the write and the read
+  alike. `matchPage` rechecks every label on the row, and the client the seed names.
+- **A Linear read selects by team and page, never by label, and reads the client in the seed**
+  (FRU-138). A team can refuse `issueLabelCreate` to the key, and it does to an application that is a
+  member of no team (measured). The write then makes the issue with no label, and a read that
+  selected by label never showed that note again. The labels stay, when Linear allows them, for the
+  people who triage. The client is also looked for in the
+  description, as a substring, so the notes of another client of the team do not fill the pages a
+  read walks; the exact comparison is in the code.
+- **A GitHub read lists the client's issues by label and re-checks `seed.page.url`; it never
+  searches.** Search is 30 requests a minute. Every page read walks the client's list, newest first,
+  stopped at 1,000 issues, and the read cache is what protects the hourly budget.
+- **A label that cannot be created stops a GitHub write.** A read finds a seed by its labels, so an
+  issue without them is a note nobody sees again. A `502` keeps the note in the widget.
+- **No parameter properties in the worker.** `constructor(readonly status: number)` is TypeScript that
+  Node's type stripping refuses, and every test file that imports the module fails to load. `tsc`
+  accepts it.
+
+### The reasons, and the history
 
 - **`store.ts` is the interface, and it existed before it was named** (FRU-29). `app.ts` used to
   select between the real and the in-memory module through
@@ -448,6 +551,23 @@ any store` asks it of every spec rather than of Linear.
 
 ## The markdown codec, and the file that outlived its name
 
+### The rules, in short
+
+- **`pageQueryTerm` lives beside it**, because the term works only where `buildSeedBlock` writes the
+  canonical URL verbatim into the JSON.
+- **The prose of a description is written in the team's language, never the reporter's** (FRU-39).
+  `FRUITBACK_TEAM_LOCALE` (English by default) reaches the stores through `ClientPolicy.locale`, and
+  `TEAM_WORDS` in `markdown-description.ts` holds the words. A description is read where the issues
+  are: a note written in Tokyo must not file a Japanese issue into a team that reads English. **The
+  locale reaches the prose and never the JSON block**, which is what keeps the round trip true in
+  every language — the test runs over several. A value that is not a locale tag is refused at boot; a
+  valid tag this build has no words for degrades to English. The note and the name the reporter typed
+  are never translated.
+- `packages/shared/src/linear.ts` became `issue.ts`; `apps/worker/src/linear.ts` keeps its name,
+  because over there a team really is Linear's.
+
+### The reasons, and the history
+
 - **`markdown-description.ts` holds "put a seed in a markdown body and keep the issue readable"**
   (FRU-30) — `buildIssueTitle`, `buildIssueMetadata`, `buildSeedBlock`, `buildIssueDescription`,
   `parseSeedFromDescription` and `pageQueryTerm`. None of it was ever Linear's; every issue tracker
@@ -475,6 +595,205 @@ any store` asks it of every spec rather than of Linear.
   consumer's build.
 
 ## The extension's session
+
+### The rules, in short
+
+- **A session is credentials, and credentials are not seeds** (FRU-42). `FRUITBACK_SESSION_PATH` is
+  its own SQLite file, whatever `FRUITBACK_STORE` says — a worker keeping its seeds in Linear still
+  keeps its sessions on a disk it owns.
+- **Do not reuse `sqlite.ts`'s `connect` for it.** That helper applies the _seeds_ migrations and
+  drives `PRAGMA user_version` with them, so a session database opened through it gets `seeds` and
+  `comments` tables and two schemas fighting over one counter. `session-sqlite.ts` has its own.
+- **The operator names the person; the browser never does.** A pairing code is minted _for_ someone,
+  carrying their name, and whoever redeems it gets a session that says so. An extension supplying its
+  own name at pairing time is the browser asserting an identity, which is what FRU-9 closed.
+- **The access token is an ordinary identity token**, signed with the same key `identity.ts`
+  verifies. One verification path in this worker rather than two, and `read: 'authenticated'` accepts
+  the extension with no change at all.
+- **Pairing codes and refresh tokens are stored as SHA-256 digests.** A copy of the file must not be
+  a set of working logins. A test reads the bytes SQLite wrote — the `-wal` file included, because a
+  row just written is only there. **This is why a rotation cannot answer the same successor twice**,
+  and it is what shaped FRU-61.
+- **Every refresh rotates** (FRU-61). A refresh token that never changes is a thirty-day password.
+  What retires a predecessor is its **successor being used** — proof the _token holder_ received it,
+  never proof of which holder, because a bearer token cannot say — not a clock.
+  `ROTATION_GRACE_SECONDS` is the ceiling for an answer that was lost, measured from the **first**
+  rotation, and derived from the extension's `REFRESH_MARGIN_MS + RETRY_DELAY_MS` by a test that
+  reads them. Inside it the predecessor may be presented repeatedly; each retry replaces the
+  successor nobody received, so one successor is live at a time. A token presented after its
+  successor was used is a copy: the **whole chain** is revoked, and the caller gets the same `401`
+  as for a token that never existed.
+- **Rotation is a detection property, not a lifetime cap.** Do not write that a stolen token is
+  useful for "at most one cycle" — three places said so and none was true. Whoever presents a bearer
+  token is served, and inside the grace each presentation revokes the successor the one before it
+  minted — so the **last** presenter keeps the chain and every earlier holder is locked out. Write
+  _last_, not _first_: the inverted version shipped into three documents and a test name. What is
+  guaranteed is only that the two cannot both keep the session quietly.
+  test:`serves whoever presents last inside the grace, until the earlier holder comes back` holds it.
+- **The replay test is the chain, not the row**, and `revokeSession` ends the chain. A revoked
+  token presented while something in its chain is still live means two parties hold one chain: that
+  is the signal, and everything goes. A chain with nothing live left is an ended session and answers
+  `gone`. The earlier test — revoked _and_ rotated — missed the case where a thief has the client's
+  own successor revoked under it inside the grace, which left the thief refreshing for thirty days.
+  The trade is that intercepting one answer in flight now ends the session at will; that capability
+  already subsumes the attack. And a log out that revoked only the row it was handed left the
+  successor of a lost-answer token live, held by nobody.
+- **`rotated_at` marks the first rotation, never the last.** `AND rotated_at IS NULL` on that update
+  is the grace being a ceiling: rewritten on every retry it slides, and whoever holds the token
+  re-presents it just inside each window for ever.
+- **An access token carries the generation of the session it was minted for** (`matches`). Fresh is
+  not enough: the popup and the background write the same two areas from separate contexts, so a
+  logout can land between a refresh writing the session and the same refresh writing its grant, and
+  the orphan was then honoured for its remaining ten minutes — which revoking on the worker does not
+  reach. The two writes are not one operation and cannot be, because `chrome.storage` has no
+  transaction. It is an opaque id, never the refresh token: copying a credential into the session
+  area would undo the split that keeps it out. Absent on both sides compares equal, so an upgrade
+  keeps the session it had. Since FRU-64 that case is refused twice — the session the grant names is
+  itself stamped with a run that is over — and what the generation still holds on its own is a grant
+  and a session that drifted apart **inside** one run, which a partial write leaves behind.
+- **One storage key per endpoint, in both areas** (FRU-63). `fruitback:grant:<endpoint>`, joined by
+  `fruitback:epoch:<endpoint>` beside the session it dates (FRU-64), and `Area` has `put`/`drop`
+  rather than a whole-record `write`. One
+  key holding every endpoint made every write a read-modify-write, and the popup and the background
+  do not share a lock: two refreshes each read the record and each replaced it, so the later write
+  put the earlier one's **spent** token back — a replay, so the worker revokes the chain and the
+  reviewer pairs again. A logout in the popup was written away the same way. `refreshOnce` is per
+  endpoint and cannot cover this; it is what makes two workers refresh in parallel in the first
+  place. A queue in `session.ts` held it inside one context only, and it is gone.
+- **A session key names its run too** (FRU-65): `fruitback:session-run:<epoch>:<endpoint>`. A
+  refresh writes the run it read, so a logout and a new pairing inside its window keep the pairing.
+  `put` removes the runs of its endpoint that its snapshot shows as over. That is safe because an
+  epoch never comes back and a key written after the snapshot is not in it. A refresh that answers
+  `401` ends only the run it spent, while that run holds the token it spent, and mints no epoch: an
+  epoch would end the pairing. The grant keeps one key per endpoint, so a lost race costs the pairing
+  one refresh.
+- **The endpoint is the rest of a key after its prefix, colons included.** An endpoint is a URL a
+  reviewer typed, so `https://a.test/x:session:y` is legal and splitting on the separator files the
+  entry under a worker nobody is paired with. The epoch in a session key is encoded with
+  `encodeURIComponent`, which writes no colon, so the first colon after the prefix ends it.
+- **The upgrade runs once per context and everything waits on it.** `splitLegacyRecord` takes one
+  `get(null)` snapshot, writes only the endpoints with no key of their own, then removes the legacy
+  key. `moveToRunKeys` then moves each key per endpoint to its run, the same way. Both go in
+  that order, so a failure between the two leaves the credentials readable rather than gone.
+  A `drop` that did not wait would remove a key not written yet and the upgrade would put the session
+  back: **a logout that does not stick**, the defect the ticket is named after.
+- **An upgrade that fails keeps the gate shut**, so every operation rejects. Releasing it is the
+  quiet half of the same fact: a read answers that the reviewer is paired with nobody while a live
+  credential sits under the legacy key. `upgradeAreas` marks its own rejection seen — an unhandled
+  one stops a service worker — and still rejects for whoever waits on it.
+- **`session-storage.ts` holds the keys, the `Area` factory, the upgrade and the wiring, behind a
+  `StorageArea` seam**, so `node --test` reaches all of it. `session-browser.ts` is left binding
+  `browser` and `fetch`. Same split as `bridge.ts`. **`createStoredSessions` is the only assembly**,
+  which is what lets a test drive two `Sessions` over one storage — the popup and the background, as
+  they really are — rather than over two fakes that cannot reach each other. A fake `Area` answers
+  from what a test put in it, so a value the parser drops on the way out of real storage is invisible
+  to it: `parseStoredSession` silently dropping the epoch is the defect that found this.
+- **The epoch is read inside the sessions area, from the same snapshot as the session** — a call site
+  cannot forget to ask, and no logout can land between the two halves of the comparison.
+- **One refresh in flight per endpoint** (`refreshOnce` in the extension's `session.ts`). Two callers
+  spending the same token is a lockout, not a wasted request: the worker treats the second as a
+  retry inside the grace, revokes the first successor, and whichever answer lands last can leave the
+  extension holding a revoked token. `background.ts` serialises the **alarm** only — the relay
+  calls `ensureAccess` directly, and the widget has a read and a write in flight in the ordinary
+  case. The lock is in `session.ts` and not the entrypoint, for the reason `bridge.ts` gives.
+- **A `200` from `/session/refresh` with no `refreshToken` is not a success.** Taking it leaves a
+  spent token in storage under a working access token, and the session dies when the grace runs out
+  with nothing to explain it. Both call sites require the field; `parseIssued` stays tolerant.
+- **`app.ts` builds the refresh answer field by field, so `refreshToken` has to be named there.**
+  Leaving it out is what the route would do by default: the rotation works, the store holds the
+  successor, and the client keeps sending a token the worker retired. `tsc` cannot see it and the
+  extension's tests cannot either — they fake the worker. `session-routes.test.ts` asserts the body.
+- **Minting a code is a command, not a route** (`node server.mjs pair --subject …`, and
+  `server.mjs` because the image copies the bundle and no source). An endpoint
+  would need an admin credential of its own and would stay reachable for ever; a command is reachable
+  by whoever already sets the secrets.
+- **Forgetting a reporter is a command too** (FRU-85): `node server.mjs forget --email … [--dry-run]`.
+  It lists before it says what it did, because a typed address is a claim. Only a store that holds
+  its rows implements `forget`; a tracker store is refused with where to delete instead.
+  **`--name` only lists and `--id` deletes** (FRU-111): the widget asks for no address since FRU-91,
+  and a name is a weaker claim than an address. One selector in a command, and one identifier that
+  names no note stops the deletion of the others.
+  `node:sqlite` turns foreign keys **on** by default, so deleting the pragma in `connect` is an
+  equivalent mutant: test the cascade with the pragma set to `OFF`.
+- **An extension origin is exempt from `ALLOWED_ORIGINS`, on every route** (FRU-42, widened by
+  FRU-57). That list names client _sites_; an extension's origin carries an id that differs between
+  an unpacked build and a store build, so an operator cannot put it there. Measured: an MV3 service
+  worker posting JSON sends `chrome-extension://<id>` and triggers a preflight, and both answered
+  `403`. The `/session/` routes needed it first; the relay then called `/feedback` the same way.
+  **`isExtensionOrigin` is one predicate in `cors.ts` that both gates ask** — `resolveCors` and
+  `resolveClient` — because two copies of this rule would drift apart in silence. It is a list of
+  schemes rather than "not http", so everything else falls through to the allowlist. It grants an
+  extension what a caller with no `Origin` already has, and `read: 'authenticated'` is still what
+  decides who may read.
+- **`checkRateLimit` runs above the path dispatch**, so a route added later is metered by default. It
+  used to sit below the `404`, which would have left `/session/pair` an unmetered guessing oracle.
+  `/health` stays free — a readiness probe that can be rate-limited takes the container out.
+- **Three boot refusals, all loud rather than silent.** A session path with no
+  `FRUITBACK_IDENTITY_SECRET` mints nothing; a session path with a client map in which no client
+  declares a `workspace` mints tokens no client accepts; a client whose own key is the worker key
+  would verify every session token as its own.
+- **A session belongs to one workspace, and the `ws` claim is what separates them** (FRU-95). Every
+  session token of every workspace is signed with the one worker key, so the signature proves
+  nothing about the workspace. `verifyForClient` compares `ws` with the client's `workspace` after
+  the signature, on the read and on the write. `pair --workspace` names it, and it travels through
+  every rotation.
+- **With `FRUITBACK_ACCOUNTS_PATH`, the sites are the clients** (FRU-96). `withSites` in `app.ts` reads
+  them from the accounts file on every request and lays them over the configuration as its client map
+  and its allowed origins, so routing, CORS and the `ws` check run unchanged. **An empty map stays
+  empty**: `undefined` would make it a single-client worker that answers every page. `accounts.ts`
+  holds the roles, and `can(role, action)` is the one table of who does what. The boot log says so
+  too: `readExposureNotice` does not read a worker with accounts as « one client, public », which is
+  what it printed on the first day of the Cloud (FRU-116).
+- **Signing in ends in a pairing code, like every session** (FRU-98). `/auth/email` sends a link whose
+  code is after the `#`; `/auth/email/redeem` spends it, makes the address an account, then mints and
+  spends a pairing code for it. **The console's refresh token is an `HttpOnly` cookie** on
+  `/console/session`, and `consoleCors` answers `FRUITBACK_CONSOLE_URL` and no other origin. A console
+  session names no workspace: the `ws` check keeps it off every site. `mail.ts` is the seam, Scaleway
+  Transactional Email over HTTP the one implementation.
+- **A workspace connects its own tracker, and a site chooses where its notes go** (FRU-121).
+  `connectors.ts` wraps the worker's store: a client with no `connector` uses it as before, a client
+  with one uses a Linear store built from the key of that connector. `clientOf` puts the connector and
+  the team on the client entry, so the Linear store routes as it always did. **A connector that cannot
+  be used is a store that is down (`502`), never a fall back**: a note in the worker's own store would
+  be invisible to the team. The key is sealed by `secrets.ts` with `FRUITBACK_SECRETS_KEY`, and no
+  route answers it. The workspace of the client is compared with the workspace of the connector at the
+  request too, because the row of a site is only a row.
+- **A workspace connects Linear with OAuth where the worker has the application** (FRU-134).
+  `linear-oauth.ts`: the console gets a ticket with its token and sends the browser to
+  `/auth/linear/start`; a navigation carries no `Authorization`, so the ticket says who starts, once.
+  The `state` is bound to the browser by a `SameSite=Lax` cookie, like GitHub's: without it, somebody
+  could get a victim's consent on their own `state`, and the victim's Linear would land in their
+  workspace. **A Linear connector keeps a key or a pair of tokens**, and `linearAuthorization` is the
+  one way to the header: it refreshes a token near its end, one refresh at a time for a connector,
+  and writes the new pair before it uses it. A personal key goes raw, a token goes with `Bearer`.
+  The connector is named `Linear OAuth · <workspace>`, and the console reads that prefix.
+- **A connector can be an address that only receives** (FRU-122). `rest` is no store: the note is
+  kept in the worker's own store first, then `receivingStore` puts a row in `deliveries`, and the
+  server's loop (`deliverPending`, every 15 seconds, one pass at a time) posts the rows that are due.
+  **The attempts of a pass run together**, and one deadline covers a whole exchange: the `timeout` of
+  a Node request is an idle time, which a receiver that sends a byte now and then never reaches.
+  **The widget is answered when the note is kept**, and a queue that refuses the row is logged and
+  does not fail the request: a `502` there would keep the note twice. A row goes when its note
+  arrived, so the table holds what is late or given up.
+- **`rest-send.ts` checks the address when the socket resolves it**, through the `lookup` of the
+  request. A check before the request is passed by a name that answers twice. `isPublicAddress`
+  refuses the private, link-local and mesh ranges, and one internal answer refuses the name. The
+  sender takes `request`, `lookup` and `allows` as seams, so the tests reach the real code on a
+  local socket: the production sender, given the same local server, must refuse it.
+- **`docs/rest-connector.md` is a contract**, and `rest-connector.test.ts` holds its waits, its
+  timeout, its headers, its body and its `openssl` example to the code. A `Destination` has a team
+  for a tracker and none for an address, and `destinationOf` asks the kind of the connector.
+- **An e-mail is written in the language of its reader** (FRU-119). An account holds a `locale`: the
+  browser that opened its first link, then what the person chose (`POST /console/me/locale`). A later
+  sign-in from another browser does not change it. For a mail, the account's language wins, then the
+  console that asked, then `Accept-Language`, then English. `readLocaleTag` parses every one with
+  `Intl.Locale`: a value from a browser is never kept as typed.
+- **GitHub names the person, never the browser** (FRU-97). `github-oauth.ts`: `state` bound to the
+  browser by a `SameSite=Lax` cookie (a `Strict` one is not sent on the way back from github.com),
+  issued by this worker and spent once; PKCE; the account is GitHub's **verified primary** address.
+  `FRUITBACK_PUBLIC_URL` is the callback's base: behind the proxy the worker sees only `http://`.
+
+### The reasons, and the history
 
 - **The reviewer is not a visitor who typed a name** (FRU-42). FRU-9 defined `reporter.verified`
   and left nothing able to set it on this side: a client site could mint an identity token, and the
@@ -744,3 +1063,23 @@ client map were refused together at boot.
   workspace no client declares.
 - **What `/health` says is unchanged.** It counts open reads and names no client, and a workspace is
   the same kind of fact as a client id.
+
+## Several client sites
+
+### The rules, in short
+
+- **`FRUITBACK_CLIENTS` maps a `clientId` to a team, a project and the origins that client may be
+  embedded on** (FRU-15). Configured, a client has to be named on **both** paths — the `client`
+  parameter on a read, `seed.client.id` on a write — and an unknown one is refused. A read that named
+  nobody used to answer with every seed on that URL.
+- **`normalizeClientId` runs before the id is used for anything.** It picks the route, builds the
+  `fruitback:<id>` label of the issue, is the client a read compares each seed with, and keys the cache. Normalising it for the route alone
+  put a note in the right team under a label its owner's clean read never asked for: authorised at
+  both ends, invisible in between.
+- **`clientId` is client-asserted.** `origins` is what turns the claim into something checkable
+  against the browser's own header. Do not describe it as authentication.
+- **`resolveClientIp` is security-relevant.** The client IP is the entry `TRUSTED_PROXY_HOPS` from
+  the **right** of `X-Forwarded-For`. Reading the leftmost entry makes the rate limit bypassable with
+  one header. **Do not write that each proxy appends**: nginx with `$proxy_add_x_forwarded_for`
+  appends, while nginx with `$remote_addr`, Traefik and Caddy replace the header (measured, FRU-50).
+  The self-hosting guide depends on the difference.

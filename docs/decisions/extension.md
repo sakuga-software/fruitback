@@ -9,6 +9,83 @@ it changes who is shown the feedback and never who may fetch it.
 
 ## The extension, and the two worlds
 
+### The rules, in short
+
+- **The private-mode widget carries no credential**, and nothing about the mode is access control.
+  `page.content.ts` mounts it with no `transport`, so it calls the worker through `fetchTransport`
+  from the page, exactly as a public-mode site does. Two consequences to state rather than discover:
+  its reporter is self-declared like any other, and a worker on `read: 'authenticated'` answers its
+  reads `401`. The page shows no pin and no reason, so the popup asks the same read and says so
+  (`read-probe.ts`, FRU-66): only a `401` is a statement, and a worker that is down or slow gets no
+  line. The probe was measured from an extension page with **no** host permission on the worker,
+  because the E2E copy holds one and its fetch skips CORS. **A client keeps its own `read`** since
+  FRU-95: a worker holding sessions can serve several clients, grouped in workspaces, so a
+  private-mode client can stay `public` beside a team-mode one.
+- **The popup offers pairing in team mode only** (FRU-88). A session changes nothing in private mode,
+  and a form that does nothing reads as the fix for a page with no pins. A session the extension
+  already holds with that worker stays on the screen with its log out: a credential is never hidden.
+- **The popup and the options page speak English and French** (FRU-131). `i18n.ts` keys a sentence
+  by its English text, like the console. **A constant keeps its English sentence, and `t` runs where
+  the text goes on the screen**: `remedyFor` finds a problem by its English text, and the guide is
+  checked against the English words of the popup. A problem translated before `showProblem` loses its
+  button with nothing to see. `messages.test.ts` reads the two pages and fails on a word outside the
+  catalog, on a sentence with no French and on a French entry no page shows.
+- **The language is the account's, then the browser's.** `GET /session/sites` answers `locale`, and
+  `rememberLanguage` keeps it under `language` in `chrome.storage.local`. It is a tag and no
+  credential, so the bridge reads it and `mount` carries it to the widget. **A worker that does not
+  answer changes nothing; no session left removes it.** The popup learns it without a draw, because
+  a draw loses what somebody types: the next popup shows it. A change of language builds the mounted
+  widget again, like a change of worker.
+- **The guide's words are guarded against the popup's** (`reviewing-doc.test.ts`). `docs/reviewing.md`
+  walks somebody through a screen by naming what is on it, and a renamed button leaves it describing
+  a popup nobody has. The mode labels are read **out of** `popup/main.ts` and the pairing failures are imported from
+  `remedy.ts`, so a fifth message is covered the day it is written; the buttons are named one by one, because a
+  regex over them would guard whichever ones it happened to match.
+- **`world: 'MAIN'` is the ticket, not a preference.** A content script in the isolated world shares
+  the DOM and **not** the properties page scripts put on it: `__reactFiber$` and
+  `__REACT_DEVTOOLS_GLOBAL_HOOK__` are both absent there, so the widget would mount, work, and quietly
+  never say which component a note is about.
+- **The extension carries its licence into the build** (FRU-82). It is `AGPL-3.0-only`, and what a
+  store hands somebody is the archive rather than this repository, so a `build:publicAssets` hook
+  copies `apps/extension/LICENSE` beside the manifest. A hook and not a copy in `public/`, so the
+  text has one home. `license.test.ts` checks the field, the text, and that the copy is declared —
+  the same rule as the published packages: a file that exists says nothing about what is in it.
+- **The icon is one SVG, rendered to a PNG for each size and committed** (FRU-78).
+  `assets/icon.svg` holds the widget's own pin — a circle plus the corner that stayed sharp, which is
+  what `border-radius: 50% 50% 50% 0` draws — and `pnpm icons:build` renders it. **Each size is
+  rendered from the vector, never resized from the big one**, or the 16px icon is a smudge. The sizes
+  live in `src/icon-sizes.ts`, which the manifest, the renderer and `icons.test.ts` all read. Nothing
+  in the build generates them, so the guard is what keeps the committed files honest: it fails on a
+  missing size, on a file of another size, and on a canvas that holds no drawing.
+- **The archives a store takes are built by `release-extension.yml`, on a `v*` tag** (FRU-77).
+  `wxt zip` for Chrome, `wxt zip -b firefox` for Firefox — the second writes a **sources** archive
+  beside it, which AMO asks for whenever the submitted file was built. The tag and
+  `apps/extension/package.json` must name the same version, and the job fails when they do not: a
+  store refuses an upload whose version is not higher than the last, so a tag that says something
+  else publishes a number nobody chose. **This workflow restores no cache.** A cache entry is
+  writable by any run of the repository, and what this job builds is shipped — `zizmor` fails on the
+  pair, and `ci.yml` keeps its cache because it ships nothing.
+  **The archives are under `.output`, and `upload-artifact` leaves out a hidden directory** unless
+  `include-hidden-files` says otherwise. The first tag, `v0.1.0`, built both archives and uploaded
+  none. `workflows.test.ts` fails on an upload through a dot directory that does not ask for it.
+- **The bridge is `window.postMessage`, and the page can forge on it.** `parseBridgeMessage` refuses
+  a _malformed_ message and cannot refuse a **well-formed** one the page wrote. That is inherent to
+  the main world and no handoff closes it — it is stated rather than defended, because a reviewer
+  grants an origin precisely because they trust that origin's code. **Nothing secret travels there,
+  and an identity token is not sent at all.** `worlds.test.ts` is what keeps that true, and
+  `protocol.test.ts` pins that a parsed message carries only the fields it declares: four, and since
+  FRU-131 the language of the reviewer, a locale tag of 35 characters at most.
+- **`createApply` takes a generation token before its `await`.** Three things call it, two can be in
+  flight, and the older read can post last. The `posted` signature alone made that **stick rather
+  than heal**: the stale run writes its own signature and the correction is then suppressed as
+  unchanged. The decision lives in `src/bridge.ts` and not in the entrypoint, because an entrypoint
+  binds `browser` and `window` at import and neither guard could be run at all.
+- **A site that embeds the widget _and_ a reviewer who has the extension get two docks.** Known,
+  harmless, and not solved here. It is the private mode's defect only: in team mode there is one
+  widget and it is the site's.
+
+### The reasons, and the history
+
 - **The client's site embeds nothing** (FRU-41). No tag, no npm package, no deployment — which is
   also the end of the integration friction: today, getting a page reviewed needs a deploy. Ordinary
   visitors see nothing because there is nothing in their page to see.
@@ -126,6 +203,17 @@ it changes who is shown the feedback and never who may fetch it.
 
 ## A problem, and the one thing to do about it (FRU-90)
 
+### The rules, in short
+
+- **A problem is shown with the one thing to do about it** (FRU-90). `remedy.ts` lists every problem
+  the popup and the options page can say, each with a remedy or with the reason it has none, and
+  `showProblem` draws the button from that list on both pages. `remedy.test.ts` fails on a problem
+  constant that is in no entry, and on a page that writes a problem by hand. **A remedy runs in its
+  own click**, so it can ask for a permission: the pairing attempt and the turn-on are functions the
+  button calls again, never a promise that already ran.
+
+### The reasons, and the history
+
 The popup and the options page stated a problem and stopped: « The worker did not answer. Try
 again. » with nothing to press. The options page already had the right shape in one place, « No
 access in this browser » with **Grant access** beside it.
@@ -162,6 +250,19 @@ access in this browser » with **Grant access** beside it.
   guide's guard read them out of the popup source with a regular expression; it imports them now.
 
 ## A pairing code that arrives as a link (FRU-92)
+
+### The rules, in short
+
+- **A pairing link is `<worker>/pair#<code>`, and the popup reads it from the address of the tab**
+  (FRU-92). `parsePairLink` takes the worker from **where the page is**, never from a value in the
+  address: any page can have an address of that shape, so a page can offer a pairing with itself
+  and with no other worker. The popup names the worker and pairs on a click. `GET /pair` takes no
+  request and runs no script, so the worker cannot read a code and the page cannot either. The
+  person is not named before the code is spent: a name in a link is the word of its writer.
+  **A click on the toolbar icon cannot be automated**, so the E2E spec proves the flow with a host
+  permission on the worker; the `activeTab` grant of a real click is the one step checked by hand.
+
+### The reasons, and the history
 
 A reviewer was handed `ABCD-EFGH-JKMN`, opened the popup on the right site and copied it in. The
 ticket asked for a link, and left the path to be measured. Four were on the table.
@@ -210,6 +311,69 @@ ticket asked for a link, and left the path to be measured. Four were on the tabl
   FRU-9 refuses from a browser. The worker says who, after the code is spent.
 
 ## The session, and the token that never goes down (FRU-60)
+
+### The rules, in short
+
+- **The refresh token lives in `chrome.storage.local` and the access token in
+  `chrome.storage.session`.** One survives the browser closing and the other must not. Both in
+  `session` would make a reviewer pair again every morning, and somebody who does that keeps their
+  pairing code in a text file — a worse place than the one the split protects.
+- **Nothing calls `setAccessLevel` on the session area.** Its default excludes content scripts, which
+  is the boundary this whole batch exists to hold. A token is held only by the extension's **trusted
+  contexts** — the background, which refreshes, and the popup, which pairs and logs out. The isolated
+  script never reads one; it asks the background to make the call, the seam FRU-57's relay needs.
+- **Pairing asks for a host permission on the worker's origin**, which is not the site's. The session
+  routes answer a `chrome-extension://` origin with CORS headers that ought to make an unprivileged
+  `fetch` enough — but that was measured with `curl`, which does not enforce CORS. It is the
+  repository's recurring defect (FRU-25) waiting to happen, so the permission is asked for rather
+  than relied on. **It must be requested before anything is awaited in the click handler**, like
+  `turnOn`: a gesture is lost across an await and the prompt never appears.
+- **A refresh writes nothing back once the refresh token in storage is no longer the one it spent**
+  (`keepIfCurrent`), and no write means no grant either. The popup and the background are separate
+  contexts sharing only storage, so a logout can land while an alarm is awaiting `/session/refresh`,
+  and the answer used to put a working access token back under a screen saying signed out. The token
+  is its own generation marker for that compare.
+- **A logout mints a new epoch for the endpoint before it clears anything** (FRU-64), and a session
+  stamped with the one before it is refused by every reader (`stillOpen`). The compare and the write
+  in `keepIfCurrent` are **not** one operation and cannot be — `chrome.storage` has no transaction —
+  so what covers the gap is what the write **carries**: the epoch of the very read the compare was
+  made on. A logout landing anywhere around those lines leaves the endpoint logged out. Nothing
+  refuses the write itself. The entry lands, unreadable, under the key of its own run, and removes
+  that key after it lands (FRU-65).
+  **The stamp must come from that read and from no fresher one**, which is why `keepIfCurrent` reads
+  the session itself and why the `epochs` seam has `put` and no `read` — a writer that could read the
+  epoch could stamp with the logout's own.
+- **A pairing mints one too, and writes it before the session it stamps.** A logout leaves an epoch
+  behind on an endpoint holding nothing, so an endpoint paired again would otherwise read as signed
+  out for ever. Absent on both sides compares equal, the same rule the generation follows.
+- **The guard is an allowlist**: `worlds.test.ts` _discovers_ every `*.content.ts` declaring
+  `world: 'MAIN'`, follows its relative imports, and refuses a `session*` module or the name
+  `refreshToken` / `accessToken` anywhere in that closure. A main-world file added later is covered
+  the day it is written. **It detects the world on the code, not on the file** — the docstring of
+  `page.content.ts` quotes `world: 'MAIN'`, so the first version guarded a file that had stopped
+  reaching the page and reported a pass.
+- **No credential crosses plain `http://`** (FRU-57). `isSecureWorkerEndpoint` requires https or
+  loopback, and `pair`, `refresh` and the revoke in `logout` all ask it — in `session.ts`, not only
+  in the popup that warns first, so a session stored before the rule cannot keep spending its token
+  over the wire. `isWorkerEndpoint` is **not** tightened: it gates the private mode's mount, which
+  carries no credential.
+- **`postJson` bounds its own request.** `refreshOnce` holds the in-flight promise so a second
+  caller joins it rather than spending the token twice, so a worker that accepts a connection and
+  never answers leaves that endpoint unable to refresh for the life of the service worker. Found by
+  looking for the other half of a review finding about the relay's fetch. Until FRU-63 one queue
+  chained every storage write, and the same hang stopped **every** worker.
+- **Log out revokes, then clears — and clears whatever the revoke answered.** A failed revoke leaves
+  the token live on the worker until it expires; a screen saying signed out over a working credential
+  would be worse.
+- `src/session.ts` is the logic behind seams and `src/session-browser.ts` binds the real
+  `browser.storage` and `fetch`, the same split `bridge.ts` made. **Refreshing runs on an alarm, not
+  a timer** — an MV3 service worker is stopped whenever the browser feels like it.
+- **`nextWakeAt` never returns a moment in the past**, missing token included. It did, and the alarm
+  was then clamped to a minute: a worker that stayed down woke the service worker to fail every
+  minute, for ever. `isFresh` is the single freshness rule the three callers share so they cannot
+  drift apart.
+
+### The reasons, and the history
 
 FRU-42 built the worker half — pairing codes, access and refresh tokens, revocation, three routes
 exempt from the origin allowlist. This is the other half, and it carries the constraint that shaped
@@ -602,6 +766,66 @@ test rather than on an assertion.
 
 ## The options page, and what a wildcard covers (FRU-43)
 
+### The rules, in short
+
+Three modes: **public** (the site embeds the widget, everyone sees the pins), **private** (the site
+embeds nothing and the extension injects the widget) and **team** (the site embeds a dormant widget
+the extension activates and relays for). Private is FRU-41, team is FRU-57, and FRU-46 is where
+they were named for a reader — [docs/modes.md](../modes.md) and
+[docs/reviewing.md](../reviewing.md). Which one an origin is in is one field on its entry, and **an
+entry with no `mode` reads as private** — that is every entry a reviewer's browser already holds.
+
+- **An entry's key is a pattern, and `resolveSite` is the only lookup** (FRU-43). A key is an exact
+  origin or `https://*.host`; every key written before is an exact origin, so nothing is upgraded. The
+  exact origin wins, then the longest wildcard. The bridge and the relay reach it through `readSite`,
+  and the popup through `findSite`, which is the same lookup and also answers the pattern the entry is
+  stored under — the popup names that pattern on screen. `sites-storage.test.ts` proves `readSite`
+  resolves a wildcard. A reader that indexed the map by origin would mount the widget and then have
+  the relay refuse its calls.
+- **A wildcard covers the default port only**, and its base host too, as a match pattern does. The
+  grant and the registration (`https://*.host/*`) cover every port; the pattern carries no port because
+  whether each browser accepts one was not measured, and one refused pattern stops every site. It needs
+  a base of at least two labels and no IP address: every pattern is registered in one call, so a pattern
+  that the browser refuses would stop the scripts on every site. If a browser registers the scripts on
+  another port, the bridge unmounts there. The opposite error shows a site as on where nothing runs.
+- **Only the background writes the sites map.** The popup and the options page send the change as a
+  runtime message; `createSiteOwner` applies one at a time, because each change reads the whole map and
+  replaces it, and the two pages share no lock. `isExtensionPage` refuses the message from a content
+  script, whose URL is the page's. One key per pattern was not taken: a reader would have to list the
+  whole `local` area, and the bridge, a content script, must not read the refresh token stored there.
+- **A write the background did not confirm can still be stored** (FRU-73), because only the answer
+  was lost. `activateStored` reads it back and injects the scripts into the tabs already open on the
+  patterns of that change that are stored switched on. Without it the rule is On and those tabs hold
+  no widget until their next load. **A client id made of spaces is an absent id**: `complaint` refuses
+  it and `siteFrom` stores the id trimmed, so a rules file cannot store one that the worker then
+  answers `client-required` for.
+- **A rules file holds no credential and no grant.** An imported entry runs nowhere until the options
+  page's **Grant access** is pressed, and `permissions.onAdded` is what re-syncs the registration,
+  because a grant writes no storage. The worker's `origins` stays an exact list, but it applies to
+  private mode only: the relay calls from the extension origin, which the worker exempts.
+- **A wildcard in team mode covers nothing** (FRU-75). `https://*.vercel.app` is a valid pattern, and
+  in team mode it would lend the reviewer's session to the sites of other people. `lendsSession` is
+  the one predicate: `resolveSite` skips such an entry, so the bridge, the relay and the popup all
+  refuse it, `complaint` takes the pattern and refuses it in the form and in the import, and the
+  background does not register it. A wildcard stays valid in private mode, which carries no token.
+- **A site asked for is remembered before the browser asks for access** (FRU-118). The permission
+  prompt can close the popup, and the code after `permissions.request` then never runs: the grant
+  exists and no entry does. `pending-site.ts` writes the intent first, **not awaited** (an await loses
+  the gesture). The background finishes it on `permissions.onAdded`, and the popup when it opens
+  again. A refused prompt leaves it as a draft, and the form shows the values again (FRU-117). It is
+  ten minutes old at most: an old intent must not turn a site on by surprise. Automation cannot answer
+  a prompt, so the E2E copy never met this: the wiring is asserted on the sources.
+- **A site of the reviewer's workspace is turned on in one click** (FRU-101). The popup asks
+  `GET /session/sites` of each session it holds and offers a tab whose origin is listed. The entry is
+  team mode with a `mount` field: the extension mounts the widget, `relay: true` on the bridge, and the
+  page's widget calls through the relay. **`mount` is a field of its own**, never a client id beside the
+  mode: a stray client id on a team entry was always dropped. `mount.workspace` is for the popup only:
+  a `label` would replace the text of the launch button (measured).
+- **The rules stay in `chrome.storage.local`.** The ticket asked for `sync`; a host permission does
+  not travel with a synced rule, and moving the key is a storage-shape change. That is FRU-72.
+
+### The reasons, and the history
+
 The popup edits the entry for its own tab. The options page lists every entry, adds one for a pattern,
 grants access, and reads and writes a rules file.
 
@@ -755,6 +979,62 @@ of `/feedback` on an `authenticated` worker reads `status: 401` (Chromium 1234):
 CORS headers on the refusal for an extension origin.
 
 ## The team mode, and the call the page cannot make (FRU-57)
+
+### The rules, in short
+
+- **The main world announces instead of mounting.** `page.content.ts` puts
+  `window.fruitbackExtension = { version, transport }` on the page and fires `fruitback:extension`.
+  Two ways to find it because nothing orders a content script against a site's own bundle.
+- **Installing the API is idempotent, which is what makes the event safe to mount on.** The global is
+  set and the event fired only when the global is not already ours, so a re-posted decision announces
+  nothing. **Withdrawal is the same event with the global gone** — nothing here can destroy a widget
+  the site owns, so a site switched off would otherwise keep stale pins and a composer that fails
+  silently.
+- **`clientId` and the widget's endpoint come from the site.** The stored entry carries an endpoint
+  anyway, and it is not what the widget is pointed at: it is what the relay checks the page's
+  declaration against.
+- **The relay is the mode.** Without it this is decluttering: a page can forge the presence signal,
+  and `curl` still reads a worker left at `read: 'public'`. It has security value **only** on
+  `read: 'authenticated'` (FRU-40, which is built). Do not describe the mode as a guarantee
+  without naming that setting.
+- **Every decision the relay makes is in the background, and `src/relay.ts` holds all of them.** A
+  content script's own input is written by the page, so the isolated world carries the request
+  across and decides nothing. The origin comes from `sender`, never from the message; the endpoint
+  from storage; the credential from the session.
+- **A page that names another worker is refused, never redirected.** A reviewer holds a session per
+  worker, so a page free to choose the endpoint could be answered with their credential for a
+  worker nobody on that page chose. Relaying to the stored endpoint instead would be worse: the
+  widget would report success against a worker it never named.
+- **No session, no call, and no plain `http://` either.** Relaying without the header would work on a
+  `read: 'public'` worker, and a reviewer would never learn they are unpaired while the mode
+  delivered none of what it promises. The endpoint must be https or loopback, because the token is a
+  bearer credential and this is the only thing carrying it; the popup refuses a team entry and
+  disables pairing on the same rule. **`isWorkerEndpoint` is not tightened** — it gates the private
+  mode's mount, which carries no credential.
+- **`Authorization` is built in the background and `Content-Type` is the only header the page may
+  name.** `ALLOWED_HEADERS` in `protocol.ts` is an allowlist of one, and `relay.ts` writes the
+  credential name by name rather than spreading — two spellings of one header reach `fetch` as a
+  combined value.
+- **One path, `/feedback`.** `relay.test.ts` reads `packages/widget/src/embed.ts` and asserts the
+  widget calls that path and names no header the relay would drop, so a call the widget grows later
+  fails the suite instead of being dropped silently on a reviewer's page.
+- **Two deadlines, and the shorter one aborts.** The composer disables its send button in flight, so
+  a promise that never settles leaves a reviewer with a dead button and a written note inside it.
+  `RELAY_CALL_TIMEOUT_MS` aborts the background fetch — merely giving up would leave the request in
+  flight while the page is told it failed, and a second send plants the note twice.
+  `RELAY_ANSWER_TIMEOUT_MS` is longer, so a slow worker is a refusal the background sends rather than
+  a timeout the page invents. **`createRelay` never rejects**, because a rejection leaves the
+  background with nothing to answer the runtime message with.
+- **`relay-transport.ts` exists so `node --test` can reach the correlation**: the widget reads and
+  writes independently, so two calls are in flight in the ordinary case. Its ids come from
+  `randomId`, not `crypto.randomUUID` — that one needs a **secure context** and this script runs on
+  `http://` staging too. `capture.ts` already carried the same fallback for the seed id, and the trap
+  was walked back into here.
+- **An extension origin is exempt from `ALLOWED_ORIGINS` on every route, by scheme.** The relay
+  calls `/feedback` from the service worker, which sends `chrome-extension://<id>`. See
+  [worker.md](worker.md).
+
+### The reasons, and the history
 
 Private mode injects a widget into a site that ships none. Team mode is for the team that ships its
 own: the widget is in their build, dormant, and it wakes up for a reviewer carrying the extension.

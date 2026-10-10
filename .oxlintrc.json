@@ -1,6 +1,199 @@
 {
   "plugins": ["oxc", "eslint", "import", "typescript"],
   "rules": {
-    "no-nested-ternary": "error"
-  }
+    "no-nested-ternary": "error",
+    "typescript/parameter-properties": "error",
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "happy-dom",
+            "message": "happy-dom is for *.test.ts and *.fixture.ts only: shipped code compiles with types: [] and runs in a real browser."
+          }
+        ]
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx", "**/*.fixture.ts"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": ["packages/**"],
+      "excludeFiles": ["**/*.test.ts", "**/*.test.tsx", "**/*.fixture.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "happy-dom",
+                "message": "happy-dom is for *.test.ts and *.fixture.ts only: shipped code compiles with types: [] and runs in a real browser."
+              }
+            ],
+            "patterns": [
+              {
+                "group": [
+                  "@fruitback/worker",
+                  "@fruitback/worker/*",
+                  "@fruitback/extension",
+                  "@fruitback/extension/*",
+                  "@fruitback/console",
+                  "@fruitback/console/*",
+                  "@fruitback/playground",
+                  "@fruitback/playground/*"
+                ],
+                "message": "A published package knows no app. What differs between the modes lives in the assembly layer (docs/decisions/project.md)."
+              },
+              {
+                "regex": "(^|/)apps/",
+                "message": "A published package knows no app. What differs between the modes lives in the assembly layer (docs/decisions/project.md)."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/shared/src/**"],
+      "excludeFiles": ["**/*.test.ts", "**/*.fixture.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "happy-dom",
+                "message": "happy-dom is for *.test.ts and *.fixture.ts only."
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["node:*", "@fruitback/*"],
+                "message": "The seed contract is browser- and server-safe: no Node API, and no other package of this repository (docs/decisions/contract.md)."
+              },
+              {
+                "regex": "(^|/)apps/",
+                "message": "The seed contract is browser- and server-safe: no Node API, and no other package of this repository (docs/decisions/contract.md)."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/widget/src/**"],
+      "excludeFiles": ["**/*.test.ts", "**/*.fixture.ts"],
+      "plugins": ["oxc", "eslint", "import", "typescript", "unicorn"],
+      "rules": {
+        "unicorn/no-instanceof-builtins": [
+          "error",
+          {
+            "include": [
+              "Node",
+              "Element",
+              "HTMLElement",
+              "SVGElement",
+              "Document",
+              "DocumentFragment",
+              "ShadowRoot",
+              "Text"
+            ]
+          }
+        ],
+        "no-restricted-globals": [
+          "error",
+          {
+            "checkGlobalObject": true,
+            "globals": [
+              {
+                "name": "MutationObserver",
+                "message": "Take it off the document's own window (ownerDocument.defaultView). The global is Node's in a test and another realm's in an iframe, and the widget then watches nothing (docs/decisions/widget.md)."
+              },
+              {
+                "name": "ResizeObserver",
+                "message": "Take it off the document's own window (ownerDocument.defaultView). The global is Node's in a test and another realm's in an iframe, and the widget then watches nothing (docs/decisions/widget.md)."
+              },
+              {
+                "name": "navigator",
+                "message": "Read document.defaultView.navigator. Node's global navigator says en-US, so a binding that reads it passes every test that expects English (docs/decisions/widget.md)."
+              },
+              {
+                "name": "fetch",
+                "message": "Only transport.ts calls fetch. Every other call goes through the transport, or a host's relay is left out with nothing to see (docs/decisions/widget.md)."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/widget/src/transport.ts"],
+      "rules": {
+        "no-restricted-globals": [
+          "error",
+          {
+            "checkGlobalObject": true,
+            "globals": [
+              {
+                "name": "MutationObserver",
+                "message": "Take it off the document's own window (ownerDocument.defaultView)."
+              },
+              {
+                "name": "ResizeObserver",
+                "message": "Take it off the document's own window (ownerDocument.defaultView)."
+              },
+              {
+                "name": "navigator",
+                "message": "Read document.defaultView.navigator."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["apps/console/**"],
+      "excludeFiles": ["apps/console/app/ui.tsx", "**/*.test.ts", "**/*.test.tsx"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "happy-dom",
+                "message": "happy-dom is for *.test.ts and *.fixture.ts only."
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["@heroui/*"],
+                "message": "ui.tsx is the one file that imports HeroUI. A screen uses the kit (docs/decisions/console.md, FRU-125)."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["apps/worker/src/session-sqlite.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["./sqlite.ts", "**/sqlite.ts"],
+                "message": "The session database has its own connect. The one of sqlite.ts applies the seeds migrations and drives PRAGMA user_version with them (docs/decisions/worker.md)."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }

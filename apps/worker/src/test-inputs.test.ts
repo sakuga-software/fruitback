@@ -65,6 +65,8 @@ const DYNAMIC_READS: Record<string, string[]> = {
   "packages/widget/src/package.test.ts: join(root, '..', name, 'dist')": [],
   // The icons the manifest declares, rendered by `build-icons.ts` and committed (FRU-78).
   'apps/extension/src/icons.test.ts: ../public/${iconPath(size)}': ['apps/extension/public/icon/*.png'],
+  // The files `CLAUDE.md` and the decisions pages link to: every one of them is a document.
+  'apps/worker/src/claude-md.test.ts: new URL(path, document)': ['**/*.md', 'docs/decisions/'],
   "apps/worker/src/session.test.ts: join(path, '..')": [],
   "apps/worker/src/session.test.ts: join(path, '..', name)": [],
 };

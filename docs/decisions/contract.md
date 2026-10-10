@@ -1,10 +1,30 @@
 # The seed contract
 
-`packages/shared` is what both ends depend on. The invariants are in [CLAUDE.md](../../CLAUDE.md);
-here is what each of them cost to establish, and what FRU-24 took out of the contract before the
+`packages/shared` is what both ends depend on. The invariants open the section, in short;
+after them is what each of them cost to establish, and what FRU-24 took out of the contract before the
 first publish made it expensive.
 
 ## The seed contract
+
+### The rules, in short
+
+### The reasons, and the history
+
+`packages/shared` is the contract both ends depend on. Treat changes to it as breaking.
+
+- **Bump `SEED_VERSION` when the payload shape changes** — it is `2` since FRU-9. Readers accept
+  older versions and refuse newer ones (`unsupported-version`) rather than silently dropping fields.
+- **The contract holds the vocabulary and nothing a human reads** (FRU-24). No emoji, no English
+  label, no colour: those are rendering decisions, and a published type is the one place they can
+  never be changed or translated downstream.
+- **A store can report only some stages, and says which** (FRU-32). `SeedStore.stages` travels as
+  `stages` on every `GET /feedback`, with or without pins — derived from the pins on screen, an empty
+  page would offer the wrong boxes. `offeredStages` reads it tolerantly and answers every stage when
+  the field is absent. GitHub reports `seeded`, `ripe` and `composted`. A read-envelope field, so
+  `SEED_VERSION` does not move.
+- **`SEED_BLOCK_CAPTION` is free to reword.** `parseSeedFromDescription` iterates fenced blocks and
+  recognises ours by parsing the JSON, and test:`finds the block by its JSON, never by
+the caption above it (FRU-24)` is what keeps that true.
 
 `packages/shared` is the contract both ends depend on. Treat changes to it as breaking.
 
