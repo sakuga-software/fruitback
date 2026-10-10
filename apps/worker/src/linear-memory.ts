@@ -1,12 +1,4 @@
-import {
-  type Seed,
-  type SeedIssue,
-  buildIssueDescription,
-  buildIssueLabels,
-  buildIssueTitle,
-  clientLabelName,
-  FRUITBACK_LABEL,
-} from '@fruitback/shared';
+import { type Seed, type SeedIssue, buildIssueDescription, buildIssueLabels, buildIssueTitle } from '@fruitback/shared';
 import { z } from 'zod';
 import type { ClientPolicy } from './clients.ts';
 import { type IssueNode, toSeedIssue } from './linear.ts';
@@ -98,14 +90,11 @@ async function createSeedIssue(seed: Seed, locale?: string): Promise<CreatedIssu
 }
 
 async function fetchSeedIssues(query: SeedIssueQuery, policy: ClientPolicy): Promise<SeedIssue[]> {
-  const required = query.clientId ? [FRUITBACK_LABEL, clientLabelName(query.clientId)] : [FRUITBACK_LABEL];
-
   return (
     issues
       // Same isolation as the real filter, by the key this store actually holds. A read that names no
       // client gets every seed on the page, as on the other stores (FRU-34).
       .filter((issue) => query.clientId === undefined || issue.clientId === query.clientId)
-      .filter((issue) => required.every((label) => issue.labels.includes(label)))
       // `contains`, like the real filter — the exact URL check is `toSeedIssue`'s job, here as there.
       .filter((issue) => (issue.description ?? '').includes(query.url))
       // Same `toSeedIssue` as production, the policy included — which is what makes the dev loop

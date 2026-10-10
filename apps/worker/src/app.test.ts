@@ -411,30 +411,26 @@ describe('GET /feedback', () => {
     assert.deepEqual(((await response.json()) as { stages?: unknown }).stages, ['seeded', 'ripe']);
   });
 
-  it('asks Linear for the fruitback label, the client label and that exact page', async () => {
+  it('asks Linear for the team and that exact page, and for no label', async () => {
     const stub = installLinearStub({ storedIssues: [] });
 
     await read(PAGE, '&client=acme');
 
+    // No clause on the labels (FRU-138): a team can refuse them, and a note found by its labels
+    // only was a note no page showed again. The client is read from each seed.
     assert.deepEqual(stub.issueFilter(), {
       team: { id: { eq: 'team_1' } },
-      // Two clauses, not one `in`: an issue must carry *both* labels, or one client's pins would
-      // surface on another client's site.
-      and: [
-        { labels: { some: { name: { eq: 'fruitback' } } } },
-        { labels: { some: { name: { eq: 'fruitback:acme' } } } },
-      ],
       description: { contains: PAGE },
     });
   });
 
-  it('narrows on the fruitback label alone when no client is given', async () => {
+  it('reads every seed of the page when no client is given', async () => {
     const seed = minimalSeedFixture();
     const stub = installLinearStub({ storedIssues: [storedIssueFromSeed(seed)] });
 
     const body = await readBody(seed.page.url);
 
-    assert.partialDeepStrictEqual(stub.issueFilter(), { and: [{ labels: { some: { name: { eq: 'fruitback' } } } }] });
+    assert.equal('and' in (stub.issueFilter() as object), false);
     assert.equal(body.issues.length, 1);
   });
 

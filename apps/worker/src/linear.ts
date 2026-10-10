@@ -1,6 +1,5 @@
 import {
   DEFAULT_SEED_STAGE,
-  FRUITBACK_LABEL,
   type Seed,
   type SeedComment,
   type SeedIssue,
@@ -8,7 +7,6 @@ import {
   buildIssueDescription,
   buildIssueLabels,
   buildIssueTitle,
-  clientLabelName,
   pageQueryTerm,
   parseSeedFromDescription,
   seedIssueSchema,
@@ -281,8 +279,11 @@ const ISSUES_MAX_PAGES = 10;
 /**
  * The seeds planted on one page, as the widget needs them to re-plant its pins.
  *
- * Everything is filtered server-side by Linear (label + `description contains <canonical url>`), so
- * the workspace can hold any number of issues without this walking them.
+ * Linear filters by team and by `description contains <canonical url>`, so the workspace can hold
+ * any number of issues without this walking them. **The client is read from the seed, never from a
+ * label** (FRU-138): a label is put on an issue when Linear allows it, and a team can refuse that to
+ * the key or to the application. An issue found by its labels only was a note that Linear kept and
+ * no page showed again.
  */
 export async function fetchSeedIssues(
   config: LinearConfig,
@@ -308,7 +309,10 @@ export async function fetchSeedIssues(
 
     for (const node of result.issues.nodes) {
       const issue = toSeedIssue(node, query.url, policy);
-      if (issue !== null) found.push(issue);
+      // The write path stores the normalized client id in the seed, so the two are equal for every
+      // note of this client. A read that names no client gets every seed of the page, as before.
+      if (issue === null || (query.clientId !== undefined && issue.seed.client?.id !== query.clientId)) continue;
+      found.push(issue);
     }
 
     after = result.issues.pageInfo.hasNextPage ? result.issues.pageInfo.endCursor : null;
@@ -318,18 +322,13 @@ export async function fetchSeedIssues(
   return found;
 }
 
-function buildSeedIssueFilter(routing: LinearRouting, { url, clientId }: SeedIssueQuery): Record<string, unknown> {
-  const labels = clientId ? [FRUITBACK_LABEL, clientLabelName(clientId)] : [FRUITBACK_LABEL];
-
+function buildSeedIssueFilter(routing: LinearRouting, { url }: SeedIssueQuery): Record<string, unknown> {
   return {
     // The API key can see the whole workspace; a seed only ever lives on the team its client routes
     // to, which on a multi-tenant worker is what keeps one client's read off another's issues.
     team: { id: { eq: routing.teamId } },
-    // One clause per label, each spelled `some`: a comparator placed directly on the collection
-    // reads as "some label matches" too, but only implicitly. A single
-    // `name: { in: [fruitback, fruitback:acme] }` would be a different query altogether — it matches
-    // *either* label, and the client label is what keeps one client's pins off another's site.
-    and: labels.map((name) => ({ labels: { some: { name: { eq: name } } } })),
+    // No clause on the labels: see `fetchSeedIssues`. Two clients of one team are told apart by the
+    // client each seed names.
     description: { contains: pageQueryTerm(url) },
   };
 }

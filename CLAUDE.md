@@ -934,11 +934,16 @@ and _The team mode, and the call the page cannot make_:
   five minutes before it expires. Concurrent reads share one mint, a failed mint is not kept, and a
   `401` drops the token. The installation is found from the repository, so there is no variable for it.
 - **GitHub's `labels=a,b` is AND** (measured on `cli/cli`: 42 for one label, 22 for the pair). It is
-  what keeps one client's pins off another's site, like the `and:` clause on Linear. A count at the
+  what keeps one client's pins off another's site. A count at the
   page size proves nothing: the first check compared three counts of 100. GitHub also splits the value
   on commas, caps a label at 50 characters and ignores case, so `githubLabelName` hashes any client
   label that is not plain lowercase, or that already has the shape of a hash — on the write and the read
   alike. `matchPage` rechecks every label on the row, and the client the seed names.
+- **A Linear read selects by team and page, never by label, and reads the client in the seed**
+  (FRU-138). A team can refuse `issueLabelCreate` to the key, and it does to an application that is a
+  member of no team (measured). The write then makes the issue with no label, and a read that
+  selected by label never showed that note again. The labels stay, when Linear allows them, for the
+  people who triage.
 - **A GitHub read lists the client's issues by label and re-checks `seed.page.url`; it never
   searches.** Search is 30 requests a minute. Every page read walks the client's list, newest first,
   stopped at 1,000 issues, and the read cache is what protects the hourly budget.
@@ -982,7 +987,7 @@ and _The team mode, and the call the page cannot make_:
   parameter on a read, `seed.client.id` on a write — and an unknown one is refused. A read that named
   nobody used to answer with every seed on that URL.
 - **`normalizeClientId` runs before the id is used for anything.** It picks the route, builds the
-  `fruitback:<id>` label a read filters on, and keys the cache. Normalising it for the route alone
+  `fruitback:<id>` label of the issue, is the client a read compares each seed with, and keys the cache. Normalising it for the route alone
   put a note in the right team under a label its owner's clean read never asked for: authorised at
   both ends, invisible in between.
 - **`clientId` is client-asserted.** `origins` is what turns the claim into something checkable
