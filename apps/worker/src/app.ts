@@ -1,6 +1,9 @@
 import { SEED_STAGES, canonicalizePageUrl, parseSeed, type SeedReporter } from '@fruitback/shared';
 import { type IdentityResult, readBearerToken, stripClaimedVerification, verifyIdentityToken } from './identity.ts';
 import {
+  type ClientConfig,
+  type ClientDestination,
+  type ClientMap,
   type ClientPolicy,
   type ClientResolution,
   normalizeClientId,
@@ -8,7 +11,7 @@ import {
   originsFromClients,
   resolveClient,
 } from './clients.ts';
-import type { AccountStore } from './accounts.ts';
+import { type AccountStore, type Role, can } from './accounts.ts';
 import { SESSION_SITES_PATH, handleSessionSites } from './session-sites.ts';
 import { consoleCors, handleConsoleSession, isConsoleRoute } from './console-routes.ts';
 import { handleConsoleApi } from './console-api.ts';
@@ -92,14 +95,62 @@ export function accountStoreFor(config: WorkerConfig): AccountStore | undefined 
  * An empty map stays an empty map: a worker with accounts and no site yet serves no client, and an
  * `undefined` here would turn it into a single-client worker that answers anybody.
  */
-async function withSites(config: WorkerConfig, accounts: AccountStore): Promise<WorkerConfig> {
+async function withSites(config: WorkerConfig, accounts: AccountStore): Promise<Served> {
   const clients = await accounts.clientMap();
 
   return {
     ...config,
     clients,
     allowedOrigins: [...new Set([...config.allowedOrigins, ...originsFromClients(clients)])],
+    roleIn: (workspace, account) => accounts.role(workspace, account),
   };
+}
+
+/**
+ * The configuration as one request reads it: the sites of the accounts are its clients, each with
+ * the places it can send to, and the role of a person in a workspace can be asked (FRU-123).
+ */
+type Served = WorkerConfig & {
+  clients?: ClientMap;
+  /** Absent on a worker with no accounts: nobody is a member of anything there. */
+  roleIn?: (workspace: string, account: string) => Promise<Role | undefined>;
+};
+
+/** The client as it routes when its notes go to this place, and not to its first one. */
+function placedAt(client: ClientConfig, place: ClientDestination): ClientConfig {
+  const { teamId: _team, projectId: _project, ...rest } = client;
+
+  return {
+    ...rest,
+    connector: place.connector,
+    ...(place.teamId === undefined ? {} : { teamId: place.teamId }),
+    ...(place.projectId === undefined ? {} : { projectId: place.projectId }),
+  };
+}
+
+/**
+ * Whether the caller is a person who may see the tracker of this client (FRU-123).
+ *
+ * Only a session of the workspace of the client says so, and the role is read at each request: a
+ * person who left the workspace holds a token for ten more minutes. The token of a site names a
+ * visitor of that site, who is in no workspace, so it never does.
+ *
+ * WARNING: this decides who reads the names of the places and who chooses one. It does not decide
+ * who reads the notes: `authorizeRead` does, before this runs.
+ */
+async function seesTracker(request: Request, config: Served, policy: ClientPolicy): Promise<boolean> {
+  if (config.roleIn === undefined || policy.sessions === undefined) return false;
+  const token = readBearerToken(request.headers.get('Authorization'));
+  if (token === undefined) return false;
+
+  // The one place that verifies a token, so the workspace is checked here as on every other path.
+  const verified = await verifyForClient(token, policy);
+  if (verified?.ok !== true || verified.session !== true) return false;
+  const account = verified.reporter.id;
+  if (account === undefined) return false;
+  const role = await config.roleIn(policy.sessions.workspace, account);
+
+  return role !== undefined && can(role, 'see-tracker');
 }
 
 /**
@@ -205,7 +256,7 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
   // With accounts, the sites the console wrote are this worker's clients (FRU-96), read per request so
   // a site added a second ago is served now. Everything below reads the served map and nothing else.
   const accounts = context.accounts ?? accountStoreFor(config.config);
-  let served: WorkerConfig;
+  let served: Served;
   try {
     served = accounts === undefined ? config.config : await withSites(config.config, accounts);
   } catch (error) {
@@ -534,7 +585,7 @@ function routeFor(request: Request, config: WorkerConfig, clientId: string | und
  * that names the workspace of this client (FRU-95). The signature alone is not enough: every session
  * of every workspace is signed with that one key.
  */
-async function verifyForClient(token: string, policy: ClientPolicy): Promise<IdentityResult | undefined> {
+async function verifyForClient(token: string, policy: ClientPolicy): Promise<Verified | undefined> {
   const asSite =
     policy.identitySecret === undefined ? undefined : await verifyIdentityToken(token, policy.identitySecret);
   if (asSite?.ok === true || policy.sessions === undefined) return asSite;
@@ -542,8 +593,17 @@ async function verifyForClient(token: string, policy: ClientPolicy): Promise<Ide
   const asSession = await verifyIdentityToken(token, policy.sessions.secret);
   if (!asSession.ok) return asSite ?? asSession;
 
-  return asSession.workspace === policy.sessions.workspace ? asSession : { ok: false, reason: 'invalid-claims' };
+  return asSession.workspace === policy.sessions.workspace
+    ? { ...asSession, session: true }
+    : { ok: false, reason: 'invalid-claims' };
 }
+
+/**
+ * `session` is there only for a token the worker key verified, with the workspace of the client
+ * (FRU-123). A site signs its own tokens and can write any claim in them, a workspace included: what
+ * says that a caller is a person of the workspace is the key, never a claim.
+ */
+type Verified = IdentityResult & { session?: true };
 
 /**
  * Whether this caller may read this client's pins (FRU-40).
@@ -618,7 +678,7 @@ function routingFailure(
  */
 async function getFeedback(
   request: Request,
-  config: WorkerConfig,
+  config: Served,
   store: SeedStore,
   kv: Kv,
   corsHeaders: Record<string, string>,
@@ -655,13 +715,41 @@ async function getFeedback(
     // The store says what separates one tenant from another — a team for Linear, nothing extra for
     // the in-memory one. The client id is in the key regardless, so two clients reading the same URL
     // never share an entry even when they share a team.
-    const key = JSON.stringify([store.name, store.scope(route.client), clientId ?? null, url]);
-    const issues = await cached(kv, url, key, () => store.findForPage({ url, clientId }, route.client, route.policy));
+    //
+    // FRU-123: a site that can send to several places is read in each one, because a tracker finds
+    // a note by where it is. Each place has its own entry: the scope of the store names it.
+    const places = route.client?.destinations ?? [];
+    const targets =
+      route.client === undefined || places.length < 2
+        ? [route.client]
+        : places.map((place) => placedAt(route.client as ClientConfig, place));
+    const found = await Promise.all(
+      targets.map((target) => {
+        const key = JSON.stringify([store.name, store.scope(target), clientId ?? null, url]);
+
+        return cached(kv, url, key, () => store.findForPage({ url, clientId }, target, route.policy));
+      }),
+    );
+    // Two places of one team are one read of the tracker, so a note can come back twice.
+    const seen = new Set<string>();
+    const issues = found.flat().filter((issue) => !seen.has(issue.seed.id) && seen.add(issue.seed.id));
+
+    // WARNING: asked at each request, and never in the cached answer. The entry of the cache is
+    // shared by everybody who may read the page, and the places are for a member only.
+    const offered =
+      places.length > 0 && (await seesTracker(request, config, route.policy))
+        ? {
+            destinations: places.map((place) => ({
+              id: place.id,
+              ...(place.label === undefined ? {} : { label: place.label }),
+            })),
+          }
+        : {};
 
     return json(
       200,
       // `stages` does not depend on the page, so it is not in the cached answer.
-      { url, issues, stages: store.stages ?? SEED_STAGES },
+      { url, issues, stages: store.stages ?? SEED_STAGES, ...offered },
       // No browser cache, deliberately. The read cache above is what protects the Linear
       // quota; letting the browser hold a copy too only buys one saved request per page load, and
       // costs the widget the pin it planted a second ago — it re-reads and gets served its own
@@ -693,7 +781,7 @@ function canonicalizeRequestedPage(requested: string): string | null {
 
 async function postFeedback(
   request: Request,
-  config: WorkerConfig,
+  config: Served,
   store: SeedStore,
   kv: Kv,
   corsHeaders: Record<string, string>,
@@ -741,8 +829,22 @@ async function postFeedback(
 
   const attributed = { ...seed, ...optionalReporter(identity.reporter) };
 
+  // FRU-123: a member chose where this note goes. The name is in the query, and the body stays the
+  // seed: the relay of the extension carries a query and no other header. Absent, the note goes to
+  // the first place of the site. A name the site does not have and a caller who may not see the
+  // tracker get the same answer, and nothing is written.
+  const wanted = new URL(request.url).searchParams.get('destination');
+  let target = route.client;
+  if (wanted !== null) {
+    const place = route.client?.destinations?.find((each) => each.id === wanted);
+    if (route.client === undefined || place === undefined || !(await seesTracker(request, config, route.policy))) {
+      return json(403, { error: 'destination-not-allowed' }, corsHeaders);
+    }
+    target = placedAt(route.client, place);
+  }
+
   try {
-    const issue = await store.create(attributed, route.client, route.policy);
+    const issue = await store.create(attributed, target, route.policy);
 
     // The page just changed, so every cached answer for it is wrong, for every client.
     try {

@@ -365,7 +365,7 @@ describe('a workspace connects Linear (FRU-121)', () => {
 
     assert.equal((await call(env, 'POST', '/feedback', { origin: SITE, body: note(world.site.id) })).status, 201);
     assert.deepEqual(linear.asked, []);
-    assert.equal((await world.accounts.sites(world.workspace.id))[0]?.destination, undefined);
+    assert.deepEqual((await world.accounts.sites(world.workspace.id))[0]?.destinations, []);
   });
 });
 
@@ -434,7 +434,7 @@ describe('who may touch a connector (FRU-121)', () => {
 
     assert.equal(set.status, 404);
     assert.equal(teams.status, 404);
-    assert.equal((await world.accounts.sites(elsewhere.id))[0]?.destination, undefined);
+    assert.deepEqual((await world.accounts.sites(elsewhere.id))[0]?.destinations, []);
   });
 
   it('does not write through the key of another workspace, whatever the row of the site says', async () => {
@@ -450,8 +450,10 @@ describe('who may touch a connector (FRU-121)', () => {
     const { DatabaseSync } = await import('node:sqlite');
     const database = new DatabaseSync(env.FRUITBACK_ACCOUNTS_PATH as string);
     database
-      .prepare("UPDATE sites SET connector_id = ?, team_id = 'team_design' WHERE id = ?")
-      .run(connector, theirs.id);
+      .prepare(
+        "INSERT INTO site_destinations (site_id, position, connector_id, team_id) VALUES (?, 0, ?, 'team_design')",
+      )
+      .run(theirs.id, connector);
     database.close();
     linear.asked.length = 0;
     const seed = seedFixture();
