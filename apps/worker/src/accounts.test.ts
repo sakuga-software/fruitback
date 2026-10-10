@@ -225,7 +225,7 @@ describe('what the boot log says about who reads the pins (FRU-116)', () => {
     // `server.ts` has no test of its own: the cases above stay green with the call deleted.
     const server = readFileSync(new URL('./server.ts', import.meta.url), 'utf8');
 
-    assert.match(server, /readExposureNotice\(\{[^}]*accounts: config\.config\.accountsPath !== undefined/s);
+    assert.match(server, /readExposureNotice\(\{[^}]*accounts: hasAccounts\(config\.config\)/s);
     assert.match(server, /console\.warn\(exposure\)/);
     assert.equal(server.includes('openReadClients('), false, 'the server holds no second copy of the rule');
   });
