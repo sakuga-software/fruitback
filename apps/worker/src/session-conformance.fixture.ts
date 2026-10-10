@@ -77,10 +77,23 @@ export function sessionCases(it: Declare<SessionStore>): void {
    */
   it('gives one session to two reviewers who redeem one code at the same moment', async (store) => {
     const { code } = await createPairing(store, ALICE);
+    const now = Date.now();
+    const codeHash = await digest(normalizePairingCode(code));
+    const tokens = await Promise.all([1, 2, 3].map(() => digest(createRefreshToken())));
 
-    const answers = await Promise.all([1, 2, 3].map(() => redeemPairing(store, code, SECRET)));
+    // The digests are made first, so the three calls reach the store in one turn of the event loop.
+    // Through `redeemPairing` of `session.ts` each call waits for its own digests, and the order in
+    // which they reach the store changes from one run to the next.
+    const answers = await Promise.all(
+      tokens.map((tokenHash) =>
+        store.redeemPairing({ codeHash, tokenHash, expiresAt: now + REFRESH_TTL_SECONDS * 1000, now }),
+      ),
+    );
 
-    assert.equal(answers.filter((answer) => answer.ok).length, 1);
+    assert.deepEqual(
+      answers.filter((answer) => answer !== undefined),
+      [ALICE],
+    );
   });
 
   /**
