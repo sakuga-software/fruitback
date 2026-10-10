@@ -12,9 +12,19 @@ export default function Account() {
   const { me, workspace } = useWorkspace();
   const navigate = useNavigate();
   const [confirming, setConfirming] = useState(false);
-  // What the worker signs people in with (FRU-135). Until it answers, neither is said to be on.
-  const [providers, setProviders] = useState<Providers>({ github: false, google: false });
-  useEffect(() => void signInProviders().then(setProviders), []);
+  // What the worker signs people in with (FRU-135). `undefined` until it says: a provider is then
+  // neither on nor "not set up", because a slow or absent answer proves neither.
+  const [providers, setProviders] = useState<Providers | undefined>();
+  useEffect(() => {
+    let asked = true;
+    void signInProviders().then((has) => {
+      if (asked) setProviders(has);
+    });
+
+    return () => {
+      asked = false;
+    };
+  }, []);
   const [unsent, setUnsent] = useState(false);
 
   async function leave() {
@@ -42,12 +52,15 @@ export default function Account() {
               <dd className="font-semibold text-done">{t('On')}</dd>
             </div>
             {(['GitHub', 'Google'] as const).map((provider) => {
-              const on = providers[provider === 'GitHub' ? 'github' : 'google'];
+              const on = providers?.[provider === 'GitHub' ? 'github' : 'google'];
+              const said = on === true ? t('On') : t('Not set up');
 
               return (
                 <div key={provider} className="flex justify-between">
                   <dt>{provider}</dt>
-                  <dd className={on ? 'font-semibold text-done' : 'text-muted'}>{on ? t('On') : t('Not set up')}</dd>
+                  <dd className={on === true ? 'font-semibold text-done' : 'text-muted'}>
+                    {on === undefined ? t('Checking…') : said}
+                  </dd>
                 </div>
               );
             })}

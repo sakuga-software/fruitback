@@ -244,7 +244,9 @@ function SignIn({ onSent }: { onSent: (email: string) => void }) {
     let asked = true;
     void signInProviders().then((has) => {
       // A worker that does not answer keeps what the build said: no button is taken away by an outage.
-      if (asked) setProviders((before) => ({ github: before.github || has.github, google: has.google }));
+      if (asked && has !== undefined) {
+        setProviders((before) => ({ github: before.github || has.github, google: has.google }));
+      }
     });
 
     return () => {

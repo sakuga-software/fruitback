@@ -172,13 +172,18 @@ export function saveLanguage(tag: string): Promise<boolean> {
   return call('POST', '/console/me/locale', { locale: tag }).then((answer) => answer.ok);
 }
 
-/** Which providers the worker signs people in with (FRU-135). None when it does not answer. */
+/** Which providers the worker signs people in with (FRU-135). */
 export type Providers = { github: boolean; google: boolean };
 
-export async function signInProviders(): Promise<Providers> {
+/**
+ * `undefined` when the worker did not say: no answer, or a refusal. That is not "none": a screen
+ * must not tell a person that a provider is not set up when nobody said so.
+ */
+export async function signInProviders(): Promise<Providers | undefined> {
   const asked = await answer<Partial<Providers>>(await send('GET', '/auth/providers'));
+  if (!asked.ok) return undefined;
 
-  return { github: asked.ok && asked.data.github === true, google: asked.ok && asked.data.google === true };
+  return { github: asked.data.github === true, google: asked.data.google === true };
 }
 
 export function requestLink(email: string, locale: string): Promise<Answer<{ sent: true }>> {
