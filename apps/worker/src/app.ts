@@ -15,6 +15,7 @@ import { handleConsoleApi } from './console-api.ts';
 import { handleGitHub } from './github-oauth.ts';
 import { type LinearOAuth, handleLinearOAuth } from './linear-oauth.ts';
 import { type ConnectorStores, createConnectorStores, createRoutedStore } from './connectors.ts';
+import { watchedStore } from './connector-health.ts';
 import { type Send, deliverDue } from './rest-connector.ts';
 import { type Mailer, createTemMailer } from './mail.ts';
 import { createSqliteAccountStore } from './accounts-sqlite.ts';
@@ -374,9 +375,10 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
       ? own
       : createRoutedStore(own, connectorStoresFor(accounts, served.secretsKey, served.linearOAuth));
 
+  // FRU-102: what the tracker of a connector answers is noted on it, for the console.
   return request.method === 'GET'
-    ? getFeedback(request, served, store, kv, cors.headers)
-    : postFeedback(request, served, store, kv, cors.headers);
+    ? getFeedback(request, served, watchedStore(store, accounts), kv, cors.headers)
+    : postFeedback(request, served, watchedStore(store, accounts), kv, cors.headers);
 }
 
 /**

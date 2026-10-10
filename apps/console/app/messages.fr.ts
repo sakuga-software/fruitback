@@ -123,6 +123,13 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Connect: 'Connecter',
   Cancel: 'Annuler',
   Working: 'En service',
+  'Needs attention': 'Action requise',
+  'Linear refuses this connection since {when}, and the notes of its sites do not reach Linear. Disconnect it, then connect Linear again.':
+    'Linear refuse cette connexion depuis {when}, et les notes de ses sites n’arrivent pas dans Linear. Déconnectez-la, puis connectez Linear de nouveau.',
+  'Since {when}, Linear refuses what Fruitback asks with this key, and the notes of its sites do not reach Linear. Disconnect it, then connect Linear with a key that has read and write access.':
+    'Depuis {when}, Linear refuse ce que Fruitback demande avec cette clé, et les notes de ses sites n’arrivent pas dans Linear. Déconnectez-la, puis connectez Linear avec une clé qui a les droits de lecture et d’écriture.',
+  'Linear ended this connection, and since {when} the notes of its sites do not reach Linear. Disconnect it, then connect Linear again.':
+    'Linear a mis fin à cette connexion, et depuis {when} les notes de ses sites n’arrivent pas dans Linear. Déconnectez-la, puis connectez Linear de nouveau.',
   '{count} site': '{count} site',
   '{count} sites': '{count} sites',
   'The destination of this site did not change. Try again.': 'La destination de ce site n’a pas changé. Réessayez.',
