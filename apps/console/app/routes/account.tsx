@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { call, signOut, saveLanguage } from '../api';
+import { type Providers, call, saveLanguage, signInProviders, signOut } from '../api';
 import { Button, Card, Choice, Problem } from '../ui';
 import { PageHead, useWorkspace } from './workspace';
 import { LOCALES, chooseLanguage, locale, t } from '../i18n';
@@ -12,6 +12,9 @@ export default function Account() {
   const { me, workspace } = useWorkspace();
   const navigate = useNavigate();
   const [confirming, setConfirming] = useState(false);
+  // What the worker signs people in with (FRU-135). Until it answers, neither is said to be on.
+  const [providers, setProviders] = useState<Providers>({ github: false, google: false });
+  useEffect(() => void signInProviders().then(setProviders), []);
   const [unsent, setUnsent] = useState(false);
 
   async function leave() {
@@ -38,14 +41,16 @@ export default function Account() {
               <dt>{t('Email link')}</dt>
               <dd className="font-semibold text-done">{t('On')}</dd>
             </div>
-            <div className="flex justify-between">
-              <dt>{t('GitHub')}</dt>
-              <dd className="text-muted">{t('Soon')}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt>{t('Google')}</dt>
-              <dd className="text-muted">{t('After the beta')}</dd>
-            </div>
+            {(['GitHub', 'Google'] as const).map((provider) => {
+              const on = providers[provider === 'GitHub' ? 'github' : 'google'];
+
+              return (
+                <div key={provider} className="flex justify-between">
+                  <dt>{provider}</dt>
+                  <dd className={on ? 'font-semibold text-done' : 'text-muted'}>{on ? t('On') : t('Not set up')}</dd>
+                </div>
+              );
+            })}
           </dl>
         </Card>
         <Card className="p-5">

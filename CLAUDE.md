@@ -1201,6 +1201,13 @@ and _The team mode, and the call the page cannot make_:
   sign-in from another browser does not change it. For a mail, the account's language wins, then the
   console that asked, then `Accept-Language`, then English. `readLocaleTag` parses every one with
   `Intl.Locale`: a value from a browser is never kept as typed.
+- **Google signs a person in like GitHub, and the steps are written once** (FRU-135).
+  `oauth-sign-in.ts` holds the start, the callback, the cookie and the `state`; a provider is its
+  addresses, its scope and `identify`. The provider is in the key of the `state`, so a state of one
+  does not finish the flow of the other. Google's address is used only when `email_verified` is the
+  boolean `true`. **The console asks `GET /auth/providers` before it draws a button**: a button for a
+  provider the worker does not have leads to a `404`. The build argument of FRU-97 still turns
+  GitHub on at once.
 - **GitHub names the person, never the browser** (FRU-97). `github-oauth.ts`: `state` bound to the
   browser by a `SameSite=Lax` cookie (a `Strict` one is not sent on the way back from github.com),
   issued by this worker and spent once; PKCE; the account is GitHub's **verified primary** address.

@@ -6,8 +6,6 @@
 export const FRENCH: Readonly<Record<string, string>> = {
   Fruitback: 'Fruitback',
   Linear: 'Linear',
-  GitHub: 'GitHub',
-  Google: 'Google',
   'Fruitback Cloud': 'Fruitback Cloud',
 
   'Fruitback cannot reach its server. Check your connection.':
@@ -22,7 +20,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Sign-in': 'Connexion',
   'Email link': 'Lien par e-mail',
   On: 'Activé',
-  Soon: 'Bientôt',
   'After the beta': 'Après la bêta',
   Language: 'Langue',
   'The language of the console, and of the e-mails Fruitback sends you.':
@@ -79,6 +76,15 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Use an API key': 'Utiliser une clé d’API',
   'Workspace {name}': 'Workspace {name}',
   'Connected to the workspace {name}': 'Connecté au workspace {name}',
+  'Google did not sign you in: the access was declined. Try again, or use an email link.':
+    'Google ne vous a pas connecté : l’accès a été refusé. Réessayez, ou utilisez un lien par e-mail.',
+  'Google has no verified address for this account. Use an email link.':
+    'Google n’a pas d’adresse vérifiée pour ce compte. Utilisez un lien par e-mail.',
+  'The sign-in with Google did not finish. Try again, or use an email link.':
+    'La connexion avec Google n’a pas abouti. Réessayez, ou utilisez un lien par e-mail.',
+  'Google sign-in is not set up on this Fruitback': 'La connexion Google n’est pas configurée sur ce Fruitback',
+  'GitHub sign-in is not set up on this Fruitback': 'La connexion GitHub n’est pas configurée sur ce Fruitback',
+  'Not set up': 'Non configuré',
   'Where you are signed in': 'Où vous êtes connecté',
   'Console · this browser': 'Console · ce navigateur',
   'Active now': 'Actif maintenant',
@@ -185,10 +191,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Un workspace pour votre équipe, vos sites et vos sources. Hébergé en Europe.',
   'Sending…': 'Envoi…',
   Continue: 'Continuer',
-  'Google sign-in comes after the beta': 'La connexion avec Google arrive après la bêta',
   'Continue with Google': 'Continuer avec Google',
   'Continue with GitHub': 'Continuer avec GitHub',
-  'GitHub sign-in arrives with its OAuth app': 'La connexion avec GitHub arrive avec son application OAuth',
   'or with an email link': 'ou avec un lien par e-mail',
   'Work email': 'E-mail professionnel',
   'Workspace name': 'Nom du workspace',

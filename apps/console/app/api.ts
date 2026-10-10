@@ -172,6 +172,15 @@ export function saveLanguage(tag: string): Promise<boolean> {
   return call('POST', '/console/me/locale', { locale: tag }).then((answer) => answer.ok);
 }
 
+/** Which providers the worker signs people in with (FRU-135). None when it does not answer. */
+export type Providers = { github: boolean; google: boolean };
+
+export async function signInProviders(): Promise<Providers> {
+  const asked = await answer<Partial<Providers>>(await send('GET', '/auth/providers'));
+
+  return { github: asked.ok && asked.data.github === true, google: asked.ok && asked.data.google === true };
+}
+
 export function requestLink(email: string, locale: string): Promise<Answer<{ sent: true }>> {
   return send('POST', '/auth/email', { email, locale }).then((response) => answer(response));
 }

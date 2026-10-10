@@ -13,6 +13,8 @@ import { SESSION_SITES_PATH, handleSessionSites } from './session-sites.ts';
 import { consoleCors, handleConsoleSession, isConsoleRoute } from './console-routes.ts';
 import { handleConsoleApi } from './console-api.ts';
 import { handleGitHub } from './github-oauth.ts';
+import { handleGoogle } from './google-oauth.ts';
+import { SIGN_IN_PROVIDERS } from './oauth-sign-in.ts';
 import { type LinearOAuth, handleLinearOAuth } from './linear-oauth.ts';
 import { type ConnectorStores, createConnectorStores, createRoutedStore } from './connectors.ts';
 import { type Send, deliverDue } from './rest-connector.ts';
@@ -271,10 +273,21 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
       return json(404, { error: 'not-found' }, cors.headers);
 
     try {
-      // Top-level navigations to and from GitHub, not calls of the console (FRU-97).
-      if (served.github !== undefined && served.publicUrl !== undefined && served.consoleUrl !== undefined) {
-        const viaGitHub = await handleGitHub(request, pathname, {
-          oauth: served.github,
+      // Which providers this worker signs people in with (FRU-135). The console asks before it draws
+      // a button: a button for a provider the worker does not have leads to a `404`.
+      if (pathname === SIGN_IN_PROVIDERS && request.method === 'GET') {
+        const ready = served.publicUrl !== undefined && served.consoleUrl !== undefined;
+
+        return json(
+          200,
+          { github: ready && served.github !== undefined, google: ready && served.google !== undefined },
+          cors.headers,
+        );
+      }
+
+      // Top-level navigations to and from a provider, not calls of the console (FRU-97, FRU-135).
+      if (served.publicUrl !== undefined && served.consoleUrl !== undefined) {
+        const signIn = {
           publicUrl: served.publicUrl,
           consoleUrl: served.consoleUrl,
           accounts,
@@ -282,8 +295,15 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
           kv,
           secret: served.identitySecret,
           ...(context.fetcher === undefined ? {} : { fetcher: context.fetcher }),
-        });
-        if (viaGitHub !== undefined) return viaGitHub;
+        };
+        const viaProvider =
+          (served.github === undefined
+            ? undefined
+            : await handleGitHub(request, pathname, { ...signIn, oauth: served.github })) ??
+          (served.google === undefined
+            ? undefined
+            : await handleGoogle(request, pathname, { ...signIn, oauth: served.google }));
+        if (viaProvider !== undefined) return viaProvider;
       }
 
       // The way to Linear and back, for a workspace that connects it (FRU-134). Navigations too.

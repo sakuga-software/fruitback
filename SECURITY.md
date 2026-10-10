@@ -553,6 +553,20 @@ top-level navigation from another site), must be one this worker issued, and is 
 minutes. The client secret never leaves the worker. GitHub's token is used for these two reads and
 kept nowhere. The session that follows is a console session, as for a link.
 
+### Signing in with Google (FRU-135)
+
+The same steps as GitHub, in the same code: the authorization code, a `state` bound to the browser
+by a cookie and spent once, and PKCE. Only the identity is asked for (`openid email profile`).
+
+- The worker asks Google who the token is for, at Google's own address over TLS. It reads no
+  identity from a token by itself, so it checks no signature of one.
+- **An address is used only when Google says it is verified.** Another one makes no account and
+  joins none.
+- A person who signs in with Google, with GitHub or with a link for the same verified address is one
+  account. That is the rule of FRU-97, and it means the account is as safe as the weakest of the
+  providers that can prove the address.
+- `GET /auth/providers` answers two booleans to the console, and no client id.
+
 ### What the console may change, and who (FRU-99)
 
 The console's routes under `/console/` take the access token of a console session, and read the role
