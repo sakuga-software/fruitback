@@ -62,7 +62,15 @@ function receivingStore(own: SeedStore, accounts: AccountStore, connector: strin
 }
 
 /**
- * One store per connector, kept for the life of the process and replaced when its key changes.
+ * The store of a connector, built for the request that asks for it, from the row as it is now.
+ *
+ * **Nothing is kept between two requests** (FRU-102). A map of the stores was here, and a map of
+ * these maps in `app.ts`, by the object of the accounts. A request makes a new object of the
+ * accounts, so the second map never found anything: each request built its store, and the comment
+ * said the opposite. A cache that worked would hold the key of each tracker in the clear for the
+ * life of the process, a connector that was removed included. The key is opened at each request, the
+ * store of Linear holds no state, and a key that changes or a connector that goes is read at once.
+ * A connector whose store costs something to build must bring its own cache, with a way out.
  *
  * WARNING: the workspace of the client is compared with the workspace of the connector. A site must
  * not write through the key of another team, whatever its row says.
@@ -73,23 +81,15 @@ export function createConnectorStores(
   now: () => number = Date.now,
   oauth?: LinearOAuth,
 ): ConnectorStores {
-  const built = new Map<string, { authorization: string; store: SeedStore }>();
-
   return async (connector, workspace, own) => {
     const kept = await accounts.sealedKey(connector);
     if (kept === undefined || kept.workspaceId !== workspace)
       throw new StoreError('The connector of this site is gone');
     // Nothing is opened to keep a note and queue it: the key is for the loop that sends.
     if (kept.kind === 'rest') return receivingStore(own, accounts, connector, now);
-    // A token of OAuth near its end is refreshed here, and the store is built again with the new one.
-    const authorization = await linearAuthorization(connector, kept.sealed, { accounts, secretsKey, oauth, now });
-    const known = built.get(connector);
-    if (known?.authorization === authorization) return known.store;
 
-    const store = TRACKERS[kept.kind](authorization);
-    built.set(connector, { authorization, store });
-
-    return store;
+    // A token of OAuth near its end is refreshed here.
+    return TRACKERS[kept.kind](await linearAuthorization(connector, kept.sealed, { accounts, secretsKey, oauth, now }));
   };
 }
 
