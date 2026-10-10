@@ -1,4 +1,5 @@
 import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
+import { DESTINATION_ID_MAX } from './destinations.ts';
 
 /**
  * What the reporter can change about the widget, and where it is kept (FRU-14).
@@ -30,10 +31,22 @@ export type WidgetConfig = {
    * it (FRU-91). Absent by default: the widget remembers nobody who did not ask.
    */
   reporterName?: string;
+  /**
+   * The place the reporter last chose for a note, as the opaque id the worker gave (FRU-123). Absent
+   * until somebody chooses.
+   *
+   * It is a preference and not a route, which is what keeps it apart from the `endpoint` this store
+   * refuses to hold (FRU-89). The composer follows it only when the worker offers that id to this
+   * reader now, it shows the place on its line, and the worker checks the id again on the write. A
+   * page that writes this key can do no more than choose first among the places the reader may use.
+   */
+  destination?: string;
 };
 
-/** A change to the config. `reporterName: undefined` forgets the name. */
-export type ConfigPatch = Partial<Omit<WidgetConfig, 'reporterName'>> & { reporterName?: string | undefined };
+type Optional = 'reporterName' | 'destination';
+
+/** A change to the config. `reporterName: undefined` forgets the name, and `destination` likewise. */
+export type ConfigPatch = Partial<Omit<WidgetConfig, Optional>> & { [Key in Optional]?: string | undefined };
 
 export type ConfigStore = {
   get(): WidgetConfig;
@@ -88,15 +101,18 @@ export function createConfigStore(options: ConfigStoreOptions): ConfigStore {
  * a caller who mutates the config — or the array they passed to `set` — into a `TypeError` here
  * rather than into state that changed without being persisted or announced.
  */
-function seal(config: Omit<WidgetConfig, 'reporterName'> & { reporterName?: string | undefined }): WidgetConfig {
-  const { reporterName, ...rest } = config;
+function seal(config: Omit<WidgetConfig, Optional> & { [Key in Optional]?: string | undefined }): WidgetConfig {
+  const { reporterName, destination, ...rest } = config;
   const name = reporterName?.trim().slice(0, REPORTER_NAME_MAX) ?? '';
+  // Longer than an id can be: dropped, never cut, because a cut id is another id.
+  const place = destination !== undefined && destination.length <= DESTINATION_ID_MAX ? destination : '';
 
   return Object.freeze({
     ...rest,
     hiddenStages: Object.freeze([...config.hiddenStages]),
     // Absent, never empty: a key that stays in storage with no value reads as a name that was kept.
     ...(name.length > 0 ? { reporterName: name } : {}),
+    ...(place.length > 0 ? { destination: place } : {}),
   }) as WidgetConfig;
 }
 
@@ -137,6 +153,7 @@ function readStored(storage: Storage | null, key: string): Partial<WidgetConfig>
 
     if (typeof stored.screenshot === 'boolean') config.screenshot = stored.screenshot;
     if (typeof stored.reporterName === 'string') config.reporterName = stored.reporterName;
+    if (typeof stored.destination === 'string') config.destination = stored.destination;
     if (Array.isArray(stored.hiddenStages)) config.hiddenStages = stored.hiddenStages.filter(isStage);
 
     return config;

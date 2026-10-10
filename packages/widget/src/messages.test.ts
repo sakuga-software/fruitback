@@ -13,6 +13,7 @@ import {
 import { FRENCH } from './locale-fr.ts';
 import { createCaptureHost } from './host.ts';
 import { createComposer } from './composer.ts';
+import { createOfferedDestinations } from './destinations.ts';
 import { createConfigPanel } from './panel.ts';
 import { createSidebar } from './sidebar.ts';
 import { feedbackAsText, placementOf } from './export.ts';
@@ -236,11 +237,20 @@ describe('every word the widget shows', () => {
     });
     cleanup.push(() => panel.destroy());
     let answer: (planted: boolean) => void = () => {};
+    const places = createOfferedDestinations();
+    places.set([{ id: 'dst_one', label: 'PLACE ONE' }, { id: 'dst_two' }]);
     const composer = createComposer({
       document: page.document,
       host: host.panel,
       translator,
       onSubmit: () => new Promise<boolean>((resolve) => (answer = resolve)),
+      // Two places, so the line of where a note goes is drawn. The second has no name of its own.
+      destinations: {
+        offered: places.get,
+        subscribe: places.subscribe,
+        remembered: () => undefined,
+        remember: () => {},
+      },
     });
     cleanup.push(() => composer.destroy());
     const overlay = createOverlay({ document: page.document, host: host.root, translator });
@@ -329,6 +339,9 @@ describe('every word the widget shows', () => {
     }
     composer.open({ left: 0, top: 0, bottom: 10, right: 10 });
     snapshots.push(...shown(host.root));
+    // A read takes the places away under the open popover, and the composer says so.
+    places.set([]);
+    snapshots.push(...shown(host.root));
     const send = composer.element.querySelector('[data-fruitback-send]') as HTMLButtonElement;
     const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
     send.click();
@@ -390,7 +403,18 @@ describe('every word the widget shows', () => {
     const relativeDates = [found, detached, placedByPosition]
       .flatMap((issue) => [issue.seed.createdAt, ...(issue.comments ?? []).map((comment) => comment.createdAt)])
       .map((written) => translator.relative(new Date(written)));
-    const data = [...relativeDates, 'NOTE ONE', 'NOTE TWO', 'ID-1', 'ID-2', 'ID-3', 'BODY', 'https://…', 'acme'];
+    const data = [
+      ...relativeDates,
+      'NOTE ONE',
+      'NOTE TWO',
+      'ID-1',
+      'ID-2',
+      'ID-3',
+      'BODY',
+      'https://…',
+      'acme',
+      'PLACE ONE',
+    ];
     const untranslated = snapshots.filter((text) => {
       const rest = data.reduce((left, value) => left.split(value).join(''), text.replace(/⟦[^⟧]+⟧/g, ''));
 

@@ -170,6 +170,44 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
     not covered**: there the session names the reviewer, and the widget cannot know it — it is given
     a transport and nothing about who is behind it. The field stays, and the worker still signs the
     note with the session's name.
+- **A member chooses where a note goes, on a line at the foot of the composer (FRU-123).** The
+  worker half is `apps/worker` (`Site.destinations`, `seesTracker`); this is what the widget does
+  with its answer.
+  - **The line is there from two places, and for nobody the worker did not name them to.** The
+    worker puts `destinations` (`[{ id, label? }]`) in the answer of a read for a session whose role
+    has `see-tracker`. A visitor, a guest, a client and an older worker send no such field, and the
+    composer is then the one of FRU-89: the two elements are hidden, and the place of the notice is
+    empty and takes no height. `e2e/destination.spec.ts` measures that.
+  - **Folded, on one line: « Send to: Linear · Web ».** Most notes go where the one before went, so
+    the line says where and asks nothing. It unfolds to radios, one for each place, in the order of
+    the worker. No board of `design/` draws it: it is the disclosure of the name and the row of the
+    box that remembers the name, on the same tokens.
+  - **The list is read like `stages`, except that one bad entry costs all of it.** A stage is a
+    name, and a list of stages with one removed is still right. A place is the default by its
+    position: with the first entry removed, the line would show the second as the default while the
+    worker sends a note that names no place to its own first. A bad label costs the label, and the
+    place is then called by its rank (`composer.destinationUnnamed`): the worker has no label for a
+    place set before it wrote them.
+  - **The list is not stored, and the choice is.** `OfferedDestinations` is in memory for the reason
+    `OfferedStages` is, and for one more: these are the names of a tracker, for this reader, now.
+    `ConfigStore` keeps the id chosen last. That store refuses `endpoint` and `clientId` because a
+    page can write its key (FRU-89). The id is not such a route: it is followed only while the worker
+    offers it to this reader, the line shows it, and the worker checks it again on the write. A page
+    that writes the key chooses first among the places its reviewer may use, and no more. The id of
+    another site is offered by no read here, so one key for an origin is one choice for a site.
+  - **Only a choice travels, in the query.** `POST /feedback?destination=<id>` when the place is not
+    the first, and the request of everybody else when it is. The body is the seed and nothing more:
+    the relay of the extension compares no query and carries no header but two. An older worker gets
+    no parameter, because it sent no list.
+  - **A refusal with a choice reads again.** The worker answers `403` for a place the site no longer
+    has and for a reader who may no longer choose. The note is kept like on any refusal. But the list
+    on screen is then old, and a second try would be refused like the first, with nothing to say why.
+    The read brings the list of now. The composer goes back to the first place and says so in words
+    (`composer.destinationGone`), because the next send goes there.
+  - **The notice is said only for a popover that is open.** A list that changed between two notes
+    promised nothing to anybody. And when the list keeps only the place the line showed, nothing is
+    said: one place is the default.
+  - **Not here**: the screen of the console where an admin sets and orders the list.
 
 ## Who carries the calls
 

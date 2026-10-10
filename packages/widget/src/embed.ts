@@ -13,6 +13,12 @@ import { type CaptureHost, type CaptureTarget, createCaptureHost } from './host.
 import type { FruitbackTheme } from './theme.ts';
 import { type FruitbackTransport, fetchTransport } from './transport.ts';
 import { type Composer, createComposer } from './composer.ts';
+import {
+  type OfferedDestinations,
+  createOfferedDestinations,
+  destinationToSend,
+  offeredDestinations,
+} from './destinations.ts';
 import { type FruitbackMessages, createTranslator, languageOf } from './messages.ts';
 import { type Overlay, createOverlay } from './overlay.ts';
 import { type ConfigPanel, type OfferedStages, createConfigPanel, createOfferedStages } from './panel.ts';
@@ -234,7 +240,8 @@ export function init(options: FruitbackOptions): Fruitback {
   });
 
   const stages = createOfferedStages();
-  const reader = createReader(overlay, stages, view, options);
+  const destinations = createOfferedDestinations();
+  const reader = createReader(overlay, stages, destinations, view, options);
   let lastReadAt = Number.NEGATIVE_INFINITY;
   const read = (): Promise<void> => {
     lastReadAt = Date.now();
@@ -253,9 +260,25 @@ export function init(options: FruitbackOptions): Fruitback {
     },
     // A host that mints identity tokens names the reporter itself.
     identified: options.identityToken !== undefined,
-    onSubmit: async (note, reporter) => {
-      const planted = await plant({ note, target, reporter, config: config.get(), options });
-      if (!planted) return false;
+    // The places are the worker's word at the last read, and the choice is a preference of this
+    // browser on this site, kept with the others (FRU-123).
+    destinations: {
+      offered: destinations.get,
+      subscribe: destinations.subscribe,
+      remembered: () => config.get().destination,
+      remember: (id) => config.set({ destination: id }),
+    },
+    onSubmit: async (note, reporter, chosen) => {
+      const destination = destinationToSend(destinations.get(), chosen);
+      const planted = await plant({ note, target, reporter, destination, config: config.get(), options });
+      if (!planted) {
+        // The worker refuses a place the site no longer has, or a reader who lost the right to
+        // choose. The list on screen is then old, and a second try would be refused like the first.
+        // A read brings the list of now, and the composer says what changed.
+        if (destination !== undefined) await read();
+
+        return false;
+      }
 
       // Re-read rather than assume: the pin the reporter is about to see is the one the worker gave
       // back, which is also what proves the write landed somewhere the read path can find.
@@ -337,6 +360,7 @@ export function init(options: FruitbackOptions): Fruitback {
 function createReader(
   overlay: Overlay,
   stages: OfferedStages,
+  destinations: OfferedDestinations,
   view: Window & typeof globalThis,
   options: FruitbackOptions,
 ): () => Promise<void> {
@@ -364,10 +388,13 @@ function createReader(
       // gone". Same rule as an unreachable worker below.
       if (mine !== generation || !response.ok) return;
 
-      const body = JSON.parse(response.body) as { issues: SeedIssue[]; stages?: unknown };
+      const body = JSON.parse(response.body) as { issues: SeedIssue[]; stages?: unknown; destinations?: unknown };
       if (mine !== generation) return;
 
       stages.set(offeredStages(body.stages));
+      // Set from every answer, an answer without the field included: that is how a reader who left
+      // the team stops seeing the names of its tracker.
+      destinations.set(offeredDestinations(body.destinations));
       overlay.render(body.issues);
     } catch {
       // A worker that cannot be reached leaves the pins alone. Blanking the page because a read
@@ -387,12 +414,15 @@ export async function plant({
   note,
   target,
   reporter,
+  destination,
   config,
   options,
 }: {
   note: string;
   target: CaptureTarget | null;
   reporter: SeedReporter | undefined;
+  /** The opaque id of the place a member chose, when it is not the first one (FRU-123). */
+  destination?: string | undefined;
   config: WidgetConfig;
   options: FruitbackOptions;
 }): Promise<boolean> {
@@ -413,7 +443,12 @@ export async function plant({
   const token = await options.identityToken?.();
 
   const response = await transportFor(options)({
-    url: `${options.endpoint}/feedback`,
+    // The choice is in the query and nowhere else. The body stays the seed, and the relay of the
+    // extension carries a query, and no header but the two below.
+    url:
+      destination === undefined
+        ? `${options.endpoint}/feedback`
+        : `${options.endpoint}/feedback?destination=${encodeURIComponent(destination)}`,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

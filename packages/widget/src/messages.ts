@@ -54,6 +54,13 @@ export const ENGLISH = {
   'composer.sending': 'sending…',
   'composer.sent': 'sent',
   'composer.failed': 'did not go through — your text is kept, try again',
+  // The line that says where the note goes (FRU-123). A member of the team reads it, nobody else.
+  // `{destination}` is the name the worker gives a place, or `composer.destinationUnnamed`.
+  'composer.destination': 'Send to: {destination}',
+  'composer.destinations': 'Where this note goes',
+  'composer.destinationUnnamed': 'Destination {position}',
+  'composer.destinationGone':
+    'Sending to {destination} is no longer possible. This note will go to the default destination.',
 
   'pin.label': '{stage} · {note}',
   'pin.labelUncertain': '{stage} · {note} (approximate position)',

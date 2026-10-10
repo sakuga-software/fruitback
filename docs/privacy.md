@@ -123,7 +123,8 @@ Since FRU-119 an account also holds the language its person reads, taken from th
 
 - `localStorage`, under `fruitback:config` (or the `configKey` the integrator chose): the stages the
   reporter hid and the screenshot switch. The reporter's name too, **only if the reporter ticked
-  « Remember me on this site »**. No e-mail, no note. In private mode the extension writes `fruitback:config:extension` into **the site's**
+  « Remember me on this site »**. For a member of a team who chose where a note goes, the identifier of that place: an opaque
+  value, with no name of the tracker (FRU-123). No e-mail, no note. In private mode the extension writes `fruitback:config:extension` into **the site's**
   storage, so a site can see that a reviewer used the extension on it.
 - The extension keeps its rules and its session tokens in its own storage, which no page can read.
   It also keeps the language of the reviewer's account there. That language goes to a page where
