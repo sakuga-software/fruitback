@@ -35,10 +35,6 @@ party, and `FRUITBACK_STORE=github` is for a team whose issues are already on Gi
 else's account either. See [docs/architecture.md](../architecture.md) for the alternatives that
 were dropped.
 
-**Deployment is Docker on a VPS, driven by Dokploy from GitHub** — no Cloudflare, no serverless, no
-managed platform primitives. When something needs infrastructure, reach for what a single container
-behind Traefik can do.
-
 **Fruitback Cloud is one such deployment**, and `apps/worker/cloud/README.md` is its runbook
 (FRU-106, FRU-128): where it runs, what is backed up, and how to restore. The host archives every
 Docker volume each night, and `snapshot.sh` writes a copy of each database with SQLite's own backup
@@ -78,7 +74,6 @@ behind Traefik can do.
   nothing.
 - `packages/element` (`@fruitback/element`) and `packages/react` (`@fruitback/react`) — the widget as
   a custom element and as a React component. Each wraps `init` and `destroy`.
-- `apps/extension` — the browser extension (FRU-41): the widget on a site that embeds nothing.
 - `apps/playground` (`@fruitback/playground`) — the dev loop: a deliberately hostile fake client site
   with the widget mounted on it, built as a React Router 8 + Vite app with HeroUI because the
   widget's clients are React apps. Not shipped. It is deployed once, as the public demonstration

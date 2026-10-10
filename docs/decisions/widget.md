@@ -11,8 +11,6 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   `<script>` tag only `data-fruitback-include-env="true"` turns it on. A reporter who does nothing is
   anonymous, and a user agent with a language narrows down who they are. `docs/privacy.md` and its
   notice template say what is sent, so a change to this default changes them too.
-- `page.url` is canonicalized here too, which is what makes the widget query the read path with the
-  key its seeds were stored under.
 - **A component name a bundler minted is worse than none.** `isMangledComponentName` drops them and
   the walk continues to the first name a human wrote. It deliberately does **not** climb to the app's
   own component. **`bound qi` is `qi`**: a bound function carries a `bound ` prefix, and a production
@@ -70,8 +68,6 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
     values. `all: initial` stops inheritance too: an element with no rule of its own painted black at
     16px, and the panel and the thread were 1.2:1 on the dark surface until axe measured them (FRU-51).
     `contrast.test.ts` compares tokens and cannot see it.
-- **Hit testing has to be told to ignore us.** `ignore` extends that to chrome the _page_ mounts
-  around the widget.
 
 ### The reasons, and the history
 
@@ -275,13 +271,6 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   - **Not here**: the screen of the console where an admin sets and orders the list.
 
 ## Who carries the calls
-
-### The rules, in short
-
-- **`fetchTransport` does not catch.** A worker nobody can reach rejects, and `embed.ts` treats a
-  rejection and a failed status identically.
-
-### The reasons, and the history
 
 - **`transport` is a seam, and it is the same one twice** (FRU-56). The widget stays dormant when a
   host has nothing to reach the worker with, and the extension relays the calls when it does. Those
@@ -583,8 +572,6 @@ with no context and no instruction added.
 - **A live region inside a hidden element announces nothing.** The host has its own announcer. The
   announcer for detached notes is a sibling of the list's root, which hides while empty, and `owns`
   must include it: otherwise its new text reads as a page change and schedules a resolve.
-- **The host container is a landmark**, `role="region"` named by `widget.label`. A screen reader meets
-  the widget in the middle of the host's content, and the landmark says what it is.
 - **`contrast.test.ts` measures every pair a module paints, in both schemes, and no pair fails**
   (FRU-93). A pin sits on the host's page, so no test can promise its contrast. `e2e/a11y.spec.ts`
   runs axe-core in both schemes, scoped to `[data-fruitback-host]`, with animations off, and finds
@@ -776,16 +763,6 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   widget's tokens do not reach.
 
 ## Re-anchoring, and why a pin says how sure it is
-
-### The rules, in short
-
-- **It watches the page, because nothing announces a re-render** (FRU-21). A `MutationObserver` on
-  `childList`/`subtree`, debounced, plus a `ResizeObserver` per anchored element. Deliberately **not**
-  `attributes`: a design system toggles classes on every hover, and what must be caught is the element
-  being _replaced_.
-- The overlay positions in **document coordinates** and re-measures on scroll and resize.
-
-### The reasons, and the history
 
 - `resolveAnchor` walks the anchor's claims in the order `SEED_ANCHOR_STRATEGIES` declares:
   **selector → testId → text → domPath → bounds**. That order is the contract's, and it puts `text`

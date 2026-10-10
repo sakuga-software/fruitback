@@ -11,8 +11,6 @@ connector's environment, and what a second connector with no markdown body actua
   somebody has to hold the SQLite file too. **Resist putting logic here that belongs in the widget or
   in the store.** The rule is the point; "exactly one reason" was the wording until FRU-26, and it
   stopped being true when a store with no API key shipped.
-- The env is validated up front (`readConfig`), so a missing secret surfaces at boot and on
-  `/health`, not as an opaque error per request.
 - **Both paths canonicalize the page URL** — `POST /feedback` re-does `seed.page.url` server-side and
   `GET /feedback` its `url` parameter. A client that skipped normalization would plant a pin nobody
   can find again.
@@ -208,12 +206,6 @@ degradation the ticket asked to have written down rather than discovered.
 - **`store.ts` is the interface.** `findForPage` states the _intention_, not the method — Linear
   filters by substring, SQL does a `WHERE`, and exposing a `contains` filter would have made
   Linear's trick the contract.
-- **`store.scope(client)` is what keeps the read cache key store-agnostic.** Only the store knows
-  what identifies a tenant. The client id stays in the key regardless, which is what stops two
-  clients sharing one team from sharing an entry.
-- **The store is built once per process, by the transport**, and every request gets it through
-  `RequestContext`. Building it per handler would open a SQLite connection per request. The tests
-  assert the handler used the store it was **given**.
 - **Every state the deprecated flag can be in says something at boot** (FRU-54).
   `fakeLinearIgnoredReason` answers when the flag lost — to `NODE_ENV=production`, or to an explicit
   `FRUITBACK_STORE`. `fakeLinearDeprecationNotice` answers when it selected the memory store, and
@@ -225,8 +217,6 @@ degradation the ticket asked to have written down rather than discovered.
   still relying on the flag — the inverse of who a deprecation notice is for. `server.ts` has no test
   of its own, so the boot line is asserted on its **source**: the notice's own cases all stay green
   with the call deleted, and the warning then reaches nobody.
-- **`/health` answers `store: '<provider>'`**, always, and it is compared exactly in `app.test.ts`
-  because the endpoint is public.
 - **A row is parsed, never trusted**, in every connector. A malformed one costs that pin; the page
   keeps its other notes. `sqlite.ts`'s `insert` and `select` are `async` so a failure to open the
   file rejects rather than throwing synchronously.
@@ -1076,8 +1066,6 @@ client map were refused together at boot.
   `fruitback:<id>` label of the issue, is the client a read compares each seed with, and keys the cache. Normalising it for the route alone
   put a note in the right team under a label its owner's clean read never asked for: authorised at
   both ends, invisible in between.
-- **`clientId` is client-asserted.** `origins` is what turns the claim into something checkable
-  against the browser's own header. Do not describe it as authentication.
 - **`resolveClientIp` is security-relevant.** The client IP is the entry `TRUSTED_PROXY_HOPS` from
   the **right** of `X-Forwarded-For`. Reading the leftmost entry makes the rate limit bypassable with
   one header. **Do not write that each proxy appends**: nginx with `$proxy_add_x_forwarded_for`

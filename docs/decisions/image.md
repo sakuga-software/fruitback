@@ -35,8 +35,6 @@ immutable.
   `check` builds, emulates and scans with a token that cannot publish. `ci.yml`'s `zizmor` job audits
   the workflows offline on every pull request and fails on any finding: a permission widened back or
   an unpinned action is a red check, not a review comment.
-- **Attaching the package is not publishing it.** A new package inherits the repository's visibility;
-  making it public is a manual, one-time change in the package settings.
 
 ### The reasons, and the history
 

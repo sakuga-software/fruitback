@@ -6,12 +6,6 @@ it writes a spec, in short; the reasoning behind them follows.
 
 ## The dev loop
 
-### The rules, in short
-
-- `apps/playground/.react-router/` is typegen, regenerated on dev and build. Ignored, not committed.
-
-### The reasons, and the history
-
 **`pnpm dev` starts both halves. The ports are fixed, and these are them:**
 
 |                         |                                     |

@@ -33,8 +33,6 @@ Plus the licence split and the two measurements that decided how it is asserted.
   function, never a class at the top of the module: `HTMLElement` is a browser global, and a server
   that renders the page must be able to import the package. The element's script holds the widget, so
   its build copies the widget's `THIRD-PARTY-NOTICES.md` into the tarball, and the guard asserts it.
-- **102 kB gzipped (measured on FRU-38), guarded by a test that trips at 150 kB** — a tripwire for a dependency that should
-  have been bundled out, not a budget.
 
 ### The reasons, and the history
 
@@ -94,9 +92,6 @@ Plus the licence split and the two measurements that decided how it is asserted.
 
 ### The rules, in short
 
-- **MIT on the five published packages, AGPL-3.0-only on the worker** (FRU-22). The split follows
-  the client/server boundary: the widget is compiled into someone else's site, and copyleft on code
-  that ships inside a client's bundle is a licence nobody adopts.
 - **The guard asserts the `license` field and the LICENSE text, not the presence of a file.** npm
   force-includes a `LICENSE` whatever `files` says, and pnpm copies the workspace root's into any
   package with none of its own — so "the tarball contains a LICENSE" is true even for a package that

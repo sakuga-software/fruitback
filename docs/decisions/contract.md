@@ -8,8 +8,6 @@ first publish made it expensive.
 
 ### The rules, in short
 
-- **Bump `SEED_VERSION` when the payload shape changes** — it is `2` since FRU-9. Readers accept
-  older versions and refuse newer ones (`unsupported-version`) rather than silently dropping fields.
 - **The contract holds the vocabulary and nothing a human reads** (FRU-24). No emoji, no English
   label, no colour: those are rendering decisions, and a published type is the one place they can
   never be changed or translated downstream.
@@ -18,9 +16,6 @@ first publish made it expensive.
   page would offer the wrong boxes. `offeredStages` reads it tolerantly and answers every stage when
   the field is absent. GitHub reports `seeded`, `ripe` and `composted`. A read-envelope field, so
   `SEED_VERSION` does not move.
-- **`SEED_BLOCK_CAPTION` is free to reword.** `parseSeedFromDescription` iterates fenced blocks and
-  recognises ours by parsing the JSON, and test:`finds the block by its JSON, never by
-the caption above it (FRU-24)` is what keeps that true.
 
 ### The reasons, and the history
 
