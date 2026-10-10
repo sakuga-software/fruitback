@@ -166,7 +166,12 @@ export type RequestContext = {
 export async function handleRequest(request: Request, env: WorkerEnv, context: RequestContext): Promise<Response> {
   // FRU-133: a delivery of the REST connector that came back to a worker. Before everything, the
   // readiness probe included: `/health` would answer 200, and the sender would count the note as
-  // arrived. It reads no configuration and costs nothing of the rate limit.
+  // arrived.
+  //
+  // WARNING: this answer is not metered, and it must stay above the rate limit. It is the one
+  // exception to « metered before the dispatch » that is not a probe or a refusal of the transport.
+  // It reads no configuration, no `Kv` and no provider, so there is nothing to protect. Below the
+  // limit it would answer `429` to a loop, and a `429` is tried again seven times.
   if (request.headers.has(DELIVERY_HEADER)) return json(LOOP_STATUS, { error: 'delivery-loop' });
 
   const { pathname } = new URL(request.url);

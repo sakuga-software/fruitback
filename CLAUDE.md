@@ -1197,7 +1197,9 @@ and _The team mode, and the call the page cannot make_:
   `handleRequest` answers `508` to every request that carries `X-Fruitback-Delivery`, before the
   readiness probe: `/health` answered 200 to a delivery, and the sender counted the note as arrived.
   A list of the worker's own hosts was not taken: another name on the same IP passes it. `deliverDue`
-  gives up on a `508` at once, with `LOOP_ERROR` for the console.
+  gives up on a `508` at once, with `LOOP_ERROR` for the console. **That answer is above the rate
+  limit, and not metered, on purpose**: it reads no configuration, no `Kv` and no provider, and below
+  the limit a loop would get `429`, which the sender tries again seven times.
 - **`docs/rest-connector.md` is a contract**, and `rest-connector.test.ts` holds its waits, its
   timeout, its headers, its body and its `openssl` example to the code. A `Destination` has a team
   for a tracker and none for an address, and `destinationOf` asks the kind of the connector.

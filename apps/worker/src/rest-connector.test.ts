@@ -650,6 +650,23 @@ describe('a delivery that comes back to a worker (FRU-133)', () => {
       200,
     );
   });
+
+  it('is refused above the rate limit: a loop must not be answered 429, which the sender tries again', async () => {
+    const env = envWith({ RATE_LIMIT_PER_MINUTE: '1' });
+    const kv = createMemoryKv();
+    const from = (headers: Record<string, string>) =>
+      handleRequest(
+        new Request('https://api.fruitback.test/console/me', { headers: { Origin: CONSOLE, ...headers } }),
+        env,
+        { clientIp: '203.0.113.77', kv },
+      );
+
+    await from({});
+    assert.equal((await from({})).status, 429, 'this address spent its limit');
+    for (let again = 0; again < 3; again += 1) {
+      assert.equal((await from({ [DELIVERY_HEADER]: 'dl_1' })).status, LOOP_STATUS);
+    }
+  });
 });
 
 describe('who may connect an address and read its deliveries (FRU-122)', () => {
