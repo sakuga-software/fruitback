@@ -537,6 +537,51 @@ any store` asks it of every spec rather than of Linear.
   worker writes SQLite replies or changes a SQLite stage. The Serverless column went, because the
   deployment is Docker only.
 
+## The conformance suites of the accounts and the sessions (FRU-140)
+
+### The rules, in short
+
+- **Every `AccountStore` passes `account-conformance.test.ts`, and every `SessionStore` passes
+  `session-conformance.test.ts`.** The cases are in `account-conformance.fixture.ts` and
+  `session-conformance.fixture.ts`, written once against the interface. A new implementation adds a
+  subject to the test file: test:`runs for every implementation the worker exports` reads the
+  exported `create…` functions that answer the type, and fails on one that no subject names.
+- **A rule of the interface is a case, and a case has a planted violation.** `VIOLATIONS` in each
+  test file gives, for each case, one change that breaks its rule. The control applies the change and
+  requires the case to fail. A case with no violation, and a violation for a case that is gone, both
+  fail test:`plants a violation for every case, and for no case that is gone`.
+- **A violation is a change to the source of the SQLite store**, applied to a copy in a temporary
+  directory (`mutatedModule` in `conformance.fixture.ts`). The text to change is in the test file: a
+  change to the store that removes that text fails the control with the text, and the violation is
+  written again. Do not weaken a case to make a control pass.
+- **A race is a case too, and its violation is a store that waits.** `node:sqlite` is synchronous, so
+  no change to the SQLite store loses a race. The three cases that run calls at the same moment (one
+  account for one address, one sign-in for one link, one session for one code) have a store that
+  reads, waits a turn of the event loop, then writes. On SQLite these cases prove nothing: they are
+  there for a store on a network.
+- **What is true of one file format stays out of the suite**: the bytes of the file and of its
+  `-wal`, `PRAGMA user_version`, a blob in a `TEXT` column, the cascade read with the foreign keys
+  off, a file of a version before. Those are in `accounts.test.ts` and `session.test.ts`, with what
+  `session.ts` does above any store.
+
+### The reasons, and the history
+
+- **The suite reads a store through its interface only.** The purge has no reader in the interface,
+  so its case turns the clock back: a row that the purge left answers at an instant before its expiry.
+- **`redeemPairing` of `session.ts` purges before it redeems**, so a late code is gone before the
+  store compares its expiry. The first version of the case went through that function and passed with
+  the comparison removed. The case now asks the store directly, at the expiry and one millisecond
+  each side.
+- **Two cases were made stricter when they moved.** test:`leaves the token a client just received
+alone when its predecessor is retired` checked the answer of the rotation and not the token in it:
+  a store that revoked the whole chain and still answered `rotated` passed. It now uses the token.
+  test:`tells a logged-out token apart from a replayed one` checked a refusal, which a replay gets too:
+  it now reads `gone` from the store.
+- **The ids are a rule.** `acc_`, `ws_`, `site_`, `con_` and `dlv_` with 20 hexadecimal characters:
+  they are in the tokens and in `reporter.id` of the notes already written.
+- **Not covered, on purpose**: the 100 rows that `deliveries` answers at most, and the walk of the
+  `SITE_COLUMNS` of a row that somebody edited by hand.
+
 ## The markdown codec, and the file that outlived its name
 
 ### The rules, in short
@@ -885,13 +930,15 @@ or the POST never happens`. What says the exemption is not a hole in the gate is
 - **The rate-limit move is mutation-tested.** Putting `checkRateLimit` back below the path dispatch —
   where it sat before this ticket — fails test:`meters the pairing endpoint, not only /feedback`. The
   unknown-path test stays green under that mutation, because it guards a different ordering.
-- **Nothing in this process can prove the redeem is atomic.** `redeemPairing` marks the code spent in
-  one `UPDATE ... WHERE redeemed_at IS NULL` and acts on `changes === 1`, which is right for two
-  workers on one volume or an asynchronous driver later. But `DatabaseSync` is synchronous and the
+- **Nothing on the SQLite store can prove the redeem is atomic.** `redeemPairing` marks the code
+  spent in one `UPDATE ... WHERE redeemed_at IS NULL` and acts on `changes === 1`, which is right for
+  two workers on one volume or an asynchronous driver. But `DatabaseSync` is synchronous and the
   store awaits nothing between its read and its write, so two redemptions cannot interleave here
   however they are scheduled: a `Promise.all` over three of them passes against a read-then-write
-  store too. Measured. The concurrency test that claimed to guard this was deleted rather than kept
-  green, and the reason is recorded beside the code.
+  store too. Measured. The first concurrency test claimed to guard this on SQLite and was deleted.
+  The case is back in the conformance suite (FRU-140), for a store that waits, and it says what it
+  proves: test:`gives one session to two reviewers who redeem one code at the same moment` passes on
+  SQLite whatever the store does, and its control is a store that reads, waits, then writes.
 - **The digest guard reads the `-wal` file too.** A row just written is in `sessions.db-wal` and
   nowhere else, so a check that read only the `.db` would pass against a store writing codes in the
   clear. Same trap as the seed store's backup note, arriving from the other side.

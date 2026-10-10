@@ -267,9 +267,15 @@ function substitutionEnd(source: string, from: number): number {
   return index;
 }
 
+/**
+ * Where a test is declared. A `*.fixture.ts` is here for the conformance suites (FRU-140): their
+ * cases are `it(` calls in a fixture, and a test file runs them on each store.
+ */
+const TEST_SOURCES = ['.test.ts', '.spec.ts', '.fixture.ts'];
+
 function declaredTestNames(): Set<string> {
   const names = new Set<string>();
-  for (const path of filesUnder(['.test.ts', '.spec.ts'])) {
+  for (const path of filesUnder(TEST_SOURCES)) {
     for (const name of namesIn(readFileSync(path, 'utf8'))) names.add(name);
   }
 
@@ -465,7 +471,7 @@ describe('the tests the documents cite (FRU-62)', () => {
     // Measured: walking the ignored directories too adds 170 test files from dependencies and 707
     // documents. A citation would then be free to match zod's own test name, and a dependency's
     // README could fail this repository's suite.
-    const scanned = [...filesUnder(['.test.ts', '.spec.ts']), ...filesUnder(['.md'])];
+    const scanned = [...filesUnder(TEST_SOURCES), ...filesUnder(['.md'])];
     const strays = scanned.filter((path) =>
       inRepository(path)
         .split('/')
