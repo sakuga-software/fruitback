@@ -115,23 +115,6 @@ export async function deliverPending(env: WorkerEnv, send: Send, now?: () => num
   await deliverDue({ accounts, secretsKey: config.config.secretsKey, send, ...(now === undefined ? {} : { now }) });
 }
 
-/** One set of connector stores per accounts file and key, so a key is opened once and not per request. */
-const connectorStores = new WeakMap<AccountStore, Map<string, ConnectorStores>>();
-
-function connectorStoresFor(
-  accounts: AccountStore,
-  secretsKey: string | undefined,
-  oauth: LinearOAuth | undefined,
-): ConnectorStores {
-  const byKey = connectorStores.get(accounts) ?? new Map<string, ConnectorStores>();
-  connectorStores.set(accounts, byKey);
-  const name = `${secretsKey ?? ''}\n${oauth?.clientId ?? ''}`;
-  const kept = byKey.get(name) ?? createConnectorStores(accounts, secretsKey, Date.now, oauth);
-  byKey.set(name, kept);
-
-  return kept;
-}
-
 /** What the transport knows and the request itself cannot say. */
 export type RequestContext = {
   /** Already resolved against the trusted proxy chain — see `resolveClientIp`. */
@@ -402,7 +385,7 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
   const store =
     accounts === undefined
       ? own
-      : createRoutedStore(own, connectorStoresFor(accounts, served.secretsKey, served.linearOAuth));
+      : createRoutedStore(own, createConnectorStores(accounts, served.secretsKey, Date.now, served.linearOAuth));
 
   return request.method === 'GET'
     ? getFeedback(request, served, store, kv, cors.headers)

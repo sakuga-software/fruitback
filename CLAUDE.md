@@ -1169,6 +1169,13 @@ and _The team mode, and the call the page cannot make_:
   be invisible to the team. The key is sealed by `secrets.ts` with `FRUITBACK_SECRETS_KEY`, and no
   route answers it. The workspace of the client is compared with the workspace of the connector at the
   request too, because the row of a site is only a row.
+- **The store of a connector is built for the request, and nothing is kept between two** (FRU-102).
+  A map of the stores existed, under a `WeakMap` by the object of the accounts. A request makes a new
+  object of the accounts, so the map never found anything, while its comment said that a key was
+  opened once. A cache that worked would hold the key of each tracker in the clear for the life of
+  the process. A connector whose store costs something to build (GitHub mints a token) must bring
+  its own cache, with a way out. `connector-stores.test.ts` holds two workspaces with two trackers,
+  and it fails when one store serves the whole process.
 - **A workspace connects Linear with OAuth where the worker has the application** (FRU-134).
   `linear-oauth.ts`: the console gets a ticket with its token and sends the browser to
   `/auth/linear/start`; a navigation carries no `Authorization`, so the ticket says who starts, once.
