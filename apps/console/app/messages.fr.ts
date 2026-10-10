@@ -30,6 +30,42 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Your account did not take this language yet. It is kept in this browser, and sent again the next time you open the console.':
     'Votre compte n’a pas encore pris cette langue. Elle est gardée dans ce navigateur, et renvoyée la prochaine fois que vous ouvrez la console.',
   'Address of the person to invite': 'Adresse de la personne à inviter',
+  'Fruitback cannot send to this address. Use a full https:// address that the internet can reach.':
+    'Fruitback ne peut pas envoyer à cette adresse. Utilisez une adresse https:// complète, joignable depuis internet.',
+  'A secret is 16 to 256 characters, with no space. Leave it empty and Fruitback makes one.':
+    'Un secret fait 16 à 256 caractères, sans espace. Laissez-le vide et Fruitback en crée un.',
+  'REST API': 'API REST',
+  'The address could not be kept just now. Try again.': 'L’adresse n’a pas pu être gardée pour le moment. Réessayez.',
+  'Copy this secret now': 'Copiez ce secret maintenant',
+  'Your receiver checks each request with it. Fruitback does not show it again.':
+    'Votre récepteur vérifie chaque requête avec lui. Fruitback ne le montre plus ensuite.',
+  Copy: 'Copier',
+  'I kept it': 'Je l’ai gardé',
+  'Address of your receiver': 'Adresse de votre récepteur',
+  'Each note is posted there, signed. The notes stay in Fruitback too.':
+    'Chaque note y est envoyée, signée. Les notes restent aussi dans Fruitback.',
+  'Secret (optional)': 'Secret (facultatif)',
+  'Leave it empty and Fruitback makes one, shown once.':
+    'Laissez-le vide et Fruitback en crée un, montré une seule fois.',
+  'Your receiver answered {status}': 'Votre récepteur a répondu {status}',
+  'No answer: {error}': 'Pas de réponse : {error}',
+  'Not sent yet': 'Pas encore envoyée',
+  'The new attempt was not started. Try again.': 'La nouvelle tentative n’a pas démarré. Réessayez.',
+  'Sends to {host}': 'Envoie à {host}',
+  'Which sites send their notes there': 'Quels sites y envoient leurs notes',
+  'Fruitback only': 'Fruitback seulement',
+  'Fruitback, and this address': 'Fruitback, et cette adresse',
+  'The request, and how to check its signature': 'La requête, et comment vérifier sa signature',
+  'Notes that did not arrive': 'Notes qui ne sont pas arrivées',
+  'Every note arrived.': 'Toutes les notes sont arrivées.',
+  'Written {when}': 'Écrite {when}',
+  '1 attempt': '1 tentative',
+  '{count} attempts': '{count} tentatives',
+  'Fruitback stopped trying.': 'Fruitback a arrêté d’essayer.',
+  'Next attempt {when}': 'Prochaine tentative {when}',
+  'Try now': 'Essayer maintenant',
+  'Its sites keep their notes in the workspace, and the notes that waited are not sent.':
+    'Ses sites gardent leurs notes dans le workspace, et les notes qui attendaient ne sont pas envoyées.',
   'Where you are signed in': 'Où vous êtes connecté',
   'Console · this browser': 'Console · ce navigateur',
   'Active now': 'Actif maintenant',

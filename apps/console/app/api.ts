@@ -65,9 +65,19 @@ export type Role = 'owner' | 'admin' | 'member' | 'guest';
 export type Workspace = { id: string; name: string; role: Role };
 export type Visibility = 'members' | 'everyone';
 /** Where the notes of a site go. Absent: they stay in the workspace. Only a member reads it. */
-export type Destination = { connector: string; teamId: string; projectId?: string };
+/** A tracker has teams, so `teamId` is there for one. An address that only receives has none (FRU-122). */
+export type Destination = { connector: string; teamId?: string; projectId?: string };
 export type Site = { id: string; origin: string; visibility: Visibility; destination?: Destination };
-export type Connector = { id: string; kind: 'linear'; label: string; createdAt: string };
+export type Connector = { id: string; kind: 'linear' | 'rest'; label: string; createdAt: string };
+/** A note that did not reach the address of a connector yet. `nextAt` absent: the worker gave up. */
+export type Delivery = {
+  id: string;
+  createdAt: string;
+  attempts: number;
+  nextAt?: string;
+  lastStatus?: number;
+  lastError?: string;
+};
 export type Team = { id: string; name: string; key: string; projects: { id: string; name: string }[] };
 export type Me = { account: Account; workspaces: Workspace[] };
 
