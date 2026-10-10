@@ -105,10 +105,12 @@ function fakeLinear(keys: string[] = [LINEAR_KEY]) {
       });
     }
     if (operation === 'FruitbackIssues') {
-      const filter = variables.filter as { team: { id: { eq: string } }; description: { contains: string } };
+      const filter = variables.filter as { team: { id: { eq: string } }; and: { description: { contains: string } }[] };
       const nodes = issues
         .filter(
-          (issue) => issue.teamId === filter.team.id.eq && issue.description.includes(filter.description.contains),
+          (issue) =>
+            issue.teamId === filter.team.id.eq &&
+            filter.and.every((clause) => issue.description.includes(clause.description.contains)),
         )
         .map((issue, index) => ({
           id: issue.id,

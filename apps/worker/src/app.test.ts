@@ -420,7 +420,9 @@ describe('GET /feedback', () => {
     // only was a note no page showed again. The client is read from each seed.
     assert.deepEqual(stub.issueFilter(), {
       team: { id: { eq: 'team_1' } },
-      description: { contains: PAGE },
+      // The client narrows what Linear sends: the notes of another client of the team must not fill
+      // the pages this read walks.
+      and: [{ description: { contains: PAGE } }, { description: { contains: 'acme' } }],
     });
   });
 
@@ -430,7 +432,7 @@ describe('GET /feedback', () => {
 
     const body = await readBody(seed.page.url);
 
-    assert.equal('and' in (stub.issueFilter() as object), false);
+    assert.deepEqual((stub.issueFilter() as { and: unknown }).and, [{ description: { contains: seed.page.url } }]);
     assert.equal(body.issues.length, 1);
   });
 
@@ -441,7 +443,9 @@ describe('GET /feedback', () => {
 
     const body = await readBody(raw);
 
-    assert.partialDeepStrictEqual(stub.issueFilter(), { description: { contains: canonicalizePageUrl(raw) } });
+    assert.partialDeepStrictEqual(stub.issueFilter(), {
+      and: [{ description: { contains: canonicalizePageUrl(raw) } }],
+    });
     assert.equal(body.url, canonicalizePageUrl(raw));
   });
 

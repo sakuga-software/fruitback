@@ -322,14 +322,19 @@ export async function fetchSeedIssues(
   return found;
 }
 
-function buildSeedIssueFilter(routing: LinearRouting, { url }: SeedIssueQuery): Record<string, unknown> {
+function buildSeedIssueFilter(routing: LinearRouting, { url, clientId }: SeedIssueQuery): Record<string, unknown> {
   return {
     // The API key can see the whole workspace; a seed only ever lives on the team its client routes
     // to, which on a multi-tenant worker is what keeps one client's read off another's issues.
     team: { id: { eq: routing.teamId } },
-    // No clause on the labels: see `fetchSeedIssues`. Two clients of one team are told apart by the
-    // client each seed names.
-    description: { contains: pageQueryTerm(url) },
+    // No clause on the labels: see `fetchSeedIssues`. The page and the client are both looked for
+    // in the description, where the seed is written. The client narrows what Linear sends, so the
+    // notes of another client of the team do not fill the pages this read walks. It is a substring,
+    // like the page: `fetchSeedIssues` compares both exactly.
+    and: [
+      { description: { contains: pageQueryTerm(url) } },
+      ...(clientId === undefined ? [] : [{ description: { contains: clientId } }]),
+    ],
   };
 }
 

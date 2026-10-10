@@ -943,7 +943,9 @@ and _The team mode, and the call the page cannot make_:
   (FRU-138). A team can refuse `issueLabelCreate` to the key, and it does to an application that is a
   member of no team (measured). The write then makes the issue with no label, and a read that
   selected by label never showed that note again. The labels stay, when Linear allows them, for the
-  people who triage.
+  people who triage. The client is also looked for in the
+  description, as a substring, so the notes of another client of the team do not fill the pages a
+  read walks; the exact comparison is in the code.
 - **A GitHub read lists the client's issues by label and re-checks `seed.page.url`; it never
   searches.** Search is 30 requests a minute. Every page read walks the client's list, newest first,
   stopped at 1,000 issues, and the read cache is what protects the hourly budget.

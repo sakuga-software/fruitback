@@ -104,14 +104,20 @@ function fakeLinear({ refuseLabels = false } = {}): { node(id: string): IssueNod
     if (operation === 'FruitbackIssues') {
       const filter = variables.filter as {
         team: { id: { eq: string } };
-        and?: unknown;
-        description: { contains: string };
+        and: { description?: { contains: string }; labels?: unknown }[];
       };
       // A clause on the labels would hide every note of a team that refuses them.
-      assert.equal(filter.and, undefined, 'the read must not select by label');
+      assert.equal(
+        filter.and.some((clause) => clause.labels !== undefined),
+        false,
+        'the read must not select by label',
+      );
+      const wanted = filter.and.flatMap((clause) =>
+        clause.description === undefined ? [] : [clause.description.contains],
+      );
       const nodes = issues
         .filter((issue) => issue.teamId === filter.team.id.eq)
-        .filter((issue) => (issue.node.description ?? '').includes(filter.description.contains))
+        .filter((issue) => wanted.every((text) => (issue.node.description ?? '').includes(text)))
         .map((issue) => ({
           ...issue.node,
           comments: { nodes: (issue.node.comments?.nodes ?? []).slice(0, variables.comments as number) },
