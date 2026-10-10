@@ -54,12 +54,19 @@ function wanted(filter: unknown): string[] {
   );
 }
 
-/** Linear with two teams. It keeps each issue with its team, and a read answers one team only. */
+/**
+ * Linear with two teams. It keeps each issue with its team, and a read answers one team only.
+ *
+ * `answers.as` is how it answers now: `revoked` is a key somebody removed at Linear (`401`), and
+ * `down` is a Linear that fails (`500`).
+ */
 function twoTeams() {
   const issues: { teamId: string; projectId?: string; description: string }[] = [];
   const reads: string[] = [];
+  const answers = { as: 'working' as 'working' | 'revoked' | 'down' };
   mock.method(globalThis, 'fetch', async (_url: unknown, init: { body: string; headers: Record<string, string> }) => {
-    if (init.headers.Authorization !== LINEAR_KEY)
+    if (answers.as === 'down') return Response.json({ errors: [{ message: 'later' }] }, { status: 500 });
+    if (answers.as === 'revoked' || init.headers.Authorization !== LINEAR_KEY)
       return Response.json({ errors: [{ message: 'no' }] }, { status: 401 });
     const { query, variables } = JSON.parse(init.body) as { query: string; variables: Record<string, unknown> };
     const operation = /Fruitback\w+/.exec(query)?.[0];
@@ -130,7 +137,7 @@ function twoTeams() {
     return Response.json({ errors: [{ message: `unexpected operation: ${operation}` }] });
   });
 
-  return { issues, reads };
+  return { issues, reads, answers };
 }
 
 let ip = 0;
@@ -279,6 +286,35 @@ describe('a site that can send to several places (FRU-123)', () => {
 
     assert.deepEqual([six.status, twice.status, unknown.status, elsewhere.status], [400, 400, 400, 404]);
     assert.deepEqual((await world.accounts.sites(world.workspace.id))[0]?.destinations, []);
+  });
+
+  it('keeps the one destination with no label, and keeps no list, when the tracker refuses the key or is down', async () => {
+    for (const as of ['revoked', 'down'] as const) {
+      const env = envWith();
+      const linear = twoTeams();
+      const world = await acme(env);
+      const one = { connector: world.connector, teamId: DESIGN };
+      linear.answers.as = as;
+
+      // The list needs the label a member chooses by, so nothing is kept without the tracker. It is
+      // the answer of a tracker that cannot be used, never a `500`. The key is not one the caller
+      // gave: `key-refused` is for a key that is typed, when a connector is made.
+      const list = await world.place([one, { connector: world.connector, teamId: SUPPORT }]);
+      assert.equal(list.status, 502, as);
+      assert.deepEqual(await list.json(), { error: 'store-unavailable' }, as);
+      assert.deepEqual((await world.accounts.sites(world.workspace.id))[0]?.destinations, [], as);
+
+      // The route of one destination does not stop for it: the place is kept, with no label.
+      const single = await call(env, 'POST', `${world.base}/sites/${world.site.id}/destination`, {
+        token: world.consoleToken,
+        body: one,
+      });
+      assert.equal(single.status, 200, as);
+      assert.deepEqual((await world.accounts.sites(world.workspace.id))[0]?.destinations, [one], as);
+
+      mock.restoreAll();
+      closeAccountConnections();
+    }
   });
 
   it('lets an owner set the places, and not a member', async () => {
