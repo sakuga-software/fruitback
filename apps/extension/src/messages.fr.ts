@@ -59,6 +59,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Remove: 'Supprimer',
   'Access granted': 'Accès donné',
   'No access in this browser': 'Pas d’accès dans ce navigateur',
+  'No access while it is off': 'Aucun accès tant qu’il est désactivé',
   Sites: 'Sites',
   'Add rule': 'Ajouter la règle',
   'Add a rule': 'Ajouter une règle',

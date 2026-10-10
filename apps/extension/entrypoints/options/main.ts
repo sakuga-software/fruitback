@@ -108,7 +108,8 @@ async function row(pattern: string, site: SiteConfig): Promise<HTMLElement> {
   const buttons = document.createElement('span');
   buttons.className = 'buttons';
   if (!refused) {
-    if (!granted) buttons.append(button(t('Grant access'), () => attempt(() => grant(pattern, site))));
+    // A rule that is off holds no access on purpose (FRU-115), and « Turn on » asks for it.
+    if (!granted && site.enabled) buttons.append(button(t('Grant access'), () => attempt(() => grant(pattern, site))));
     buttons.append(
       site.enabled
         ? button(t('Turn off'), () => attempt(() => writeSite(pattern, { ...site, enabled: false })))
@@ -122,12 +123,22 @@ async function row(pattern: string, site: SiteConfig): Promise<HTMLElement> {
     element('span', pattern, 'pattern'),
     buttons,
     element('span', `${site.enabled && !refused ? t('On') : t('Off')} · ${client} · ${site.endpoint}`, 'state'),
-    refused
-      ? element('span', t(STALE_TEAM_WILDCARD), 'problem')
-      : element('span', granted ? t('Access granted') : t('No access in this browser'), granted ? 'state' : 'problem'),
+    refused ? element('span', t(STALE_TEAM_WILDCARD), 'problem') : access(granted, site.enabled),
   );
 
   return item;
+}
+
+/**
+ * What the browser holds for a rule. No access is a problem only for a rule that is on: a rule that
+ * is off gave its access back (FRU-115).
+ */
+function access(granted: boolean, enabled: boolean): HTMLElement {
+  if (granted) return element('span', t('Access granted'), 'state');
+
+  return enabled
+    ? element('span', t('No access in this browser'), 'problem')
+    : element('span', t('No access while it is off'), 'state');
 }
 
 /**

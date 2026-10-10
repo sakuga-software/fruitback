@@ -684,6 +684,42 @@ its own tab. Raised in review.
 Without it, an imported rule granted from the options page stays unregistered until the browser
 restarts.
 
+### The access goes back when nothing uses it (FRU-115)
+
+« Turn off » unregistered the two scripts and kept the host permission. Nothing ran on the site, but
+the browser went on saying that Fruitback can read it, and the store listing could not write that the
+access is removed. A rule that is switched off, removed, or moved to another worker now gives its
+access back with `permissions.remove`. The cost is the one the ticket accepts: to switch the same site
+on again, the browser asks again.
+
+- **The background does it, after it stores the change.** It is the only writer of the map, so the
+  popup, the options page and an import all pass there. `createSiteOwner` hands it the map of before
+  the change, and the next change waits for it. A change answers when it is stored: an access that
+  could not be given back is reported in the console and does not make the change wrong.
+- **What is in use is in `accessInUse`** (`access-return.ts`): the pattern of each rule that is on,
+  the origin of the worker of each rule that is on, and the origin of each worker this browser holds a
+  session with. So the access to a worker goes with its last site, and not while a session needs it
+  for its refresh and its log out. A log out then gives it back, from the popup, if no site that is on
+  uses that worker.
+- **A wildcard that covers something still in use stays.** The browser can hold the wildcard only,
+  and to give it back would stop a site that is on. The test is the rule of a match pattern, every
+  port included, and not `coversOrigin`. The other way round costs nothing: an exact site that is
+  switched off under a wildcard that stays on gives back its own grant, and the wildcard still covers
+  it in the browser. Nothing runs there, because the exact rule wins in `resolveSite`.
+- **Only the accesses of the rule that changed are candidates, never everything the browser holds.**
+  A sweep of the granted origins would take back the access a prompt has just granted, before the
+  popup stores its site (FRU-118), and the one a pairing has just asked for, before its session is
+  stored.
+- **An update gives back the access of the rules that were already off**, once, on `onInstalled`.
+- **The options page does not call it a problem.** A rule that is off reads `No access while it is
+off`, with no **Grant access**: **Turn on** asks.
+
+**Not verified in a browser.** A prompt for an optional host permission cannot be answered by
+automation, so the E2E copy of the extension holds its hosts in the manifest, and a browser refuses to
+remove a permission the manifest requires. `permissions.remove` is therefore reached through a seam
+under `node --test`, one access at a time so that such a refusal keeps nothing else. What Chromium and
+Firefox do with the real call on an optional grant was not measured.
+
 ### What was left out
 
 The ticket asks for `chrome.storage.sync`. A host permission does not travel with a synced rule, so a

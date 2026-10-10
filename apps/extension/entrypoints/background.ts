@@ -1,5 +1,7 @@
 import { browser } from 'wxt/browser';
 import { readAll, readSite, replaceAll } from '../src/sites.ts';
+import { accessOf, patternsOf } from '../src/access-return.ts';
+import { createBrowserAccessReturn } from '../src/access-return-browser.ts';
 import { createBrowserPending } from '../src/pending-site-browser.ts';
 import { createSiteOwner, isExtensionPage, parseSiteMutation } from '../src/site-writes.ts';
 import { lendsSession, parseSitePattern } from '../src/site-patterns.ts';
@@ -115,7 +117,11 @@ export default defineBackground(() => {
   const relay = createRelay({ readSite, ensureAccess: (endpoint) => sessions.ensureAccess(endpoint), send });
 
   /** The only writer of the sites map, so a change from the popup and one from the options page cannot drop each other (FRU-43). */
-  const ownSites = createSiteOwner({ read: readAll, replace: replaceAll });
+  const returnAccess = createBrowserAccessReturn(sessions);
+  // FRU-115: a rule that is switched off, removed or moved to another worker gives its access back.
+  const ownSites = createSiteOwner({ read: readAll, replace: replaceAll }, (before, mutation) =>
+    returnAccess(accessOf(before, patternsOf(mutation))),
+  );
   const extensionRoot = browser.runtime.getURL('/popup.html').replace(/popup\.html$/, '');
   const pending = createBrowserPending((pattern, site) => ownSites({ kind: 'write', entries: { [pattern]: site } }));
 
@@ -155,7 +161,15 @@ export default defineBackground(() => {
     return true;
   });
 
-  browser.runtime.onInstalled.addListener(() => void sync());
+  browser.runtime.onInstalled.addListener(() => {
+    void sync();
+    // A rule switched off before FRU-115 kept its access. An update gives it back, once.
+    void readAll()
+      .then((sites) => returnAccess(accessOf(sites, Object.keys(sites))))
+      .catch((error: unknown) =>
+        console.error('[fruitback] could not give back the access of the rules that are off', error),
+      );
+  });
   browser.runtime.onStartup.addListener(() => void sync());
   browser.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;

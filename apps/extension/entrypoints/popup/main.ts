@@ -9,6 +9,7 @@ import { type SiteConfig, type SiteMode, findSite, readAll, writeSite } from '..
 import { injectIntoOpenTabs } from '../../src/tab-injection.ts';
 import { browserTabScripting } from '../../src/tab-scripting-browser.ts';
 import { createBrowserSessions } from '../../src/session-browser.ts';
+import { createBrowserAccessReturn } from '../../src/access-return-browser.ts';
 import { describeIdentity } from '../../src/session.ts';
 import { showProblem } from '../../src/problem-view.ts';
 import { PAIRING_CODE_REQUIRED, PAIRING_NEEDS_HTTPS, PAIRING_PROBLEM } from '../../src/remedy.ts';
@@ -38,6 +39,9 @@ import { rememberLanguage } from '../../src/language-sync.ts';
  * they can each spend the same refresh token.
  */
 const sessions = createBrowserSessions();
+
+/** Gives back to the browser the access that no rule and no session uses (FRU-115). */
+const returnAccess = createBrowserAccessReturn(sessions);
 
 /** The site somebody asked for, kept across a permission prompt that can close this popup (FRU-118). */
 const pending = createBrowserPending(writeSite);
@@ -260,6 +264,10 @@ function paired(endpoint: string, identity: string): HTMLElement {
       // holds nothing, with a dead button. And a click is fire-and-forget, so a failure nobody
       // logs here is logged nowhere at all. Raised in review.
       .catch((error: unknown) => console.error('[fruitback] the log out did not finish', error))
+      // FRU-115: the session was what the access to the worker was for. It stays when a site that is
+      // switched on uses that worker, and when the log out left the session in storage.
+      .then(() => returnAccess([workerOrigin(endpoint)]))
+      .catch((error: unknown) => console.error('[fruitback] could not give back the access to the worker', error))
       .then(() => {
         // The account of that session spoke for the language. Ask who is left to speak for it.
         void rememberLanguage(browser.storage.local, cloudSeams()).catch(() => undefined);
