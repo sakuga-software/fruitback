@@ -80,75 +80,20 @@ describe('the words people paste', () => {
   });
 });
 
-describe('the account store', () => {
-  it('makes one account of two providers that prove the same address', async () => {
-    const store = createSqliteAccountStore(join(scratch(), 'accounts.db'));
-
-    const byLink = await store.signIn({ provider: 'email', subject: 'alice@acme.dev', email: 'alice@acme.dev' });
-    const byGitHub = await store.signIn({
-      provider: 'github',
-      subject: '4242',
-      email: 'Alice@Acme.dev',
-      name: 'Alice',
-    });
-    const again = await store.signIn({ provider: 'github', subject: '4242', email: 'alice@acme.dev' });
-
-    assert.equal(byGitHub.id, byLink.id);
-    assert.equal(again.id, byLink.id);
-    assert.equal(byGitHub.name, 'Alice', 'a name the first sign-in did not have is kept');
-  });
-
-  it('keeps two addresses apart', async () => {
-    const store = createSqliteAccountStore(join(scratch(), 'accounts.db'));
-
-    const alice = await store.signIn({ provider: 'email', subject: 'alice@acme.dev', email: 'alice@acme.dev' });
-    const bob = await store.signIn({ provider: 'email', subject: 'bob@acme.dev', email: 'bob@acme.dev' });
-
-    assert.notEqual(alice.id, bob.id);
-  });
-
-  it('makes the creator the owner, and gives nobody else a role', async () => {
-    const store = createSqliteAccountStore(join(scratch(), 'accounts.db'));
-    const alice = await store.signIn({ provider: 'email', subject: 'alice@acme.dev', email: 'alice@acme.dev' });
-    const bob = await store.signIn({ provider: 'email', subject: 'bob@acme.dev', email: 'bob@acme.dev' });
-
-    const workspace = await store.createWorkspace('  Sakuga ', alice.id);
-
-    assert.equal(workspace.name, 'Sakuga');
-    assert.equal(await store.role(workspace.id, alice.id), 'owner');
-    assert.equal(await store.role(workspace.id, bob.id), undefined);
-    assert.deepEqual(await store.memberships(alice.id), [{ workspace, role: 'owner' }]);
-    assert.deepEqual(await store.memberships(bob.id), []);
-  });
-
-  it('adds a site once, whatever was pasted twice, and serves it as a client of its workspace', async () => {
-    const store = createSqliteAccountStore(join(scratch(), 'accounts.db'));
-    const alice = await store.signIn({ provider: 'email', subject: 'alice@acme.dev', email: 'alice@acme.dev' });
-    const workspace = await store.createWorkspace('Sakuga', alice.id);
-
-    const first = await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'members' });
-    const second = await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'everyone' });
-
-    assert.equal(second.id, first.id);
-    assert.deepEqual(await store.sites(workspace.id), [{ ...first, visibility: 'everyone' }]);
-    assert.deepEqual(await store.clientMap(), {
-      [first.id]: { workspace: workspace.id, origins: ['https://acme.dev'], read: 'public' },
-    });
-  });
-
-  it('removes the members and the sites of a workspace it deletes, and only those', async () => {
+/**
+ * What is true of the SQLite file alone. The rules of every `AccountStore` are in
+ * `account-conformance.fixture.ts`, and `account-conformance.test.ts` runs them on this store.
+ */
+describe('the SQLite account store', () => {
+  it('leaves no site of a deleted workspace in the file, read with the foreign keys off', async () => {
     const path = join(scratch(), 'accounts.db');
     const store = createSqliteAccountStore(path);
     const alice = await store.signIn({ provider: 'email', subject: 'alice@acme.dev', email: 'alice@acme.dev' });
     const gone = await store.createWorkspace('Gone', alice.id);
-    const kept = await store.createWorkspace('Kept', alice.id);
     await store.addSite(gone.id, { origin: 'https://gone.dev', visibility: 'members' });
-    const site = await store.addSite(kept.id, { origin: 'https://kept.dev', visibility: 'members' });
 
     await store.deleteWorkspace(gone.id);
 
-    assert.deepEqual(await store.memberships(alice.id), [{ workspace: kept, role: 'owner' }]);
-    assert.deepEqual(Object.keys(await store.clientMap()), [site.id]);
     closeAccountConnections();
     // The cascade is the rule, so it is checked with the pragma off: `node:sqlite` turns it on itself.
     const raw = new DatabaseSync(path);
@@ -156,18 +101,6 @@ describe('the account store', () => {
     const left = raw.prepare('SELECT count(*) AS n FROM sites WHERE workspace_id = ?').get(gone.id) as { n: number };
     assert.equal(left.n, 0);
     raw.close();
-  });
-
-  it('removes a site only from its own workspace', async () => {
-    const store = createSqliteAccountStore(join(scratch(), 'accounts.db'));
-    const alice = await store.signIn({ provider: 'email', subject: 'alice@acme.dev', email: 'alice@acme.dev' });
-    const a = await store.createWorkspace('A', alice.id);
-    const b = await store.createWorkspace('B', alice.id);
-    const site = await store.addSite(a.id, { origin: 'https://a.dev', visibility: 'members' });
-
-    assert.equal(await store.removeSite(b.id, site.id), false);
-    assert.equal(await store.removeSite(a.id, site.id), true);
-    assert.deepEqual(await store.sites(a.id), []);
   });
 });
 
