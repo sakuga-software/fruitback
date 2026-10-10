@@ -26,15 +26,36 @@ export type SitesArea = {
   replace: (sites: Record<string, SiteConfig>) => Promise<void>;
 };
 
-/** Applies each change after the one before it has been stored. A change that fails does not stop the next. */
-export function createSiteOwner(area: SitesArea): (mutation: SiteMutation) => Promise<void> {
+/**
+ * Applies each change after the one before it has been stored. A change that fails does not stop the next.
+ *
+ * `stored` runs after a change is stored, with the map as it was before, and before the next change
+ * starts. It is where the access of a rule that was switched off is given back (FRU-115). The change
+ * is stored when it runs, so its failure is reported and does not reject the change.
+ */
+export function createSiteOwner(
+  area: SitesArea,
+  stored?: (before: Record<string, SiteConfig>, mutation: SiteMutation) => Promise<void>,
+): (mutation: SiteMutation) => Promise<void> {
   let tail: Promise<unknown> = Promise.resolve();
 
   return (mutation) => {
-    const run = tail.then(async () => area.replace(applyMutation(await area.read(), mutation)));
-    tail = run.catch(() => undefined);
+    const run = tail.then(async () => {
+      const before = await area.read();
+      await area.replace(applyMutation(before, mutation));
 
-    return run;
+      return before;
+    });
+    tail = run.then(
+      (before) =>
+        stored?.(before, mutation).catch((error: unknown) =>
+          console.error('[fruitback] could not finish a site change that is stored', error),
+        ),
+      // The caller hears a change that was not stored. Here it must only not stop the next one.
+      () => undefined,
+    );
+
+    return run.then(() => undefined);
   };
 }
 

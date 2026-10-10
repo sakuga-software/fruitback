@@ -672,6 +672,11 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   origins somebody turned on and granted, and unregisters them on the way out. `syncRegistration`
   unregisters on an empty set rather than updating — `updateContentScripts` refuses an empty
   `matches`, so an implementation that updated there would leave a switched-off site still running.
+- **A rule that is switched off gives its access back** (FRU-115), with `permissions.remove`, from the
+  background after it stores the change. The access to a worker goes with its last site that is on,
+  and not while a session needs it. Only the accesses of the rule that changed are candidates: a sweep
+  of what the browser holds would take back a grant that a prompt has just given (FRU-118). Not
+  verified in a browser. See `docs/decisions/extension.md`.
 - **`packages/widget` is unchanged by this app, which is the ticket's own test.** The extension is a
   fourth assembler; nothing extension-shaped leaks into the widget.
 - **The extension carries its licence into the build** (FRU-82). It is `AGPL-3.0-only`, and what a

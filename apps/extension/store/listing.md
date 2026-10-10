@@ -106,7 +106,7 @@ In team mode, renews the short-lived access token before it expires. A Manifest 
 Host permission (`optional_host_permissions: *://*/*`)
 
 ```text
-The extension requests no host access at install. The pattern is optional and wide because the user chooses which site to review, and that can be any staging or production site. Access is requested for one origin at a time, when the user clicks "Turn on for this site". When the user turns a site off, the extension unregisters its scripts for that site and runs nothing there. In team mode the extension also asks for access to the address of the user's own feedback server, to send the notes to it.
+The extension requests no host access at install. The pattern is optional and wide because the user chooses which site to review, and that can be any staging or production site. Access is requested for one origin at a time, when the user clicks "Turn on for this site". When the user turns a site off, the extension unregisters its scripts for that site, runs nothing there, and gives the access to that site back to the browser. In team mode the extension also asks for access to the address of the user's own feedback server, to send the notes to it.
 ```
 
 **Remote code**: No.
@@ -147,7 +147,7 @@ Fruitback needs a server. A public sandbox is available for the review. It holds
 5. A "Leave feedback" button appears at the bottom right of the page. Click it, click any element of the page, type a note, click "Send".
 6. A pin appears on the element. Reload the page: the pin is still there.
 
-To stop it: click the icon, then "Turn off here". The extension then runs nothing on the site.
+To stop it: click the icon, then "Turn off here". The extension then runs nothing on the site, and gives its access to the site back to the browser.
 
 The second mode, "Team", needs a paired session with a private server and cannot be tried on the sandbox. It uses the same permissions.
 ```

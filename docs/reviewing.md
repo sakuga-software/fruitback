@@ -50,6 +50,11 @@ runs. The row afterwards reads `On · acme` in private mode, and in team mode
 `On · team mode · the site's own widget` — where the client id would be, because there the site
 declares its own. Either row carries **Turn off here** and **Change**.
 
+**Turn off here** also gives the access to that site back to the browser, so the browser no longer
+lists the site under what Fruitback can read. To turn the site on again, the browser asks you again.
+The access to a worker stays while another site that is on uses it, or while you are paired with it;
+it goes back when you log out and no site that is on uses that worker.
+
 A grant reaches the **next** page load, so the popup injects into the tab you have open. Come back to
 the page and the widget is there.
 
@@ -180,7 +185,7 @@ skipped, and the page names it.
 
 The file holds patterns, modes, endpoints and client ids. It holds no session and no access, so an
 imported rule reads `No access in this browser` until you press **Grant access**, and a team-mode worker
-still needs you to pair. The rules stay in the browser that holds them: they do not sync to your other
+still needs you to pair. A rule that is off reads `No access while it is off`: **Turn on** asks for it. The rules stay in the browser that holds them: they do not sync to your other
 browsers yet (FRU-72).
 
 ## What log out does, and what it cannot undo
