@@ -522,6 +522,13 @@ describe('a token of Linear that ends (FRU-134)', () => {
       const kept = await world.accounts.sealedKey(connector);
       const credential = readCredential(open(kept?.sealed as string, SECRETS_KEY) as string);
       assert.equal(credential.via === 'oauth' && credential.refreshToken, 'refresh-1');
+      // FRU-102: a connection Linear ended is for somebody to fix, and a Linear that is down is not.
+      const [listed] = await world.accounts.connectors(world.workspace.id);
+      assert.equal(
+        listed?.attention?.reason,
+        answer === 400 || answer === 401 ? 'connection-ended' : undefined,
+        String(answer),
+      );
       mock.timers.reset();
       mock.restoreAll();
       closeAccountConnections();

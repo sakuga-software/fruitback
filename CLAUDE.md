@@ -1191,6 +1191,13 @@ and _The team mode, and the call the page cannot make_:
   connector, and in no state after it. An address says « Connected », never « Working »: the list
   cannot know that its notes arrive. **No list of deliveries is not an empty list**: a worker that did
   not answer must not read as « every note arrived ».
+- **A connector that its tracker refuses says « Needs attention »** (FRU-102). `connector-health.ts`:
+  `watchedStore` notes on the connector what each call through it answered, and the console draws the
+  state from that field, with what to do. **Only a refusal is kept**: a key that is refused, a key
+  that may not do this, a connection that Linear ended. A tracker that is down answers `502` too, and
+  nobody of the workspace can fix it. The first call that the tracker answers clears the state.
+  **Keeping the state never changes the answer**: the note exists when it runs, and an error there
+  would have the widget send the note again.
 - **The console draws its controls with HeroUI v3, through its own kit** (FRU-125). `ui.tsx` is the
   one file that imports `@heroui/react`: `Button`, `Field`, `Choice` (a select), `Pick` (radios),
   `Chip` and `Problem`. A screen uses the kit, and `messages.test.ts` fails on a native control in a

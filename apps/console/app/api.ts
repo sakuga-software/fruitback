@@ -68,7 +68,15 @@ export type Visibility = 'members' | 'everyone';
 /** A tracker has teams, so `teamId` is there for one. An address that only receives has none (FRU-122). */
 export type Destination = { connector: string; teamId?: string; projectId?: string };
 export type Site = { id: string; origin: string; visibility: Visibility; destination?: Destination };
-export type Connector = { id: string; kind: 'linear' | 'rest'; label: string; createdAt: string };
+/** Why a source needs somebody (FRU-102): its tracker refuses it since `since`. Absent: it works. */
+export type ConnectorAttention = { reason: 'key-refused' | 'key-lacks-access' | 'connection-ended'; since: string };
+export type Connector = {
+  id: string;
+  kind: 'linear' | 'rest';
+  label: string;
+  createdAt: string;
+  attention?: ConnectorAttention;
+};
 /** A note that did not reach the address of a connector yet. `nextAt` absent: the worker gave up. */
 export type Delivery = {
   id: string;

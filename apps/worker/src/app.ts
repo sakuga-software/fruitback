@@ -22,6 +22,7 @@ import { type Mailer, createTemMailer } from './mail.ts';
 import { createSqliteAccountStore } from './accounts-sqlite.ts';
 import { type WorkerConfig, type WorkerEnv, readAllowedOrigins, readConfig } from './env.ts';
 import { type SeedStore, StoreError } from './store.ts';
+import { watchedStore } from './connector-health.ts';
 import { type CorsDecision, diagnosticCorsHeaders, openCors, resolveCors } from './cors.ts';
 import { PAIR_PATH, pairPage } from './pair-page.ts';
 import { checkRateLimit } from './rate-limit.ts';
@@ -387,9 +388,10 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
       ? own
       : createRoutedStore(own, createConnectorStores(accounts, served.secretsKey, Date.now, served.linearOAuth));
 
+  // FRU-102: what the tracker of a connector answers is noted on it, for the console.
   return request.method === 'GET'
-    ? getFeedback(request, served, store, kv, cors.headers)
-    : postFeedback(request, served, store, kv, cors.headers);
+    ? getFeedback(request, served, watchedStore(store, accounts), kv, cors.headers)
+    : postFeedback(request, served, watchedStore(store, accounts), kv, cors.headers);
 }
 
 /**

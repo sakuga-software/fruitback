@@ -3,8 +3,10 @@ import {
   type Account,
   type AccountStore,
   CONNECTOR_KINDS,
+  CONNECTOR_TROUBLES,
   type Connector,
   type ConnectorKind,
+  type ConnectorTrouble,
   ROLES,
   type Role,
   type Site,
@@ -120,6 +122,12 @@ const MIGRATIONS: readonly string[] = [
   CREATE INDEX deliveries_due ON deliveries (next_at);
   CREATE INDEX deliveries_by_connector ON deliveries (connector_id);
   `,
+  // What the tracker last said of a connector (FRU-102). `attention` NULL: its last answer was not a
+  // refusal. `attention_at` is the first refusal of that kind.
+  `
+  ALTER TABLE connectors ADD COLUMN attention TEXT;
+  ALTER TABLE connectors ADD COLUMN attention_at INTEGER;
+  `,
 ];
 
 const connections = new Map<string, DatabaseSync>();
@@ -234,6 +242,10 @@ function connectorOf(row: Record<string, unknown> | undefined): Connector | unde
   if (typeof row.id !== 'string' || typeof row.workspace_id !== 'string' || typeof row.label !== 'string') {
     return undefined;
   }
+  // A word this build does not know is no trouble it can explain: the connector reads as working.
+  const reason = (CONNECTOR_TROUBLES as readonly unknown[]).includes(row.attention)
+    ? (row.attention as ConnectorTrouble)
+    : undefined;
 
   return {
     id: row.id,
@@ -241,6 +253,14 @@ function connectorOf(row: Record<string, unknown> | undefined): Connector | unde
     kind,
     label: row.label,
     createdAt: new Date(typeof row.created_at === 'number' ? row.created_at : 0).toISOString(),
+    ...(reason === undefined
+      ? {}
+      : {
+          attention: {
+            reason,
+            since: new Date(typeof row.attention_at === 'number' ? row.attention_at : 0).toISOString(),
+          },
+        }),
   };
 }
 
@@ -421,7 +441,8 @@ export function createSqliteAccountStore(path: string): AccountStore {
     async connectors(workspace) {
       const rows = connect(path)
         .prepare(
-          'SELECT id, workspace_id, kind, label, created_at FROM connectors WHERE workspace_id = ? ORDER BY created_at, id',
+          `SELECT id, workspace_id, kind, label, created_at, attention, attention_at
+           FROM connectors WHERE workspace_id = ? ORDER BY created_at, id`,
         )
         .all(workspace) as Record<string, unknown>[];
 
@@ -438,6 +459,14 @@ export function createSqliteAccountStore(path: string): AccountStore {
 
     async resealConnector(connector, sealed) {
       connect(path).prepare('UPDATE connectors SET sealed = ? WHERE id = ?').run(sealed, connector);
+    },
+
+    async noteConnector(connector, trouble, now) {
+      // `IS NOT` and not `<>`: NULL compares with nothing. A row that already says this is not
+      // written again, so the first moment of a refusal stays, and a call that worked writes nothing.
+      connect(path)
+        .prepare('UPDATE connectors SET attention = ?, attention_at = ? WHERE id = ? AND attention IS NOT ?')
+        .run(trouble ?? null, trouble === undefined ? null : now, connector, trouble ?? null);
     },
 
     async sealedKey(connector) {

@@ -115,8 +115,33 @@ export type PendingDelivery = {
   lastError?: string;
 };
 
-/** A connector as the console reads it. The key is not here, and no route answers it. */
-export type Connector = { id: string; workspaceId: string; kind: ConnectorKind; label: string; createdAt: string };
+/**
+ * Why a connector cannot be used until somebody acts (FRU-102). Each one is a refusal of the tracker,
+ * never a tracker that is down: an outage is nobody's fault, and it ends with nothing to do.
+ *
+ * - `key-refused`: the tracker does not accept the key or the token.
+ * - `key-lacks-access`: the tracker knows the key, and the key may not do what the worker asks.
+ * - `connection-ended`: the tracker refused to refresh the token of an OAuth connection.
+ */
+export const CONNECTOR_TROUBLES = ['key-refused', 'key-lacks-access', 'connection-ended'] as const;
+export type ConnectorTrouble = (typeof CONNECTOR_TROUBLES)[number];
+
+/** `since` is the first refusal of this kind, so the console says how long the notes did not leave. */
+export type ConnectorAttention = { reason: ConnectorTrouble; since: string };
+
+/**
+ * A connector as the console reads it. The key is not here, and no route answers it.
+ *
+ * `attention` absent: the last call the tracker answered was not a refusal.
+ */
+export type Connector = {
+  id: string;
+  workspaceId: string;
+  kind: ConnectorKind;
+  label: string;
+  createdAt: string;
+  attention?: ConnectorAttention;
+};
 
 /** How a sign-in method names the person. `email` is the link, and its subject is the address. */
 export const PROVIDERS = ['email', 'github', 'google', 'linear'] as const;
@@ -159,6 +184,11 @@ export type AccountStore = {
   removeConnector(workspace: string, connector: string): Promise<boolean>;
   /** Replaces what a connector keeps sealed: a refreshed token takes the place of the one it spent. */
   resealConnector(connector: string, sealed: string): Promise<void>;
+  /**
+   * What the tracker last said of a connector (FRU-102): a refusal, or `undefined` for a call it
+   * answered. A refusal of the same kind keeps its first moment. A connector that is gone is ignored.
+   */
+  noteConnector(connector: string, trouble: ConnectorTrouble | undefined, now: number): Promise<void>;
   /** The encrypted key of a connector, for the worker's own calls. */
   sealedKey(connector: string): Promise<{ kind: ConnectorKind; sealed: string; workspaceId: string } | undefined>;
   /**

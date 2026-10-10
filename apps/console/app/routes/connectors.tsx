@@ -45,6 +45,22 @@ const LINEAR_RETURNS: Record<string, string> = {
   failed: msg('Linear was not connected. Start again from « Connect with Linear ».'),
 };
 
+/**
+ * What to do about a source that its tracker refuses (FRU-102), by what the tracker said. `{when}` is
+ * the first refusal: the notes written since then are not in the tracker.
+ */
+const ATTENTION: Record<NonNullable<Connector['attention']>['reason'], string> = {
+  'key-refused': msg(
+    'Linear refuses this connection since {when}, and the notes of its sites do not reach Linear. Disconnect it, then connect Linear again.',
+  ),
+  'key-lacks-access': msg(
+    'Since {when}, Linear refuses what Fruitback asks with this key, and the notes of its sites do not reach Linear. Disconnect it, then connect Linear with a key that has read and write access.',
+  ),
+  'connection-ended': msg(
+    'Linear ended this connection, and since {when} the notes of its sites do not reach Linear. Disconnect it, then connect Linear again.',
+  ),
+};
+
 /** What a refused key means for the person, and what to do. */
 const KEY_PROBLEMS: Record<string, string> = {
   'key-refused': msg('Linear refused this key. Copy it again from Linear, in Settings, then Security and access.'),
@@ -154,7 +170,7 @@ export default function Connectors() {
                     {sourceLine(connector)} · {siteCount(countOf(connector))}
                   </span>
                 </span>
-                <Working connected={connector.kind === 'rest'} />
+                <Working connected={connector.kind === 'rest'} attention={connector.attention !== undefined} />
               </button>
             ))}
           </div>
@@ -297,10 +313,20 @@ function SourceMark({ children, small = false }: { children: string; small?: boo
 
 /**
  * The state of a source. A tracker that took the key is working. An address is only connected: the
- * list cannot know that its notes arrive, and the panel of the address says which did not.
+ * list cannot know that its notes arrive, and the panel of the address says which did not. A tracker
+ * that refuses the source needs somebody (FRU-102), and the panel of the source says what to do.
  */
-function Working({ connected = false }: { connected?: boolean }) {
+function Working({ connected = false, attention = false }: { connected?: boolean; attention?: boolean }) {
   useLocale();
+  if (attention) {
+    return (
+      <span className="flex items-center gap-1.5 text-sm font-semibold text-accent-strong">
+        <span className="h-2 w-2 rounded-full bg-accent-strong" />
+        {t('Needs attention')}
+      </span>
+    );
+  }
+
   return (
     <span className="flex items-center gap-1.5 text-sm font-semibold text-done">
       <span className="h-2 w-2 rounded-full bg-done" />
@@ -657,14 +683,20 @@ function Detail({
   useLocale();
   const [teams, setTeams] = useState<Team[] | undefined>();
   const [problem, setProblem] = useState<string | undefined>();
+  const [silent, setSilent] = useState(false);
 
   useEffect(() => {
     if (!manages) return;
+    setSilent(false);
     void call<{ teams: Team[] }>('GET', `${base}/connectors/${connector.id}/teams`).then((answer) => {
       if (answer.ok) return setTeams(answer.data.teams);
       setTeams([]);
-      setProblem(msg('Linear did not answer for this connection. Disconnect it, then connect Linear again.'));
+      setSilent(true);
+      // This read is what told the worker that Linear refuses the source: the list is read again, and
+      // the reason takes the place of the sentence below.
+      void onChanged();
     });
+    // `onChanged` is not a reason to ask Linear again: the read above runs once for a connector.
   }, [base, connector.id, manages]);
 
   async function place(site: Site, value: string) {
@@ -699,6 +731,11 @@ function Detail({
         </div>
       </div>
       <div className="px-5 py-4">
+        {connector.attention === undefined ? null : (
+          <div className="mb-4">
+            <Problem>{t(ATTENTION[connector.attention.reason], { when: moment(connector.attention.since) })}</Problem>
+          </div>
+        )}
         <h3 className="mb-2 text-sm font-semibold">{t('Where each site sends its notes')}</h3>
         {sites.length === 0 ? <p className="text-sm text-muted">{t('This workspace has no site yet.')}</p> : null}
         <ul className="space-y-2">
@@ -735,6 +772,14 @@ function Detail({
             );
           })}
         </ul>
+        {/* A source with a reason says it above: this sentence is for a Linear that only did not answer. */}
+        {silent && connector.attention === undefined ? (
+          <div className="mt-3">
+            <Problem>
+              {t('Linear did not answer for this connection. Disconnect it, then connect Linear again.')}
+            </Problem>
+          </div>
+        ) : null}
         {problem === undefined ? null : (
           <div className="mt-3">
             <Problem>{t(problem)}</Problem>

@@ -119,6 +119,12 @@ async function current(
   return credential?.via === 'oauth' ? credential : undefined;
 }
 
+/**
+ * Linear refused to refresh the tokens of a connection (FRU-102): somebody revoked the application,
+ * or the refresh token is spent. It does not come back alone, so the console asks for a new consent.
+ */
+export class LinearConnectionEnded extends StoreError {}
+
 /** One refresh at a time for a connector: two would spend one refresh token, and the second is refused. */
 const refreshing = new Map<string, Promise<string>>();
 
@@ -169,11 +175,10 @@ export async function linearAuthorization(
       throw new StoreError('Linear could not be reached');
     }
     if (answer.tokens === undefined) {
-      throw new StoreError(
-        answer.status === 400 || answer.status === 401
-          ? 'The connection to Linear ended. Connect Linear again.'
-          : 'Linear did not refresh the connection',
-      );
+      if (answer.status === 400 || answer.status === 401) {
+        throw new LinearConnectionEnded('The connection to Linear ended. Connect Linear again.');
+      }
+      throw new StoreError('Linear did not refresh the connection');
     }
     const next = { via: 'oauth', ...answer.tokens } as const;
     await accounts.resealConnector(connector, sealCredential(next, secretsKey));

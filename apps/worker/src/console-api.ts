@@ -2,6 +2,7 @@ import {
   type AccountStore,
   type Action,
   type Connector,
+  type ConnectorAttention,
   type ConnectorKind,
   type Destination,
   type Site,
@@ -12,6 +13,7 @@ import {
   readLocaleTag,
 } from './accounts.ts';
 import { readBearerToken, verifyIdentityToken } from './identity.ts';
+import { noteConnectorCall } from './connector-health.ts';
 import { LinearKeyForbidden, LinearKeyRefused, listLinearTeams } from './linear.ts';
 import { isAcceptableSecret, newSecret, parseTargetUrl, sealTarget, targetLabel } from './rest-connector.ts';
 import type { Kv } from './kv.ts';
@@ -97,8 +99,21 @@ function linearOAuthReady(context: ConsoleApiContext): boolean {
   return context.linearOAuth !== undefined && context.secretsKey !== undefined && context.publicUrl !== undefined;
 }
 
-function connectorView(connector: Connector): { id: string; kind: string; label: string; createdAt: string } {
-  return { id: connector.id, kind: connector.kind, label: connector.label, createdAt: connector.createdAt };
+function connectorView(connector: Connector): {
+  id: string;
+  kind: string;
+  label: string;
+  createdAt: string;
+  attention?: ConnectorAttention;
+} {
+  return {
+    id: connector.id,
+    kind: connector.kind,
+    label: connector.label,
+    createdAt: connector.createdAt,
+    // Absent for a connector that works: the console draws « Needs attention » from this field only.
+    ...(connector.attention === undefined ? {} : { attention: connector.attention }),
+  };
 }
 
 const ID = /^[A-Za-z0-9_-]{1,80}$/;
@@ -365,14 +380,25 @@ export async function handleConsoleApi(
     if (kept === undefined || kept.workspaceId !== workspaceId) return json(404, { error: 'not-found' }, headers);
     // An address that only receives has no team to choose.
     if (kept.kind !== 'linear') return json(404, { error: 'not-found' }, headers);
-    // A key goes as it is. A token of OAuth near its end is refreshed first.
-    const authorization = await linearAuthorization(id, kept.sealed, {
-      accounts: context.accounts,
-      secretsKey: context.secretsKey,
-      oauth: context.linearOAuth,
-    });
+    // This read is a call to the tracker like a note is, so what Linear answers is noted too
+    // (FRU-102): somebody who opens the panel of a connector that Linear refuses sees it at once.
+    const moment = context.now;
+    const clock = moment === undefined ? undefined : () => moment;
+    try {
+      // A key goes as it is. A token of OAuth near its end is refreshed first.
+      const authorization = await linearAuthorization(id, kept.sealed, {
+        accounts: context.accounts,
+        secretsKey: context.secretsKey,
+        oauth: context.linearOAuth,
+      });
+      const { teams } = await listLinearTeams(authorization);
+      await noteConnectorCall(context.accounts, id, undefined, clock);
 
-    return json(200, { teams: (await listLinearTeams(authorization)).teams }, headers);
+      return json(200, { teams }, headers);
+    } catch (error) {
+      await noteConnectorCall(context.accounts, id, error, clock);
+      throw error;
+    }
   }
 
   if (rest === '/connect') {
