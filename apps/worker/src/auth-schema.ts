@@ -16,9 +16,9 @@ import type { Migration } from './postgres.ts';
  * word. An instant is a `timestamptz` here, and a `BIGINT` of milliseconds in the tables of the
  * worker: better-auth writes these rows, with its own types.
  *
- * WARNING: `session.token` is the token of a session, in the clear. What keeps a copy of this table
- * from being a set of working logins is the signature of the cookie, with `FRUITBACK_AUTH_SECRET`,
- * and the absence of the `bearer` plugin. See `REFUSED_PLUGINS` in `auth.ts`.
+ * WARNING: `session.token` and `verification.identifier` hold digests, and the token columns of
+ * `account` stay empty, only because better-auth writes through the layer of `auth-at-rest.ts`
+ * (FRU-181). Code that writes these tables by itself must keep the same rule.
  */
 export const BETTER_AUTH_MIGRATION: Migration = {
   name: 'better-auth',

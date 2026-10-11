@@ -116,6 +116,16 @@ can read them, with or without the widget.
   of each site it reviews. No password, and no token of a provider that signs a person in. Deleting a workspace removes its
   members and its sites; the notes already in a tracker stay there.
 
+- **The tables of better-auth, in the same PostgreSQL database** (FRU-144). They are empty until the
+  console signs in with it. Once written, they hold: for each person, the address, whether it is
+  proven, the name, and an image address if a provider gives one; for each sign-in by a provider,
+  which provider and the id it gives the person, **never its tokens** (FRU-181); for each session of
+  the console, the SHA-256 of its token, never the token, its dates and the user agent of the
+  browser, and no address; for a sign-in link that waits, the SHA-256 of its token and the address
+  and name it was sent for; the workspaces, their members and the address each invitation was sent
+  to. The state of a sign-in with a provider is in a cookie of the browser that started it, not in
+  the database.
+
 - **The notes that wait to be sent to a connected address, on disk** (FRU-122), in the accounts file.
   A note goes from there when it arrives, and 30 days after its last attempt when it never does.
 

@@ -1,13 +1,14 @@
-import type { Auth, BetterAuthOptions } from 'better-auth';
+import type { Auth, BetterAuthOptions, BetterAuthPlugin } from 'better-auth';
 import { ACTIONS } from './accounts.ts';
 import { newId } from './account-rows.ts';
+import { type AdapterOfAuth, keepAtRest } from './auth-at-rest.ts';
 import { FRUITBACK_RESOURCE, roleStatements } from './auth-roles.ts';
 import { type WorkerConfig, hasAuth } from './env.ts';
 import { type PgDatabase, type PgPool, databaseFor, withoutAddress } from './postgres.ts';
 import { migrated } from './postgres-migrations.ts';
 
 /**
- * better-auth, built and switched off (FRU-144).
+ * better-auth, built and switched off (FRU-144), and what it keeps in the database (FRU-181).
  *
  * **Nothing here serves a route.** This file says how better-auth is configured for the console, and
  * builds one instance for the process when `FRUITBACK_AUTH_SECRET` and `FRUITBACK_DATABASE_URL` are
@@ -20,13 +21,69 @@ import { migrated } from './postgres-migrations.ts';
  * **It does not take the place of the session of the extension.** `session.ts` stays: a token that
  * rotates, and a replay that ends the chain. A session of better-auth is one token that does not
  * rotate.
+ *
+ * **A copy of its database opens nothing, even with `FRUITBACK_AUTH_SECRET` beside it** (FRU-181).
+ * The plugin `fruitback-at-rest` keeps the token of a session and the identifier of a link as their
+ * digests, and never writes a token of a provider: see `auth-at-rest.ts`.
  */
 
 /** Where the routes of better-auth are, the day they are served: under the console's own routes. */
 export const AUTH_BASE_PATH = '/console/auth';
 
 /** The plugins of better-auth that the worker configures. A test holds the list. */
-export const AUTH_PLUGINS = ['organization'] as const;
+export const AUTH_PLUGINS = ['organization', 'fruitback-at-rest'] as const;
+
+/**
+ * The routes of better-auth that the digests of `auth-at-rest.ts` break, each with its reason.
+ *
+ * better-auth answers `404` on each one, and a call to one in the process throws: see `atRest`.
+ * « Sign out everywhere » is `/revoke-sessions`, which names the person and not a token: it stays.
+ */
+export const DISABLED_PATHS: Readonly<Record<string, string>> = {
+  '/revoke-session':
+    'it names the session to end by its token, and a list of sessions has no token: name a session by its id',
+  '/revoke-other-sessions':
+    'it reads the token of each session in a list of them, and the database keeps none: it would end nothing',
+  '/get-access-token': 'the worker keeps no token of a provider',
+  '/refresh-token': 'the worker keeps no token of a provider',
+  '/account-info': 'it calls the provider with a token that the worker does not keep',
+};
+
+/**
+ * The plugin that keeps no usable secret in the database (FRU-181): see `auth-at-rest.ts`.
+ *
+ * It puts its layer in front of the adapter while better-auth builds its context, before the first
+ * query. `startAuth` refuses options that do not have it.
+ */
+export const AT_REST_PLUGIN = 'fruitback-at-rest';
+
+/** The message of a call, in the process, to a path of `DISABLED_PATHS`. It quotes no value. */
+export function closedPath(path: string): string {
+  return `better-auth « ${path} » is closed in this worker: ${DISABLED_PATHS[path] ?? 'see DISABLED_PATHS of auth.ts'}`;
+}
+
+function atRest(APIError: typeof import('better-auth/api').APIError): BetterAuthPlugin {
+  return {
+    id: AT_REST_PLUGIN,
+    init(context) {
+      keepAtRest(context.adapter as unknown as AdapterOfAuth);
+    },
+    // `disabledPaths` closes a route to a request, and not to `auth.api`. Called in the process,
+    // `revokeSession` and `revokeOtherSessions` would end nothing and answer `{ status: true }`:
+    // better-auth takes the lookup that the layer refuses for « no such session » (measured). So a
+    // call to a closed path throws here, before the endpoint runs.
+    hooks: {
+      before: [
+        {
+          matcher: (context: { path?: string }) => Object.hasOwn(DISABLED_PATHS, context.path ?? ''),
+          handler: (async (context: { path?: string }) => {
+            throw new APIError('NOT_FOUND', { message: closedPath(context.path ?? '') });
+          }) as never,
+        },
+      ],
+    },
+  };
+}
 
 /**
  * The plugins that must never be in the configuration, each with its reason.
@@ -35,8 +92,9 @@ export const AUTH_PLUGINS = ['organization'] as const;
  */
 export const REFUSED_PLUGINS: Readonly<Record<string, string>> = {
   bearer:
-    'with it, the token of a session as it is read in the `session` table opens that session in an ' +
-    '`Authorization` header: a copy of the database is a set of working logins (measured on 1.7.7)',
+    'with it, a session is opened by its token in an `Authorization` header, which a script can send, ' +
+    'when the console keeps it in a cookie that no script reads. And without `fruitback-at-rest`, the token ' +
+    'read in a copy of the `session` table opens that session alone (measured on 1.7.7)',
   jwt: 'it is a second way to verify a token, beside the one path of identity.ts',
   'device-authorization':
     'it ends in a session token of better-auth, and the extension keeps its own session, which rotates',
@@ -106,10 +164,11 @@ export function authId(model: string): string {
  * `docs/decisions/worker.md`.
  */
 export async function authOptions(config: AuthConfig, pool: PgPool): Promise<BetterAuthOptions> {
-  const [{ organization }, { createAccessControl }, { defaultStatements }] = await Promise.all([
+  const [{ organization }, { createAccessControl }, { defaultStatements }, { APIError }] = await Promise.all([
     import('better-auth/plugins/organization'),
     import('better-auth/plugins/access'),
     import('better-auth/plugins/organization/access'),
+    import('better-auth/api'),
   ]);
 
   // The four roles, read from `can` of accounts.ts: see auth-roles.ts.
@@ -140,6 +199,14 @@ export async function authOptions(config: AuthConfig, pool: PgPool): Promise<Bet
     rateLimit: { enabled: false },
     // The session is read in the database at each call, so a session that is revoked stops at once.
     session: { cookieCache: { enabled: false } },
+    // A link or a code is kept as its digest. `auth-at-rest.ts` digests each identifier once more,
+    // because this option alone also looks the identifier up as it was given (read in the package).
+    verification: { storeIdentifier: 'hashed' },
+    // The state of a sign-in with a provider holds the state and the PKCE verifier in the clear. In
+    // the database, a copy and an intercepted code would finish the sign-in. In an encrypted cookie,
+    // it is in the browser that started it, and in no copy.
+    account: { storeStateStrategy: 'cookie' },
+    disabledPaths: Object.keys(DISABLED_PATHS),
     advanced: {
       cookiePrefix: 'fruitback',
       // `HttpOnly` is the default of better-auth, and `Secure` comes with an `https://` address. The
@@ -160,7 +227,7 @@ export async function authOptions(config: AuthConfig, pool: PgPool): Promise<Bet
       },
     },
     // The schema of the organization plugin and the four roles. None of its routes is served.
-    plugins: [organization({ ac: access, roles })],
+    plugins: [organization({ ac: access, roles }), atRest(APIError)],
   };
 }
 
@@ -207,6 +274,18 @@ export async function startAuth(options: BetterAuthOptions): Promise<Auth> {
   const refused = refusedPlugins(options);
   if (refused.length > 0) {
     throw new Error(`better-auth is not built with a plugin that the worker refuses. ${refused.join('. ')}`);
+  }
+  if (!(options.plugins ?? []).some((plugin) => plugin.id === AT_REST_PLUGIN)) {
+    throw new Error(
+      `better-auth is not built without the plugin « ${AT_REST_PLUGIN} »: without it, the database keeps the token of each session in the clear`,
+    );
+  }
+  // A secondary storage keeps the sessions and the links in a store of keys, by their token in the
+  // clear, where the layer of `auth-at-rest.ts` does not reach (read in `db/internal-adapter.mjs`).
+  if (options.secondaryStorage !== undefined) {
+    throw new Error(
+      'better-auth is not built with a secondary storage: it keeps each token in the clear, around the digests',
+    );
   }
 
   const { betterAuth } = await import('better-auth');

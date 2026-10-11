@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { AUTH_BASE_PATH, startAuth } from './auth.ts';
+import { AT_REST_PLUGIN, AUTH_BASE_PATH, startAuth } from './auth.ts';
 import {
   CONSOLE_URL,
   DATABASES,
@@ -24,31 +24,49 @@ const { opening } = databasesOfACase();
 
 for (const { label, open, skip } of DATABASES) {
   describe(`the options of better-auth, measured on an instance, on ${label} (FRU-144)`, { skip }, () => {
-    it('opens no session with the token read in the session table, and opens one with the bearer plugin', async () => {
+    it('opens no session with the row of the session table, and the bearer plugin opens one with the token alone', async () => {
       const database = await opening(open);
       const { options } = await optionsOn(database);
       const auth = await startAuth(withTestSignUp(options));
       const { cookie } = await signUp(auth, 'alice@acme.dev');
-      const token = String((await database.query('SELECT "token" FROM "session"')).rows[0]?.token);
+      const row = String((await database.query('SELECT "token" FROM "session"')).rows[0]?.token);
       const name = cookie.split('=')[0];
+      const token = decodeURIComponent(cookie.split('=')[1] ?? '').split('.')[0] ?? '';
       const sessionOf = async (instance: typeof auth, headers: Record<string, string>): Promise<unknown> =>
         ((await (await ask(instance, '/get-session', { headers })).json()) as { session?: unknown } | null)?.session;
 
-      assert.ok(token.length >= 32, 'no token was read in the table, so nothing below is tested');
-      assert.equal(await sessionOf(auth, { Authorization: `Bearer ${token}` }), undefined);
-      assert.equal(await sessionOf(auth, { Cookie: `${name}=${token}` }), undefined, 'a cookie that is not signed');
+      assert.ok(row.length >= 32, 'no token was read in the table, so nothing below is tested');
+      assert.equal(await sessionOf(auth, { Authorization: `Bearer ${row}` }), undefined);
+      assert.equal(await sessionOf(auth, { Cookie: `${name}=${row}` }), undefined, 'a cookie that is not signed');
       // The control: the cookie the worker signed opens the session.
       assert.ok(await sessionOf(auth, { Cookie: cookie }));
 
-      // The reason `bearer` is refused, kept measured. Built past `startAuth`, which refuses it.
+      // Why `bearer` is refused, kept measured. Built past `startAuth`, which refuses it.
       const { betterAuth } = await import('better-auth');
       const { bearer } = await import('better-auth/plugins/bearer');
-      const withBearer = betterAuth({ ...withTestSignUp(options), plugins: [...(options.plugins ?? []), bearer()] });
-
+      const plugins = [...(options.plugins ?? []), bearer()];
+      const withBearer = betterAuth({ ...withTestSignUp(options), plugins }) as unknown as typeof auth;
       assert.ok(
-        await sessionOf(withBearer as unknown as typeof auth, { Authorization: `Bearer ${token}` }),
-        'the bearer plugin no longer opens a session with the token of the table: read REFUSED_PLUGINS again',
+        await sessionOf(withBearer, { Authorization: `Bearer ${token}` }),
+        'the bearer plugin no longer opens a session with the token in a header: read REFUSED_PLUGINS again',
       );
+      assert.equal(await sessionOf(withBearer, { Authorization: `Bearer ${row}` }), undefined);
+      // And without the layer of auth-at-rest.ts, the row of a copy is that token (FRU-144).
+      const withoutLayer = betterAuth({
+        ...withTestSignUp(options),
+        plugins: plugins.filter((plugin) => plugin.id !== AT_REST_PLUGIN),
+      }) as unknown as typeof auth;
+      const { cookie: other } = await signUp(withoutLayer, 'bob@acme.dev');
+      const clear = String(
+        (
+          await database.query(
+            'SELECT s."token" FROM "session" s JOIN "user" u ON u."id" = s."userId" WHERE u."email" = $1',
+            ['bob@acme.dev'],
+          )
+        ).rows[0]?.token,
+      );
+      assert.ok(other.includes(encodeURIComponent(clear)), 'without the layer, the table holds the token itself');
+      assert.ok(await sessionOf(withoutLayer, { Authorization: `Bearer ${clear}` }));
     });
 
     it('sets the cookie of a session for the routes of the console only, where no script reads it', async () => {
@@ -130,9 +148,9 @@ for (const { label, open, skip } of DATABASES) {
       const { cookie } = await signUp(auth, 'alice@acme.dev');
       const sessionOf = async (instance: typeof auth, origin: string): Promise<number> =>
         (
-          await ask(instance, '/revoke-other-sessions', {
+          await ask(instance, '/update-user', {
             method: 'POST',
-            body: '{}',
+            body: '{"name":"Alice"}',
             headers: { Cookie: cookie, Origin: origin },
           })
         ).status;
