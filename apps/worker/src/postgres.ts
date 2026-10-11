@@ -134,10 +134,17 @@ export function createPgDatabase(url: string, options: { max?: number } = {}): P
         max: options.max ?? 10,
         connectionTimeoutMillis: 5_000,
       });
-      // An idle connection that the server closes emits `error`. With no listener, the process stops.
-      pool.on('error', (error) => {
-        console.error(`[fruitback] a PostgreSQL connection failed: ${withoutAddress(String(error), url)}`);
+      // A connection that the server closes emits `error`. With no listener, the process stops (FRU-187).
+      // The pool listens to a connection only while it is idle. A connection that a transaction, a
+      // migration or better-auth holds has no listener of the pool, so each connection gets this one
+      // for its life. The call that used it rejects with its own error.
+      pool.on('connect', (client) => {
+        client.on('error', (error) => {
+          console.error(`[fruitback] a PostgreSQL connection failed: ${withoutAddress(String(error), url)}`);
+        });
       });
+      // The pool sends the error of an idle connection here too. The listener above wrote it already.
+      pool.on('error', () => {});
 
       return {
         pool,
