@@ -87,12 +87,15 @@ export function defaultPermissions(source: string): Record<string, string> | und
   );
 }
 
-/** Every `uses` in the workflows. A local action has no tag to move. */
+/**
+ * Every `uses` in the workflows. A local action has no tag to move, in either of its two forms:
+ * `./path` is read from the checkout, and `$/path` from this repository at the commit that runs.
+ */
 function actionReferences(): Reference[] {
   return readdirSync(WORKFLOWS)
     .filter((file) => /\.ya?ml$/.test(file))
     .flatMap((file) => referencesIn(file, readFileSync(new URL(file, WORKFLOWS), 'utf8')))
-    .filter((reference) => !reference.value.startsWith('./'));
+    .filter((reference) => !/^[.$]\//.test(reference.value));
 }
 
 /** The keys of a mapping node, or nothing when the node is not one. */
@@ -206,6 +209,56 @@ export function pullRequestFilters(source: string): string[] | undefined {
   const trigger = on.get('pull_request', true);
 
   return isMap(trigger) ? trigger.items.flatMap((pair) => (isScalar(pair.key) ? [String(pair.key.value)] : [])) : [];
+}
+
+/** A job that calls `ci.yml` of this repository, in either form of a local reference. */
+const CALLS_CI = /^[.$]\/\.github\/workflows\/ci\.yml$/;
+
+/** The functions that let a job run after a job it needs has failed or was cancelled. */
+const RUNS_AFTER_A_FAILURE = /\b(?:always|failure|cancelled)\s*\(/;
+
+/**
+ * The jobs that hold a write permission and can run on a commit that did not pass `ci.yml`.
+ *
+ * **A job that writes names, in its own `needs`, a job that calls `ci.yml`** (FRU-172). On
+ * 2026-10-11 `release-image.yml` published `46a5fa7` while `typecheck` and `test` failed on it: it
+ * started on the same push as `ci.yml` and waited for nothing.
+ *
+ * The rule is the direct `needs`, and a chain does not excuse it. GitHub skips a job when a job it
+ * needs fails, but a job in the middle of a chain that holds `if: always()` runs anyway, and what
+ * the last job then does is a question about Actions. Asking for the name on the job that writes
+ * has no such corner. For the same reason an `if` that holds `always()`, `failure()` or
+ * `cancelled()` on that job is reported: it runs the job after the checks failed.
+ */
+export function writersWithoutCi(source: string): string[] {
+  const jobs = parseDocument(source).get('jobs', true);
+  if (!isMap(jobs)) return [];
+
+  const callers = new Set(
+    jobs.items.flatMap((pair) =>
+      isScalar(pair.key) && isMap(pair.value) && CALLS_CI.test(String(pair.value.get('uses') ?? ''))
+        ? [String(pair.key.value)]
+        : [],
+    ),
+  );
+
+  return jobs.items.flatMap((pair) => {
+    if (!isScalar(pair.key) || !isMap(pair.value)) return [];
+    const granted = pair.value.get('permissions', true);
+    const levels = isMap(granted)
+      ? granted.items.map((entry) => (isScalar(entry.value) ? String(entry.value.value) : ''))
+      : [isScalar(granted) ? String(granted.value) : ''];
+    if (!levels.some((level) => level.includes('write'))) return [];
+
+    const needs = pair.value.get('needs', true);
+    const needed = isSeq(needs) ? needs.items.map((item) => (isScalar(item) ? String(item.value) : '')) : [];
+    if (isScalar(needs)) needed.push(String(needs.value));
+    const condition = String(pair.value.get('if') ?? '');
+
+    return needed.some((job) => callers.has(job)) && !RUNS_AFTER_A_FAILURE.test(condition)
+      ? []
+      : [String(pair.key.value)];
+  });
 }
 
 describe('the GitHub workflows', () => {
@@ -388,5 +441,53 @@ describe('the GitHub workflows', () => {
       /github\.event_name == 'pull_request'/,
       'a run is cancelled whatever the event is',
     );
+  });
+
+  it('publish nothing from a commit that did not pass CI', () => {
+    const files = workflows();
+    const writers = files.flatMap(({ source }) => [...source.matchAll(/^ {6}\w[\w-]*: write$/gm)]);
+    // An absence needs a control: the two jobs that publish are found before none is reported.
+    assert.ok(writers.length >= 4, `only ${writers.length} write permissions found in the workflows`);
+
+    const free = files.flatMap(({ file, source }) => writersWithoutCi(source).map((job) => `${file}: ${job}`));
+
+    assert.deepEqual(free, [], 'these jobs can write and do not need the job that calls ci.yml');
+    // A workflow that cannot be called fails the release at its start, after the merge. Fail here.
+    const on = parseDocument(readFileSync(new URL('ci.yml', WORKFLOWS), 'utf8')).get('on', true);
+    assert.ok(isMap(on) && on.has('workflow_call'), 'ci.yml does not declare workflow_call');
+  });
+
+  it('read what a job that writes waits for, whatever shape it is written in', () => {
+    const workflow = (publish: string, ci = '    uses: $/.github/workflows/ci.yml') =>
+      `jobs:\n  ci:\n${ci}\n  check:\n    runs-on: ubuntu-latest\n  publish:\n    permissions:\n      packages: write\n${publish}`;
+
+    assert.deepEqual(writersWithoutCi(workflow('    needs: [ci, check]\n')), []);
+    assert.deepEqual(writersWithoutCi(workflow('    needs: ci\n')), []);
+    assert.deepEqual(writersWithoutCi(workflow('    needs:\n      - check\n      - ci\n')), []);
+    assert.deepEqual(writersWithoutCi(workflow('    needs: ci\n', '    uses: ./.github/workflows/ci.yml')), []);
+    // The form `release-image.yml` had: it waits for its own check, and not for the tests.
+    assert.deepEqual(writersWithoutCi(workflow('    needs: check\n')), ['publish']);
+    assert.deepEqual(writersWithoutCi(workflow('    runs-on: ubuntu-latest\n')), ['publish']);
+    // A job called `ci` that calls nothing is a name.
+    assert.deepEqual(writersWithoutCi(workflow('    needs: ci\n', '    runs-on: ubuntu-latest')), ['publish']);
+    assert.deepEqual(writersWithoutCi(workflow('    needs: ci\n', '    uses: ./.github/workflows/other.yml')), [
+      'publish',
+    ]);
+    // A chain is not the direct `needs`.
+    assert.deepEqual(
+      writersWithoutCi(
+        'jobs:\n  ci:\n    uses: $/.github/workflows/ci.yml\n  package:\n    needs: ci\n  publish:\n    needs: package\n    permissions:\n      contents: write\n',
+      ),
+      ['publish'],
+    );
+    // These run the job after the checks failed.
+    assert.deepEqual(writersWithoutCi(workflow('    needs: ci\n    if: always()\n')), ['publish']);
+    assert.deepEqual(writersWithoutCi(workflow("    needs: ci\n    if: ${{ !cancelled() && github.ref == 'x' }}\n")), [
+      'publish',
+    ]);
+    assert.deepEqual(writersWithoutCi(workflow("    needs: ci\n    if: github.ref == 'refs/heads/main'\n")), []);
+    // `write-all` on a job is a write. A job that only reads is free to run when it likes.
+    assert.deepEqual(writersWithoutCi('jobs:\n  publish:\n    permissions: write-all\n'), ['publish']);
+    assert.deepEqual(writersWithoutCi('jobs:\n  scan:\n    permissions:\n      contents: read\n'), []);
   });
 });

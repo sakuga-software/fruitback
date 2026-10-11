@@ -18,6 +18,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The checks of ci.yml on the tagged commit (FRU-172). A tag can name any commit, and before this
+  # the archives of a commit that failed its tests were attached to the release.
+  ci:
+    name: ci
+    uses: $/.github/workflows/ci.yml
+
   package:
     name: package
     runs-on: ubuntu-latest
@@ -81,7 +87,7 @@ jobs:
 
   publish:
     name: attach to the release
-    needs: package
+    needs: [ci, package]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     timeout-minutes: 10
