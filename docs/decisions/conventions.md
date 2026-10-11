@@ -160,3 +160,59 @@ How this repository is formatted, tested and documented, and which test holds ea
   itself, and no two runs share it.
 - **A stacked pull request proves the trigger.** #141 targets the branch of #140 and not `main`, and
   it has a run of `CI`.
+
+## Mutation testing
+
+### The rules, in short
+
+- **StrykerJS mutates the seed contract and the core of the worker** (FRU-172), with its `tap`
+  runner, which drives `node --test`. The scope is the `mutate` list of `packages/shared/stryker.config.json`
+  and of `apps/worker/stryker.config.json`. `mutation.test.ts` fails on a file of
+  `packages/shared/src` that the list leaves out.
+- **The score of a file may not go down.** `tools/mutation/baseline.json` holds the score of each
+  file and of each package, measured by a full run in CI. `tools/mutation/ratchet.ts` fails a run
+  when a file scores under its line, a new file under the line of its package, or a full run under
+  the line of the package. A line moves up by a commit that says why: `node tools/mutation/ratchet.ts
+write <package> <mutation.json>` prints it from the report of a full run.
+- **A pull request mutates the files of the scope that it changes.** A full run happens every Monday,
+  by hand (`workflow_dispatch`), and on a pull request that changes how mutation runs: the workflow,
+  a `stryker.config.json`, or `tools/mutation/`.
+- **StrykerJS is installed apart**, from `tools/mutation/pnpm-lock.yaml`, by the mutation job alone.
+- **Never run it on a tree you care about.** `inPlace` rewrites the source files and puts them back
+  at the end. A run that is killed leaves them mutated.
+- **A test that reads a mutated file as text is left out of the run**: `security.test.ts`, through
+  the `tap.testFiles` of the worker. `mutation.test.ts` fails on another one.
+
+### The reasons, and the history
+
+- **The hand-planted violation was already the practice** — 79 in the conformance suite, a table of
+  mutants in [dev-loop.md](dev-loop.md) — and it proves the guards that someone thought of. A tool
+  plants the ones nobody thought of.
+- **The `tap` runner, because it is the one that runs `node --test`.** It reads the TAP output of
+  each test file, so a test for StrykerJS is a file, and coverage is measured per file. Each file
+  runs in its own process. Version 10.0.0 needs no build and no loader: Node strips the types of the
+  instrumented sources as it strips the others.
+- **Outside the workspace, because of its weight.** Added to the root, StrykerJS 10.0.0 and its
+  runner brought 125 packages, Babel 8 among them, and 1,210 lines of `pnpm-lock.yaml` to every
+  install, for one job (measured on 2026-10-11).
+- **`inPlace`, because the sandbox moves the files.** In a sandbox under `.stryker-tmp/`, a test
+  that reads `../../../SECURITY.md` finds nothing, and the worker has twelve such tests. The CI
+  checkout is thrown away after the job.
+- **`plugins` names the entry file of the runner.** The directory alone is refused by Node's
+  resolver (« Directory import … is not supported »), and StrykerJS then warns about an unknown
+  option `tap` and goes on with another runner.
+- **The score counts a mutant that no test reaches as missed.** That is StrykerJS's own score, not
+  the « covered » one: a line no test runs is the first thing this is meant to show.
+- **The lines were measured, not chosen** (CI, 2026-10-11, Node 26.11.1, four runners of StrykerJS
+  on `ubuntu-latest`). `packages/shared`: 74.35, from 316 mutants killed of 425, in 40 seconds, and
+  the same to the mutant on a second run. The core of the worker: 82.36, from 653 killed and one
+  timed out of 794, in 8 minutes 44 seconds. The lowest files are `cache.ts` (65.90), `seed.ts`
+  (72.12) and `identity.ts` (73.00). The holes that matter most are tickets: FRU-175, FRU-176,
+  FRU-178 and FRU-179. A file that a pull request does not change costs it nothing.
+- **A timeout counts as killed, and that is the one result that can move between two runs.** One
+  mutant of `identity.ts` timed out in the measured run. If it survives a later run, that file drops
+  under its line by half a point, and the job says so in its summary. Look at the mutant before
+  you lower a line.
+- **The run of a package uses the tests of that package only.** A survivor of `packages/shared` may be
+  killed by a test of the worker or of the widget. The contract is tested where it is written, so the
+  survivor is still a hole there.
