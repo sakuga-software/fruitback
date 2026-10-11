@@ -141,6 +141,10 @@ How this repository is formatted, tested and documented, and which test holds ea
   `typecheck` and `test` failed on `46a5fa7`. The run of `f812d97`, the commit of #134, was cancelled:
   the group was `ci-${{ github.ref }}` with `cancel-in-progress: true`, and both pushes had the ref
   `refs/heads/main`.
-- **`cancel-in-progress: false` on a shared group is not enough.** GitHub documents that a group
-  holds one run in progress and one run pending, and that a third run cancels the pending one. That
-  was read, not measured here. So the group of a push is the commit itself, and no two runs share it.
+- **`cancel-in-progress: false` on a shared group is not enough.** A group holds one run in progress
+  and one run pending, and a third run cancels the pending one. Measured on 2026-10-11 with three
+  pushes 9 seconds apart to a branch made for it, on a workflow whose group is its ref: the first
+  run went on, the second was cancelled, the third waited. So the group of a push is the commit
+  itself, and no two runs share it.
+- **A stacked pull request proves the trigger.** #141 targets the branch of #140 and not `main`, and
+  it has a run of `CI`.
