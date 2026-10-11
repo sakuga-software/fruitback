@@ -32,13 +32,14 @@ import {
   databasesOfACase,
   migrationsWith,
   optionsOn,
+  ownDatabaseUrl,
   withPool,
   without,
 } from './auth.fixture.ts';
 import { FRUITBACK_RESOURCE, IMPLIED, roleStatements } from './auth-roles.ts';
 import { type WorkerEnv, hasAuth, readConfig } from './env.ts';
 import { type Database, closeDatabases, createPgDatabase, migrate } from './postgres.ts';
-import { NO_REAL_POSTGRES, TEST_DATABASE_URL, createPgliteDatabase, schemaName } from './postgres.fixture.ts';
+import { NO_REAL_POSTGRES, createPgliteDatabase } from './postgres.fixture.ts';
 import { MIGRATIONS } from './postgres-migrations.ts';
 import { closeSessionConnections } from './session-sqlite.ts';
 
@@ -290,28 +291,26 @@ describe('a worker that has better-auth switched off (FRU-144)', () => {
   });
 
   it('builds better-auth at boot on a real server, and still answers 404', { skip: NO_REAL_POSTGRES }, async () => {
-    const schema = schemaName();
-    const admin = createPgDatabase(TEST_DATABASE_URL as string, { max: 1 });
-    await admin.query(`CREATE SCHEMA ${schema}`);
-    // The address of a worker has no schema: the tests put one in the options of the connection.
-    const address = new URL(TEST_DATABASE_URL as string);
-    address.searchParams.set('options', `-c search_path=${schema}`);
+    // A database of its own, not a schema: see `ownDatabaseUrl`.
+    const { url, drop } = await ownDatabaseUrl();
 
     try {
-      const on = await worker(envWith({ FRUITBACK_DATABASE_URL: address.href }));
+      const on = await worker(envWith({ FRUITBACK_DATABASE_URL: url }));
 
       assert.deepEqual(on.statuses, [200, 404, 404]);
       assert.equal(on.announced, 'ready');
       assert.ok(on.library > 0);
-      const inSchema = createPgDatabase(TEST_DATABASE_URL as string, { schema, max: 1 });
-      assert.deepEqual(
-        (await inSchema.query('SELECT name FROM schema_migrations ORDER BY version')).rows.map((row) => row.name),
-        MIGRATIONS.map((migration) => migration.name),
-      );
-      await inSchema.close();
+      const made = createPgDatabase(url, { max: 1 });
+      try {
+        assert.deepEqual(
+          (await made.query('SELECT name FROM schema_migrations ORDER BY version')).rows.map((row) => row.name),
+          MIGRATIONS.map((migration) => migration.name),
+        );
+      } finally {
+        await made.close();
+      }
     } finally {
-      await admin.query(`DROP SCHEMA ${schema} CASCADE`);
-      await admin.close();
+      await drop();
     }
   });
 });

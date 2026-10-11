@@ -892,6 +892,14 @@ in` keeps the first two measured.
 - **Some lines of better-auth do not go through the logger of the options.** The refusal of an
   origin is written twice: once by the logger the worker gives, as a `[fruitback]` line, and once by
   a logger of the library, with colours (measured). No such line held a secret or an address.
+- **better-auth reads every schema of its database** (measured, in CI and on a local server).
+  Kysely's `getTables`, which `getMigrations` and the schema check at boot both call, lists the
+  tables of all the schemas, then reads each one. The tests of the accounts and the sessions give
+  each case a schema in one database, and drop it at the end: a schema dropped between the two reads
+  failed a case of better-auth with `schema "t_…" does not exist`, two runs out of three with four
+  test files at once. So each case of better-auth on a real server has a database of its own
+  (`ownDatabaseUrl` in `auth.fixture.ts`). In production the database of a worker is its own, and
+  what this costs there is the time to read every schema of it.
 - **Two tables are named after a session, and they are not the same thing.** `sessions` (FRU-142)
   holds the sessions of the extension: digests, a chain, a rotation. `session` (better-auth) will
   hold the sessions of the console, with the token in the clear, and it is empty. A query, a backup

@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { afterEach } from 'node:test';
 import type { Auth, BetterAuthOptions } from 'better-auth';
 import { type AuthConfig, authOptions } from './auth.ts';
-import { type Database, type Migration, type PgDatabase, type PgPool, migrate } from './postgres.ts';
-import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase } from './postgres.fixture.ts';
+import { type Database, type Migration, type PgDatabase, type PgPool, createPgDatabase, migrate } from './postgres.ts';
+import { NO_REAL_POSTGRES, TEST_DATABASE_URL, createPgliteDatabase, schemaName } from './postgres.fixture.ts';
 import { MIGRATIONS } from './postgres-migrations.ts';
 
 /**
@@ -143,10 +143,54 @@ export async function signUp(
   return { cookie: setCookie.map((each) => each.split(';')[0]).join('; '), setCookie };
 }
 
+/**
+ * An empty database of its own on the real server, for one case: its address, and how to drop it.
+ *
+ * **A database, and not a schema as `createRealDatabase` gives.** better-auth reads the tables of
+ * **every** schema of its database (Kysely's `getTables`, in `getMigrations` and in its schema check
+ * at boot), then reads each one. The other test files of the job make and drop their schemas in the
+ * same database at the same time, and a schema dropped between the two reads failed the case with
+ * `schema "t_…" does not exist` (measured in CI, and on a local server with four files at once).
+ * The catalogue that better-auth reads is per database.
+ */
+export async function ownDatabaseUrl(): Promise<{ url: string; drop(): Promise<void> }> {
+  if (TEST_DATABASE_URL === undefined) throw new Error('FRUITBACK_TEST_DATABASE_URL is not set');
+  const name = schemaName();
+  const admin = createPgDatabase(TEST_DATABASE_URL, { max: 1 });
+  await admin.query(`CREATE DATABASE ${name}`);
+  const url = new URL(TEST_DATABASE_URL);
+  url.pathname = `/${name}`;
+
+  return {
+    url: url.href,
+    async drop() {
+      try {
+        await admin.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
+      } finally {
+        await admin.close();
+      }
+    },
+  };
+}
+
+/** An empty database of its own on the real server, on the pool that ships. `close` drops it. */
+export async function createOwnRealDatabase(): Promise<Database> {
+  const { url, drop } = await ownDatabaseUrl();
+  const database = createPgDatabase(url);
+
+  return {
+    ...database,
+    async close() {
+      await database.close();
+      await drop();
+    },
+  };
+}
+
 /** The databases a case runs on. PGlite has one connection; the CI job « postgres » has a server. */
 export const DATABASES: readonly { label: string; open: () => Promise<Database>; skip: string | false }[] = [
   { label: 'PGlite', open: createPgliteDatabase, skip: false },
-  { label: 'a real server', open: createRealDatabase, skip: NO_REAL_POSTGRES },
+  { label: 'a real server', open: createOwnRealDatabase, skip: NO_REAL_POSTGRES },
 ];
 
 /**
