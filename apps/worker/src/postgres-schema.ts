@@ -1,4 +1,4 @@
-import { bigint, index, integer, pgTable, primaryKey, text, unique } from 'drizzle-orm/pg-core';
+import { bigint, foreignKey, index, integer, pgTable, primaryKey, text, unique } from 'drizzle-orm/pg-core';
 
 /**
  * The schema of the whole PostgreSQL database of a worker (FRU-180): one description, in Drizzle.
@@ -15,14 +15,21 @@ import { bigint, index, integer, pgTable, primaryKey, text, unique } from 'drizz
  * and the same number goes in both. `mode: 'number'` answers it as a number.
  *
  * The tables are the ones of `accounts-sqlite.ts` after its seven migrations, and of
- * `session-sqlite.ts` after its three, with the same names.
+ * `session-sqlite.ts` after its three, with the same names. The tables of better-auth are in
+ * `auth-schema.ts`, and `drizzle.config.ts` reads both files.
+ *
+ * **Every constraint has the name that PostgreSQL gives it** (`<table>_pkey`, `<table>_<column>_key`,
+ * `<table>_<column>_fkey`), and not the one that Drizzle would choose. The tool of before made these
+ * tables with those names, and a database it made is adopted as it is (`postgres-migrate.ts`): a
+ * later migration that drops a constraint by its name must find it on both. A constraint of one
+ * column is therefore written in the third argument, where it takes a name, and not on its column.
  */
 
 const instant = (name: string) => bigint(name, { mode: 'number' });
 
 export const accounts = pgTable('accounts', {
   id: text('id').primaryKey(),
-  email: text('email').notNull().unique(),
+  email: text('email').notNull().unique('accounts_email_key'),
   name: text('name'),
   locale: text('locale'),
   created_at: instant('created_at').notNull(),
@@ -33,12 +40,15 @@ export const logins = pgTable(
   {
     provider: text('provider').notNull(),
     subject: text('subject').notNull(),
-    account_id: text('account_id')
-      .notNull()
-      .references(() => accounts.id, { onDelete: 'cascade' }),
+    account_id: text('account_id').notNull(),
     created_at: instant('created_at').notNull(),
   },
-  (table) => [primaryKey({ columns: [table.provider, table.subject] })],
+  (table) => [
+    primaryKey({ name: 'logins_pkey', columns: [table.provider, table.subject] }),
+    foreignKey({ name: 'logins_account_id_fkey', columns: [table.account_id], foreignColumns: [accounts.id] }).onDelete(
+      'cascade',
+    ),
+  ],
 );
 
 export const workspaces = pgTable('workspaces', {
@@ -50,17 +60,23 @@ export const workspaces = pgTable('workspaces', {
 export const members = pgTable(
   'members',
   {
-    workspace_id: text('workspace_id')
-      .notNull()
-      .references(() => workspaces.id, { onDelete: 'cascade' }),
-    account_id: text('account_id')
-      .notNull()
-      .references(() => accounts.id, { onDelete: 'cascade' }),
+    workspace_id: text('workspace_id').notNull(),
+    account_id: text('account_id').notNull(),
     role: text('role').notNull(),
     created_at: instant('created_at').notNull(),
   },
   (table) => [
-    primaryKey({ columns: [table.workspace_id, table.account_id] }),
+    primaryKey({ name: 'members_pkey', columns: [table.workspace_id, table.account_id] }),
+    foreignKey({
+      name: 'members_workspace_id_fkey',
+      columns: [table.workspace_id],
+      foreignColumns: [workspaces.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'members_account_id_fkey',
+      columns: [table.account_id],
+      foreignColumns: [accounts.id],
+    }).onDelete('cascade'),
     index('members_by_account').on(table.account_id),
   ],
 );
@@ -73,9 +89,7 @@ export const connectors = pgTable(
   'connectors',
   {
     id: text('id').primaryKey(),
-    workspace_id: text('workspace_id')
-      .notNull()
-      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    workspace_id: text('workspace_id').notNull(),
     kind: text('kind').notNull(),
     label: text('label').notNull(),
     sealed: text('sealed').notNull(),
@@ -83,7 +97,14 @@ export const connectors = pgTable(
     attention: text('attention'),
     attention_at: instant('attention_at'),
   },
-  (table) => [index('connectors_by_workspace').on(table.workspace_id)],
+  (table) => [
+    foreignKey({
+      name: 'connectors_workspace_id_fkey',
+      columns: [table.workspace_id],
+      foreignColumns: [workspaces.id],
+    }).onDelete('cascade'),
+    index('connectors_by_workspace').on(table.workspace_id),
+  ],
 );
 
 /**
@@ -95,17 +116,28 @@ export const sites = pgTable(
   'sites',
   {
     id: text('id').primaryKey(),
-    workspace_id: text('workspace_id')
-      .notNull()
-      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    workspace_id: text('workspace_id').notNull(),
     origin: text('origin').notNull(),
     visibility: text('visibility').notNull(),
     created_at: instant('created_at').notNull(),
-    connector_id: text('connector_id').references(() => connectors.id, { onDelete: 'set null' }),
+    connector_id: text('connector_id'),
     team_id: text('team_id'),
     project_id: text('project_id'),
   },
-  (table) => [unique().on(table.workspace_id, table.origin), index('sites_by_connector').on(table.connector_id)],
+  (table) => [
+    foreignKey({
+      name: 'sites_workspace_id_fkey',
+      columns: [table.workspace_id],
+      foreignColumns: [workspaces.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'sites_connector_id_fkey',
+      columns: [table.connector_id],
+      foreignColumns: [connectors.id],
+    }).onDelete('set null'),
+    unique('sites_workspace_id_origin_key').on(table.workspace_id, table.origin),
+    index('sites_by_connector').on(table.connector_id),
+  ],
 );
 
 /**
@@ -116,9 +148,7 @@ export const deliveries = pgTable(
   'deliveries',
   {
     id: text('id').primaryKey(),
-    connector_id: text('connector_id')
-      .notNull()
-      .references(() => connectors.id, { onDelete: 'cascade' }),
+    connector_id: text('connector_id').notNull(),
     body: text('body').notNull(),
     created_at: instant('created_at').notNull(),
     attempts: integer('attempts').notNull().default(0),
@@ -127,7 +157,15 @@ export const deliveries = pgTable(
     last_status: integer('last_status'),
     last_error: text('last_error'),
   },
-  (table) => [index('deliveries_due').on(table.next_at), index('deliveries_by_connector').on(table.connector_id)],
+  (table) => [
+    foreignKey({
+      name: 'deliveries_connector_id_fkey',
+      columns: [table.connector_id],
+      foreignColumns: [connectors.id],
+    }).onDelete('cascade'),
+    index('deliveries_due').on(table.next_at),
+    index('deliveries_by_connector').on(table.connector_id),
+  ],
 );
 
 /** `code_hash` is a digest, like a pairing code: a copy of the database is not a way in. */
@@ -147,19 +185,25 @@ export const email_links = pgTable('email_links', {
 export const site_destinations = pgTable(
   'site_destinations',
   {
-    site_id: text('site_id')
-      .notNull()
-      .references(() => sites.id, { onDelete: 'cascade' }),
+    site_id: text('site_id').notNull(),
     position: integer('position').notNull(),
-    connector_id: text('connector_id')
-      .notNull()
-      .references(() => connectors.id, { onDelete: 'cascade' }),
+    connector_id: text('connector_id').notNull(),
     team_id: text('team_id'),
     project_id: text('project_id'),
     label: text('label'),
   },
   (table) => [
-    primaryKey({ columns: [table.site_id, table.position] }),
+    primaryKey({ name: 'site_destinations_pkey', columns: [table.site_id, table.position] }),
+    foreignKey({
+      name: 'site_destinations_site_id_fkey',
+      columns: [table.site_id],
+      foreignColumns: [sites.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'site_destinations_connector_id_fkey',
+      columns: [table.connector_id],
+      foreignColumns: [connectors.id],
+    }).onDelete('cascade'),
     index('site_destinations_by_connector').on(table.connector_id),
   ],
 );

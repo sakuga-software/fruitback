@@ -1,115 +1,179 @@
-import type { Migration } from './postgres.ts';
+import { sql } from 'drizzle-orm';
+import { boolean, foreignKey, index, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
 
 /**
- * The tables of better-auth, as one step of the schema of the database (FRU-144).
+ * The tables of better-auth, in the schema of the database of a worker (FRU-144, FRU-180).
  *
- * **This is the DDL that better-auth 1.7.7 compiles for the configuration of `auth.ts`**
+ * **These are the tables that better-auth 1.7.7 makes for the configuration of `auth.ts`**
  * (`compileMigrations` of `better-auth/db/migration`, on an empty PostgreSQL), with one constraint
- * added: see `member`. `auth migrate` and `runMigrations()` never run on a database of the worker:
- * one tool migrates it, and that tool is `migrate` of `postgres.ts`.
+ * added: see `member`. `drizzle-kit` writes their migration with the rest of the schema
+ * (`postgres-schema.ts`), and the worker applies it. `auth migrate` and `runMigrations()` never run
+ * on a database of the worker: one tool migrates it, and that tool is Drizzle.
  *
- * `auth-schema.test.ts` holds this text to the library: after the migrations of the worker, better-auth has
- * nothing to create and nothing to add, and the tables are the ones its own migration makes, column
- * for column and constraint for constraint, but the one that is added here.
+ * better-auth keeps its own adapter, Kysely, on the pool of `postgres.ts`. It does not read this
+ * file. `auth-schema.test.ts` holds these tables to the library: after the migrations of the worker,
+ * better-auth has nothing to create and nothing to add, and the tables are the ones its own migration
+ * makes, column for column and constraint for constraint, but the one that is added here.
  *
- * The names are the ones of better-auth: `camelCase`, between quotes, and `"user"` is a reserved
- * word. An instant is a `timestamptz` here, and a `BIGINT` of milliseconds in the tables of the
- * worker: better-auth writes these rows, with its own types.
+ * The names are the ones of better-auth: `camelCase`, and `"user"` is a reserved word. An instant is
+ * a `timestamptz` here, and a `BIGINT` of milliseconds in the tables of the worker: better-auth writes
+ * these rows, with its own types. A default is `CURRENT_TIMESTAMP`, as better-auth writes it, and not
+ * `now()`, which the catalogue would show as another text.
+ *
+ * Every constraint has the name that PostgreSQL gives it, as in `postgres-schema.ts`: the DDL of
+ * better-auth names none, and the tool of before made these tables from that DDL.
  *
  * WARNING: `session.token` and `verification.identifier` hold digests, and the token columns of
  * `account` stay empty, only because better-auth writes through the layer of `auth-at-rest.ts`
  * (FRU-181). Code that writes these tables by itself must keep the same rule.
  */
-export const BETTER_AUTH_MIGRATION: Migration = {
-  name: 'better-auth',
-  sql: `
-    CREATE TABLE "user" (
-      "id" text NOT NULL PRIMARY KEY,
-      "name" text NOT NULL,
-      "email" text NOT NULL UNIQUE,
-      "emailVerified" boolean NOT NULL,
-      "image" text,
-      "createdAt" timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
-      "updatedAt" timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL
-    );
 
-    CREATE TABLE "session" (
-      "id" text NOT NULL PRIMARY KEY,
-      "expiresAt" timestamptz NOT NULL,
-      "token" text NOT NULL UNIQUE,
-      "createdAt" timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
-      "updatedAt" timestamptz NOT NULL,
-      "ipAddress" text,
-      "userAgent" text,
-      "userId" text NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
-      "activeOrganizationId" text
-    );
+const instant = (name: string) => timestamp(name, { withTimezone: true });
+const createdAt = () =>
+  instant('createdAt')
+    .default(sql`CURRENT_TIMESTAMP`)
+    .notNull();
 
-    -- The token columns are where better-auth keeps the tokens of a provider that signs a person in.
-    -- Nothing writes this table yet. SECURITY.md says that the worker keeps no such token: the code
-    -- that writes a row here must leave them empty.
-    CREATE TABLE "account" (
-      "id" text NOT NULL PRIMARY KEY,
-      "accountId" text NOT NULL,
-      "providerId" text NOT NULL,
-      "userId" text NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
-      "accessToken" text,
-      "refreshToken" text,
-      "idToken" text,
-      "accessTokenExpiresAt" timestamptz,
-      "refreshTokenExpiresAt" timestamptz,
-      "scope" text,
-      "password" text,
-      "createdAt" timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
-      "updatedAt" timestamptz NOT NULL
-    );
+export const user = pgTable(
+  'user',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    email: text('email').notNull(),
+    emailVerified: boolean('emailVerified').notNull(),
+    image: text('image'),
+    createdAt: createdAt(),
+    updatedAt: instant('updatedAt')
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (table) => [unique('user_email_key').on(table.email)],
+);
 
-    CREATE TABLE "verification" (
-      "id" text NOT NULL PRIMARY KEY,
-      "identifier" text NOT NULL,
-      "value" text NOT NULL,
-      "expiresAt" timestamptz NOT NULL,
-      "createdAt" timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
-      "updatedAt" timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL
-    );
+export const session = pgTable(
+  'session',
+  {
+    id: text('id').primaryKey(),
+    expiresAt: instant('expiresAt').notNull(),
+    token: text('token').notNull(),
+    createdAt: createdAt(),
+    updatedAt: instant('updatedAt').notNull(),
+    ipAddress: text('ipAddress'),
+    userAgent: text('userAgent'),
+    userId: text('userId').notNull(),
+    activeOrganizationId: text('activeOrganizationId'),
+  },
+  (table) => [
+    unique('session_token_key').on(table.token),
+    foreignKey({ name: 'session_userId_fkey', columns: [table.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+    index('session_userId_idx').on(table.userId),
+  ],
+);
 
-    CREATE TABLE "organization" (
-      "id" text NOT NULL PRIMARY KEY,
-      "name" text NOT NULL,
-      "slug" text NOT NULL UNIQUE,
-      "logo" text,
-      "createdAt" timestamptz NOT NULL,
-      "metadata" text
-    );
+/**
+ * The token columns are where better-auth keeps the tokens of a provider that signs a person in.
+ * Nothing writes this table yet. `SECURITY.md` says that the worker keeps no such token: the code that
+ * writes a row here must leave them empty.
+ */
+export const account = pgTable(
+  'account',
+  {
+    id: text('id').primaryKey(),
+    accountId: text('accountId').notNull(),
+    providerId: text('providerId').notNull(),
+    userId: text('userId').notNull(),
+    accessToken: text('accessToken'),
+    refreshToken: text('refreshToken'),
+    idToken: text('idToken'),
+    accessTokenExpiresAt: instant('accessTokenExpiresAt'),
+    refreshTokenExpiresAt: instant('refreshTokenExpiresAt'),
+    scope: text('scope'),
+    password: text('password'),
+    createdAt: createdAt(),
+    updatedAt: instant('updatedAt').notNull(),
+  },
+  (table) => [
+    foreignKey({ name: 'account_userId_fkey', columns: [table.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+    index('account_userId_idx').on(table.userId),
+  ],
+);
 
-    -- The constraint is not in the DDL of better-auth. A person is a member of a workspace once, as
-    -- in the members table of the worker: with two rows, one person has two roles.
-    CREATE TABLE "member" (
-      "id" text NOT NULL PRIMARY KEY,
-      "organizationId" text NOT NULL REFERENCES "organization" ("id") ON DELETE CASCADE,
-      "userId" text NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
-      "role" text NOT NULL,
-      "createdAt" timestamptz NOT NULL,
-      CONSTRAINT "member_organizationId_userId_key" UNIQUE ("organizationId", "userId")
-    );
+export const verification = pgTable(
+  'verification',
+  {
+    id: text('id').primaryKey(),
+    identifier: text('identifier').notNull(),
+    value: text('value').notNull(),
+    expiresAt: instant('expiresAt').notNull(),
+    createdAt: createdAt(),
+    updatedAt: instant('updatedAt')
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (table) => [index('verification_identifier_idx').on(table.identifier)],
+);
 
-    CREATE TABLE "invitation" (
-      "id" text NOT NULL PRIMARY KEY,
-      "organizationId" text NOT NULL REFERENCES "organization" ("id") ON DELETE CASCADE,
-      "email" text NOT NULL,
-      "role" text,
-      "status" text NOT NULL,
-      "expiresAt" timestamptz NOT NULL,
-      "createdAt" timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
-      "inviterId" text NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE
-    );
+export const organization = pgTable(
+  'organization',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    slug: text('slug').notNull(),
+    logo: text('logo'),
+    createdAt: instant('createdAt').notNull(),
+    metadata: text('metadata'),
+  },
+  (table) => [unique('organization_slug_key').on(table.slug)],
+);
 
-    CREATE INDEX "session_userId_idx" ON "session" ("userId");
-    CREATE INDEX "account_userId_idx" ON "account" ("userId");
-    CREATE INDEX "verification_identifier_idx" ON "verification" ("identifier");
-    CREATE INDEX "member_organizationId_idx" ON "member" ("organizationId");
-    CREATE INDEX "member_userId_idx" ON "member" ("userId");
-    CREATE INDEX "invitation_organizationId_idx" ON "invitation" ("organizationId");
-    CREATE INDEX "invitation_email_idx" ON "invitation" ("email");
-  `,
-};
+/**
+ * `member_organizationId_userId_key` is not in the DDL of better-auth. A person is a member of a
+ * workspace once, as in the `members` table of the worker: with two rows, one person has two roles.
+ */
+export const member = pgTable(
+  'member',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organizationId').notNull(),
+    userId: text('userId').notNull(),
+    role: text('role').notNull(),
+    createdAt: instant('createdAt').notNull(),
+  },
+  (table) => [
+    foreignKey({
+      name: 'member_organizationId_fkey',
+      columns: [table.organizationId],
+      foreignColumns: [organization.id],
+    }).onDelete('cascade'),
+    foreignKey({ name: 'member_userId_fkey', columns: [table.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+    unique('member_organizationId_userId_key').on(table.organizationId, table.userId),
+    index('member_organizationId_idx').on(table.organizationId),
+    index('member_userId_idx').on(table.userId),
+  ],
+);
+
+export const invitation = pgTable(
+  'invitation',
+  {
+    id: text('id').primaryKey(),
+    organizationId: text('organizationId').notNull(),
+    email: text('email').notNull(),
+    role: text('role'),
+    status: text('status').notNull(),
+    expiresAt: instant('expiresAt').notNull(),
+    createdAt: createdAt(),
+    inviterId: text('inviterId').notNull(),
+  },
+  (table) => [
+    foreignKey({
+      name: 'invitation_organizationId_fkey',
+      columns: [table.organizationId],
+      foreignColumns: [organization.id],
+    }).onDelete('cascade'),
+    foreignKey({ name: 'invitation_inviterId_fkey', columns: [table.inviterId], foreignColumns: [user.id] }).onDelete(
+      'cascade',
+    ),
+    index('invitation_organizationId_idx').on(table.organizationId),
+    index('invitation_email_idx').on(table.email),
+  ],
+);

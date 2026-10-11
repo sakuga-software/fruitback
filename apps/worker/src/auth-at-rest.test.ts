@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { describe, it, mock } from 'node:test';
+import { sql } from 'drizzle-orm';
 import type { Auth, BetterAuthOptions } from 'better-auth';
 import { ADAPTER_MEMBERS, type AdapterOfAuth, DIGESTED, DROPPED, keepAtRest, unknownMembers } from './auth-at-rest.ts';
 import { AT_REST_PLUGIN, DISABLED_PATHS, closedPath, startAuth } from './auth.ts';
@@ -16,6 +17,7 @@ import {
   withTestSignUp,
 } from './auth.fixture.ts';
 import type { Database } from './postgres.ts';
+import { rowsOf } from './postgres.fixture.ts';
 import { digest } from './session.ts';
 
 /**
@@ -64,7 +66,7 @@ async function builtPast(options: BetterAuthOptions): Promise<Auth> {
 async function everyValue(database: Database): Promise<string[]> {
   const values: string[] = [];
   for (const table of ['user', 'session', 'account', 'verification', 'organization', 'member', 'invitation']) {
-    for (const row of (await database.query(`SELECT * FROM "${table}"`)).rows) {
+    for (const row of await rowsOf(database, `SELECT * FROM "${table}"`)) {
       for (const value of Object.values(row)) if (value !== null) values.push(String(value));
     }
   }
@@ -89,7 +91,7 @@ for (const { label, open, skip } of DATABASES) {
       const { options } = await optionsOn(database);
       const auth = await builtPast(withTestSignUp(withoutTheLayer(options)));
       const { cookie } = await signUp(auth, 'alice@acme.dev');
-      const row = String((await database.query('SELECT "token" FROM "session"')).rows[0]?.token);
+      const row = String((await rowsOf(database, 'SELECT "token" FROM "session"'))[0]?.token);
 
       assert.equal(
         row,
@@ -109,7 +111,7 @@ for (const { label, open, skip } of DATABASES) {
       const auth = await startAuth(withTestSignUp(options));
       const { cookie } = await signUp(auth, 'alice@acme.dev');
       const token = tokenIn(cookie);
-      const row = String((await database.query('SELECT "token" FROM "session"')).rows[0]?.token);
+      const row = String((await rowsOf(database, 'SELECT "token" FROM "session"'))[0]?.token);
 
       assert.ok(token.length >= 32, 'no token in the cookie, so nothing below is tested');
       assert.equal(row, await digest(token));
@@ -122,7 +124,7 @@ for (const { label, open, skip } of DATABASES) {
         assert.equal(await sessionOf(auth, headers), undefined, what);
       }
       // The control: the cookie the worker set opens the session, and it names the row.
-      const id = String((await database.query('SELECT "id" FROM "session"')).rows[0]?.id);
+      const id = String((await rowsOf(database, 'SELECT "id" FROM "session"'))[0]?.id);
       assert.equal((await sessionOf(auth, { Cookie: cookie }))?.id, id);
 
       // Even with the bearer plugin, which the worker refuses, the row opens nothing.
@@ -141,11 +143,11 @@ for (const { label, open, skip } of DATABASES) {
       const { cookie: first } = await signUp(auth, 'alice@acme.dev');
       // A second session of the same person, as a second browser would hold it.
       const context = await auth.$context;
-      const alice = String((await database.query('SELECT "id" FROM "user"')).rows[0]?.id);
+      const alice = String((await rowsOf(database, 'SELECT "id" FROM "user"'))[0]?.id);
       const second = signed(String((await context.internalAdapter.createSession(alice)).token), AUTH_SECRET);
       const { cookie: other } = await signUp(auth, 'bob@acme.dev');
       const count = async (): Promise<number> =>
-        Number((await database.query('SELECT count(*) AS n FROM "session"')).rows[0]?.n);
+        Number((await rowsOf(database, 'SELECT count(*) AS n FROM "session"'))[0]?.n);
 
       assert.equal(await count(), 3);
       assert.ok(await sessionOf(auth, { Cookie: second }), 'a second session of the same person');
@@ -172,16 +174,17 @@ for (const { label, open, skip } of DATABASES) {
       const auth = await startAuth(withTestSignUp(options));
       const { cookie } = await signUp(auth, 'alice@acme.dev');
       // A session last renewed two days ago: better-auth renews it at the next read (updateAge, a day).
-      await database.query(
+      await rowsOf(
+        database,
         `UPDATE "session" SET "expiresAt" = now() + interval '5 days', "updatedAt" = now() - interval '2 days'`,
       );
-      const before = (await database.query('SELECT "expiresAt" FROM "session"')).rows[0]?.expiresAt;
+      const before = (await rowsOf(database, 'SELECT "expiresAt" FROM "session"'))[0]?.expiresAt;
       const answer = await ask(auth, '/get-session', { headers: { Cookie: cookie } });
       const renewed = answer.headers.getSetCookie().find((each) => each.startsWith(`${SESSION_COOKIE}=`));
 
       assert.ok(renewed, 'better-auth did not renew the session, so nothing below is tested');
       assert.equal(tokenIn(renewed), tokenIn(cookie));
-      const row = (await database.query('SELECT "token", "expiresAt" FROM "session"')).rows[0];
+      const row = (await rowsOf(database, 'SELECT "token", "expiresAt" FROM "session"'))[0];
       assert.equal(row?.token, await digest(tokenIn(cookie)));
       assert.ok(new Date(String(row?.expiresAt)) > new Date(String(before)));
       assert.ok(await sessionOf(auth, { Cookie: renewed.split(';')[0] ?? '' }));
@@ -260,7 +263,7 @@ for (const { label, open, skip } of DATABASES) {
       const workspace = await api.createOrganization?.({ headers, body: { name: 'Acme', slug: 'acme' } });
       await api.setActiveOrganization?.({ headers, body: { organizationId: null } });
       await api.setActiveOrganization?.({ headers, body: { organizationId: workspace?.id } });
-      const row = (await database.query('SELECT "token", "activeOrganizationId" FROM "session"')).rows[0];
+      const row = (await rowsOf(database, 'SELECT "token", "activeOrganizationId" FROM "session"'))[0];
 
       assert.match(String(workspace?.id), /^ws_/);
       assert.deepEqual(row, { token: await digest(tokenIn(cookie)), activeOrganizationId: workspace?.id });
@@ -273,7 +276,7 @@ for (const { label, open, skip } of DATABASES) {
       const identifier = 'magic-link:a-token-of-a-link-that-nobody-guesses';
       const expiresAt = new Date(Date.now() + 15 * 60_000);
       await context.internalAdapter.createVerificationValue({ identifier, value: '{}', expiresAt });
-      const kept = String((await database.query('SELECT "identifier" FROM "verification"')).rows[0]?.identifier);
+      const kept = String((await rowsOf(database, 'SELECT "identifier" FROM "verification"'))[0]?.identifier);
 
       assert.deepEqual(await heldIn(database, ['a-token-of-a-link']), []);
       assert.notEqual(kept, await digest(identifier), 'digested once more than better-auth does');
@@ -320,7 +323,7 @@ for (const { label, open, skip } of DATABASES) {
           .join('; ');
 
         assert.ok(state.length >= 32, 'no state in the address of GitHub');
-        assert.deepEqual((await database.query('SELECT "id" FROM "verification"')).rows, [], 'a row for the state');
+        assert.deepEqual(await rowsOf(database, 'SELECT "id" FROM "verification"'), [], 'a row for the state');
         assert.match(stateCookie, /oauth_state=/);
 
         const back = await auth.handler(
@@ -337,7 +340,7 @@ for (const { label, open, skip } of DATABASES) {
           .join('; ');
 
         assert.ok(await sessionOf(auth, { Cookie: cookie }), 'the sign-in with GitHub opened no session');
-        assert.deepEqual((await database.query('SELECT "providerId", "accountId", "scope" FROM "account"')).rows, [
+        assert.deepEqual(await rowsOf(database, 'SELECT "providerId", "accountId", "scope" FROM "account"'), [
           { providerId: 'github', accountId: '4242', scope: 'read:user,user:email' },
         ]);
         assert.deepEqual(
@@ -360,7 +363,7 @@ for (const { label, open, skip } of DATABASES) {
       try {
         const auth = await startAuth(withTestSignUp(options));
         const { cookie } = await signUp(auth, 'alice@acme.dev');
-        const row = String((await database.query('SELECT "token" FROM "session"')).rows[0]?.token);
+        const row = String((await rowsOf(database, 'SELECT "token" FROM "session"'))[0]?.token);
         secrets = [tokenIn(cookie), row];
         await sessionOf(auth, { Cookie: signed(row, AUTH_SECRET) });
         await ask(auth, '/sign-out', {
@@ -389,10 +392,14 @@ for (const { label, open, skip } of DATABASES) {
     it('finds a session by an index of its digest', async () => {
       const database = await opening(open);
       await optionsOn(database);
-      await database.query('SET enable_seqscan = off');
-      const plan = (
-        await database.query(`EXPLAIN SELECT * FROM "session" WHERE "token" = $1`, [await digest('x')])
-      ).rows
+      const token = await digest('x');
+      // One connection for the two statements: the setting is the one of a session.
+      const answer = await database.alone(async (db) => {
+        await db.execute(sql`SET enable_seqscan = off`);
+
+        return db.execute(sql`EXPLAIN SELECT * FROM "session" WHERE "token" = ${token}`);
+      });
+      const plan = (answer as unknown as { rows: Record<string, unknown>[] }).rows
         .map((row) => String(Object.values(row)[0]))
         .join('\n');
 

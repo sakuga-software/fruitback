@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { readFileSync } from 'node:fs';
 import { afterEach, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -12,12 +11,12 @@ import { type WorkerEnv, hasAccounts, readConfig } from './env.ts';
 import type { Database } from './postgres.ts';
 import {
   NO_REAL_POSTGRES,
+  appliedDates,
   createPgliteDatabase,
   createRealDatabase,
+  journalDates,
   outcomeOnChangedStore,
-  rowsOf,
 } from './postgres.fixture.ts';
-import { migrationsFolder } from './postgres-migrate.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
 import { type SessionStore, createPairing, redeemPairing } from './session.ts';
 
@@ -209,15 +208,7 @@ describe('the sites of a workspace, read from PostgreSQL (FRU-141)', () => {
     ]);
 
     // One row for each migration of the folder, and no more: three stores did not apply it three times.
-    const journal = JSON.parse(readFileSync(`${migrationsFolder()}meta/_journal.json`, 'utf8')) as {
-      entries: { when: number }[];
-    };
-    assert.deepEqual(
-      (await rowsOf(database, 'SELECT created_at FROM __drizzle_migrations ORDER BY created_at')).map((row) =>
-        Number(row.created_at),
-      ),
-      journal.entries.map((entry) => entry.when),
-    );
+    assert.deepEqual(await appliedDates(database), journalDates());
   });
 });
 

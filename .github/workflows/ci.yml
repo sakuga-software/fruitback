@@ -381,7 +381,10 @@ jobs:
             echo "the worker without FRUITBACK_AUTH_SECRET said something of better-auth"
             exit 1
           fi
-          test "$(docker exec auth-db psql -U postgres -Atc 'SELECT name FROM schema_migrations ORDER BY version' | tail -1)" = better-auth
+          # FRU-180. The seven tables of better-auth are in the migrations of Drizzle, and the journal has
+          # one row for each entry of the folder.
+          test "$(docker exec auth-db psql -U postgres -Atc "SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('user', 'session', 'account', 'verification', 'organization', 'member', 'invitation')")" = 7
+          test "$(docker exec auth-db psql -U postgres -Atc 'SELECT count(*) FROM public.__drizzle_migrations')" = "$(jq '.entries | length' apps/worker/drizzle/meta/_journal.json)"
           docker rm -f worker-auth-on worker-auth-off auth-db
 
       - name: Take a snapshot of the database, restore it on another server, and count the rows

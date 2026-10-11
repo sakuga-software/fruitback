@@ -27,6 +27,9 @@ import { StoreError } from './store.ts';
  *
  * A database that holds more migrations than this build is left alone: that is the image of before,
  * after a roll back.
+ *
+ * **A database that the tool of before made is adopted, and nothing in it is run again.** See
+ * `adoptWhatTheHomeMadeToolMade`.
  */
 
 /** Where Drizzle writes what it applied: in `public`, beside the tables. `drizzle.config.ts` names the same. */
@@ -55,6 +58,86 @@ function rowsOf(answer: unknown): Record<string, unknown>[] {
   return (answer as { rows: Record<string, unknown>[] }).rows;
 }
 
+/** The entries of the journal of `folder`, in order. */
+function journalOf(folder: string): { tag: string; when: number }[] {
+  return (
+    JSON.parse(readFileSync(`${folder}/meta/_journal.json`, 'utf8')) as { entries: { tag: string; when: number }[] }
+  ).entries;
+}
+
+/**
+ * The migrations that the tool of before wrote in `schema_migrations`, in order (FRU-141, FRU-142,
+ * FRU-144). That tool was `migrate` of `postgres.ts`, with the list of `postgres-migrations.ts`, until
+ * FRU-180 removed both.
+ */
+export const HOME_MADE = ['accounts', 'site_destinations', 'sessions', 'better-auth'] as const;
+
+/**
+ * The first migration of the journal. It makes the tables that the four migrations of `HOME_MADE`
+ * make, with the same columns in the same order, the same constraints under the same names, and the
+ * same indexes: test:`makes the database that the tool of before made, to the last name` compares
+ * the two catalogues.
+ */
+export const BASELINE = '0000_baseline';
+
+/**
+ * Puts a database that the tool of before made under Drizzle, and runs nothing of the baseline.
+ *
+ * Such a database has `public.schema_migrations` and no journal of Drizzle. Drizzle alone would run
+ * the baseline on it, and fail on its first `CREATE TABLE`: the tables are there. So when the four
+ * rows of `schema_migrations` are the four migrations of `HOME_MADE`, in order, this writes the row of
+ * the baseline in the journal, as Drizzle writes it (its digest and its date), in one transaction with
+ * the journal itself. Drizzle then applies what comes after the baseline, as on any database.
+ *
+ * Anything else is refused before any write, with what to do: a database stopped at an earlier
+ * migration of that tool, or one whose list was edited. `schema_migrations` is kept as it is. An
+ * image of before reads it, so a roll back to such an image still finds its database.
+ *
+ * The caller holds the lock: two processes do not adopt one database twice.
+ */
+async function adoptWhatTheHomeMadeToolMade(db: Db, folder: string): Promise<void> {
+  const [found] = rowsOf(
+    await db.execute(
+      sql`SELECT to_regclass(${`${APPLIED.migrationsSchema}.${APPLIED.migrationsTable}`}) AS drizzle,
+                 to_regclass('public.schema_migrations') AS home_made`,
+    ),
+  );
+  // A database under Drizzle already, or one that no tool has touched.
+  if (found?.drizzle !== null || found.home_made === null) return;
+
+  const rows = rowsOf(await db.execute(sql`SELECT version, name FROM public.schema_migrations ORDER BY version`));
+  const names = rows.map((row) => String(row.name));
+  const expected = HOME_MADE.map((name, index) => ({ version: index + 1, name }));
+  const same =
+    rows.length === expected.length &&
+    rows.every((row, index) => Number(row.version) === expected[index]?.version && row.name === expected[index]?.name);
+  if (!same) {
+    throw new StoreError(
+      `This database was made by the migration tool of before, and it holds « ${names.join(', ')} »: ` +
+        `this build adopts only a database that holds « ${HOME_MADE.join(', ')} ». ` +
+        'Start an image of the worker from #143 (FRU-144) to before Drizzle on it once, then this one ' +
+        '(docs/decisions/worker.md, FRU-180)',
+    );
+  }
+
+  const [entry] = journalOf(folder);
+  const [baseline] = readMigrationFiles({ migrationsFolder: folder });
+  if (entry?.tag !== BASELINE || baseline === undefined) {
+    throw new StoreError(`The first migration of the journal is « ${entry?.tag ?? 'none'} », and not « ${BASELINE} »`);
+  }
+
+  const journal = sql`${sql.identifier(APPLIED.migrationsSchema)}.${sql.identifier(APPLIED.migrationsTable)}`;
+  await db.transaction(async (transaction) => {
+    // The table that `migrate` of Drizzle makes, to the last word (pg-core/dialect.js of 0.45.4).
+    await transaction.execute(
+      sql`CREATE TABLE ${journal} (id SERIAL PRIMARY KEY, hash text NOT NULL, created_at bigint)`,
+    );
+    await transaction.execute(
+      sql`INSERT INTO ${journal} ("hash", "created_at") VALUES (${baseline.hash}, ${baseline.folderMillis})`,
+    );
+  });
+}
+
 /**
  * Refuses a folder that Drizzle would apply in part, or not at all, without a word.
  *
@@ -75,9 +158,7 @@ async function refuseWhatDrizzleWouldSkip(db: Db, folder: string): Promise<void>
   );
   const last = Math.max(...applied.keys());
 
-  const { entries } = JSON.parse(readFileSync(`${folder}/meta/_journal.json`, 'utf8')) as {
-    entries: { tag: string }[];
-  };
+  const entries = journalOf(folder);
   for (const [index, migration] of readMigrationFiles({ migrationsFolder: folder }).entries()) {
     const tag = entries[index]?.tag ?? String(index);
     const hash = applied.get(migration.folderMillis);
@@ -102,6 +183,7 @@ export async function migrate(database: Database, folder: string = migrationsFol
   await database.alone(async (db, apply) => {
     await db.execute(sql`SELECT pg_advisory_lock(${MIGRATION_LOCK})`);
     try {
+      await adoptWhatTheHomeMadeToolMade(db, folder);
       await refuseWhatDrizzleWouldSkip(db, folder);
       await apply({ migrationsFolder: folder, ...APPLIED });
     } finally {

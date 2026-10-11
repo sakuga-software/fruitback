@@ -1,5 +1,5 @@
 import type { MigrationConfig } from 'drizzle-orm/migrator';
-import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
+import type { PgDatabase as Drizzle, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import type { Pool, PoolClient } from 'pg';
 import { StoreError } from './store.ts';
 
@@ -21,7 +21,7 @@ import { StoreError } from './store.ts';
  */
 
 /** Drizzle, on a pool or on one connection. A store writes its statements with it. */
-export type Db = PgDatabase<PgQueryResultHKT>;
+export type Db = Drizzle<PgQueryResultHKT>;
 
 /** `migrate` of Drizzle for one driver, on one connection. */
 export type Migrator = (config: MigrationConfig) => Promise<void>;

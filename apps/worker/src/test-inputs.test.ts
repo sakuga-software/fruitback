@@ -77,6 +77,8 @@ const DYNAMIC_READS: Record<string, string[]> = {
   'apps/worker/src/claude-md.test.ts: new URL(path, document)': ['**/*.md', 'docs/decisions/'],
   "apps/worker/src/session.test.ts: join(path, '..')": [],
   "apps/worker/src/session.test.ts: join(path, '..', name)": [],
+  // The configuration of drizzle-kit, written beside a copy of the migrations in a temporary directory.
+  "apps/worker/src/postgres-drift.test.ts: join(folder, '..', 'drizzle.config.json')": [],
 };
 
 type Project = { root: string; name: string; inputs: string[]; declared: boolean; dependencies: string[] };

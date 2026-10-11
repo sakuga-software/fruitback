@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { after } from 'node:test';
 import { PGlite, types } from '@electric-sql/pglite';
 import { type SQL, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/pglite';
 import { migrate as migrateOnPglite } from 'drizzle-orm/pglite/migrator';
 import { type Cases, type Subject, collect, mutatedModule } from './conformance.fixture.ts';
-import { type Database, causeOfQueryError, createPgDatabase } from './postgres.ts';
-import { migrated } from './postgres-migrate.ts';
+import { type Database, type PgDatabase, type PgPool, causeOfQueryError, createPgDatabase } from './postgres.ts';
+import { migrated, migrationsFolder } from './postgres-migrate.ts';
 
 /**
  * A PostgreSQL for the tests (FRU-141), in two forms.
@@ -20,8 +21,10 @@ import { migrated } from './postgres-migrate.ts';
  *
  * **An empty database is a database, not a schema** (FRU-180). The migrations that `drizzle-kit`
  * writes name `public` in every foreign key, so the tables of a case cannot live in a schema of its
- * own. On a server each case makes a database and drops it. PGlite has one database: a case empties
- * `public`, so one process holds one PGlite database at a time.
+ * own. better-auth also reads the tables of every schema of its database (FRU-144): a schema that
+ * another file dropped between two of its reads failed a case in CI. On a server each case makes a
+ * database and drops it. PGlite has one database: a case empties `public`, so one process holds one
+ * PGlite database at a time.
  */
 
 export const TEST_DATABASE_URL = process.env.FRUITBACK_TEST_DATABASE_URL || undefined;
@@ -52,6 +55,22 @@ export async function rowsOf(database: Database, statement: SQL | string): Promi
   return (answer as { rows?: Row[] }).rows ?? [];
 }
 
+/** The dates of the migrations that `database` applied, in order. Drizzle names a migration by its date. */
+export async function appliedDates(database: Database): Promise<number[]> {
+  const rows = await rowsOf(database, 'SELECT created_at FROM __drizzle_migrations ORDER BY created_at');
+
+  return rows.map((row) => Number(row.created_at));
+}
+
+/** The dates of the migrations of the worker, in the order of its journal. */
+export function journalDates(): number[] {
+  const journal = JSON.parse(readFileSync(`${migrationsFolder()}meta/_journal.json`, 'utf8')) as {
+    entries: { when: number }[];
+  };
+
+  return journal.entries.map((entry) => entry.when);
+}
+
 /** The PGlite of this process. It takes a second to start, so the cases share it. */
 let shared: PGlite | undefined;
 
@@ -69,8 +88,44 @@ after(async () => {
 
 const EMPTY_PUBLIC = 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;';
 
+/**
+ * A pool of `pg`, as Kysely's PostgreSQL dialect uses one, on PGlite: what better-auth takes (FRU-144).
+ *
+ * PGlite is one connection, so one client is out at a time: a transaction of better-auth is `begin`
+ * and `commit` on the client it holds, and no other client may come between the two.
+ */
+function poolOver(instance: PGlite): PgPool {
+  let tail: Promise<void> = Promise.resolve();
+
+  const pool = {
+    async connect() {
+      let release = (): void => {};
+      const held = new Promise<void>((resolve) => (release = resolve));
+      const before = tail;
+      tail = before.then(() => held);
+      await before;
+
+      return {
+        async query(text: string, values?: readonly unknown[]) {
+          const answer = await instance.query<Row>(text, values === undefined ? [] : [...values]);
+
+          return {
+            command: (text.trim().split(/\s+/)[0] ?? '').toUpperCase(),
+            rowCount: answer.affectedRows ?? answer.rows.length,
+            rows: answer.rows,
+          };
+        },
+        release,
+      };
+    },
+    async end() {},
+  };
+
+  return pool as unknown as PgPool;
+}
+
 /** An empty database on PGlite: the one database of the shared instance, with nothing in `public`. */
-export async function createPgliteDatabase(): Promise<Database> {
+export async function createPgliteDatabase(): Promise<PgDatabase> {
   const instance = pglite();
   await instance.exec(EMPTY_PUBLIC);
   const db = drizzle({ client: instance });
@@ -88,6 +143,7 @@ export async function createPgliteDatabase(): Promise<Database> {
     run: (work) => plain(work(db)),
     transaction: (work) => plain(db.transaction((transaction) => work(transaction))),
     alone: (work) => plain(work(db, (config) => migrateOnPglite(db, config))),
+    pool: async () => poolOver(instance),
     async close() {
       await instance.exec(EMPTY_PUBLIC);
     },
@@ -118,7 +174,7 @@ export async function ownDatabase(): Promise<{ url: string; drop(): Promise<void
 }
 
 /** An empty database on the real server: a new one, and a pool on it. `close` drops it. */
-export async function createRealDatabase(): Promise<Database> {
+export async function createRealDatabase(): Promise<PgDatabase> {
   const own = await ownDatabase();
   const database = createPgDatabase(own.url);
 

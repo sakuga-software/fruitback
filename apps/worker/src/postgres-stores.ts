@@ -1,5 +1,5 @@
 import type { AccountStore } from './accounts.ts';
-import { databaseFor } from './postgres.ts';
+import { type Database, databaseFor } from './postgres.ts';
 import type { SessionStore } from './session.ts';
 
 /**
@@ -13,6 +13,15 @@ import type { SessionStore } from './session.ts';
  *
  * Do not import one of the two files from a file that every worker loads.
  */
+
+/**
+ * The database with its schema, once for each `Database`: `migrated` of `postgres-migrate.ts`, loaded
+ * at the first call. `auth.ts` applies the migrations before it builds better-auth, and is loaded by
+ * every worker.
+ */
+export async function migrated(database: Database): Promise<void> {
+  return (await import('./postgres-migrate.ts')).migrated(database);
+}
 
 /**
  * A store whose every method loads the real one, then calls it.
