@@ -1062,6 +1062,12 @@ variable` holds the rest.
 - **The role of `FRUITBACK_DATABASE_URL` owns its database, or has `CREATE` on it.** The tool of
   before needed `CREATE` on the schema `public` only. A role without it is refused at the first
   call, with what to grant: see the reasons.
+- **The tables are in `public`, and a search path that puts another schema first is refused.** The
+  tool of before made its tables wherever the search path said. The address, the role and the
+  database give no search path, and no schema has the name of the role.
+- **A store reads a `BIGINT` through the schema, never with a raw statement.** Through the schema it
+  is a number. In the answer of a raw statement it is a string, and `account-rows.ts` reads a string
+  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the twenty columns.
 - **A transaction is the one of `postgres.ts`, never `db.transaction` of Drizzle on the pool.** A
   store takes `database.transaction`, which gives it Drizzle on one connection.
 - **The words of an error of Drizzle reach no log.** They quote the statement and its values: an
@@ -1133,6 +1139,34 @@ the lock` is its control: the same two processes, with the line of the lock remo
 - **Drizzle gives its own parsers of types to each statement**, so a parser on the pool is not read.
   That is why the `BIGINT` is a number by the schema.
   test:`answers a BIGINT of the schema as a number, on the driver that ships`.
+- **What the parser that is gone changes, measured on a server** (raised in review). For each of the
+  twenty `BIGINT` columns, a pool built as `postgres.ts` built it before answers a number for a raw
+  statement, the pool that ships answers a string for the same statement, and the schema answers
+  the number: test:`answered a number for a raw statement, and now answers a string for it and a
+number through the schema`. No store sends a raw statement
+  (test:`sends no raw statement from a store: a column is read through the schema, where it is a
+number`), and test:`reads an instant that is a string as no instant, and says 1970 with no error`
+  is why that matters. Every column is read at 2^31, past 2^32 and at the last exact integer, and as
+  `NULL`: test:`is the number that was written, in every column, at 2^31, past 2^32 and at the last
+exact integer`, test:`is null when the column holds no instant, and never 0`. The two stores are
+  read at the same values: test:`reaches the console as the instant that was given, through the
+store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
+2^32`.
+- **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
+  have none (test:`knows the twenty BIGINT columns of the worker, and that better-auth has none`).
+  `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
+  reads it as a number, through its adapter and the layer of FRU-181
+  (test:`gives better-auth a count as a string, which better-auth reads as a number`).
+- **A search path that is not `public` breaks the migrations of `drizzle-kit`, in two ways**
+  (raised in review, measured on 17.11). On an empty database the tables go in the first schema of
+  the path, and the first foreign key fails: relation `public.…` does not exist
+  (test:`fails in the middle of the baseline when Drizzle alone meets it, on a relation of public`).
+  On a database that the tool of before made in that schema, there is no `public.schema_migrations`
+  to adopt, and the first `CREATE TABLE` fails. `postgres-migrate.ts` reads `current_schema()` first
+  and refuses with what to change: test:`is refused before any write, with what to change`,
+  test:`is refused too on a database that the tool of before made in that schema, which Drizzle
+alone breaks on`. Such a database moves its tables to `public` by hand
+  (`ALTER TABLE … SET SCHEMA public`, `schema_migrations` too), and is then adopted.
 - **The baseline makes the database that the tool of before made, to the last name.** One database
   made by the four migrations of that tool, as they shipped (`postgres-home-made.fixture.ts`, a copy
   compared word for word with `main` at e74be53), one made by the baseline: their catalogues are the

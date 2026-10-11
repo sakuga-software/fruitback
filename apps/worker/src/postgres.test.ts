@@ -26,6 +26,7 @@ import {
   ownDatabase,
   rowsOf,
 } from './postgres.fixture.ts';
+import { madeByTheHomeMadeTool } from './postgres-home-made.fixture.ts';
 import { APPLIED, migrate, migrated, migrationsFolder } from './postgres-migrate.ts';
 import { accounts } from './postgres-schema.ts';
 import { StoreError } from './store.ts';
@@ -283,6 +284,73 @@ describe('the migrations of the PostgreSQL database (FRU-180)', () => {
           database.alone((_, apply) => apply({ migrationsFolder: folderOf([FIRST]), ...APPLIED })),
           /permission denied for database/,
         );
+      });
+    });
+  });
+
+  /**
+   * The migrations of `drizzle-kit` name `"public"` in every foreign key, and make a table where the
+   * search path says. The tool of before made its tables wherever the search path said. So a
+   * connection that puts another schema first is refused with what to change (raised in review).
+   */
+  describe('an address whose search path puts another schema first', { skip: NO_REAL_POSTGRES }, () => {
+    /** A database of its own, with a schema `other`, and a pool whose search path starts with it. */
+    async function withAnotherSchemaFirst(use: (database: Database) => Promise<void>): Promise<void> {
+      const own = await ownDatabase();
+      const admin = createPgDatabase(own.url, { max: 1 });
+      const elsewhere = new URL(own.url);
+      elsewhere.searchParams.set('options', '-c search_path=other,public');
+      const database = createPgDatabase(elsewhere.href, { max: 2 });
+      try {
+        await rowsOf(admin, 'CREATE SCHEMA other');
+        assert.deepEqual(
+          await rowsOf(database, 'SELECT current_schema() AS first'),
+          [{ first: 'other' }],
+          'the address did not set the search path, so nothing below is tested',
+        );
+        await use(database);
+      } finally {
+        await database.close();
+        await admin.close();
+        await own.drop();
+      }
+    }
+
+    it('is refused before any write, with what to change', async () => {
+      await withAnotherSchemaFirst(async (database) => {
+        await assert.rejects(migrate(database), (error: unknown) => {
+          assert.ok(error instanceof StoreError);
+          assert.match(error.message, /the search path of FRUITBACK_DATABASE_URL puts another schema first/);
+          assert.match(error.message, /take the search path out of the address/);
+
+          return true;
+        });
+        assert.equal(await has(database, 'other.accounts'), false);
+        assert.equal(await has(database, `public.${APPLIED.migrationsTable}`), false);
+      });
+    });
+
+    // The control: what Drizzle alone does there. The tables go in `other`, and a foreign key names `public`.
+    it('fails in the middle of the baseline when Drizzle alone meets it, on a relation of public', async () => {
+      await withAnotherSchemaFirst(async (database) => {
+        await assert.rejects(
+          database.alone((_, apply) => apply({ migrationsFolder: migrationsFolder(), ...APPLIED })),
+          /relation "public\.[a-z_]+" does not exist/,
+        );
+      });
+    });
+
+    it('is refused too on a database that the tool of before made in that schema, which Drizzle alone breaks on', async () => {
+      await withAnotherSchemaFirst(async (database) => {
+        await madeByTheHomeMadeTool(database);
+        assert.equal(await has(database, 'other.schema_migrations'), true, 'the tool of before wrote in public');
+
+        // The control: no `public.schema_migrations`, so nothing to adopt, and the tables are there.
+        await assert.rejects(
+          database.alone((_, apply) => apply({ migrationsFolder: migrationsFolder(), ...APPLIED })),
+          /already exists/,
+        );
+        await assert.rejects(migrate(database), /the search path of FRUITBACK_DATABASE_URL puts another schema first/);
       });
     });
   });

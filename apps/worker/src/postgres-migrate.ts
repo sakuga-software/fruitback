@@ -167,6 +167,29 @@ function refuseTwoMigrationsOfOneDate(folder: string): void {
 }
 
 /**
+ * Refuses a connection whose tables would not go in the schema `public`, and says what to change.
+ *
+ * A migration that `drizzle-kit` writes makes a table where the search path says, and names
+ * `"public"` in every foreign key. So with another schema first in the search path, the baseline
+ * fails in its middle on a relation of `public` that does not exist, and a database that the tool of
+ * before made in that schema fails on its first `CREATE TABLE` (both measured on 17.11). The tool of
+ * before made its tables wherever the search path said. A search path comes from `options` in the
+ * address, from the role, from the database, or from a schema that has the name of the role.
+ *
+ * WARNING: the message does not name the schema. It can be the name of the role, which is in the address.
+ */
+async function refuseASearchPathThatIsNotPublic(db: Db): Promise<void> {
+  const [row] = rowsOf(await db.execute(sql`SELECT current_schema() AS first`));
+  if (row?.first === 'public') return;
+
+  throw new StoreError(
+    'The tables of the worker are in the schema « public », and the search path of FRUITBACK_DATABASE_URL ' +
+      'puts another schema first: take the search path out of the address, of the role and of the database, ' +
+      'and move to « public » the tables that an earlier image made elsewhere (docs/self-hosting.md)',
+  );
+}
+
+/**
  * Refuses a role that cannot create in its database, and says what to grant.
  *
  * `migrate` of Drizzle sends `CREATE SCHEMA IF NOT EXISTS "public"` before anything else, and
@@ -233,6 +256,7 @@ async function refuseWhatDrizzleWouldSkip(db: Db, folder: string): Promise<void>
 export async function migrate(database: Database, folder: string = migrationsFolder()): Promise<void> {
   refuseTwoMigrationsOfOneDate(folder);
   await database.alone(async (db, apply) => {
+    await refuseASearchPathThatIsNotPublic(db);
     await refuseARoleThatCannotCreate(db);
     await db.execute(sql`SELECT pg_advisory_lock(${MIGRATION_LOCK})`);
     try {
