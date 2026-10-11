@@ -7,6 +7,12 @@ allowBuilds:
   nx: true
   workerd: true
 
+overrides:
+  # drizzle-kit 0.31.11 lists this loader, and no file of it loads it (FRU-180). It brings esbuild
+  # 0.18.20, which `pnpm audit --prod` reports: better-auth names drizzle-kit as a peer, so pnpm counts
+  # it with the production dependencies of the worker. Read it again when drizzle-kit changes.
+  'drizzle-kit>@esbuild-kit/esm-loader': '-'
+
 catalog:
   '@electric-sql/pglite': 0.5.8
   '@types/node': 26.1.1
