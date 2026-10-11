@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import { afterEach } from 'node:test';
 import type { Auth, BetterAuthOptions } from 'better-auth';
 import { type AuthConfig, authOptions } from './auth.ts';
-import { type Database, type Migration, type PgDatabase, type PgPool, createPgDatabase, migrate } from './postgres.ts';
-import { NO_REAL_POSTGRES, TEST_DATABASE_URL, createPgliteDatabase, schemaName } from './postgres.fixture.ts';
-import { MIGRATIONS } from './postgres-migrations.ts';
+import type { PgDatabase } from './postgres.ts';
+import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase, rowsOf } from './postgres.fixture.ts';
+import { migrate } from './postgres-migrate.ts';
 
 /**
- * What the tests of `auth.ts` share (FRU-144): a pool for better-auth on the database of a case, and
- * a way to get a session from an instance that serves no way to sign in.
+ * What the tests of `auth.ts` share (FRU-144): the database of a case with its pool, and a way to get
+ * a session from an instance that serves no way to sign in.
  */
 
 export const AUTH_SECRET = 'q7Zp!4vLx@9Rk#2Tn$8Wd%5Hs^1Bf&6Yj*3Gc(0M';
@@ -26,57 +26,28 @@ export const AUTH_CONFIG: AuthConfig = {
 };
 
 /**
- * A pool of `pg`, as Kysely's PostgreSQL dialect uses one, on a `Database` of the tests.
+ * What is in the database of a case when better-auth reads it.
  *
- * PGlite is one connection, so one client is out at a time: a transaction of better-auth is `begin`
- * and `commit` on the client it holds, and no other call may come between the two.
+ * `migrations`: the migrations of the worker ran (Drizzle, `postgres-migrate.ts`). `planted`: then
+ * these statements ran, one by one. A control plants what a migration would have lost, and the case
+ * must find it: the database is what better-auth reads, whatever made it.
  */
-function poolOver(database: Database): PgPool {
-  let tail: Promise<void> = Promise.resolve();
+export type Made = { migrations: boolean; planted?: readonly string[] };
 
-  const pool = {
-    async connect() {
-      let release = (): void => {};
-      const held = new Promise<void>((resolve) => (release = resolve));
-      const before = tail;
-      tail = before.then(() => held);
-      await before;
+export const MIGRATED: Made = { migrations: true };
+export const EMPTY: Made = { migrations: false };
 
-      return {
-        async query(text: string, values?: readonly unknown[]) {
-          const answer = await database.query(text, values === undefined || values.length === 0 ? undefined : values);
+/** The migrations of the worker, then `planted`. */
+export function plantedAfterTheMigrations(...planted: string[]): Made {
+  assert.ok(planted.length > 0, 'a control that plants nothing proves nothing');
 
-          return {
-            command: (text.trim().split(/\s+/)[0] ?? '').toUpperCase(),
-            rowCount: answer.rowCount,
-            rows: answer.rows,
-          };
-        },
-        release,
-      };
-    },
-    async end() {},
-  };
-
-  return pool as unknown as PgPool;
+  return { migrations: true, planted };
 }
 
-/**
- * The database of a case as `authFor` takes one: with a pool.
- *
- * On a real server it is the pool that ships. On PGlite it is `poolOver`.
- */
-export function withPool(database: Database): PgDatabase {
-  const real = (database as Partial<PgDatabase>).pool;
-
-  return { ...database, pool: real === undefined ? async () => poolOver(database) : real };
-}
-
-/** The migrations of the worker, with the one of better-auth changed by `change`. */
-export function migrationsWith(change: (sql: string) => string): Migration[] {
-  return MIGRATIONS.map((migration) =>
-    migration.name === 'better-auth' ? { ...migration, sql: change(migration.sql) } : migration,
-  );
+/** Makes `database` what `made` says. */
+export async function make(database: PgDatabase, made: Made = MIGRATED): Promise<void> {
+  if (made.migrations) await migrate(database);
+  for (const statement of made.planted ?? []) await rowsOf(database, statement);
 }
 
 /** What better-auth wrote in its log while a test ran: a warning there is a finding. */
@@ -84,14 +55,14 @@ export type Said = { level: string; message: string }[];
 
 /**
  * The options of the worker for this database, after its migrations, with a log that keeps what
- * better-auth says. `migrations` is the list to apply: a control gives one with something missing.
+ * better-auth says. `made` says what the database holds: a control plants something missing.
  */
 export async function optionsOn(
-  database: Database,
-  migrations: readonly Migration[] = MIGRATIONS,
+  database: PgDatabase,
+  made: Made = MIGRATED,
 ): Promise<{ options: BetterAuthOptions; said: Said }> {
-  await migrate(database, migrations);
-  const options = await authOptions(AUTH_CONFIG, await withPool(database).pool());
+  await make(database, made);
+  const options = await authOptions(AUTH_CONFIG, await database.pool());
   const said: Said = [];
 
   return {
@@ -143,54 +114,10 @@ export async function signUp(
   return { cookie: setCookie.map((each) => each.split(';')[0]).join('; '), setCookie };
 }
 
-/**
- * An empty database of its own on the real server, for one case: its address, and how to drop it.
- *
- * **A database, and not a schema as `createRealDatabase` gives.** better-auth reads the tables of
- * **every** schema of its database (Kysely's `getTables`, in `getMigrations` and in its schema check
- * at boot), then reads each one. The other test files of the job make and drop their schemas in the
- * same database at the same time, and a schema dropped between the two reads failed the case with
- * `schema "t_…" does not exist` (measured in CI, and on a local server with four files at once).
- * The catalogue that better-auth reads is per database.
- */
-export async function ownDatabaseUrl(): Promise<{ url: string; drop(): Promise<void> }> {
-  if (TEST_DATABASE_URL === undefined) throw new Error('FRUITBACK_TEST_DATABASE_URL is not set');
-  const name = schemaName();
-  const admin = createPgDatabase(TEST_DATABASE_URL, { max: 1 });
-  await admin.query(`CREATE DATABASE ${name}`);
-  const url = new URL(TEST_DATABASE_URL);
-  url.pathname = `/${name}`;
-
-  return {
-    url: url.href,
-    async drop() {
-      try {
-        await admin.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
-      } finally {
-        await admin.close();
-      }
-    },
-  };
-}
-
-/** An empty database of its own on the real server, on the pool that ships. `close` drops it. */
-export async function createOwnRealDatabase(): Promise<Database> {
-  const { url, drop } = await ownDatabaseUrl();
-  const database = createPgDatabase(url);
-
-  return {
-    ...database,
-    async close() {
-      await database.close();
-      await drop();
-    },
-  };
-}
-
 /** The databases a case runs on. PGlite has one connection; the CI job « postgres » has a server. */
-export const DATABASES: readonly { label: string; open: () => Promise<Database>; skip: string | false }[] = [
+export const DATABASES: readonly { label: string; open: () => Promise<PgDatabase>; skip: string | false }[] = [
   { label: 'PGlite', open: createPgliteDatabase, skip: false },
-  { label: 'a real server', open: createOwnRealDatabase, skip: NO_REAL_POSTGRES },
+  { label: 'a real server', open: createRealDatabase, skip: NO_REAL_POSTGRES },
 ];
 
 /**
@@ -198,10 +125,10 @@ export const DATABASES: readonly { label: string; open: () => Promise<Database>;
  * `closing` closes one before the end of its case, for a case that needs two on one PGlite.
  */
 export function databasesOfACase(): {
-  opening(open: () => Promise<Database>): Promise<Database>;
-  closing(database: Database): Promise<void>;
+  opening(open: () => Promise<PgDatabase>): Promise<PgDatabase>;
+  closing(database: PgDatabase): Promise<void>;
 } {
-  const opened: Database[] = [];
+  const opened: PgDatabase[] = [];
   afterEach(async () => {
     for (const database of opened.splice(0)) await database.close();
   });
@@ -218,11 +145,4 @@ export function databasesOfACase(): {
       opened.splice(opened.indexOf(database), 1);
     },
   };
-}
-
-/** `sql` with `text` taken out. It must be there once: a control that changes nothing proves nothing. */
-export function without(sql: string, text: string, replacement = ''): string {
-  assert.equal(sql.split(text).length - 1, 1, `the migration of better-auth must hold this text once: ${text}`);
-
-  return sql.replace(text, replacement);
 }

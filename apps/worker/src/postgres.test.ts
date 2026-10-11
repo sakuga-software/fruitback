@@ -1,15 +1,20 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { describe, it } from 'node:test';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { after, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { DrizzleQueryError, eq, sql } from 'drizzle-orm';
+import { mutatedModule } from './conformance.fixture.ts';
 import {
   type Database,
-  type Migration,
+  causeOfQueryError,
   closeDatabases,
   createPgDatabase,
   databaseFor,
-  migrate,
   readDatabaseUrl,
   withoutAddress,
 } from './postgres.ts';
@@ -18,21 +23,64 @@ import {
   TEST_DATABASE_URL,
   createPgliteDatabase,
   createRealDatabase,
-  schemaName,
+  ownDatabase,
+  rowsOf,
 } from './postgres.fixture.ts';
-import { MIGRATIONS } from './postgres-migrations.ts';
+import { madeByTheHomeMadeTool } from './postgres-home-made.fixture.ts';
+import { APPLIED, migrate, migrated, migrationsFolder } from './postgres-migrate.ts';
+import { accounts } from './postgres-schema.ts';
 import { StoreError } from './store.ts';
 
 const run = promisify(execFile);
 
-const FIRST: Migration = { name: 'first', sql: 'CREATE TABLE first_things (id INTEGER PRIMARY KEY);' };
-const SECOND: Migration = {
-  name: 'second',
-  sql: 'CREATE TABLE second_things (id INTEGER PRIMARY KEY); INSERT INTO second_things VALUES (1);',
+type Entry = { tag: string; when: number; sql: string };
+
+const FIRST: Entry = { tag: '0000_first', when: 1_000, sql: 'CREATE TABLE first_things (id INTEGER PRIMARY KEY);' };
+const SECOND: Entry = {
+  tag: '0001_second',
+  when: 2_000,
+  sql: 'CREATE TABLE second_things (id INTEGER PRIMARY KEY);\n--> statement-breakpoint\nINSERT INTO second_things VALUES (1);',
 };
 
-async function applied(database: Database): Promise<unknown[]> {
-  return (await database.query('SELECT version, name FROM schema_migrations ORDER BY version')).rows;
+const folders: string[] = [];
+
+after(() => {
+  for (const folder of folders) rmSync(folder, { recursive: true, force: true });
+});
+
+/** A folder as `drizzle-kit` writes one, with these migrations in this order. */
+function folderOf(entries: readonly Entry[]): string {
+  const folder = mkdtempSync(join(tmpdir(), 'fruitback-migrations-'));
+  folders.push(folder);
+  mkdirSync(join(folder, 'meta'));
+  writeFileSync(
+    join(folder, 'meta', '_journal.json'),
+    JSON.stringify({
+      version: '7',
+      dialect: 'postgresql',
+      entries: entries.map((entry, idx) => ({
+        idx,
+        version: '7',
+        when: entry.when,
+        tag: entry.tag,
+        breakpoints: true,
+      })),
+    }),
+  );
+  for (const entry of entries) writeFileSync(join(folder, `${entry.tag}.sql`), entry.sql);
+
+  return folder;
+}
+
+/** The dates of the migrations that the database says it applied, in order. */
+async function applied(database: Database): Promise<number[]> {
+  const rows = await rowsOf(database, 'SELECT created_at FROM __drizzle_migrations ORDER BY created_at');
+
+  return rows.map((row) => Number(row.created_at));
+}
+
+async function has(database: Database, table: string): Promise<boolean> {
+  return (await rowsOf(database, sql`SELECT to_regclass(${table}) AS found`))[0]?.found !== null;
 }
 
 async function withPglite(use: (database: Database) => Promise<void>): Promise<void> {
@@ -44,108 +92,367 @@ async function withPglite(use: (database: Database) => Promise<void>): Promise<v
   }
 }
 
-describe('the migrations of the PostgreSQL database (FRU-141)', () => {
-  it('applies each migration once, in order, and writes its number and its name', async () => {
+describe('the migrations of the PostgreSQL database (FRU-180)', () => {
+  it('applies each migration once, in order, and writes its date and its digest', async () => {
     await withPglite(async (database) => {
-      await migrate(database, [FIRST]);
-      assert.deepEqual(await applied(database), [{ version: 1, name: 'first' }]);
+      await migrate(database, folderOf([FIRST]));
+      assert.deepEqual(await applied(database), [1_000]);
 
       // A build with one migration more: the first is not run again, or CREATE TABLE would fail.
-      await migrate(database, [FIRST, SECOND]);
-      await migrate(database, [FIRST, SECOND]);
+      await migrate(database, folderOf([FIRST, SECOND]));
+      await migrate(database, folderOf([FIRST, SECOND]));
 
-      assert.deepEqual(await applied(database), [
-        { version: 1, name: 'first' },
-        { version: 2, name: 'second' },
+      assert.deepEqual(await applied(database), [1_000, 2_000]);
+      assert.deepEqual(await rowsOf(database, 'SELECT id FROM second_things'), [{ id: 1 }]);
+      assert.deepEqual(await rowsOf(database, 'SELECT hash FROM __drizzle_migrations ORDER BY created_at'), [
+        { hash: createHash('sha256').update(FIRST.sql).digest('hex') },
+        { hash: createHash('sha256').update(SECOND.sql).digest('hex') },
       ]);
-      assert.deepEqual((await database.query('SELECT id FROM second_things')).rows, [{ id: 1 }]);
     });
   });
 
-  it('refuses a list in which an entry that shipped was edited', async () => {
+  it('writes what it applied in the schema of the tables, and makes no schema of its own', async () => {
     await withPglite(async (database) => {
-      await migrate(database, [FIRST]);
+      await migrate(database, folderOf([FIRST]));
 
-      await assert.rejects(migrate(database, [{ ...SECOND, name: 'renamed' }]), (error: unknown) => {
+      assert.equal(await has(database, `${APPLIED.migrationsSchema}.${APPLIED.migrationsTable}`), true);
+      assert.equal(await has(database, 'public.first_things'), true);
+      // The place where Drizzle writes when nobody tells it.
+      assert.equal(await has(database, 'drizzle.__drizzle_migrations'), false);
+    });
+  });
+
+  it('refuses a folder in which a migration that shipped was edited', async () => {
+    await withPglite(async (database) => {
+      await migrate(database, folderOf([FIRST]));
+      const edited = { ...FIRST, sql: 'CREATE TABLE first_things (id INTEGER PRIMARY KEY, more TEXT);' };
+
+      await assert.rejects(migrate(database, folderOf([edited, SECOND])), (error: unknown) => {
         assert.ok(error instanceof StoreError);
-        assert.match(error.message, /Migration 1 .*« first ».*« renamed »/);
+        assert.match(error.message, /« 0000_first » is not the one that the database applied/);
 
         return true;
+      });
+      // Nothing of the folder was applied: the refusal comes before Drizzle.
+      assert.deepEqual(await applied(database), [1_000]);
+    });
+  });
+
+  /**
+   * The defect of the migrator of drizzle-orm 0.45, and what `migrate` does about it. A pull request
+   * that was rebased after another one merged its migration holds a date before the last one applied.
+   */
+  describe('a migration dated before the last one that the database applied', () => {
+    const LATE: Entry = { tag: '0001_late', when: 1_500, sql: 'CREATE TABLE late_things (id INTEGER PRIMARY KEY);' };
+    const AFTER: Entry = { ...SECOND, tag: '0002_second' };
+
+    it('is refused, and named', async () => {
+      await withPglite(async (database) => {
+        await migrate(database, folderOf([FIRST, SECOND]));
+
+        await assert.rejects(migrate(database, folderOf([FIRST, LATE, AFTER])), (error: unknown) => {
+          assert.ok(error instanceof StoreError);
+          assert.match(error.message, /« 0001_late » is dated before the last one that the database applied/);
+
+          return true;
+        });
+      });
+    });
+
+    // The control of the test above: this is what the check is for.
+    it('is skipped in silence by Drizzle alone: no error, and no table', async () => {
+      await withPglite(async (database) => {
+        await migrate(database, folderOf([FIRST, SECOND]));
+
+        await database.alone((_, apply) => apply({ migrationsFolder: folderOf([FIRST, LATE, AFTER]), ...APPLIED }));
+
+        assert.equal(await has(database, 'public.late_things'), false);
+        assert.deepEqual(await applied(database), [1_000, 2_000]);
+      });
+    });
+
+    it('is applied on a database that is empty, where every continuous integration starts', async () => {
+      await withPglite(async (database) => {
+        await migrate(database, folderOf([FIRST, LATE, AFTER]));
+
+        assert.equal(await has(database, 'public.late_things'), true);
       });
     });
   });
 
-  it('leaves nothing of a migration that fails, and keeps the ones before it', async () => {
+  it('leaves nothing of a run that fails, and keeps what the run before applied', async () => {
     await withPglite(async (database) => {
-      const broken: Migration = {
-        name: 'broken',
-        sql: 'CREATE TABLE half_made (id INTEGER PRIMARY KEY); CREATE TABLE first_things (id INTEGER);',
-      };
+      const half: Entry = { tag: '0001_half', when: 2_000, sql: 'CREATE TABLE half_made (id INTEGER PRIMARY KEY);' };
+      const broken: Entry = { tag: '0002_broken', when: 3_000, sql: 'CREATE TABLE first_things (id INTEGER);' };
+      await migrate(database, folderOf([FIRST]));
 
-      await assert.rejects(migrate(database, [FIRST, broken]));
+      await assert.rejects(migrate(database, folderOf([FIRST, half, broken])));
 
-      assert.deepEqual(await applied(database), [{ version: 1, name: 'first' }]);
-      await assert.rejects(database.query('SELECT 1 FROM half_made'), /half_made/);
+      // Drizzle applies a run in one transaction: the migration that passed goes with the one that failed.
+      assert.deepEqual(await applied(database), [1_000]);
+      assert.equal(await has(database, 'public.half_made'), false);
     });
   });
 
   it('leaves a database alone that holds more migrations than the build', async () => {
     await withPglite(async (database) => {
-      await migrate(database, [FIRST, SECOND]);
+      await migrate(database, folderOf([FIRST, SECOND]));
 
       // The image of before, after a roll back.
-      await migrate(database, [FIRST]);
+      await migrate(database, folderOf([FIRST]));
 
-      assert.equal((await applied(database)).length, 2);
+      assert.deepEqual(await applied(database), [1_000, 2_000]);
     });
   });
 
-  it('gives every migration a name of its own', () => {
-    const names = MIGRATIONS.map((migration) => migration.name);
+  it('finds the migrations of the worker beside its sources, and applies them once for a database', async () => {
+    const folder = migrationsFolder();
+    assert.ok(existsSync(join(folder, 'meta', '_journal.json')));
+    assert.match(folder, /apps\/worker\/drizzle\/$/);
 
-    assert.deepEqual([...new Set(names)], names);
-    assert.ok(names.every((name) => name !== ''));
+    await withPglite(async (database) => {
+      await Promise.all([migrated(database), migrated(database)]);
+
+      assert.equal(await has(database, 'public.accounts'), true);
+      assert.equal((await applied(database)).length > 0, true);
+    });
+  });
+
+  it('refuses a folder in which two migrations have one date, before it applies anything', async () => {
+    await withPglite(async (database) => {
+      const twin: Entry = { ...SECOND, when: FIRST.when };
+
+      await assert.rejects(migrate(database, folderOf([FIRST, twin])), (error: unknown) => {
+        assert.ok(error instanceof StoreError);
+        assert.match(error.message, /« 0000_first » and « 0001_second » have one date/);
+
+        return true;
+      });
+      assert.equal(await has(database, 'public.first_things'), false);
+    });
+  });
+
+  /**
+   * `migrate` of Drizzle sends `CREATE SCHEMA IF NOT EXISTS "public"` first, and PostgreSQL asks for
+   * the privilege on the database before it looks for the schema. The tool of before needed only
+   * the schema. So a role that cannot create in its database is refused with what to grant.
+   */
+  describe('a role that cannot create in its database', { skip: NO_REAL_POSTGRES }, () => {
+    /** A database of its own, and a role that can make tables in `public` and nothing in the database. */
+    async function withALesserRole(use: (database: Database) => Promise<void>): Promise<void> {
+      const own = await ownDatabase();
+      const admin = createPgDatabase(own.url, { max: 1 });
+      const role = `r_${new URL(own.url).pathname.slice(1)}`;
+      const lesser = new URL(own.url);
+      lesser.username = role;
+      lesser.password = 'not-a-secret-of-a-test';
+      const database = createPgDatabase(lesser.href, { max: 2 });
+      try {
+        await rowsOf(admin, `CREATE ROLE ${role} LOGIN PASSWORD 'not-a-secret-of-a-test'`);
+        await rowsOf(admin, `GRANT USAGE, CREATE ON SCHEMA public TO ${role}`);
+        await use(database);
+      } finally {
+        await database.close();
+        await admin.close();
+        await own.drop();
+        const server = createPgDatabase(TEST_DATABASE_URL ?? '', { max: 1 });
+        await rowsOf(server, `DROP ROLE IF EXISTS ${role}`);
+        await server.close();
+      }
+    }
+
+    it('is refused before any write, with what to grant, and with no name of the role', async () => {
+      await withALesserRole(async (database) => {
+        await assert.rejects(migrate(database, folderOf([FIRST])), (error: unknown) => {
+          assert.ok(error instanceof StoreError);
+          assert.match(error.message, /cannot create in its database/);
+          assert.match(error.message, /grant it CREATE on the database/);
+          assert.doesNotMatch(error.message, /r_t_/);
+
+          return true;
+        });
+        assert.equal(await has(database, 'public.first_things'), false);
+      });
+    });
+
+    it('is refused too when it can create in its database and not in public', async () => {
+      await withALesserRole(async (database) => {
+        const admin = createPgDatabase(TEST_DATABASE_URL ?? '', { max: 1 });
+        const name = String(
+          (await rowsOf(database, 'SELECT current_database() AS name, current_user AS role'))[0]?.name,
+        );
+        const role = String((await rowsOf(database, 'SELECT current_user AS role'))[0]?.role);
+        try {
+          await rowsOf(admin, `GRANT CREATE ON DATABASE ${name} TO ${role}`);
+        } finally {
+          await admin.close();
+        }
+        const owner = createPgDatabase(new URL(`/${name}`, TEST_DATABASE_URL ?? '').href, { max: 1 });
+        try {
+          await rowsOf(owner, `REVOKE CREATE ON SCHEMA public FROM ${role}, PUBLIC`);
+        } finally {
+          await owner.close();
+        }
+
+        await assert.rejects(migrate(database, folderOf([FIRST])), (error: unknown) => {
+          assert.ok(error instanceof StoreError);
+          assert.match(error.message, /cannot create in the schema « public »/);
+          assert.doesNotMatch(error.message, /did not answer/);
+
+          return true;
+        });
+      });
+    });
+
+    // The control: the role can make a table in `public`, and Drizzle alone is what PostgreSQL refuses.
+    it('can make a table in public, and is refused by PostgreSQL when Drizzle alone migrates', async () => {
+      await withALesserRole(async (database) => {
+        await rowsOf(database, 'CREATE TABLE made_by_the_role (id INTEGER PRIMARY KEY)');
+
+        await assert.rejects(
+          database.alone((_, apply) => apply({ migrationsFolder: folderOf([FIRST]), ...APPLIED })),
+          /permission denied for database/,
+        );
+      });
+    });
+  });
+
+  /**
+   * The migrations of `drizzle-kit` name `"public"` in every foreign key, and make a table where the
+   * search path says. The tool of before made its tables wherever the search path said. So a
+   * connection that puts another schema first is refused with what to change (raised in review).
+   */
+  describe('an address whose search path puts another schema first', { skip: NO_REAL_POSTGRES }, () => {
+    /** A database of its own, with a schema `other`, and a pool whose search path starts with it. */
+    async function withAnotherSchemaFirst(use: (database: Database) => Promise<void>): Promise<void> {
+      const own = await ownDatabase();
+      const admin = createPgDatabase(own.url, { max: 1 });
+      const elsewhere = new URL(own.url);
+      elsewhere.searchParams.set('options', '-c search_path=other,public');
+      const database = createPgDatabase(elsewhere.href, { max: 2 });
+      try {
+        await rowsOf(admin, 'CREATE SCHEMA other');
+        assert.deepEqual(
+          await rowsOf(database, 'SELECT current_schema() AS first'),
+          [{ first: 'other' }],
+          'the address did not set the search path, so nothing below is tested',
+        );
+        await use(database);
+      } finally {
+        await database.close();
+        await admin.close();
+        await own.drop();
+      }
+    }
+
+    it('is refused before any write, with what to change', async () => {
+      await withAnotherSchemaFirst(async (database) => {
+        await assert.rejects(migrate(database), (error: unknown) => {
+          assert.ok(error instanceof StoreError);
+          assert.match(error.message, /the search path of FRUITBACK_DATABASE_URL puts another schema first/);
+          assert.match(error.message, /take the search path out of the address/);
+
+          return true;
+        });
+        assert.equal(await has(database, 'other.accounts'), false);
+        assert.equal(await has(database, `public.${APPLIED.migrationsTable}`), false);
+      });
+    });
+
+    // The control: what Drizzle alone does there. The tables go in `other`, and a foreign key names `public`.
+    it('fails in the middle of the baseline when Drizzle alone meets it, on a relation of public', async () => {
+      await withAnotherSchemaFirst(async (database) => {
+        await assert.rejects(
+          database.alone((_, apply) => apply({ migrationsFolder: migrationsFolder(), ...APPLIED })),
+          /relation "public\.[a-z_]+" does not exist/,
+        );
+      });
+    });
+
+    it('is refused too on a database that the tool of before made in that schema, which Drizzle alone breaks on', async () => {
+      await withAnotherSchemaFirst(async (database) => {
+        await madeByTheHomeMadeTool(database);
+        assert.equal(await has(database, 'other.schema_migrations'), true, 'the tool of before wrote in public');
+
+        // The control: no `public.schema_migrations`, so nothing to adopt, and the tables are there.
+        await assert.rejects(
+          database.alone((_, apply) => apply({ migrationsFolder: migrationsFolder(), ...APPLIED })),
+          /already exists/,
+        );
+        await assert.rejects(migrate(database), /the search path of FRUITBACK_DATABASE_URL puts another schema first/);
+      });
+    });
   });
 
   /**
    * Two workers that start together on an empty database. Each is a process of its own, as two
    * replicas are. `pg_sleep` holds the first migration open long enough for the second process to
-   * reach it. Without the advisory lock, both read « not applied » and the second `CREATE TABLE`
-   * fails: measured, by removing the lock.
+   * reach it: 1.5 s, because the two processes do not start at the same instant on a busy machine.
    */
-  it('applies each migration once when two processes start together', { skip: NO_REAL_POSTGRES }, async () => {
-    const schema = schemaName();
-    const admin = createPgDatabase(TEST_DATABASE_URL as string, { max: 1 });
-    await admin.query(`CREATE SCHEMA ${schema}`);
-    const script = `
-      import { createPgDatabase, migrate } from ${JSON.stringify(new URL('./postgres.ts', import.meta.url).href)};
-      const database = createPgDatabase(process.env.FRUITBACK_TEST_DATABASE_URL, { schema: process.env.SCHEMA });
-      await migrate(database, [
-        { name: 'slow', sql: 'SELECT pg_sleep(0.4); CREATE TABLE made_once (id INTEGER PRIMARY KEY); INSERT INTO made_once VALUES (1);' },
-        { name: 'after', sql: 'INSERT INTO made_once VALUES (2);' },
-      ]);
-      await database.close();
-    `;
-    const start = () =>
-      run(process.execPath, ['--input-type=module', '--eval', script], {
-        cwd: fileURLToPath(new URL('.', import.meta.url)),
-        env: { ...process.env, SCHEMA: schema },
-      });
+  describe('two processes that start together', { skip: NO_REAL_POSTGRES }, () => {
+    const SLOW: Entry = {
+      tag: '0000_slow',
+      when: 1_000,
+      sql: 'SELECT pg_sleep(1.5);\n--> statement-breakpoint\nCREATE TABLE made_once (id INTEGER PRIMARY KEY);\n--> statement-breakpoint\nINSERT INTO made_once VALUES (1);',
+    };
+    const THEN: Entry = { tag: '0001_then', when: 2_000, sql: 'INSERT INTO made_once VALUES (2);' };
 
-    try {
-      await Promise.all([start(), start()]);
+    /** Two processes that migrate one database with `migrate` of this module, at the same moment. */
+    async function twoProcesses(module: string, url: string): Promise<PromiseSettledResult<unknown>[]> {
+      const script = `
+        import { createPgDatabase } from ${JSON.stringify(new URL('./postgres.ts', import.meta.url).href)};
+        const { migrate } = await import(process.env.MIGRATE);
+        const database = createPgDatabase(process.env.DATABASE);
+        try {
+          await migrate(database, process.env.FOLDER);
+        } finally {
+          await database.close();
+        }
+      `;
+      const start = () =>
+        run(process.execPath, ['--input-type=module', '--eval', script], {
+          cwd: fileURLToPath(new URL('.', import.meta.url)),
+          env: { ...process.env, MIGRATE: module, DATABASE: url, FOLDER: folderOf([SLOW, THEN]) },
+        });
 
-      const inSchema = createPgDatabase(TEST_DATABASE_URL as string, { schema, max: 1 });
-      assert.deepEqual((await inSchema.query('SELECT id FROM made_once ORDER BY id')).rows, [{ id: 1 }, { id: 2 }]);
-      assert.deepEqual(await applied(inSchema), [
-        { version: 1, name: 'slow' },
-        { version: 2, name: 'after' },
-      ]);
-      await inSchema.close();
-    } finally {
-      await admin.query(`DROP SCHEMA ${schema} CASCADE`);
-      await admin.close();
+      return Promise.allSettled([start(), start()]);
     }
+
+    it('applies each migration once', async () => {
+      const own = await ownDatabase();
+      try {
+        const ended = await twoProcesses(new URL('./postgres-migrate.ts', import.meta.url).href, own.url);
+        assert.deepEqual(
+          ended.map((end) => end.status),
+          ['fulfilled', 'fulfilled'],
+          JSON.stringify(ended),
+        );
+
+        const database = createPgDatabase(own.url, { max: 1 });
+        assert.deepEqual(await rowsOf(database, 'SELECT id FROM made_once ORDER BY id'), [{ id: 1 }, { id: 2 }]);
+        assert.deepEqual(await applied(database), [1_000, 2_000]);
+        await database.close();
+      } finally {
+        await own.drop();
+      }
+    });
+
+    // The control of the test above: Drizzle takes no lock, so without ours one process fails.
+    it('fails for one of the two when nothing holds the lock', async () => {
+      const own = await ownDatabase();
+      const unlocked = await mutatedModule('postgres-migrate.ts', {
+        from: 'await db.execute(sql`SELECT pg_advisory_lock(${MIGRATION_LOCK})`);',
+        to: '',
+      });
+      try {
+        const ended = await twoProcesses(unlocked.url, own.url);
+
+        assert.equal(ended.filter((end) => end.status === 'rejected').length, 1, JSON.stringify(ended));
+      } finally {
+        unlocked.remove();
+        await own.drop();
+      }
+    });
   });
 });
 
@@ -201,8 +508,9 @@ describe('the address of the database, which holds a password (FRU-141)', () => 
     const database = createPgDatabase(UNREACHABLE);
     const failures: unknown[] = [];
     for (const call of [
-      () => database.query('SELECT 1'),
-      () => database.transaction(async (transaction) => transaction.query('SELECT 1')),
+      () => database.run((db) => db.execute(sql`SELECT 1`)),
+      () => database.transaction((transaction) => transaction.execute(sql`SELECT 1`)),
+      () => database.alone((db) => db.execute(sql`SELECT 1`)),
     ]) {
       failures.push(
         await call().then(
@@ -219,35 +527,88 @@ describe('the address of the database, which holds a password (FRU-141)', () => 
       assert.equal(failure.message.includes('fruitback:'), false);
     }
   });
+});
+
+/**
+ * Drizzle says of a statement that failed what the statement was, and with which values. A value is
+ * an address or a digest, so that sentence must reach no log: the worker reports the error of the
+ * driver, which is inside it.
+ */
+describe('a statement that fails, which Drizzle quotes with its values (FRU-180)', () => {
+  const VALUE = 'a-digest-that-is-not-for-a-log';
+
+  it('takes the error of the driver out of the error of Drizzle, and leaves any other error alone', () => {
+    const driver = Object.assign(new Error('duplicate key'), { code: '23505' });
+    const wrapped = new DrizzleQueryError('INSERT INTO once VALUES ($1)', [VALUE], driver);
+
+    // The control: the sentence of Drizzle holds the value.
+    assert.match(wrapped.message, new RegExp(VALUE));
+    assert.equal(causeOfQueryError(wrapped), driver);
+    assert.equal(causeOfQueryError(driver), undefined);
+    assert.equal(causeOfQueryError(new StoreError('The site could not be read back')), undefined);
+    assert.equal(causeOfQueryError(undefined), undefined);
+  });
 
   it(
-    'answers a statement that the data refuses as an error with its code, not as an outage',
+    'answers a statement that the data refuses as an error with its code, not as an outage, and without its values',
     { skip: NO_REAL_POSTGRES },
     async () => {
       const database = await createRealDatabase();
       try {
-        await database.query('CREATE TABLE once (id INTEGER PRIMARY KEY); INSERT INTO once VALUES (1);');
+        await rowsOf(database, 'CREATE TABLE once (id TEXT PRIMARY KEY)');
+        await rowsOf(database, sql`INSERT INTO once VALUES (${VALUE})`);
 
-        const failure = await database.query('INSERT INTO once VALUES ($1)', [1]).then(
-          () => undefined,
-          (error: unknown) => error,
-        );
+        for (const call of [
+          () => database.run((db) => db.execute(sql`INSERT INTO once VALUES (${VALUE})`)),
+          () => database.transaction((transaction) => transaction.execute(sql`INSERT INTO once VALUES (${VALUE})`)),
+        ]) {
+          const failure = await call().then(
+            () => undefined,
+            (error: unknown) => error,
+          );
 
-        assert.ok(failure instanceof Error);
-        assert.equal(failure instanceof StoreError, false, 'a constraint was reported as a database that is down');
-        assert.equal((failure as { code?: string }).code, '23505');
+          assert.ok(failure instanceof Error);
+          assert.equal(failure instanceof StoreError, false, 'a constraint was reported as a database that is down');
+          assert.equal((failure as { code?: string }).code, '23505');
+          assert.equal(failure.message.includes(VALUE), false, failure.message);
+          assert.equal(failure.message.includes('INSERT INTO'), false, failure.message);
+        }
+        // The transaction that failed was rolled back, and its connection serves the next call.
+        assert.deepEqual(await rowsOf(database, 'SELECT count(*)::integer AS rows FROM once'), [{ rows: 1 }]);
       } finally {
         await database.close();
       }
     },
   );
 
-  it('answers a BIGINT as a number, on the driver that ships', { skip: NO_REAL_POSTGRES }, async () => {
+  it('leaves an error that a store throws in a transaction as it is, and rolls back', async () => {
+    await withPglite(async (database) => {
+      await rowsOf(database, 'CREATE TABLE once (id TEXT PRIMARY KEY)');
+      const mine = new StoreError('The site could not be read back');
+
+      await assert.rejects(
+        database.transaction(async (transaction) => {
+          await transaction.execute(sql`INSERT INTO once VALUES (${VALUE})`);
+          throw mine;
+        }),
+        (error: unknown) => error === mine,
+      );
+      assert.deepEqual(await rowsOf(database, 'SELECT id FROM once'), []);
+    });
+  });
+
+  it('answers a BIGINT of the schema as a number, on the driver that ships', { skip: NO_REAL_POSTGRES }, async () => {
     const database = await createRealDatabase();
     try {
-      const { rows } = await database.query('SELECT $1::bigint AS instant, 7::integer AS count', [1_760_000_000_000]);
+      await migrated(database);
+      const instant = 1_760_000_000_000;
+      await database.run((db) => db.insert(accounts).values({ id: 'acc_1', email: 'a@acme.dev', created_at: instant }));
 
-      assert.deepEqual(rows, [{ instant: 1_760_000_000_000, count: 7 }]);
+      const rows = await database.run((db) =>
+        db.select({ created_at: accounts.created_at }).from(accounts).where(eq(accounts.id, 'acc_1')),
+      );
+
+      assert.deepEqual(rows, [{ created_at: instant }]);
     } finally {
       await database.close();
     }

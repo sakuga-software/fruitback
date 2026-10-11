@@ -4,3 +4,7 @@ pnpm-lock.yaml
 
 # The design export is a bundle, not source to format (design/README.md).
 design/
+
+# drizzle-kit writes these files, and reads them back (docs/decisions/worker.md, FRU-180). The
+# worker leaves them out of its own format target too.
+apps/worker/drizzle/

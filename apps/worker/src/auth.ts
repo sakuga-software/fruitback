@@ -5,7 +5,7 @@ import { type AdapterOfAuth, keepAtRest } from './auth-at-rest.ts';
 import { FRUITBACK_RESOURCE, roleStatements } from './auth-roles.ts';
 import { type WorkerConfig, hasAuth } from './env.ts';
 import { type PgDatabase, type PgPool, databaseFor, withoutAddress } from './postgres.ts';
-import { migrated } from './postgres-migrations.ts';
+import { migrated } from './postgres-stores.ts';
 
 /**
  * better-auth, built and switched off (FRU-144), and what it keeps in the database (FRU-181).
@@ -255,8 +255,8 @@ function schemaMismatch(error: unknown): string | undefined {
 
   return (
     `the schema of the database is not the one better-auth expects (${missing.join(', ') || 'no detail given'}). ` +
-    'A migration of the worker is missing for this version or these options of better-auth: add it to MIGRATIONS, ' +
-    'and never run `auth migrate` on this database'
+    'A migration of the worker is missing for this version or these options of better-auth: change auth-schema.ts, ' +
+    'run drizzle-kit generate, and never run `auth migrate` on this database'
   );
 }
 

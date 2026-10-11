@@ -138,8 +138,9 @@ Then check `https://api.fruitback.com/health`, and sign in.
 
 **Tried on 2026-10-11, on a laptop and never on the host**, by `restore-drill.sh`, which CI runs in
 the `docker image` job on every pull request to `main`. It starts a database and the worker of the
-pull request, fills every table (41 rows in 19 tables, `schema_migrations` and the seven tables of
-better-auth included), takes a snapshot with `snapshot-pg.sh`, and runs step 2 above on another
+pull request, fills every table (38 rows in 19 tables, the journal of Drizzle `__drizzle_migrations`
+and the seven tables of better-auth included; 41 rows before FRU-180, when the journal was the four
+rows of `schema_migrations`), takes a snapshot with `snapshot-pg.sh`, and runs step 2 above on another
 server: every table had the same number of rows and the same rows on both sides. It then cut the end
 of a dump: the snapshot exited 1, and the copy before was the same, byte for byte.
 

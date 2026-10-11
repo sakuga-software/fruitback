@@ -31,17 +31,14 @@ import {
   PUBLIC_URL,
   ask,
   databasesOfACase,
-  migrationsWith,
+  make,
   optionsOn,
-  ownDatabaseUrl,
-  withPool,
-  without,
+  plantedAfterTheMigrations,
 } from './auth.fixture.ts';
 import { FRUITBACK_RESOURCE, IMPLIED, roleStatements } from './auth-roles.ts';
 import { type WorkerEnv, hasAuth, readConfig } from './env.ts';
-import { type Database, closeDatabases, createPgDatabase, migrate } from './postgres.ts';
-import { NO_REAL_POSTGRES, createPgliteDatabase } from './postgres.fixture.ts';
-import { MIGRATIONS } from './postgres-migrations.ts';
+import { type Database, closeDatabases, createPgDatabase } from './postgres.ts';
+import { NO_REAL_POSTGRES, appliedDates, createPgliteDatabase, journalDates, ownDatabase } from './postgres.fixture.ts';
 import { closeSessionConnections } from './session-sqlite.ts';
 
 /**
@@ -292,8 +289,8 @@ describe('a worker that has better-auth switched off (FRU-144)', () => {
   });
 
   it('builds better-auth at boot on a real server, and still answers 404', { skip: NO_REAL_POSTGRES }, async () => {
-    // A database of its own, not a schema: see `ownDatabaseUrl`.
-    const { url, drop } = await ownDatabaseUrl();
+    // A database of its own, not a schema: see `postgres.fixture.ts`.
+    const { url, drop } = await ownDatabase();
 
     try {
       const on = await worker(envWith({ FRUITBACK_DATABASE_URL: url }));
@@ -303,10 +300,7 @@ describe('a worker that has better-auth switched off (FRU-144)', () => {
       assert.ok(on.library > 0);
       const made = createPgDatabase(url, { max: 1 });
       try {
-        assert.deepEqual(
-          (await made.query('SELECT name FROM schema_migrations ORDER BY version')).rows.map((row) => row.name),
-          MIGRATIONS.map((migration) => migration.name),
-        );
+        assert.deepEqual(await appliedDates(made), journalDates());
       } finally {
         await made.close();
       }
@@ -647,16 +641,13 @@ describe('better-auth, built when the server starts (FRU-144)', () => {
   };
 
   it('applies the migrations of the worker, builds one instance, and says that it serves no route', async () => {
-    const database = withPool(await opening(createPgliteDatabase));
+    const database = await opening(createPgliteDatabase);
     const config = configOf(envWith());
     const { lines, log } = listening();
 
     assert.equal(await announceAuth(config, log, () => database), 'ready');
     assert.deepEqual(lines, ['log [fruitback] better-auth is ready, and serves no route']);
-    assert.deepEqual(
-      (await database.query('SELECT name FROM schema_migrations ORDER BY version')).rows.map((row) => row.name),
-      MIGRATIONS.map((migration) => migration.name),
-    );
+    assert.deepEqual(await appliedDates(database), journalDates());
 
     const first = authFor(config, () => database);
     assert.equal(
@@ -680,23 +671,15 @@ describe('better-auth, built when the server starts (FRU-144)', () => {
     assert.equal(lines.join('').includes('fruitback:'), false);
 
     // The database may answer the next time: the failure is not the instance of the process.
-    const database = withPool(await opening(createPgliteDatabase));
+    const database = await opening(createPgliteDatabase);
     assert.equal(await announceAuth(config, log, () => database), 'ready');
   });
 
   it('says at boot that the schema is wrong, and not that better-auth is ready', async () => {
-    const database = withPool(await opening(createPgliteDatabase));
-    // A database whose migration of better-auth lost a table: the list of the worker finds each
-    // step applied, by its name, and changes nothing.
-    await migrate(
-      database,
-      migrationsWith((sql) =>
-        without(sql, 'CREATE INDEX "verification_identifier_idx" ON "verification" ("identifier");').replace(
-          /CREATE TABLE "verification" \([\s\S]*?\);/,
-          '',
-        ),
-      ),
-    );
+    const database = await opening(createPgliteDatabase);
+    // A database that lost a table after its migrations: Drizzle finds each migration applied, and
+    // changes nothing.
+    await make(database, plantedAfterTheMigrations('DROP TABLE "verification"'));
     const { lines, log } = listening();
 
     assert.equal(await announceAuth(configOf(envWith()), log, () => database), 'failed');

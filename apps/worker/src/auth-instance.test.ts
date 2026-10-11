@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { sql } from 'drizzle-orm';
 import { AT_REST_PLUGIN, AUTH_BASE_PATH, startAuth } from './auth.ts';
 import {
   CONSOLE_URL,
@@ -11,6 +12,7 @@ import {
   signUp,
   withTestSignUp,
 } from './auth.fixture.ts';
+import { rowsOf } from './postgres.fixture.ts';
 
 /**
  * What an instance of better-auth does with the options of the worker, measured (FRU-144): the
@@ -29,7 +31,7 @@ for (const { label, open, skip } of DATABASES) {
       const { options } = await optionsOn(database);
       const auth = await startAuth(withTestSignUp(options));
       const { cookie } = await signUp(auth, 'alice@acme.dev');
-      const row = String((await database.query('SELECT "token" FROM "session"')).rows[0]?.token);
+      const row = String((await rowsOf(database, 'SELECT "token" FROM "session"'))[0]?.token);
       const name = cookie.split('=')[0];
       const token = decodeURIComponent(cookie.split('=')[1] ?? '').split('.')[0] ?? '';
       const sessionOf = async (instance: typeof auth, headers: Record<string, string>): Promise<unknown> =>
@@ -59,11 +61,11 @@ for (const { label, open, skip } of DATABASES) {
       const { cookie: other } = await signUp(withoutLayer, 'bob@acme.dev');
       const clear = String(
         (
-          await database.query(
-            'SELECT s."token" FROM "session" s JOIN "user" u ON u."id" = s."userId" WHERE u."email" = $1',
-            ['bob@acme.dev'],
+          await rowsOf(
+            database,
+            sql`SELECT s."token" FROM "session" s JOIN "user" u ON u."id" = s."userId" WHERE u."email" = ${'bob@acme.dev'}`,
           )
-        ).rows[0]?.token,
+        )[0]?.token,
       );
       assert.ok(other.includes(encodeURIComponent(clear)), 'without the layer, the table holds the token itself');
       assert.ok(await sessionOf(withoutLayer, { Authorization: `Bearer ${clear}` }));
@@ -84,8 +86,8 @@ for (const { label, open, skip } of DATABASES) {
         'Secure',
       ]);
       // The ids of the worker, on the rows that better-auth wrote.
-      assert.match(String((await database.query('SELECT "id" FROM "user"')).rows[0]?.id), /^acc_[0-9a-f]{20}$/);
-      assert.match(String((await database.query('SELECT "id" FROM "session"')).rows[0]?.id), /^ses_[0-9a-f]{20}$/);
+      assert.match(String((await rowsOf(database, 'SELECT "id" FROM "user"'))[0]?.id), /^acc_[0-9a-f]{20}$/);
+      assert.match(String((await rowsOf(database, 'SELECT "id" FROM "session"'))[0]?.id), /^ses_[0-9a-f]{20}$/);
     });
 
     it('refuses a request that has the cookie and comes from another origin, or from none', async () => {
@@ -113,7 +115,7 @@ for (const { label, open, skip } of DATABASES) {
       const { options } = await optionsOn(database);
       await signUp(await startAuth(withTestSignUp(options)), 'alice@acme.dev', { 'X-Forwarded-For': '203.0.113.7' });
 
-      assert.deepEqual((await database.query('SELECT "ipAddress" FROM "session"')).rows, [{ ipAddress: '' }]);
+      assert.deepEqual(await rowsOf(database, 'SELECT "ipAddress" FROM "session"'), [{ ipAddress: '' }]);
     });
 
     // Why the worker does not let better-auth read the address: measured, with the tracking on.
@@ -127,11 +129,10 @@ for (const { label, open, skip } of DATABASES) {
       await signUp(tracking, 'chain@acme.dev', { 'X-Forwarded-For': '203.0.113.7, 198.51.100.9' });
 
       assert.deepEqual(
-        (
-          await database.query(
-            'SELECT u."email", s."ipAddress" FROM "session" s JOIN "user" u ON u."id" = s."userId" ORDER BY u."email"',
-          )
-        ).rows,
+        await rowsOf(
+          database,
+          'SELECT u."email", s."ipAddress" FROM "session" s JOIN "user" u ON u."id" = s."userId" ORDER BY u."email"',
+        ),
         [
           { email: 'chain@acme.dev', ipAddress: '' },
           { email: 'lone@acme.dev', ipAddress: '203.0.113.7' },
@@ -182,7 +183,7 @@ for (const { label, open, skip } of DATABASES) {
 
       assert.ok(answer.status >= 400, `a sign-up with a password answered ${answer.status}`);
       assert.equal(answer.headers.get('Set-Cookie'), null);
-      assert.deepEqual((await database.query('SELECT "id" FROM "user"')).rows, []);
+      assert.deepEqual(await rowsOf(database, 'SELECT "id" FROM "user"'), []);
     });
   });
 }
