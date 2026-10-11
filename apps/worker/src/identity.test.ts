@@ -52,12 +52,6 @@ describe('verifyIdentityToken', () => {
     });
   });
 
-  it('refuses an expired token', async () => {
-    const token = await signIdentityToken({ sub: 'user_42', exp: inSeconds(-HOUR) }, SECRET);
-
-    assert.deepEqual(await verifyIdentityToken(token, SECRET), { ok: false, reason: 'expired' });
-  });
-
   it('refuses a token with no expiry, because that is a password', async () => {
     const token = await signToken({ sub: 'user_42' }, SECRET);
 

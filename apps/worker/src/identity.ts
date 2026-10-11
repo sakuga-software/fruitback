@@ -190,5 +190,3 @@ function base64UrlEncode(bytes: Uint8Array): string {
 function base64UrlDecode(value: string): Uint8Array {
   return new Uint8Array(Buffer.from(value, 'base64url'));
 }
-
-// proof of the pull request job of mutation.yml (FRU-172): never merge.
