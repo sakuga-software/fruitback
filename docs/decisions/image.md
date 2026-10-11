@@ -113,10 +113,20 @@ immutable.
   `502` to every read (measured). The `docker image` job therefore boots the image a second time,
   beside a PostgreSQL container, and probes a read: `{"error":"unknown-client"}` says that the
   bundle reached the database and applied its migration.
+- **better-auth is in the bundle since FRU-144, and the bundle is 3,711,008 bytes**, from 959,289.
+  Its code is behind a dynamic import: a worker without `FRUITBACK_AUTH_SECRET` runs none of it, and
+  a test reads that on the graph of the bundle. It serves no route, so nothing reads it on `/health`
+  or on any request. The `docker image` job therefore boots the image a third and a fourth time on
+  one database, without the secret and with it: the one with the secret must write « better-auth is
+  ready, and serves no route » in its log, the other must write nothing of better-auth, and both
+  must answer `404` under `/console/auth/`. The numbers are in [worker.md](worker.md).
 - **The scan of the image does not see what is inside the bundle, and that gap is open.** Trivy reads
   the packages of the image, and `server.mjs` is one file: it never saw `zod`, and it does not see
-  `pg` and its six packages. A check of the lockfile in CI is what closes it. It is named in FRU-139
-  and is in no slice yet: until it is, a vulnerability of the driver reaches nobody's screen.
+  `pg` and its six packages, or better-auth and the sixteen packages it brings. A check of the
+  lockfile in CI is what closes it. It is named in FRU-139 and is in no slice yet: until it is, a
+  vulnerability of the driver or of better-auth reaches nobody's screen. What holds today is the
+  version: `pg` and `better-auth` are each pinned to one exact version in the catalog, and a test
+  refuses a range.
 - **Trivy runs with `ignore-unfixed`.** An Alpine CVE with no patch available reddens every release
   for something nobody can act on, and a gate that cannot be satisfied is a gate somebody deletes.
 - **Every action is pinned to a commit SHA, with its version as a comment (FRU-69).** A tag can be

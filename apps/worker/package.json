@@ -14,12 +14,13 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test 'src/**/*.test.ts'",
     "test:watch": "node --test --watch 'src/**/*.test.ts'",
-    "test:postgres": "FRUITBACK_TEST_POSTGRES=required node --test src/postgres.test.ts src/account-conformance.test.ts src/accounts-postgres.test.ts src/session-conformance.test.ts src/session-postgres.test.ts",
+    "test:postgres": "FRUITBACK_TEST_POSTGRES=required node --test src/postgres.test.ts src/account-conformance.test.ts src/accounts-postgres.test.ts src/session-conformance.test.ts src/session-postgres.test.ts src/auth.test.ts src/auth-schema.test.ts src/auth-instance.test.ts",
     "dev:fake": "FRUITBACK_STORE=memory PORT=8788 ALLOWED_ORIGINS=http://localhost:5177 node --watch src/main.ts",
     "serve:fake": "FRUITBACK_STORE=memory PORT=8788 node src/main.ts"
   },
   "dependencies": {
     "@fruitback/shared": "workspace:*",
+    "better-auth": "catalog:",
     "pg": "catalog:",
     "zod": "catalog:"
   },
@@ -45,6 +46,7 @@
           "{workspaceRoot}/**/*.spec.ts",
           "{workspaceRoot}/nx.json",
           "{workspaceRoot}/package.json",
+          "{workspaceRoot}/pnpm-workspace.yaml",
           "{workspaceRoot}/apps/*/package.json",
           "{workspaceRoot}/packages/*/package.json",
           "{workspaceRoot}/.nvmrc",

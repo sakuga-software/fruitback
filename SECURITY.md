@@ -450,7 +450,7 @@ that signs a person in. Since FRU-121 it also holds the key of each connector, e
 
 **With `FRUITBACK_DATABASE_URL` the same accounts are in a PostgreSQL database** (FRU-141), in place
 of that file, and the worker refuses to start with both. The database holds what the file holds, in
-tables of the same names, and nothing more: addresses, names, the id each provider gives a person,
+tables of the same names: addresses, names, the id each provider gives a person,
 the roles, the sites, the digest of each sign-in link, the key of each connector encrypted with
 `FRUITBACK_SECRETS_KEY`, and the notes that wait for an address that receives them.
 
@@ -461,6 +461,9 @@ gave, its workspace, and its dates. No code and no token is in a row:
 test:`holds no code and no token in clear, in any row of any table` reads every table of the schema.
 The rules of a session are the same, and they hold between two connections: one code opens one
 session, and one token has one live successor.
+
+Since FRU-144 it also has the seven tables of better-auth, and they are empty: no code writes them
+yet. See [better-auth, built and switched off](#better-auth-built-and-switched-off-fru-144).
 
 Three things change with a database on a network, and each has its condition:
 
@@ -504,6 +507,53 @@ script cannot read** (`HttpOnly`, `Secure`, `SameSite=Strict`, on `/console/sess
 console routes answer one origin, `FRUITBACK_CONSOLE_URL`, with credentials. A script injected into the
 console can use the session while the page is open; it cannot carry the refresh token away. A
 console session names no workspace, so it reads no site.
+
+### better-auth, built and switched off (FRU-144)
+
+The worker carries better-auth, the library that will sign a person in to the console. **Today it
+serves no route.** No path under `/console/auth/` answers anything but `404`, the console signs in as
+the section above says, and a worker without `FRUITBACK_AUTH_SECRET` loads nothing of the library.
+What exists is its configuration, seven empty tables in the database of the accounts, and one secret.
+Nothing in this section protects anybody yet: it says what is closed before the first route opens.
+
+- **`FRUITBACK_AUTH_SECRET` signs the cookie of a console session.** It is a secret of the worker's
+  own, like `FRUITBACK_IDENTITY_SECRET` and `FRUITBACK_SECRETS_KEY`, and it is not one of those two:
+  the worker refuses to start when it equals one of them, and when it is under 32 characters. It
+  stays in the environment: nothing writes it in the database, and no route answers it. Changing it
+  ends every session better-auth opened.
+- **The token of a session is in the clear in the `session` table**, unlike a pairing code and a
+  refresh token, which are digests. A copy of the database is not a set of working logins on two
+  conditions: the secret is not with the copy, and the `bearer` plugin is not in the configuration.
+  The cookie holds the token and its signature, and a token with no signature opens nothing. With
+  that plugin the token alone opens the session, in an `Authorization` header (measured on 1.7.7).
+  The worker refuses to build better-auth with it, and
+  test:`opens no session with the token read in the session table, and opens one with the bearer
+plugin` holds both halves, with the token it reads in the row, which is what a copy gives. Whoever
+  has the secret **and** the table signs the cookie of every open session. **This is the one
+  exception to « a token is a digest in the database »**, and it is not a choice of the worker:
+  better-auth 1.7.7 has no option that keeps a digest of that token, and it finds a session by the
+  token itself (read in the package). The table is empty until a route of better-auth is served.
+- **The environment cannot widen it.** better-auth reads `BETTER_AUTH_TRUSTED_ORIGINS`,
+  `BETTER_AUTH_SECRETS` and `BETTER_AUTH_TELEMETRY` from the environment of the process, over what
+  the worker gives it (measured). A worker that has better-auth on refuses to start with any
+  `BETTER_AUTH_…` variable, and names it without its value.
+- **The cookie is for the routes of the console and for no script**: `HttpOnly`, `Secure`,
+  `SameSite=Strict`, `Path=/console`. `demo.fruitback.com` is the same site as the worker, so
+  `SameSite` does not keep its pages out. What does is the origin: better-auth answers a request
+  that has the cookie only from `FRUITBACK_CONSOLE_URL`, and refuses one from another origin and one
+  with no `Origin` (measured). **That is true of its own routes, which are not served.** The routes
+  of the worker under `/console/` read no cookie today.
+- **better-auth counts no request and keeps no address.** Its limit is off, so the limit of the
+  worker is the only one, with the address `TRUSTED_PROXY_HOPS` decides. Left alone, better-auth
+  takes an `X-Forwarded-For` that holds one value as the caller wrote it (measured). So it reads no
+  header, and a row of `session` holds no address.
+- **No password.** The sign-up with a password is off, and the accounts hold none.
+- **The session of the extension does not change.** It is not a session of better-auth, and it keeps
+  its rotation and its replay detection. Its table is `sessions`, which holds digests; the table of
+  better-auth is `session`, without the `s`.
+- **A guest and the tracker.** The four roles reach better-auth from the one table of `accounts.ts`:
+  a guest has no `see-tracker` there either. That is a table for the routes of the organization
+  plugin, and none of them is served.
 
 ### The key of a connector (FRU-121)
 

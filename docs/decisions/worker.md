@@ -762,6 +762,201 @@ table` reads every table of the schema after a code was spent, a session refresh
 - **Whoever can write to the database can write a session**, as whoever could write the session file.
   `SECURITY.md` says it, with what the database holds.
 
+## better-auth, built and switched off (FRU-144)
+
+The first slice of FRU-139 that adds better-auth. **It changes nothing a caller can observe**: no
+route is new, and a worker without `FRUITBACK_AUTH_SECRET` loads nothing of the library. What is here
+is its configuration, its tables and the guards, so the slice that signs a person in with it is small.
+
+### The rules, in short
+
+- **`FRUITBACK_AUTH_SECRET`, with `FRUITBACK_DATABASE_URL`, switches better-auth on.** The worker then
+  builds one instance when it starts (`announceAuth`, from `server.ts`) and says so in its log.
+  Without the secret, `authFor` answers `undefined`: nothing is loaded and nothing is opened. Ask
+  `hasAuth(config)`, as you ask `hasAccounts(config)`.
+- **better-auth serves no route.** No path under `/console/auth/` answers anything but `404`, with or
+  without a database, with or without the secret: `app.ts` does not import `auth.ts`, and a test reads
+  that in the source. test:`answers 404 on every route of better-auth, with or without a database,
+with or without its secret` asks nine routes that better-auth really has, and its control asks
+  better-auth for the same nine. A worker whose database does not answer says `502` there, as on
+  every route: the accounts are read before the dispatch.
+- **`auth.ts` is the one file that names better-auth**, as types, and it loads the library when the
+  instance is built, as `postgres.ts` does for its driver. A lint rule holds the import, for `kysely`
+  too. test:`loads no file of better-auth for a worker that has it off, and answers 404 under
+/console/auth` holds the rest in a process of its own, and test:`keeps better-auth and the driver
+behind a dynamic import, so the image runs none of them at boot` holds it on the graph of the bundle.
+- **It does not take the place of the session of the extension.** `session.ts` stays as it is: a
+  token that rotates, and a replay that ends the chain. A session of better-auth is one token that
+  does not rotate.
+- **The `bearer` plugin is never in the configuration**, and `jwt` and `deviceAuthorization` are not
+  either. `REFUSED_PLUGINS` in `auth.ts` gives each its reason, and `startAuth` refuses to build an
+  instance that has one. With `bearer`, the token of a row of the `session` table opens that session
+  as it is read there: test:`opens no session with the token read in the session table, and opens one
+with the bearer plugin` keeps both halves measured.
+- **One tool migrates the database, and it is `migrate` of `postgres.ts`.** The tables of better-auth
+  are the entry `better-auth` of `MIGRATIONS`, written in `auth-schema.ts`: the DDL that better-auth
+  compiles for the options of `auth.ts`, and one constraint more, `UNIQUE ("organizationId",
+"userId")` on `member`. `auth migrate` and `runMigrations()` never run on a database of the worker.
+  **A plugin, a field or a version of better-auth that changes its schema needs a new entry in
+  `MIGRATIONS`**: the tests of the schema say what is missing.
+- **`RIGHTS` of `accounts.ts` stays the one table of who may do what.** `auth-roles.ts` asks `can` for
+  each role and each action and writes the answer for the organization plugin. `IMPLIED` says what
+  an action gives in the words of the plugin: `manage-members` invites and removes,
+  `manage-workspace` renames, `delete-workspace` deletes. An action with no line there does not
+  compile, and `roleStatements` refuses it at run time. The routes of the worker go on calling `can`.
+- **The limit of the worker is the only one, and better-auth reads no address.** Its own limit is
+  off (`rateLimit.enabled: false`) and it tracks no address (`disableIpTracking`). The worker counts
+  above the dispatch, for every route, with the address that `resolveClientIp` read.
+- **No `BETTER_AUTH_…` variable in the environment of a worker that has better-auth on.** better-auth
+  reads them by itself, over its options. `readConfig` refuses the prefix, and names the variable
+  without its value.
+- **The options that close something are written in `authOptions`, even when they are the default.**
+  The cookie is `__Secure-fruitback.session_token`: `HttpOnly`, `Secure`, `SameSite=Strict`,
+  `Path=/console`. One trusted origin, the console. No cookie cache, no password, no telemetry.
+- **An id of better-auth has the shape of every id of the worker.** `authId`: `acc_` for a `user` and
+  `ws_` for an `organization`, which are the ids the worker already gives, then `ses_`, `lgn_`
+  (`account`), `ver_`, `mem_` and `inv_`. A table with no prefix throws.
+- **better-auth is pinned to one exact version in the catalog**, like `pg`. A test refuses a range.
+  Read the documentation of that version again before you change an option: do not trust this page,
+  or a ticket, for the name of one.
+
+### The reasons, and the measurements
+
+Read on 2026-10-11 in the documentation of better-auth 1.7.7, the `latest` of npm that day:
+installation, basic-usage, concepts/api, concepts/cli, concepts/cookies, concepts/database,
+concepts/rate-limit, concepts/session-management, adapters/postgresql, plugins/organization,
+plugins/bearer, reference/options, reference/security, reference/telemetry and guides/optimizing-for-performance. Each fact below says
+whether it was read there, read in the source of the package, or measured.
+
+- **Why it is built when the server starts, while it serves nothing.** `/health` reads no database
+  and no library, so a bundle that cannot load better-auth is green there. That is how the bundle
+  without its `createRequire` banner answered `200` on `/health` and `502` on every read (FRU-141).
+  With no route, nothing else would build the instance before the first sign-in of the next slice.
+  So a worker that has the secret builds it at boot and writes one line: « better-auth is ready, and
+  serves no route », or why it did not start. `/health` does not wait for it.
+- **better-auth reads the schema of the database while it starts** (measured, with
+  `NODE_ENV=production` too; reference/options says « outside production », concepts/database says
+  « including in production »). On an empty database it writes « Database schema mismatch » in the
+  log before any request. So `authFor` applies the migrations of the worker first, and builds
+  nothing when they fail: test:`loads nothing of better-auth while the database of a worker that has
+it on does not answer`.
+- **A context that is built is not an instance that is ready** (measured). On a schema that is wrong,
+  better-auth builds its context all the same. It is the first request that is rejected, and every
+  one after it: `auth.handler` rejects with `SCHEMA_MISMATCH`, it does not answer `500`. So
+  `startAuth` asks the instance for `/ok`, in the process and through no socket, before it answers,
+  and the line of the boot then says what is missing in place of « ready ». The message of
+  better-auth ends with « Run `npx auth migrate` », which is the one thing not to do on a database
+  of the worker: the worker writes its own words. test:`refuses to call better-auth ready on a
+schema that lost a column, and names the column` holds it. **The slice that mounts the handler must
+  catch that rejection**, or a schema that is wrong is an exception in `handleRequest`.
+- **A pool of `pg` is what better-auth takes** (read: adapters/postgresql). `postgres.ts` hands over
+  the pool of the process, `PgDatabase.pool()`, and nothing else may take it. The tests on PGlite
+  give better-auth a pool made of the `Database` of the case, in `auth.fixture.ts`: one client out
+  at a time, because PGlite is one connection. On a real server they use the pool that ships.
+- **What `getMigrations` reports, and what it does not** (measured). It reports a table and a column
+  that are missing, and a required column that better-auth never fills. It writes in its log a
+  column of another type and a required column that takes a null: the tests read that log. **It reports no index of one column, no foreign key and no unique constraint that an existing table lost.** So
+  test:`makes the tables that the migration of better-auth itself makes, and one constraint more`
+  compares the catalogue of PostgreSQL after the migrations of the worker with the catalogue after
+  better-auth's own migration, on a second empty database, and
+  test:`finds an index, a cascade and a unique constraint that the migration lost` is its control.
+- **The address of the caller.** The framing said that better-auth reads the left of
+  `X-Forwarded-For`. Measured on 1.7.7, and read in `@better-auth/core/dist/utils/ip.mjs`: with no
+  `trustedProxies`, it takes a header that holds **one** value as the caller wrote it, and refuses a
+  header that holds several. Behind Traefik, which replaces the header, that is the true address.
+  With no proxy, which is what `docker-compose.yml` runs, it is whatever the caller wrote. Behind a proxy that appends, every caller who sends the header has no address, and its limit then counts them all in one bucket (read in `api/rate-limiter/index.mjs`). `TRUSTED_PROXY_HOPS` says none of this to better-auth, and `trustedProxies`
+  is a list of addresses and not a count. Two limits with two readings of the address are two
+  answers to « who is this caller »: its limit is off. The address in a row of `session` comes from
+  the same reading, so none is kept. test:`takes a lone X-Forwarded-For as the caller wrote it, and
+refuses a chain, when it tracks addresses` keeps the reason measured. A slice that wants the address
+  in the `session` table gives better-auth the one that `resolveClientIp` read, in one header that
+  the worker writes over anything the caller sent, and names that header in `ipAddressHeaders`.
+- **The variables better-auth reads by itself** (read in the source, and measured).
+  `BETTER_AUTH_TRUSTED_ORIGINS` is added to the trusted origins: with it set to another origin, a
+  request that has the cookie and comes from that origin is answered. `BETTER_AUTH_SECRETS` takes
+  the place of the `secret` option. `BETTER_AUTH_TELEMETRY` turns the telemetry on over
+  `telemetry.enabled: false`, when `BETTER_AUTH_TELEMETRY_ENDPOINT` names where to send it: 1.7.7
+  has no address of its own to send to. `BETTER_AUTH_URL` and `BETTER_AUTH_SECRET` are read only
+  when the option is absent, and the worker always writes both. The refusal is on the prefix, so a
+  variable that a later version adds is refused too.
+  test:`takes an origin and a secret from the environment over its options, when the worker lets one
+in` keeps the first two measured.
+- **`FRUITBACK_PUBLIC_URL` has no path when better-auth is on.** better-auth takes a path in its
+  address as the path its routes are under, in place of `basePath` (read in `utils/url.mjs`). The
+  worker refuses such an address at boot and gives better-auth the origin.
+- **A request that has the cookie is refused from another origin, and with no `Origin`** (measured:
+  `403` both times). `demo.fruitback.com` is the same site as the worker, so `SameSite` does not keep
+  it out: the check of the origin does. This is true of the routes of better-auth. The routes of the
+  worker under `/console/` read no cookie yet, and the slice that makes them read one must refuse
+  the same two requests itself.
+- **Some lines of better-auth do not go through the logger of the options.** The refusal of an
+  origin is written twice: once by the logger the worker gives, as a `[fruitback]` line, and once by
+  a logger of the library, with colours (measured). No such line held a secret or an address.
+- **better-auth reads every schema of its database** (measured, in CI and on a local server).
+  Kysely's `getTables`, which `getMigrations` and the schema check at boot both call, lists the
+  tables of all the schemas, then reads each one. The tests of the accounts and the sessions give
+  each case a schema in one database, and drop it at the end: a schema dropped between the two reads
+  failed a case of better-auth with `schema "t_…" does not exist`, two runs out of three with four
+  test files at once. So each case of better-auth on a real server has a database of its own
+  (`ownDatabaseUrl` in `auth.fixture.ts`). In production the database of a worker is its own, and
+  what this costs there is the time to read every schema of it.
+- **Two tables are named after a session, and they are not the same thing.** `sessions` (FRU-142)
+  holds the sessions of the extension: digests, a chain, a rotation. `session` (better-auth) will
+  hold the sessions of the console, with the token in the clear, and it is empty. A query, a backup
+  check or a purge that names one must not mean the other.
+- **better-auth 1.7.7 cannot keep a digest of a session token** (read in the types and in the source
+  of the package). Its `session` option has `expiresIn`, `updateAge`, `disableSessionRefresh`,
+  `deferSessionRefresh`, `storeSessionInDatabase`, `preserveSessionInDatabase`, `cookieCache` and
+  `freshAge`, and `findSession` asks the table for the row whose `token` is the value of the cookie.
+  So `session.token` is the one token the database holds in the clear, and SECURITY.md says on which
+  two conditions a copy of it opens nothing. `verification.storeIdentifier: 'hashed'` does it for
+  the `verification` table only, and its default is `plain`: the slice that first writes a link or a
+  code there chooses it (FRU-147).
+- **The tables have the names better-auth gives them**: `user`, `session`, `account`,
+  `verification`, `organization`, `member`, `invitation`. They are made in every database of a
+  worker, with better-auth on or off, because the database has one list of migrations. Names that
+  plain are taken in a database that another application shares: the migration then fails, and
+  every read of the accounts answers `502`. The database of a worker is its own. A schema of its
+  own does the same, with `options=-c search_path=<schema>` in the address: that is how
+  test:`builds better-auth at boot on a real server, and still answers 404` gives each run an empty
+  database, and better-auth reads the search path (read: adapters/postgresql).
+- **The organization plugin is in the configuration for its tables and its roles.** `getMigrations`
+  reads the schema from the plugins, and `member` is a table of that plugin. None of its routes is
+  served. What a guest reads through them, and two roles on one member, are the next slices: the
+  constraint on `member` closes only the second row for one person.
+- **What is left to the slices that serve a route**, so nobody reads a decision in a default: how
+  long a session lasts (7 days, renewed each day of use, by default), which ways to sign in, how two
+  providers that prove one address are linked, and whether the `session` table keeps an address.
+- **The generated DDL has no unique constraint on `account ("providerId", "accountId")` either.**
+  The `logins` table of the worker has that pair as its primary key. It is not added here: nothing
+  writes the table yet, and the slice that moves the rows decides.
+
+### The bundle, and what it costs a worker that has better-auth off
+
+Measured on 2026-10-11, on the commit this slice starts from (the head of FRU-142) and on this one,
+two runs of seven boots each:
+
+|                                      | Before        | After         |
+| ------------------------------------ | ------------- | ------------- |
+| `dist/server.mjs`, bytes             | 959,289       | 3,711,008     |
+| the same, gzip                       | 178,187       | 622,017       |
+| files in the bundle                  | 162           | 802           |
+| packages in the bundle               | 15            | 32            |
+| bytes the process evaluates at boot  | 763,922       | 779,458       |
+| boot to « listening », median        | 99–108 ms     | 121–139 ms    |
+| resident memory after `/health`, KiB | 75,952–76,080 | 87,584–87,728 |
+
+- **The 17 new packages are 2,659,947 bytes**: `zod` 4.6.5 (827,181), `kysely` (602,844),
+  `better-auth` (602,191), `@better-auth/core` (315,706), `jose` (92,785), and twelve small ones.
+- **Nothing of them runs for a worker that has better-auth off.** The file is larger all the same:
+  Node reads and parses it, which is the 13 to 31 ms and the 11.6 MiB of the last two rows (Node
+  25.8.1, one machine, `FRUITBACK_STORE=sqlite`, no accounts).
+- **`zod` is in the bundle twice.** The worker uses 4.3.6, which the catalog pins with a tilde, and
+  better-auth asks for `^4.5.4`. Aligning the catalog takes the second copy out, 513,751 bytes. It is not done here:
+  `packages/shared` and the widget bundle use the same entry of the catalog.
+- **Not tried: `better-auth/minimal`**, which leaves Kysely out for a deployment that brings its own adapter (read: guides/optimizing-for-performance). The worker gives better-auth a pool, and that path needs Kysely.
+- **The scan of the image sees none of the 32 packages.** [image.md](image.md) says what is open.
+
 ## The markdown codec, and the file that outlived its name
 
 ### The rules, in short

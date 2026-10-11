@@ -73,6 +73,7 @@ services:
       FRUITBACK_GOOGLE_OAUTH: ${FRUITBACK_GOOGLE_OAUTH:-}
       FRUITBACK_LINEAR_OAUTH: ${FRUITBACK_LINEAR_OAUTH:-}
       FRUITBACK_SECRETS_KEY: ${FRUITBACK_SECRETS_KEY:-}
+      FRUITBACK_AUTH_SECRET: ${FRUITBACK_AUTH_SECRET:-}
 
 volumes:
   # Compose prefixes this volume with the project name, so two stacks on one host keep separate data

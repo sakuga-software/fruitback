@@ -31,6 +31,18 @@ export type Database = Queryable & {
   close(): Promise<void>;
 };
 
+/** The pool of `pg`, for the one file that may name the driver. */
+export type PgPool = Pool;
+
+/**
+ * A database that is on a pool of `pg`, and can hand that pool over (FRU-144).
+ *
+ * better-auth takes a pool and writes its own queries. It gets the pool of the process: one pool for
+ * a database, whoever reads it. Nothing else may take it: a store goes through `query` and
+ * `transaction`, which take the address out of every message.
+ */
+export type PgDatabase = Database & { pool(): Promise<PgPool> };
+
 /** The type of a `BIGINT` in the catalogue of PostgreSQL. */
 const INT8 = 20;
 
@@ -83,7 +95,7 @@ export function readDatabaseUrl(value: string | undefined): string | undefined {
  * `schema` puts every connection of the pool in one schema. The tests use it to give each case an
  * empty database inside one server.
  */
-export function createPgDatabase(url: string, options: { schema?: string; max?: number } = {}): Database {
+export function createPgDatabase(url: string, options: { schema?: string; max?: number } = {}): PgDatabase {
   let opening: Promise<Pool> | undefined;
 
   const pool = (): Promise<Pool> => {
@@ -138,6 +150,8 @@ export function createPgDatabase(url: string, options: { schema?: string; max?: 
   });
 
   return {
+    pool,
+
     async query(text, values) {
       let opened: Pool;
       try {
@@ -191,9 +205,9 @@ export function createPgDatabase(url: string, options: { schema?: string; max?: 
  * The stores are built for each request wherever the transport did not hand one over, as the SQLite
  * ones are: the pool must not be.
  */
-const databases = new Map<string, Database>();
+const databases = new Map<string, PgDatabase>();
 
-export function databaseFor(url: string): Database {
+export function databaseFor(url: string): PgDatabase {
   const known = databases.get(url);
   if (known !== undefined) return known;
 
