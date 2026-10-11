@@ -658,7 +658,7 @@ together` starts two Node processes, and the first migration sleeps so the secon
   `createRequire` banner of the build script, the first read answers `502`, and `/health` answers
   `200`. With it the worker applies its migration and answers. The `docker image` job boots the image
   on a database for that reason, and probes a read, not `/health`.
-- **The bundle went from 731,224 to 940,220 bytes** with `pg` 8.23.1 and its six packages. PGlite is
+- **The bundle went from 739,751 to 951,408 bytes** with `pg` 8.23.1 and its six packages. PGlite is
   not in it: no shipped file may import it.
 - **An outage of the accounts is in the log now.** `handleRequest` answered `502` and wrote nothing,
   for SQLite too. That is how the missing banner looked like a database that was down.
