@@ -201,6 +201,22 @@ const VIOLATIONS: Violation<AccountStore>[] = [
     }),
   },
   {
+    breaks: 'keeps the settings of a connector, set from its own workspace only',
+    by: 'sets the settings of a connector for any workspace',
+    replace: {
+      from: 'UPDATE connectors SET settings = ? WHERE workspace_id = ? AND id = ?',
+      to: 'UPDATE connectors SET settings = ? WHERE ? IS NOT NULL AND id = ?',
+    },
+  },
+  {
+    breaks: 'keeps the settings of a connector, set from its own workspace only',
+    by: 'keeps the switch and loses the exceptions',
+    replace: {
+      from: '.run(JSON.stringify(settings), workspace, connector)',
+      to: '.run(JSON.stringify({ ...settings, stages: {} }), workspace, connector)',
+    },
+  },
+  {
     breaks: 'removes a connector only from its own workspace, and its sites keep their notes in the worker again',
     by: 'removes a connector for any workspace',
     replace: {

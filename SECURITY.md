@@ -60,6 +60,12 @@ its own `showComments` wins over it, so setting the flag on a multi-client worke
 every client — check each entry, or an operator who believes replies are hidden is wrong for the
 ones that say otherwise.
 
+**A connector of a workspace can only take the replies away** (FRU-102). Its switch « Show Linear
+comments as replies » is off or on, and on keeps what the worker decides: a worker with
+`FRUITBACK_HIDE_COMMENTS=1` hides the replies of every connector, whatever its switch says. The
+switch reaches the next read of the tracker; an answer already in the read cache keeps its replies
+until its entry ends, or until a note is written on that page.
+
 ### `clientId` is asserted by the browser, never authenticated
 
 A page says which client it is. `origins` is what turns that claim into something checkable against

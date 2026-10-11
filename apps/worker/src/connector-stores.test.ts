@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
-import type { AccountStore } from './accounts.ts';
+import { type AccountStore, DEFAULT_CONNECTOR_SETTINGS } from './accounts.ts';
 import { closeAccountConnections, createSqliteAccountStore } from './accounts-sqlite.ts';
 import { handleRequest } from './app.ts';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
@@ -79,6 +80,23 @@ function linearOf(organisations: Record<string, string>) {
         },
       });
     }
+    if (operation === 'FruitbackStates') {
+      const teams = variables.teams as string[];
+      // Linear answers the states of every team the filter names, and of no other.
+      const nodes = [
+        { id: 'state_todo', name: 'Todo', type: 'unstarted', position: 1, team: { id: 'team_design', name: 'Design' } },
+        {
+          id: 'state_triage',
+          name: 'Triage',
+          type: 'triage',
+          position: 0,
+          team: { id: 'team_design', name: 'Design' },
+        },
+        { id: 'state_other', name: 'Todo', type: 'unstarted', position: 0, team: { id: 'team_other', name: 'Other' } },
+      ].filter((state) => teams.includes(state.team.id));
+
+      return Response.json({ data: { workflowStates: { nodes } } });
+    }
     if (operation === 'FruitbackLabels') return Response.json({ data: { team: { labels: { nodes: [] } } } });
     if (operation === 'FruitbackCreateLabel') {
       const { name } = variables.input as { name: string };
@@ -112,8 +130,10 @@ function linearOf(organisations: Record<string, string>) {
           title: 'A note',
           updatedAt: '2026-10-09T10:00:00.000Z',
           description: issue.description,
-          state: { name: 'Todo', type: 'unstarted' },
-          comments: { nodes: [] },
+          state: { id: 'state_todo', name: 'Todo', type: 'unstarted' },
+          comments: {
+            nodes: [{ id: `${identifier}-reply`, body: 'Seen.', createdAt: '2026-10-09T11:00:00.000Z', user: null }],
+          },
         }));
 
       return Response.json({ data: { issues: { pageInfo: { hasNextPage: false, endCursor: null }, nodes } } });
@@ -184,8 +204,17 @@ async function tenant(env: WorkerEnv, name: string, origin: string, apiKey: stri
       (issue) => [issue.identifier, issue.seed.note],
     );
   };
+  /** What the widget draws of each pin: its stage, and the replies it shows. */
+  const pins = async () => {
+    const answer = await call(env, 'GET', `/feedback?url=${encodeURIComponent(page)}&client=${site.id}`, { origin });
 
-  return { accounts, workspace, site, connector, base, token, write, read };
+    return ((await answer.json()) as { issues: { stage: string; comments?: unknown[] }[] }).issues.map((issue) => ({
+      stage: issue.stage,
+      comments: issue.comments?.length,
+    }));
+  };
+
+  return { accounts, workspace, account, site, connector, base, token, write, read, pins };
 }
 
 describe('two workspaces on one worker, each with its own tracker (FRU-102)', () => {
@@ -248,7 +277,12 @@ describe('the store of a connector, built for the request that asks for it (FRU-
       sealedKey: async () =>
         held.now === undefined
           ? undefined
-          : { kind: 'linear' as const, sealed: seal(held.now.key, SECRETS_KEY), workspaceId: held.now.workspaceId },
+          : {
+              kind: 'linear' as const,
+              sealed: seal(held.now.key, SECRETS_KEY),
+              workspaceId: held.now.workspaceId,
+              settings: DEFAULT_CONNECTOR_SETTINGS,
+            },
     } as unknown as AccountStore;
 
     return { held, accounts };
@@ -293,5 +327,113 @@ describe('the store of a connector, built for the request that asks for it (FRU-
     held.now = undefined;
     await assert.rejects(stores('con_a', 'ws_a', own), StoreError);
     assert.deepEqual(asked, [], 'no key left the worker');
+  });
+});
+
+describe('what a workspace sets on its connector (FRU-102)', () => {
+  it('takes the replies away and gives a state another stage, for the connector it is set on only', async () => {
+    const env = envWith();
+    linearOf({ lin_api_the_key_of_acme: 'acme', lin_api_the_key_of_globex: 'globex' });
+    const acme = await tenant(env, 'Acme', 'https://staging.acme.dev', 'lin_api_the_key_of_acme');
+    const globex = await tenant(env, 'Globex', 'https://staging.globex.dev', 'lin_api_the_key_of_globex');
+    assert.equal((await acme.write('Acme: one.')).status, 201);
+    assert.equal((await globex.write('Globex: one.')).status, 201);
+    // The stage of the type of « Todo », and its reply.
+    assert.deepEqual(await acme.pins(), [{ stage: 'green', comments: 1 }]);
+
+    const set = await call(env, 'POST', `${acme.base}/connectors/${acme.connector}/settings`, {
+      token: acme.token,
+      body: { showComments: false, stages: { state_todo: 'ripening' } },
+    });
+    assert.equal(set.status, 200, await set.clone().text());
+    // A new note empties the cache of the page, as a change of the settings does not.
+    assert.equal((await acme.write('Acme: two.')).status, 201);
+
+    assert.deepEqual(await acme.pins(), [
+      { stage: 'ripening', comments: undefined },
+      { stage: 'ripening', comments: undefined },
+    ]);
+    assert.deepEqual(await globex.pins(), [{ stage: 'green', comments: 1 }], 'the other workspace is not touched');
+
+    // The defaults again: the exception is gone, and the replies come back.
+    const back = await call(env, 'POST', `${acme.base}/connectors/${acme.connector}/settings`, {
+      token: acme.token,
+      body: { showComments: true, stages: {} },
+    });
+    assert.equal(back.status, 200);
+    assert.equal((await acme.write('Acme: three.')).status, 201);
+    assert.deepEqual((await acme.pins())[0], { stage: 'green', comments: 1 });
+  });
+
+  it('lists the states of the teams its sites send to, each with the stage of its type, and its settings', async () => {
+    const env = envWith();
+    linearOf({ lin_api_the_key_of_acme: 'acme' });
+    const acme = await tenant(env, 'Acme', 'https://staging.acme.dev', 'lin_api_the_key_of_acme');
+
+    const listed = await call(env, 'GET', `${acme.base}/connectors/${acme.connector}/states`, { token: acme.token });
+    assert.equal(listed.status, 200, await listed.clone().text());
+    assert.deepEqual(await listed.json(), {
+      // In the order of the board, and no state of a team no site sends to.
+      states: [
+        { id: 'state_triage', name: 'Triage', type: 'triage', teamId: 'team_design', team: 'Design', stage: 'seeded' },
+        { id: 'state_todo', name: 'Todo', type: 'unstarted', teamId: 'team_design', team: 'Design', stage: 'green' },
+      ],
+      settings: DEFAULT_CONNECTOR_SETTINGS,
+    });
+  });
+
+  it('refuses settings that are not settings, a role that does not manage the workspace, and another workspace', async () => {
+    const env = envWith();
+    linearOf({ lin_api_the_key_of_acme: 'acme', lin_api_the_key_of_globex: 'globex' });
+    const acme = await tenant(env, 'Acme', 'https://staging.acme.dev', 'lin_api_the_key_of_acme');
+    const globex = await tenant(env, 'Globex', 'https://staging.globex.dev', 'lin_api_the_key_of_globex');
+    const settings = (body: unknown, as = acme, connector = acme.connector) =>
+      call(env, 'POST', `${as.base}/connectors/${connector}/settings`, { token: as.token, body });
+
+    for (const body of [
+      { showComments: 'no' },
+      { stages: { state_todo: 'purple' } },
+      { stages: { 'a state': 'green' } },
+      { stages: ['green'] },
+      { stages: Object.fromEntries(Array.from({ length: 201 }, (_, index) => [`state_${index}`, 'green'])) },
+    ]) {
+      const refused = await settings(body);
+      assert.equal(refused.status, 400, JSON.stringify(body).slice(0, 80));
+    }
+
+    // The connector of Acme, asked from Globex, does not exist.
+    assert.equal((await settings({ showComments: false }, globex, acme.connector)).status, 404);
+    const read = await call(env, 'GET', `${globex.base}/connectors/${acme.connector}/states`, { token: globex.token });
+    assert.equal(read.status, 404);
+
+    // A member sees the tracker and does not change what the workspace set; an admin does. The file
+    // is written by hand: no route invites yet (FRU-104).
+    for (const [role, status] of [
+      ['member', 403],
+      ['admin', 200],
+    ] as const) {
+      const email = `${role}@acme.dev`;
+      const person = await acme.accounts.signIn({ provider: 'email', subject: email, email });
+      closeAccountConnections();
+      const database = new DatabaseSync(env.FRUITBACK_ACCOUNTS_PATH as string);
+      database
+        .prepare('INSERT INTO members (workspace_id, account_id, role, created_at) VALUES (?, ?, ?, ?)')
+        .run(acme.workspace.id, person.id, role, Date.now());
+      database.close();
+      const token = await signIdentityToken({ sub: person.id, exp: Math.floor(Date.now() / 1000) + 600 }, SECRET);
+
+      const asked = await call(env, 'POST', `${acme.base}/connectors/${acme.connector}/settings`, {
+        token,
+        body: { showComments: false },
+      });
+      assert.equal(asked.status, status, role);
+      const states = await call(env, 'GET', `${acme.base}/connectors/${acme.connector}/states`, { token });
+      assert.equal(states.status, status, role);
+    }
+    // The admin's change only.
+    assert.deepEqual((await acme.accounts.connectors(acme.workspace.id))[0]?.settings, {
+      showComments: false,
+      stages: {},
+    });
   });
 });

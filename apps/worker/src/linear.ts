@@ -221,7 +221,7 @@ const ISSUES_QUERY = `
         title
         updatedAt
         description
-        state { name type }
+        state { id name type }
         comments(first: $comments) {
           nodes { id body createdAt user { name } }
         }
@@ -238,7 +238,8 @@ export type IssueNode = {
   title: string;
   updatedAt: string;
   description: string | null;
-  state: { name: string; type: string } | null;
+  /** `id` is what a connector's exceptions name (FRU-102). The in-memory Linear has none. */
+  state: { id?: string; name: string; type: string } | null;
   comments?: { nodes: CommentNode[] } | null;
 };
 
@@ -290,6 +291,7 @@ export async function fetchSeedIssues(
   routing: LinearRouting,
   query: SeedIssueQuery,
   policy: ClientPolicy,
+  stages: StageExceptions = {},
 ): Promise<SeedIssue[]> {
   const filter = buildSeedIssueFilter(routing, query);
   const found: SeedIssue[] = [];
@@ -308,7 +310,7 @@ export async function fetchSeedIssues(
     });
 
     for (const node of result.issues.nodes) {
-      const issue = toSeedIssue(node, query.url, policy);
+      const issue = toSeedIssue(node, query.url, policy, stages);
       // The write path stores the normalized client id in the seed, so the two are equal for every
       // note of this client. A read that names no client gets every seed of the page, as before.
       if (issue === null || (query.clientId !== undefined && issue.seed.client?.id !== query.clientId)) continue;
@@ -393,6 +395,23 @@ export function stageForLinearState(stateType: string): SeedStage {
 }
 
 /**
+ * The stages a connector gives to some states, by the **id** of the state (FRU-102). A state with no
+ * entry takes the stage of its type.
+ */
+export type StageExceptions = Readonly<Record<string, SeedStage>>;
+
+/**
+ * The stage of a state: its exception, or the stage of its type. `Object.hasOwn`, so a state whose
+ * id is `constructor` is not read from the prototype.
+ */
+function stageOf(state: IssueNode['state'], stages: StageExceptions): SeedStage {
+  const id = state?.id;
+  if (id !== undefined && Object.hasOwn(stages, id)) return stages[id] as SeedStage;
+
+  return stageForLinearState(state?.type ?? '');
+}
+
+/**
  * `routing` decides whether replies come back, and it decides here — the one function both the real
  * Linear and the in-memory one go through.
  *
@@ -405,6 +424,7 @@ export function toSeedIssue(
   node: IssueNode,
   canonicalUrl: string,
   policy?: Pick<ClientPolicy, 'showComments'>,
+  stages: StageExceptions = {},
 ): SeedIssue | null {
   const parsed = parseSeedFromDescription(node.description);
   // Someone edited the block away, or a newer Fruitback wrote it: a pin we cannot place is worse
@@ -420,7 +440,7 @@ export function toSeedIssue(
     identifier: node.identifier,
     url: node.url,
     title: node.title,
-    stage: stageForLinearState(node.state?.type ?? ''),
+    stage: stageOf(node.state, stages),
     stateName: node.state?.name ?? '',
     updatedAt: node.updatedAt,
     ...optionalComments(policy?.showComments === false ? undefined : toSeedComments(node)),
@@ -489,6 +509,58 @@ export async function listLinearTeams(
   };
 }
 
+/** A workflow state of a team, as the panel of a connector shows it (FRU-102). */
+export type LinearState = { id: string; name: string; type: string; teamId: string; team: string; stage: SeedStage };
+
+const STATES_QUERY = `
+  query FruitbackStates($teams: [ID!]) {
+    workflowStates(first: 250, filter: { team: { id: { in: $teams } } }) {
+      nodes { id name type position team { id name } }
+    }
+  }
+`;
+
+/**
+ * The workflow states of these teams, each with the stage of its type: what the panel of a connector
+ * offers to change. In the order of each team's board. Throws a `StoreError` for a key Linear refuses.
+ */
+export async function listLinearStates(apiKey: string, teamIds: readonly string[]): Promise<LinearState[]> {
+  if (teamIds.length === 0) return [];
+  const data = await graphql<{
+    workflowStates?: {
+      nodes?: {
+        id?: unknown;
+        name?: unknown;
+        type?: unknown;
+        position?: unknown;
+        team?: { id?: unknown; name?: unknown };
+      }[];
+    };
+  }>({ apiKey, teamId: 'none' }, STATES_QUERY, { teams: [...teamIds] });
+
+  const states = (data.workflowStates?.nodes ?? []).flatMap((node) => {
+    const { id, name, type, position, team } = node;
+    if (typeof id !== 'string' || typeof name !== 'string' || typeof type !== 'string') return [];
+    if (typeof team?.id !== 'string' || !teamIds.includes(team.id)) return [];
+
+    return [
+      {
+        id,
+        name,
+        type,
+        teamId: team.id,
+        team: typeof team.name === 'string' ? team.name : '',
+        stage: stageForLinearState(type),
+        position: typeof position === 'number' ? position : 0,
+      },
+    ];
+  });
+
+  return states
+    .sort((a, b) => teamIds.indexOf(a.teamId) - teamIds.indexOf(b.teamId) || a.position - b.position)
+    .map(({ position: _position, ...state }) => state);
+}
+
 /**
  * Linear, as a `SeedStore` (FRU-29).
  *
@@ -496,14 +568,15 @@ export async function listLinearTeams(
  * name. Bound to its configuration at construction rather than handed the worker's config per call,
  * which is what a store holding a connection — SQLite (FRU-31) — is going to need.
  */
-export function createLinearStore(config: LinearConfig): SeedStore {
+export function createLinearStore(config: LinearConfig, stages: StageExceptions = {}): SeedStore {
   return {
     name: 'linear',
     // The team, because that is what separates one tenant's issues from another's here. The worker
     // used to reach for `routing.teamId` itself, which meant the read cache knew how Linear routes.
     scope: (client) => linearRoutingFor(config, client).teamId,
     create: (seed, client, policy) => createSeedIssue(config, linearRoutingFor(config, client), seed, policy.locale),
-    findForPage: (query, client, policy) => fetchSeedIssues(config, linearRoutingFor(config, client), query, policy),
+    findForPage: (query, client, policy) =>
+      fetchSeedIssues(config, linearRoutingFor(config, client), query, policy, stages),
   };
 }
 

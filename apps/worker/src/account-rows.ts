@@ -4,6 +4,7 @@ import {
   CONNECTOR_TROUBLES,
   type Connector,
   type ConnectorKind,
+  type ConnectorSettings,
   type ConnectorTrouble,
   type Destination,
   type DueDelivery,
@@ -14,6 +15,8 @@ import {
   VISIBILITIES,
   type Visibility,
   type Workspace,
+  DEFAULT_CONNECTOR_SETTINGS,
+  readConnectorSettings,
 } from './accounts.ts';
 
 /**
@@ -75,6 +78,24 @@ export function destinationOf(row: Record<string, unknown>): Destination | undef
   };
 }
 
+/**
+ * The settings a row holds. A row that is not settings reads as the defaults, field by field: an
+ * operator who edits the column by hand loses the entry they broke, not the switch beside it.
+ */
+export function connectorSettingsOf(value: unknown): ConnectorSettings {
+  let parsed: unknown;
+  try {
+    parsed = typeof value === 'string' ? JSON.parse(value) : undefined;
+  } catch {
+    parsed = undefined;
+  }
+  if (typeof parsed !== 'object' || parsed === null) return DEFAULT_CONNECTOR_SETTINGS;
+  const { showComments, stages } = parsed as Record<string, unknown>;
+  const kept = readConnectorSettings({ stages })?.stages ?? {};
+
+  return { showComments: typeof showComments === 'boolean' ? showComments : true, stages: kept };
+}
+
 export function connectorOf(row: Record<string, unknown> | undefined): Connector | undefined {
   const kind = (CONNECTOR_KINDS as readonly unknown[]).includes(row?.kind) ? (row?.kind as ConnectorKind) : undefined;
   if (row === undefined || kind === undefined) return undefined;
@@ -92,6 +113,7 @@ export function connectorOf(row: Record<string, unknown> | undefined): Connector
     kind,
     label: row.label,
     createdAt: new Date(typeof row.created_at === 'number' ? row.created_at : 0).toISOString(),
+    settings: connectorSettingsOf(row.settings),
     ...(reason === undefined
       ? {}
       : {

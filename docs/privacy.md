@@ -92,6 +92,8 @@ can read them, with or without the widget.
   identity token on every read. [modes.md](modes.md) says which mode can supply one.
 - `FRUITBACK_HIDE_COMMENTS=1`, or `showComments: false` on one client, keeps your team's replies,
   and the names of the people who wrote them, out of the answer.
+- In the Cloud, the switch « Show Linear comments as replies » of a connector does the same for the
+  sites that send there. It cannot show what the worker hides.
 
 ### What the worker keeps besides the note
 

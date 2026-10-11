@@ -10,7 +10,7 @@ import {
   siteOf,
   workspaceOf,
 } from './account-rows.ts';
-import { type AccountStore, type Site, clientOf, normalizeEmail } from './accounts.ts';
+import { type AccountStore, DEFAULT_CONNECTOR_SETTINGS, type Site, clientOf, normalizeEmail } from './accounts.ts';
 import type { ClientMap } from './clients.ts';
 import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
@@ -292,7 +292,14 @@ export function createPostgresAccountStore(database: Database): AccountStore {
         db.insert(connectors).values({ id, workspace_id: workspace, kind, label, sealed, created_at: now }),
       );
 
-      return { id, workspaceId: workspace, kind, label, createdAt: new Date(now).toISOString() };
+      return {
+        id,
+        workspaceId: workspace,
+        kind,
+        label,
+        createdAt: new Date(now).toISOString(),
+        settings: DEFAULT_CONNECTOR_SETTINGS,
+      };
     },
 
     async connectors(workspace) {
@@ -306,6 +313,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
             created_at: connectors.created_at,
             attention: connectors.attention,
             attention_at: connectors.attention_at,
+            settings: connectors.settings,
           })
           .from(connectors)
           .where(eq(connectors.workspace_id, workspace))
@@ -341,6 +349,18 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       );
     },
 
+    async setConnectorSettings(workspace, connector, settings) {
+      const changed = await run((db) =>
+        db
+          .update(connectors)
+          .set({ settings: JSON.stringify(settings) })
+          .where(and(eq(connectors.workspace_id, workspace), eq(connectors.id, connector)))
+          .returning({ id: connectors.id }),
+      );
+
+      return changed.length === 1;
+    },
+
     async sealedKey(connector) {
       const row = (
         await run((db) =>
@@ -352,6 +372,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
               label: connectors.label,
               sealed: connectors.sealed,
               created_at: connectors.created_at,
+              settings: connectors.settings,
             })
             .from(connectors)
             .where(eq(connectors.id, connector)),
@@ -360,7 +381,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       const known = connectorOf(row);
       if (known === undefined || row === undefined) return undefined;
 
-      return { kind: known.kind, sealed: row.sealed, workspaceId: known.workspaceId };
+      return { kind: known.kind, sealed: row.sealed, workspaceId: known.workspaceId, settings: known.settings };
     },
 
     async setDestination(workspace, site, destination) {

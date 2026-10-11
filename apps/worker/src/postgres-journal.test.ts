@@ -182,6 +182,10 @@ function asBase(folder: string): Base {
 
 describe('the journal of the migrations (FRU-180)', () => {
   const last = journalOf(FOLDER).entries.at(-1) as Entry;
+  // Where the next migration goes, and the one after it: a test that adds one names it from here,
+  // so the cases hold whatever number of migrations the worker has.
+  const next = journalOf(FOLDER).entries.length;
+  const [NEXT, AFTER, LAST] = [number(next), number(next + 1), number(next - 1)];
 
   it('is in order: an index, a name, a file and a snapshot for each entry, and dates that only go up', () => {
     assert.ok(journalOf(FOLDER).entries.length > 0, 'the journal has no entry, so nothing was checked');
@@ -245,29 +249,29 @@ describe('the journal of the migrations (FRU-180)', () => {
       const renamed = copyOfTheFolder();
       const added = add(renamed, { name: 'more', when: last.when + 1 });
       const entries = journalOf(renamed).entries.map((entry) =>
-        entry.tag === added.tag ? { ...entry, tag: '0007_more' } : entry,
+        entry.tag === added.tag ? { ...entry, tag: '9997_more' } : entry,
       );
       writeFileSync(join(renamed, 'meta', '_journal.json'), JSON.stringify({ entries }));
 
-      assert.match(problemsOf(renamed).join('\n'), /its name must start with « 0001_ »/);
+      assert.match(problemsOf(renamed).join('\n'), new RegExp(`its name must start with « ${NEXT}_ »`));
     });
 
     it('refuses an entry with no SQL file, and one with no snapshot', () => {
       const folder = copyOfTheFolder();
       const added = add(folder, { name: 'more', when: last.when + 1 });
       rmSync(join(folder, `${added.tag}.sql`));
-      rmSync(join(folder, 'meta', '0001_snapshot.json'));
+      rmSync(join(folder, 'meta', `${NEXT}_snapshot.json`));
 
       const problems = problemsOf(folder).join('\n');
-      assert.match(problems, /has no file 0001_more\.sql/);
-      assert.match(problems, /has no snapshot meta\/0001_snapshot\.json/);
+      assert.match(problems, new RegExp(`has no file ${NEXT}_more\\.sql`));
+      assert.match(problems, new RegExp(`has no snapshot meta/${NEXT}_snapshot\\.json`));
     });
 
     it('refuses a SQL file that the journal does not name', () => {
       const folder = copyOfTheFolder();
-      writeFileSync(join(folder, '0001_by_hand.sql'), 'CREATE TABLE by_hand (id TEXT PRIMARY KEY);');
+      writeFileSync(join(folder, `${NEXT}_by_hand.sql`), 'CREATE TABLE by_hand (id TEXT PRIMARY KEY);');
 
-      assert.deepEqual(problemsOf(folder), ['0001_by_hand.sql is not in the journal: no database gets it']);
+      assert.deepEqual(problemsOf(folder), [`${NEXT}_by_hand.sql is not in the journal: no database gets it`]);
     });
 
     it('refuses a migration that was generated from another base than the one before it', () => {
@@ -275,10 +279,13 @@ describe('the journal of the migrations (FRU-180)', () => {
       add(folder, { name: 'theirs', when: last.when + 1 });
       add(folder, { name: 'mine', when: last.when + 2 });
       // Two branches each generated a migration from the same snapshot, and the journal was merged by hand.
-      const first = JSON.parse(readFileSync(join(folder, 'meta', '0000_snapshot.json'), 'utf8')) as { id: string };
-      writeFileSync(join(folder, 'meta', '0002_snapshot.json'), JSON.stringify({ id: 'mine', prevId: first.id }));
+      const shared = JSON.parse(readFileSync(join(folder, 'meta', `${LAST}_snapshot.json`), 'utf8')) as { id: string };
+      writeFileSync(join(folder, 'meta', `${AFTER}_snapshot.json`), JSON.stringify({ id: 'mine', prevId: shared.id }));
 
-      assert.match(problemsOf(folder).join('\n'), /the snapshot of « 0002_mine » does not name the snapshot before it/);
+      assert.match(
+        problemsOf(folder).join('\n'),
+        new RegExp(`the snapshot of « ${AFTER}_mine » does not name the snapshot before it`),
+      );
     });
 
     it('refuses a migration of the base that was edited', () => {
@@ -305,12 +312,12 @@ describe('the journal of the migrations (FRU-180)', () => {
       add(mine, { name: 'theirs', when: last.when + 2_000 });
       assert.match(
         problemsOf(mine, base).join('\n'),
-        /entry 1 of the base is « 0001_theirs » .* it is not entry 1 here/,
+        new RegExp(`entry ${next} of the base is « ${NEXT}_theirs » .* it is not entry ${next} here`),
       );
 
       const dated = copyOfTheFolder();
       add(dated, { name: 'theirs', when: last.when + 3_000 });
-      assert.match(problemsOf(dated, base).join('\n'), /entry 1 of the base is « 0001_theirs »/);
+      assert.match(problemsOf(dated, base).join('\n'), new RegExp(`entry ${next} of the base is « ${NEXT}_theirs »`));
     });
   });
 });

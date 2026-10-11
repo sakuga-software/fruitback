@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { isDeepStrictEqual } from 'node:util';
-import { type Account, type AccountStore, type Workspace, destinationId } from './accounts.ts';
+import {
+  type Account,
+  type AccountStore,
+  DEFAULT_CONNECTOR_SETTINGS,
+  type Workspace,
+  destinationId,
+} from './accounts.ts';
 import { type Declare, pause } from './conformance.fixture.ts';
 import { StoreError } from './store.ts';
 
@@ -247,17 +253,41 @@ export function accountCases(it: Declare<AccountStore>): void {
 
     const connector = await store.addConnector(workspace.id, { kind: 'linear', label: 'Linear', sealed: 'sealed-1' });
 
-    assert.deepEqual(Object.keys(connector).sort(), ['createdAt', 'id', 'kind', 'label', 'workspaceId']);
+    assert.deepEqual(Object.keys(connector).sort(), ['createdAt', 'id', 'kind', 'label', 'settings', 'workspaceId']);
     assert.deepEqual(await store.connectors(workspace.id), [connector]);
     assert.deepEqual(await store.sealedKey(connector.id), {
       kind: 'linear',
       sealed: 'sealed-1',
       workspaceId: workspace.id,
+      settings: DEFAULT_CONNECTOR_SETTINGS,
     });
     assert.equal(await store.sealedKey('con_nobody'), undefined);
 
     await store.resealConnector(connector.id, 'sealed-2');
     assert.equal((await store.sealedKey(connector.id))?.sealed, 'sealed-2');
+  });
+
+  it('keeps the settings of a connector, set from its own workspace only', async (store) => {
+    const { workspace: acme } = await world(store);
+    const { workspace: globex } = await otherWorld(store);
+    const linear = await store.addConnector(acme.id, { kind: 'linear', label: 'Linear', sealed: 'sealed' });
+    const other = await store.addConnector(acme.id, { kind: 'linear', label: 'Other', sealed: 'sealed' });
+    const settingsOf = async (id: string) => (await store.connectors(acme.id)).find((each) => each.id === id)?.settings;
+    const quiet = { showComments: false, stages: { state_triage: 'green', state_review: 'ripe' } } as const;
+
+    assert.deepEqual(linear.settings, DEFAULT_CONNECTOR_SETTINGS);
+    assert.equal(await store.setConnectorSettings(globex.id, linear.id, quiet), false);
+    assert.equal(await store.setConnectorSettings(acme.id, 'con_nobody', quiet), false);
+    assert.deepEqual(await settingsOf(linear.id), DEFAULT_CONNECTOR_SETTINGS);
+
+    assert.equal(await store.setConnectorSettings(acme.id, linear.id, quiet), true);
+    assert.deepEqual(await settingsOf(linear.id), quiet);
+    assert.deepEqual((await store.sealedKey(linear.id))?.settings, quiet);
+    assert.deepEqual(await settingsOf(other.id), DEFAULT_CONNECTOR_SETTINGS, 'one connector, not its neighbour');
+
+    // The whole value takes the place of the one before: an exception taken away is gone.
+    assert.equal(await store.setConnectorSettings(acme.id, linear.id, DEFAULT_CONNECTOR_SETTINGS), true);
+    assert.deepEqual(await settingsOf(linear.id), DEFAULT_CONNECTOR_SETTINGS);
   });
 
   it('removes a connector only from its own workspace, and its sites keep their notes in the worker again', async (store) => {
