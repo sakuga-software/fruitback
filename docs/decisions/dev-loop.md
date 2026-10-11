@@ -58,6 +58,9 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   `--test-concurrency`, before the files. CI does not set it, so there `node --test` uses every core
   but one. `githooks.test.ts` fails on a package that does not pass it, and on a workflow that
   sets it.
+- **`pre-push` starts Nx, and so every test, without the variables of git that name a repository.**
+  Git gives a hook `GIT_DIR`. With it, a `git` that a test starts in a temporary directory works on
+  the repository that pushes. `githooks.test.ts` runs the function of the hook that removes them.
 - **CI is the gate. A hook only says it sooner.** `--no-verify` skips either one.
 - **The path is relative, so a worktree runs the hooks of its own branch.** The setting is in the
   configuration of the clone, which every worktree shares: one install sets it for all of them. A
@@ -104,6 +107,18 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   `--test-concurrency` (measured), so the variable goes through the script of each package. Node
   ignores the option after the files: four files of 300 ms took 0.43 s with `--test-concurrency=1`
   after them, and 1.58 s with it before them (measured on Node 25.8.1).
+- **What the bound of two costs, and what it frees** (2026-10-11, 10 cores, load average 9 to 18,
+  nothing replayed from the cache of Nx). The tests of the worker, 1,096 of them: 9 processes at
+  once and 23 to 26 s without the bound, 2 processes and 28 to 29 s with it, for 81 to 87 s of
+  processor against 69 s. The whole hook for a branch that changes every package, typechecks
+  included: 55 s with nine files at a time, 71 s with two, for 202 s of processor against 171 s.
+- **A test under `pre-push` saw `GIT_DIR`, and one changed the clone with it** (2026-10-11). Its
+  `git init`, in a temporary directory, re-initialised the repository that pushed, and git wrote
+  `core.bare = true` to the configuration that the clone and its worktrees share. Measured after
+  the change, with a test planted to write what it sees: under a hook that is given `GIT_DIR`, the
+  test reads none. Nx finds the repository from the directory it runs in, as it does outside a
+  hook. A repository whose directory is given by hand, with `--git-dir`, is not found that way:
+  push it with `--no-verify`.
 - **The installer leaves another `core.hooksPath` as it is**, and says where the hooks are.
 - **In a French shell, `pre-push` stopped a branch that changes the widget** until its four tests
   stopped reading the locale (see [conventions.md](conventions.md)).
