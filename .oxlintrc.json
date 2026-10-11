@@ -180,6 +180,56 @@
       }
     },
     {
+      "files": ["apps/worker/src/**"],
+      "excludeFiles": [
+        "**/*.test.ts",
+        "**/*.fixture.ts",
+        "apps/worker/src/postgres.ts",
+        "apps/worker/src/session-sqlite.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "happy-dom",
+                "message": "happy-dom is for *.test.ts and *.fixture.ts only: shipped code compiles with types: [] and runs in a real browser."
+              },
+              {
+                "name": "@electric-sql/pglite",
+                "message": "PGlite is the PostgreSQL of the tests: *.test.ts and *.fixture.ts only. It is 25 MB, and it must not enter the bundle of the worker (docs/decisions/worker.md, FRU-141)."
+              },
+              {
+                "name": "pg",
+                "message": "postgres.ts is the one file that names the driver, as types, and loads it at the first query. A worker without FRUITBACK_DATABASE_URL loads nothing of PostgreSQL (docs/decisions/worker.md, FRU-141)."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["apps/worker/src/postgres.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "happy-dom",
+                "message": "happy-dom is for *.test.ts and *.fixture.ts only: shipped code compiles with types: [] and runs in a real browser."
+              },
+              {
+                "name": "@electric-sql/pglite",
+                "message": "PGlite is the PostgreSQL of the tests: *.test.ts and *.fixture.ts only. It is 25 MB, and it must not enter the bundle of the worker (docs/decisions/worker.md, FRU-141)."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["apps/worker/src/session-sqlite.ts"],
       "rules": {
         "no-restricted-imports": [
@@ -189,6 +239,20 @@
               {
                 "group": ["./sqlite.ts", "**/sqlite.ts"],
                 "message": "The session database has its own connect. The one of sqlite.ts applies the seeds migrations and drives PRAGMA user_version with them (docs/decisions/worker.md)."
+              }
+            ],
+            "paths": [
+              {
+                "name": "happy-dom",
+                "message": "happy-dom is for *.test.ts and *.fixture.ts only: shipped code compiles with types: [] and runs in a real browser."
+              },
+              {
+                "name": "@electric-sql/pglite",
+                "message": "PGlite is the PostgreSQL of the tests: *.test.ts and *.fixture.ts only. It is 25 MB, and it must not enter the bundle of the worker (docs/decisions/worker.md, FRU-141)."
+              },
+              {
+                "name": "pg",
+                "message": "postgres.ts is the one file that names the driver, as types, and loads it at the first query. A worker without FRUITBACK_DATABASE_URL loads nothing of PostgreSQL (docs/decisions/worker.md, FRU-141)."
               }
             ]
           }

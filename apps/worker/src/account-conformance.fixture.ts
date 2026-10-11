@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { isDeepStrictEqual } from 'node:util';
 import { type Account, type AccountStore, type Workspace, destinationId } from './accounts.ts';
 import { type Declare, pause } from './conformance.fixture.ts';
 import { StoreError } from './store.ts';
@@ -321,6 +322,203 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.equal(await store.setDestination(workspace.id, site.id, { connector: hook.id }), true);
 
     assert.deepEqual(await store.sites(workspace.id), [{ ...site, destinations: [{ connector: hook.id }] }]);
+  });
+
+  it('keeps the destinations of a site in the order they were given, and the client map carries them', async (store) => {
+    const { workspace } = await world(store);
+    const site = await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'members' });
+    const linear = await store.addConnector(workspace.id, { kind: 'linear', label: 'Linear', sealed: 'sealed' });
+    const hook = await store.addConnector(workspace.id, { kind: 'rest', label: 'Hook', sealed: 'sealed' });
+    // One connector twice, and not in the order of the connectors: only the order given says which
+    // place is the first.
+    const places = [
+      { connector: hook.id, label: 'Hook' },
+      { connector: linear.id, teamId: 'team_2', projectId: 'project_2', label: 'Linear · Design' },
+      { connector: linear.id, teamId: 'team_1' },
+    ];
+
+    assert.equal(await store.setDestinations(workspace.id, site.id, places), true);
+
+    assert.deepEqual(await store.sites(workspace.id), [{ ...site, destinations: places }]);
+    assert.deepEqual(await store.clientMap(), {
+      [site.id]: {
+        workspace: workspace.id,
+        origins: ['https://acme.dev'],
+        read: 'authenticated',
+        // The first place is where a note goes when nobody chose. It has no team.
+        connector: hook.id,
+        destinations: places.map((place) => ({ id: destinationId(site.id, place), ...place })),
+      },
+    });
+
+    // The same places in the other order are another list: a store that sorts them fails one of the two.
+    const reversed = places.toReversed();
+    assert.equal(await store.setDestinations(workspace.id, site.id, reversed), true);
+    assert.deepEqual(await store.sites(workspace.id), [{ ...site, destinations: reversed }]);
+
+    // A site that is added again is the same site, and it answers the places it has.
+    assert.deepEqual(await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'everyone' }), {
+      ...site,
+      visibility: 'everyone',
+      destinations: reversed,
+    });
+
+    // A second site, with the same places in the first order. A store that reads the places of
+    // every site in one answer gets the rows of the two sites one between the other: each site
+    // keeps its own order, in the list of the workspace and in the client map.
+    await pause();
+    const other = await store.addSite(workspace.id, { origin: 'https://other.dev', visibility: 'members' });
+    assert.equal(await store.setDestinations(workspace.id, other.id, places), true);
+
+    assert.deepEqual(
+      (await store.sites(workspace.id)).map((listed) => [listed.id, listed.destinations]),
+      [
+        [site.id, reversed],
+        [other.id, places],
+      ],
+    );
+    const map = await store.clientMap();
+    assert.deepEqual(
+      map[site.id]?.destinations,
+      reversed.map((place) => ({ id: destinationId(site.id, place), ...place })),
+    );
+    assert.deepEqual(
+      map[other.id]?.destinations,
+      places.map((place) => ({ id: destinationId(other.id, place), ...place })),
+    );
+  });
+
+  it('refuses a list of destinations in which one connector is of another workspace, and writes none of it', async (store) => {
+    const { workspace: acme } = await world(store);
+    const { workspace: globex } = await otherWorld(store);
+    const site = await store.addSite(acme.id, { origin: 'https://acme.dev', visibility: 'members' });
+    const ours = await store.addConnector(acme.id, { kind: 'linear', label: 'Ours', sealed: 'sealed-ours' });
+    const hook = await store.addConnector(acme.id, { kind: 'rest', label: 'Hook', sealed: 'sealed-hook' });
+    const theirs = await store.addConnector(globex.id, { kind: 'linear', label: 'Theirs', sealed: 'sealed-theirs' });
+    const kept = [{ connector: ours.id, teamId: 'team_1' }];
+    assert.equal(await store.setDestinations(acme.id, site.id, kept), true);
+
+    // The connector that is refused is the last one: a store that writes as it reads wrote two rows.
+    const mixed = [{ connector: hook.id }, { connector: ours.id, teamId: 'team_2' }, { connector: theirs.id }];
+    assert.equal(await store.setDestinations(acme.id, site.id, mixed), false);
+    assert.equal(
+      await store.setDestinations(acme.id, site.id, [{ connector: hook.id }, { connector: 'con_nobody' }]),
+      false,
+    );
+    // Nor by the other workspace, with its own connector, for a site that is not its own.
+    assert.equal(await store.setDestinations(globex.id, site.id, [{ connector: theirs.id }]), false);
+
+    assert.deepEqual(await store.sites(acme.id), [{ ...site, destinations: kept }]);
+  });
+
+  it('clears the destinations of a site with an empty list, and a connector that is removed takes only its own', async (store) => {
+    const { workspace } = await world(store);
+    const site = await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'members' });
+    const linear = await store.addConnector(workspace.id, { kind: 'linear', label: 'Linear', sealed: 'sealed' });
+    const hook = await store.addConnector(workspace.id, { kind: 'rest', label: 'Hook', sealed: 'sealed' });
+    const place = { connector: hook.id, label: 'Hook' };
+    assert.equal(
+      await store.setDestinations(workspace.id, site.id, [
+        { connector: linear.id, teamId: 'team_1' },
+        place,
+        { connector: linear.id, teamId: 'team_2' },
+      ]),
+      true,
+    );
+
+    // The first place goes with its connector, and the next one of the site becomes the first.
+    assert.equal(await store.removeConnector(workspace.id, linear.id), true);
+    assert.deepEqual(await store.sites(workspace.id), [{ ...site, destinations: [place] }]);
+    assert.deepEqual(await store.clientMap(), {
+      [site.id]: {
+        workspace: workspace.id,
+        origins: ['https://acme.dev'],
+        read: 'authenticated',
+        connector: hook.id,
+        destinations: [{ id: destinationId(site.id, place), ...place }],
+      },
+    });
+
+    assert.equal(await store.setDestinations(workspace.id, site.id, []), true);
+    assert.deepEqual(await store.sites(workspace.id), [site]);
+    assert.deepEqual(await store.clientMap(), {
+      [site.id]: { workspace: workspace.id, origins: ['https://acme.dev'], read: 'authenticated' },
+    });
+  });
+
+  it('removes the destinations of a site with the site, and with its workspace, and only those', async (store) => {
+    const { workspace: gone } = await world(store);
+    const { workspace: kept } = await otherWorld(store);
+    const theirs = await store.addConnector(gone.id, { kind: 'linear', label: 'Theirs', sealed: 'sealed' });
+    const lost = await store.addSite(gone.id, { origin: 'https://gone.dev', visibility: 'members' });
+    assert.equal(
+      await store.setDestinations(gone.id, lost.id, [
+        { connector: theirs.id, teamId: 'team_1' },
+        { connector: theirs.id, teamId: 'team_2' },
+      ]),
+      true,
+    );
+    const ours = await store.addConnector(kept.id, { kind: 'linear', label: 'Ours', sealed: 'sealed' });
+    const first = await store.addSite(kept.id, { origin: 'https://one.dev', visibility: 'members' });
+    await pause();
+    const second = await store.addSite(kept.id, { origin: 'https://two.dev', visibility: 'members' });
+    const place = { connector: ours.id, teamId: 'team_1' };
+    assert.equal(await store.setDestinations(kept.id, first.id, [place]), true);
+    assert.equal(
+      await store.setDestinations(kept.id, second.id, [place, { connector: ours.id, teamId: 'team_2' }]),
+      true,
+    );
+
+    // A site that has destinations is removed like another, and its connector keeps the other site.
+    assert.equal(await store.removeSite(kept.id, second.id), true);
+    assert.deepEqual(await store.sites(kept.id), [{ ...first, destinations: [place] }]);
+
+    await store.deleteWorkspace(gone.id);
+
+    assert.deepEqual(await store.sites(gone.id), []);
+    assert.deepEqual(await store.sites(kept.id), [{ ...first, destinations: [place] }]);
+    assert.deepEqual(await store.clientMap(), {
+      [first.id]: {
+        workspace: kept.id,
+        origins: ['https://one.dev'],
+        read: 'authenticated',
+        connector: ours.id,
+        teamId: 'team_1',
+        destinations: [{ id: destinationId(first.id, place), ...place }],
+      },
+    });
+  });
+
+  it('keeps one whole list when two calls set the destinations of one site at the same moment', async (store) => {
+    const { workspace } = await world(store);
+    const site = await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'members' });
+    const linear = await store.addConnector(workspace.id, { kind: 'linear', label: 'Linear', sealed: 'sealed' });
+    const hook = await store.addConnector(workspace.id, { kind: 'rest', label: 'Hook', sealed: 'sealed' });
+    // Two lists of two lengths with no place in common: a mix of them is neither.
+    const one = [
+      { connector: linear.id, teamId: 'team_1' },
+      { connector: linear.id, teamId: 'team_2' },
+      { connector: linear.id, teamId: 'team_3' },
+    ];
+    const two = [{ connector: hook.id }, { connector: linear.id, teamId: 'team_4' }];
+
+    // Two rounds, which are two races: the first one starts from no list, and the second one from
+    // a list that is there.
+    for (let round = 0; round < 2; round += 1) {
+      assert.deepEqual(
+        await Promise.all([
+          store.setDestinations(workspace.id, site.id, one),
+          store.setDestinations(workspace.id, site.id, two),
+        ]),
+        [true, true],
+      );
+
+      const held = (await store.sites(workspace.id))[0]?.destinations;
+      assert.ok(
+        isDeepStrictEqual(held, one) || isDeepStrictEqual(held, two),
+        `the site holds neither list: ${JSON.stringify(held)}`,
+      );
+    }
   });
 
   it('keeps the first moment of a refusal, and forgets it at the first call that works', async (store) => {
