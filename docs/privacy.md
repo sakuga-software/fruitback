@@ -102,7 +102,8 @@ can read them, with or without the widget.
   address over one-minute windows, and keeps a window for two. Nothing writes the address to disk.
 - **The answer to a read, for 15 seconds, in memory.** The read cache keeps a page's notes so a burst
   of visitors costs one call to the store.
-- **The extension's sessions, on disk**, when `FRUITBACK_SESSION_PATH` is set. Each row holds the
+- **The extension's sessions, on disk**, when `FRUITBACK_SESSION_PATH` is set, or in the PostgreSQL
+  database of `FRUITBACK_DATABASE_URL` in place of that file (FRU-142). Each row holds the
   subject, name and e-mail the operator gave when minting the pairing code, its dates, and a SHA-256
   digest of the code or token, never the token itself. Expired rows are removed when a new code is
   redeemed.

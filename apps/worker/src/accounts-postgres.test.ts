@@ -1,8 +1,5 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { afterEach, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -10,13 +7,17 @@ import { accountCases } from './account-conformance.fixture.ts';
 import type { AccountStore } from './accounts.ts';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { accountStoreFor, handleRequest } from './app.ts';
-import { collect, mutatedModule } from './conformance.fixture.ts';
 import { type WorkerEnv, hasAccounts, readConfig } from './env.ts';
 import { type Database, migrate } from './postgres.ts';
-import { MIGRATIONS, migrated } from './postgres-migrations.ts';
-import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase } from './postgres.fixture.ts';
-import { closeSessionConnections, createSqliteSessionStore } from './session-sqlite.ts';
-import { createPairing, redeemPairing } from './session.ts';
+import { MIGRATIONS } from './postgres-migrations.ts';
+import {
+  NO_REAL_POSTGRES,
+  createPgliteDatabase,
+  createRealDatabase,
+  outcomeOnChangedStore,
+} from './postgres.fixture.ts';
+import { createPostgresSessionStore } from './session-postgres.ts';
+import { type SessionStore, createPairing, redeemPairing } from './session.ts';
 
 /**
  * What is true of the PostgreSQL account store alone (FRU-141). The rules of every `AccountStore`
@@ -29,27 +30,17 @@ const PASSWORD = 'hunter2-not-for-a-log';
 // Port 1 of this machine: nothing listens there.
 const DATABASE_URL = `postgres://fruitback:${PASSWORD}@127.0.0.1:1/fruitback`;
 
-const directories: string[] = [];
-
+/** A worker on a database. Its sessions are in the database too (FRU-142): it names no session file. */
 function envWith(overrides: Partial<WorkerEnv> = {}): WorkerEnv {
-  const directory = mkdtempSync(join(tmpdir(), 'fruitback-accounts-pg-'));
-  directories.push(directory);
-
   return {
     FRUITBACK_STORE: 'memory',
     ALLOWED_ORIGINS: 'https://app.fruitback.test',
     FRUITBACK_IDENTITY_SECRET: SECRET,
-    FRUITBACK_SESSION_PATH: join(directory, 'sessions.db'),
     FRUITBACK_DATABASE_URL: DATABASE_URL,
     FRUITBACK_CONSOLE_URL: 'https://app.fruitback.test',
     ...overrides,
   };
 }
-
-afterEach(() => {
-  closeSessionConnections();
-  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
-});
 
 describe('a worker whose accounts are in PostgreSQL (FRU-141)', () => {
   it('takes the address of the database in place of the accounts file', () => {
@@ -72,9 +63,12 @@ describe('a worker whose accounts are in PostgreSQL (FRU-141)', () => {
     );
   });
 
-  it('asks of the database what it asks of the accounts file: sessions, and a console', () => {
-    const noSessions = readConfig(envWith({ FRUITBACK_SESSION_PATH: undefined }));
-    assert.ok(noSessions.ok === false && noSessions.missing.some((name) => name.startsWith('FRUITBACK_SESSION_PATH')));
+  it('asks of the database what it asks of the accounts file: a console, and the key of a session', () => {
+    // The sessions are in the database too (FRU-142), so the key that signs one is asked for.
+    const noKey = readConfig(envWith({ FRUITBACK_IDENTITY_SECRET: undefined }));
+    assert.deepEqual(noKey.ok === false && noKey.missing, [
+      'FRUITBACK_IDENTITY_SECRET (FRUITBACK_DATABASE_URL is set, and a session signs its access token)',
+    ]);
 
     const noConsole = readConfig(envWith({ FRUITBACK_CONSOLE_URL: undefined }));
     assert.ok(noConsole.ok === false && noConsole.missing.some((name) => name.startsWith('FRUITBACK_CONSOLE_URL')));
@@ -88,7 +82,8 @@ describe('a worker whose accounts are in PostgreSQL (FRU-141)', () => {
     const cases = [
       envWith({ FRUITBACK_DATABASE_URL: malformed }),
       envWith({ FRUITBACK_ACCOUNTS_PATH: '/data/accounts.db' }),
-      envWith({ FRUITBACK_SESSION_PATH: undefined }),
+      envWith({ FRUITBACK_SESSION_PATH: '/data/sessions.db' }),
+      envWith({ FRUITBACK_IDENTITY_SECRET: undefined }),
       envWith({ FRUITBACK_CONSOLE_URL: undefined }),
       envWith({ FRUITBACK_CLIENTS: '{"acme":{"workspace":"ws"}}' }),
     ];
@@ -150,8 +145,7 @@ describe('the sites of a workspace, read from PostgreSQL (FRU-141)', () => {
     });
   }
 
-  async function sessionIn(env: WorkerEnv, account: string, workspace: string): Promise<string> {
-    const sessions = createSqliteSessionStore(env.FRUITBACK_SESSION_PATH as string);
+  async function sessionIn(sessions: SessionStore, account: string, workspace: string): Promise<string> {
     const redeemed = await redeemPairing(
       sessions,
       (await createPairing(sessions, { subject: account, workspace })).code,
@@ -183,8 +177,10 @@ describe('the sites of a workspace, read from PostgreSQL (FRU-141)', () => {
 
     const site = await accounts.addSite(acme.id, { origin: 'https://acme.dev', visibility: 'members' });
 
-    const mine = await sessionIn(env, alice.id, acme.id);
-    const theirs = await sessionIn(env, mallory.id, evil.id);
+    // The sessions are in the same database as the accounts.
+    const sessions = createPostgresSessionStore(database);
+    const mine = await sessionIn(sessions, alice.id, acme.id);
+    const theirs = await sessionIn(sessions, mallory.id, evil.id);
     assert.equal((await read(env, accounts, site.id, 'https://acme.dev', mine)).status, 200);
     assert.equal((await read(env, accounts, site.id, 'https://acme.dev', theirs)).status, 401);
     assert.equal(
@@ -197,16 +193,23 @@ describe('the sites of a workspace, read from PostgreSQL (FRU-141)', () => {
     assert.equal((await read(env, accounts, site.id, 'https://acme.dev', mine)).status, 403, 'after: the site is gone');
   });
 
-  it('applies the migrations at the first call, and once for the two stores of one database', async () => {
+  it('applies the migrations at the first call, and once for the stores of one database', async () => {
     database = await createPgliteDatabase();
 
-    // Two requests at the same moment build two stores on the database of the process.
+    // Two requests at the same moment build their stores on the database of the process: two of
+    // the accounts, and one of the sessions.
     const [first, second] = [createPostgresAccountStore(database), createPostgresAccountStore(database)];
-    assert.deepEqual(await Promise.all([first.clientMap(), second.clientMap()]), [{}, {}]);
+    const sessions = createPostgresSessionStore(database);
+    assert.deepEqual(await Promise.all([first.clientMap(), second.clientMap(), sessions.purge(0)]), [
+      {},
+      {},
+      undefined,
+    ]);
 
     assert.deepEqual((await database.query('SELECT version, name FROM schema_migrations ORDER BY version')).rows, [
       { version: 1, name: 'accounts' },
       { version: 2, name: 'site_destinations' },
+      { version: 3, name: 'sessions' },
     ]);
   });
 
@@ -237,51 +240,22 @@ describe('the sites of a workspace, read from PostgreSQL (FRU-141)', () => {
   });
 });
 
-/** How long the database holds a new row before it writes it, in the tests that plant a race. */
-const HOLD_SECONDS = 0.3;
-
-/**
- * What a case answers on the store with one change, on this database: `'passed'`, or its failure.
- *
- * **A race that is left to chance is a control that fails one run in a few.** Two calls overlap only
- * when the scheduler lets them, and a store that loses the race then passes. CI showed it: the same
- * control passed on one head and failed on the next one, which changed one line of a document. So
- * the overlap is made here, as `pg_sleep` makes it for the migrations of two processes:
- *
- * - a trigger holds each new row of `held` for `HOLD_SECONDS` before it is written, inside the
- *   transaction, so the first call has not committed when the second one reads;
- * - the two connections are open before the case starts, so the second call does not wait for one.
- */
-async function outcomeOf(
+/** What a case of the accounts answers on the store with one change. See `outcomeOnChangedStore`. */
+function outcomeOf(
   name: string,
   change: { from: string; to: string },
   held: { table: string; when?: string },
   open: () => Promise<Database>,
 ): Promise<unknown> {
-  const mutant = await mutatedModule('accounts-postgres.ts', change);
-  const opened = await open();
-  const create = mutant.module.createPostgresAccountStore as typeof createPostgresAccountStore;
-  try {
-    const runCase = collect(accountCases).get(name);
-    assert.ok(runCase !== undefined, 'the case is gone');
-
-    await migrated(opened);
-    await opened.query(`
-      CREATE FUNCTION hold_the_row() RETURNS trigger LANGUAGE plpgsql
-        AS $$ BEGIN PERFORM pg_sleep(${HOLD_SECONDS}); RETURN NEW; END $$;
-      CREATE TRIGGER hold_the_row BEFORE INSERT ON ${held.table} FOR EACH ROW
-        ${held.when === undefined ? '' : `WHEN (${held.when})`} EXECUTE FUNCTION hold_the_row();
-    `);
-    await Promise.all([opened.query('SELECT 1'), opened.query('SELECT 1')]);
-
-    return await runCase(create(opened)).then(
-      () => 'passed',
-      (error: unknown) => error,
-    );
-  } finally {
-    await opened.close();
-    mutant.remove();
-  }
+  return outcomeOnChangedStore({
+    file: 'accounts-postgres.ts',
+    factory: 'createPostgresAccountStore',
+    cases: accountCases,
+    name,
+    change,
+    held,
+    open,
+  });
 }
 
 /**

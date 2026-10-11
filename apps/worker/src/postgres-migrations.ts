@@ -127,6 +127,46 @@ export const MIGRATIONS: readonly Migration[] = [
         SELECT id, 0, connector_id, team_id, project_id FROM sites WHERE connector_id IS NOT NULL;
     `,
   },
+  {
+    // The pairing codes and the sessions as `session-sqlite.ts` holds them after its three
+    // migrations, with the same names (FRU-142). Every code and every token is a SHA-256 digest: a
+    // copy of the database is not a way in.
+    //
+    // `root_hash` names the chain of a token, so a log out and a replay end it in one statement.
+    // It is NULL on the head of a chain: read it as the row's own `token_hash` there.
+    name: 'sessions',
+    sql: `
+      CREATE TABLE pairings (
+        code_hash TEXT PRIMARY KEY,
+        subject TEXT NOT NULL,
+        name TEXT,
+        email TEXT,
+        workspace TEXT,
+        created_at BIGINT NOT NULL,
+        expires_at BIGINT NOT NULL,
+        redeemed_at BIGINT
+      );
+
+      CREATE TABLE sessions (
+        token_hash TEXT PRIMARY KEY,
+        subject TEXT NOT NULL,
+        name TEXT,
+        email TEXT,
+        workspace TEXT,
+        created_at BIGINT NOT NULL,
+        expires_at BIGINT NOT NULL,
+        revoked_at BIGINT,
+        rotated_at BIGINT,
+        predecessor_hash TEXT,
+        root_hash TEXT
+      );
+
+      -- The purge walks both tables by expiry, before every redemption.
+      CREATE INDEX pairings_by_expiry ON pairings (expires_at);
+      CREATE INDEX sessions_by_expiry ON sessions (expires_at);
+      CREATE INDEX sessions_by_root ON sessions (root_hash);
+    `,
+  },
 ];
 
 /**

@@ -1,5 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
-import type { RotationOutcome, SessionIdentity, SessionStore } from './session.ts';
+import { chainOf, identityOf } from './session-rows.ts';
+import type { RotationOutcome, SessionStore } from './session.ts';
 import { StoreError } from './store.ts';
 
 /**
@@ -147,28 +148,6 @@ export function closeSessionConnections(): void {
 
 type IdentityRow = { subject: unknown; name: unknown; email: unknown; workspace: unknown };
 
-/**
- * A row is parsed, never trusted — the same rule the seed store follows, and for the same reason.
- *
- * This file sits on a volume an operator can edit and a restore can be older than the code. A cast
- * describes the row to TypeScript and checks nothing. `TEXT` affinity narrows what can actually
- * arrive — an integer written here comes back as a string — but a **BLOB** keeps its type, and a
- * `NOT NULL` column holds an empty string quite happily. Either would otherwise reach
- * `signIdentityToken` and mint a token behind a `200` that this worker's own verifier then rejects.
- * An unreadable row answers like a missing one, so it costs that session and never the endpoint.
- * Raised in review.
- */
-function identityOf(row: IdentityRow): SessionIdentity | undefined {
-  if (typeof row.subject !== 'string' || row.subject === '') return undefined;
-
-  return {
-    subject: row.subject,
-    ...(typeof row.name === 'string' && row.name !== '' ? { name: row.name } : {}),
-    ...(typeof row.email === 'string' && row.email !== '' ? { email: row.email } : {}),
-    ...(typeof row.workspace === 'string' && row.workspace !== '' ? { workspace: row.workspace } : {}),
-  };
-}
-
 type SessionRow = IdentityRow & {
   expires_at: unknown;
   revoked_at: unknown;
@@ -182,11 +161,6 @@ function revoke(database: DatabaseSync, tokenHash: string, now: number): void {
   database
     .prepare('UPDATE sessions SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL')
     .run(now, tokenHash);
-}
-
-/** The chain a row belongs to. A row with no `root_hash` predates the column and heads its own. */
-function chainOf(row: { root_hash: unknown }, tokenHash: string): string {
-  return typeof row.root_hash === 'string' ? row.root_hash : tokenHash;
 }
 
 /**

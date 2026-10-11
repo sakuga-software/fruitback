@@ -633,6 +633,69 @@ export function sessionCases(it: Declare<SessionStore>): void {
    * whether a row is still there. A row that the purge left would answer at an instant before its
    * expiry.
    */
+  // --- Two calls at the same moment
+
+  it('never leaves two live successors when one token is refreshed twice at the same moment', async (store) => {
+    const { token, at } = await opened(store);
+    const [one, two] = [createRefreshToken(), createRefreshToken()];
+    const [tokenHash, oneHash, twoHash] = (await Promise.all([token, one, two].map((value) => digest(value)))) as [
+      string,
+      string,
+      string,
+    ];
+
+    // The digests are made first, so the two calls reach the store in one turn of the event loop.
+    const answers = await Promise.all(
+      [oneHash, twoHash].map((successorHash) =>
+        store.rotateSession({ tokenHash, successorHash, now: at + 1000, graceMs: GRACE }),
+      ),
+    );
+    // Both are answered: the second one is the retry that the grace exists for.
+    assert.deepEqual(
+      answers.map((answer) => answer.outcome),
+      ['rotated', 'rotated'],
+    );
+
+    // The successor of the call that came first is the one nobody is known to hold, and it was
+    // dropped. Which one it is changes from one run to the next, so both are used, one after the
+    // other: with one dropped, exactly one of the two answers is a replay. Two live successors
+    // both rotate, and no answer is.
+    const after = [await presented(store, one, at + 2000), await presented(store, two, at + 3000)];
+    assert.equal(
+      after.filter((outcome) => outcome === 'reused').length,
+      1,
+      `the two successors answered ${after.join(' and ')}`,
+    );
+  });
+
+  it('ends the session when a token and its successor are refreshed at the same moment', async (store) => {
+    const { token: first, at } = await opened(store);
+    const [second, afterFirst, afterSecond] = [createRefreshToken(), createRefreshToken(), createRefreshToken()];
+    const [firstHash, secondHash, afterFirstHash, afterSecondHash] = (await Promise.all(
+      [first, second, afterFirst, afterSecond].map((value) => digest(value)),
+    )) as [string, string, string, string];
+    const rotation = (tokenHash: string, successorHash: string, now: number) =>
+      store.rotateSession({ tokenHash, successorHash, now, graceMs: GRACE });
+    assert.equal((await rotation(firstHash, secondHash, at + 1000)).outcome, 'rotated');
+
+    // The old token is inside its grace, and the new one was never used: a client can hold either.
+    // Whichever call comes first, the other one then presents a token that the first call revoked,
+    // in a chain that is still live. That is a replay, and the chain goes.
+    const outcomes = (
+      await Promise.all([
+        rotation(firstHash, afterFirstHash, at + 2000),
+        rotation(secondHash, afterSecondHash, at + 2000),
+      ])
+    ).map((answer) => answer.outcome);
+    assert.deepEqual(outcomes.toSorted(), ['reused', 'rotated']);
+
+    // Nothing of the chain is left to use, the successor of the call that came first included.
+    assert.equal(await presented(store, afterFirst, at + 3000), 'gone');
+    assert.equal(await presented(store, afterSecond, at + 3000), 'gone');
+  });
+
+  // --- The purge
+
   it('drops the codes and the sessions that are expired, and nothing that is not', async (store) => {
     const at = Date.now();
     const spent = await opened(store, at);

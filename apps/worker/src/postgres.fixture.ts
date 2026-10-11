@@ -1,7 +1,9 @@
+import assert from 'node:assert/strict';
 import { after } from 'node:test';
 import { PGlite, types } from '@electric-sql/pglite';
-import type { Subject } from './conformance.fixture.ts';
+import { type Cases, type Subject, collect, mutatedModule } from './conformance.fixture.ts';
 import { type Database, type Queryable, type Row, createPgDatabase } from './postgres.ts';
+import { migrated } from './postgres-migrations.ts';
 
 /**
  * A PostgreSQL for the tests (FRU-141), in two forms.
@@ -124,4 +126,56 @@ export function onDatabase<Store>(
       database = undefined;
     },
   };
+}
+
+/** How long the database holds a new row before it writes it, in the tests that plant a race. */
+const HOLD_SECONDS = 0.3;
+
+/**
+ * What a case answers on a store with one change, on this database: `'passed'`, or its failure.
+ *
+ * **A race that is left to chance is a control that fails one run in a few.** Two calls overlap only
+ * when the scheduler lets them, and a store that loses the race then passes. CI showed it: the same
+ * control passed on one head and failed on the next one, which changed one line of a document. So
+ * the overlap is made here, as `pg_sleep` makes it for the migrations of two processes:
+ *
+ * - a trigger holds each new row of `held` for `HOLD_SECONDS` before it is written, inside the
+ *   transaction, so the first call has not committed when the second one reads;
+ * - the two connections are open before the case starts, so the second call does not wait for one.
+ */
+export async function outcomeOnChangedStore<Store>(input: {
+  /** The file of the store, and the function of it that builds one. */
+  file: string;
+  factory: string;
+  cases: Cases<Store>;
+  /** The name of the case to run. */
+  name: string;
+  change: { from: string; to: string };
+  held: { table: string; when?: string };
+  open: () => Promise<Database>;
+}): Promise<unknown> {
+  const mutant = await mutatedModule(input.file, input.change);
+  const opened = await input.open();
+  const create = mutant.module[input.factory] as (database: Database) => Store;
+  try {
+    const runCase = collect(input.cases).get(input.name);
+    assert.ok(runCase !== undefined, 'the case is gone');
+
+    await migrated(opened);
+    await opened.query(`
+      CREATE FUNCTION hold_the_row() RETURNS trigger LANGUAGE plpgsql
+        AS $$ BEGIN PERFORM pg_sleep(${HOLD_SECONDS}); RETURN NEW; END $$;
+      CREATE TRIGGER hold_the_row BEFORE INSERT ON ${input.held.table} FOR EACH ROW
+        ${input.held.when === undefined ? '' : `WHEN (${input.held.when})`} EXECUTE FUNCTION hold_the_row();
+    `);
+    await Promise.all([opened.query('SELECT 1'), opened.query('SELECT 1')]);
+
+    return await runCase(create(opened)).then(
+      () => 'passed',
+      (error: unknown) => error,
+    );
+  } finally {
+    await opened.close();
+    mutant.remove();
+  }
 }
