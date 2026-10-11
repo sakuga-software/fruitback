@@ -11,6 +11,7 @@ import { ACTIONS, ROLES, can } from './accounts.ts';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { handleRequest } from './app.ts';
 import {
+  AT_REST_PLUGIN,
   AUTH_BASE_PATH,
   AUTH_PLUGINS,
   REFUSED_PLUGINS,
@@ -490,7 +491,7 @@ describe('the options of better-auth, as they are written (FRU-144)', () => {
 });
 
 describe('the plugins of better-auth (FRU-144)', () => {
-  it('configures the organization plugin and no other', async () => {
+  it('configures the organization plugin and the layer that keeps no secret at rest, and no other', async () => {
     const options = await authOptions(AUTH_CONFIG, {} as never);
 
     assert.deepEqual(
@@ -509,11 +510,28 @@ describe('the plugins of better-auth (FRU-144)', () => {
     await assert.rejects(startAuth(planted), (error: unknown) => {
       assert.ok(error instanceof Error);
       assert.match(error.message, /« bearer »/);
-      assert.match(error.message, /the token of a session as it is read in the `session` table opens that session/);
-      assert.match(error.message, /a copy of the database is a set of working logins/);
+      assert.match(error.message, /in an `Authorization` header, which a script can send/);
+      assert.match(error.message, /the token read in a copy of the `session` table opens that session alone/);
 
       return true;
     });
+  });
+
+  it('refuses to build better-auth without the layer that keeps no secret at rest, or with a secondary storage', async () => {
+    const options = await authOptions(AUTH_CONFIG, {} as never);
+    const store = {
+      get: async () => null,
+      set: async () => {},
+      delete: async () => {},
+      getAndDelete: async () => null,
+      increment: async () => 1,
+    };
+
+    await assert.rejects(
+      startAuth({ ...options, plugins: (options.plugins ?? []).filter((plugin) => plugin.id !== AT_REST_PLUGIN) }),
+      /without the plugin « fruitback-at-rest »: without it, the database keeps the token of each session in the clear/,
+    );
+    await assert.rejects(startAuth({ ...options, secondaryStorage: store }), /secondary storage: it keeps each token/);
   });
 
   it('refuses each plugin the framing ruled out, by the id the plugin really has', async () => {

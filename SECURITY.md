@@ -521,18 +521,53 @@ Nothing in this section protects anybody yet: it says what is closed before the 
   the worker refuses to start when it equals one of them, and when it is under 32 characters. It
   stays in the environment: nothing writes it in the database, and no route answers it. Changing it
   ends every session better-auth opened.
-- **The token of a session is in the clear in the `session` table**, unlike a pairing code and a
-  refresh token, which are digests. A copy of the database is not a set of working logins on two
-  conditions: the secret is not with the copy, and the `bearer` plugin is not in the configuration.
-  The cookie holds the token and its signature, and a token with no signature opens nothing. With
-  that plugin the token alone opens the session, in an `Authorization` header (measured on 1.7.7).
-  The worker refuses to build better-auth with it, and
-  test:`opens no session with the token read in the session table, and opens one with the bearer
-plugin` holds both halves, with the token it reads in the row, which is what a copy gives. Whoever
-  has the secret **and** the table signs the cookie of every open session. **This is the one
-  exception to « a token is a digest in the database »**, and it is not a choice of the worker:
-  better-auth 1.7.7 has no option that keeps a digest of that token, and it finds a session by the
-  token itself (read in the package). The table is empty until a route of better-auth is served.
+- **A copy of the database opens nothing, even with `FRUITBACK_AUTH_SECRET` beside it** (FRU-181).
+  The secret and the database live on one host, so a copy is assumed to come with the secret. The
+  `session` table keeps the SHA-256 of the token of each session, never the token, and the
+  `verification` table the SHA-256 of each link or code. The worker digests every value that
+  reaches those two columns, in a row it writes and in a lookup, so a digest read in a copy is
+  digested again when it is presented and finds nothing.
+  test:`keeps the digest of the token of a session, which opens nothing, even signed with the secret`
+  signs the row with the secret, sends it with no signature and in an `Authorization` header, and
+  its control is the cookie the worker set. Before FRU-181 the table held the token itself, and the
+  row and the secret together were a cookie for every open session:
+  test:`opened a session with the token of the table and the secret, before the layer` keeps that
+  measured. A lookup by digest is a read of the unique index of the column, as before. **The
+  condition is the plugin `fruitback-at-rest`** (`auth-at-rest.ts`): it puts this layer between
+  better-auth and its database adapter, and the worker refuses to build better-auth without it, or
+  with a secondary storage, which would keep each token in the clear around it. No key is added: a
+  token of 190 bits cannot be found again from its digest, and a key would leak with the secret.
+- **No token of GitHub or Google is kept.** better-auth writes the access token, the refresh token
+  and the id token of the provider in the `account` table; the worker writes those columns empty,
+  and the password column too.
+  test:`keeps no state of a sign-in with a provider, and no token of the provider, in any row`
+  signs a person in with GitHub (its answers simulated) and reads every column of the seven tables.
+  **So the worker can never act at GitHub or Google in the name of the person who signed in.** If
+  the product needs that one day, it is a decision, with a key of its own beside
+  `FRUITBACK_AUTH_SECRET` and a rotation, and not `encryptOAuthTokens` of better-auth: its key comes
+  from that secret, so a copy and the environment would open every token.
+- **The state of a sign-in with a provider is not in the database.** It is in an encrypted cookie of
+  the browser that started the sign-in, for 10 minutes. In the database it held the state and the
+  PKCE verifier in the clear (measured).
+- **A route that names a session by its token is closed.** `/revoke-session` and
+  `/revoke-other-sessions` answer `404`, and a call to them in the process throws: a list of
+  sessions has no token, so they would end nothing and say that they did.
+  test:`throws on a call in the process to a route that names a session by its token, and ends
+nothing` plants each call. `/get-access-token`, `/refresh-token` and `/account-info` are closed the
+  same way: there is no token of a provider to answer. Signing out, and « sign out everywhere »
+  (`/revoke-sessions`), end the session at the next call:
+  test:`ends a session at once on sign-out, and every session of a person with « sign out everywhere »`.
+- **What a copy holds in the clear**: the address and the name of each person, the user agent of a
+  session, a link that waits (its address and name, not its token), and the id of an invitation. An
+  invitation is accepted only by a session of the address it invites.
+- **Whoever can write to the database can write a session**, as for the extension: with the secret
+  too, a row with the digest of a token they chose, and a cookie of that token they sign.
+- **The `bearer` plugin is not in the configuration**: the worker refuses to build better-auth with
+  it. It opens a session with its token in an `Authorization` header, which a script can send, where
+  the console keeps it in a cookie that no script reads. Without the layer, the row of a copy was
+  that token:
+  test:`opens no session with the row of the session table, and the bearer plugin opens one with the
+token alone` keeps both measured.
 - **The environment cannot widen it.** better-auth reads `BETTER_AUTH_TRUSTED_ORIGINS`,
   `BETTER_AUTH_SECRETS` and `BETTER_AUTH_TELEMETRY` from the environment of the process, over what
   the worker gives it (measured). A worker that has better-auth on refuses to start with any

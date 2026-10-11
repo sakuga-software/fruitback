@@ -790,9 +790,37 @@ behind a dynamic import, so the image runs none of them at boot` holds it on the
   does not rotate.
 - **The `bearer` plugin is never in the configuration**, and `jwt` and `deviceAuthorization` are not
   either. `REFUSED_PLUGINS` in `auth.ts` gives each its reason, and `startAuth` refuses to build an
-  instance that has one. With `bearer`, the token of a row of the `session` table opens that session
-  as it is read there: test:`opens no session with the token read in the session table, and opens one
-with the bearer plugin` keeps both halves measured.
+  instance that has one. With `bearer`, a session opens with its token in an `Authorization` header,
+  which a script can send: test:`opens no session with the row of the session table, and the bearer
+plugin opens one with the token alone` keeps it measured, with and without the layer below.
+- **The database keeps no usable secret of better-auth, even with `FRUITBACK_AUTH_SECRET` beside it**
+  (FRU-181). The plugin `fruitback-at-rest` (`auth-at-rest.ts`) puts a layer between better-auth and
+  its database adapter: `session.token` and `verification.identifier` are kept as their SHA-256,
+  every value that reaches them, written or looked up, and the token columns and the password of
+  `account` are written empty. `startAuth` refuses options without the plugin, and with a
+  `secondaryStorage`, which keeps the tokens around the layer. **No key is added**, so there is no
+  rotation to keep.
+- **The worker keeps no token of GitHub or Google, so it can never act at a provider in the name of
+  the person who signed in.** A feature that needs it is a decision first, with a key of its own
+  beside `FRUITBACK_AUTH_SECRET`, and never `encryptOAuthTokens`, whose key is that secret. Nothing
+  relies on those tokens today: the connector of Linear keeps its own, sealed with
+  `FRUITBACK_SECRETS_KEY`, the GitHub App signs with its private key, and the old sign-in path
+  reads the profile and keeps no token.
+- **A session is named by its id, never by its token.** A row read back through the layer has the
+  token its caller gave, and a row of a list has none. So `/revoke-session` and
+  `/revoke-other-sessions` are in `DISABLED_PATHS` with `/get-access-token`, `/refresh-token` and
+  `/account-info`: `404` to a request, and a call in the process throws (`closedPath`). « Sign out
+  everywhere » is `/revoke-sessions`. A screen that ends one session of a list (FRU-104) ends it by
+  its id, with a route of the worker.
+- **A plugin that writes a secret in `verification.value` is measured before it is added.** The
+  layer digests the identifier, not the value. `email-otp` keeps its code in the value, and the
+  state of OAuth kept its PKCE verifier there, which is why it is in a cookie
+  (`storeStateStrategy: 'cookie'`). Each new way to sign in joins the sweep of
+  test:`keeps no state of a sign-in with a provider, and no token of the provider, in any row`.
+- **The adapter is read before a version of better-auth is trusted.** The layer knows the members of
+  the adapter of 1.7.7 (`ADAPTER_MEMBERS`) and refuses an adapter with another one, which could read
+  or write a row around it: test:`knows every member of the adapter that better-auth builds, and no
+other`.
 - **One tool migrates the database, and it is `migrate` of `postgres.ts`.** The tables of better-auth
   are the entry `better-auth` of `MIGRATIONS`, written in `auth-schema.ts`: the DDL that better-auth
   compiles for the options of `auth.ts`, and one constraint more, `UNIQUE ("organizationId",
@@ -902,16 +930,37 @@ in` keeps the first two measured.
   what this costs there is the time to read every schema of it.
 - **Two tables are named after a session, and they are not the same thing.** `sessions` (FRU-142)
   holds the sessions of the extension: digests, a chain, a rotation. `session` (better-auth) will
-  hold the sessions of the console, with the token in the clear, and it is empty. A query, a backup
+  hold the sessions of the console, as digests too (FRU-181), and it is empty. A query, a backup
   check or a purge that names one must not mean the other.
-- **better-auth 1.7.7 cannot keep a digest of a session token** (read in the types and in the source
-  of the package). Its `session` option has `expiresIn`, `updateAge`, `disableSessionRefresh`,
-  `deferSessionRefresh`, `storeSessionInDatabase`, `preserveSessionInDatabase`, `cookieCache` and
-  `freshAge`, and `findSession` asks the table for the row whose `token` is the value of the cookie.
-  So `session.token` is the one token the database holds in the clear, and SECURITY.md says on which
-  two conditions a copy of it opens nothing. `verification.storeIdentifier: 'hashed'` does it for
-  the `verification` table only, and its default is `plain`: the slice that first writes a link or a
-  code there chooses it (FRU-147).
+- **better-auth 1.7.7 cannot keep a digest of a session token by itself** (read in the types, in the
+  source of the package and in reference/options). Its `session` option has `expiresIn`,
+  `updateAge`, `disableSessionRefresh`, `deferSessionRefresh`, `storeSessionInDatabase`,
+  `preserveSessionInDatabase`, `cookieCache` and `freshAge`, and `findSession` asks the table for
+  the row whose `token` is the value of the cookie. The cookie is that value, a dot, and its
+  HMAC-SHA256 with the secret (read in `better-call`). So a row and the secret were a cookie:
+  test:`opened a session with the token of the table and the secret, before the layer`.
+- **Why a layer in front of the adapter, and the options it was weighed against** (FRU-181, the
+  report is in the ticket). A hook `databaseHooks.session.create.before` that digests the token puts
+  the digest in the cookie too: better-auth signs the token of the row it created.
+  `secondaryStorage` keys the sessions by their token in the clear. `encryptOAuthTokens` takes its
+  key from the secret. `verification.storeIdentifier: 'hashed'` digests the identifier, then looks
+  the identifier up as it was given when the digest finds nothing (read in `db/internal-adapter.mjs`;
+  measured: the digest of a copy, presented as the identifier, finds its row). It is kept as a first
+  layer, and the layer digests that digest again, so that second lookup finds nothing. A plugin of
+  Kysely that rewrites the SQL would tie this to Kysely. The adapter is the one interface every
+  adapter of better-auth implements, Kysely today or Drizzle (FRU-180), and the schema does not
+  change: the digest is in the same `text UNIQUE` column, and a lookup is a read of its index.
+- **The layer wraps the adapter in place**, in the `init` of its plugin. better-auth keeps the check
+  of the schema of an adapter in a `WeakMap` of that very object (read in
+  `@better-auth/core/dist/db/schema-check.mjs`): another object would lose it, and `startAuth` would
+  call an instance ready on a schema that is wrong. A transaction gives its calls an adapter of its
+  own, and the layer wraps that one too.
+- **Why a closed path also throws in the process.** `disabledPaths` closes a route to a request, not
+  to `auth.api`. Called in the process, `revokeOtherSessions` read a list with no token, asked for
+  each by none, and better-auth took the refusal of the layer for « no such session »: it answered
+  `{ status: true }` and ended nothing (measured). A hook of the plugin throws before the endpoint
+  runs: test:`throws on a call in the process to a route that names a session by its token, and ends
+nothing`.
 - **The tables have the names better-auth gives them**: `user`, `session`, `account`,
   `verification`, `organization`, `member`, `invitation`. They are made in every database of a
   worker, with better-auth on or off, because the database has one list of migrations. Names that
