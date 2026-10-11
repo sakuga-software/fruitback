@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { devNull, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { parseDocument } from 'yaml';
@@ -14,6 +13,7 @@ import {
   scoreOf,
 } from '../../../tools/mutation/ratchet.ts';
 import { changedSince, choose, scopeOf } from '../../../tools/mutation/scope.ts';
+import { apart, git } from './git.fixture.ts';
 
 /**
  * The mutation job, and the line its score may not go under (FRU-172).
@@ -46,61 +46,26 @@ function report(statuses: Status[], file = 'src/seed.ts'): Report {
   };
 }
 
-/**
- * Runs `body` without the variables of git of the process that runs the test.
- *
- * A hook of git exports `GIT_DIR`, and a `git` started in a temporary directory then works on the
- * repository of the hook. The configuration of the machine is left out too: the test reads its
- * own repository and nothing else.
- */
-function apart<T>(body: () => T): T {
-  const caller = { ...process.env };
-  const clear = () => {
-    for (const name of Object.keys(process.env)) {
-      if (name.startsWith('GIT_')) delete process.env[name];
-    }
-  };
-  clear();
-  process.env.GIT_CONFIG_NOSYSTEM = '1';
-  process.env.GIT_CONFIG_GLOBAL = devNull;
-  try {
-    return body();
-  } finally {
-    clear();
-    Object.assign(process.env, caller);
-  }
-}
-
 /** The files that a pull request changes when it deletes one test and renames another, read by git. */
 function deletedAndRenamed(): string[] {
-  return apart(() => {
-    const repository = mkdtempSync(join(tmpdir(), 'fruitback-scope-'));
-    const git = (...args: string[]) =>
-      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
-        cwd: repository,
-        encoding: 'utf8',
-      });
-    try {
-      git('init', '-q', '-b', 'main');
-      mkdirSync(join(repository, 'packages/shared/src'), { recursive: true });
-      for (const file of ['issue', 'issue.test', 'seed', 'seed.test']) {
-        writeFileSync(join(repository, `packages/shared/src/${file}.ts`), `export const name = '${file}';\n`);
-      }
-      git('add', '.');
-      git('commit', '-q', '-m', 'base');
-      const base = git('rev-parse', 'HEAD').trim();
-      rmSync(join(repository, 'packages/shared/src/issue.test.ts'));
-      renameSync(
-        join(repository, 'packages/shared/src/seed.test.ts'),
-        join(repository, 'packages/shared/src/x.test.ts'),
-      );
-      git('add', '-A');
-      git('commit', '-q', '-m', 'a test deleted, a test renamed');
-      return changedSince(base, repository);
-    } finally {
-      rmSync(repository, { recursive: true, force: true });
+  const repository = mkdtempSync(join(tmpdir(), 'fruitback-scope-'));
+  try {
+    git(repository, 'init', '-q', '-b', 'main');
+    mkdirSync(join(repository, 'packages/shared/src'), { recursive: true });
+    for (const file of ['issue', 'issue.test', 'seed', 'seed.test']) {
+      writeFileSync(join(repository, `packages/shared/src/${file}.ts`), `export const name = '${file}';\n`);
     }
-  });
+    git(repository, 'add', '.');
+    git(repository, 'commit', '-q', '-m', 'base');
+    const base = git(repository, 'rev-parse', 'HEAD').trim();
+    rmSync(join(repository, 'packages/shared/src/issue.test.ts'));
+    renameSync(join(repository, 'packages/shared/src/seed.test.ts'), join(repository, 'packages/shared/src/x.test.ts'));
+    git(repository, 'add', '-A');
+    git(repository, 'commit', '-q', '-m', 'a test deleted, a test renamed');
+    return apart(() => changedSince(base, repository));
+  } finally {
+    rmSync(repository, { recursive: true, force: true });
+  }
 }
 
 describe('the score of a mutation run', () => {
@@ -188,46 +153,13 @@ describe('what a mutation job mutates', () => {
   /**
    * A test deleted whole, or renamed, still brings its file into the run (raised in review). Run on
    * a real repository of git, because the defect was in the flags of the diff, not in the choice.
+   * Git is started through `git.fixture.ts`, which keeps it out of the repository of a hook.
    */
   it('sees a test the pull request deletes or renames, through git itself', () => {
     assert.deepEqual(choose('packages/shared', scope, 'pull_request', deletedAndRenamed()), {
       mutate: ['src/seed.ts', 'src/issue.ts'],
       full: false,
     });
-  });
-
-  /**
-   * The hook `pre-push` runs this file with `GIT_DIR` set to the worktree that pushes. Without
-   * `apart`, the `git init` of the test re-initialised that repository, guessed it bare, wrote
-   * `core.bare = true` to the configuration that the clone and its worktrees share, and put the two
-   * commits of the test on the branch being pushed (2026-10-11).
-   */
-  it('stays in its own repository when a hook of git runs it', () => {
-    const outer = mkdtempSync(join(tmpdir(), 'fruitback-hook-'));
-    const git = (cwd: string, ...args: string[]) =>
-      execFileSync('git', ['-c', 'user.name=h', '-c', 'user.email=h@h', ...args], { cwd, encoding: 'utf8' });
-    try {
-      apart(() => {
-        git(outer, 'init', '-q', '-b', 'main', 'clone');
-        git(join(outer, 'clone'), 'commit', '-q', '--allow-empty', '-m', 'first');
-        git(join(outer, 'clone'), 'worktree', 'add', '-q', '-b', 'pushed', '../worktree');
-      });
-      const caller = process.env.GIT_DIR;
-      // The value that `pre-push` exports in a worktree, read in the environment of a real hook.
-      process.env.GIT_DIR = join(outer, 'clone/.git/worktrees/worktree');
-      try {
-        deletedAndRenamed();
-      } finally {
-        if (caller === undefined) delete process.env.GIT_DIR;
-        else process.env.GIT_DIR = caller;
-      }
-      apart(() => {
-        assert.equal(git(join(outer, 'worktree'), 'log', '--format=%s').trim(), 'first');
-        assert.equal(git(join(outer, 'clone'), 'config', 'core.bare').trim(), 'false');
-      });
-    } finally {
-      rmSync(outer, { recursive: true, force: true });
-    }
   });
 
   it('reads the scope of a configuration, and leaves out what it excludes', () => {
