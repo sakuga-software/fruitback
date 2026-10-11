@@ -1086,6 +1086,14 @@ variable` holds the rest.
 - **The words of an error of Drizzle reach no log.** They quote the statement and its values: an
   address, a digest. `causeOfQueryError` takes the error of the driver out, and `postgres.ts` reports
   only that one.
+- **A store gives Drizzle no `undefined`, and no limit that is not a positive integer** (FRU-187).
+  Drizzle writes no `NULL` for `undefined`: in `.set()` it leaves the column out, and the row keeps
+  its value; in a fragment of `sql` it leaves the value out of the text. It also leaves out a
+  `LIMIT` that is negative or `NaN`, and the statement answers every row. No caller passes such a
+  value, and the types forbid it. `accounts-postgres.ts` refuses them with a `TypeError` that names
+  the value: test:`refuses undefined in place of a value it writes, and changes no row`,
+  test:`refuses a limit of due deliveries that is not a positive integer, where Drizzle drops the
+LIMIT`.
 - **A write that must say whether it changed a row returns that row** (`returning`), and the store
   counts what comes back. The two drivers do not count the rows of a statement in the same way.
 - **The tables are in `public`, and so is the journal** (`__drizzle_migrations`). A test that needs

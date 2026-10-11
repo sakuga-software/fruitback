@@ -86,6 +86,27 @@ function sitesFrom(rows: readonly Record<string, unknown>[]): Site[] {
   return [...found.values()];
 }
 
+/**
+ * `value`, or a `TypeError` that names it (FRU-187).
+ *
+ * Drizzle writes no `NULL` for `undefined`. In `.set()` it leaves the column out, and the row keeps
+ * its old value. In a raw fragment it leaves the value out of the text, and the statement is
+ * wrong. The types say every one of these values is given: this holds it for a caller that the types
+ * do not see.
+ */
+function given<T>(value: T | undefined, what: string): T {
+  if (value === undefined) throw new TypeError(`${what} is required`);
+
+  return value;
+}
+
+/** `limit`, when it is a whole number of rows of at least one. Drizzle leaves out a `LIMIT` that is not. */
+function rowLimit(limit: number): number {
+  if (!Number.isSafeInteger(limit) || limit < 1) throw new TypeError(`dueDeliveries: limit must be a positive integer`);
+
+  return limit;
+}
+
 export function createPostgresAccountStore(database: Database): AccountStore {
   /** `work` on the database, with its schema. The first call of a process applies the migrations. */
   const run = async <T>(work: (db: Db) => Promise<T>): Promise<T> => {
@@ -327,10 +348,14 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     },
 
     async resealConnector(connector, sealed) {
+      given(connector, 'resealConnector: connector');
+      given(sealed, 'resealConnector: sealed');
       await run((db) => db.update(connectors).set({ sealed }).where(eq(connectors.id, connector)));
     },
 
     async noteConnector(connector, trouble, now) {
+      given(connector, 'noteConnector: connector');
+      given(now, 'noteConnector: now');
       // `IS DISTINCT FROM` and not `<>`: NULL compares with nothing. A row that already says this is
       // not written again, so the first moment of a refusal stays, and a call that worked writes nothing.
       await run((db) =>
@@ -416,6 +441,8 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     },
 
     async dueDeliveries(now, limit) {
+      given(now, 'dueDeliveries: now');
+      rowLimit(limit);
       const rows = await run((db) =>
         db
           .select({
@@ -434,11 +461,14 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     },
 
     async settleDelivery(id, outcome) {
+      given(id, 'settleDelivery: id');
       if (outcome.delivered) {
         await run((db) => db.delete(deliveries).where(eq(deliveries.id, id)));
 
         return;
       }
+      given(outcome.attempts, 'settleDelivery: outcome.attempts');
+      given(outcome.at, 'settleDelivery: outcome.at');
       // The count in the condition: of two attempts that started from the same count, one writes.
       await run((db) =>
         db
@@ -476,6 +506,10 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     },
 
     async retryDelivery(workspace, connector, delivery, now) {
+      given(workspace, 'retryDelivery: workspace');
+      given(connector, 'retryDelivery: connector');
+      given(delivery, 'retryDelivery: delivery');
+      given(now, 'retryDelivery: now');
       // One statement: the delivery must be of a connector of this workspace. The count starts again:
       // somebody asked, so the delivery gets the whole series of attempts.
       const set = await run((db) =>
@@ -501,6 +535,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     },
 
     async dropAbandonedDeliveries(before) {
+      given(before, 'dropAbandonedDeliveries: before');
       const dropped = await run((db) =>
         db
           .delete(deliveries)
@@ -531,6 +566,8 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     },
 
     async spendEmailLink(codeHash, now) {
+      given(codeHash, 'spendEmailLink: codeHash');
+      given(now, 'spendEmailLink: now');
       // One statement decides who spent it: two tabs that open the same link get one sign-in. The
       // second update waits for the row, reads `spent_at` again, and changes nothing.
       const rows = await run((db) =>
