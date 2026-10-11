@@ -101,6 +101,17 @@ describe('what a mutation job mutates', () => {
     });
   });
 
+  it('mutates a file whose test the pull request changes, so that deleting a test is measured', () => {
+    assert.deepEqual(choose('packages/shared', scope, 'pull_request', ['packages/shared/src/issue.test.ts']), {
+      mutate: ['src/issue.ts'],
+      full: false,
+    });
+    assert.deepEqual(choose('packages/shared', scope, 'pull_request', ['packages/shared/src/seed-shape.test.ts']), {
+      mutate: [],
+      full: false,
+    });
+  });
+
   it('mutates the whole scope on a schedule, by hand, and when the pull request changes how mutation runs', () => {
     for (const event of ['schedule', 'workflow_dispatch']) {
       assert.deepEqual(choose('packages/shared', scope, event, undefined), { mutate: scope, full: true });

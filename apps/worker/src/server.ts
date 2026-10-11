@@ -4,7 +4,7 @@ import { pipeline } from 'node:stream/promises';
 import { handleRequest, storeFor, deliverPending } from './app.ts';
 import type { SeedStore } from './store.ts';
 import { readExposureNotice } from './clients.ts';
-import { DEFAULT_HOST, DEFAULT_TRUSTED_PROXY_HOPS, type WorkerEnv, readConfig, readPort } from './env.ts';
+import { DEFAULT_HOST, DEFAULT_TRUSTED_PROXY_HOPS, type WorkerEnv, hasAccounts, readConfig, readPort } from './env.ts';
 import { fakeLinearDeprecationNotice, fakeLinearIgnoredReason } from './store-config.ts';
 import { isDevOnlyProvider } from './stores.ts';
 import { resolveClientIp } from './rate-limit.ts';
@@ -147,7 +147,7 @@ export function startServer(env: WorkerEnv = process.env): Server {
 
   // FRU-122: the notes that wait for an address a workspace connected. One pass at a time: a slow
   // receiver must not start a second pass over the same rows. One container, so one loop.
-  if (config.ok && config.config.accountsPath !== undefined) {
+  if (config.ok && hasAccounts(config.config)) {
     const send = createSender();
     let passing = false;
     const pass = setInterval(() => {
@@ -187,7 +187,7 @@ export function startServer(env: WorkerEnv = process.env): Server {
       const exposure = readExposureNotice({
         read: config.config.read,
         clients: config.config.clients,
-        accounts: config.config.accountsPath !== undefined,
+        accounts: hasAccounts(config.config),
       });
       if (exposure !== undefined) console.warn(exposure);
     } else {

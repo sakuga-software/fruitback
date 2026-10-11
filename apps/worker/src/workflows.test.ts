@@ -187,6 +187,27 @@ function namedRepository(env: unknown): boolean {
   return typeof value === 'string' && value.trim() !== '';
 }
 
+/**
+ * What narrows the pull requests a workflow runs on: every key of its `pull_request` trigger.
+ *
+ * `undefined` says the workflow does not run on a pull request. An empty list says it runs on every
+ * one. `on` is read in its three shapes: one event, a list of events, a mapping.
+ *
+ * `ci.yml` held `branches: [main]` until FRU-172. A pull request stacked on another one then got no
+ * check at all, and no check reads as checks that have not started. A filter of paths has the same
+ * result for a pull request that touches none of them. `types` counts too: a list without
+ * `synchronize` checks the first push and none after it.
+ */
+export function pullRequestFilters(source: string): string[] | undefined {
+  const on = parseDocument(source).get('on', true);
+  if (isScalar(on)) return on.value === 'pull_request' ? [] : undefined;
+  if (isSeq(on)) return on.items.some((item) => isScalar(item) && item.value === 'pull_request') ? [] : undefined;
+  if (!isMap(on) || !on.has('pull_request')) return undefined;
+  const trigger = on.get('pull_request', true);
+
+  return isMap(trigger) ? trigger.items.flatMap((pair) => (isScalar(pair.key) ? [String(pair.key.value)] : [])) : [];
+}
+
 describe('the GitHub workflows', () => {
   it('pin every action to a commit SHA, with its version as a comment', () => {
     const references = actionReferences();
@@ -317,5 +338,55 @@ describe('the GitHub workflows', () => {
       );
 
     assert.deepEqual(wide, [], 'these workflows give every job more than a read');
+  });
+
+  /**
+   * **A pull request with no check is not a pull request that passed** (FRU-172). `ci.yml` is the
+   * workflow that holds lint, format, typecheck and the tests, so it is the one read here.
+   */
+  it('run CI on every pull request, whatever branch it targets', () => {
+    const ci = readFileSync(new URL('ci.yml', WORKFLOWS), 'utf8');
+
+    assert.deepEqual(pullRequestFilters(ci), [], 'ci.yml runs on some pull requests only');
+    const pushed = parseDocument(ci).getIn(['on', 'push', 'branches'], true);
+    assert.ok(isSeq(pushed), 'ci.yml names no branch that it runs on at a push');
+    assert.deepEqual(pushed.toJSON(), ['main']);
+  });
+
+  it('read a pull request trigger whatever shape it is written in', () => {
+    assert.deepEqual(pullRequestFilters('on: pull_request\njobs: {}\n'), []);
+    assert.deepEqual(pullRequestFilters('on: [push, pull_request]\njobs: {}\n'), []);
+    assert.deepEqual(pullRequestFilters('on:\n  pull_request:\n  push:\n    branches: [main]\njobs: {}\n'), []);
+    assert.deepEqual(pullRequestFilters('on:\n  pull_request: {}\njobs: {}\n'), []);
+    // The form `ci.yml` had: a pull request whose base is another branch gets no run.
+    assert.deepEqual(pullRequestFilters('on:\n  pull_request:\n    branches: [main]\njobs: {}\n'), ['branches']);
+    assert.deepEqual(pullRequestFilters("on:\n  pull_request:\n    paths: ['apps/**']\n    types: [opened]\n"), [
+      'paths',
+      'types',
+    ]);
+    assert.equal(pullRequestFilters('on:\n  push:\n    tags: [v*]\njobs: {}\n'), undefined);
+    assert.equal(pullRequestFilters('on: push\njobs: {}\n'), undefined);
+    // Another event is another event: a pull request from a fork must not run with the secrets.
+    assert.equal(pullRequestFilters('on:\n  pull_request_target:\njobs: {}\n'), undefined);
+  });
+
+  /**
+   * **A commit of `main` keeps its run.** On 2026-10-11 the group was `ci-${{ github.ref }}` with
+   * `cancel-in-progress: true`: two merges landed 14 seconds apart, the second one cancelled the run
+   * of the first, and `main` had no verdict for that commit.
+   *
+   * This reads the two lines and does not evaluate them. It fails on the form that caused it: a
+   * group that no commit is part of, or a cancellation that does not depend on the event.
+   */
+  it('give a commit of main a run that no later merge cancels', () => {
+    const concurrency = parseDocument(readFileSync(new URL('ci.yml', WORKFLOWS), 'utf8')).get('concurrency');
+    assert.ok(isMap(concurrency), 'ci.yml has no concurrency block');
+
+    assert.match(String(concurrency.get('group')), /github\.sha/, 'the group of a push names no commit');
+    assert.match(
+      String(concurrency.get('cancel-in-progress')),
+      /github\.event_name == 'pull_request'/,
+      'a run is cancelled whatever the event is',
+    );
   });
 });
