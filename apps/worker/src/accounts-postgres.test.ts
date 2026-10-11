@@ -12,7 +12,8 @@ import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { accountStoreFor, handleRequest } from './app.ts';
 import { collect, mutatedModule } from './conformance.fixture.ts';
 import { type WorkerEnv, hasAccounts, readConfig } from './env.ts';
-import type { Database } from './postgres.ts';
+import { type Database, migrate } from './postgres.ts';
+import { MIGRATIONS } from './postgres-migrations.ts';
 import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase } from './postgres.fixture.ts';
 import { closeSessionConnections, createSqliteSessionStore } from './session-sqlite.ts';
 import { createPairing, redeemPairing } from './session.ts';
@@ -203,11 +204,61 @@ describe('the sites of a workspace, read from PostgreSQL (FRU-141)', () => {
     const [first, second] = [createPostgresAccountStore(database), createPostgresAccountStore(database)];
     assert.deepEqual(await Promise.all([first.clientMap(), second.clientMap()]), [{}, {}]);
 
-    assert.deepEqual((await database.query('SELECT version, name FROM schema_migrations')).rows, [
+    assert.deepEqual((await database.query('SELECT version, name FROM schema_migrations ORDER BY version')).rows, [
       { version: 1, name: 'accounts' },
+      { version: 2, name: 'site_destinations' },
     ]);
   });
+
+  it('gives a site the one destination it had before the list existed', async () => {
+    database = await createPgliteDatabase();
+    // A database that a build before the list wrote: the destination is three columns of the site.
+    await migrate(database, MIGRATIONS.slice(0, 1));
+    await database.query("INSERT INTO workspaces (id, name, created_at) VALUES ('ws_1', 'Acme', 1)");
+    await database.query(
+      `INSERT INTO connectors (id, workspace_id, kind, label, sealed, created_at)
+       VALUES ('con_1', 'ws_1', 'linear', 'Linear', 'sealed', 1)`,
+    );
+    await database.query(
+      `INSERT INTO sites (id, workspace_id, origin, visibility, created_at, connector_id, team_id, project_id)
+       VALUES ('site_1', 'ws_1', 'https://acme.dev', 'members', 1, 'con_1', 'team_1', 'project_1'),
+              ('site_2', 'ws_1', 'https://bare.dev', 'members', 2, NULL, NULL, NULL)`,
+    );
+
+    const sites = await createPostgresAccountStore(database).sites('ws_1');
+
+    assert.deepEqual(
+      sites.map((site) => [site.id, site.destinations]),
+      [
+        ['site_1', [{ connector: 'con_1', teamId: 'team_1', projectId: 'project_1' }]],
+        ['site_2', []],
+      ],
+    );
+  });
 });
+
+/** What a case answers on the store with one change, on this database: `'passed'`, or its failure. */
+async function outcomeOf(
+  name: string,
+  change: { from: string; to: string },
+  open: () => Promise<Database>,
+): Promise<unknown> {
+  const mutant = await mutatedModule('accounts-postgres.ts', change);
+  const opened = await open();
+  const create = mutant.module.createPostgresAccountStore as typeof createPostgresAccountStore;
+  try {
+    const runCase = collect(accountCases).get(name);
+    assert.ok(runCase !== undefined, 'the case is gone');
+
+    return await runCase(create(opened)).then(
+      () => 'passed',
+      (error: unknown) => error,
+    );
+  } finally {
+    await opened.close();
+    mutant.remove();
+  }
+}
 
 /**
  * What only a real server shows. PGlite has one connection: a transaction holds every other call
@@ -224,30 +275,12 @@ describe('two sign-ins of one new address, on two connections (FRU-141)', () => 
     to: 'SELECT $1::text, $2::text, $3::text, $4::text, $5::bigint WHERE NOT EXISTS (SELECT 1 FROM accounts WHERE email = $2::text)',
   };
 
-  async function outcomeOn(open: () => Promise<Database>): Promise<unknown> {
-    const mutant = await mutatedModule('accounts-postgres.ts', WITHOUT_CONFLICT);
-    const opened = await open();
-    const create = mutant.module.createPostgresAccountStore as typeof createPostgresAccountStore;
-    try {
-      const runCase = collect(accountCases).get(CASE);
-      assert.ok(runCase !== undefined, 'the case is gone');
-
-      return await runCase(create(opened)).then(
-        () => 'passed',
-        (error: unknown) => error,
-      );
-    } finally {
-      await opened.close();
-      mutant.remove();
-    }
-  }
-
   it('passes on PGlite with an insert that names no conflict', async () => {
-    assert.equal(await outcomeOn(createPgliteDatabase), 'passed');
+    assert.equal(await outcomeOf(CASE, WITHOUT_CONFLICT, createPgliteDatabase), 'passed');
   });
 
   it('fails on a real server when the insert names no conflict', { skip: NO_REAL_POSTGRES }, async () => {
-    const outcome = await outcomeOn(createRealDatabase);
+    const outcome = await outcomeOf(CASE, WITHOUT_CONFLICT, createRealDatabase);
 
     assert.ok(outcome instanceof Error, 'the case passed on a store that loses the race');
     assert.equal((outcome as { code?: string }).code, '23505');

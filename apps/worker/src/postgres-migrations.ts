@@ -103,6 +103,30 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    // Every place a site can send to, in order (FRU-123): migration 7 of `accounts-sqlite.ts`, with
+    // the same names. The first row of a site is where a note goes when nobody chose. The three
+    // columns of `sites` held the one destination until here: they are copied, and nothing reads or
+    // writes them after this. A connector that goes takes its rows with it, and the next row of the
+    // site becomes the first.
+    name: 'site_destinations',
+    sql: `
+      CREATE TABLE site_destinations (
+        site_id TEXT NOT NULL REFERENCES sites (id) ON DELETE CASCADE,
+        position INTEGER NOT NULL,
+        connector_id TEXT NOT NULL REFERENCES connectors (id) ON DELETE CASCADE,
+        team_id TEXT,
+        project_id TEXT,
+        label TEXT,
+        PRIMARY KEY (site_id, position)
+      );
+
+      CREATE INDEX site_destinations_by_connector ON site_destinations (connector_id);
+
+      INSERT INTO site_destinations (site_id, position, connector_id, team_id, project_id)
+        SELECT id, 0, connector_id, team_id, project_id FROM sites WHERE connector_id IS NOT NULL;
+    `,
+  },
 ];
 
 /**

@@ -1,7 +1,7 @@
 import {
-  SITE_COLUMNS,
   accountOf,
   connectorOf,
+  destinationOf,
   dueDeliveryOf,
   newId,
   pendingDeliveryOf,
@@ -9,9 +9,9 @@ import {
   siteOf,
   workspaceOf,
 } from './account-rows.ts';
-import { type AccountStore, clientOf, normalizeEmail } from './accounts.ts';
+import { type AccountStore, type Site, clientOf, normalizeEmail } from './accounts.ts';
 import type { ClientMap } from './clients.ts';
-import type { Database } from './postgres.ts';
+import type { Database, Row } from './postgres.ts';
 import { migrated } from './postgres-migrations.ts';
 import { StoreError } from './store.ts';
 
@@ -31,7 +31,33 @@ import { StoreError } from './store.ts';
  * - `IS NOT ?` with a null is `IS DISTINCT FROM`: `<>` with a null is never true.
  * - A link is spent by one `UPDATE … RETURNING`: the row lock decides which of two calls changed it.
  * - An instant is a `BIGINT` of milliseconds that the worker gives. The database never reads its clock.
+ * - `setDestinations` checks and writes in one transaction that holds the row of the site. SQLite
+ *   checked, then wrote, with nothing between. Two lists for one site at the same moment would
+ *   otherwise both remove the old rows and both write position 0.
+ * - A site and its destinations are one statement, where SQLite reads the sites and then every
+ *   destination: one exchange with the server for a request, and one moment of the database.
  */
+
+/** A site beside each of its destinations. `LEFT JOIN`: a site that has none is one row. */
+const SITES_WITH_DESTINATIONS = `
+  SELECT s.id, s.workspace_id, s.origin, s.visibility, d.connector_id, d.team_id, d.project_id, d.label
+  FROM sites s LEFT JOIN site_destinations d ON d.site_id = s.id`;
+
+/** The sites of these rows in the order of the rows, each with its destinations in that order. */
+function sitesFrom(rows: readonly Row[]): Site[] {
+  const sites = new Map<string, Site>();
+  for (const row of rows) {
+    const site = sites.get(String(row.id)) ?? siteOf(row, []);
+    if (site === undefined) continue;
+    sites.set(site.id, site);
+
+    const destination = destinationOf(row);
+    if (destination !== undefined) site.destinations.push(destination);
+  }
+
+  return [...sites.values()];
+}
+
 export function createPostgresAccountStore(database: Database): AccountStore {
   /** The database, with its schema. The first call of a process applies the migrations. */
   const ready = async (): Promise<Database> => {
@@ -40,7 +66,7 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     return database;
   };
 
-  return {
+  const store: AccountStore = {
     async signIn({ provider, subject, email, name, locale }) {
       const address = normalizeEmail(email);
       if (address === undefined) throw new StoreError('A sign-in needs a valid address');
@@ -160,16 +186,22 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     },
 
     async addSite(workspace, { origin, visibility }) {
-      // Adding the same address twice is the same site, with the visibility asked for last.
+      // Adding the same address twice is the same site, with the visibility asked for last. It keeps
+      // the destinations it had, so the statement that writes it reads them too.
       const { rows } = await (
         await ready()
       ).query(
-        `INSERT INTO sites (id, workspace_id, origin, visibility, created_at) VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (workspace_id, origin) DO UPDATE SET visibility = EXCLUDED.visibility
-         RETURNING ${SITE_COLUMNS}`,
+        `WITH site AS (
+           INSERT INTO sites (id, workspace_id, origin, visibility, created_at) VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (workspace_id, origin) DO UPDATE SET visibility = EXCLUDED.visibility
+           RETURNING id, workspace_id, origin, visibility
+         )
+         SELECT site.id, site.workspace_id, site.origin, site.visibility,
+                d.connector_id, d.team_id, d.project_id, d.label
+         FROM site LEFT JOIN site_destinations d ON d.site_id = site.id ORDER BY d.position`,
         [newId('site'), workspace, origin, visibility, Date.now()],
       );
-      const site = rows[0] === undefined ? undefined : siteOf(rows[0]);
+      const site = sitesFrom(rows)[0];
       if (site === undefined) throw new StoreError('The site could not be read back');
 
       return site;
@@ -178,9 +210,11 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     async sites(workspace) {
       const { rows } = await (
         await ready()
-      ).query(`SELECT ${SITE_COLUMNS} FROM sites WHERE workspace_id = $1 ORDER BY created_at, id`, [workspace]);
+      ).query(`${SITES_WITH_DESTINATIONS} WHERE s.workspace_id = $1 ORDER BY s.created_at, s.id, d.position`, [
+        workspace,
+      ]);
 
-      return rows.flatMap((row) => siteOf(row) ?? []);
+      return sitesFrom(rows);
     },
 
     async removeSite(workspace, site) {
@@ -252,25 +286,48 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     },
 
     async setDestination(workspace, site, destination) {
-      const db = await ready();
-      if (destination === undefined) {
-        const cleared = await db.query(
-          'UPDATE sites SET connector_id = NULL, team_id = NULL, project_id = NULL WHERE workspace_id = $1 AND id = $2',
-          [workspace, site],
-        );
+      return store.setDestinations(workspace, site, destination === undefined ? [] : [destination]);
+    },
 
-        return cleared.rowCount === 1;
-      }
+    async setDestinations(workspace, site, destinations) {
+      return (await ready()).transaction(async (transaction) => {
+        // The lock puts two lists for one site one after the other. Without it the second `DELETE`
+        // does not see the rows the first transaction wrote, and both write position 0.
+        const owned = await transaction.query('SELECT 1 FROM sites WHERE id = $1 AND workspace_id = $2 FOR UPDATE', [
+          site,
+          workspace,
+        ]);
+        if (owned.rows.length !== 1) return false;
 
-      // One statement: the connector must be of the same workspace as the site.
-      const set = await db.query(
-        `UPDATE sites SET connector_id = $1, team_id = $2, project_id = $3
-         WHERE workspace_id = $4 AND id = $5
-           AND EXISTS (SELECT 1 FROM connectors WHERE id = $1 AND workspace_id = $4)`,
-        [destination.connector, destination.teamId ?? null, destination.projectId ?? null, workspace, site],
-      );
+        // A site must not write through the key of another team: each connector is of this workspace.
+        // `FOR KEY SHARE` keeps the connector until the end: a removal waits, then takes these rows.
+        for (const connector of new Set(destinations.map((destination) => destination.connector))) {
+          const ours = await transaction.query(
+            'SELECT 1 FROM connectors WHERE id = $1 AND workspace_id = $2 FOR KEY SHARE',
+            [connector, workspace],
+          );
+          if (ours.rows.length !== 1) return false;
+        }
 
-      return set.rowCount === 1;
+        // One transaction: a reader never sees half of a list.
+        await transaction.query('DELETE FROM site_destinations WHERE site_id = $1', [site]);
+        for (const [position, destination] of destinations.entries()) {
+          await transaction.query(
+            `INSERT INTO site_destinations (site_id, position, connector_id, team_id, project_id, label)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [
+              site,
+              position,
+              destination.connector,
+              destination.teamId ?? null,
+              destination.projectId ?? null,
+              destination.label ?? null,
+            ],
+          );
+        }
+
+        return true;
+      });
     },
 
     async enqueueDelivery(connector, body, now) {
@@ -351,7 +408,8 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     },
 
     async deleteWorkspace(workspace) {
-      // The foreign keys take its members, its sites, its connectors and their deliveries with it.
+      // The foreign keys take its members, its sites and their destinations, its connectors and their
+      // deliveries with it.
       await (await ready()).query('DELETE FROM workspaces WHERE id = $1', [workspace]);
     },
 
@@ -384,14 +442,15 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     },
 
     async clientMap() {
-      const { rows } = await (await ready()).query(`SELECT ${SITE_COLUMNS} FROM sites`);
+      // Every request reads this. The order of the sites is nothing to a map, and a sort of their ids
+      // is what costs: only the places of one site have an order.
+      const { rows } = await (await ready()).query(`${SITES_WITH_DESTINATIONS} ORDER BY d.position`);
       const map: ClientMap = {};
-      for (const row of rows) {
-        const site = siteOf(row);
-        if (site !== undefined) map[site.id] = clientOf(site);
-      }
+      for (const site of sitesFrom(rows)) map[site.id] = clientOf(site);
 
       return map;
     },
   };
+
+  return store;
 }
