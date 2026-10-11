@@ -24,11 +24,17 @@ const ALLOWED = ['apps/worker/src/git.fixture.ts', 'tools/mutation/scope.ts'];
 /** A call that starts git itself, or hands a line that begins with `git` to a shell. */
 const STARTS_GIT = /\b(?:exec|execSync|execFile|execFileSync|spawn|spawnSync)\(\s*['"`]git\b/;
 
-function sourcesUnder(directory: string): string[] {
+/**
+ * The files of the tests: a test, a spec, a fixture, and all of `e2e/` and of `tools/`. They are
+ * the files that the `test` target of the worker hashes outside its own project, so a change to
+ * one of them runs this test again.
+ */
+function testFilesUnder(directory: string, all = false): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
-    if (entry.isDirectory()) return IGNORED.has(entry.name) ? [] : sourcesUnder(path);
-    return entry.isFile() && /\.(?:ts|tsx|mts|mjs|js)$/.test(entry.name) ? [path] : [];
+    if (entry.isDirectory()) return IGNORED.has(entry.name) ? [] : testFilesUnder(path, all);
+    const wanted = all ? /\.(?:ts|tsx|mts|mjs|js)$/ : /\.(?:test|spec|fixture)\.tsx?$/;
+    return entry.isFile() && wanted.test(entry.name) ? [path] : [];
   });
 }
 
@@ -64,12 +70,17 @@ describe('git in a test', () => {
   });
 
   /**
-   * The scan reads the text, so it sees a direct call and not a name held in a variable, nor a
-   * script that a test starts. It holds the way the defect came in.
+   * The scan reads the text of the files of the tests, so it sees a direct call and not a name
+   * held in a variable, nor a script that a test starts. It holds the way the defect came in.
    */
   it('is started through git.fixture.ts, and by no other file', () => {
-    const sources = ['apps', 'packages', 'e2e', 'tools'].flatMap((directory) => sourcesUnder(join(ROOT, directory)));
-    assert.ok(sources.length > 100, `only ${sources.length} source files were read`);
+    const sources = [
+      ...testFilesUnder(join(ROOT, 'apps')),
+      ...testFilesUnder(join(ROOT, 'packages')),
+      ...testFilesUnder(join(ROOT, 'e2e'), true),
+      ...testFilesUnder(join(ROOT, 'tools'), true),
+    ];
+    assert.ok(sources.length > 100, `only ${sources.length} files of tests were read`);
 
     const starters = sources
       .filter((file) =>

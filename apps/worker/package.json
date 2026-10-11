@@ -44,6 +44,8 @@
           "{workspaceRoot}/docs/**/*",
           "{workspaceRoot}/**/*.test.ts",
           "{workspaceRoot}/**/*.spec.ts",
+          "{workspaceRoot}/**/*.fixture.ts",
+          "{workspaceRoot}/e2e/**/*.ts",
           "{workspaceRoot}/nx.json",
           "{workspaceRoot}/package.json",
           "{workspaceRoot}/pnpm-workspace.yaml",
