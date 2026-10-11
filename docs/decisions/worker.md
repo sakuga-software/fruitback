@@ -917,22 +917,23 @@ in` keeps the first two measured.
 
 ### The bundle, and what it costs a worker that has better-auth off
 
-Measured on 2026-10-11, on the commit before this slice and on this one:
+Measured on 2026-10-11, on the commit this slice starts from (the head of FRU-142) and on this one,
+two runs of seven boots each:
 
-|                                        | Before    | After      |
-| -------------------------------------- | --------- | ---------- |
-| `dist/server.mjs`, bytes               | 951,408   | 3,703,080  |
-| the same, gzip                         | 176,470   | 620,408    |
-| files in the bundle                    | 160       | 800        |
-| packages in the bundle                 | 15        | 32         |
-| bytes the process evaluates at boot    | 756,093   | 771,582    |
-| boot to « listening », median of seven | 98–113 ms | 122–126 ms |
-| resident memory after `/health`, KiB   | 75,808    | 87,344     |
+|                                      | Before        | After         |
+| ------------------------------------ | ------------- | ------------- |
+| `dist/server.mjs`, bytes             | 959,289       | 3,711,008     |
+| the same, gzip                       | 178,187       | 622,017       |
+| files in the bundle                  | 162           | 802           |
+| packages in the bundle               | 15            | 32            |
+| bytes the process evaluates at boot  | 763,922       | 779,458       |
+| boot to « listening », median        | 99–108 ms     | 121–139 ms    |
+| resident memory after `/health`, KiB | 75,952–76,080 | 87,584–87,728 |
 
 - **The 17 new packages are 2,659,947 bytes**: `zod` 4.6.5 (827,181), `kysely` (602,844),
   `better-auth` (602,191), `@better-auth/core` (315,706), `jose` (92,785), and twelve small ones.
 - **Nothing of them runs for a worker that has better-auth off.** The file is larger all the same:
-  Node reads and parses it, which is the 15 to 25 ms and the 11,536 KiB of the last two rows (Node
+  Node reads and parses it, which is the 13 to 31 ms and the 11.6 MiB of the last two rows (Node
   25.8.1, one machine, `FRUITBACK_STORE=sqlite`, no accounts).
 - **`zod` is in the bundle twice.** The worker uses 4.3.6, which the catalog pins with a tilde, and
   better-auth asks for `^4.5.4`. Aligning the catalog takes the second copy out, 513,751 bytes. It is not done here:

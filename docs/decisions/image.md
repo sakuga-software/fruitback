@@ -113,7 +113,7 @@ immutable.
   `502` to every read (measured). The `docker image` job therefore boots the image a second time,
   beside a PostgreSQL container, and probes a read: `{"error":"unknown-client"}` says that the
   bundle reached the database and applied its migration.
-- **better-auth is in the bundle since FRU-144, and the bundle is 3,703,080 bytes**, from 951,408.
+- **better-auth is in the bundle since FRU-144, and the bundle is 3,711,008 bytes**, from 959,289.
   Its code is behind a dynamic import: a worker without `FRUITBACK_AUTH_SECRET` runs none of it, and
   a test reads that on the graph of the bundle. It serves no route, so nothing reads it on `/health`
   or on any request. The `docker image` job therefore boots the image a third and a fourth time on
