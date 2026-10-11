@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -22,6 +22,8 @@ const HOOKS = [
   { name: 'pre-push', file: new URL('.githooks/pre-push', ROOT) },
 ];
 const INSTALLER = new URL('.githooks/install.mjs', ROOT);
+/** What the `test` script of a package passes to `node --test`: nothing, unless the variable is set. */
+const CONCURRENCY = '${FRUITBACK_TEST_CONCURRENCY:+--test-concurrency=$FRUITBACK_TEST_CONCURRENCY}';
 
 /** The `-e '^…'` patterns of the line that filters what the hook gives to oxfmt. */
 function leftOutOfFormat(hook: string): string[] {
@@ -94,4 +96,88 @@ describe('the git hooks', () => {
     assert.ok(ignored.length >= 2, `only ${ignored.length} entries found in .oxfmtignore`);
     assert.deepEqual(leftOutOfFormat(readFileSync(new URL('.githooks/pre-commit', ROOT), 'utf8')), ignored);
   });
+
+  /**
+   * Without a bound, `node --test` runs the files of a package on every core but one, and
+   * `NODE_OPTIONS` refuses `--test-concurrency`. So the `test` script of each package passes
+   * `FRUITBACK_TEST_CONCURRENCY` to Node. The option goes before the files, because Node ignores
+   * it after them (measured). `pre-push` sets the variable. CI does not, so CI keeps every core.
+   */
+  it(
+    'bound the test files that a push runs at a time, and leave CI on every core',
+    { skip: process.platform === 'win32' && 'the scripts of the packages are read by a POSIX shell' },
+    () => {
+      const scripts = ['apps', 'packages'].flatMap((directory) =>
+        readdirSync(new URL(`${directory}/`, ROOT), { withFileTypes: true })
+          .filter(
+            (entry) => entry.isDirectory() && existsSync(new URL(`${directory}/${entry.name}/package.json`, ROOT)),
+          )
+          .map((entry) => {
+            const file = `${directory}/${entry.name}/package.json`;
+            const { scripts: all = {} } = JSON.parse(readFileSync(new URL(file, ROOT), 'utf8')) as {
+              scripts?: Record<string, string>;
+            };
+            return { file, test: all.test ?? '' };
+          })
+          .filter(({ test }) => test.startsWith('node --test')),
+      );
+      assert.ok(scripts.length >= 7, `only ${scripts.length} packages run node --test`);
+      for (const { file, test } of scripts) {
+        assert.ok(test.startsWith(`node --test ${CONCURRENCY} '`), `${file} runs every test file at once: ${test}`);
+      }
+
+      const hook = readFileSync(new URL('.githooks/pre-push', ROOT), 'utf8');
+      assert.match(hook, /^export FRUITBACK_TEST_CONCURRENCY="\$\{FRUITBACK_TEST_CONCURRENCY:-[1-9]\d*\}"$/m);
+      const workflows = new URL('.github/workflows/', ROOT);
+      for (const workflow of readdirSync(workflows)) {
+        assert.doesNotMatch(readFileSync(new URL(workflow, workflows), 'utf8'), /FRUITBACK_TEST_CONCURRENCY/, workflow);
+      }
+
+      const args = (value: string | undefined) => {
+        const env = { ...process.env };
+        delete env.FRUITBACK_TEST_CONCURRENCY;
+        if (value !== undefined) env.FRUITBACK_TEST_CONCURRENCY = value;
+        const run = spawnSync('sh', ['-c', `printf '%s\\n' node --test ${CONCURRENCY} file`], {
+          env,
+          encoding: 'utf8',
+        });
+        return run.stdout.trim().split('\n');
+      };
+      assert.deepEqual(args('2'), ['node', '--test', '--test-concurrency=2', 'file']);
+      assert.deepEqual(args(undefined), ['node', '--test', 'file']);
+    },
+  );
+
+  /**
+   * Git gives a hook `GIT_DIR`. A test that starts git in a temporary directory then works on the
+   * repository that pushes: one did, and it set `core.bare` on the clone (2026-10-11). So the hook
+   * starts Nx, and with it every test, without the variables that name a repository. The function
+   * is run here as the hook wrote it, with `env` in the place of Nx.
+   */
+  it(
+    'hide the repository that pushes from the tests they run',
+    { skip: process.platform === 'win32' && 'the hook is a POSIX shell script' },
+    () => {
+      const hook = readFileSync(new URL('.githooks/pre-push', ROOT), 'utf8');
+      const nx = /^nx\(\) \{\n[\s\S]*?^\}\n/m.exec(hook)?.[0] ?? '';
+      assert.match(nx, /exec node_modules\/\.bin\/nx "\$@"/, 'pre-push holds no function that starts Nx');
+
+      const started = hook.replace(nx, '').match(/^(?!#).*node_modules\/\.bin\/nx(?! \]).*$/gm) ?? [];
+      assert.deepEqual(started, [], 'pre-push starts Nx outside the function that hides the repository');
+
+      const env = {
+        PATH: process.env.PATH ?? '',
+        GIT_DIR: '/a',
+        GIT_WORK_TREE: '/b',
+        GIT_INDEX_FILE: '/c',
+        KEPT: 'yes',
+      };
+      const run = spawnSync('sh', ['-c', `${nx.replace('node_modules/.bin/nx "$@"', 'env')}nx`], {
+        env,
+        encoding: 'utf8',
+      });
+      const seen = run.stdout.split('\n').filter((line) => /^(GIT_|KEPT=)/.test(line));
+      assert.deepEqual(seen, ['KEPT=yes'], run.stderr);
+    },
+  );
 });

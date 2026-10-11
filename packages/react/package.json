@@ -33,7 +33,7 @@
     "format:fix": "oxfmt .",
     "lint": "oxlint .",
     "prepack": "pnpm build",
-    "test": "node --test 'src/**/*.test.ts'",
+    "test": "node --test ${FRUITBACK_TEST_CONCURRENCY:+--test-concurrency=$FRUITBACK_TEST_CONCURRENCY} 'src/**/*.test.ts'",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {

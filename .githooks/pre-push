@@ -35,12 +35,27 @@ done
 # One daemon of Nx for each worktree is one process too many on a machine that holds ten of them.
 export NX_DAEMON=false
 
-# Two typechecks at a time, then one package of tests at a time. `node --test` already runs the
-# files of a package side by side, on every core but one, and `NODE_OPTIONS` refuses
-# `--test-concurrency` (measured): the number of packages is the bound this hook can set.
+# Two typechecks at a time, then one package of tests at a time, and two test files at a time.
+# Without a bound, `node --test` runs the files of a package on every core but one, and
+# `NODE_OPTIONS` refuses `--test-concurrency` (measured). So the `test` script of each package passes
+# `FRUITBACK_TEST_CONCURRENCY` to it. CI does not set it, and runs on every core. Set it before the
+# push to use more cores.
+export FRUITBACK_TEST_CONCURRENCY="${FRUITBACK_TEST_CONCURRENCY:-2}"
+
+# Git gives a hook `GIT_DIR`, and here it names the worktree that pushes. A test that starts git in
+# a temporary directory then works on this repository: one did, and it set `core.bare` on the clone
+# (2026-10-11). So Nx and the tests run without the variables that name a repository, and find it
+# from the directory they are in, as they do outside a hook.
+nx() {
+  (
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_PREFIX
+    exec node_modules/.bin/nx "$@"
+  )
+}
+
 run() {
-  node_modules/.bin/nx "$@" -t typecheck --parallel=2
-  node_modules/.bin/nx "$@" -t test --parallel=1
+  nx "$@" -t typecheck --parallel=2
+  nx "$@" -t test --parallel=1
 }
 
 if ! base=$(git merge-base HEAD "refs/remotes/$remote/main" 2>/dev/null); then
@@ -54,5 +69,5 @@ run affected --base="$base" --head=HEAD
 # A file that no package owns is read by the guard tests of the worker: the documents, the
 # workflows, the specs. Nx counts a project as affected by its own files only.
 if git diff --name-only "$base" HEAD | grep -qv -e '^apps/' -e '^packages/'; then
-  node_modules/.bin/nx run-many -t typecheck test -p @fruitback/worker --parallel=1
+  nx run-many -t typecheck test -p @fruitback/worker --parallel=1
 fi

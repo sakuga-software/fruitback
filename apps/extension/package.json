@@ -17,7 +17,7 @@
     "format:fix": "oxfmt .",
     "lint": "oxlint .",
     "postinstall": "wxt prepare",
-    "test": "node --test 'src/**/*.test.ts'",
+    "test": "node --test ${FRUITBACK_TEST_CONCURRENCY:+--test-concurrency=$FRUITBACK_TEST_CONCURRENCY} 'src/**/*.test.ts'",
     "typecheck": "wxt prepare && tsc --noEmit"
   },
   "dependencies": {

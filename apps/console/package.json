@@ -11,7 +11,7 @@
     "format:fix": "oxfmt .",
     "lint": "oxlint .",
     "typecheck": "react-router typegen && tsc --noEmit",
-    "test": "node --test 'app/**/*.test.ts'"
+    "test": "node --test ${FRUITBACK_TEST_CONCURRENCY:+--test-concurrency=$FRUITBACK_TEST_CONCURRENCY} 'app/**/*.test.ts'"
   },
   "dependencies": {
     "@heroui/react": "^3.2.4",
