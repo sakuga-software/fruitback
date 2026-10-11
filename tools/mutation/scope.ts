@@ -7,7 +7,8 @@ import { readFileSync } from 'node:fs';
  * `mutate` is a comma-separated list for `stryker run --mutate`, empty when there is nothing to do.
  * `full` is `--full` when the whole scope of the package is mutated, and empty otherwise.
  *
- * A pull request mutates the files of the scope that it changes. It mutates the whole scope when it
+ * A pull request mutates the files of the scope that it changes, and those whose test it changes
+ * (`src/x.test.ts` for `src/x.ts`). It mutates the whole scope when it
  * changes how mutation runs: the workflow, a `stryker.config.json`, or `tools/mutation/`. The lines
  * of `baseline.json` were measured with those, so a change to them is measured again in full. A
  * schedule and a run by hand mutate the whole scope.
@@ -39,9 +40,13 @@ export function choose(
   if (changed.some((file) => MUTATION_SETUP.some((pattern) => pattern.test(file)))) {
     return { mutate: scope, full: true };
   }
+  // A test that changes can stop killing the mutants of the file it tests, so that file is mutated
+  // too: a pull request that deletes a test must not pass because it touched no source.
   const touched = new Set(changed);
+  const tested = (file: string) =>
+    touched.has(`${pkg}/${file}`) || touched.has(`${pkg}/${file.replace(/\.ts$/, '.test.ts')}`);
 
-  return { mutate: scope.filter((file) => touched.has(`${pkg}/${file}`)), full: false };
+  return { mutate: scope.filter(tested), full: false };
 }
 
 function main([pkg = '', event = '', base = '']: string[]): void {

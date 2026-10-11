@@ -174,7 +174,8 @@ How this repository is formatted, tested and documented, and which test holds ea
   when a file scores under its line, a new file under the line of its package, or a full run under
   the line of the package. A line moves up by a commit that says why: `node tools/mutation/ratchet.ts
 write <package> <mutation.json>` prints it from the report of a full run.
-- **A pull request mutates the files of the scope that it changes.** A full run happens every Monday,
+- **A pull request mutates the files of the scope that it changes, and those whose test it changes**
+  (`src/x.test.ts` for `src/x.ts`): a pull request that deletes a test is measured too. A full run happens every Monday,
   by hand (`workflow_dispatch`), and on a pull request that changes how mutation runs: the workflow,
   a `stryker.config.json`, or `tools/mutation/`.
 - **StrykerJS is installed apart**, from `tools/mutation/pnpm-lock.yaml`, by the mutation job alone.
@@ -209,6 +210,11 @@ write <package> <mutation.json>` prints it from the report of a full run.
   timed out of 794, in 8 minutes 44 seconds. The lowest files are `cache.ts` (65.90), `seed.ts`
   (72.12) and `identity.ts` (73.00). The holes that matter most are tickets: FRU-175, FRU-176,
   FRU-178 and FRU-179. A file that a pull request does not change costs it nothing.
+- **The job of a pull request takes 1 to 3 minutes for one file.** Measured on a pull request made
+  for it (#150), which changed `seed.ts` and `identity.ts`: 42 seconds for the job of the contract,
+  2 minutes 32 for the job of the worker, installs included. A pull request that changes every file
+  of the worker scope takes the full 9 minutes. So the job is not proposed as a required check yet:
+  it reports, and a red one says which file lost what.
 - **A timeout counts as killed, and that is the one result that can move between two runs.** One
   mutant of `identity.ts` timed out in the measured run. If it survives a later run, that file drops
   under its line by half a point, and the job says so in its summary. Look at the mutant before
