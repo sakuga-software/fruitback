@@ -892,6 +892,14 @@ in` keeps the first two measured.
 - **Some lines of better-auth do not go through the logger of the options.** The refusal of an
   origin is written twice: once by the logger the worker gives, as a `[fruitback]` line, and once by
   a logger of the library, with colours (measured). No such line held a secret or an address.
+- **The tables have the names better-auth gives them**: `user`, `session`, `account`,
+  `verification`, `organization`, `member`, `invitation`. They are made in every database of a
+  worker, with better-auth on or off, because the database has one list of migrations. Names that
+  plain are taken in a database that another application shares: the migration then fails, and
+  every read of the accounts answers `502`. The database of a worker is its own. A schema of its
+  own does the same, with `options=-c search_path=<schema>` in the address: that is how
+  test:`builds better-auth at boot on a real server, and still answers 404` gives each run an empty
+  database, and better-auth reads the search path (read: adapters/postgresql).
 - **The organization plugin is in the configuration for its tables and its roles.** `getMigrations`
   reads the schema from the plugins, and `member` is a table of that plugin. None of its routes is
   served. What a guest reads through them, and two roles on one member, are the next slices: the

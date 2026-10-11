@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import { afterEach, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { getMigrations } from 'better-auth/db/migration';
 import { build } from 'esbuild';
 import { ACTIONS, ROLES, can } from './accounts.ts';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
@@ -18,7 +17,6 @@ import {
   announceAuth,
   authConfigOf,
   authFor,
-  authId,
   authOptions,
   refusedPlugins,
   startAuth,
@@ -31,28 +29,23 @@ import {
   DATABASE_URL,
   PUBLIC_URL,
   ask,
+  databasesOfACase,
   migrationsWith,
   optionsOn,
-  signUp,
   withPool,
-  withTestSignUp,
+  without,
 } from './auth.fixture.ts';
 import { FRUITBACK_RESOURCE, IMPLIED, roleStatements } from './auth-roles.ts';
 import { type WorkerEnv, hasAuth, readConfig } from './env.ts';
-import { type Database, type Migration, closeDatabases, createPgDatabase, migrate } from './postgres.ts';
-import {
-  NO_REAL_POSTGRES,
-  TEST_DATABASE_URL,
-  createPgliteDatabase,
-  createRealDatabase,
-  schemaName,
-} from './postgres.fixture.ts';
+import { type Database, closeDatabases, createPgDatabase, migrate } from './postgres.ts';
+import { NO_REAL_POSTGRES, TEST_DATABASE_URL, createPgliteDatabase, schemaName } from './postgres.fixture.ts';
 import { MIGRATIONS } from './postgres-migrations.ts';
 import { closeSessionConnections } from './session-sqlite.ts';
 
 /**
  * better-auth, built and switched off (FRU-144). No route of it is served: what is tested here is
- * its configuration, its schema, and that a worker which has it off loads nothing and answers `404`.
+ * its configuration, and that a worker which has it off loads nothing and answers `404`.
+ * `auth-schema.test.ts` holds its tables, and `auth-instance.test.ts` what an instance does.
  *
  * A rule that says « never » has its control beside it: the same thing, planted, must fail.
  */
@@ -62,7 +55,8 @@ const IDENTITY_SECRET = 'a-worker-secret-of-exactly-enough';
 const SECRETS_KEY = 'a-key-that-seals-the-connectors-0123';
 
 const directories: string[] = [];
-const opened: Database[] = [];
+// Registered first: the databases of a case are closed before the pools of the process.
+const { opening } = databasesOfACase();
 
 /** A worker with its accounts in PostgreSQL and better-auth on, unless `overrides` says otherwise. */
 function envWith(overrides: Record<string, string | undefined> = {}): WorkerEnv {
@@ -96,25 +90,11 @@ function refusal(env: WorkerEnv): string {
   return config.ok ? '' : config.missing.join(' | ');
 }
 
-async function opening(open: () => Promise<Database>): Promise<Database> {
-  const database = await open();
-  opened.push(database);
-
-  return database;
-}
-
 afterEach(async () => {
   closeSessionConnections();
-  for (const database of opened.splice(0)) await database.close();
   await closeDatabases();
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
 });
-
-/** The databases a case runs on. PGlite has one connection; the CI job « postgres » has a server. */
-const DATABASES = [
-  { label: 'PGlite', open: createPgliteDatabase, skip: false as string | false },
-  { label: 'a real server', open: createRealDatabase, skip: NO_REAL_POSTGRES },
-];
 
 describe('the secret of better-auth, and what it switches on (FRU-144)', () => {
   it('switches better-auth on with its secret and a database, and leaves it off without the secret', () => {
@@ -458,426 +438,6 @@ describe('the routes of better-auth, which the worker does not serve (FRU-144)',
     assert.equal((await ask(auth, '/a-path-nothing-has')).status, 404);
   });
 });
-
-/** What better-auth would do to the database to make it the one its options ask for. */
-async function plan(
-  database: Database,
-  migrations: readonly Migration[] = MIGRATIONS,
-  change: (options: Awaited<ReturnType<typeof authOptions>>) => Awaited<ReturnType<typeof authOptions>> = (same) =>
-    same,
-) {
-  const { options, said } = await optionsOn(database, migrations);
-  const found = await getMigrations(change(options), { throwOnUnsafe: false });
-
-  return {
-    create: found.toBeCreated.map((table) => table.table),
-    add: found.toBeAdded.flatMap((table) => Object.keys(table.fields).map((field) => `${table.table}.${field}`)),
-    indexes: found.toBeAddedIndexes.map((index) => index.name),
-    unsafe: found.unsafeChanges,
-    problems: found.schemaProblems,
-    // A column of another type, and a required column that takes a null, are only said in the log.
-    said: said.filter(({ level }) => level === 'warn' || level === 'error').map(({ message }) => message),
-  };
-}
-
-const NOTHING = { create: [], add: [], indexes: [], unsafe: [], problems: [], said: [] };
-
-/** `sql` with `text` taken out. It must be there once: a control that changes nothing proves nothing. */
-function without(sql: string, text: string, replacement = ''): string {
-  assert.equal(sql.split(text).length - 1, 1, `the migration of better-auth must hold this text once: ${text}`);
-
-  return sql.replace(text, replacement);
-}
-
-/** The tables in the current schema with their columns, constraints and indexes, by name. */
-async function shapeOf(database: Database, only?: readonly string[]) {
-  const schema = String((await database.query('SELECT current_schema() AS name')).rows[0]?.name);
-  const plain = (value: unknown): string => String(value).replaceAll(`${schema}.`, '');
-  const kept = (table: unknown): boolean => only === undefined || only.includes(String(table));
-
-  const columns = await database.query(
-    `SELECT table_name, column_name, data_type, is_nullable, column_default
-       FROM information_schema.columns WHERE table_schema = $1 ORDER BY table_name, column_name`,
-    [schema],
-  );
-  const constraints = await database.query(
-    `SELECT t.relname AS table_name, c.conname AS name, pg_get_constraintdef(c.oid) AS definition
-       FROM pg_constraint c
-       JOIN pg_class t ON t.oid = c.conrelid
-       JOIN pg_namespace n ON n.oid = c.connamespace
-      WHERE n.nspname = $1 ORDER BY t.relname, c.conname`,
-    [schema],
-  );
-  const indexes = await database.query(
-    'SELECT tablename AS table_name, indexname AS name, indexdef AS definition FROM pg_indexes WHERE schemaname = $1 ORDER BY tablename, indexname',
-    [schema],
-  );
-
-  return {
-    tables: [...new Set(columns.rows.map((row) => String(row.table_name)))].filter(kept),
-    columns: columns.rows
-      .filter((row) => kept(row.table_name))
-      .map(
-        (row) =>
-          `${row.table_name}.${row.column_name} ${row.data_type} null:${row.is_nullable} default:${plain(row.column_default)}`,
-      ),
-    constraints: constraints.rows
-      .filter((row) => kept(row.table_name))
-      .map((row) => `${row.table_name} ${row.name}: ${plain(row.definition)}`),
-    indexes: indexes.rows.filter((row) => kept(row.table_name)).map((row) => `${row.name}: ${plain(row.definition)}`),
-  };
-}
-
-/** The one thing the migration of the worker has that the DDL of better-auth does not. */
-const ADDED = 'member member_organizationId_userId_key: UNIQUE ("organizationId", "userId")';
-const ADDED_INDEX =
-  'member_organizationId_userId_key: CREATE UNIQUE INDEX "member_organizationId_userId_key" ON member USING btree ("organizationId", "userId")';
-
-/**
- * How the tables that `migrations` make differ from the ones better-auth makes on an empty database
- * by its own migration: `-` is what better-auth has and the worker has not, `+` the reverse.
- *
- * `runMigrations` of better-auth never runs on a database of the worker. Here it makes the database
- * that the hand-written migration is compared with.
- */
-async function drift(open: () => Promise<Database>, migrations: readonly Migration[]): Promise<string[]> {
-  const theirs = await opening(open);
-  const { options } = await optionsOn(theirs, []);
-  await (await getMigrations(options)).runMigrations();
-  const expected = await shapeOf(theirs);
-  // One PGlite is one connection, and the schema of a case is its search path: one case at a time.
-  await theirs.close();
-  opened.splice(opened.indexOf(theirs), 1);
-
-  const ours = await opening(open);
-  await optionsOn(ours, migrations);
-  const made = await shapeOf(ours, expected.tables);
-
-  assert.deepEqual(expected.tables.toSorted(), [
-    'account',
-    'invitation',
-    'member',
-    'organization',
-    'session',
-    'user',
-    'verification',
-  ]);
-
-  return (['columns', 'constraints', 'indexes'] as const).flatMap((kind) => {
-    const word = { columns: 'column', constraints: 'constraint', indexes: 'index' }[kind];
-    const all = [...new Set([...expected[kind], ...made[kind]])].toSorted();
-
-    return all.flatMap((line) => {
-      if (expected[kind].includes(line) === made[kind].includes(line)) return [];
-
-      return [`${expected[kind].includes(line) ? '-' : '+'} ${word} ${line}`];
-    });
-  });
-}
-
-for (const { label, open, skip } of DATABASES) {
-  describe(`the schema of better-auth, as one migration of the worker, on ${label} (FRU-144)`, { skip }, () => {
-    it('leaves better-auth nothing to create and nothing to add after the migrations of the worker', async () => {
-      assert.deepEqual(await plan(await opening(open)), NOTHING);
-    });
-
-    // The controls: each thing the test above says is there is taken out, and must be reported.
-    it('reports a column that the migration lost', async () => {
-      const lost = migrationsWith((sql) =>
-        without(without(sql, ',\n      "activeOrganizationId" text'), '      "image" text,\n'),
-      );
-
-      assert.deepEqual(await plan(await opening(open), lost), {
-        ...NOTHING,
-        add: ['user.image', 'session.activeOrganizationId'],
-      });
-    });
-
-    it('reports a table that the migration lost', async () => {
-      const lost = migrationsWith((sql) => {
-        const table = sql.slice(
-          sql.indexOf('CREATE TABLE "invitation"'),
-          sql.indexOf('CREATE INDEX "session_userId_idx"'),
-        );
-
-        return [
-          table,
-          'CREATE INDEX "invitation_organizationId_idx" ON "invitation" ("organizationId");',
-          'CREATE INDEX "invitation_email_idx" ON "invitation" ("email");',
-        ].reduce((left, text) => without(left, text), sql);
-      });
-
-      assert.deepEqual(await plan(await opening(open), lost), { ...NOTHING, create: ['invitation'] });
-    });
-
-    it('says in its log a column of another type, and a required column that takes a null', async () => {
-      const drifted = migrationsWith((sql) =>
-        without(
-          without(sql, '"emailVerified" boolean NOT NULL', '"emailVerified" text NOT NULL'),
-          '"slug" text NOT NULL UNIQUE',
-          '"slug" text UNIQUE',
-        ),
-      );
-      const found = await plan(await opening(open), drifted);
-
-      assert.deepEqual({ ...found, said: [] }, NOTHING);
-      assert.equal(found.said.length, 2, found.said.join('\n'));
-      assert.match(found.said.join('\n'), /emailVerified.*different type/);
-      assert.match(found.said.join('\n'), /"slug".*stays nullable/);
-    });
-
-    it('reports a required column that better-auth never fills', async () => {
-      const more = migrationsWith((sql) =>
-        without(sql, '      "image" text,\n', '      "image" text,\n      "plan" text NOT NULL,\n'),
-      );
-      const found = await plan(await opening(open), more);
-
-      assert.deepEqual({ ...found, problems: [] }, NOTHING);
-      assert.match(found.problems.join('\n'), /plan/);
-    });
-
-    it('reports the tables of a plugin that no migration makes', async () => {
-      const { organization } = await import('better-auth/plugins/organization');
-      const found = await plan(await opening(open), MIGRATIONS, (options) => ({
-        ...options,
-        plugins: [organization({ teams: { enabled: true } })],
-      }));
-
-      assert.deepEqual(found.create, ['team', 'teamMember']);
-      assert.deepEqual(found.add, ['session.activeTeamId', 'invitation.teamId']);
-    });
-
-    it('makes the tables that the migration of better-auth itself makes, and one constraint more', async () => {
-      assert.deepEqual(await drift(open, MIGRATIONS), [`+ constraint ${ADDED}`, `+ index ${ADDED_INDEX}`]);
-    });
-
-    // The controls of the test above. better-auth reports none of these three (measured): it reads
-    // the names of the tables and of the columns, and an index of one column only when it makes the
-    // table. So the comparison with its own migration is what holds them.
-    it('finds an index, a cascade and a unique constraint that the migration lost', async () => {
-      const lost = migrationsWith((sql) =>
-        [
-          ['CREATE INDEX "member_userId_idx" ON "member" ("userId");', ''],
-          [
-            '"inviterId" text NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE',
-            '"inviterId" text NOT NULL REFERENCES "user" ("id")',
-          ],
-          ['"token" text NOT NULL UNIQUE', '"token" text NOT NULL'],
-        ].reduce((left, [text = '', replacement = '']) => without(left, text, replacement), sql),
-      );
-
-      assert.deepEqual(
-        await plan(await opening(open), lost),
-        NOTHING,
-        'better-auth now reports one of these: say so in worker.md',
-      );
-      assert.deepEqual(await drift(open, lost), [
-        '+ constraint invitation invitation_inviterId_fkey: FOREIGN KEY ("inviterId") REFERENCES "user"(id)',
-        '- constraint invitation invitation_inviterId_fkey: FOREIGN KEY ("inviterId") REFERENCES "user"(id) ON DELETE CASCADE',
-        `+ constraint ${ADDED}`,
-        '- constraint session session_token_key: UNIQUE (token)',
-        `+ index ${ADDED_INDEX}`,
-        '- index member_userId_idx: CREATE INDEX "member_userId_idx" ON member USING btree ("userId")',
-        '- index session_token_key: CREATE UNIQUE INDEX session_token_key ON session USING btree (token)',
-      ]);
-    });
-
-    // better-auth builds its context on a schema that is wrong, and rejects the first request
-    // (measured). `startAuth` asks for that request before it says « ready ».
-    it('refuses to call better-auth ready on a schema that lost a column, and names the column', async () => {
-      const lost = migrationsWith((sql) => without(sql, ',\n      "activeOrganizationId" text'));
-      const { options } = await optionsOn(await opening(open), lost);
-
-      await assert.rejects(startAuth(options), (error: unknown) => {
-        assert.ok(error instanceof Error);
-        assert.match(error.message, /not the one better-auth expects \(missing-column session\.activeOrganizationId\)/);
-        assert.match(error.message, /never run `auth migrate` on this database/);
-        // The advice of better-auth itself, which is the second migration tool the worker must not have.
-        assert.doesNotMatch(error.message, /npx auth migrate/);
-
-        return true;
-      });
-    });
-
-    it('refuses a second row for one person in one workspace', async () => {
-      const database = await opening(open);
-      await optionsOn(database);
-      await database.query(
-        `INSERT INTO "user" ("id", "name", "email", "emailVerified") VALUES ('acc_1', 'Alice', 'alice@acme.dev', true);
-         INSERT INTO "organization" ("id", "name", "slug", "createdAt") VALUES ('ws_1', 'Acme', 'acme', now());
-         INSERT INTO "member" ("id", "organizationId", "userId", "role", "createdAt") VALUES ('mem_1', 'ws_1', 'acc_1', 'guest', now());`,
-      );
-
-      const second = await database
-        .query(
-          'INSERT INTO "member" ("id", "organizationId", "userId", "role", "createdAt") VALUES ($1, $2, $3, $4, now())',
-          ['mem_2', 'ws_1', 'acc_1', 'admin'],
-        )
-        .then(
-          () => undefined,
-          (error: unknown) => error,
-        );
-
-      assert.equal((second as { code?: string } | undefined)?.code, '23505', 'one person has two rows, so two roles');
-    });
-
-    it('gives every table of better-auth an id of the worker, and keeps acc_ and ws_', async () => {
-      const { create: tables } = await plan(await opening(open), []);
-
-      assert.equal(tables.length, 7);
-      for (const table of tables) assert.match(authId(table), /^[a-z]{2,3}_[0-9a-f]{20}$/, table);
-      assert.match(authId('user'), /^acc_/);
-      assert.match(authId('organization'), /^ws_/);
-      // The control: a table that has no prefix is refused, and is not given a default one.
-      assert.throws(() => authId('team'), /« team ».*no prefix/);
-    });
-  });
-
-  describe(`the options of better-auth, measured on an instance, on ${label} (FRU-144)`, { skip }, () => {
-    it('opens no session with the token read in the session table, and opens one with the bearer plugin', async () => {
-      const database = await opening(open);
-      const { options } = await optionsOn(database);
-      const auth = await startAuth(withTestSignUp(options));
-      const { cookie } = await signUp(auth, 'alice@acme.dev');
-      const token = String((await database.query('SELECT "token" FROM "session"')).rows[0]?.token);
-      const name = cookie.split('=')[0];
-      const sessionOf = async (instance: typeof auth, headers: Record<string, string>): Promise<unknown> =>
-        ((await (await ask(instance, '/get-session', { headers })).json()) as { session?: unknown } | null)?.session;
-
-      assert.ok(token.length >= 32, 'no token was read in the table, so nothing below is tested');
-      assert.equal(await sessionOf(auth, { Authorization: `Bearer ${token}` }), undefined);
-      assert.equal(await sessionOf(auth, { Cookie: `${name}=${token}` }), undefined, 'a cookie that is not signed');
-      // The control: the cookie the worker signed opens the session.
-      assert.ok(await sessionOf(auth, { Cookie: cookie }));
-
-      // The reason `bearer` is refused, kept measured. Built past `startAuth`, which refuses it.
-      const { betterAuth } = await import('better-auth');
-      const { bearer } = await import('better-auth/plugins/bearer');
-      const withBearer = betterAuth({ ...withTestSignUp(options), plugins: [...(options.plugins ?? []), bearer()] });
-
-      assert.ok(
-        await sessionOf(withBearer as unknown as typeof auth, { Authorization: `Bearer ${token}` }),
-        'the bearer plugin no longer opens a session with the token of the table: read REFUSED_PLUGINS again',
-      );
-    });
-
-    it('sets the cookie of a session for the routes of the console only, where no script reads it', async () => {
-      const database = await opening(open);
-      const { options } = await optionsOn(database);
-      const { setCookie } = await signUp(await startAuth(withTestSignUp(options)), 'alice@acme.dev');
-
-      assert.equal(setCookie.length, 1, setCookie.join('\n'));
-      const [pair, ...attributes] = (setCookie[0] ?? '').split('; ');
-      assert.match(pair ?? '', /^__Secure-fruitback\.session_token=/);
-      assert.deepEqual(attributes.filter((attribute) => !attribute.startsWith('Max-Age=')).toSorted(), [
-        'HttpOnly',
-        'Path=/console',
-        'SameSite=Strict',
-        'Secure',
-      ]);
-      // The ids of the worker, on the rows that better-auth wrote.
-      assert.match(String((await database.query('SELECT "id" FROM "user"')).rows[0]?.id), /^acc_[0-9a-f]{20}$/);
-      assert.match(String((await database.query('SELECT "id" FROM "session"')).rows[0]?.id), /^ses_[0-9a-f]{20}$/);
-    });
-
-    it('refuses a request that has the cookie and comes from another origin, or from none', async () => {
-      const { options } = await optionsOn(await opening(open));
-      const auth = await startAuth(withTestSignUp(options));
-      const { cookie } = await signUp(auth, 'alice@acme.dev');
-      const signOut = (headers: Record<string, string>): Promise<Response> =>
-        auth.handler(
-          new Request(`${PUBLIC_URL}${AUTH_BASE_PATH}/sign-out`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Cookie: cookie, ...headers },
-            body: '{}',
-          }),
-        );
-
-      // `demo.fruitback.com` is the same site as the worker: the cookie is sent from there.
-      assert.equal((await signOut({ Origin: 'https://demo.fruitback.test' })).status, 403);
-      assert.equal((await signOut({})).status, 403);
-      // The control: the console itself is answered.
-      assert.equal((await signOut({ Origin: CONSOLE_URL })).status, 200);
-    });
-
-    it('keeps no address of the caller, whatever X-Forwarded-For says', async () => {
-      const database = await opening(open);
-      const { options } = await optionsOn(database);
-      await signUp(await startAuth(withTestSignUp(options)), 'alice@acme.dev', { 'X-Forwarded-For': '203.0.113.7' });
-
-      assert.deepEqual((await database.query('SELECT "ipAddress" FROM "session"')).rows, [{ ipAddress: '' }]);
-    });
-
-    // Why the worker does not let better-auth read the address: measured, with the tracking on.
-    it('takes a lone X-Forwarded-For as the caller wrote it, and refuses a chain, when it tracks addresses', async () => {
-      const database = await opening(open);
-      const { options } = await optionsOn(database);
-      const tracking = await startAuth(
-        withTestSignUp({ ...options, advanced: { ...options.advanced, ipAddress: { disableIpTracking: false } } }),
-      );
-      await signUp(tracking, 'lone@acme.dev', { 'X-Forwarded-For': '203.0.113.7' });
-      await signUp(tracking, 'chain@acme.dev', { 'X-Forwarded-For': '203.0.113.7, 198.51.100.9' });
-
-      assert.deepEqual(
-        (
-          await database.query(
-            'SELECT u."email", s."ipAddress" FROM "session" s JOIN "user" u ON u."id" = s."userId" ORDER BY u."email"',
-          )
-        ).rows,
-        [
-          { email: 'chain@acme.dev', ipAddress: '' },
-          { email: 'lone@acme.dev', ipAddress: '203.0.113.7' },
-        ],
-      );
-    });
-
-    // Why `readConfig` refuses every BETTER_AUTH_ variable: measured. The options of the worker are
-    // the same in each half, and only the environment of the process changes.
-    it('takes an origin and a secret from the environment over its options, when the worker lets one in', async () => {
-      const { options } = await optionsOn(await opening(open));
-      const withSignUp = withTestSignUp(options);
-      const auth = await startAuth(withSignUp);
-      const { cookie } = await signUp(auth, 'alice@acme.dev');
-      const sessionOf = async (instance: typeof auth, origin: string): Promise<number> =>
-        (
-          await ask(instance, '/revoke-other-sessions', {
-            method: 'POST',
-            body: '{}',
-            headers: { Cookie: cookie, Origin: origin },
-          })
-        ).status;
-
-      assert.equal(await sessionOf(auth, 'https://evil.test'), 403, 'before: an origin that is not the console');
-      try {
-        process.env.BETTER_AUTH_TRUSTED_ORIGINS = 'https://evil.test';
-        assert.equal(await sessionOf(auth, 'https://evil.test'), 200, 'the variable no longer adds an origin');
-
-        process.env.BETTER_AUTH_SECRETS = '2:another-secret-that-nobody-gave-the-worker-0123456789';
-        const other = await startAuth(withSignUp);
-        assert.equal(await sessionOf(other, CONSOLE_URL), 401, 'the variable no longer takes the place of the secret');
-      } finally {
-        delete process.env.BETTER_AUTH_TRUSTED_ORIGINS;
-        delete process.env.BETTER_AUTH_SECRETS;
-      }
-      // The control: with no variable, the cookie the worker signed is the cookie that is read.
-      assert.equal(await sessionOf(await startAuth(withSignUp), CONSOLE_URL), 200);
-    });
-
-    it('gives no way to sign in with a password', async () => {
-      const database = await opening(open);
-      const { options } = await optionsOn(database);
-      const auth = await startAuth(options);
-      const answer = await ask(auth, '/sign-up/email', {
-        method: 'POST',
-        body: JSON.stringify({ email: 'alice@acme.dev', password: 'correct horse battery staple', name: 'Alice' }),
-      });
-
-      assert.ok(answer.status >= 400, `a sign-up with a password answered ${answer.status}`);
-      assert.equal(answer.headers.get('Set-Cookie'), null);
-      assert.deepEqual((await database.query('SELECT "id" FROM "user"')).rows, []);
-    });
-  });
-}
 
 describe('the options of better-auth, as they are written (FRU-144)', () => {
   it('writes each option that closes something, and reads none of them from the environment', async () => {

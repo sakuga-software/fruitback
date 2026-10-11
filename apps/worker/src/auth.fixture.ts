@@ -1,6 +1,9 @@
+import assert from 'node:assert/strict';
+import { afterEach } from 'node:test';
 import type { Auth, BetterAuthOptions } from 'better-auth';
 import { type AuthConfig, authOptions } from './auth.ts';
 import { type Database, type Migration, type PgDatabase, type PgPool, migrate } from './postgres.ts';
+import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase } from './postgres.fixture.ts';
 import { MIGRATIONS } from './postgres-migrations.ts';
 
 /**
@@ -138,4 +141,44 @@ export async function signUp(
   const setCookie = answer.headers.getSetCookie();
 
   return { cookie: setCookie.map((each) => each.split(';')[0]).join('; '), setCookie };
+}
+
+/** The databases a case runs on. PGlite has one connection; the CI job « postgres » has a server. */
+export const DATABASES: readonly { label: string; open: () => Promise<Database>; skip: string | false }[] = [
+  { label: 'PGlite', open: createPgliteDatabase, skip: false },
+  { label: 'a real server', open: createRealDatabase, skip: NO_REAL_POSTGRES },
+];
+
+/**
+ * The databases of the cases of a test file: `opening` opens one, and it is closed after the case.
+ * `closing` closes one before the end of its case, for a case that needs two on one PGlite.
+ */
+export function databasesOfACase(): {
+  opening(open: () => Promise<Database>): Promise<Database>;
+  closing(database: Database): Promise<void>;
+} {
+  const opened: Database[] = [];
+  afterEach(async () => {
+    for (const database of opened.splice(0)) await database.close();
+  });
+
+  return {
+    async opening(open) {
+      const database = await open();
+      opened.push(database);
+
+      return database;
+    },
+    async closing(database) {
+      await database.close();
+      opened.splice(opened.indexOf(database), 1);
+    },
+  };
+}
+
+/** `sql` with `text` taken out. It must be there once: a control that changes nothing proves nothing. */
+export function without(sql: string, text: string, replacement = ''): string {
+  assert.equal(sql.split(text).length - 1, 1, `the migration of better-auth must hold this text once: ${text}`);
+
+  return sql.replace(text, replacement);
 }

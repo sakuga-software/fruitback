@@ -8,7 +8,7 @@ import type { Migration } from './postgres.ts';
  * added: see `member`. `auth migrate` and `runMigrations()` never run on a database of the worker:
  * one tool migrates it, and that tool is `migrate` of `postgres.ts`.
  *
- * `auth.test.ts` holds this text to the library: after the migrations of the worker, better-auth has
+ * `auth-schema.test.ts` holds this text to the library: after the migrations of the worker, better-auth has
  * nothing to create and nothing to add, and the tables are the ones its own migration makes, column
  * for column and constraint for constraint, but the one that is added here.
  *
