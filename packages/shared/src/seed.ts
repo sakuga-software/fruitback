@@ -290,3 +290,5 @@ export function canonicalizePageUrl(input: string | URL, options: { keepSearch?:
   // `URL` already strips the default port; `toString()` keeps a bare `?` out of the result.
   return url.toString();
 }
+
+// proof of the pull request job of mutation.yml (FRU-172): never merge.
