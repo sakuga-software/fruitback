@@ -892,6 +892,10 @@ in` keeps the first two measured.
 - **Some lines of better-auth do not go through the logger of the options.** The refusal of an
   origin is written twice: once by the logger the worker gives, as a `[fruitback]` line, and once by
   a logger of the library, with colours (measured). No such line held a secret or an address.
+- **Two tables are named after a session, and they are not the same thing.** `sessions` (FRU-142)
+  holds the sessions of the extension: digests, a chain, a rotation. `session` (better-auth) will
+  hold the sessions of the console, with the token in the clear, and it is empty. A query, a backup
+  check or a purge that names one must not mean the other.
 - **The tables have the names better-auth gives them**: `user`, `session`, `account`,
   `verification`, `organization`, `member`, `invitation`. They are made in every database of a
   worker, with better-auth on or off, because the database has one list of migrations. Names that

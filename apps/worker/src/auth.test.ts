@@ -58,22 +58,34 @@ const directories: string[] = [];
 // Registered first: the databases of a case are closed before the pools of the process.
 const { opening } = databasesOfACase();
 
-/** A worker with its accounts in PostgreSQL and better-auth on, unless `overrides` says otherwise. */
+/**
+ * A worker with its accounts and its sessions in PostgreSQL and better-auth on, unless `overrides`
+ * says otherwise. `FRUITBACK_SESSION_PATH` is refused beside the database (FRU-142).
+ */
 function envWith(overrides: Record<string, string | undefined> = {}): WorkerEnv {
-  const directory = mkdtempSync(join(tmpdir(), 'fruitback-auth-'));
-  directories.push(directory);
-
   return {
     FRUITBACK_STORE: 'memory',
     ALLOWED_ORIGINS: CONSOLE_URL,
     FRUITBACK_IDENTITY_SECRET: IDENTITY_SECRET,
-    FRUITBACK_SESSION_PATH: join(directory, 'sessions.db'),
     FRUITBACK_DATABASE_URL: DATABASE_URL,
     FRUITBACK_CONSOLE_URL: CONSOLE_URL,
     FRUITBACK_PUBLIC_URL: PUBLIC_URL,
     FRUITBACK_AUTH_SECRET: AUTH_SECRET,
     ...overrides,
   };
+}
+
+/** A worker whose accounts and sessions are in files: what a worker with no database runs on. */
+function filesOnly(overrides: Record<string, string | undefined> = {}): WorkerEnv {
+  const directory = mkdtempSync(join(tmpdir(), 'fruitback-auth-'));
+  directories.push(directory);
+
+  return envWith({
+    FRUITBACK_DATABASE_URL: undefined,
+    FRUITBACK_ACCOUNTS_PATH: join(directory, 'accounts.db'),
+    FRUITBACK_SESSION_PATH: join(directory, 'sessions.db'),
+    ...overrides,
+  });
 }
 
 function configOf(env: WorkerEnv) {
@@ -134,13 +146,7 @@ describe('the secret of better-auth, and what it switches on (FRU-144)', () => {
   });
 
   it('refuses the secret of better-auth without a database: the accounts in a file have no better-auth', () => {
-    const directory = mkdtempSync(join(tmpdir(), 'fruitback-auth-'));
-    directories.push(directory);
-
-    for (const env of [
-      envWith({ FRUITBACK_DATABASE_URL: undefined, FRUITBACK_CONSOLE_URL: undefined }),
-      envWith({ FRUITBACK_DATABASE_URL: undefined, FRUITBACK_ACCOUNTS_PATH: join(directory, 'accounts.db') }),
-    ]) {
+    for (const env of [envWith({ FRUITBACK_DATABASE_URL: undefined, FRUITBACK_CONSOLE_URL: undefined }), filesOnly()]) {
       assert.equal(
         refusal(env),
         'FRUITBACK_DATABASE_URL (FRUITBACK_AUTH_SECRET is set, and better-auth keeps its tables there)',
@@ -197,19 +203,13 @@ describe('the secret of better-auth, and what it switches on (FRU-144)', () => {
 
 describe('a worker that has better-auth switched off (FRU-144)', () => {
   it('builds no instance of better-auth without a database, or without its secret', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'fruitback-auth-'));
-    directories.push(directory);
     const lines: string[] = [];
     const log = { log: (line: string) => void lines.push(line), error: (line: string) => void lines.push(line) };
     const refuses = (): never => assert.fail('a worker with better-auth off asked for a database');
 
     for (const env of [
       { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: CONSOLE_URL },
-      envWith({
-        FRUITBACK_DATABASE_URL: undefined,
-        FRUITBACK_AUTH_SECRET: undefined,
-        FRUITBACK_ACCOUNTS_PATH: join(directory, 'accounts.db'),
-      }),
+      filesOnly({ FRUITBACK_AUTH_SECRET: undefined }),
       envWith({ FRUITBACK_AUTH_SECRET: undefined }),
     ]) {
       const config = configOf(env);

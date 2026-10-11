@@ -546,7 +546,8 @@ plugin` holds both halves. Whoever has the secret **and** the table signs the co
   header, and a row of `session` holds no address.
 - **No password.** The sign-up with a password is off, and the accounts hold none.
 - **The session of the extension does not change.** It is not a session of better-auth, and it keeps
-  its rotation and its replay detection.
+  its rotation and its replay detection. Its table is `sessions`, which holds digests; the table of
+  better-auth is `session`, without the `s`.
 - **A guest and the tracker.** The four roles reach better-auth from the one table of `accounts.ts`:
   a guest has no `see-tracker` there either. That is a table for the routes of the organization
   plugin, and none of them is served.

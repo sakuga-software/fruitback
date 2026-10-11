@@ -310,7 +310,6 @@ jobs:
               -e LINEAR_API_KEY=ci-not-a-real-key \
               -e LINEAR_TEAM_ID=ci-team \
               -e FRUITBACK_IDENTITY_SECRET=ci-not-a-real-secret-of-32-characters \
-              -e FRUITBACK_SESSION_PATH=/data/sessions.db \
               -e FRUITBACK_CONSOLE_URL=https://app.fruitback.example \
               -e FRUITBACK_PUBLIC_URL=https://api.fruitback.example \
               -e FRUITBACK_DATABASE_URL=postgres://postgres:ci-not-a-real-password@auth-db:5432/postgres \
