@@ -18,8 +18,10 @@ Dokploy project `fruitback-cloud` on `em-sakuga-01`. Two applications follow `ma
 
 **After the move of the storage (switch 1, FRU-145), the accounts and the sessions are in PostgreSQL**:
 a database service `postgres` in the same Dokploy project, which publishes no port, and
-`FRUITBACK_DATABASE_URL` in the environment of the worker. `fb.db` stays on the volume. Until that
-day, the section « The database » below describes what is ready, and nothing of it runs.
+`FRUITBACK_DATABASE_URL` in the environment of the worker. `fb.db` stays on the volume, and so do
+`accounts.db` and `sessions.db`: switch 1 reads them and never writes them, and they are its way back
+until its point of no return. Until that day, the section « The database » below describes what is
+ready, and nothing of it runs.
 
 ## What is backed up
 
@@ -87,9 +89,12 @@ and the « What to do on the host » list says when.
    into the volume of the worker, as `/data/snapshots/fruitback.pgdump`. It compares the copy with
    the dump, and only then replaces the copy before. A dump that cannot be read to its end replaces
    nothing, and the script exits 1.
-2. **02:45, `snapshot.sh`**, as before. Once the accounts and the sessions are in the database, it
-   finds only `fb.db` on the volume, and says « no accounts.db yet » for the two others: that is not a
-   failure.
+2. **02:45, `snapshot.sh`**, as before. Switch 1 leaves `accounts.db` and `sessions.db` on the
+   volume, as they were when the worker stopped: they are its way back (FRU-145). So `snapshot.sh`
+   still copies the three files, and the copies of those two hold the accounts and the sessions of
+   the day of the switch. After the point of no return, a pull request makes it copy `fb.db` alone
+   and rewrites the restore above, which requires the two files; then the operator moves them out of
+   `/data` (FRU-183).
 3. **03:00, the backup of the host**, as before. The archive of the volume of the worker holds the
    dump, because the dump is in that volume. The volume of the database is archived too, and **it is
    not a backup**: the files of a database that runs are not a copy to trust. Restore from the dump.
