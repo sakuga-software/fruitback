@@ -1,0 +1,27 @@
+{
+  "$schema": "../../tools/mutation/node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "The core of the worker: who a request is, its session, its client, its limit and its cache. docs/decisions/conventions.md says why each option is set (FRU-172). security.test.ts is left out of the run: it reads the text of session.ts and identity.ts, and a mutation run rewrites that text.",
+  "testRunner": "tap",
+  "plugins": ["../../tools/mutation/node_modules/@stryker-mutator/tap-runner/dist/src/index.js"],
+  "tap": {
+    "testFiles": ["src/**/!(security).test.ts"]
+  },
+  "mutate": [
+    "src/identity.ts",
+    "src/session.ts",
+    "src/clients.ts",
+    "src/rate-limit.ts",
+    "src/cors.ts",
+    "src/store-config.ts",
+    "src/cache.ts",
+    "src/kv.ts"
+  ],
+  "inPlace": true,
+  "coverageAnalysis": "perTest",
+  "reporters": ["clear-text", "json", "html"],
+  "thresholds": {
+    "high": 80,
+    "low": 60,
+    "break": null
+  }
+}

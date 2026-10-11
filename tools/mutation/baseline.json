@@ -1,0 +1,56 @@
+{
+  "packages/shared": {
+    "score": 74.35,
+    "files": {
+      "src/markdown-description.ts": {
+        "score": 75.74,
+        "mutants": 235
+      },
+      "src/seed.ts": {
+        "score": 72.12,
+        "mutants": 165
+      },
+      "src/issue.ts": {
+        "score": 76,
+        "mutants": 25
+      }
+    }
+  },
+  "apps/worker": {
+    "score": 82.36,
+    "files": {
+      "src/cache.ts": {
+        "score": 65.9,
+        "mutants": 44
+      },
+      "src/clients.ts": {
+        "score": 88.46,
+        "mutants": 208
+      },
+      "src/identity.ts": {
+        "score": 73,
+        "mutants": 200
+      },
+      "src/kv.ts": {
+        "score": 80.59,
+        "mutants": 67
+      },
+      "src/rate-limit.ts": {
+        "score": 86.79,
+        "mutants": 53
+      },
+      "src/cors.ts": {
+        "score": 81.66,
+        "mutants": 60
+      },
+      "src/session.ts": {
+        "score": 90.66,
+        "mutants": 75
+      },
+      "src/store-config.ts": {
+        "score": 89.65,
+        "mutants": 87
+      }
+    }
+  }
+}
