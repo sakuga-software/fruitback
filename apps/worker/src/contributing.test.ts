@@ -27,7 +27,7 @@ const ROOT_PACKAGE = JSON.parse(read('../../../package.json')) as {
 };
 
 /** pnpm's own commands. They are not scripts of this repository. */
-const PNPM_COMMANDS = new Set(['install', 'exec', 'add', 'dlx', 'store']);
+const PNPM_COMMANDS = new Set(['install', 'exec', 'add', 'dlx', 'store', 'audit']);
 
 /** Every `pnpm <name>` in a text, except pnpm's own commands. `pnpm --filter` starts with a dash. */
 function pnpmScripts(text: string): string[] {
