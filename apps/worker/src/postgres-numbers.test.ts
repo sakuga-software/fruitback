@@ -16,7 +16,7 @@ import {
   createRealDatabase,
   rowsOf,
 } from './postgres.fixture.ts';
-import { withRows } from './postgres-home-made.fixture.ts';
+import { THEN, withRows } from './postgres-home-made.fixture.ts';
 import { migrate } from './postgres-migrate.ts';
 import * as schema from './postgres-schema.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
@@ -155,12 +155,19 @@ for (const { label, open, skip } of [
         const id = await accounts.enqueueDelivery('con_linear', '{"title":"A note"}', instant);
         const delivery = (await accounts.deliveries('ws_acme', 'con_linear')).find((each) => each.id === id);
         assert.deepEqual(delivery, { id, createdAt: written, attempts: 0, nextAt: written });
+        // Due at its own instant, and not one millisecond before.
+        const due = async (now: number) => (await accounts.dueDeliveries(now, 100)).filter((each) => each.id === id);
+        assert.deepEqual(await due(instant - 1), []);
+        assert.deepEqual(await due(instant), [
+          { id, connectorId: 'con_linear', body: '{"title":"A note"}', attempts: 0 },
+        ]);
 
         // A refusal of another kind each time: a refusal of the same kind keeps its first moment.
         await accounts.noteConnector('con_linear', undefined, instant);
         await accounts.noteConnector('con_linear', 'key-refused', instant);
         const [connector] = await accounts.connectors('ws_acme');
         assert.deepEqual(connector?.attention, { reason: 'key-refused', since: written });
+        assert.equal(connector?.createdAt, new Date(THEN).toISOString());
 
         // No more attempt: `next_at` is NULL, and the console must read « nobody will try again ».
         await accounts.settleDelivery(id, { delivered: false, attempts: 0, at: instant, status: 503 });
@@ -177,6 +184,7 @@ for (const { label, open, skip } of [
 
       await sessions.createPairing({ codeHash: 'digest-late', identity, expiresAt: edge - 1 });
       await sessions.createPairing({ codeHash: 'digest-in-time', identity, expiresAt: edge + 1 });
+      await sessions.createPairing({ codeHash: 'digest-in-time-too', identity, expiresAt: edge + 1 });
       const redeem = (codeHash: string, tokenHash: string) =>
         sessions.redeemPairing({ codeHash, tokenHash, expiresAt: edge + 10, now: edge });
 
@@ -186,16 +194,19 @@ for (const { label, open, skip } of [
         'a code that expired opened a session',
       );
       assert.deepEqual(await redeem('digest-in-time', 'digest-of-a-token-2'), identity);
+      assert.deepEqual(await redeem('digest-in-time-too', 'digest-of-a-token-3'), identity);
 
-      const rotate = (now: number) =>
-        sessions.rotateSession({
-          tokenHash: 'digest-of-a-token-2',
-          successorHash: `digest-of-a-successor-${now}`,
-          now,
-          graceMs: 0,
-        });
-      // The session expires at 2^32 + 10: one millisecond after, it is gone.
-      assert.deepEqual(await rotate(edge + 11), { outcome: 'gone' });
+      const rotate = (tokenHash: string, now: number) =>
+        sessions.rotateSession({ tokenHash, successorHash: `successor-of-${tokenHash}-at-${now}`, now, graceMs: 5 });
+
+      // `rotated_at`, plus the grace, is a sum of two numbers: the ceiling is 2^32 + 2 + 5.
+      assert.deepEqual(await rotate('digest-of-a-token-2', edge + 2), { outcome: 'rotated', identity });
+      assert.deepEqual(await rotate('digest-of-a-token-2', edge + 7), { outcome: 'rotated', identity });
+      assert.deepEqual(await rotate('digest-of-a-token-2', edge + 8), { outcome: 'gone' });
+
+      // `expires_at` is 2^32 + 10: live one millisecond before, gone at that instant.
+      assert.deepEqual(await rotate('digest-of-a-token-3', edge + 9), { outcome: 'rotated', identity });
+      assert.deepEqual(await rotate('digest-of-a-token-3', edge + 10), { outcome: 'gone' });
     });
   });
 }
@@ -279,5 +290,12 @@ describe('why the type of an instant matters (FRU-180)', () => {
       assert.equal(source.includes('.execute('), false, `${file} sends a raw statement: its BIGINT is a string`);
       assert.match(source, /from '\.\/postgres-schema\.ts'/, `${file} no longer reads the schema`);
     }
+    // A raw fragment is a string too when it is selected. Each one of today is in a `where` or a `set`:
+    // read a new one, then change its count here.
+    const fragments = (source: string): number => source.split('sql`').length - 1;
+    assert.deepEqual(
+      { accounts: fragments(stores['accounts-postgres.ts']), sessions: fragments(stores['session-postgres.ts']) },
+      { accounts: 4, sessions: 1 },
+    );
   });
 });
