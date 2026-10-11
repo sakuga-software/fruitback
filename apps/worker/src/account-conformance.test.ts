@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { accountCases } from './account-conformance.fixture.ts';
 import type { AccountStore } from './accounts.ts';
+import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { closeAccountConnections, createSqliteAccountStore } from './accounts-sqlite.ts';
 import type { ClientMap } from './clients.ts';
 import {
@@ -15,6 +16,7 @@ import {
   onFile,
   turn,
 } from './conformance.fixture.ts';
+import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase, onDatabase } from './postgres.fixture.ts';
 
 /**
  * Each `AccountStore` against the conformance suite (FRU-140). A new implementation adds a subject
@@ -26,7 +28,23 @@ const SQLITE = onFile<AccountStore>('the SQLite account store', 'createSqliteAcc
   close: closeAccountConnections,
 }));
 
-const SUBJECTS: Subject<AccountStore>[] = [SQLITE];
+const SUBJECTS: Subject<AccountStore>[] = [
+  SQLITE,
+  onDatabase(
+    'the PostgreSQL account store, on PGlite',
+    'createPostgresAccountStore',
+    createPgliteDatabase,
+    createPostgresAccountStore,
+  ),
+  // The same store on a server, where the calls of a case run on several connections.
+  onDatabase(
+    'the PostgreSQL account store, on a real server',
+    'createPostgresAccountStore',
+    createRealDatabase,
+    createPostgresAccountStore,
+    NO_REAL_POSTGRES,
+  ),
+];
 
 for (const subject of SUBJECTS) describeConformance('AccountStore', accountCases, subject);
 
@@ -212,6 +230,108 @@ const VIOLATIONS: Violation<AccountStore>[] = [
     replace: { from: 'destination.teamId ?? null,', to: "destination.teamId ?? 'team_default'," },
   },
   {
+    breaks: 'keeps the destinations of a site in the order they were given, and the client map carries them',
+    by: 'gives the places of a site last first',
+    replace: {
+      from: 'FROM site_destinations ORDER BY site_id, position',
+      to: 'FROM site_destinations ORDER BY site_id, position DESC',
+    },
+  },
+  {
+    breaks: 'keeps the destinations of a site in the order they were given, and the client map carries them',
+    by: 'forgets how a place is named',
+    replace: { from: 'destination.label ?? null,', to: 'null,' },
+  },
+  {
+    breaks: 'keeps the destinations of a site in the order they were given, and the client map carries them',
+    by: 'answers a site that is added again with no place',
+    replace: { from: 'return { ...known, visibility };', to: 'return { ...known, visibility, destinations: [] };' },
+  },
+  {
+    breaks: 'refuses a list of destinations in which one connector is of another workspace, and writes none of it',
+    by: 'reads whose connector the first place has, and no other',
+    replace: {
+      from: "destinations.every((destination) => owned('connectors', destination.connector))",
+      to: "destinations.slice(0, 1).every((destination) => owned('connectors', destination.connector))",
+    },
+  },
+  {
+    breaks: 'refuses a list of destinations in which one connector is of another workspace, and writes none of it',
+    by: 'removes the places a site had when it refuses a list',
+    replace: {
+      from: "if (!destinations.every((destination) => owned('connectors', destination.connector))) return false;",
+      to: "if (!destinations.every((destination) => owned('connectors', destination.connector))) { database.prepare('DELETE FROM site_destinations WHERE site_id = ?').run(site); return false; }",
+    },
+  },
+  {
+    breaks: 'clears the destinations of a site with an empty list, and a connector that is removed takes only its own',
+    by: 'keeps the places of a site when the list is empty',
+    replace: {
+      from: "database.prepare('DELETE FROM site_destinations WHERE site_id = ?').run(site);",
+      to: "if (destinations.length > 0) database.prepare('DELETE FROM site_destinations WHERE site_id = ?').run(site);",
+    },
+  },
+  {
+    breaks: 'clears the destinations of a site with an empty list, and a connector that is removed takes only its own',
+    by: 'removes every place of a site with one of its connectors',
+    wrap: (real) => ({
+      ...real,
+      async removeConnector(workspace, connector) {
+        for (const site of await real.sites(workspace)) {
+          if (site.destinations.some((destination) => destination.connector === connector)) {
+            await real.setDestinations(workspace, site.id, []);
+          }
+        }
+
+        return real.removeConnector(workspace, connector);
+      },
+    }),
+  },
+  {
+    breaks: 'removes the destinations of a site with the site, and with its workspace, and only those',
+    by: 'removes the places of every site of a workspace with one site',
+    wrap: (real) => ({
+      ...real,
+      async removeSite(workspace, site) {
+        for (const other of await real.sites(workspace)) await real.setDestinations(workspace, other.id, []);
+
+        return real.removeSite(workspace, site);
+      },
+    }),
+  },
+  {
+    breaks: 'removes the destinations of a site with the site, and with its workspace, and only those',
+    by: 'removes the places of every site with a workspace',
+    wrap: (real) => ({
+      ...real,
+      async deleteWorkspace(workspace) {
+        for (const [site, client] of Object.entries(await real.clientMap())) {
+          await real.setDestinations(client.workspace as string, site, []);
+        }
+
+        return real.deleteWorkspace(workspace);
+      },
+    }),
+  },
+  {
+    breaks: 'keeps one whole list when two calls set the destinations of one site at the same moment',
+    by: 'removes the places of a site, then adds the new ones one at a time, with a wait before each',
+    // No transaction around the list: each place is added to what the site holds at that moment.
+    wrap: (real) => ({
+      ...real,
+      async setDestinations(workspace, site, destinations) {
+        if (!(await real.setDestinations(workspace, site, []))) return false;
+        for (const destination of destinations) {
+          await turn();
+          const held = (await real.sites(workspace)).find(({ id }) => id === site)?.destinations ?? [];
+          if (!(await real.setDestinations(workspace, site, [...held, destination]))) return false;
+        }
+
+        return true;
+      },
+    }),
+  },
+  {
     breaks: 'keeps the first moment of a refusal, and forgets it at the first call that works',
     by: 'writes the moment of every refusal',
     replace: { from: 'WHERE id = ? AND attention IS NOT ?', to: 'WHERE id = ? AND (attention IS NOT ? OR 1)' },
@@ -350,6 +470,6 @@ describeControls('AccountStore', accountCases, VIOLATIONS, SQLITE, async (change
 
 describe('the AccountStore conformance suite', () => {
   it('runs for every implementation the worker exports', () => {
-    assert.deepEqual(SUBJECTS.map((subject) => subject.factory).sort(), factoriesOf('AccountStore'));
+    assert.deepEqual([...new Set(SUBJECTS.map((subject) => subject.factory))].sort(), factoriesOf('AccountStore'));
   });
 });
