@@ -217,6 +217,76 @@ describe('the migrations of the PostgreSQL database (FRU-180)', () => {
     });
   });
 
+  it('refuses a folder in which two migrations have one date, before it applies anything', async () => {
+    await withPglite(async (database) => {
+      const twin: Entry = { ...SECOND, when: FIRST.when };
+
+      await assert.rejects(migrate(database, folderOf([FIRST, twin])), (error: unknown) => {
+        assert.ok(error instanceof StoreError);
+        assert.match(error.message, /« 0000_first » and « 0001_second » have one date/);
+
+        return true;
+      });
+      assert.equal(await has(database, 'public.first_things'), false);
+    });
+  });
+
+  /**
+   * `migrate` of Drizzle sends `CREATE SCHEMA IF NOT EXISTS "public"` first, and PostgreSQL asks for
+   * the privilege on the database before it looks for the schema. The tool of before needed only
+   * the schema. So a role that cannot create in its database is refused with what to grant.
+   */
+  describe('a role that cannot create in its database', { skip: NO_REAL_POSTGRES }, () => {
+    /** A database of its own, and a role that can make tables in `public` and nothing in the database. */
+    async function withALesserRole(use: (database: Database) => Promise<void>): Promise<void> {
+      const own = await ownDatabase();
+      const admin = createPgDatabase(own.url, { max: 1 });
+      const role = `r_${new URL(own.url).pathname.slice(1)}`;
+      const lesser = new URL(own.url);
+      lesser.username = role;
+      lesser.password = 'not-a-secret-of-a-test';
+      const database = createPgDatabase(lesser.href, { max: 2 });
+      try {
+        await rowsOf(admin, `CREATE ROLE ${role} LOGIN PASSWORD 'not-a-secret-of-a-test'`);
+        await rowsOf(admin, `GRANT USAGE, CREATE ON SCHEMA public TO ${role}`);
+        await use(database);
+      } finally {
+        await database.close();
+        await admin.close();
+        await own.drop();
+        const server = createPgDatabase(TEST_DATABASE_URL ?? '', { max: 1 });
+        await rowsOf(server, `DROP ROLE IF EXISTS ${role}`);
+        await server.close();
+      }
+    }
+
+    it('is refused before any write, with what to grant, and with no name of the role', async () => {
+      await withALesserRole(async (database) => {
+        await assert.rejects(migrate(database, folderOf([FIRST])), (error: unknown) => {
+          assert.ok(error instanceof StoreError);
+          assert.match(error.message, /cannot create in its database/);
+          assert.match(error.message, /grant it CREATE on the database/);
+          assert.doesNotMatch(error.message, /r_t_/);
+
+          return true;
+        });
+        assert.equal(await has(database, 'public.first_things'), false);
+      });
+    });
+
+    // The control: the role can make a table in `public`, and Drizzle alone is what PostgreSQL refuses.
+    it('can make a table in public, and is refused by PostgreSQL when Drizzle alone migrates', async () => {
+      await withALesserRole(async (database) => {
+        await rowsOf(database, 'CREATE TABLE made_by_the_role (id INTEGER PRIMARY KEY)');
+
+        await assert.rejects(
+          database.alone((_, apply) => apply({ migrationsFolder: folderOf([FIRST]), ...APPLIED })),
+          /permission denied for database/,
+        );
+      });
+    });
+  });
+
   /**
    * Two workers that start together on an empty database. Each is a process of its own, as two
    * replicas are. `pg_sleep` holds the first migration open long enough for the second process to

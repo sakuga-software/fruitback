@@ -1059,6 +1059,9 @@ variable` holds the rest.
   what comes after. `schema_migrations` stays. A database left at an earlier migration of that tool,
   or whose list was edited, is refused before any write, with what to do. **The baseline is never
   edited**, as no migration is: the adoption writes its digest.
+- **The role of `FRUITBACK_DATABASE_URL` owns its database, or has `CREATE` on it.** The tool of
+  before needed `CREATE` on the schema `public` only. A role without it is refused at the first
+  call, with what to grant: see the reasons.
 - **A transaction is the one of `postgres.ts`, never `db.transaction` of Drizzle on the pool.** A
   store takes `database.transaction`, which gives it Drizzle on one connection.
 - **The words of an error of Drizzle reach no log.** They quote the statement and its values: an
@@ -1104,6 +1107,18 @@ the lock` is its control: the same two processes, with the line of the lock remo
   test:`leaves nothing of a run that fails, and keeps what the run before applied`. A database that
   holds more migrations than the build is left alone, as before: that is a roll back, and
   test:`leaves a database alone that holds more migrations than the build` holds it.
+- **`migrate` of Drizzle needs `CREATE` on the database.** It sends `CREATE SCHEMA IF NOT EXISTS
+"public"` before anything else, on every call, and PostgreSQL checks the privilege on the database
+  before it looks for the schema. Measured on 17.11 with a role that can make a table in `public`:
+  « permission denied for database ». `postgres-migrate.ts` asks `has_database_privilege` first and
+  refuses with what to grant, where the worker would say that the database did not answer.
+  test:`is refused before any write, with what to grant, and with no name of the role`, and its
+  control test:`can make a table in public, and is refused by PostgreSQL when Drizzle alone migrates`.
+  The role that owns its database has the privilege, and so has the role that a `postgres` image
+  makes from `POSTGRES_USER`, which is what the job `docker image` boots.
+- **Two migrations of one date are refused when the worker starts**, before anything is applied:
+  test:`refuses a folder in which two migrations have one date, before it applies anything`. The
+  journal guard refuses the same folder before a merge.
 - **`drizzle-kit` ends with 0 when it fails.** Measured: `--out` with an absolute path is a folder it
   does not find, it prints the error, and ends well. The first form of the drift test passed for
   that reason, and its control is what showed it. So
@@ -1134,6 +1149,10 @@ it, and writes no row of its journal` is the control of the adoption. Rows canno
   test:`is adopted: nothing is run again, every row stays, and the stores read them` plants rows in
   the eighteen tables, compares a digest of each table before and after, and reads them through the
   two stores: a sign-in finds its account, a site its destination, a refresh token rotates.
+- **An empty journal of Drizzle does not stop the adoption.** Drizzle makes its journal before its
+  transaction, so a `drizzle-kit migrate` that somebody ran by hand on a database of before failed on
+  the first `CREATE TABLE` and left the journal, empty. An empty journal says that Drizzle applied
+  nothing: test:`is adopted all the same after Drizzle alone met it, and left its journal empty`.
 - **Why `schema_migrations` stays.** An image of before reads it, and finds its four migrations
   applied: a roll back by digest still finds its database. Measured once on this machine with the
   worker of `main` e74be53 itself, not with the copy: it made the database (`pair`), the bundle of

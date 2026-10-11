@@ -219,6 +219,23 @@ for (const { label, open, skip } of DATABASES) {
       assert.deepEqual(await drizzleJournal(database), []);
     });
 
+    // What a `drizzle-kit migrate` run by hand leaves: Drizzle makes its journal before its transaction.
+    it('is adopted all the same after Drizzle alone met it, and left its journal empty', async () => {
+      const database = await opening(open);
+      await madeByTheHomeMadeTool(database);
+      await withRows(database);
+      const content = await contentOf(database);
+      await assert.rejects(database.alone((_, apply) => apply({ migrationsFolder: migrationsFolder(), ...APPLIED })));
+      assert.deepEqual(await drizzleJournal(database), [], 'Drizzle left no empty journal: nothing is tested');
+
+      await migrate(database);
+
+      assert.deepEqual(await drizzleJournal(database), [
+        { hash: BASELINE_FILE.hash, created_at: BASELINE_FILE.folderMillis },
+      ]);
+      assert.deepEqual(await contentOf(database), content);
+    });
+
     // The control on a new database: the baseline runs there, and nothing is adopted.
     it('is not adopted on a new database: there the baseline runs, and no journal of before appears', async () => {
       const database = await opening(open);

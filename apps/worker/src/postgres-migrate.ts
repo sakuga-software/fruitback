@@ -83,11 +83,16 @@ export const BASELINE = '0000_baseline';
 /**
  * Puts a database that the tool of before made under Drizzle, and runs nothing of the baseline.
  *
- * Such a database has `public.schema_migrations` and no journal of Drizzle. Drizzle alone would run
- * the baseline on it, and fail on its first `CREATE TABLE`: the tables are there. So when the four
- * rows of `schema_migrations` are the four migrations of `HOME_MADE`, in order, this writes the row of
- * the baseline in the journal, as Drizzle writes it (its digest and its date), in one transaction with
- * the journal itself. Drizzle then applies what comes after the baseline, as on any database.
+ * Such a database has `public.schema_migrations`, and no row in the journal of Drizzle. Drizzle alone
+ * would run the baseline on it, and fail on its first `CREATE TABLE`: the tables are there. So when
+ * the four rows of `schema_migrations` are the four migrations of `HOME_MADE`, in order, this writes
+ * the row of the baseline in the journal, as Drizzle writes it (its digest and its date), in one
+ * transaction with the journal itself. Drizzle then applies what comes after the baseline, as on any
+ * database.
+ *
+ * The journal can be there, and empty: Drizzle makes it before its transaction, so a
+ * `drizzle-kit migrate` that somebody ran by hand on such a database failed and left one. An empty
+ * journal says that Drizzle applied nothing, so the database is adopted all the same.
  *
  * Anything else is refused before any write, with what to do: a database stopped at an earlier
  * migration of that tool, or one whose list was edited. `schema_migrations` is kept as it is. An
@@ -102,8 +107,11 @@ async function adoptWhatTheHomeMadeToolMade(db: Db, folder: string): Promise<voi
                  to_regclass('public.schema_migrations') AS home_made`,
     ),
   );
-  // A database under Drizzle already, or one that no tool has touched.
-  if (found?.drizzle !== null || found.home_made === null) return;
+  // A database that the tool of before never touched.
+  if (found === undefined || found.home_made === null) return;
+  const journal = sql`${sql.identifier(APPLIED.migrationsSchema)}.${sql.identifier(APPLIED.migrationsTable)}`;
+  // A database under Drizzle already: its journal holds a row.
+  if (found.drizzle !== null && rowsOf(await db.execute(sql`SELECT 1 FROM ${journal} LIMIT 1`)).length > 0) return;
 
   const rows = rowsOf(await db.execute(sql`SELECT version, name FROM public.schema_migrations ORDER BY version`));
   const names = rows.map((row) => String(row.name));
@@ -126,16 +134,59 @@ async function adoptWhatTheHomeMadeToolMade(db: Db, folder: string): Promise<voi
     throw new StoreError(`The first migration of the journal is « ${entry?.tag ?? 'none'} », and not « ${BASELINE} »`);
   }
 
-  const journal = sql`${sql.identifier(APPLIED.migrationsSchema)}.${sql.identifier(APPLIED.migrationsTable)}`;
   await db.transaction(async (transaction) => {
     // The table that `migrate` of Drizzle makes, to the last word (pg-core/dialect.js of 0.45.4).
     await transaction.execute(
-      sql`CREATE TABLE ${journal} (id SERIAL PRIMARY KEY, hash text NOT NULL, created_at bigint)`,
+      sql`CREATE TABLE IF NOT EXISTS ${journal} (id SERIAL PRIMARY KEY, hash text NOT NULL, created_at bigint)`,
     );
     await transaction.execute(
       sql`INSERT INTO ${journal} ("hash", "created_at") VALUES (${baseline.hash}, ${baseline.folderMillis})`,
     );
   });
+}
+
+/**
+ * Refuses a folder in which two migrations have one date.
+ *
+ * Drizzle names a migration by its date. With one date for two, a database that has the first one
+ * never gets the second one. `postgres-journal.test.ts` refuses such a folder before a merge: this
+ * holds an image that was built past it.
+ */
+function refuseTwoMigrationsOfOneDate(folder: string): void {
+  const seen = new Map<number, string>();
+  for (const entry of journalOf(folder)) {
+    const first = seen.get(entry.when);
+    if (first !== undefined) {
+      throw new StoreError(
+        `The migrations « ${first} » and « ${entry.tag} » have one date, and Drizzle names a migration by its date: ` +
+          'generate the second one again',
+      );
+    }
+    seen.set(entry.when, entry.tag);
+  }
+}
+
+/**
+ * Refuses a role that cannot create in its database, and says what to grant.
+ *
+ * `migrate` of Drizzle sends `CREATE SCHEMA IF NOT EXISTS "public"` before anything else, and
+ * PostgreSQL checks the privilege on the database before it looks for the schema (measured on 17.11:
+ * « permission denied for database », for a role that can create tables in `public`). The role that
+ * owns its database has that privilege. Without this check the worker says that the database did not
+ * answer.
+ *
+ * WARNING: the message names no role and no database. Both are in the address.
+ */
+async function refuseARoleThatCannotCreate(db: Db): Promise<void> {
+  const [row] = rowsOf(
+    await db.execute(sql`SELECT has_database_privilege(current_user, current_database(), 'CREATE') AS allowed`),
+  );
+  if (row?.allowed === true) return;
+
+  throw new StoreError(
+    'The role of FRUITBACK_DATABASE_URL cannot create in its database, and the migrations of the worker need it: ' +
+      'make that role the owner of the database, or grant it CREATE on the database (docs/self-hosting.md)',
+  );
 }
 
 /**
@@ -180,7 +231,9 @@ async function refuseWhatDrizzleWouldSkip(db: Db, folder: string): Promise<void>
 
 /** Applies the migrations of `folder` that the database does not have yet, in order. */
 export async function migrate(database: Database, folder: string = migrationsFolder()): Promise<void> {
+  refuseTwoMigrationsOfOneDate(folder);
   await database.alone(async (db, apply) => {
+    await refuseARoleThatCannotCreate(db);
     await db.execute(sql`SELECT pg_advisory_lock(${MIGRATION_LOCK})`);
     try {
       await adoptWhatTheHomeMadeToolMade(db, folder);
