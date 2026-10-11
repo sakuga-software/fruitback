@@ -14,7 +14,7 @@ immutable.
   file whose bytes are identical on every platform, so emulating the install and the bundle buys
   nothing. Only the runtime stage is emulated.
 - **`latest` moves on a `v*` tag and never on a merge to `main`**; `main` publishes `edge`, and
-  `sha-<commit>` is always written. **No tag is immutable**, `sha-<commit>` included — a tag names a
+  `sha-<commit>` is written with it. **No tag is immutable**, `sha-<commit>` included — a tag names a
   commit, only a digest names a build.
 - **The runtime stage holds no npm** (FRU-79). The base image carries npm, npx and corepack, the
   worker runs none of them, and the release gate scans npm's own dependencies: every build of `main`
@@ -71,6 +71,13 @@ immutable.
   `ci.yml`. The other way was a step that asks the API for the run of `CI` on the same commit: that
   takes `actions: read`, a wait in a loop, and an answer for a run that does not exist yet. A `needs`
   is enforced by GitHub. Its price is a second run of the checks on each push to `main`.
+- **Not every commit of `main` has its `sha-<commit>`.** A commit that fails a check is not
+  published. And the group of this workflow is its ref, with `cancel-in-progress: false`: a run
+  waits for the one before it, and a third run cancels the one that waits. Measured on 2026-10-11
+  with three pushes 9 seconds apart to a branch made for it: the first run went on, the second was
+  cancelled, the third waited. So the middle one of three merges in a row is not published. The
+  last one is, and `edge` names it. A group for each commit would let an older run finish last and
+  move `edge` back.
 - **The call is written `$/.github/workflows/ci.yml`.** That form reads the file from this
   repository at the commit that runs. `zizmor` 1.30.1 reports the `./` form as a finding
   (`self-repository`), and its job fails on any finding.
