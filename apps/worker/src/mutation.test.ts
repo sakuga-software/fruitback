@@ -2,7 +2,14 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import { parseDocument } from 'yaml';
-import { type Report, type Status, linesOf, regressions, scoreOf } from '../../../tools/mutation/ratchet.ts';
+import {
+  type Baseline,
+  type Report,
+  type Status,
+  linesOf,
+  regressions,
+  scoreOf,
+} from '../../../tools/mutation/ratchet.ts';
 import { choose, scopeOf } from '../../../tools/mutation/scope.ts';
 
 /**
@@ -158,6 +165,24 @@ describe('the configuration of the mutation job', () => {
         run.some((glob) => glob.includes(`!(${reader.replace(/\.test\.ts$/, '')})`)),
         `${reader} reads a mutated file as text and is not left out of tap.testFiles`,
       );
+    }
+  });
+
+  /**
+   * A file with no line is held only to the line of its package, and a line for a file that is gone
+   * holds nothing. Both mean the baseline no longer describes the scope.
+   */
+  it('holds a line for each file it mutates, and none for another', () => {
+    const baseline = JSON.parse(readFileSync(new URL('tools/mutation/baseline.json', ROOT), 'utf8')) as Baseline;
+
+    for (const [name, config] of [
+      ['packages/shared', SHARED],
+      ['apps/worker', WORKER],
+    ] as const) {
+      const lines = baseline[name];
+      assert.ok(lines !== undefined, `${name} has no line in tools/mutation/baseline.json`);
+      assert.ok(lines.score > 0 && lines.score <= 100, `${name}: a line of ${lines.score}`);
+      assert.deepEqual(Object.keys(lines.files).sort(), [...scopeOf(config)].sort(), name);
     }
   });
 
