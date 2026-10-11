@@ -1,5 +1,8 @@
 {
   "plugins": ["oxc", "eslint", "import", "typescript"],
+  "categories": {
+    "correctness": "error"
+  },
   "rules": {
     "no-nested-ternary": "error",
     "typescript/parameter-properties": "error",

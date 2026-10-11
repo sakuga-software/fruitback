@@ -9,7 +9,6 @@ import {
   EPOCH_PREFIX,
   RUN_PREFIX,
   createSessionArea,
-  entriesOf,
   stillOpen,
   keyFor,
   moveToRunKeys,

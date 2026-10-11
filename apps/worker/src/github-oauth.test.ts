@@ -61,7 +61,7 @@ function github(options: { emails?: Emails; id?: number; name?: string; down?: b
 
       return Response.json(valid ? { access_token: 'gho_token' } : { error: 'bad_verification_code' });
     }
-    const auth = (init?.headers as Record<string, string>).Authorization;
+    const auth = (init?.headers as Record<string, string> | undefined)?.Authorization;
     if (auth !== 'Bearer gho_token') return new Response('{}', { status: 401 });
     if (input === 'https://api.github.com/user')
       return Response.json({ id: options.id ?? 4242, login: 'alice', name: options.name ?? 'Alice' });

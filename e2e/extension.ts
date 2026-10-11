@@ -26,6 +26,8 @@ export const PLAYGROUND_ORIGIN = 'http://localhost:5177';
 export type LoadedExtension = { context: BrowserContext; worker: Worker; id: string };
 
 export const test = base.extend<{ extension: LoadedExtension }>({
+  // Playwright reads the fixtures a function asks for from this pattern, so it must be a pattern.
+  // oxlint-disable-next-line no-empty-pattern
   extension: async ({}, use, testInfo) => {
     const directory = copyWithLocalAccess(testInfo.outputPath('extension'));
     // Not under test-results: CI uploads that folder when the job fails, and after a pairing the profile

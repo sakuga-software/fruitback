@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { WORKER_ORIGIN, openPlayground } from './pin.ts';
+import { WORKER_ORIGIN } from './pin.ts';
 
 /**
  * The optional picture (FRU-6), in a browser — the only place the full path is reachable.

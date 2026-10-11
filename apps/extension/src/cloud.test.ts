@@ -26,7 +26,7 @@ function worker(body: unknown = LISTED, status = 200) {
   const asked: string[] = [];
   const fetcher = (async (url: string, init?: RequestInit) => {
     asked.push(url);
-    const token = (init?.headers as Record<string, string>).Authorization;
+    const token = (init?.headers as Record<string, string> | undefined)?.Authorization;
 
     return token === 'Bearer tok'
       ? new Response(JSON.stringify(body), { status })

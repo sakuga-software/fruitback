@@ -437,7 +437,7 @@ describe('selecting an element without a pointer (FRU-51)', () => {
     );
     host?.start();
 
-    (host?.root.querySelector('[data-fruitback-host-configure]') as HTMLElement).click();
+    (host?.root.querySelector('[data-fruitback-host-configure]') as HTMLElement | undefined)?.click();
 
     assert.equal(opened, 1);
     assert.equal(host?.capturing(), false, 'the capture mode still takes the arrows and Enter');

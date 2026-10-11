@@ -290,7 +290,7 @@ describe('create', () => {
         .map((call) => (call.body as { name: string }).name),
       ['fruitback', label],
     );
-    assert.deepEqual((apiCalls(calls).at(-1)?.body as { labels: string[] }).labels, ['fruitback', label]);
+    assert.deepEqual((apiCalls(calls).at(-1)?.body as { labels: string[] } | undefined)?.labels, ['fruitback', label]);
   });
 
   it('creates the two labels, then the issue with the shared codec', async () => {
@@ -333,7 +333,7 @@ describe('create', () => {
 
     await store.create(seed, undefined, { ...POLICY, locale: 'fr' });
 
-    const body = (apiCalls(calls)[2]?.body as { body?: string }).body ?? '';
+    const body = (apiCalls(calls)[2]?.body as { body?: string } | undefined)?.body ?? '';
     assert.equal(body, buildIssueDescription(seed, { locale: 'fr' }));
     assert.match(body, /\*\*Signalé par\*\*/);
   });
