@@ -116,7 +116,9 @@ cmp -s "$WORK/source.txt" "$WORK/restored.txt" || fail "the restored database is
 # too. With the end alone gone, only a check that reads the whole file refuses it (measured: this
 # step passed with `--list` in snapshot-pg.sh while the dump was cut to half).
 echo "restore-drill: 5. a dump that lost its end replaces nothing"
-docker exec -i "$P-source" sh -c 'cat >/usr/local/bin/pg_dump_cut && chmod +x /usr/local/bin/pg_dump_cut' <<'CUT'
+# As root (`-u 0`), here and in step 6: the file goes in /usr/local/bin, and the user of an image
+# given in PG_IMAGE may not write there (measured with `USER postgres`: « Permission denied »).
+docker exec -i -u 0 "$P-source" sh -c 'cat >/usr/local/bin/pg_dump_cut && chmod +x /usr/local/bin/pg_dump_cut' <<'CUT'
 #!/bin/sh
 # pg_dump, and then its file without its end: a disk that is full, a process that was killed.
 pg_dump "$@" || exit 1
@@ -140,7 +142,7 @@ left() {
 [ -z "$(left)" ] || fail "a failed snapshot left a file: $(left)"
 
 echo "restore-drill: 6. a pg_dump that stops half way replaces nothing, and leaves nothing"
-docker exec -i "$P-source" sh -c 'cat >/usr/local/bin/pg_dump_dies && chmod +x /usr/local/bin/pg_dump_dies' <<'DIES'
+docker exec -i -u 0 "$P-source" sh -c 'cat >/usr/local/bin/pg_dump_dies && chmod +x /usr/local/bin/pg_dump_dies' <<'DIES'
 #!/bin/sh
 # pg_dump, and then a failure after it wrote: a process that was killed while it wrote.
 pg_dump "$@" && echo ran >/tmp/pg_dump_dies.ran
