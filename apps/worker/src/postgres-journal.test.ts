@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { git } from './git.fixture.ts';
 
 /**
  * The journal of the migrations (FRU-180). It reads files only: no database.
@@ -109,17 +109,16 @@ function problemsOf(folder: string, base?: Base): string[] {
 
 /** The migrations of a commit of this repository. A commit with no journal is from before the first migration. */
 function baseAt(commit: string): Base {
-  const git = (...values: string[]): string =>
-    execFileSync('git', values, { cwd: WORKER, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  // Through git.fixture.ts: under a hook, `GIT_DIR` names the repository of the hook (FRU-172).
   // A commit that this clone does not have must fail here, and not read as « no migration yet ».
-  git('rev-parse', '--verify', '--quiet', `${commit}^{commit}`);
-  const show = (path: string): string | undefined => {
-    try {
-      return git('show', `${commit}:${FOLDER_IN_GIT}/${path}`);
-    } catch {
-      return undefined;
-    }
-  };
+  git(WORKER, 'rev-parse', '--verify', '--quiet', `${commit}^{commit}`);
+  const files = new Set(
+    git(WORKER, 'ls-tree', '-r', '--name-only', commit, '--', FOLDER_IN_GIT)
+      .split('\n')
+      .filter((line) => line !== ''),
+  );
+  const show = (path: string): string | undefined =>
+    files.has(`${FOLDER_IN_GIT}/${path}`) ? git(WORKER, 'show', `${commit}:${FOLDER_IN_GIT}/${path}`) : undefined;
   const journal = show('meta/_journal.json');
 
   return {
