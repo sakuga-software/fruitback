@@ -1,0 +1,13 @@
+{
+  "name": "@fruitback/mutation",
+  "version": "0.0.0",
+  "private": true,
+  "description": "StrykerJS, kept out of the workspace: only the mutation job installs it.",
+  "license": "MIT",
+  "type": "module",
+  "devDependencies": {
+    "@stryker-mutator/core": "10.0.0",
+    "@stryker-mutator/tap-runner": "10.0.0"
+  },
+  "packageManager": "pnpm@11.16.0"
+}
