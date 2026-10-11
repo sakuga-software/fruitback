@@ -311,4 +311,32 @@ describe('the configuration of the mutation job', () => {
     assert.deepEqual(Object.keys(on).sort(), ['pull_request', 'schedule', 'workflow_dispatch']);
     assert.equal(on.pull_request, null, 'the pull request trigger of mutation.yml holds a filter');
   });
+
+  /**
+   * The files of a pull request are read from its base (raised in review). With no base, `scope.ts`
+   * mutates the whole scope, and with no history `git diff` fails the job: both fail safe. Another
+   * value, the head for one, would measure nothing and pass.
+   */
+  it('reads the files of a pull request from its base, with the history to diff it', () => {
+    type Step = {
+      uses?: string;
+      id?: string;
+      with?: Record<string, unknown>;
+      env?: Record<string, string>;
+      run?: string;
+    };
+    const { jobs } = parseDocument(readFileSync(new URL('.github/workflows/mutation.yml', ROOT), 'utf8')).toJS() as {
+      jobs: { mutation: { steps: Step[] } };
+    };
+    const checkout = jobs.mutation.steps.find((step) => step.uses?.startsWith('actions/checkout@'));
+    const choice = jobs.mutation.steps.find((step) => step.id === 'scope');
+
+    assert.equal(checkout?.with?.['fetch-depth'], 0, 'the checkout of mutation.yml is shallow');
+    assert.deepEqual(choice?.env, {
+      PACKAGE: '${{ matrix.package }}',
+      EVENT: '${{ github.event_name }}',
+      BASE: '${{ github.event.pull_request.base.sha }}',
+    });
+    assert.equal(choice?.run, 'node tools/mutation/scope.ts "$PACKAGE" "$EVENT" "$BASE" >> "$GITHUB_OUTPUT"');
+  });
 });
