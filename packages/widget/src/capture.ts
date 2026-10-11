@@ -1,10 +1,13 @@
 import {
   createSeed,
   type Seed,
+  type SeedAnchor,
   type SeedClient,
+  type SeedPage,
   type SeedReporter,
   type SeedScreenshot,
   type SeedSource,
+  type SeedViewport,
 } from '@fruitback/shared';
 import { captureAnchor } from './anchor.ts';
 import { captureEnv, capturePage, captureViewport } from './page.ts';
@@ -40,22 +43,31 @@ export type CaptureSeedOptions = {
    * (FRU-84): a reporter who does nothing is anonymous, and these three narrow down who they are.
    */
   includeEnv?: boolean;
+  /**
+   * Where the element was when the reporter chose it (FRU-152). Left out, it is read now.
+   *
+   * The page can change its address while the popover is open: a link of a single-page app, the back
+   * button. A note sent then must go to the page where it was written, with the element of that
+   * page, so `embed.ts` reads the place at the click and hands it here at the send.
+   */
+  place?: CapturedPlace;
   /** Injected by the tests, and by anything that needs the seed to be reproducible. */
   id?: string;
   createdAt?: string;
 };
 
-export function captureSeed(options: CaptureSeedOptions): Seed {
-  const { element, note, includeEnv = false } = options;
-  const view = options.view ?? element.ownerDocument.defaultView;
-  if (view === null) {
-    throw new Error('captureSeed: the element belongs to a document with no window');
-  }
+/** The part of a seed that says where the note is: the page, how it was seen, the element. */
+export type CapturedPlace = {
+  page: SeedPage;
+  viewport: SeedViewport;
+  anchor: SeedAnchor;
+  source?: SeedSource;
+};
 
-  const seed = {
-    id: options.id ?? newSeedId(view),
-    createdAt: options.createdAt ?? new Date().toISOString(),
-    note,
+export function capturePlace(element: Element, options: { view?: Window; source?: SeedSource } = {}): CapturedPlace {
+  const view = viewOf(element, options.view);
+
+  return {
     page: capturePage(view),
     viewport: captureViewport(view),
     anchor: captureAnchor(element),
@@ -63,6 +75,19 @@ export function captureSeed(options: CaptureSeedOptions): Seed {
       'source',
       mergeSource(options.source, () => readReactSource(element)),
     ),
+  };
+}
+
+export function captureSeed(options: CaptureSeedOptions): Seed {
+  const { element, note, includeEnv = false } = options;
+  const view = viewOf(element, options.view);
+  const place = options.place ?? capturePlace(element, { view, ...optional('source', options.source) });
+
+  const seed = {
+    id: options.id ?? newSeedId(view),
+    createdAt: options.createdAt ?? new Date().toISOString(),
+    note,
+    ...place,
     ...optional('client', options.client),
     ...optional('reporter', options.reporter),
     ...optional('env', includeEnv ? captureEnv(view) : undefined),
@@ -70,6 +95,15 @@ export function captureSeed(options: CaptureSeedOptions): Seed {
   };
 
   return createSeed(seed);
+}
+
+function viewOf(element: Element, view: Window | undefined): Window {
+  const found = view ?? element.ownerDocument.defaultView;
+  if (found === null) {
+    throw new Error('captureSeed: the element belongs to a document with no window');
+  }
+
+  return found;
 }
 
 const SOURCE_FIELDS = ['component', 'file', 'line', 'column'] as const;

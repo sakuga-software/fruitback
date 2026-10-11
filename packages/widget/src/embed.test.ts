@@ -2,6 +2,7 @@ import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseSeed } from '@fruitback/shared';
 import { init, plant } from './embed.ts';
+import { capturePlace } from './capture.ts';
 import type { TransportRequest, TransportResponse } from './transport.ts';
 import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
 import { type MountedPage, globalNavigatorSpeaks, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
@@ -709,6 +710,54 @@ describe('who carries the calls', () => {
     assert.equal(request?.headers['Content-Type'], 'application/json');
     assert.equal(request?.headers.Authorization, 'Bearer a-token');
     assert.equal((JSON.parse(request?.body ?? '{}') as { note: string }).note, 'the price is wrong');
+  });
+
+  it('sends the note to the page where the element was chosen, after a navigation (FRU-152)', async () => {
+    const page = mountPage('<main><button id="cta">Commander</button></main>', {
+      url: 'https://preview.acme.test/pricing',
+    });
+    setDocumentSize(page.document, 1_000, 1_000);
+    const button = page.query('button');
+    setRect(button, { left: 100, top: 200, width: 200, height: 40 });
+    forbidFetch();
+
+    // The click reads the place. The page then moves on without a reload, and its content goes.
+    const place = capturePlace(button);
+    page.view.history.pushState(null, '', '/checkout');
+    page.document.body.innerHTML = '<main><h2>Votre commande</h2></main>';
+
+    const seen: TransportRequest[] = [];
+    const send = (withPlace: boolean) =>
+      plant({
+        note: 'the price is wrong',
+        target: { element: button, source: undefined },
+        ...(withPlace ? { place } : {}),
+        reporter: undefined,
+        config: { hiddenStages: [], screenshot: false },
+        options: {
+          endpoint: ENDPOINT,
+          clientId: 'acme',
+          transport: async (request) => {
+            seen.push(request);
+
+            return { ok: true, status: 201, body: '{}' };
+          },
+        },
+      });
+
+    assert.equal(await send(true), true);
+    // The control: read at the send, the place is the page of now. This is the defect.
+    assert.equal(await send(false), true);
+
+    const [kept, late] = seen.map(
+      (request) =>
+        JSON.parse(request.body ?? '{}') as { page: { url: string }; anchor: { selector: string; text?: string } },
+    );
+    assert.equal(kept?.page.url, 'https://preview.acme.test/pricing');
+    assert.equal(kept?.anchor.text, 'Commander');
+    assert.equal(kept?.anchor.selector, '#cta');
+    assert.equal(late?.page.url, 'https://preview.acme.test/checkout');
+    assert.equal(parseSeed(kept).ok, true);
   });
 
   it('names the place a member chose in the query, and leaves the body the seed it was (FRU-123)', async () => {
