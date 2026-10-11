@@ -67,7 +67,7 @@ workers, so stop `pnpm dev` first.
 
 ## Before you open a pull request
 
-CI runs each of these as its own check on every pull request to `main`. Run them first:
+CI runs each of these as its own check on every pull request, whatever branch it targets. Run them first:
 
 | Check          | Locally                                                                                                                                                                                                                        |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

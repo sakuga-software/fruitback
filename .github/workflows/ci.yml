@@ -1,17 +1,26 @@
 name: CI
 
 on:
+  # Every pull request, whatever branch it targets (FRU-172). With `branches: [main]` here, a pull
+  # request stacked on another one got no check at all, and that looks the same as checks that have
+  # not started. `workflows.test.ts` fails on a filter of branches or of paths.
   pull_request:
-    branches: [main]
   push:
     branches: [main]
+  # A merge queue runs the checks on the commit it is about to put on `main`. Nothing sends this
+  # event until the repository has a queue, and a queue with no run to wait for never merges.
+  merge_group:
 
 permissions:
   contents: read
 
+# A push to a pull request makes the run of the push before it obsolete, so that run is cancelled.
+# A commit of `main` is never obsolete: it takes a group of its own, so no later merge cancels its
+# run or takes its place in a queue. On 2026-10-11 two merges landed 14 seconds apart, the run of
+# the first one was cancelled, and `main` had no verdict for that commit.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:
