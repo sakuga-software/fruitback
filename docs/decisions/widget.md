@@ -20,6 +20,11 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   the chunk (`/assets/site-state-Bgn4uEnK.js`) with a line and a column of one minified line.
   `isBundleChunk` knows it by the content hash before the extension, and `sourceFromContext` sends
   no file, line or column for it. A line and a column go with their file.
+- **The place of a note is read at the click, not at the send** (FRU-152). The page stays live while
+  the popover is open, and a link of a single-page app or the back button changes its address. So
+  `embed.ts` reads the page, the viewport, the anchor and the source with `capturePlace` when the
+  reporter chooses the element, and `captureSeed` takes them as `place`. The note goes to the page
+  where it was written. `e2e/navigation.spec.ts` sends one after a navigation of the client.
 
 ### The reasons, and the history
 

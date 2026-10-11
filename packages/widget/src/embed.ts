@@ -5,7 +5,7 @@ import {
   type SeedReporter,
   type SeedScreenshot,
 } from '@fruitback/shared';
-import { captureSeed } from './capture.ts';
+import { type CapturedPlace, captureSeed, capturePlace } from './capture.ts';
 import { type WidgetConfig, createConfigStore } from './config.ts';
 import { type FeedbackEntry, feedbackAsText, placementOf } from './export.ts';
 import { type Sidebar, createSidebar } from './sidebar.ts';
@@ -206,6 +206,7 @@ export function init(options: FruitbackOptions): Fruitback {
   });
 
   let target: CaptureTarget | null = null;
+  let place: CapturedPlace | undefined;
   let composer: Composer;
   let panel: ConfigPanel;
   let sidebar: Sidebar;
@@ -220,6 +221,7 @@ export function init(options: FruitbackOptions): Fruitback {
     onList: () => sidebar.toggle(),
     onSelect: (selected) => {
       target = selected;
+      place = placeOf(selected);
       const rect = selected.element.getBoundingClientRect();
       composer.open({
         left: rect.left + view.scrollX,
@@ -270,7 +272,7 @@ export function init(options: FruitbackOptions): Fruitback {
     },
     onSubmit: async (note, reporter, chosen) => {
       const destination = destinationToSend(destinations.get(), chosen);
-      const planted = await plant({ note, target, reporter, destination, config: config.get(), options });
+      const planted = await plant({ note, target, place, reporter, destination, config: config.get(), options });
       if (!planted) {
         // The worker refuses a place the site no longer has, or a reader who lost the right to
         // choose. The list on screen is then old, and a second try would be refused like the first.
@@ -413,6 +415,7 @@ function createReader(
 export async function plant({
   note,
   target,
+  place,
   reporter,
   destination,
   config,
@@ -420,6 +423,8 @@ export async function plant({
 }: {
   note: string;
   target: CaptureTarget | null;
+  /** Where the element was when the reporter chose it (FRU-152). Left out, it is read at the send. */
+  place?: CapturedPlace | undefined;
   reporter: SeedReporter | undefined;
   /** The opaque id of the place a member chose, when it is not the first one (FRU-123). */
   destination?: string | undefined;
@@ -435,6 +440,7 @@ export async function plant({
     source: target.source,
     reporter,
     includeEnv: options.includeEnv,
+    ...(place === undefined ? {} : { place }),
     ...optionalScreenshot(await screenshotFor(target.element, config, options)),
   });
 
@@ -459,6 +465,24 @@ export async function plant({
   });
 
   return response.ok;
+}
+
+/**
+ * The place of the element, read at the click (FRU-152).
+ *
+ * The page stays live while the popover is open. A link of a single-page app or the back button
+ * changes the address, and can remove the element. A note sent then must go to the page where it
+ * was written, with the element of that page.
+ *
+ * A place that cannot be read here is read again at the send, where a failure keeps the note: the
+ * click must not fail because of it.
+ */
+function placeOf(target: CaptureTarget): CapturedPlace | undefined {
+  try {
+    return capturePlace(target.element, target.source === undefined ? {} : { source: target.source });
+  } catch {
+    return undefined;
+  }
 }
 
 /**
