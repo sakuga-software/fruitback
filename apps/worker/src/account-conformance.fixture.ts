@@ -478,8 +478,9 @@ export function accountCases(it: Declare<AccountStore>): void {
     ];
     const two = [{ connector: hook.id }, { connector: linear.id, teamId: 'team_4' }];
 
-    // Several rounds: the second one starts from a list that is there, which is another race.
-    for (let round = 0; round < 4; round += 1) {
+    // Two rounds, which are two races: the first one starts from no list, and the second one from
+    // a list that is there.
+    for (let round = 0; round < 2; round += 1) {
       assert.deepEqual(
         await Promise.all([
           store.setDestinations(workspace.id, site.id, one),

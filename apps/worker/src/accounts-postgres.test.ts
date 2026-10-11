@@ -13,7 +13,7 @@ import { accountStoreFor, handleRequest } from './app.ts';
 import { collect, mutatedModule } from './conformance.fixture.ts';
 import { type WorkerEnv, hasAccounts, readConfig } from './env.ts';
 import { type Database, migrate } from './postgres.ts';
-import { MIGRATIONS } from './postgres-migrations.ts';
+import { MIGRATIONS, migrated } from './postgres-migrations.ts';
 import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase } from './postgres.fixture.ts';
 import { closeSessionConnections, createSqliteSessionStore } from './session-sqlite.ts';
 import { createPairing, redeemPairing } from './session.ts';
@@ -237,10 +237,25 @@ describe('the sites of a workspace, read from PostgreSQL (FRU-141)', () => {
   });
 });
 
-/** What a case answers on the store with one change, on this database: `'passed'`, or its failure. */
+/** How long the database holds a new row before it writes it, in the tests that plant a race. */
+const HOLD_SECONDS = 0.3;
+
+/**
+ * What a case answers on the store with one change, on this database: `'passed'`, or its failure.
+ *
+ * **A race that is left to chance is a control that fails one run in a few.** Two calls overlap only
+ * when the scheduler lets them, and a store that loses the race then passes. CI showed it: the same
+ * control passed on one head and failed on the next one, which changed one line of a document. So
+ * the overlap is made here, as `pg_sleep` makes it for the migrations of two processes:
+ *
+ * - a trigger holds each new row of `held` for `HOLD_SECONDS` before it is written, inside the
+ *   transaction, so the first call has not committed when the second one reads;
+ * - the two connections are open before the case starts, so the second call does not wait for one.
+ */
 async function outcomeOf(
   name: string,
   change: { from: string; to: string },
+  held: { table: string; when?: string },
   open: () => Promise<Database>,
 ): Promise<unknown> {
   const mutant = await mutatedModule('accounts-postgres.ts', change);
@@ -249,6 +264,15 @@ async function outcomeOf(
   try {
     const runCase = collect(accountCases).get(name);
     assert.ok(runCase !== undefined, 'the case is gone');
+
+    await migrated(opened);
+    await opened.query(`
+      CREATE FUNCTION hold_the_row() RETURNS trigger LANGUAGE plpgsql
+        AS $$ BEGIN PERFORM pg_sleep(${HOLD_SECONDS}); RETURN NEW; END $$;
+      CREATE TRIGGER hold_the_row BEFORE INSERT ON ${held.table} FOR EACH ROW
+        ${held.when === undefined ? '' : `WHEN (${held.when})`} EXECUTE FUNCTION hold_the_row();
+    `);
+    await Promise.all([opened.query('SELECT 1'), opened.query('SELECT 1')]);
 
     return await runCase(create(opened)).then(
       () => 'passed',
@@ -274,13 +298,15 @@ describe('two sign-ins of one new address, on two connections (FRU-141)', () => 
     from: 'VALUES ($1, $2, $3, $4, $5)\n             ON CONFLICT (email) DO NOTHING',
     to: 'SELECT $1::text, $2::text, $3::text, $4::text, $5::bigint WHERE NOT EXISTS (SELECT 1 FROM accounts WHERE email = $2::text)',
   };
+  // The first sign-in has read that the address is new, and has not written its account yet.
+  const HELD = { table: 'accounts' };
 
   it('passes on PGlite with an insert that names no conflict', async () => {
-    assert.equal(await outcomeOf(CASE, WITHOUT_CONFLICT, createPgliteDatabase), 'passed');
+    assert.equal(await outcomeOf(CASE, WITHOUT_CONFLICT, HELD, createPgliteDatabase), 'passed');
   });
 
   it('fails on a real server when the insert names no conflict', { skip: NO_REAL_POSTGRES }, async () => {
-    const outcome = await outcomeOf(CASE, WITHOUT_CONFLICT, createRealDatabase);
+    const outcome = await outcomeOf(CASE, WITHOUT_CONFLICT, HELD, createRealDatabase);
 
     assert.ok(outcome instanceof Error, 'the case passed on a store that loses the race');
     assert.equal((outcome as { code?: string }).code, '23505');
@@ -298,13 +324,15 @@ describe('two lists of destinations for one site, on two connections (FRU-141)',
     from: 'SELECT 1 FROM sites WHERE id = $1 AND workspace_id = $2 FOR UPDATE',
     to: 'SELECT 1 FROM sites WHERE id = $1 AND workspace_id = $2',
   };
+  // The first list has removed the rows of the site, and has not written its first place yet.
+  const HELD = { table: 'site_destinations', when: 'NEW.position = 0' };
 
   it('passes on PGlite with no lock on the site', async () => {
-    assert.equal(await outcomeOf(CASE, WITHOUT_LOCK, createPgliteDatabase), 'passed');
+    assert.equal(await outcomeOf(CASE, WITHOUT_LOCK, HELD, createPgliteDatabase), 'passed');
   });
 
   it('fails on a real server with no lock on the site', { skip: NO_REAL_POSTGRES }, async () => {
-    const outcome = await outcomeOf(CASE, WITHOUT_LOCK, createRealDatabase);
+    const outcome = await outcomeOf(CASE, WITHOUT_LOCK, HELD, createRealDatabase);
 
     assert.ok(outcome instanceof Error, 'the case passed on a store that loses the race');
     assert.equal((outcome as { code?: string }).code, '23505');
