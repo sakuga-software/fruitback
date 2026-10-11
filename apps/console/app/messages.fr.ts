@@ -284,4 +284,16 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Its sites keep their notes in the workspace again. The issues already in Linear stay there.':
     'Ses sites gardent de nouveau leurs notes dans le workspace. Les issues déjà dans Linear y restent.',
   'Cloud workspace · beta': 'Workspace Cloud · bêta',
+
+  New: 'Nouveau',
+  'To do': 'À faire',
+  'In progress': 'En cours',
+  Done: 'Terminé',
+  Closed: 'Fermé',
+  'This setting did not change. Try again.': 'Ce réglage n’a pas changé. Réessayez.',
+  'Status of the pins': 'État des pins',
+  'Which Linear state gives which colour on the page.': 'Quel état de Linear donne quelle couleur sur la page.',
+  'The states appear here once a site sends its notes to a team.':
+    'Les états apparaissent ici dès qu’un site envoie ses notes à une équipe.',
+  'Show Linear comments as replies': 'Montrer les commentaires de Linear comme réponses',
 };

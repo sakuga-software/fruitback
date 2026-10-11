@@ -1,10 +1,21 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { type Connector, type Delivery, type Destination, type Site, type Team, call } from '../api';
+import {
+  type Connector,
+  type ConnectorSettings,
+  type Delivery,
+  type Destination,
+  STAGES,
+  type Site,
+  type Stage,
+  type Team,
+  type TrackerState,
+  call,
+} from '../api';
 import { Confirm } from '../confirm';
 import { copyText } from '../problems';
 import { type Listed, known, listedOf } from '../listed';
-import { Button, Card, Choice, Field, Problem } from '../ui';
+import { Button, Card, Choice, Field, Problem, Toggle } from '../ui';
 import { PageHead, useWorkspace } from './workspace';
 import { locale, msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
@@ -707,6 +718,91 @@ function siteCount(count: number): string {
   return count === 1 ? t('{count} site', { count }) : t('{count} sites', { count });
 }
 
+/** The names of the five stages, as the widget shows them on a pin. */
+const STAGE_NAMES: Record<Stage, string> = {
+  seeded: msg('New'),
+  green: msg('To do'),
+  ripening: msg('In progress'),
+  ripe: msg('Done'),
+  composted: msg('Closed'),
+};
+
+/**
+ * What the workspace sets on a Linear (FRU-102): which colour each state gives a pin, and whether
+ * the replies come back. Only the exceptions are kept, by the id of the state: a state set back to
+ * the stage of its type is no exception any more.
+ */
+function Settings({ base, connector }: { base: string; connector: Connector & { settings: ConnectorSettings } }) {
+  useLocale();
+  const [settings, setSettings] = useState<ConnectorSettings>(connector.settings);
+  const [states, setStates] = useState<TrackerState[] | undefined>();
+  const [problem, setProblem] = useState<string | undefined>();
+
+  useEffect(() => {
+    void call<{ states: TrackerState[]; settings: ConnectorSettings }>(
+      'GET',
+      `${base}/connectors/${connector.id}/states`,
+    ).then((answer) => {
+      if (!answer.ok) return setStates([]);
+      setStates(answer.data.states);
+      setSettings(answer.data.settings);
+    });
+  }, [base, connector.id]);
+
+  async function save(next: ConnectorSettings) {
+    const before = settings;
+    setSettings(next);
+    setProblem(undefined);
+    const set = await call('POST', `${base}/connectors/${connector.id}/settings`, next);
+    if (set.ok) return;
+    // What the screen shows must be what the worker keeps.
+    setSettings(before);
+    setProblem(msg('This setting did not change. Try again.'));
+  }
+
+  function stageOf(state: TrackerState, stage: Stage) {
+    const { [state.id]: _was, ...others } = settings.stages;
+    void save({ ...settings, stages: stage === state.stage ? others : { ...others, [state.id]: stage } });
+  }
+
+  const teams = new Set((states ?? []).map((state) => state.teamId)).size;
+
+  return (
+    <div className="mt-5">
+      <h3 className="text-sm font-semibold">{t('Status of the pins')}</h3>
+      <p className="mb-2 text-xs text-muted">{t('Which Linear state gives which colour on the page.')}</p>
+      {states !== undefined && states.length === 0 ? (
+        <p className="text-sm text-muted">{t('The states appear here once a site sends its notes to a team.')}</p>
+      ) : null}
+      <ul className="space-y-2">
+        {(states ?? []).map((state) => (
+          <li key={state.id}>
+            <Choice
+              label={teams > 1 ? `${state.team} · ${state.name}` : state.name}
+              labelStrong
+              value={settings.stages[state.id] ?? state.stage}
+              onChange={(value) => stageOf(state, value as Stage)}
+              options={STAGES.map((stage) => ({ value: stage, label: t(STAGE_NAMES[stage]) }))}
+            />
+          </li>
+        ))}
+      </ul>
+      <div className="mt-4">
+        <Toggle
+          label={t('Show Linear comments as replies')}
+          value={settings.showComments}
+          onChange={(value) => void save({ ...settings, showComments: value })}
+        />
+      </div>
+      {problem === undefined ? null : (
+        <div className="mt-3">
+          <Problem>{t(problem)}</Problem>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** The panel of one connector: which sites send their notes there, and to which team. */
 function Detail({
   base,
@@ -828,6 +924,9 @@ function Detail({
             <Problem>{t(problem)}</Problem>
           </div>
         )}
+        {manages && connector.settings !== undefined ? (
+          <Settings key={connector.id} base={base} connector={{ ...connector, settings: connector.settings }} />
+        ) : null}
       </div>
       {manages ? (
         <div className="border-t border-line px-5 py-3">
