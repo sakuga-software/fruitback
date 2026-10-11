@@ -65,6 +65,10 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   date gets its hooks at its next install that installs something, or from `pnpm prepare`.
 - **A hook that is not executable does not run.** Git prints a hint and the commit passes.
   `githooks.test.ts` fails on it.
+- **A test that runs `git` removes the variables `GIT_*` first.** `pre-push` runs the tests with
+  `GIT_DIR` set to the worktree that pushes, and a `git` started in a temporary directory works on
+  that repository. `apart`, in `mutation.test.ts`, does it, and a test there plants the `GIT_DIR` of
+  a hook.
 
 ### The reasons, and the history
 
@@ -99,6 +103,12 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - **The installer leaves another `core.hooksPath` as it is**, and says where the hooks are.
 - **In a French shell, `pre-push` stopped a branch that changes the widget** until its four tests
   stopped reading the locale (see [conventions.md](conventions.md)).
+- **A test under `pre-push` changed the clone that ran it** (2026-10-11, a commit of #148 that was
+  not pushed). Its `git init`, in a temporary directory, re-initialised the repository of `GIT_DIR`.
+  Git guessed that repository bare, because its path does not end in `/.git`, and wrote
+  `core.bare = true` to the configuration that the clone and its worktrees share: `git status` failed
+  in the clone. The two commits of the test went on the branch being pushed. A worktree reads
+  `core.bare` as false and went on. Reproduced in a clone made for it, then held by a test.
 
 ## The E2E suite
 
