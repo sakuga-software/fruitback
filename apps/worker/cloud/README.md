@@ -152,8 +152,10 @@ Steps 1 to 3 come before switch 1 (the runbook of FRU-145), step 4 after it.
    named so that its Swarm service is `fruitback-cloud-postgres`, with no external port. The user and
    the database are `fruitback`. If Dokploy names the service otherwise, set `PG_SERVICE` on the
    crontab line of step 3.
-2. **Keep its password in the Keychain** of the operator (`fruitback-cloud-postgres-password`), as
-   the two other secrets: it is in no backup.
+2. **Give it a random password of 32 characters or more, letters and digits, and keep it in the
+   Keychain** of the operator (`fruitback-cloud-postgres-password`), as the two other secrets. The
+   password is in no backup, but the volume of the database is in the archive of 03:00, and it holds
+   the verifier of the password: a short one can be guessed from a copy of the archive (`SECURITY.md`).
 3. **Copy `snapshot-pg.sh` next to `snapshot.sh` on the host, and add it to the crontab, before
    `snapshot.sh`:**
 
