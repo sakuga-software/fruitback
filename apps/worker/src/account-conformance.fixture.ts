@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import type { Account, AccountStore, Workspace } from './accounts.ts';
+import { type Account, type AccountStore, type Workspace, destinationId } from './accounts.ts';
 import { type Declare, pause } from './conformance.fixture.ts';
 import { StoreError } from './store.ts';
 
@@ -177,6 +177,7 @@ export function accountCases(it: Declare<AccountStore>): void {
       workspaceId: workspace.id,
       origin: 'https://acme.dev',
       visibility: 'members',
+      destinations: [],
     });
     assert.deepEqual(await store.sites(workspace.id), [{ ...first, visibility: 'everyone' }]);
     assert.deepEqual(await store.clientMap(), {
@@ -267,7 +268,7 @@ export function accountCases(it: Declare<AccountStore>): void {
     await store.enqueueDelivery(connector.id, '{}', 0);
 
     assert.equal(await store.removeConnector(globex.id, connector.id), false);
-    assert.equal((await store.sites(acme.id))[0]?.destination?.connector, connector.id);
+    assert.equal((await store.sites(acme.id))[0]?.destinations[0]?.connector, connector.id);
 
     assert.equal(await store.removeConnector(acme.id, connector.id), true);
     assert.deepEqual(await store.connectors(acme.id), []);
@@ -292,7 +293,7 @@ export function accountCases(it: Declare<AccountStore>): void {
 
     const destination = { connector: ours.id, teamId: 'team_1', projectId: 'project_1' };
     assert.equal(await store.setDestination(acme.id, site.id, destination), true);
-    assert.deepEqual(await store.sites(acme.id), [{ ...site, destination }]);
+    assert.deepEqual(await store.sites(acme.id), [{ ...site, destinations: [destination] }]);
     assert.deepEqual(await store.clientMap(), {
       [site.id]: {
         workspace: acme.id,
@@ -301,11 +302,13 @@ export function accountCases(it: Declare<AccountStore>): void {
         connector: ours.id,
         teamId: 'team_1',
         projectId: 'project_1',
+        // The list a member chooses in: the one place, under the name the widget holds for it.
+        destinations: [{ id: destinationId(site.id, destination), ...destination }],
       },
     });
 
     assert.equal(await store.setDestination(globex.id, site.id, undefined), false);
-    assert.deepEqual(await store.sites(acme.id), [{ ...site, destination }]);
+    assert.deepEqual(await store.sites(acme.id), [{ ...site, destinations: [destination] }]);
     assert.equal(await store.setDestination(acme.id, site.id, undefined), true);
     assert.deepEqual(await store.sites(acme.id), [site]);
   });
@@ -317,7 +320,7 @@ export function accountCases(it: Declare<AccountStore>): void {
 
     assert.equal(await store.setDestination(workspace.id, site.id, { connector: hook.id }), true);
 
-    assert.deepEqual(await store.sites(workspace.id), [{ ...site, destination: { connector: hook.id } }]);
+    assert.deepEqual(await store.sites(workspace.id), [{ ...site, destinations: [{ connector: hook.id }] }]);
   });
 
   it('keeps the first moment of a refusal, and forgets it at the first call that works', async (store) => {
