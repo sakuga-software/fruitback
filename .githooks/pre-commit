@@ -1,0 +1,42 @@
+#!/bin/sh
+# Format and lint, on the files that this commit stages (FRU-172). A second or two.
+#
+# It reads each file from the working tree, so a file staged in part is checked whole. It changes
+# no file. `git commit --no-verify` skips it: CI is the gate, and this only says it sooner.
+set -eu
+
+cd "$(git rev-parse --show-toplevel)"
+
+if [ ! -x node_modules/.bin/oxfmt ] || [ ! -x node_modules/.bin/oxlint ]; then
+  echo "pre-commit: oxfmt and oxlint are not installed in this worktree." >&2
+  echo "pre-commit: run pnpm install, or commit with --no-verify." >&2
+  exit 1
+fi
+
+# Added, copied, modified, renamed: a deleted file has nothing to check. NUL between the names, so
+# that a space in a path stays in the path.
+staged() {
+  git diff --cached --name-only --diff-filter=ACMR -z
+}
+
+# `xargs -r` runs nothing when no name is left. Without it, GNU xargs runs the tool once with no
+# path, and the tool then reads every file of the repository.
+
+failed=0
+
+# What oxfmt does not format here, as in `.oxfmtignore`: `githooks.test.ts` compares the two lists.
+# A type it cannot format is left out by oxfmt itself.
+if ! staged | grep -zv -e '^design/' -e '^pnpm-lock\.yaml$' |
+  xargs -0 -r node_modules/.bin/oxfmt --check --no-error-on-unmatched-pattern; then
+  echo "pre-commit: these files are not formatted. pnpm format:fix rewrites them." >&2
+  failed=1
+fi
+
+# oxlint takes its rules from `.oxlintrc.json` at the root, whatever package a file is in.
+if ! staged | grep -z -e '\.[cm]\{0,1\}[jt]sx\{0,1\}$' |
+  xargs -0 -r node_modules/.bin/oxlint --no-error-on-unmatched-pattern; then
+  echo "pre-commit: oxlint refuses these files." >&2
+  failed=1
+fi
+
+exit "$failed"

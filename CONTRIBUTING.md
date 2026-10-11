@@ -80,6 +80,10 @@ CI runs each of these as its own check on every pull request, whatever branch it
 | `docker image` | builds the worker image and plants a pin through `docker-compose.yml`, see [docs/self-hosting.md](docs/self-hosting.md)                                                                                                        |
 | `zizmor`       | `uvx zizmor==1.30.1 --offline .github/workflows`, the version CI runs, if you changed a workflow: it fails on an unpinned action or a permission a job does not need                                                           |
 
+`pnpm install` also sets two git hooks, from `.githooks/`. `pre-commit` checks the format and the lint of
+the files you stage. `pre-push` typechecks and tests the packages your branch changes. Both run what CI
+runs, sooner, and `--no-verify` skips either one. If they do not run, `pnpm prepare` installs them.
+
 Then:
 
 - **The title is a Conventional Commit**: `type(scope): what changed (FRU-xxx)`. The key at the end is the
