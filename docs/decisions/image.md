@@ -124,7 +124,8 @@ immutable.
   PostgreSQL database. They are files that `drizzle-kit` wrote, and the worker reads them when it
   first calls its database. A worker without `FRUITBACK_DATABASE_URL` never opens the folder. An
   image without it answers `502` to the same read, and the job counts the rows of
-  `__drizzle_migrations` against the journal of the repository.
+  `__drizzle_migrations` against the journal of the repository, on both databases it boots. Drizzle
+  brings the bundle to 4,027,571 bytes; the numbers are in [worker.md](worker.md).
 - **The scan of the image does not see what is inside the bundle, so CI asks the lockfile**
   (FRU-143). Trivy reads the packages of the image, and `server.mjs` is one file: it never saw `zod`,
   and it does not see `pg` and its six packages, or better-auth and the sixteen packages it brings.

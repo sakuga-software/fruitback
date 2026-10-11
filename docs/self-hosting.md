@@ -597,6 +597,13 @@ client, three for a note that names one.
 
 The schema migrates by itself on the first read or write, in one transaction.
 
+**With `FRUITBACK_DATABASE_URL`**, the PostgreSQL database migrates the same way, under a lock, with
+the migrations that `drizzle-kit` wrote (FRU-180). A database that an earlier image made with its own
+migration tool is adopted as it is, and nothing in it runs again, when that image had the tables of
+better-auth (FRU-144, image `sha-e74be5311941918429e9b5cf15a1518e49ba828c`, and the ones after it). A
+database that an image from before FRU-144 made is refused, and the log says why: start that image of
+FRU-144 on it once, then the new one. An image of before still opens a database that was adopted.
+
 **Roll back:** set `FRUITBACK_IMAGE` in `.env` to the digest from step 2, then
 `docker compose up -d --wait`.
 

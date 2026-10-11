@@ -647,11 +647,12 @@ for a worker without the variable` holds the rest in a process of its own. `/hea
   test:`fails on a real server with no lock on the site` gets `23505` from the key of the table, and
   test:`passes on PGlite with no lock on the site` is the other half.
 - **The database never copied the one destination a site had.** Migration 7 of the SQLite file
-  copies the three columns of `sites` into `site_destinations`. The home-made migration 2 did the
-  same, and no database was at migration 1 when it was written, so it moved nothing anywhere. The
-  first migration of Drizzle makes the tables as they are after it, with no copy
-  (gone-test:`gives a site the one destination it had before the list existed`). The three columns
-  stay in `sites`, unread: the two schemas have the same columns.
+  copies the three columns of `sites` into `site_destinations`. Migration 2 of the tool of before did
+  the same, and no database was at migration 1 when it was written, so it moved nothing anywhere.
+  The first migration of Drizzle makes the tables as they are after it, with no copy
+  (gone-test:`gives a site the one destination it had before the list existed`): a database that
+  ran migration 2 had its copy then, and is adopted as it is (FRU-180). The three columns stay in
+  `sites`, unread: the two schemas have the same columns.
 - **The driver is CommonJS in an ESM bundle.** esbuild keeps its `require('events')` as a dynamic
   require, which an ESM file does not have. Measured on the bundle against a server: without the
   `createRequire` banner of the build script, the first read answers `502`, and `/health` answers
@@ -819,12 +820,18 @@ plugin opens one with the token alone` keeps it measured, with and without the l
   the adapter of 1.7.7 (`ADAPTER_MEMBERS`) and refuses an adapter with another one, which could read
   or write a row around it: test:`knows every member of the adapter that better-auth builds, and no
 other`.
-- **One tool migrates the database, and it is `migrate` of `postgres.ts`.** The tables of better-auth
-  are the entry `better-auth` of `MIGRATIONS`, written in `auth-schema.ts`: the DDL that better-auth
-  compiles for the options of `auth.ts`, and one constraint more, `UNIQUE ("organizationId",
-"userId")` on `member`. `auth migrate` and `runMigrations()` never run on a database of the worker.
-  **A plugin, a field or a version of better-auth that changes its schema needs a new entry in
-  `MIGRATIONS`**: the tests of the schema say what is missing.
+- **One tool migrates the database, and it is Drizzle** (FRU-180, section below). The tables of
+  better-auth are written in `auth-schema.ts`, in Drizzle: the tables that better-auth compiles for
+  the options of `auth.ts`, and one constraint more, `UNIQUE ("organizationId", "userId")` on
+  `member`. `drizzle-kit generate` writes their migration with the tables of the worker. `auth
+migrate` and `runMigrations()` never run on a database of the worker. **A plugin, a field or a
+  version of better-auth that changes its schema is a change of `auth-schema.ts` and a migration
+  that `drizzle-kit` generates**: the tests of the schema say what is missing.
+- **better-auth keeps its own adapter, Kysely, on the pool of `postgres.ts`.** It does not read the
+  schema of Drizzle, and it does not need to: it reads the database. `getMigrations` and the probe of
+  `startAuth` work with this adapter only (read: concepts/database), and they are the guards of this
+  section. The layer of FRU-181 sits on that adapter. Changing it for the adapter of Drizzle is a
+  question of FRU-182, on the weight of better-auth, and FRU-180 does not answer it.
 - **`RIGHTS` of `accounts.ts` stays the one table of who may do what.** `auth-roles.ts` asks `can` for
   each role and each action and writes the answer for the organization plugin. `IMPLIED` says what
   an action gives in the words of the plugin: `manage-members` invites and removes,
@@ -877,7 +884,7 @@ schema that lost a column, and names the column` holds it. **The slice that moun
   catch that rejection**, or a schema that is wrong is an exception in `handleRequest`.
 - **A pool of `pg` is what better-auth takes** (read: adapters/postgresql). `postgres.ts` hands over
   the pool of the process, `PgDatabase.pool()`, and nothing else may take it. The tests on PGlite
-  give better-auth a pool made of the `Database` of the case, in `auth.fixture.ts`: one client out
+  give better-auth a pool made of the instance of the case, in `postgres.fixture.ts`: one client out
   at a time, because PGlite is one connection. On a real server they use the pool that ships.
 - **What `getMigrations` reports, and what it does not** (measured). It reports a table and a column
   that are missing, and a required column that better-auth never fills. It writes in its log a
@@ -1007,33 +1014,51 @@ two runs of seven boots each:
 ## The database in Drizzle (FRU-180)
 
 The PostgreSQL database of a worker is described once, in Drizzle, and `drizzle-kit` writes its
-migrations. **Nothing changes for what a worker answers**: the two conformance suites pass on SQLite,
-on PGlite and on a server, with no change to a case. **SQLite is not in Drizzle**: `sqlite.ts`,
-`accounts-sqlite.ts` and `session-sqlite.ts` stay as they are.
+migrations: the tables of the worker and the seven tables of better-auth, in one journal. **One tool
+migrates the database, and the tool of before is gone**: `postgres-migrations.ts`, `migrate` of
+`postgres.ts` and their tests. A database that it made is adopted, and nothing in it is run again.
+**Nothing changes for what a worker answers**: the two conformance suites pass on SQLite, on PGlite
+and on a server, with no change to a case.
+
+**SQLite is not in Drizzle**: `sqlite.ts`, `accounts-sqlite.ts` and `session-sqlite.ts` stay as they
+are, with their own migrations. Mathieu decided on 2026-10-11 that a worker always has PostgreSQL;
+the stores on SQLite and on files go with FRU-184, after the storage of the production moves to
+PostgreSQL. Porting them to Drizzle first would be work on code that leaves.
 
 ### The rules, in short
 
-- **`postgres-schema.ts` is the source, and `drizzle/` is generated from it.** Change a table there,
-  run `pnpm --filter @fruitback/worker db:generate`, and commit what it writes. Never write a
-  migration by hand, and never edit one that has shipped: add one.
+- **`postgres-schema.ts` and `auth-schema.ts` are the source, and `drizzle/` is generated from
+  them.** `drizzle.config.ts` names both. Change a table there, run
+  `pnpm --filter @fruitback/worker db:generate`, and commit what it writes. Never write a migration
+  by hand, and never edit one that has shipped: add one.
+- **A constraint has the name that PostgreSQL gives it**: `<table>_pkey`, `<table>_<column>_key`,
+  `<table>_<column>_fkey`. So a constraint of one column is written in the third argument of
+  `pgTable`, with its name, and never on its column, where Drizzle names it in its own way. A database
+  that the tool of before made has these names, and a later migration that drops one must find it.
 - **A property of the schema has the name of its column** (`created_at`). `account-rows.ts` and
   `session-rows.ts` parse a row of either database, so a row of PostgreSQL has the keys of a row of
   SQLite.
 - **A pull request that is rebased after another one merged a migration generates its own again.**
   Remove its SQL file, its snapshot and its entry, then run `db:generate`. Do not merge the journal
   by hand: see the first defect below.
-- **Drizzle is named by the files of the database only**: `postgres-schema.ts`,
+- **Drizzle is named by the files of the database only**: `postgres-schema.ts`, `auth-schema.ts`,
   `postgres-migrate.ts`, `accounts-postgres.ts` and `session-postgres.ts`, and `postgres.ts` as
-  types. No file that every worker loads imports one of them: `app.ts` takes a store from
-  `postgres-stores.ts`, which loads it at its first call. A lint rule holds both, and
-  test:`loads no file of Drizzle and no file of the driver for a worker without the variable` holds
-  the rest.
+  types. No file that every worker loads imports one of them: `app.ts` takes a store, and `auth.ts`
+  takes `migrated`, from `postgres-stores.ts`, which loads them at their first call. A lint rule
+  holds both, and test:`loads no file of Drizzle and no file of the driver for a worker without the
+variable` holds the rest.
 - **The worker applies the migrations at its first call to the database**, with `migrate` of
   `postgres-migrate.ts`. No command applies them, and `drizzle-kit migrate` is never run on a
   database of the worker: the image has no `npx` and no `drizzle-kit`.
-- **`migrate` of Drizzle is never called alone.** `postgres-migrate.ts` holds a lock around it, and
-  refuses first what Drizzle would skip or would not see. Read the three defects below before you
-  change that file.
+- **`migrate` of Drizzle is never called alone.** `postgres-migrate.ts` holds a lock around it,
+  adopts a database of the tool of before, and refuses first what Drizzle would skip or would not
+  see. Read the three defects below before you change that file.
+- **A database that the tool of before made is adopted, once, and nothing in it runs again.** Its
+  `schema_migrations` must hold the four migrations of `HOME_MADE`, in order: the worker then writes
+  the row of `0000_baseline` in the journal of Drizzle, as Drizzle writes it, and Drizzle applies
+  what comes after. `schema_migrations` stays. A database left at an earlier migration of that tool,
+  or whose list was edited, is refused before any write, with what to do. **The baseline is never
+  edited**, as no migration is: the adoption writes its digest.
 - **A transaction is the one of `postgres.ts`, never `db.transaction` of Drizzle on the pool.** A
   store takes `database.transaction`, which gives it Drizzle on one connection.
 - **The words of an error of Drizzle reach no log.** They quote the statement and its values: an
@@ -1044,7 +1069,7 @@ on PGlite and on a server, with no change to a case. **SQLite is not in Drizzle*
 - **The tables are in `public`, and so is the journal** (`__drizzle_migrations`). A test that needs
   an empty database on a server makes a database (`createRealDatabase`, `ownDatabase`), not a schema.
 - **`drizzle/` is not formatted.** `drizzle-kit` writes it again at the next `generate`, in its own
-  form: the `format` scripts of the worker leave the folder out.
+  form: the `format` scripts of the worker and the pre-commit hook leave the folder out.
 
 ### The reasons, and the measurements
 
@@ -1074,8 +1099,8 @@ the lock` is its control: the same two processes, with the line of the lock remo
 - **The third defect: the digest is written and never read.** Drizzle keeps a SHA-256 of each SQL
   file, and a migration that was edited after it shipped is not run again on a database that has
   it. test:`refuses a folder in which a migration that shipped was edited` holds the check that
-  compares them. The home-made tool refused the same thing by the name of the migration.
-- **A run of migrations is one transaction**, where the home-made tool gave each migration its own.
+  compares them. The tool of before refused the same thing by the name of the migration.
+- **A run of migrations is one transaction**, where the tool of before gave each migration its own.
   test:`leaves nothing of a run that fails, and keeps what the run before applied`. A database that
   holds more migrations than the build is left alone, as before: that is a roll back, and
   test:`leaves a database alone that holds more migrations than the build` holds it.
@@ -1083,7 +1108,9 @@ the lock` is its control: the same two processes, with the line of the lock remo
   does not find, it prints the error, and ends well. The first form of the drift test passed for
   that reason, and its control is what showed it. So
   test:`are the same: drizzle-kit generate writes nothing` also reads that the tool said it compared,
-  and test:`are told apart when a column of the schema has no migration` is the control.
+  and test:`are told apart when a column of the schema has no migration` is the control. It runs
+  `drizzle-kit` with the schema files of `drizzle.config.ts`, so the tables of better-auth are held
+  too: test:`are told apart when a column of a table of better-auth has no migration`.
 - **The transaction of Drizzle gives a broken connection back to the pool.** Read in
   `node-postgres/session.js`: when the `ROLLBACK` fails, its error replaces the first one, and the
   connection is released as a good one. `postgres.ts` keeps its own `BEGIN`, `COMMIT` and `ROLLBACK`,
@@ -1091,18 +1118,45 @@ the lock` is its control: the same two processes, with the line of the lock remo
 - **Drizzle gives its own parsers of types to each statement**, so a parser on the pool is not read.
   That is why the `BIGINT` is a number by the schema.
   test:`answers a BIGINT of the schema as a number, on the driver that ships`.
-- **The schema is the one the home-made migrations made.** Measured on PostgreSQL 17.11, by reading
-  the catalogue of two databases, one made by each tool: 71 columns in the same order, with the same
-  type, the same default and the same « not null », 22 constraints with the same definition, and 9
-  indexes. Only the names of the constraints differ.
+- **The baseline makes the database that the tool of before made, to the last name.** One database
+  made by the four migrations of that tool, as they shipped (`postgres-home-made.fixture.ts`, a copy
+  compared word for word with `main` at e74be53), one made by the baseline: their catalogues are the
+  same, line for line. That is 204 lines on PostgreSQL 17.11: each column with its place, type,
+  default and « not null », each constraint with its name and its definition, each index.
+  test:`makes the database that the tool of before made, to the last name` holds it on PGlite and on
+  a server. Before the names were written in the schema, only the names of the constraints differed
+  (`logins_provider_subject_pk` for `logins_pkey`, `accounts_email_unique` for `accounts_email_key`).
+- **Why the baseline is marked and not run on a database of before.** Drizzle alone runs it, and
+  fails on the first `CREATE TABLE`: test:`fails on its first CREATE TABLE when Drizzle alone meets
+it, and writes no row of its journal` is the control of the adoption. Rows cannot be replayed into
+  new tables without a copy, and a copy is a second way to lose them. The two catalogues are the same,
+  so the database has what the baseline makes: the row of the journal is the one thing missing.
+  test:`is adopted: nothing is run again, every row stays, and the stores read them` plants rows in
+  the eighteen tables, compares a digest of each table before and after, and reads them through the
+  two stores: a sign-in finds its account, a site its destination, a refresh token rotates.
+- **Why `schema_migrations` stays.** An image of before reads it, and finds its four migrations
+  applied: a roll back by digest still finds its database. Measured once on this machine with the
+  worker of `main` e74be53 itself, not with the copy: it made the database (`pair`), the bundle of
+  this branch adopted it (`pair`, one row in the journal, the catalogue unchanged), and the worker of
+  e74be53 ran `pair` on it again.
+- **Why a database left at migration 2 or 3 of the tool of before is refused, and not adopted.**
+  On `main`, migration 2 was the last one for 40 minutes (FRU-141 to FRU-142, 2026-10-11) and
+  migration 3 for 7 (FRU-142 to FRU-144), and the repository knows no database of the production
+  (FRU-183 asks Mathieu to confirm it). Adopting them would keep the SQL of the tool of before in the
+  worker. The message says what to do: start an image from FRU-144 to
+  before Drizzle on it once, then this one. test:`refuses a database that the tool of before left at
+an earlier migration, and writes nothing`.
 - **The migrations of `drizzle-kit` name `public` in every foreign key.** A case of a test cannot
   have a schema of its own, as it had. On a server it has a database. PGlite has one database: a
   case empties `public`, so a process holds one PGlite database at a time.
 - **The migrations are files beside the bundle.** `migrationsFolder` finds `drizzle/` beside
   `server.mjs` in the image, and beside `src/` and `dist/` in the repository. The Dockerfile copies
   the folder, and the job `docker image` counts the rows of the journal against it.
-- **The bundle went from 959,289 to 1,262,730 bytes** with drizzle-orm 0.45.4, which has no
-  dependency of its own. `drizzle-kit` is a development dependency, and is not in the bundle.
+- **The bundle went from 3,711,008 to 4,027,571 bytes** (+316,563, +8.5 %; gzip 616,379 to 666,495)
+  with drizzle-orm 0.45.4, which has no dependency of its own. Measured with
+  `pnpm --filter @fruitback/worker build` on `main` e74be53 and on this branch. On the base of before
+  better-auth it was 959,289 to 1,262,730. `drizzle-kit` is a development dependency, and is not in
+  the bundle.
 - **A statement is no longer SQL that can be read as it is sent.** That is the cost of this section,
   and the ticket says who chose it. The locks of the two stores are `for('update')` and
   `for('key share')`. The page of Drizzle on `select` does not document them: they are read in its
