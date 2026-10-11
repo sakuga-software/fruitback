@@ -528,8 +528,11 @@ Nothing in this section protects anybody yet: it says what is closed before the 
   that plugin the token alone opens the session, in an `Authorization` header (measured on 1.7.7).
   The worker refuses to build better-auth with it, and
   test:`opens no session with the token read in the session table, and opens one with the bearer
-plugin` holds both halves. Whoever has the secret **and** the table signs the cookie of every open
-  session.
+plugin` holds both halves, with the token it reads in the row, which is what a copy gives. Whoever
+  has the secret **and** the table signs the cookie of every open session. **This is the one
+  exception to « a token is a digest in the database »**, and it is not a choice of the worker:
+  better-auth 1.7.7 has no option that keeps a digest of that token, and it finds a session by the
+  token itself (read in the package). The table is empty until a route of better-auth is served.
 - **The environment cannot widen it.** better-auth reads `BETTER_AUTH_TRUSTED_ORIGINS`,
   `BETTER_AUTH_SECRETS` and `BETTER_AUTH_TELEMETRY` from the environment of the process, over what
   the worker gives it (measured). A worker that has better-auth on refuses to start with any

@@ -904,6 +904,14 @@ in` keeps the first two measured.
   holds the sessions of the extension: digests, a chain, a rotation. `session` (better-auth) will
   hold the sessions of the console, with the token in the clear, and it is empty. A query, a backup
   check or a purge that names one must not mean the other.
+- **better-auth 1.7.7 cannot keep a digest of a session token** (read in the types and in the source
+  of the package). Its `session` option has `expiresIn`, `updateAge`, `disableSessionRefresh`,
+  `deferSessionRefresh`, `storeSessionInDatabase`, `preserveSessionInDatabase`, `cookieCache` and
+  `freshAge`, and `findSession` asks the table for the row whose `token` is the value of the cookie.
+  So `session.token` is the one token the database holds in the clear, and SECURITY.md says on which
+  two conditions a copy of it opens nothing. `verification.storeIdentifier: 'hashed'` does it for
+  the `verification` table only, and its default is `plain`: the slice that first writes a link or a
+  code there chooses it (FRU-147).
 - **The tables have the names better-auth gives them**: `user`, `session`, `account`,
   `verification`, `organization`, `member`, `invitation`. They are made in every database of a
   worker, with better-auth on or off, because the database has one list of migrations. Names that
