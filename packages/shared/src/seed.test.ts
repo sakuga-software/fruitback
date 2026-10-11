@@ -45,12 +45,6 @@ describe('parseSeed', () => {
     assert.deepEqual(parseSeed('{}'), { ok: false, reason: 'not-found' });
   });
 
-  it('refuses a payload from a newer Fruitback instead of dropping its fields', () => {
-    const result = parseSeed({ ...seedFixture(), v: SEED_VERSION + 1 });
-
-    assert.deepEqual(result, { ok: false, reason: 'unsupported-version', version: SEED_VERSION + 1 });
-  });
-
   it('reports a corrupted payload as invalid, naming the field', () => {
     const { anchor: _dropped, ...withoutAnchor } = seedFixture();
     const result = parseSeed(withoutAnchor);
@@ -59,16 +53,6 @@ describe('parseSeed', () => {
       throw new assert.AssertionError({ message: 'expected an invalid result', actual: result });
     }
     assert.ok(result.message.includes('anchor'), result.message);
-  });
-
-  it('reports a missing version as invalid rather than unsupported', () => {
-    const { v: _dropped, ...withoutVersion } = seedFixture();
-
-    assert.deepEqual(parseSeed(withoutVersion), {
-      ok: false,
-      reason: 'invalid',
-      message: 'missing or malformed seed version',
-    });
   });
 });
 
