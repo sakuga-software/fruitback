@@ -14,13 +14,18 @@ immutable.
   file whose bytes are identical on every platform, so emulating the install and the bundle buys
   nothing. Only the runtime stage is emulated.
 - **`latest` moves on a `v*` tag and never on a merge to `main`**; `main` publishes `edge`, and
-  `sha-<commit>` is always written. **No tag is immutable**, `sha-<commit>` included — a tag names a
+  `sha-<commit>` is written with it. **No tag is immutable**, `sha-<commit>` included — a tag names a
   commit, only a digest names a build.
 - **The runtime stage holds no npm** (FRU-79). The base image carries npm, npx and corepack, the
   worker runs none of them, and the release gate scans npm's own dependencies: every build of `main`
   was refused for two weeks on a package inside npm, so `edge` stayed two weeks old. `apk upgrade`
   does not reach those files. **A release that fails publishes nothing and says so only in the
   Actions tab**: look at `release-image.yml` after a merge, not only at `ci.yml`.
+- **Nothing is published from a commit that did not pass `ci.yml`** (FRU-172). The `publish` job of
+  `release-image.yml`, and of `release-extension.yml`, needs a job `ci` that calls `ci.yml` on the
+  same commit. `workflows.test.ts` fails on a job that holds a write permission and does not name
+  that job in its own `needs`, or that holds `always()` in its `if`. A push to `main` therefore runs
+  the checks twice: in `CI`, and in `Release image`.
 - **Trivy runs with `ignore-unfixed`**, and its version carries the `v` (`# v0.36.0`). One tag out
   of seventy-five is unprefixed, so the wrong form looks valid until the next bump.
 - **Every `uses:` is pinned to a 40-character commit SHA, with its version as a trailing comment**
@@ -49,8 +54,9 @@ immutable.
 - **`linux/arm64` is not a nicety.** A Raspberry Pi and an ARM VPS are ordinary self-hosting, and an
   amd64-only image excludes them with an error that reads like a broken download.
 - **`latest` moves on a `v*` tag and never on a merge to `main`**; `main` publishes `edge`. A
-  `latest` that followed every merge takes away the one thing a tag is for. `sha-<commit>` is always
-  written, which is what a bisect or an incident needs.
+  `latest` that followed every merge takes away the one thing a tag is for. `sha-<commit>` is
+  written with `edge`, which is what a bisect or an incident needs. Two kinds of commit have none:
+  see below.
 - **No tag is immutable, `sha-<commit>` included.** Rebuilding the same commit republishes it under a
   new digest, because `org.opencontainers.image.created` moves. A tag names a commit; only a digest
   names a build, and the README says so rather than promising an immutability the registry does not
@@ -58,6 +64,24 @@ immutable.
 - **Publishing is a second workflow, not a job in `ci.yml`.** That file's `image` job builds one
   architecture and `load: true`s it to boot it, and **a multi-platform build cannot be loaded into
   the daemon at all**. The two cannot be merged.
+- **Apart, and not independent** (FRU-172). On 2026-10-11 `release-image.yml` published `46a5fa7`
+  while `typecheck` and `test` failed on it, and `f812d97` while its run of `CI` was cancelled. The
+  two workflows started on the same push, and this one waited for nothing. Measured on those runs:
+  the image was pushed about 2 minutes after the merge, and `CI` needs about 4 minutes 30 to finish,
+  so the image was out before any check could fail. `publish` now needs `ci`, a job that calls
+  `ci.yml`. The other way was a step that asks the API for the run of `CI` on the same commit: that
+  takes `actions: read`, a wait in a loop, and an answer for a run that does not exist yet. A `needs`
+  is enforced by GitHub. Its price is a second run of the checks on each push to `main`.
+- **Not every commit of `main` has its `sha-<commit>`.** A commit that fails a check is not
+  published. And the group of this workflow is its ref, with `cancel-in-progress: false`: a run
+  waits for the one before it, and a third run cancels the one that waits. Measured on 2026-10-11
+  with three pushes 9 seconds apart to a branch made for it: the first run went on, the second was
+  cancelled, the third waited. So the middle one of three merges in a row is not published. The
+  last one is, and `edge` names it. A group for each commit would let an older run finish last and
+  move `edge` back.
+- **The call is written `$/.github/workflows/ci.yml`.** That form reads the file from this
+  repository at the commit that runs. `zizmor` 1.30.1 reports the `./` form as a finding
+  (`self-repository`), and its job fails on any finding.
 - **`release-image.yml` checks every architecture it publishes, one job each, before anything is
   pushed.** The first version checked only the runner's own — so an arm64 failure in the base image,
   the `apk add` or the healthcheck passed every gate and shipped, **on the architecture the workflow

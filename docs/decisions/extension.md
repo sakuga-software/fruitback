@@ -62,9 +62,12 @@ it changes who is shown the feedback and never who may fetch it.
   beside it, which AMO asks for whenever the submitted file was built. The tag and
   `apps/extension/package.json` must name the same version, and the job fails when they do not: a
   store refuses an upload whose version is not higher than the last, so a tag that says something
-  else publishes a number nobody chose. **This workflow restores no cache.** A cache entry is
+  else publishes a number nobody chose. **The `package` job restores no cache.** A cache entry is
   writable by any run of the repository, and what this job builds is shipped — `zizmor` fails on the
-  pair, and `ci.yml` keeps its cache because it ships nothing.
+  pair, and `ci.yml` keeps its cache because it ships nothing. **`publish` needs `ci`, a job that
+  calls `ci.yml` on the tagged commit** (FRU-172): a tag can name any commit, and the archives of one
+  that fails its tests must not reach a release. Those jobs restore the cache of `ci.yml`. They run
+  on their own runners with `contents: read`, and nothing they build is in the archives.
   **The archives are under `.output`, and `upload-artifact` leaves out a hidden directory** unless
   `include-hidden-files` says otherwise. The first tag, `v0.1.0`, built both archives and uploaded
   none. `workflows.test.ts` fails on an upload through a dot directory that does not ask for it.

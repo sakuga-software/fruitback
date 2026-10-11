@@ -10,6 +10,8 @@ on:
   # A merge queue runs the checks on the commit it is about to put on `main`. Nothing sends this
   # event until the repository has a queue, and a queue with no run to wait for never merges.
   merge_group:
+  # The workflows that publish call this one, and publish only after it passed (FRU-172).
+  workflow_call:
 
 permissions:
   contents: read
@@ -18,8 +20,11 @@ permissions:
 # A commit of `main` is never obsolete: it takes a group of its own, so no later merge cancels its
 # run or takes its place in a queue. On 2026-10-11 two merges landed 14 seconds apart, the run of
 # the first one was cancelled, and `main` had no verdict for that commit.
+#
+# The name of the workflow is in the group. In a call it is the name of the caller, so the run that
+# a release starts and the run of `CI` on the same commit do not wait for each other.
 concurrency:
-  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

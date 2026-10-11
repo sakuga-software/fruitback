@@ -3,6 +3,8 @@ name: Release image
 # Publishing is a different job from checking, which is why this is not a job in ci.yml: that
 # workflow's `image` job builds one architecture and loads it into the local daemon to boot it, and
 # a multi-platform build cannot be loaded at all. The two must stay apart.
+#
+# Apart, but not independent (FRU-172): `publish` needs `ci`, which calls ci.yml on this commit.
 on:
   push:
     branches: [main]
@@ -22,6 +24,15 @@ env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/fruitback-worker
 
 jobs:
+  # Lint, format, typecheck, the tests, the E2E suite and zizmor, on the commit that is published.
+  # On 2026-10-11 this workflow published `46a5fa7` while `typecheck` and `test` failed on it, and
+  # `f812d97` while its run of CI was cancelled: it started on the same push as ci.yml and waited
+  # for nothing. A push to `main` therefore runs the checks twice, here and in `CI`. That is the
+  # price of a dependency that GitHub enforces itself, with no call to its API and no new permission.
+  ci:
+    name: ci
+    uses: $/.github/workflows/ci.yml
+
   # Every architecture that gets published is booted and scanned here first, and that is one job per
   # architecture rather than one for the native one. An arm64-only failure — the base image, the
   # `apk add`, the healthcheck — passes an amd64 gate and reaches the registry anyway, which is the
@@ -144,8 +155,9 @@ jobs:
 
   publish:
     name: push
-    # Both architectures, so a red arm64 stops the amd64 one from being published beside it.
-    needs: check
+    # Both architectures, so a red arm64 stops the amd64 one from being published beside it. And
+    # `ci`, so a commit that fails a check is never published: `workflows.test.ts` holds that.
+    needs: [ci, check]
     # `workflow_dispatch` runs on whatever ref you pick it from, and `type=sha` below produces a tag
     # on any of them — so without this line a dispatch from a branch pushes an image built from
     # unmerged code. With it, a dispatch checks both architectures and publishes nothing, which is
