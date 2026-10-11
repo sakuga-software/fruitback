@@ -95,11 +95,6 @@ function actionReferences(): Reference[] {
     .filter((reference) => !reference.value.startsWith('./'));
 }
 
-/** The keys of a mapping node, or nothing when the node is not one. */
-function keysOf(node: unknown): string[] {
-  return isMap(node) ? node.items.flatMap((entry) => (isScalar(entry.key) ? [String(entry.key.value)] : [])) : [];
-}
-
 /**
  * Every step that runs `gh` without naming the repository it talks to.
  *

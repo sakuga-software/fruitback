@@ -342,7 +342,7 @@ describe('the Scaleway mailer', () => {
     await mailer.send(signInMessage('alice@acme.dev', 'https://app.test/sign-in#abc', 15));
 
     assert.equal(calls[0]?.url, 'https://api.scaleway.com/transactional-email/v1alpha1/regions/fr-par/emails');
-    assert.equal((calls[0]?.init.headers as Record<string, string>)['X-Auth-Token'], 'secret');
+    assert.equal((calls[0]?.init.headers as Record<string, string> | undefined)?.['X-Auth-Token'], 'secret');
     const body = JSON.parse(String(calls[0]?.init.body)) as Record<string, unknown>;
     assert.equal(body.project_id, 'proj');
     assert.deepEqual(body.to, [{ email: 'alice@acme.dev' }]);

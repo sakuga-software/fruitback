@@ -53,7 +53,8 @@ function google(options: { profile?: Profile; down?: boolean } = {}) {
         .update(body.code_verifier ?? '')
         .digest('base64url');
       const valid =
-        (init?.headers as Record<string, string>)['Content-Type'] === 'application/x-www-form-urlencoded' &&
+        (init?.headers as Record<string, string> | undefined)?.['Content-Type'] ===
+          'application/x-www-form-urlencoded' &&
         body.grant_type === 'authorization_code' &&
         body.client_id === 'client-1.apps.googleusercontent.com' &&
         body.client_secret === 'GOCSPX-the-client-secret' &&
@@ -65,7 +66,7 @@ function google(options: { profile?: Profile; down?: boolean } = {}) {
         : Response.json({ error: 'invalid_grant' }, { status: 400 });
     }
     if (input === 'https://openidconnect.googleapis.com/v1/userinfo') {
-      if ((init?.headers as Record<string, string>).Authorization !== 'Bearer ya29.token') {
+      if ((init?.headers as Record<string, string> | undefined)?.Authorization !== 'Bearer ya29.token') {
         return new Response('{}', { status: 401 });
       }
 

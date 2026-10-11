@@ -12,11 +12,17 @@ How this repository is formatted, tested and documented, and which test holds ea
   written in `CLAUDE.md` so it is read there.
 - Formatting and linting are oxfmt / oxlint (config at the root). 120 columns, single quotes,
   trailing commas.
-  - **The root is an Nx project too, named `workspace`, with `format` and `format:fix` only**
-    (FRU-55). It formats what no package owns: `e2e/`, `docs/`, the root Markdown and JSON.
-    `.oxfmtignore` gives `apps/` and `packages/` back to their own targets, and only this target
-    reads it. Do not move that list to `ignorePatterns` in `.oxfmtrc.json`: every package reads that
-    file, and its `oxfmt --check .` then finds no file at all.
+  - **A warning of oxlint is an error** (FRU-172). `.oxlintrc.json` sets `correctness`, the category
+    oxlint turns on by default, to `error`. A warning fails nothing, so nobody reads it: `main` held
+    thirteen, two unused imports of `app.ts` among them. Do not set a rule to `warn`. Turn it `off`
+    with its reason, or leave it an error.
+  - **The root is an Nx project too, named `workspace`, with `lint`, `format` and `format:fix`**
+    (FRU-55, FRU-172). It lints and formats what no package owns: `e2e/`, `playwright.config.ts`,
+    `docs/`, the root Markdown and JSON, and a directory added to the root later. Until it had a
+    `lint` target, a nested ternary in `e2e/` passed `pnpm lint` (measured).
+    `.oxfmtignore` gives `apps/` and `packages/` back to their own targets, and only the targets of
+    the root read it. Do not move that list to `ignorePatterns` in `.oxfmtrc.json`: every package
+    reads that file, and its `oxfmt --check .` then finds no file at all.
   - **`"nx": { "includedScripts": [] }` in the root `package.json` is load-bearing.** Without it,
     Nx makes every root script a target of `workspace`. A root `test` script is `nx run-many -t test`,
     so that target would start `nx run-many -t test` again.
