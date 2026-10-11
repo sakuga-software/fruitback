@@ -1152,9 +1152,9 @@ an earlier migration, and writes nothing`.
 - **The migrations are files beside the bundle.** `migrationsFolder` finds `drizzle/` beside
   `server.mjs` in the image, and beside `src/` and `dist/` in the repository. The Dockerfile copies
   the folder, and the job `docker image` counts the rows of the journal against it.
-- **The bundle went from 3,711,008 to 4,027,571 bytes** (+316,563, +8.5 %; gzip 616,379 to 666,495)
+- **The bundle went from 3,724,344 to 4,041,092 bytes** (+316,748, +8.5 %; gzip 619,850 to 669,989)
   with drizzle-orm 0.45.4, which has no dependency of its own. Measured with
-  `pnpm --filter @fruitback/worker build` on `main` e74be53 and on this branch. On the base of before
+  `pnpm --filter @fruitback/worker build` on `main` dcc96f2 and on this branch. On the base of before
   better-auth it was 959,289 to 1,262,730. `drizzle-kit` is a development dependency, and is not in
   the bundle.
 - **A statement is no longer SQL that can be read as it is sent.** That is the cost of this section,
