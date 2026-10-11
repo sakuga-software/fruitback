@@ -441,7 +441,9 @@ export async function plant({
     reporter,
     includeEnv: options.includeEnv,
     ...(place === undefined ? {} : { place }),
-    ...optionalScreenshot(await screenshotFor(target.element, config, options)),
+    ...optionalScreenshot(
+      stillThere(target.element, place) ? await screenshotFor(target.element, config, options) : undefined,
+    ),
   });
 
   // Asked for per write rather than once at init: a short-lived token that expired mid-session would
@@ -483,6 +485,21 @@ function placeOf(target: CaptureTarget): CapturedPlace | undefined {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Whether the element is still on the page where it was chosen (FRU-152).
+ *
+ * The picture is taken at the send. After a navigation it would show the page of now, or nothing of
+ * the element, beside a place and an anchor of the page before. A note with no picture is better
+ * than a picture of another page.
+ */
+function stillThere(element: Element, place: CapturedPlace | undefined): boolean {
+  if (!element.isConnected) return false;
+  if (place === undefined) return true;
+  const view = element.ownerDocument.defaultView;
+
+  return view !== null && canonicalizePageUrl(view.location.href) === place.page.url;
 }
 
 /**

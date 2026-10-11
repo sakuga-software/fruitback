@@ -24,7 +24,9 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   the popover is open, and a link of a single-page app or the back button changes its address. So
   `embed.ts` reads the page, the viewport, the anchor and the source with `capturePlace` when the
   reporter chooses the element, and `captureSeed` takes them as `place`. The note goes to the page
-  where it was written. `e2e/navigation.spec.ts` sends one after a navigation of the client.
+  where it was written. The picture is still taken at the send, so it is left out when the address
+  changed or the element left the page. `e2e/navigation.spec.ts` sends a note after a navigation of
+  the client.
 
 ### The reasons, and the history
 
