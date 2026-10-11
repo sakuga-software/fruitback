@@ -11,6 +11,7 @@
 
 - [ ] `pnpm lint`, `pnpm format`, `pnpm typecheck` and `pnpm test` pass
 - [ ] `pnpm e2e` passes
+- [ ] The `postgres` check passes in CI: it runs the account store on a real PostgreSQL, if you changed `accounts-postgres.ts`, `postgres.ts` or a migration
 - [ ] The `docker image` check passes in CI: it builds the worker image and plants a pin through `docker-compose.yml`
 - [ ] The `zizmor` check passes in CI: it audits the workflows
 

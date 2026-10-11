@@ -17,7 +17,6 @@ import {
   normalizePairingCode,
   redeemPairing,
   refreshSession,
-  revokeSession,
 } from './session.ts';
 import { closeSessionConnections, createSqliteSessionStore } from './session-sqlite.ts';
 import { verifyIdentityToken } from './identity.ts';

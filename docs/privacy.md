@@ -106,7 +106,8 @@ can read them, with or without the widget.
   subject, name and e-mail the operator gave when minting the pairing code, its dates, and a SHA-256
   digest of the code or token, never the token itself. Expired rows are removed when a new code is
   redeemed.
-- **The accounts, on disk**, when `FRUITBACK_ACCOUNTS_PATH` is set (FRU-96). For each person: the
+- **The accounts, on disk**, when `FRUITBACK_ACCOUNTS_PATH` is set (FRU-96), or in the PostgreSQL
+  database of `FRUITBACK_DATABASE_URL` in place of that file (FRU-141): the same things, in one or the other. For each person: the
   address a provider or a link proved, the name the provider gave, and which provider signed them in
   with the id it gives them, and the language they read (the browser that opened their first sign-in
   link, or their own choice), which their e-mails are written in. For each workspace: the key of each

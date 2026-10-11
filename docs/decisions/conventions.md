@@ -119,3 +119,38 @@ How this repository is formatted, tested and documented, and which test holds ea
 - The Linear MCP server is declared in `.mcp.json` at the project scope. If its tools are missing in a
   session, it needs to be approved and authorized (`/mcp` in an interactive session) — it cannot be
   authorized from a non-interactive one.
+
+## The checks, and where each one runs
+
+### The rules, in short
+
+- **`ci.yml` runs on every pull request, whatever branch it targets, and on every commit of `main`**
+  (FRU-172). Its `pull_request` trigger holds no filter: no `branches`, no `paths`, no `types`.
+  `workflows.test.ts` fails on one. A pull request stacked on another one is checked as the merge of
+  its branch into the branch it targets.
+- **A push to a pull request cancels the run of the push before it. Nothing cancels the run of a
+  commit of `main`.** The concurrency group of a pull request is its ref, and the group of a push is
+  its commit. A group that two merges share lets the second one cancel the first.
+- **Green apart is not green together.** Two pull requests that pass alone can break `main` when both
+  merge. `ci.yml` cannot stop that: only a setting of the repository can, by a branch that must be up
+  to date before it merges, or by a merge queue. `ci.yml` declares `merge_group` so that a queue has a
+  run to wait for. Do not remove it: a queue whose required check never reports never merges.
+
+### The reasons, and the history
+
+- **A stacked pull request had no check at all.** `ci.yml` held `pull_request: branches: [main]`, so
+  a pull request whose base was another branch started no run. Measured on #138 while its base was
+  the branch of #137: its commit `61b2160` has a run of `Sakuga Review` and none of `CI`. No check and
+  « checks not started » look the same on the page of a pull request.
+- **On 2026-10-11, `main` was red for 29 minutes, and one of its commits has no verdict.** #134 and
+  #137 were green alone and merged 14 seconds apart. #137 tested a field that #134 had renamed, so
+  `typecheck` and `test` failed on `46a5fa7`. The run of `f812d97`, the commit of #134, was cancelled:
+  the group was `ci-${{ github.ref }}` with `cancel-in-progress: true`, and both pushes had the ref
+  `refs/heads/main`.
+- **`cancel-in-progress: false` on a shared group is not enough.** A group holds one run in progress
+  and one run pending, and a third run cancels the pending one. Measured on 2026-10-11 with three
+  pushes 9 seconds apart to a branch made for it, on a workflow whose group is its ref: the first
+  run went on, the second was cancelled, the third waited. So the group of a push is the commit
+  itself, and no two runs share it.
+- **A stacked pull request proves the trigger.** #141 targets the branch of #140 and not `main`, and
+  it has a run of `CI`.
