@@ -56,6 +56,19 @@ jobs:
       - name: Run ${{ matrix.target }}
         run: pnpm exec nx run-many -t ${{ matrix.target }}
 
+      # A test that reads the locale of the shell passes on this runner and fails on the machine of
+      # somebody who works in French, or the reverse (FRU-172). Node takes the language of its own
+      # `navigator`, and the default of `Intl`, from these variables. `--skip-nx-cache` is what makes
+      # this a second run: the locale is no input of the `test` target, so Nx would replay the first.
+      - name: Run the tests again under a French locale
+        if: matrix.target == 'test'
+        env:
+          LC_ALL: fr_FR.UTF-8
+          LANG: fr_FR.UTF-8
+        run: |
+          test "$(node -p 'navigator.language')" = fr-FR
+          pnpm exec nx run-many -t test --skip-nx-cache
+
   e2e:
     # The two things `node --test` cannot answer for: a real selector engine and real layout. Kept to
     # six specs and ~6 seconds of browser time — a slow E2E job is one people learn to ignore.
