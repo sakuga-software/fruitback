@@ -132,5 +132,25 @@ docker exec "$P-source" test -s /tmp/pg_dump_cut.ran || fail "the dump was not c
 AFTER=$(docker exec "$P-worker" sha256sum /data/snapshots/fruitback.pgdump | cut -d' ' -f1)
 [ "$GOOD" = "$AFTER" ] || fail "a dump that lost its end replaced the copy before"
 
+# Nothing of a failed snapshot is left behind: a dump that stopped half way still holds accounts.
+left() {
+  docker exec "$P-source" sh -c 'ls /tmp/fruitback.pgdump.* 2>/dev/null' || true
+  docker exec "$P-worker" sh -c 'ls /data/snapshots/*.tmp 2>/dev/null' || true
+}
+[ -z "$(left)" ] || fail "a failed snapshot left a file: $(left)"
+
+echo "restore-drill: 6. a pg_dump that stops half way replaces nothing, and leaves nothing"
+docker exec -i "$P-source" sh -c 'cat >/usr/local/bin/pg_dump_dies && chmod +x /usr/local/bin/pg_dump_dies' <<'DIES'
+#!/bin/sh
+# pg_dump, and then a failure after it wrote: a process that was killed while it wrote.
+pg_dump "$@" && echo ran >/tmp/pg_dump_dies.ran
+exit 1
+DIES
+if PG_DUMP=pg_dump_dies snapshot; then fail "a pg_dump that failed was accepted"; fi
+docker exec "$P-source" test -s /tmp/pg_dump_dies.ran || fail "the dump did not run: this check proved nothing"
+AFTER=$(docker exec "$P-worker" sha256sum /data/snapshots/fruitback.pgdump | cut -d' ' -f1)
+[ "$GOOD" = "$AFTER" ] || fail "a pg_dump that failed replaced the copy before"
+[ -z "$(left)" ] || fail "a pg_dump that failed left a file: $(left)"
+
 ROWS=$(awk '{ sum += $2 } END { print sum }' "$WORK/source.txt")
-echo "restore-drill: done. $(wc -l <"$WORK/source.txt" | tr -d ' ') tables and $ROWS rows are the same on both sides, and a dump that lost its end replaced nothing."
+echo "restore-drill: done. $(wc -l <"$WORK/source.txt" | tr -d ' ') tables and $ROWS rows are the same on both sides, and a failed snapshot replaced nothing and left nothing."

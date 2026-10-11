@@ -484,6 +484,13 @@ Three things change with a database on a network, and each has its condition:
 A copy of the database is a copy of the file: no working login and no working key of a tracker,
 while `FRUITBACK_SECRETS_KEY` is not with it.
 
+**The backup of the Cloud is such a copy** (FRU-143): `snapshot-pg.sh` writes a dump of the database
+each night into the volume of the worker, which the host archives with every other volume. It holds
+what the database holds, and no secret of the worker: `FRUITBACK_SECRETS_KEY`,
+`FRUITBACK_IDENTITY_SECRET`, `FRUITBACK_AUTH_SECRET` and the password of the database are in no
+backup. A dump that failed is removed, where it was written and in the volume: it is not left beside
+the good one.
+
 **`GET /session/sites` lists the sites of the workspace a session belongs to** (FRU-101), to the
 holder of its access token, while that person is still a member: the extension turns such a site on in
 one click. It answers an origin, an id and a visibility per site, and the language of the account

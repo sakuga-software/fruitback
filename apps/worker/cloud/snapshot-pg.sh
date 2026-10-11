@@ -29,14 +29,21 @@ PG=$(container "${PG_CONTAINER:-}" "$PG_SERVICE")
 WORKER=$(container "${WORKER_CONTAINER:-}" "$WORKER_SERVICE")
 [ -n "$WORKER" ] || { say "no container for the worker ($WORKER_SERVICE)"; exit 1; }
 
-# 1. The dump, in a file where pg_dump runs. No pipe: the exit status is the one of pg_dump.
+# The temporary files go whatever happens: a dump that stopped half way still holds accounts, and
+# the volume of the worker is archived at 03:00. After the `mv` below there is no copy left to remove.
 TMP=/tmp/$NAME.$$
+cleanup() {
+  docker exec "$PG" rm -f "$TMP" >/dev/null 2>&1 || true
+  docker exec "$WORKER" rm -f "$DIR/$NAME.tmp" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+# 1. The dump, in a file where pg_dump runs. No pipe: the exit status is the one of pg_dump.
 docker exec "$PG" "$PG_DUMP" -Fc -U "$PGUSER" -d "$PGDATABASE" -f "$TMP"
 
 # 2. Read to its end. `pg_restore --list` is not that check: it reads the table of contents, which
 #    is at the start of the file, and accepts a dump cut to a tenth of its size (measured).
 if ! docker exec "$PG" pg_restore -f /dev/null "$TMP"; then
-  docker exec "$PG" rm -f "$TMP"
   say "the dump cannot be read to its end. The copy before is left as it is."
   exit 1
 fi
@@ -47,7 +54,6 @@ SUM=$(docker exec "$PG" sha256sum "$TMP" | cut -d' ' -f1)
 docker exec "$WORKER" mkdir -p "$DIR"
 docker exec "$PG" cat "$TMP" | docker exec -i "$WORKER" sh -c "cat > '$DIR/$NAME.tmp'"
 COPY=$(docker exec "$WORKER" sha256sum "$DIR/$NAME.tmp" | cut -d' ' -f1)
-docker exec "$PG" rm -f "$TMP"
 if [ "$SUM" != "$COPY" ]; then
   say "the copy in the volume is not the dump. The copy before is left as it is."
   exit 1
