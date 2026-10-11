@@ -353,11 +353,12 @@ export function createSqliteSessionStore(path: string): SessionStore {
     /**
      * Spends the code and opens the session it buys, in one transaction.
      *
-     * **No test in this process can tell the spend apart from a read followed by a write.**
+     * **No test on this store can tell the spend apart from a read followed by a write.**
      * `DatabaseSync` is synchronous and nothing here awaits, so two redemptions never interleave in
      * one process however they are scheduled — measured, against exactly that mutation, which stayed
-     * green. What the single statement buys is the case a unit test cannot reach: two workers on one
-     * volume, or an asynchronous driver later.
+     * green. What the single statement buys is the case this store cannot show: two workers on one
+     * volume, or an asynchronous driver. The conformance suite redeems one code three times at once
+     * for that driver, and its control is a store that waits between the read and the write.
      *
      * The **transaction** is a different guard, and that one is observable: marking the code spent
      * and then failing to insert the session burns the only code the reviewer has, and the retry
