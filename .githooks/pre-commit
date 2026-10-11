@@ -26,7 +26,7 @@ failed=0
 
 # What oxfmt does not format here, as in `.oxfmtignore`: `githooks.test.ts` compares the two lists.
 # A type it cannot format is left out by oxfmt itself.
-if ! staged | grep -zv -e '^design/' -e '^pnpm-lock\.yaml$' |
+if ! staged | grep -zv -e '^apps/worker/drizzle/' -e '^design/' -e '^pnpm-lock\.yaml$' |
   xargs -0 -r node_modules/.bin/oxfmt --check --no-error-on-unmatched-pattern; then
   echo "pre-commit: these files are not formatted. pnpm format:fix rewrites them." >&2
   failed=1

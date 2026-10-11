@@ -1,33 +1,41 @@
-import type { Pool, PoolClient, QueryResult } from 'pg';
+import type { MigrationConfig } from 'drizzle-orm/migrator';
+import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
+import type { Pool, PoolClient } from 'pg';
 import { StoreError } from './store.ts';
 
 /**
- * PostgreSQL as the worker speaks to it (FRU-141).
+ * PostgreSQL as the worker speaks to it (FRU-141), through Drizzle (FRU-180).
  *
  * `Database` is the seam: `createPgDatabase` is the one implementation that ships, on a `Pool` of
- * `pg`, and the tests have another on PGlite, a PostgreSQL in the process.
+ * `pg`, and the tests have another on PGlite, a PostgreSQL in the process. A store writes its
+ * statements with the `Db` that the seam hands it, and never opens a connection.
  *
- * **This file imports `pg` as types only, and loads it at the first query.** A worker without
- * `FRUITBACK_DATABASE_URL` loads nothing of PostgreSQL and opens nothing.
+ * **This file imports `pg` and Drizzle as types only, and loads them at the first call.** A worker
+ * without `FRUITBACK_DATABASE_URL` loads nothing of PostgreSQL and opens nothing.
  *
  * **No message here holds the address of the database.** It carries the password.
+ *
+ * **No message here holds what Drizzle says of a statement that failed.** Its error quotes the
+ * statement and its values: an address, a digest. `causeOfQueryError` takes the error of the driver
+ * out of it, and only that one is read.
  */
 
-export type Row = Record<string, unknown>;
+/** Drizzle, on a pool or on one connection. A store writes its statements with it. */
+export type Db = PgDatabase<PgQueryResultHKT>;
 
-export type Queryable = {
+/** `migrate` of Drizzle for one driver, on one connection. */
+export type Migrator = (config: MigrationConfig) => Promise<void>;
+
+export type Database = {
+  /** `work` on the database. Two statements of one `work` may run on two connections. */
+  run<T>(work: (db: Db) => Promise<T>): Promise<T>;
+  /** `work` on one connection, in one transaction. It is rolled back when `work` rejects. */
+  transaction<T>(work: (db: Db) => Promise<T>): Promise<T>;
   /**
-   * One statement with its values, or several statements with none.
-   *
-   * A `BIGINT` is answered as a number. Every one in this schema is an instant in milliseconds or a
-   * count, and the driver answers a string for it by default.
+   * `work` on one connection, in no transaction: what a lock of the session needs. `migrate` applies
+   * a folder of migrations on that connection.
    */
-  query(text: string, values?: readonly unknown[]): Promise<{ rows: Row[]; rowCount: number }>;
-};
-
-export type Database = Queryable & {
-  /** `run` on one connection, in one transaction. It is rolled back when `run` rejects. */
-  transaction<T>(run: (transaction: Queryable) => Promise<T>): Promise<T>;
+  alone<T>(work: (db: Db, migrate: Migrator) => Promise<T>): Promise<T>;
   close(): Promise<void>;
 };
 
@@ -38,19 +46,28 @@ export type PgPool = Pool;
  * A database that is on a pool of `pg`, and can hand that pool over (FRU-144).
  *
  * better-auth takes a pool and writes its own queries. It gets the pool of the process: one pool for
- * a database, whoever reads it. Nothing else may take it: a store goes through `query` and
+ * a database, whoever reads it. Nothing else may take it: a store goes through `run` and
  * `transaction`, which take the address out of every message.
  */
 export type PgDatabase = Database & { pool(): Promise<PgPool> };
-
-/** The type of a `BIGINT` in the catalogue of PostgreSQL. */
-const INT8 = 20;
 
 /** SQLSTATE classes 22 and 23: the statement is wrong for the data. The database answered. */
 function isStatementError(error: unknown): boolean {
   const code = (error as { code?: unknown } | null)?.code;
 
   return typeof code === 'string' && /^2[23]/.test(code);
+}
+
+/**
+ * The error of the driver inside the error of Drizzle, or `undefined` for any other error.
+ *
+ * Drizzle throws `DrizzleQueryError` for a statement that failed. Its message is the statement and
+ * its values, so it must reach no log. It is read by its shape: this file loads nothing of Drizzle.
+ */
+export function causeOfQueryError(error: unknown): unknown {
+  const wrapped = error as { query?: unknown; params?: unknown; cause?: unknown } | null;
+
+  return typeof wrapped?.query === 'string' && Array.isArray(wrapped.params) ? wrapped.cause : undefined;
 }
 
 /**
@@ -89,38 +106,54 @@ export function readDatabaseUrl(value: string | undefined): string | undefined {
   }
 }
 
+type Opened = {
+  pool: Pool;
+  /** Drizzle on the pool: each statement takes a connection, and gives it back. */
+  db: Db;
+  /** Drizzle on one connection, and `migrate` of Drizzle on it. */
+  on(client: PoolClient): { db: Db; migrate: Migrator };
+};
+
 /**
  * A database on a `Pool` of `pg`.
  *
- * `schema` puts every connection of the pool in one schema. The tests use it to give each case an
- * empty database inside one server.
+ * The tables are in the schema `public`: the migrations that `drizzle-kit` writes name it in every
+ * foreign key. A test that needs an empty database makes a database, not a schema.
  */
-export function createPgDatabase(url: string, options: { schema?: string; max?: number } = {}): PgDatabase {
-  let opening: Promise<Pool> | undefined;
+export function createPgDatabase(url: string, options: { max?: number } = {}): PgDatabase {
+  let opening: Promise<Opened> | undefined;
 
-  const pool = (): Promise<Pool> => {
-    opening ??= import('pg').then(({ default: pg }) => {
-      const opened = new pg.Pool({
+  const open = (): Promise<Opened> => {
+    opening ??= Promise.all([
+      import('pg'),
+      import('drizzle-orm/node-postgres'),
+      import('drizzle-orm/node-postgres/migrator'),
+    ]).then(([{ default: pg }, { drizzle }, { migrate }]) => {
+      const pool = new pg.Pool({
         connectionString: url,
         max: options.max ?? 10,
         connectionTimeoutMillis: 5_000,
-        ...(options.schema === undefined ? {} : { options: `-c search_path=${options.schema}` }),
-        types: {
-          getTypeParser: ((oid: number, format?: 'text' | 'binary') =>
-            oid === INT8 ? Number : pg.types.getTypeParser(oid, format as 'text')) as typeof pg.types.getTypeParser,
-        },
       });
       // An idle connection that the server closes emits `error`. With no listener, the process stops.
-      opened.on('error', (error) => {
+      pool.on('error', (error) => {
         console.error(`[fruitback] a PostgreSQL connection failed: ${withoutAddress(String(error), url)}`);
       });
 
-      return opened;
+      return {
+        pool,
+        db: drizzle({ client: pool }),
+        on(client) {
+          const db = drizzle({ client });
+
+          return { db, migrate: (config) => migrate(db, config) };
+        },
+      };
     });
 
     return opening;
   };
 
+  /** What the driver said, as the worker reports it: a statement the data refuses, or an outage. */
   const failure = (error: unknown): Error => {
     const message = withoutAddress(error instanceof Error ? error.message : String(error), url);
     if (isStatementError(error)) {
@@ -132,50 +165,64 @@ export function createPgDatabase(url: string, options: { schema?: string; max?: 
     return new StoreError(`PostgreSQL did not answer: ${message}`);
   };
 
-  const answer = (result: QueryResult | QueryResult[]): { rows: Row[]; rowCount: number } => {
-    // Several statements answer several results: the last one is the answer.
-    const last = Array.isArray(result) ? result.at(-1) : result;
+  /** An error of `work`: the one of the driver is reported, and any other one is left as it is. */
+  const reported = (error: unknown): unknown => {
+    const cause = causeOfQueryError(error);
 
-    return { rows: (last?.rows ?? []) as Row[], rowCount: last?.rowCount ?? 0 };
+    return cause === undefined ? error : failure(cause);
   };
 
-  const on = (client: Pool | PoolClient): Queryable => ({
-    async query(text, values) {
-      try {
-        return answer(await (values === undefined ? client.query(text) : client.query(text, [...values])));
-      } catch (error) {
-        throw failure(error);
-      }
-    },
-  });
+  /** The pool, and one connection of it. */
+  const connect = async (): Promise<{ opened: Opened; client: PoolClient }> => {
+    try {
+      const opened = await open();
+
+      return { opened, client: await opened.pool.connect() };
+    } catch (error) {
+      throw failure(error);
+    }
+  };
+
+  /** One statement of this file, on one connection. */
+  const ask = async (client: PoolClient, text: string): Promise<void> => {
+    try {
+      await client.query(text);
+    } catch (error) {
+      throw failure(error);
+    }
+  };
 
   return {
-    pool,
-
-    async query(text, values) {
-      let opened: Pool;
+    async pool() {
       try {
-        opened = await pool();
+        return (await open()).pool;
       } catch (error) {
         throw failure(error);
       }
-
-      return on(opened).query(text, values);
     },
 
-    async transaction(run) {
-      let client: PoolClient;
+    async run(work) {
+      let opened: Opened;
       try {
-        client = await (await pool()).connect();
+        opened = await open();
       } catch (error) {
         throw failure(error);
       }
 
-      const transaction = on(client);
       try {
-        await transaction.query('BEGIN');
-        const result = await run(transaction);
-        await transaction.query('COMMIT');
+        return await work(opened.db);
+      } catch (error) {
+        throw reported(error);
+      }
+    },
+
+    async transaction(work) {
+      const { opened, client } = await connect();
+
+      try {
+        await ask(client, 'BEGIN');
+        const result = await work(opened.on(client).db);
+        await ask(client, 'COMMIT');
         client.release();
 
         return result;
@@ -186,7 +233,23 @@ export function createPgDatabase(url: string, options: { schema?: string; max?: 
           () => true,
         );
         client.release(broken);
-        throw error;
+        throw reported(error);
+      }
+    },
+
+    async alone(work) {
+      const { opened, client } = await connect();
+      const { db, migrate } = opened.on(client);
+
+      try {
+        const result = await work(db, migrate);
+        client.release();
+
+        return result;
+      } catch (error) {
+        // The connection is closed, and not given back: whatever the session held ends with it.
+        client.release(true);
+        throw reported(error);
       }
     },
 
@@ -194,7 +257,7 @@ export function createPgDatabase(url: string, options: { schema?: string; max?: 
       if (opening === undefined) return;
       const opened = await opening.catch(() => undefined);
       opening = undefined;
-      await opened?.end();
+      await opened?.pool.end();
     },
   };
 }
@@ -221,55 +284,4 @@ export async function closeDatabases(): Promise<void> {
   const open = [...databases.values()];
   databases.clear();
   await Promise.all(open.map((database) => database.close()));
-}
-
-/**
- * One step of the schema. `name` says what it adds, and it is kept in the database beside its number:
- * a build whose list was edited, and not appended to, is refused.
- */
-export type Migration = { name: string; sql: string };
-
-/** Any number that no other application of the same database uses for an advisory lock. */
-const MIGRATION_LOCK = 0x4652_5542;
-
-/**
- * Applies the migrations that the database does not have yet, in order (FRU-141).
- *
- * **Each migration has its own transaction, and takes an advisory lock for it.** Two processes that
- * start together on an empty database both get here. The second one waits for the lock, then reads
- * that the first one applied the migration, and does nothing. Without the lock both read « not
- * applied » and both run `CREATE TABLE`.
- *
- * A database that holds more migrations than this build is left alone: that is the image of before,
- * after a roll back.
- */
-export async function migrate(database: Database, migrations: readonly Migration[]): Promise<void> {
-  for (const [index, migration] of migrations.entries()) {
-    const version = index + 1;
-
-    await database.transaction(async (transaction) => {
-      await transaction.query('SELECT pg_advisory_xact_lock($1)', [MIGRATION_LOCK]);
-      await transaction.query(
-        'CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at BIGINT NOT NULL)',
-      );
-      const applied = await transaction.query('SELECT name FROM schema_migrations WHERE version = $1', [version]);
-      const known = applied.rows[0]?.name;
-      if (known !== undefined) {
-        if (known !== migration.name) {
-          throw new StoreError(
-            `Migration ${version} of the database is « ${String(known)} », and this build calls it « ${migration.name} »: the list is appended to, never edited`,
-          );
-        }
-
-        return;
-      }
-
-      await transaction.query(migration.sql);
-      await transaction.query('INSERT INTO schema_migrations (version, name, applied_at) VALUES ($1, $2, $3)', [
-        version,
-        migration.name,
-        Date.now(),
-      ]);
-    });
-  }
 }

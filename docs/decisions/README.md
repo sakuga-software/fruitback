@@ -67,6 +67,8 @@ file or a heading that is not there.
 | `no-restricted-imports`: `pg`, in `apps/worker/src` but `postgres.ts`                                | one file names the driver, as types, and loads it at the first query                       |
 | `no-restricted-imports`: `better-auth` and `kysely`, in `apps/worker/src` but `auth.ts`              | one file names better-auth, as types, and loads it when the instance is built              |
 | `no-restricted-imports`: `@electric-sql/pglite` outside `*.test.ts`, `*.fixture.ts`                  | PGlite is the PostgreSQL of the tests, and must not enter the bundle                       |
+| `no-restricted-imports`: `drizzle-orm`, in `apps/worker/src` but the files of the database           | Drizzle is loaded only by a worker that has a database                                     |
+| `no-restricted-imports`: the two PostgreSQL stores and their schema, from any other file             | a file that every worker loads must not load Drizzle                                       |
 | `unicorn/no-instanceof-builtins`, in `packages/widget/src`                                           | `instanceof Element` reads a class off one realm; use `isElement` from `dom.ts`            |
 | `no-restricted-globals`: `MutationObserver`, `ResizeObserver`, `navigator`, in `packages/widget/src` | take them off the document's own window, never off `globalThis`                            |
 | `no-restricted-globals`: `fetch`, in `packages/widget/src` but `transport.ts`                        | every call goes through the transport                                                      |

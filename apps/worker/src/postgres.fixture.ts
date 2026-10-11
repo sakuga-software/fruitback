@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import { after } from 'node:test';
 import { PGlite, types } from '@electric-sql/pglite';
+import { type SQL, sql } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/pglite';
+import { migrate as migrateOnPglite } from 'drizzle-orm/pglite/migrator';
 import { type Cases, type Subject, collect, mutatedModule } from './conformance.fixture.ts';
-import { type Database, type Queryable, type Row, createPgDatabase } from './postgres.ts';
-import { migrated } from './postgres-migrations.ts';
+import { type Database, causeOfQueryError, createPgDatabase } from './postgres.ts';
+import { migrated } from './postgres-migrate.ts';
 
 /**
  * A PostgreSQL for the tests (FRU-141), in two forms.
@@ -14,6 +17,11 @@ import { migrated } from './postgres-migrations.ts';
  * **A real server** is the address in `FRUITBACK_TEST_DATABASE_URL`. There the calls of a case run
  * on several connections of a pool, and the code that ships (`createPgDatabase`) is what answers.
  * The CI job `postgres` sets the address, and fails when it is missing.
+ *
+ * **An empty database is a database, not a schema** (FRU-180). The migrations that `drizzle-kit`
+ * writes name `public` in every foreign key, so the tables of a case cannot live in a schema of its
+ * own. On a server each case makes a database and drops it. PGlite has one database: a case empties
+ * `public`, so one process holds one PGlite database at a time.
  */
 
 export const TEST_DATABASE_URL = process.env.FRUITBACK_TEST_DATABASE_URL || undefined;
@@ -22,13 +30,26 @@ export const TEST_DATABASE_URL = process.env.FRUITBACK_TEST_DATABASE_URL || unde
 export const NO_REAL_POSTGRES: string | false =
   TEST_DATABASE_URL === undefined ? 'FRUITBACK_TEST_DATABASE_URL is not set: the CI job « postgres » sets it' : false;
 
+export type Row = Record<string, unknown>;
+
 let counter = 0;
 
-/** A name for a schema that no other case, and no other process on the same server, has. */
-export function schemaName(): string {
+/** A name for a database that no other case, and no other process on the same server, has. */
+export function databaseName(): string {
   counter += 1;
 
   return `t_${process.pid}_${Date.now().toString(36)}_${counter}`;
+}
+
+/**
+ * The rows that one statement answers, on either database.
+ *
+ * For what a test reads or plants beside a store. A store writes its statements with Drizzle.
+ */
+export async function rowsOf(database: Database, statement: SQL | string): Promise<Row[]> {
+  const answer = await database.run((db) => db.execute(typeof statement === 'string' ? sql.raw(statement) : statement));
+
+  return (answer as { rows?: Row[] }).rows ?? [];
 }
 
 /** The PGlite of this process. It takes a second to start, so the cases share it. */
@@ -46,58 +67,66 @@ after(async () => {
   shared = undefined;
 });
 
-type PgliteQueryable = Pick<PGlite, 'query' | 'exec'>;
+const EMPTY_PUBLIC = 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;';
 
-function on(client: PgliteQueryable): Queryable {
+/** An empty database on PGlite: the one database of the shared instance, with nothing in `public`. */
+export async function createPgliteDatabase(): Promise<Database> {
+  const instance = pglite();
+  await instance.exec(EMPTY_PUBLIC);
+  const db = drizzle({ client: instance });
+
+  /** The error of PGlite, and not the one of Drizzle around it: a test reads its code. */
+  const plain = async <T>(work: Promise<T>): Promise<T> => {
+    try {
+      return await work;
+    } catch (error) {
+      throw causeOfQueryError(error) ?? error;
+    }
+  };
+
   return {
-    async query(text, values) {
-      if (values === undefined) {
-        // Several statements, as the driver of the worker accepts them: the last one is the answer.
-        const results = await client.exec(text);
-        const last = results.at(-1);
-
-        return { rows: (last?.rows ?? []) as Row[], rowCount: last?.affectedRows ?? 0 };
-      }
-      const result = await client.query(text, [...values]);
-
-      return { rows: result.rows as Row[], rowCount: result.affectedRows ?? 0 };
+    run: (work) => plain(work(db)),
+    transaction: (work) => plain(db.transaction((transaction) => work(transaction))),
+    alone: (work) => plain(work(db, (config) => migrateOnPglite(db, config))),
+    async close() {
+      await instance.exec(EMPTY_PUBLIC);
     },
   };
 }
 
 /**
- * An empty database on PGlite: a new schema of the shared instance. `close` drops it.
+ * A new empty database on the real server, and its address. `drop` removes it.
  *
- * One connection, so `SET search_path` holds for every call until the next case sets its own.
+ * For a test that gives the address to another process. Any other test takes `createRealDatabase`.
  */
-export async function createPgliteDatabase(): Promise<Database> {
-  const instance = pglite();
-  const schema = schemaName();
-  await instance.exec(`CREATE SCHEMA ${schema}; SET search_path TO ${schema};`);
+export async function ownDatabase(): Promise<{ url: string; drop(): Promise<void> }> {
+  if (TEST_DATABASE_URL === undefined) throw new Error('FRUITBACK_TEST_DATABASE_URL is not set');
+  const name = databaseName();
+  const admin = createPgDatabase(TEST_DATABASE_URL, { max: 1 });
+  // `template0`: a copy of `template1` is refused while another session is on it.
+  await rowsOf(admin, `CREATE DATABASE ${name} TEMPLATE template0`);
+  const url = new URL(TEST_DATABASE_URL);
+  url.pathname = `/${name}`;
 
   return {
-    ...on(instance),
-    transaction: (run) => instance.transaction((transaction) => run(on(transaction))) as never,
-    async close() {
-      await instance.exec(`SET search_path TO public; DROP SCHEMA ${schema} CASCADE;`);
+    url: url.href,
+    async drop() {
+      await rowsOf(admin, `DROP DATABASE ${name} WITH (FORCE)`);
+      await admin.close();
     },
   };
 }
 
-/** An empty database on the real server: a new schema, and a pool whose connections are in it. */
+/** An empty database on the real server: a new one, and a pool on it. `close` drops it. */
 export async function createRealDatabase(): Promise<Database> {
-  if (TEST_DATABASE_URL === undefined) throw new Error('FRUITBACK_TEST_DATABASE_URL is not set');
-  const schema = schemaName();
-  const admin = createPgDatabase(TEST_DATABASE_URL, { max: 1 });
-  await admin.query(`CREATE SCHEMA ${schema}`);
-  const database = createPgDatabase(TEST_DATABASE_URL, { schema });
+  const own = await ownDatabase();
+  const database = createPgDatabase(own.url);
 
   return {
     ...database,
     async close() {
       await database.close();
-      await admin.query(`DROP SCHEMA ${schema} CASCADE`);
-      await admin.close();
+      await own.drop();
     },
   };
 }
@@ -162,13 +191,17 @@ export async function outcomeOnChangedStore<Store>(input: {
     assert.ok(runCase !== undefined, 'the case is gone');
 
     await migrated(opened);
-    await opened.query(`
-      CREATE FUNCTION hold_the_row() RETURNS trigger LANGUAGE plpgsql
-        AS $$ BEGIN PERFORM pg_sleep(${HOLD_SECONDS}); RETURN NEW; END $$;
-      CREATE TRIGGER hold_the_row BEFORE INSERT ON ${input.held.table} FOR EACH ROW
-        ${input.held.when === undefined ? '' : `WHEN (${input.held.when})`} EXECUTE FUNCTION hold_the_row();
-    `);
-    await Promise.all([opened.query('SELECT 1'), opened.query('SELECT 1')]);
+    await rowsOf(
+      opened,
+      `CREATE FUNCTION hold_the_row() RETURNS trigger LANGUAGE plpgsql
+         AS $$ BEGIN PERFORM pg_sleep(${HOLD_SECONDS}); RETURN NEW; END $$`,
+    );
+    await rowsOf(
+      opened,
+      `CREATE TRIGGER hold_the_row BEFORE INSERT ON ${input.held.table} FOR EACH ROW
+         ${input.held.when === undefined ? '' : `WHEN (${input.held.when})`} EXECUTE FUNCTION hold_the_row()`,
+    );
+    await Promise.all([rowsOf(opened, 'SELECT 1'), rowsOf(opened, 'SELECT 1')]);
 
     return await runCase(create(opened)).then(
       () => 'passed',

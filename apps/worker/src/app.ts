@@ -22,7 +22,6 @@ import { handleLinearOAuth } from './linear-oauth.ts';
 import { createConnectorStores, createRoutedStore } from './connectors.ts';
 import { DELIVERY_HEADER, LOOP_STATUS, type Send, deliverDue } from './rest-connector.ts';
 import { type Mailer, createTemMailer } from './mail.ts';
-import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { createSqliteAccountStore } from './accounts-sqlite.ts';
 import { type WorkerConfig, type WorkerEnv, hasAccounts, hasSessions, readAllowedOrigins, readConfig } from './env.ts';
 import { type SeedStore, StoreError } from './store.ts';
@@ -32,7 +31,7 @@ import { PAIR_PATH, pairPage } from './pair-page.ts';
 import { checkRateLimit } from './rate-limit.ts';
 import { cached, invalidate } from './cache.ts';
 import { type Kv, KvError, processKv } from './kv.ts';
-import { databaseFor } from './postgres.ts';
+import { postgresAccountStore, postgresSessionStore } from './postgres-stores.ts';
 import {
   type SessionStore,
   createPairing as openPairing,
@@ -40,7 +39,6 @@ import {
   refreshSession,
   revokeSession,
 } from './session.ts';
-import { createPostgresSessionStore } from './session-postgres.ts';
 import { createSqliteSessionStore } from './session-sqlite.ts';
 
 /**
@@ -81,7 +79,7 @@ export function storeFor(config: WorkerConfig): SeedStore {
  */
 export function sessionStoreFor(config: WorkerConfig): SessionStore | undefined {
   // `readConfig` refuses the two together, so the order here decides nothing.
-  if (config.databaseUrl !== undefined) return createPostgresSessionStore(databaseFor(config.databaseUrl));
+  if (config.databaseUrl !== undefined) return postgresSessionStore(config.databaseUrl);
 
   return config.sessionPath === undefined ? undefined : createSqliteSessionStore(config.sessionPath);
 }
@@ -94,7 +92,7 @@ export function mailerFor(config: WorkerConfig): Mailer | undefined {
 /** The accounts of this worker, or `undefined` when its clients come from the env (FRU-96). */
 export function accountStoreFor(config: WorkerConfig): AccountStore | undefined {
   // `readConfig` refuses the two together, so the order here decides nothing.
-  if (config.databaseUrl !== undefined) return createPostgresAccountStore(databaseFor(config.databaseUrl));
+  if (config.databaseUrl !== undefined) return postgresAccountStore(config.databaseUrl);
 
   return config.accountsPath === undefined ? undefined : createSqliteAccountStore(config.accountsPath);
 }

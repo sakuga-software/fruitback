@@ -36,13 +36,20 @@ jobs:
       fail-fast: false
       matrix:
         target: [lint, format, typecheck, test]
+    env:
+      # FRU-180. The commit that `postgres-journal.test.ts` compares the migrations with: a migration
+      # that the base has must be here, first, and unchanged. For a pull request the checkout is the
+      # merge commit, and its first parent is the head of the base. On `main` it is the commit before.
+      FRUITBACK_MIGRATIONS_BASE: HEAD^1
 
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Nothing in this job runs git after the checkout, so the token has no reason to stay in .git/config.
+          # Nothing in this job reaches the remote after the checkout, so the token has no reason to stay in .git/config.
           persist-credentials: false
+          # The commit, and its parents: `HEAD^1` above is read with `git show`.
+          fetch-depth: 2
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -311,7 +318,10 @@ jobs:
           echo "$answer"
           docker logs worker-db
           test "$answer" = '{"error":"unknown-client"}'
-          test "$(docker exec accounts-db psql -U postgres -Atc 'SELECT name FROM schema_migrations ORDER BY version' | head -1)" = accounts
+          # FRU-180. The migrations are files beside the bundle, and Drizzle writes one row for each one
+          # it applied: an image without its `drizzle` folder answers 502 above, and has no row here.
+          test "$(docker exec accounts-db psql -U postgres -Atc 'SELECT count(*) FROM public.__drizzle_migrations')" = "$(jq '.entries | length' apps/worker/drizzle/meta/_journal.json)"
+          test "$(docker exec accounts-db psql -U postgres -Atc "SELECT to_regclass('public.accounts') IS NOT NULL")" = t
           timeout 30 docker exec worker-db node server.mjs pair --subject ci
           test "$(docker exec accounts-db psql -U postgres -Atc 'SELECT count(*) FROM pairings')" = 1
           docker rm -f worker-db accounts-db

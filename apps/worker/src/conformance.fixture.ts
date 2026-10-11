@@ -106,12 +106,13 @@ const SOURCES = new URL('./', import.meta.url);
  * The module of `file` with one change applied, loaded from a temporary directory.
  *
  * The relative imports become absolute, so the changed module shares every other module with the
- * real one. `remove` deletes the temporary directory.
+ * real one. The import of a package becomes the file that these sources resolve it to: the temporary
+ * directory has no `node_modules` (FRU-180). `remove` deletes the temporary directory.
  */
 export async function mutatedModule(
   file: string,
   { after, from, to }: { after?: string; from: string; to: string },
-): Promise<{ module: Record<string, unknown>; remove(): void }> {
+): Promise<{ module: Record<string, unknown>; url: string; remove(): void }> {
   const source = readFileSync(new URL(file, SOURCES), 'utf8');
   const start = after === undefined ? 0 : source.indexOf(after);
   assert.ok(start >= 0, `${file} no longer holds the text a mutation starts after: ${after}`);
@@ -121,16 +122,19 @@ export async function mutatedModule(
   const at = source.indexOf(from, start);
   assert.ok(at >= 0, `${file} no longer holds the text of a mutation: ${from}`);
 
-  const mutated = `${source.slice(0, at)}${to}${source.slice(at + from.length)}`.replaceAll(
-    /from '\.\//g,
-    () => `from '${SOURCES.href}`,
-  );
+  const mutated = `${source.slice(0, at)}${to}${source.slice(at + from.length)}`
+    .replaceAll(/from '\.\//g, () => `from '${SOURCES.href}`)
+    .replaceAll(/from '([a-z@][^':]*)'/g, (_, specifier: string) => `from '${import.meta.resolve(specifier)}'`);
   const directory = mkdtempSync(join(tmpdir(), 'fruitback-mutant-'));
   const path = join(directory, 'mutant.ts');
   writeFileSync(path, mutated);
 
+  const url = pathToFileURL(path).href;
+
   return {
-    module: (await import(pathToFileURL(path).href)) as Record<string, unknown>,
+    module: (await import(url)) as Record<string, unknown>,
+    // For a test that loads the changed module in another process.
+    url,
     remove: () => rmSync(directory, { recursive: true, force: true }),
   };
 }

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -8,14 +9,15 @@ import type { AccountStore } from './accounts.ts';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { accountStoreFor, handleRequest } from './app.ts';
 import { type WorkerEnv, hasAccounts, readConfig } from './env.ts';
-import { type Database, migrate } from './postgres.ts';
-import { MIGRATIONS } from './postgres-migrations.ts';
+import type { Database } from './postgres.ts';
 import {
   NO_REAL_POSTGRES,
   createPgliteDatabase,
   createRealDatabase,
   outcomeOnChangedStore,
+  rowsOf,
 } from './postgres.fixture.ts';
+import { migrationsFolder } from './postgres-migrate.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
 import { type SessionStore, createPairing, redeemPairing } from './session.ts';
 
@@ -206,38 +208,15 @@ describe('the sites of a workspace, read from PostgreSQL (FRU-141)', () => {
       undefined,
     ]);
 
-    // Each migration of the list, once and in order: a list read from the code, so the next step of
-    // the schema is one entry in `MIGRATIONS` and no line here.
+    // One row for each migration of the folder, and no more: three stores did not apply it three times.
+    const journal = JSON.parse(readFileSync(`${migrationsFolder()}meta/_journal.json`, 'utf8')) as {
+      entries: { when: number }[];
+    };
     assert.deepEqual(
-      (await database.query('SELECT version, name FROM schema_migrations ORDER BY version')).rows,
-      MIGRATIONS.map((migration, index) => ({ version: index + 1, name: migration.name })),
-    );
-    assert.ok(MIGRATIONS.length >= 2, 'the list of migrations lost a step');
-  });
-
-  it('gives a site the one destination it had before the list existed', async () => {
-    database = await createPgliteDatabase();
-    // A database that a build before the list wrote: the destination is three columns of the site.
-    await migrate(database, MIGRATIONS.slice(0, 1));
-    await database.query("INSERT INTO workspaces (id, name, created_at) VALUES ('ws_1', 'Acme', 1)");
-    await database.query(
-      `INSERT INTO connectors (id, workspace_id, kind, label, sealed, created_at)
-       VALUES ('con_1', 'ws_1', 'linear', 'Linear', 'sealed', 1)`,
-    );
-    await database.query(
-      `INSERT INTO sites (id, workspace_id, origin, visibility, created_at, connector_id, team_id, project_id)
-       VALUES ('site_1', 'ws_1', 'https://acme.dev', 'members', 1, 'con_1', 'team_1', 'project_1'),
-              ('site_2', 'ws_1', 'https://bare.dev', 'members', 2, NULL, NULL, NULL)`,
-    );
-
-    const sites = await createPostgresAccountStore(database).sites('ws_1');
-
-    assert.deepEqual(
-      sites.map((site) => [site.id, site.destinations]),
-      [
-        ['site_1', [{ connector: 'con_1', teamId: 'team_1', projectId: 'project_1' }]],
-        ['site_2', []],
-      ],
+      (await rowsOf(database, 'SELECT created_at FROM __drizzle_migrations ORDER BY created_at')).map((row) =>
+        Number(row.created_at),
+      ),
+      journal.entries.map((entry) => entry.when),
     );
   });
 });
@@ -271,8 +250,16 @@ describe('two sign-ins of one new address, on two connections (FRU-141)', () => 
   // A read and a write in one statement, as a store that never saw two connections writes it: an
   // account that is not there yet is inserted. One call after the other, it is correct.
   const WITHOUT_CONFLICT = {
-    from: 'VALUES ($1, $2, $3, $4, $5)\n             ON CONFLICT (email) DO NOTHING',
-    to: 'SELECT $1::text, $2::text, $3::text, $4::text, $5::bigint WHERE NOT EXISTS (SELECT 1 FROM accounts WHERE email = $2::text)',
+    from: [
+      '.insert(accounts)',
+      "            .values({ id: newId('acc'), email: address, name: given, locale: locale ?? null, created_at: now })",
+      '            .onConflictDoNothing({ target: accounts.email })',
+    ].join('\n'),
+    to: [
+      '.execute(sql`INSERT INTO accounts (id, email, name, locale, created_at)',
+      "  SELECT ${newId('acc')}::text, ${address}::text, ${given}::text, ${locale ?? null}::text, ${now}::bigint",
+      '  WHERE NOT EXISTS (SELECT 1 FROM accounts WHERE email = ${address}::text)`)',
+    ].join('\n'),
   };
   // The first sign-in has read that the address is new, and has not written its account yet.
   const HELD = { table: 'accounts' };
@@ -296,10 +283,7 @@ describe('two sign-ins of one new address, on two connections (FRU-141)', () => 
  */
 describe('two lists of destinations for one site, on two connections (FRU-141)', () => {
   const CASE = 'keeps one whole list when two calls set the destinations of one site at the same moment';
-  const WITHOUT_LOCK = {
-    from: 'SELECT 1 FROM sites WHERE id = $1 AND workspace_id = $2 FOR UPDATE',
-    to: 'SELECT 1 FROM sites WHERE id = $1 AND workspace_id = $2',
-  };
+  const WITHOUT_LOCK = { from: ".for('update')", to: '' };
   // The first list has removed the rows of the site, and has not written its first place yet.
   const HELD = { table: 'site_destinations', when: 'NEW.position = 0' };
 
@@ -316,41 +300,55 @@ describe('two lists of destinations for one site, on two connections (FRU-141)',
 });
 
 /**
- * « Without `FRUITBACK_DATABASE_URL`, the worker loads nothing of PostgreSQL ». Each run is a process
- * of its own: the modules that one test loaded would be loaded for the next.
+ * « Without `FRUITBACK_DATABASE_URL`, the worker loads nothing of PostgreSQL »: no file of the driver
+ * (FRU-141), and no file of Drizzle (FRU-180). Each run is a process of its own: the modules that one
+ * test loaded would be loaded for the next.
  */
-describe('the driver of PostgreSQL, loaded only by a worker that has a database (FRU-141)', () => {
+describe('Drizzle and the driver of PostgreSQL, loaded only by a worker that has a database (FRU-141)', () => {
   const script = `
-    import { createRequire } from 'node:module';
-    import { handleRequest } from ${JSON.stringify(new URL('./app.ts', import.meta.url).href)};
+    import { createRequire, registerHooks } from 'node:module';
+    // Drizzle is ES modules, and Node keeps no list of those: every module that is asked for is noted here.
+    const asked = [];
+    registerHooks({
+      resolve(specifier, context, next) {
+        const found = next(specifier, context);
+        asked.push(found.url);
+        return found;
+      },
+    });
+    const { handleRequest } = await import(${JSON.stringify(new URL('./app.ts', import.meta.url).href)});
     const env = JSON.parse(process.env.WORKER_ENV);
     const ask = (path) => handleRequest(new Request('https://worker.test' + path, { headers: { Origin: 'https://acme.dev' } }), env, { clientIp: '192.0.2.9' });
     const statuses = [(await ask('/health')).status, (await ask('/feedback?url=' + encodeURIComponent('https://acme.dev/'))).status];
     // The driver is CommonJS: Node keeps every CommonJS module it loaded in this cache.
     const loaded = Object.keys(createRequire(import.meta.url).cache).filter((path) => /node_modules\\/(pg|pg-[a-z-]+)\\//.test(path));
-    console.log(JSON.stringify({ statuses, driver: loaded.length }));
+    const drizzle = asked.filter((url) => /node_modules\\/drizzle-orm\\//.test(url));
+    console.log(JSON.stringify({ statuses, driver: loaded.length, drizzle: drizzle.length, modules: asked.length }));
     process.exit(0);
   `;
-  const worker = async (env: WorkerEnv): Promise<{ statuses: number[]; driver: number }> => {
+  type Loaded = { statuses: number[]; driver: number; drizzle: number; modules: number };
+  const worker = async (env: WorkerEnv): Promise<Loaded> => {
     const { stdout } = await run(process.execPath, ['--input-type=module', '--eval', script], {
       cwd: fileURLToPath(new URL('.', import.meta.url)),
       env: { ...process.env, WORKER_ENV: JSON.stringify(env) },
     });
 
-    return JSON.parse(stdout) as { statuses: number[]; driver: number };
+    return JSON.parse(stdout) as Loaded;
   };
 
-  it('loads no file of the driver for a worker without the variable', async () => {
+  it('loads no file of Drizzle and no file of the driver for a worker without the variable', async () => {
     const answered = await worker({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: 'https://acme.dev' });
 
-    assert.deepEqual(answered, { statuses: [200, 200], driver: 0 });
+    assert.deepEqual({ ...answered, modules: 0 }, { statuses: [200, 200], driver: 0, drizzle: 0, modules: 0 });
+    assert.ok(answered.modules > 0, 'no module was noted at all, so a zero for Drizzle proves nothing');
   });
 
-  // The control of the test above: the same count is not zero when the worker has a database.
-  it('loads it at the first request that reads the accounts, and not for /health', async () => {
+  // The control of the test above: the same counts are not zero when the worker has a database.
+  it('loads them at the first request that reads the accounts, and not for /health', async () => {
     const answered = await worker(envWith({ ALLOWED_ORIGINS: 'https://acme.dev' }));
 
     assert.deepEqual(answered.statuses, [200, 502]);
     assert.ok(answered.driver > 0, 'the count of the files of the driver found none, so a zero proves nothing');
+    assert.ok(answered.drizzle > 0, 'the count of the files of Drizzle found none, so a zero proves nothing');
   });
 });

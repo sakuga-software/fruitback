@@ -67,6 +67,11 @@ VOLUME /data
 # The bundle carries its own dependencies, so the runtime image needs no node_modules at all.
 COPY --from=build /repo/apps/worker/dist/server.mjs ./server.mjs
 
+# The migrations of the PostgreSQL database (FRU-180). `drizzle-kit` wrote them, and they are files:
+# the worker reads this folder beside its bundle, and applies what the database does not have yet. A
+# worker without FRUITBACK_DATABASE_URL never opens it.
+COPY --from=build /repo/apps/worker/drizzle ./drizzle
+
 # Never run as root, and never own the files you execute.
 USER node
 

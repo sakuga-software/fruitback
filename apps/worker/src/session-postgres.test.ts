@@ -3,16 +3,18 @@ import { execFile } from 'node:child_process';
 import { afterEach, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { sql } from 'drizzle-orm';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { handleRequest, sessionStoreFor } from './app.ts';
 import { type WorkerEnv, hasSessions, readConfig } from './env.ts';
-import { type Database, closeDatabases } from './postgres.ts';
+import { type Database, closeDatabases, createPgDatabase } from './postgres.ts';
 import {
   NO_REAL_POSTGRES,
-  TEST_DATABASE_URL,
   createPgliteDatabase,
   createRealDatabase,
   outcomeOnChangedStore,
+  ownDatabase,
+  rowsOf,
 } from './postgres.fixture.ts';
 import { sessionCases } from './session-conformance.fixture.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
@@ -150,12 +152,13 @@ describe('what the database holds of a session (FRU-142)', () => {
 
   /** The tables in which one of these values is written. */
   async function tablesThatHold(opened: Database, values: readonly string[]): Promise<string[]> {
-    const tables = await opened.query(
+    const tables = await rowsOf(
+      opened,
       'SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema() ORDER BY table_name',
     );
     const holding: string[] = [];
-    for (const { table_name: table } of tables.rows) {
-      const written = JSON.stringify((await opened.query(`SELECT * FROM ${String(table)}`)).rows);
+    for (const { table_name: table } of tables) {
+      const written = JSON.stringify(await rowsOf(opened, `SELECT * FROM ${String(table)}`));
       if (values.some((value) => written.includes(value))) holding.push(String(table));
     }
 
@@ -202,7 +205,7 @@ describe('what the database holds of a session (FRU-142)', () => {
     const { secrets, firstToken } = await lived(database);
 
     // A store that kept the token would write it in a column like this one.
-    await database.query('UPDATE sessions SET name = $1 WHERE subject = $2', [firstToken, 'alice']);
+    await rowsOf(database, sql`UPDATE sessions SET name = ${firstToken} WHERE subject = ${'alice'}`);
 
     assert.deepEqual(await tablesThatHold(database, secrets), ['sessions']);
   });
@@ -233,11 +236,14 @@ describe('two calls on one session at the same moment, on two connections (FRU-1
   // The code is read in a subquery, as a statement that never saw two connections reads it. The
   // second call waits for the row, then reads the code as it was when its statement started.
   const READS_THE_CODE_APART = {
-    from: 'UPDATE pairings SET redeemed_at = $1 WHERE code_hash = $2 AND redeemed_at IS NULL AND expires_at > $1',
-    to: 'UPDATE pairings SET redeemed_at = $1 WHERE code_hash = $2 AND EXISTS (SELECT 1 FROM pairings spent WHERE spent.code_hash = $2 AND spent.redeemed_at IS NULL AND spent.expires_at > $1)',
+    from: '.where(and(eq(pairings.code_hash, codeHash), isNull(pairings.redeemed_at), gt(pairings.expires_at, now)))',
+    to: [
+      '.where(and(eq(pairings.code_hash, codeHash), sql`EXISTS (SELECT 1 FROM pairings spent',
+      '  WHERE spent.code_hash = ${codeHash} AND spent.redeemed_at IS NULL AND spent.expires_at > ${now})`))',
+    ].join('\n'),
   };
   // Nothing holds the chain: two calls read the token before either writes.
-  const WITHOUT_THE_CHAIN = { from: 'ORDER BY token_hash FOR UPDATE', to: 'ORDER BY token_hash' };
+  const WITHOUT_THE_CHAIN = { from: ".for('update')", to: '' };
   // The first call has decided, and has not written the session yet.
   const A_SESSION = { table: 'sessions' };
   const A_SUCCESSOR = { table: 'sessions', when: 'NEW.predecessor_hash IS NOT NULL' };
@@ -300,24 +306,24 @@ describe('the pair command of a worker on a database (FRU-142)', () => {
   });
 
   it('writes the digest of its code in the database, and ends', { skip: NO_REAL_POSTGRES }, async () => {
-    database = await createRealDatabase();
-    const schema = String((await database.query('SELECT current_schema() AS name')).rows[0]?.name);
-    // The worker takes one address: the schema of this test goes in it, as an option of the session.
-    const address = new URL(TEST_DATABASE_URL as string);
-    address.searchParams.set('options', `-c search_path=${schema}`);
+    // The worker takes one address: the database of this test, which the command migrates itself.
+    const own = await ownDatabase();
+    database = createPgDatabase(own.url, { max: 1 });
+    const opened = database;
+    database = { ...opened, close: async () => opened.close().then(own.drop) };
 
     // Less than the ten seconds an idle connection of the pool lives: a command that leaves the
     // pool open is still running when this gives up.
     const { stdout } = await run(process.execPath, ['src/main.ts', 'pair', '--subject', 'alice'], {
       cwd: fileURLToPath(new URL('..', import.meta.url)),
-      env: { PATH: process.env.PATH, ...envWith({ FRUITBACK_DATABASE_URL: address.href }) },
+      env: { PATH: process.env.PATH, ...envWith({ FRUITBACK_DATABASE_URL: own.url }) },
       timeout: 8_000,
     });
 
     const code = /^ {4}(\S+)$/m.exec(stdout)?.[1];
     assert.ok(code !== undefined, stdout);
     assert.match(stdout, /^pairing code for alice:/);
-    assert.deepEqual((await database.query('SELECT subject, code_hash, redeemed_at FROM pairings')).rows, [
+    assert.deepEqual(await rowsOf(database, 'SELECT subject, code_hash, redeemed_at FROM pairings'), [
       { subject: 'alice', code_hash: await digest(normalizePairingCode(code)), redeemed_at: null },
     ]);
   });
