@@ -11,7 +11,7 @@ import {
   SITE_COLUMNS,
   workspaceOf,
 } from './account-rows.ts';
-import { type Account, type AccountStore, type Destination, type Site, clientOf, normalizeEmail } from './accounts.ts';
+import { type AccountStore, type Destination, type Site, clientOf, normalizeEmail } from './accounts.ts';
 import type { ClientMap } from './clients.ts';
 import { StoreError } from './store.ts';
 
