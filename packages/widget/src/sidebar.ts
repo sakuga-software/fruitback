@@ -25,6 +25,15 @@ export type Sidebar = {
   destroy(): void;
 };
 
+/**
+ * What the widget knows of the notes of this page (FRU-153).
+ *
+ * `pending`: no read has answered yet. `read`: a read answered, and the list is what it said.
+ * `failed`: no read answered for this page, and the last one failed. An empty list then says
+ * nothing about the notes, so the list must not say that there are none.
+ */
+export type ReadState = 'pending' | 'read' | 'failed';
+
 export type SidebarOptions = {
   /** Where to render. The Shadow root, in practice. */
   host: Element | ShadowRoot;
@@ -32,6 +41,10 @@ export type SidebarOptions = {
   entries: () => readonly FeedbackEntry[];
   /** The reviewer chose this note. */
   onSelect: (id: string) => void;
+  /** Read on each draw. Left out, the list is always `read`. */
+  readState?: () => ReadState;
+  /** The reviewer asked to read the notes again, after a failed read. */
+  onRetry?: () => void;
   document?: Document;
   /** The widget's words (FRU-37). Left out: English, with dates in this document's language. */
   translator?: Translator;
@@ -73,10 +86,29 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   empty.className = 'fruitback-sidebar-empty';
   empty.textContent = t.text('sidebar.empty');
 
+  // A failed read says so, and offers to read again (FRU-153). The message is a live region that
+  // stays in the tree, because a live region that was hidden announces nothing. It also describes
+  // the button, which takes focus.
+  const failedText = document.createElement('p');
+  failedText.id = 'fruitback-sidebar-failed-text';
+  failedText.className = 'fruitback-sidebar-failed-text';
+  failedText.setAttribute('role', 'status');
+  failedText.setAttribute('aria-live', 'polite');
+  const failed = document.createElement('div');
+  failed.className = 'fruitback-sidebar-failed';
+  failed.hidden = true;
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.className = 'fruitback-sidebar-retry';
+  retry.textContent = t.text('sidebar.retry');
+  retry.setAttribute('aria-describedby', failedText.id);
+  retry.addEventListener('click', () => options.onRetry?.());
+  failed.append(retry);
+
   const list = document.createElement('ul');
   list.className = 'fruitback-sidebar-list';
 
-  root.append(head, empty, list);
+  root.append(head, empty, failedText, failed, list);
   options.host.append(style, root);
 
   /** What had focus when the list opened, to give it back. */
@@ -88,11 +120,21 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     const active = deepActiveElement(document);
     const focusedId =
       active !== null && list.contains(active) ? (active as HTMLElement).dataset.fruitbackNote : undefined;
+    const state = options.readState?.() ?? 'read';
+    const failing = state === 'failed';
+    const known = state === 'read' || entries.length > 0;
 
-    count.textContent = t.plural('sidebar.count', entries.length);
-    empty.hidden = entries.length > 0;
-    list.hidden = entries.length === 0;
-    list.replaceChildren(...entries.map((entry) => item(entry)));
+    // No count and no empty state while no read answered: zero notes would be a guess.
+    count.textContent = failing || !known ? '' : t.plural('sidebar.count', entries.length);
+    empty.textContent = t.text(state === 'pending' ? 'sidebar.loading' : 'sidebar.empty');
+    empty.hidden = failing || entries.length > 0;
+    // Set only when it changes, so a draw does not announce the same failure again.
+    const failedMessage = failing ? t.text('sidebar.failed') : '';
+    if (failedText.textContent !== failedMessage) failedText.textContent = failedMessage;
+    if (!failing && failed.contains(active)) close.focus();
+    failed.hidden = !failing;
+    list.hidden = failing || entries.length === 0;
+    list.replaceChildren(...(failing ? [] : entries.map((entry) => item(entry))));
 
     if (focusedId !== undefined) {
       const again = [...list.querySelectorAll<HTMLElement>('[data-fruitback-note]')].find(
@@ -152,7 +194,7 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     opener = active !== null && active !== document.body ? (active as HTMLElement) : null;
     root.hidden = false;
     draw();
-    (list.querySelector<HTMLElement>('[data-fruitback-note]') ?? close).focus();
+    (list.querySelector<HTMLElement>('[data-fruitback-note]') ?? (failed.hidden ? close : retry)).focus();
   }
 
   function shut(): void {
@@ -247,6 +289,21 @@ const STYLES = `
 }
 .fruitback-sidebar-empty { padding: 4px 14px 14px; color: var(--fruitback-color-text-muted); }
 .fruitback-sidebar-empty[hidden] { display: none; }
+.fruitback-sidebar-failed-text { margin: 0; padding: 4px 14px 8px; }
+.fruitback-sidebar-failed-text:empty { padding: 0; }
+/* The dock sits over the bottom of the sheet on a phone, as over the list. */
+.fruitback-sidebar-failed { padding: 0 14px 64px; }
+.fruitback-sidebar-failed[hidden] { display: none; }
+.fruitback-sidebar-retry {
+  padding: 6px 12px;
+  border: 1px solid var(--fruitback-color-text-muted);
+  border-radius: var(--fruitback-radius-sm);
+  background: none;
+  color: var(--fruitback-color-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
 .fruitback-sidebar-list {
   flex: 1;
   overflow-y: auto;

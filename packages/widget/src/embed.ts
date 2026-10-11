@@ -8,7 +8,7 @@ import {
 import { type CapturedPlace, captureSeed, capturePlace } from './capture.ts';
 import { type WidgetConfig, createConfigStore } from './config.ts';
 import { type FeedbackEntry, feedbackAsText, placementOf } from './export.ts';
-import { type Sidebar, createSidebar } from './sidebar.ts';
+import { type ReadState, type Sidebar, createSidebar } from './sidebar.ts';
 import { type CaptureHost, type CaptureTarget, createCaptureHost } from './host.ts';
 import type { FruitbackTheme } from './theme.ts';
 import { type FruitbackTransport, fetchTransport } from './transport.ts';
@@ -245,10 +245,17 @@ export function init(options: FruitbackOptions): Fruitback {
   const destinations = createOfferedDestinations();
   const reader = createReader(overlay, stages, destinations, view, options);
   let lastReadAt = Number.NEGATIVE_INFINITY;
+  // Per page (FRU-153): a navigation starts again at `pending`. A failed read after a good one
+  // leaves the state and the pins alone, like it always did.
+  let readState: ReadState = 'pending';
   const read = (): Promise<void> => {
     lastReadAt = Date.now();
 
-    return reader().then(() => sidebar.refresh());
+    return reader().then((outcome) => {
+      if (outcome === 'read') readState = 'read';
+      else if (outcome === 'failed' && readState !== 'read') readState = 'failed';
+      sidebar.refresh();
+    });
   };
 
   composer = createComposer({
@@ -303,6 +310,12 @@ export function init(options: FruitbackOptions): Fruitback {
     host: host.root,
     entries,
     onSelect: (id) => void overlay.select(id),
+    readState: () => readState,
+    onRetry: () => {
+      readState = 'pending';
+      sidebar.refresh();
+      void read();
+    },
   });
 
   panel = createConfigPanel({
@@ -321,7 +334,10 @@ export function init(options: FruitbackOptions): Fruitback {
     sidebar.refresh();
   });
 
-  const stopWatchingUrl = watchUrl(view, () => void read());
+  const stopWatchingUrl = watchUrl(view, () => {
+    readState = 'pending';
+    void read();
+  });
 
   // The team changes the state of an issue while the reviewer is in another tab. `render` closes an
   // open thread, and somebody who comes back to a thread is reading it: that return reads nothing,
@@ -365,10 +381,10 @@ function createReader(
   destinations: OfferedDestinations,
   view: Window & typeof globalThis,
   options: FruitbackOptions,
-): () => Promise<void> {
+): () => Promise<ReadOutcome> {
   let generation = 0;
 
-  return async function read(): Promise<void> {
+  return async function read(): Promise<ReadOutcome> {
     const mine = ++generation;
     const url = canonicalizePageUrl(view.location.href);
 
@@ -378,7 +394,7 @@ function createReader(
       // a short-lived token that expired mid-session would otherwise turn every later read into a
       // 401 until the page is reloaded.
       const token = await options.identityToken?.();
-      if (mine !== generation) return;
+      if (mine !== generation) return 'stale';
 
       const response = await transportFor(options)({
         url: `${options.endpoint}/feedback?url=${encodeURIComponent(url)}&client=${encodeURIComponent(options.clientId)}`,
@@ -388,22 +404,29 @@ function createReader(
       // A 401 lands here like any other failure, and that is deliberate: the pins already on screen
       // are correct, and blanking the page because a token expired would read as "my notes are
       // gone". Same rule as an unreachable worker below.
-      if (mine !== generation || !response.ok) return;
+      if (mine !== generation) return 'stale';
+      if (!response.ok) return 'failed';
 
       const body = JSON.parse(response.body) as { issues: SeedIssue[]; stages?: unknown; destinations?: unknown };
-      if (mine !== generation) return;
+      if (mine !== generation) return 'stale';
 
       stages.set(offeredStages(body.stages));
       // Set from every answer, an answer without the field included: that is how a reader who left
       // the team stops seeing the names of its tracker.
       destinations.set(offeredDestinations(body.destinations));
       overlay.render(body.issues);
+
+      return 'read';
     } catch {
       // A worker that cannot be reached leaves the pins alone. Blanking the page because a read
       // failed would lose what is already correctly on screen.
+      return mine === generation ? 'failed' : 'stale';
     }
   };
 }
+
+/** `stale`: a newer read was sent, and this one touched nothing. */
+type ReadOutcome = 'read' | 'failed' | 'stale';
 
 /**
  * Exported for its tests, never from `public.ts`.
