@@ -194,17 +194,16 @@ const VIOLATIONS: Violation<AccountStore>[] = [
     breaks: 'never lets a site write through the connector of another workspace',
     by: 'takes a connector of any workspace',
     replace: {
-      after: 'async setDestination(',
-      from: 'AND EXISTS (SELECT 1 FROM connectors WHERE id = ? AND workspace_id = ?)',
-      to: 'AND EXISTS (SELECT 1 FROM connectors WHERE id = ? AND ? IS NOT NULL)',
+      from: "destinations.every((destination) => owned('connectors', destination.connector))",
+      to: 'destinations.every(() => true)',
     },
   },
   {
     breaks: 'never lets a site write through the connector of another workspace',
     by: 'clears the destination of a site for any workspace',
     replace: {
-      from: 'project_id = NULL WHERE workspace_id = ? AND id = ?',
-      to: 'project_id = NULL WHERE ? IS NOT NULL AND id = ?',
+      from: "if (!owned('sites', site)) return false;",
+      to: "if (destinations.length > 0 && !owned('sites', site)) return false;",
     },
   },
   {
