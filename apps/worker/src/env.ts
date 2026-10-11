@@ -111,6 +111,13 @@ export type WorkerEnv = {
    */
   FRUITBACK_SECRETS_KEY?: string;
   /**
+   * What better-auth signs its cookies with (FRU-144). At least 32 characters, and not one of the two
+   * secrets above. **It switches better-auth on**, and needs `FRUITBACK_DATABASE_URL` and
+   * `FRUITBACK_PUBLIC_URL`. Absent, nothing of better-auth is loaded. WARNING: changing it ends
+   * every session of the console.
+   */
+  FRUITBACK_AUTH_SECRET?: string;
+  /**
    * The language of the prose in an issue description (FRU-39). A BCP-47 tag; English by default.
    *
    * **The team that triages reads it, never the reporter**, so it is configured here and never taken
@@ -202,6 +209,8 @@ const configSchema = z.object({
   linearOAuth: z.custom<LinearOAuth | undefined>().optional(),
   /** What encrypts the connector keys at rest, or absent (FRU-121). */
   secretsKey: z.string().min(32).optional(),
+  /** What better-auth signs its cookies with, or absent: better-auth is then off (FRU-144). */
+  authSecret: z.string().min(32).optional(),
   /**
    * The language an issue description is written in (FRU-39), for the team that triages.
    *
@@ -230,6 +239,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     store: store.ok ? store.config : undefined,
     identitySecret: env.FRUITBACK_IDENTITY_SECRET || undefined,
     secretsKey: env.FRUITBACK_SECRETS_KEY || undefined,
+    authSecret: env.FRUITBACK_AUTH_SECRET || undefined,
     showComments: env.FRUITBACK_HIDE_COMMENTS !== '1',
     read: readAccess(env.FRUITBACK_READ),
     // A client's own `origins` are sites that must be able to reach this worker, so they join the
@@ -403,6 +413,54 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     return { ok: false, missing: ['FRUITBACK_PUBLIC_URL (an https:// address, or http:// on localhost)'] };
   }
 
+  // FRU-144. One secret for two jobs is one leak for both: the cookie of the console must not be
+  // signed with the key that signs an identity, or with the key that opens the connectors.
+  const authSecret = result.data.authSecret;
+  if (authSecret !== undefined) {
+    if (authSecret === result.data.identitySecret || authSecret === result.data.secretsKey) {
+      return {
+        ok: false,
+        missing: [
+          'FRUITBACK_AUTH_SECRET (it must differ from FRUITBACK_IDENTITY_SECRET and from FRUITBACK_SECRETS_KEY)',
+        ],
+      };
+    }
+    // better-auth keeps its tables in the database of the accounts. It has no SQLite here.
+    if (result.data.databaseUrl === undefined) {
+      return {
+        ok: false,
+        missing: ['FRUITBACK_DATABASE_URL (FRUITBACK_AUTH_SECRET is set, and better-auth keeps its tables there)'],
+      };
+    }
+    // Absent, better-auth reads its address from each request. With a path, it takes that path as
+    // the one its routes are under, in place of `/console/auth` (read in its source, 1.7.7).
+    if (result.data.publicUrl === undefined || new URL(result.data.publicUrl).pathname !== '/') {
+      return {
+        ok: false,
+        missing: [
+          'FRUITBACK_PUBLIC_URL (FRUITBACK_AUTH_SECRET is set, and better-auth needs the address of this worker, with no path)',
+        ],
+      };
+    }
+    // WARNING: better-auth reads these from the environment of the process by itself, over what the
+    // worker gives it (measured on 1.7.7): BETTER_AUTH_TRUSTED_ORIGINS adds an origin that may send
+    // a request with the cookie, BETTER_AUTH_SECRETS takes the place of the secret, and
+    // BETTER_AUTH_TELEMETRY turns the telemetry on. Refused by the prefix, and named, never quoted:
+    // two of them hold a secret.
+    const ambient = Object.entries(env)
+      .filter(([name, value]) => name.startsWith('BETTER_AUTH_') && typeof value === 'string' && value !== '')
+      .map(([name]) => name)
+      .sort();
+    if (ambient.length > 0) {
+      return {
+        ok: false,
+        missing: [
+          `${ambient.join(', ')} (better-auth reads it from the environment over the configuration of the worker: remove it)`,
+        ],
+      };
+    }
+  }
+
   // Linear sends the person back to the worker's own address, and the token it gives is kept sealed.
   if (env.FRUITBACK_LINEAR_OAUTH) {
     if (result.data.linearOAuth === undefined) {
@@ -481,6 +539,16 @@ export function hasSessions(config: Pick<WorkerConfig, 'sessionPath' | 'database
   return config.sessionPath !== undefined || config.databaseUrl !== undefined;
 }
 
+/**
+ * Whether better-auth is on (FRU-144): its secret, and the database it keeps its tables in.
+ *
+ * The one question, as `hasAccounts` is. `readConfig` refuses the secret without the database, so
+ * the second half only narrows the type.
+ */
+export function hasAuth(config: Pick<WorkerConfig, 'authSecret' | 'databaseUrl'>): boolean {
+  return config.authSecret !== undefined && config.databaseUrl !== undefined;
+}
+
 /** The console's address with no slash at the end, or `undefined` when it cannot carry a sign-in. */
 function readConsoleUrl(value: string | undefined): string | undefined {
   if (value === undefined || value.trim() === '') return undefined;
@@ -528,6 +596,7 @@ const NAMES_BY_FIELD: Record<string, string> = {
   // can fail validation needs an entry here — asserted by `answers no empty diagnostic`.
   identitySecret: 'FRUITBACK_IDENTITY_SECRET',
   secretsKey: 'FRUITBACK_SECRETS_KEY',
+  authSecret: 'FRUITBACK_AUTH_SECRET',
 };
 
 function missingFrom(result: z.ZodSafeParseResult<unknown>): string[] {

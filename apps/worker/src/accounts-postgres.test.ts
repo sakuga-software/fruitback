@@ -206,11 +206,13 @@ describe('the sites of a workspace, read from PostgreSQL (FRU-141)', () => {
       undefined,
     ]);
 
-    assert.deepEqual((await database.query('SELECT version, name FROM schema_migrations ORDER BY version')).rows, [
-      { version: 1, name: 'accounts' },
-      { version: 2, name: 'site_destinations' },
-      { version: 3, name: 'sessions' },
-    ]);
+    // Each migration of the list, once and in order: a list read from the code, so the next step of
+    // the schema is one entry in `MIGRATIONS` and no line here.
+    assert.deepEqual(
+      (await database.query('SELECT version, name FROM schema_migrations ORDER BY version')).rows,
+      MIGRATIONS.map((migration, index) => ({ version: index + 1, name: migration.name })),
+    );
+    assert.ok(MIGRATIONS.length >= 2, 'the list of migrations lost a step');
   });
 
   it('gives a site the one destination it had before the list existed', async () => {

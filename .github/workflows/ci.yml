@@ -287,6 +287,65 @@ jobs:
           test "$(docker exec accounts-db psql -U postgres -Atc 'SELECT count(*) FROM pairings')" = 1
           docker rm -f worker-db accounts-db
 
+      - name: Boot it with better-auth on, and find it built and serving no route
+        # FRU-144. better-auth is in the bundle behind a dynamic import, and no route reads it, so
+        # /health is green on a bundle that cannot load it. With its secret and a database the worker
+        # builds it at boot and says so in its log: that line is what proves the bundle. The same
+        # image without the secret must say nothing of it. Both answer 404 under /console/auth.
+        run: |
+          docker network create auth
+          docker run -d --name auth-db --network auth \
+            -e POSTGRES_PASSWORD=ci-not-a-real-password \
+            postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+          for attempt in $(seq 1 30); do
+            if docker exec auth-db pg_isready -U postgres -q; then break; fi
+            sleep 1
+          done
+          start() {
+            name=$1
+            port=$2
+            shift 2
+            docker run -d --name "$name" --network auth -p "$port:8080" \
+              -e ALLOWED_ORIGINS=http://localhost:5173 \
+              -e LINEAR_API_KEY=ci-not-a-real-key \
+              -e LINEAR_TEAM_ID=ci-team \
+              -e FRUITBACK_IDENTITY_SECRET=ci-not-a-real-secret-of-32-characters \
+              -e FRUITBACK_SESSION_PATH=/data/sessions.db \
+              -e FRUITBACK_CONSOLE_URL=https://app.fruitback.example \
+              -e FRUITBACK_PUBLIC_URL=https://api.fruitback.example \
+              -e FRUITBACK_DATABASE_URL=postgres://postgres:ci-not-a-real-password@auth-db:5432/postgres \
+              "$@" fruitback-worker:ci
+            for attempt in $(seq 1 30); do
+              if curl -sf -o /dev/null "http://127.0.0.1:$port/health"; then break; fi
+              sleep 1
+            done
+          }
+          start worker-auth-off 8084
+          start worker-auth-on 8085 -e FRUITBACK_AUTH_SECRET=ci-not-a-real-secret-of-better-auth-0123456789
+          for attempt in $(seq 1 30); do
+            if docker logs worker-auth-on 2>&1 | grep -q 'better-auth is ready, and serves no route'; then break; fi
+            sleep 1
+          done
+          docker logs worker-auth-on
+          docker logs worker-auth-off
+          docker logs worker-auth-on 2>&1 | grep -q 'better-auth is ready, and serves no route'
+          for port in 8084 8085; do
+            for route in ok get-session organization/list; do
+              status=$(curl -s -o /dev/null -w '%{http_code}' -H 'Origin: https://app.fruitback.example' \
+                "http://127.0.0.1:$port/console/auth/$route")
+              echo "$port /console/auth/$route $status"
+              test "$status" = 404
+            done
+          done
+          # After the requests above: a line of better-auth in the log of the worker that has it off
+          # would say that something loaded it.
+          if docker logs worker-auth-off 2>&1 | grep -q 'better-auth'; then
+            echo "the worker without FRUITBACK_AUTH_SECRET said something of better-auth"
+            exit 1
+          fi
+          test "$(docker exec auth-db psql -U postgres -Atc 'SELECT name FROM schema_migrations ORDER BY version' | tail -1)" = better-auth
+          docker rm -f worker-auth-on worker-auth-off auth-db
+
       - name: Build the image of the public demonstration
         # FRU-79. Dokploy builds this Dockerfile on push too. It is not published anywhere.
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0

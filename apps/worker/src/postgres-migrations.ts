@@ -1,3 +1,4 @@
+import { BETTER_AUTH_MIGRATION } from './auth-schema.ts';
 import { type Database, type Migration, migrate } from './postgres.ts';
 
 /**
@@ -167,6 +168,9 @@ export const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX sessions_by_root ON sessions (root_hash);
     `,
   },
+  // The tables of better-auth (FRU-144). They are made for every worker that has a database, and stay
+  // empty: nothing reads or writes them until better-auth serves a route.
+  BETTER_AUTH_MIGRATION,
 ];
 
 /**

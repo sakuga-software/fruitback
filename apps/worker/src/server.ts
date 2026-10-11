@@ -2,6 +2,7 @@ import { type IncomingMessage, type Server, type ServerResponse, createServer } 
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { handleRequest, storeFor, deliverPending } from './app.ts';
+import { announceAuth } from './auth.ts';
 import type { SeedStore } from './store.ts';
 import { readExposureNotice } from './clients.ts';
 import { DEFAULT_HOST, DEFAULT_TRUSTED_PROXY_HOPS, type WorkerEnv, hasAccounts, readConfig, readPort } from './env.ts';
@@ -161,6 +162,9 @@ export function startServer(env: WorkerEnv = process.env): Server {
     pass.unref();
     server.on('close', () => clearInterval(pass));
   }
+
+  // FRU-144: better-auth is built here when it is on, and serves no route. See `announceAuth`.
+  if (config.ok) void announceAuth(config.config);
 
   server.listen(port, host, () => {
     if (config.ok) {
