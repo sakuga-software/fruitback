@@ -20,7 +20,7 @@ Package manager is `pnpm@11.16.0` (pinned). Nx runs multi-project targets.
 ```bash
 pnpm install
 pnpm dev                                    # worker (in-memory Linear) + playground, see below
-LC_ALL=en_US.UTF-8 pnpm test                # nx run-many -t test → node --test
+pnpm test                                   # nx run-many -t test → node --test
 pnpm e2e                                    # playwright, starts both servers itself
 pnpm typecheck
 pnpm lint                                   # oxlint

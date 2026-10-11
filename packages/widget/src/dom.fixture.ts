@@ -1,5 +1,6 @@
 // Aliased: an unqualified `Window` in this file has to keep meaning the DOM's, which is what the
 // code under test is written against and what `MountedPage` hands back.
+import { mock } from 'node:test';
 import { Window as HappyDomWindow } from 'happy-dom';
 
 /**
@@ -53,6 +54,25 @@ export function mountPage(html: string, options: MountOptions = {}): MountedPage
       return element;
     },
   };
+}
+
+/**
+ * Give Node's own navigator a language, until `mock.restoreAll()`.
+ *
+ * Node has a navigator too, and it takes its language from the locale of the shell: `fr-FR` under
+ * `LC_ALL=fr_FR.UTF-8`. A test that proves a binding reads the navigator of the page gives the page
+ * one language and this navigator another. Left to the shell, the two agreed on a French machine:
+ * four tests failed there and passed in CI (FRU-172).
+ *
+ * The getter of the prototype is replaced. `mock.property` refuses `language`, which the navigator
+ * does not own, and it cannot restore `navigator` itself, which is a getter of `globalThis`
+ * (measured on Node 25.8.1).
+ */
+export function globalNavigatorSpeaks(language: string): void {
+  const prototype = Object.getPrototypeOf(globalThis.navigator) as Navigator;
+
+  mock.getter(prototype, 'language', () => language);
+  mock.getter(prototype, 'languages', () => [language]);
 }
 
 /**

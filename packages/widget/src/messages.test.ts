@@ -1,4 +1,4 @@
-import { afterEach, describe, it } from 'node:test';
+import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { SEED_STAGES } from '@fruitback/shared';
 import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
@@ -19,7 +19,7 @@ import { createSidebar } from './sidebar.ts';
 import { feedbackAsText, placementOf } from './export.ts';
 import { createConfigStore } from './config.ts';
 import { createOverlay } from './overlay.ts';
-import { mountPage, pressKey, setDocumentSize, setRect } from './dom.fixture.ts';
+import { globalNavigatorSpeaks, mountPage, pressKey, setDocumentSize, setRect } from './dom.fixture.ts';
 
 describe('createTranslator', () => {
   it('speaks English when nobody asked for anything', () => {
@@ -147,9 +147,15 @@ describe('the bundled catalog', () => {
 });
 
 describe('languageOf', () => {
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
   it('reads the navigator of the mounted page, not the global one', () => {
     const page = mountPage('<main></main>');
     Object.defineProperty(page.view.navigator, 'language', { value: 'fr-FR', configurable: true });
+    // Node's navigator speaks the language of the shell, so the test gives it another one.
+    globalNavigatorSpeaks('en-US');
 
     assert.notEqual(
       globalThis.navigator?.language,

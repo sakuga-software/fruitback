@@ -107,9 +107,15 @@ How this repository is formatted, tested and documented, and which test holds ea
   `FRU`). Reference tickets as `FRU-xxx` in commits. Every `FRU-` number in this repository was an
   `SKG-` number until 2026-10-06, when the tickets left the Sakuga-software team; Linear still
   redirects the old keys, and merged commit messages keep them.
-- **Run the tests with `LC_ALL=en_US.UTF-8` when the shell has another locale.** Four tests of
-  `packages/widget` fail under `fr_FR.UTF-8` and pass under `en_US.UTF-8` and `C` (measured on
-  2026-10-10, on `main` too). CI is not affected.
+- **A test does not read the locale of the shell** (FRU-172). Node has a `navigator` of its own, and
+  it takes its language from `LC_ALL` and `LANG`: `fr-FR` in a French shell, `en-US` on a CI runner.
+  A test that needs that navigator to disagree with the page gives it a language with
+  `globalNavigatorSpeaks`, from `dom.fixture.ts` of the widget, and `mock.restoreAll()` takes it back.
+  **CI runs the `test` target twice, the second time under `fr_FR.UTF-8`**, with `--skip-nx-cache`:
+  the locale is no input of the target, so Nx would replay the first run. Until then four tests of
+  `packages/widget` failed in a French shell and passed in CI (measured on 2026-10-10). Their control
+  — « the global navigator must disagree, or this proves nothing » — was right to fail: with a widget
+  that reads the global navigator, the tests it guards pass in a French shell without it.
 - The Linear MCP server is declared in `.mcp.json` at the project scope. If its tools are missing in a
   session, it needs to be approved and authorized (`/mcp` in an interactive session) — it cannot be
   authorized from a non-interactive one.
