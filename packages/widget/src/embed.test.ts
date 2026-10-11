@@ -4,7 +4,7 @@ import { parseSeed } from '@fruitback/shared';
 import { init, plant } from './embed.ts';
 import type { TransportRequest, TransportResponse } from './transport.ts';
 import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
-import { type MountedPage, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
+import { type MountedPage, globalNavigatorSpeaks, mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
 import { readFile } from 'node:fs/promises';
 
 /**
@@ -835,10 +835,16 @@ describe('the language a mount speaks (FRU-37)', () => {
   const shadow = (page: MountedPage) =>
     (page.document.querySelector('[data-fruitback-host]') as HTMLElement).shadowRoot;
 
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
   function pageInFrench(): MountedPage {
     const page = mountPage('<main><button id="cta">Commander</button></main>');
     Object.defineProperty(page.view.navigator, 'language', { value: 'fr-FR', configurable: true });
-    // The global navigator is Node's. If it also said French, a binding that read it would pass.
+    // The global navigator is Node's, and it speaks the language of the shell. If it also said
+    // French, a binding that read it would pass. So the test gives it English, on every machine.
+    globalNavigatorSpeaks('en-US');
     assert.notEqual(globalThis.navigator?.language, 'fr-FR');
 
     return page;
