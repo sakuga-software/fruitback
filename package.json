@@ -12,7 +12,8 @@
     "format": "nx run-many -t format",
     "format:fix": "nx run-many -t format:fix",
     "typecheck": "nx run-many -t typecheck",
-    "test": "nx run-many -t test"
+    "test": "nx run-many -t test",
+    "prepare": "node -e \"require('node:fs').existsSync('.githooks/install.mjs') && import('./.githooks/install.mjs')\""
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",

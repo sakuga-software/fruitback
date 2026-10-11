@@ -42,6 +42,64 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - `apps/playground/.react-router/` is typegen, regenerated on dev and build. It is ignored, not
   committed.
 
+## The git hooks (FRU-172)
+
+### The rules, in short
+
+- **`pnpm install` points git at `.githooks/`**, through the `prepare` script of the root:
+  `core.hooksPath` is `.githooks`. There is nothing else to do, and no dependency: two shell scripts.
+  - **`pre-commit` checks the format and the lint of the staged files**, with `oxfmt --check` and
+    `oxlint`. It changes no file.
+  - **`pre-push` typechecks and tests the packages that the branch changes**, against `main` of the
+    remote, with `nx affected`. A file that no package owns runs the tests of the worker too: its
+    guard tests read the documents, the workflows and the specs.
+- **CI is the gate. A hook only says it sooner.** `--no-verify` skips either one.
+- **The path is relative, so a worktree runs the hooks of its own branch.** The setting is in the
+  configuration of the clone, which every worktree shares: one install sets it for all of them. A
+  branch that holds no `.githooks/` runs no hook. A worktree needs its own `pnpm install`: without
+  it the hook says so and stops.
+- **The `prepare` script passes where the repository is not.** pnpm runs it with a `--filter` too,
+  and the three Dockerfiles install from the manifests alone. So the script runs the installer only
+  when the file is there, and `githooks.test.ts` runs it in an empty directory.
+- **pnpm does not run `prepare` when it has nothing to install.** A clone that was already up to
+  date gets its hooks at its next install that installs something, or from `pnpm prepare`.
+- **A hook that is not executable does not run.** Git prints a hint and the commit passes.
+  `githooks.test.ts` fails on it.
+
+### The reasons, and the history
+
+- **Two scripts, and no manager of hooks.** A manager is a dependency whose work here is one
+  `git config`. This repository takes a dependency when it has measured that it needs one.
+- **What each hook stops was planted, in a clone made for it** (2026-10-11). `pre-commit` refused
+  an unformatted file of a package, one whose name holds a space, an unformatted table of a
+  document, a nested ternary, and a global `fetch` in `packages/widget/src`, which is a rule
+  `.oxlintrc.json` gives to one directory. It let pass a clean file, a deletion alone, a file of
+  `design/`, and a clean staged file beside an unformatted one that was not staged. `pre-push`
+  refused a type error in a test of the worker, a failing test of `packages/shared`, and a
+  `CLAUDE.md` past its budget. `--no-verify` passed the same commits.
+- **The times, on a machine of 10 cores at a load average of 14.** `pre-commit`: 0.2 to 0.4 s.
+  `pre-push`: 8 s for a branch that changes one application, 22 s for one that changes
+  `packages/shared` and so every package, both with an empty cache of Nx; 1.5 s for the same tree
+  a second time.
+- **`node .githooks/install.mjs` as the `prepare` script failed every image build** (measured in a
+  directory that holds what a Dockerfile copies: `Cannot find module`, exit 1, for each of the three
+  filters). The `docker image` job would have said so after the push. The script now looks for the
+  file first. An installer that throws still fails the install: only its absence passes.
+- **« Already up to date » runs no script** (measured on pnpm 11.16.0, with a `prepare` and a
+  `postinstall` added to the root). A fresh clone and a fresh worktree run it.
+- **`pre-push` compares with `main` of the remote, not with the last push.** A push that skipped
+  the hook must not hide its commits from the next one. Nx replays what did not change, so the
+  comparison costs nothing on a second push.
+- **Both hooks read the working tree.** `pre-commit` checks a file staged in part as a whole.
+  `pre-push` checks a ref only when it is the commit that is checked out, and says so for another
+  one. What is not committed is part of what it checks.
+- **The bound on `pre-push` is the number of packages**: two typechecks at a time, then one package
+  of tests at a time, and no daemon of Nx. `node --test` runs the files of a package on every core
+  but one, and `NODE_OPTIONS` refuses `--test-concurrency` (measured), so a hook cannot bound that.
+- **The installer leaves another `core.hooksPath` as it is**, and says where the hooks are.
+- **In a French shell, `pre-push` stopped a branch that changes the widget** until its four tests
+  stopped reading the locale (see [conventions.md](conventions.md)).
+
 ## The E2E suite
 
 ### The rules, in short
