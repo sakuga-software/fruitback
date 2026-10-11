@@ -11,8 +11,10 @@ import {
   onFile,
   turn,
 } from './conformance.fixture.ts';
-import type { SessionIdentity, SessionStore } from './session.ts';
+import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase, onDatabase } from './postgres.fixture.ts';
+import type { RotationOutcome, SessionIdentity, SessionStore } from './session.ts';
 import { sessionCases } from './session-conformance.fixture.ts';
+import { createPostgresSessionStore } from './session-postgres.ts';
 import { closeSessionConnections, createSqliteSessionStore } from './session-sqlite.ts';
 
 /**
@@ -25,9 +27,98 @@ const SQLITE = onFile<SessionStore>('the SQLite session store', 'createSqliteSes
   close: closeSessionConnections,
 }));
 
-const SUBJECTS: Subject<SessionStore>[] = [SQLITE];
+const SUBJECTS: Subject<SessionStore>[] = [
+  SQLITE,
+  onDatabase(
+    'the PostgreSQL session store, on PGlite',
+    'createPostgresSessionStore',
+    createPgliteDatabase,
+    createPostgresSessionStore,
+  ),
+  // The same store on a server, where two refreshes are two connections.
+  onDatabase(
+    'the PostgreSQL session store, on a real server',
+    'createPostgresSessionStore',
+    createRealDatabase,
+    createPostgresSessionStore,
+    NO_REAL_POSTGRES,
+  ),
+];
 
 for (const subject of SUBJECTS) describeConformance('SessionStore', sessionCases, subject);
+
+/**
+ * A store in memory that reads a token, waits a turn of the event loop, then writes what it decided
+ * on what it read. One call after the other, it answers as the real store does. Two calls on one
+ * chain at the same moment both decide before either writes: that is a store on a network that
+ * nothing makes wait for the chain.
+ */
+function decidesThenWaits(real: SessionStore): SessionStore {
+  type Held = {
+    identity: SessionIdentity;
+    expiresAt: number;
+    root: string;
+    predecessor?: string;
+    revokedAt?: number;
+    rotatedAt?: number;
+  };
+  const pairings = new Map<string, SessionIdentity>();
+  const sessions = new Map<string, Held>();
+  const chain = (root: string) => [...sessions].filter(([hash, session]) => session.root === root || hash === root);
+  const revokeChain = (root: string, now: number, keep?: string) => {
+    for (const [hash, session] of chain(root)) if (hash !== keep) session.revokedAt ??= now;
+  };
+
+  return {
+    ...real,
+    async createPairing(pairing) {
+      pairings.set(pairing.codeHash, pairing.identity);
+    },
+    async redeemPairing({ codeHash, tokenHash, expiresAt }) {
+      const identity = pairings.get(codeHash);
+      if (identity === undefined) return undefined;
+      pairings.delete(codeHash);
+      sessions.set(tokenHash, { identity, expiresAt, root: tokenHash });
+
+      return identity;
+    },
+    async purge() {},
+    async rotateSession({ tokenHash, successorHash, now, graceMs }): Promise<RotationOutcome> {
+      const row = sessions.get(tokenHash);
+      if (row === undefined || row.expiresAt <= now) return { outcome: 'gone' };
+      // The token as it was read. Everything below is decided on this copy.
+      const read = { ...row };
+      await turn();
+
+      if (read.revokedAt !== undefined) {
+        if (!chain(read.root).some(([, session]) => session.revokedAt === undefined)) return { outcome: 'gone' };
+        revokeChain(read.root, now);
+
+        return { outcome: 'reused' };
+      }
+      if (read.rotatedAt !== undefined) {
+        if (now > read.rotatedAt + graceMs) {
+          revokeChain(read.root, now);
+
+          return { outcome: 'gone' };
+        }
+        revokeChain(read.root, now, tokenHash);
+      }
+
+      sessions.set(successorHash, {
+        identity: read.identity,
+        expiresAt: read.expiresAt,
+        root: read.root,
+        predecessor: tokenHash,
+      });
+      row.rotatedAt ??= now;
+      const before = read.predecessor === undefined ? undefined : sessions.get(read.predecessor);
+      if (before !== undefined) before.revokedAt ??= now;
+
+      return { outcome: 'rotated', identity: read.identity };
+    },
+  };
+}
 
 const REPLAY_ANSWER = "return { answer: { outcome: 'reused' }, commit: true };";
 const EXPIRED_OR_UNKNOWN = "if (row === undefined || typeof row.expires_at !== 'number' || row.expires_at <= now) {";
@@ -95,9 +186,11 @@ const VIOLATIONS: Violation<SessionStore>[] = [
   {
     breaks: 'refuses a pairing whose subject is an empty string',
     by: 'takes an empty subject',
+    // The parser of a row is in `session-rows.ts`, for the two stores. The change is where this
+    // store reads its answer: a row that is no person is taken as one.
     replace: {
-      from: "if (typeof row.subject !== 'string' || row.subject === '') return undefined;",
-      to: "if (typeof row.subject !== 'string') return undefined;",
+      from: 'const identity = row === undefined ? undefined : identityOf(row);',
+      to: "const identity = row === undefined ? undefined : (identityOf(row) ?? { subject: '' });",
     },
   },
   {
@@ -282,6 +375,16 @@ const VIOLATIONS: Violation<SessionStore>[] = [
     replace: { from: PURGE_SESSIONS, to: "'DELETE FROM sessions WHERE expires_at <= ? AND 0'" },
   },
   {
+    breaks: 'never leaves two live successors when one token is refreshed twice at the same moment',
+    by: 'reads a token, waits, then writes what it decided',
+    wrap: decidesThenWaits,
+  },
+  {
+    breaks: 'ends the session when a token and its successor are refreshed at the same moment',
+    by: 'reads a token, waits, then writes what it decided',
+    wrap: decidesThenWaits,
+  },
+  {
     breaks: 'drops the codes and the sessions that are expired, and nothing that is not',
     by: 'drops every session',
     replace: { from: PURGE_SESSIONS, to: "'DELETE FROM sessions WHERE ? IS NOT NULL'" },
@@ -311,6 +414,6 @@ describeControls('SessionStore', sessionCases, VIOLATIONS, SQLITE, async (change
 
 describe('the SessionStore conformance suite', () => {
   it('runs for every implementation the worker exports', () => {
-    assert.deepEqual(SUBJECTS.map((subject) => subject.factory).sort(), factoriesOf('SessionStore'));
+    assert.deepEqual([...new Set(SUBJECTS.map((subject) => subject.factory))].sort(), factoriesOf('SessionStore'));
   });
 });

@@ -287,6 +287,15 @@ export function readConfig(env: WorkerEnv): ConfigResult {
       missing: ['FRUITBACK_ACCOUNTS_PATH (FRUITBACK_DATABASE_URL is set, and the accounts are in that database)'],
     };
   }
+  // The sessions have one source too (FRU-142): with a database they are in it, and a file beside it
+  // would be a second place that nothing reads.
+  if (result.data.databaseUrl !== undefined && result.data.sessionPath !== undefined) {
+    return {
+      ok: false,
+      missing: ['FRUITBACK_SESSION_PATH (FRUITBACK_DATABASE_URL is set, and the sessions are in that database)'],
+    };
+  }
+  const sessions = hasSessions(result.data);
   const accounts = hasAccounts(result.data);
   /** The variable that turned the accounts on, for a diagnostic that names what the operator wrote. */
   const source = result.data.databaseUrl === undefined ? 'FRUITBACK_ACCOUNTS_PATH' : 'FRUITBACK_DATABASE_URL';
@@ -298,7 +307,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     read: result.data.read,
     clients: result.data.clients,
     identitySecret: result.data.identitySecret,
-    sessions: result.data.sessionPath !== undefined,
+    sessions,
   });
 
   if (unreadable.length > 0) {
@@ -321,10 +330,12 @@ export function readConfig(env: WorkerEnv): ConfigResult {
 
   // Refused at boot for the same reason as the clause above: a session path with nothing to sign
   // with mints no access token, so pairing would succeed and every call it enabled would fail.
-  if (result.data.sessionPath !== undefined && result.data.identitySecret === undefined) {
+  if (sessions && result.data.identitySecret === undefined) {
+    const where = result.data.sessionPath === undefined ? 'FRUITBACK_DATABASE_URL' : 'FRUITBACK_SESSION_PATH';
+
     return {
       ok: false,
-      missing: ['FRUITBACK_IDENTITY_SECRET (FRUITBACK_SESSION_PATH is set, and a session signs its access token)'],
+      missing: [`FRUITBACK_IDENTITY_SECRET (${where} is set, and a session signs its access token)`],
     };
   }
 
@@ -440,8 +451,9 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     }
   }
 
-  // An account signs in to get a session, so accounts without sessions sign in to nothing.
-  if (accounts && result.data.sessionPath === undefined) {
+  // An account signs in to get a session, so accounts without sessions sign in to nothing. A database
+  // holds both, so this is the accounts file with no session file beside it.
+  if (accounts && !sessions) {
     return {
       ok: false,
       missing: [`FRUITBACK_SESSION_PATH (${source} is set, and signing in opens a session)`],
@@ -458,6 +470,15 @@ export function readConfig(env: WorkerEnv): ConfigResult {
  */
 export function hasAccounts(config: Pick<WorkerConfig, 'accountsPath' | 'databaseUrl'>): boolean {
   return config.accountsPath !== undefined || config.databaseUrl !== undefined;
+}
+
+/**
+ * Does this worker keep sessions, in a file or in the database (FRU-142)?
+ *
+ * Ask this and never `sessionPath`: a route that reads the field is off for a worker on a database.
+ */
+export function hasSessions(config: Pick<WorkerConfig, 'sessionPath' | 'databaseUrl'>): boolean {
+  return config.sessionPath !== undefined || config.databaseUrl !== undefined;
 }
 
 /** The console's address with no slash at the end, or `undefined` when it cannot carry a sign-in. */

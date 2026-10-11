@@ -24,7 +24,7 @@ import { DELIVERY_HEADER, LOOP_STATUS, type Send, deliverDue } from './rest-conn
 import { type Mailer, createTemMailer } from './mail.ts';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { createSqliteAccountStore } from './accounts-sqlite.ts';
-import { type WorkerConfig, type WorkerEnv, hasAccounts, readAllowedOrigins, readConfig } from './env.ts';
+import { type WorkerConfig, type WorkerEnv, hasAccounts, hasSessions, readAllowedOrigins, readConfig } from './env.ts';
 import { type SeedStore, StoreError } from './store.ts';
 import { watchedStore } from './connector-health.ts';
 import { type CorsDecision, diagnosticCorsHeaders, openCors, resolveCors } from './cors.ts';
@@ -40,6 +40,7 @@ import {
   refreshSession,
   revokeSession,
 } from './session.ts';
+import { createPostgresSessionStore } from './session-postgres.ts';
 import { createSqliteSessionStore } from './session-sqlite.ts';
 
 /**
@@ -75,9 +76,13 @@ export function storeFor(config: WorkerConfig): SeedStore {
  * The extension's session store, or `undefined` when this worker runs without one (FRU-42).
  *
  * Deliberately not built from `config.store`: sessions are credentials and seeds are not, so they
- * never share a backend. See `FRUITBACK_SESSION_PATH`.
+ * never share a backend. They are in the database of the accounts when the worker has one (FRU-142),
+ * and in their own file otherwise. See `FRUITBACK_SESSION_PATH`.
  */
 export function sessionStoreFor(config: WorkerConfig): SessionStore | undefined {
+  // `readConfig` refuses the two together, so the order here decides nothing.
+  if (config.databaseUrl !== undefined) return createPostgresSessionStore(databaseFor(config.databaseUrl));
+
   return config.sessionPath === undefined ? undefined : createSqliteSessionStore(config.sessionPath);
 }
 
@@ -413,7 +418,7 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
   if (pairing) {
     // It exists only where the sessions do, like the three routes below: a worker without the
     // extension does not advertise the page.
-    if (context.sessionStore === undefined && served.sessionPath === undefined) {
+    if (context.sessionStore === undefined && !hasSessions(served)) {
       return json(404, { error: 'not-found' });
     }
     if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' });
@@ -475,7 +480,7 @@ async function handleSession(
   headers: Record<string, string>,
 ): Promise<Response> {
   const store = context.sessionStore ?? sessionStoreFor(config);
-  // `identitySecret` is present whenever `sessionPath` is — `readConfig` refuses the pair at boot.
+  // `identitySecret` is present whenever the worker keeps sessions — `readConfig` refuses the pair at boot.
   if (store === undefined || config.identitySecret === undefined) return json(404, { error: 'not-found' }, headers);
   if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
 
@@ -542,7 +547,11 @@ export async function createPairingCommand(
   identity: { subject: string; name?: string; email?: string; workspace?: string },
 ): Promise<{ code: string; expiresAt: number }> {
   const store = sessionStoreFor(config);
-  if (store === undefined) throw new Error('FRUITBACK_SESSION_PATH is not set, so this worker keeps no sessions');
+  if (store === undefined) {
+    throw new Error(
+      'FRUITBACK_SESSION_PATH is not set, and no FRUITBACK_DATABASE_URL, so this worker keeps no sessions',
+    );
+  }
 
   return openPairing(store, identity);
 }
@@ -583,9 +592,7 @@ function routeFor(request: Request, config: WorkerConfig, clientId: string | und
       read: config.read,
       locale: config.teamLocale,
     },
-    ...(config.sessionPath !== undefined && config.identitySecret !== undefined
-      ? { sessionSecret: config.identitySecret }
-      : {}),
+    ...(hasSessions(config) && config.identitySecret !== undefined ? { sessionSecret: config.identitySecret } : {}),
   });
 }
 

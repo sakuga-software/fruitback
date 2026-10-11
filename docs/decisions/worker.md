@@ -555,10 +555,11 @@ any store` asks it of every spec rather than of Linear.
   change to the store that removes that text fails the control with the text, and the violation is
   written again. Do not weaken a case to make a control pass.
 - **A race is a case too, and its violation is a store that waits.** `node:sqlite` is synchronous, so
-  no change to the SQLite store loses a race. The four cases that run calls at the same moment (one
-  account for one address, one sign-in for one link, one whole list of destinations for one site, one
-  session for one code) have a store that reads, waits a turn of the event loop, then writes. On
-  SQLite these cases prove nothing: they are there for a store on a network.
+  no change to the SQLite store loses a race. The cases that run calls at the same moment have a
+  store that reads, waits a turn of the event loop, then writes: one account for one address, one
+  sign-in for one link, one whole list of destinations for one site, one session for one code, one
+  live successor for one token, one end for a token and its successor. On SQLite these cases prove
+  nothing: they are there for a store on a network.
 - **A rule that a foreign key holds has a store around the real one too.** A destination goes with
   its site, its connector and its workspace, and only with them. Without the key the statement
   fails, and a store that throws proves nothing of the case: the control wants an assertion of the
@@ -589,7 +590,8 @@ alone when its predecessor is retired` checked the answer of the rotation and no
 ## The accounts in PostgreSQL (FRU-141)
 
 The first slice of FRU-139 that touches production code. **Nothing changes for a worker that does not
-set `FRUITBACK_DATABASE_URL`**: SQLite stays the default, and the sessions stay in their file.
+set `FRUITBACK_DATABASE_URL`**: SQLite stays the default. With the variable, the sessions are in the
+same database since FRU-142: see the section after this one.
 
 ### The rules, in short
 
@@ -709,6 +711,57 @@ Neither was taken, for three reasons:
 every request, and this decision must be measured again before such a deployment. The same holds
 above a few thousand sites.
 
+## The sessions in PostgreSQL (FRU-142)
+
+**Nothing changes for a worker that does not set `FRUITBACK_DATABASE_URL`**: a self-hoster with no
+accounts keeps its session file and `node server.mjs pair`. This store is not a step towards
+better-auth: it holds the session of the extension, and it stays.
+
+### The rules, in short
+
+- **With `FRUITBACK_DATABASE_URL` the sessions are in the database, and `FRUITBACK_SESSION_PATH` is
+  refused beside it.** One source, as for the accounts. Ask `hasSessions(config)` and never
+  `sessionPath`: a route that reads the field is off for a worker on a database.
+- **`session-postgres.ts` has the tables, the columns and the digests of `session-sqlite.ts`**:
+  migration 3, `pairings` and `sessions`. `session-rows.ts` parses a row of either database.
+- **A code is spent by one statement that reads what it changes.** Do not read `redeemed_at` in
+  another statement, or in a subquery: the second of two calls then reads the code as it was.
+- **A rotation and a log out hold the head of their chain, `FOR UPDATE`, before they read the
+  token.** `holdChain` is the one place. A rotation is several statements, and none decides alone.
+- **`pair` writes in the database, and `main.ts` closes the pool after a command.** Without that the
+  command ends ten seconds after its answer.
+- **A race is planted with `outcomeOnChangedStore`**, which makes the two calls overlap. Do not write
+  a control that waits for the scheduler: see below.
+
+### The reasons, and the measurements
+
+- **What `BEGIN IMMEDIATE` did without saying it.** The SQLite store has one writer at a time for
+  the whole file. Here two refreshes are two connections, and with no lock both read « never
+  rotated » and leave two live successors. The chain of a token never changes, so it is read first
+  with no lock; the token is read again when the chain is held.
+- **The three rules of the ticket are cases of the suite**, so SQLite, PGlite and a server run them:
+  one session for one code, one live successor for one token refreshed twice, and the end of the
+  chain when a token and its successor come together. Each has a store that loses the race, planted
+  in `session-postgres.test.ts`: it passes on PGlite and fails on a server, on an assertion of the
+  case. test:`fails on a real server with no lock on the chain` is one of the three.
+- **The planted store of the code reads it in a subquery.** One call after the other it is correct.
+  With two, the second `UPDATE` waits for the row, and reads the row again: but the subquery is read
+  as it was when the statement started, so the code is still to spend.
+- **A planted race does not wait for the scheduler.** The first control of this kind, for the
+  accounts, passed in CI on one head and failed on the next, which changed one line of a document:
+  nothing made the two calls overlap. `outcomeOnChangedStore` holds each new row for 0.3 s in a
+  trigger, inside the transaction, and opens two connections before the case. That failure was not
+  reproduced on a developer machine (25 runs of 25, then 12 of 12 with the server at half a CPU):
+  the cause is read from the code, and CI is what says the fix holds.
+- **No code and no token is in a row.** test:`holds no code and no token in clear, in any row of any
+table` reads every table of the schema after a code was spent, a session refreshed and one logged
+  out. test:`finds a token that a row holds in clear` is its control.
+- **`pair` ends.** test:`writes the digest of its code in the database, and ends` runs the command as
+  a process against a server, with 8 seconds to end. Measured without the line that closes the pool:
+  the process is killed at 8 seconds.
+- **Whoever can write to the database can write a session**, as whoever could write the session file.
+  `SECURITY.md` says it, with what the database holds.
+
 ## The markdown codec, and the file that outlived its name
 
 ### The rules, in short
@@ -758,7 +811,8 @@ above a few thousand sites.
 
 - **A session is credentials, and credentials are not seeds** (FRU-42). `FRUITBACK_SESSION_PATH` is
   its own SQLite file, whatever `FRUITBACK_STORE` says — a worker keeping its seeds in Linear still
-  keeps its sessions on a disk it owns.
+  keeps its sessions on a disk it owns. A worker with `FRUITBACK_DATABASE_URL` keeps them in that
+  database instead, beside its accounts (FRU-142): see _The sessions in PostgreSQL_.
 - **Do not reuse `sqlite.ts`'s `connect` for it.** That helper applies the _seeds_ migrations and
   drives `PRAGMA user_version` with them, so a session database opened through it gets `seeds` and
   `comments` tables and two schemas fighting over one counter. `session-sqlite.ts` has its own.

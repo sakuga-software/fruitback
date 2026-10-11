@@ -1,5 +1,6 @@
 import { startServer } from './server.ts';
 import { runForget, runPair } from './cli.ts';
+import { closeDatabases } from './postgres.ts';
 
 /**
  * Container entry point, kept apart from `server.ts` so importing the server in a test does not bind
@@ -21,6 +22,9 @@ if (command !== undefined) {
 
   for (const line of outcome.lines) (outcome.ok ? console.log : console.error)(line);
   process.exitCode = outcome.ok ? 0 : 1;
+  // `pair` writes its code in the database when the worker has one (FRU-142). An open pool keeps the
+  // process up until its connections time out, so a command would end ten seconds after its answer.
+  await closeDatabases();
 } else {
   startServer();
 }

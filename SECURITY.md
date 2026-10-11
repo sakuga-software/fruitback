@@ -389,7 +389,9 @@ make, against a worker its reviewer chose, with a credential it never sees.
 
 **`FRUITBACK_SESSION_PATH` is a credentials file.** Give it the same care as a key: a copy of it is
 not a set of working logins, but it is a list of who holds a session and until when. Back it up with
-`sqlite3 … ".backup"` rather than `cp`, which loses the write-ahead log.
+`sqlite3 … ".backup"` rather than `cp`, which loses the write-ahead log. With
+`FRUITBACK_DATABASE_URL` there is no such file: the sessions are two tables of that database
+(FRU-142), and the same care goes to the database and to each dump of it.
 
 **An extension origin is exempt from `ALLOWED_ORIGINS`, on every route.** The id in
 `chrome-extension://<id>` changes between an unpacked build and a store build, so no operator can
@@ -450,9 +452,17 @@ that signs a person in. Since FRU-121 it also holds the key of each connector, e
 of that file, and the worker refuses to start with both. The database holds what the file holds, in
 tables of the same names, and nothing more: addresses, names, the id each provider gives a person,
 the roles, the sites, the digest of each sign-in link, the key of each connector encrypted with
-`FRUITBACK_SECRETS_KEY`, and the notes that wait for an address that receives them. It holds no
-session: those stay in `FRUITBACK_SESSION_PATH`. Three things change with a database on a network,
-and each has its condition:
+`FRUITBACK_SECRETS_KEY`, and the notes that wait for an address that receives them.
+
+**Since FRU-142 that database holds the sessions too**, in place of `FRUITBACK_SESSION_PATH`, which
+the worker then refuses. It holds what the file held, in tables of the same names: for each pairing
+code and each refresh token its SHA-256 digest, the subject, the name and the address its pairing
+gave, its workspace, and its dates. No code and no token is in a row:
+test:`holds no code and no token in clear, in any row of any table` reads every table of the schema.
+The rules of a session are the same, and they hold between two connections: one code opens one
+session, and one token has one live successor.
+
+Three things change with a database on a network, and each has its condition:
 
 - **The address holds the password of the database.** No diagnostic of the worker quotes it: a value
   that is refused is named by its variable, and the message of a database that does not answer has
@@ -464,6 +474,9 @@ and each has its condition:
 - **Whoever can connect to the database reads every account, and can write a site or a role.** The
   file was reachable by whoever reads the volume. The database is reachable by whoever has its
   address and its password, from wherever its port is open. Do not publish that port.
+- **Whoever can write to the database can write a session.** A row with the digest of a token they
+  chose is a session of the subject and the workspace they wrote, as it was for whoever could write
+  the session file. Reading is not enough: a digest is not a token.
 
 A copy of the database is a copy of the file: no working login and no working key of a tracker,
 while `FRUITBACK_SECRETS_KEY` is not with it.
