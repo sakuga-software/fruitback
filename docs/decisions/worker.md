@@ -555,10 +555,14 @@ any store` asks it of every spec rather than of Linear.
   change to the store that removes that text fails the control with the text, and the violation is
   written again. Do not weaken a case to make a control pass.
 - **A race is a case too, and its violation is a store that waits.** `node:sqlite` is synchronous, so
-  no change to the SQLite store loses a race. The three cases that run calls at the same moment (one
-  account for one address, one sign-in for one link, one session for one code) have a store that
-  reads, waits a turn of the event loop, then writes. On SQLite these cases prove nothing: they are
-  there for a store on a network.
+  no change to the SQLite store loses a race. The four cases that run calls at the same moment (one
+  account for one address, one sign-in for one link, one whole list of destinations for one site, one
+  session for one code) have a store that reads, waits a turn of the event loop, then writes. On
+  SQLite these cases prove nothing: they are there for a store on a network.
+- **A rule that a foreign key holds has a store around the real one too.** A destination goes with
+  its site, its connector and its workspace, and only with them. Without the key the statement
+  fails, and a store that throws proves nothing of the case: the control wants an assertion of the
+  case to fail. So the violation removes too much, through the interface.
 - **What is true of one file format stays out of the suite**: the bytes of the file and of its
   `-wal`, `PRAGMA user_version`, a blob in a `TEXT` column, the cascade read with the foreign keys
   off, a file of a version before. Those are in `accounts.test.ts` and `session.test.ts`, with what
@@ -608,6 +612,14 @@ the variable` holds the rest in a process of its own. `/health` opens no databas
   append, never edit. `migrate` gives each one its own transaction and an advisory lock, and writes
   its number and its name in `schema_migrations`. A build that edited an entry is refused by the
   name. A database with more migrations than the build is left alone: that is a roll back.
+- **`setDestinations` is one transaction that holds the row of its site** (`FOR UPDATE`), and the
+  row of each connector until it ends (`FOR KEY SHARE`). SQLite checked, then wrote, with nothing
+  between. A list is removed and written again, so two lists for one site must come one after the
+  other.
+- **A site and its destinations are one statement**, a `LEFT JOIN`, where SQLite reads the sites and
+  then every destination. It is one exchange with the server for a request, and one moment of the
+  database. `clientMap` orders by position alone: read the numbers below before you add a column to
+  that `ORDER BY`.
 - **PGlite is the PostgreSQL of `node --test`, and it cannot show a race.** It has one connection, so
   a transaction holds every other call back. The CI job `postgres` runs the same cases on a server,
   and `test:postgres` fails when the address of that server is missing: a suite that is skipped
@@ -623,10 +635,18 @@ the variable` holds the rest in a process of its own. `/health` opens no databas
   for a new account, one `INSERT … ON CONFLICT … DO UPDATE` for `addSite`, `IS DISTINCT FROM` for
   `IS NOT ?` with a null, one `UPDATE … RETURNING` for a link.
 - **The race that only a server shows is planted.** An insert of an account that reads first and
-  names no conflict is correct one call after the other. It passes the 32 cases on PGlite, and on a
+  names no conflict is correct one call after the other. It passes every case on PGlite, and on a
   server test:`fails on a real server when the insert names no conflict` gets `23505`.
   test:`passes on PGlite with an insert that names no conflict` is the other half, kept so the sentence
   about PGlite stays measured.
+- **So is the race of two lists.** Without the lock on the site, the second transaction removes the
+  rows it saw, not the ones the first one wrote, and both write position 0.
+  test:`fails on a real server with no lock on the site` gets `23505` from the key of the table, and
+  test:`passes on PGlite with no lock on the site` is the other half.
+- **Migration 2 is migration 7 of the SQLite file**: `site_destinations`, with the same names, and
+  the copy of the one destination a site had. No database was at migration 1 when it was written, so
+  the copy moved nothing anywhere. It is there so the two lists of migrations say the same thing,
+  and test:`gives a site the one destination it had before the list existed` holds it.
 - **Two processes on an empty database.** test:`applies each migration once when two processes start
 together` starts two Node processes, and the first migration sleeps so the second arrives inside
   it. Without the advisory lock the test fails with a duplicate key in the catalogue of PostgreSQL
@@ -646,30 +666,44 @@ together` starts two Node processes, and the first migration sleeps so the secon
 ### The sites are read on every request, and that was measured
 
 `withSites` reads every site on every request, `/feedback` included. On a file that is free. On a
-database it is one exchange with the server. Measured on 2026-10-10, on one machine, PostgreSQL 17
-in a container reached through a published port, 500 calls after 50 to warm up, median and p95:
+database it is one exchange with the server. Measured on 2026-10-11, after a site got its list of
+destinations (#134), on one machine, PostgreSQL 17 in a container reached through a published port.
+Every site but the one that is read has two destinations. 500 calls after 50 to warm up, three runs,
+and for each cell the middle value of the three: median and p95.
 
 | Sites | `clientMap`, SQLite | `clientMap`, PostgreSQL | `GET /feedback`, SQLite | `GET /feedback`, PostgreSQL |
 | ----- | ------------------- | ----------------------- | ----------------------- | --------------------------- |
-| 1     | 0.007 ms, 0.010 ms  | 0.188 ms, 0.419 ms      | 0.039 ms, 0.158 ms      | 0.182 ms, 0.625 ms          |
-| 100   | 0.081 ms, 0.086 ms  | 0.474 ms, 0.746 ms      | 0.115 ms, 0.135 ms      | 1.079 ms, 5.395 ms          |
-| 1000  | 0.801 ms, 8.569 ms  | 0.709 ms, 0.950 ms      | 0.922 ms, 1.526 ms      | 1.190 ms, 2.379 ms          |
+| 1     | 0.013 ms, 0.017 ms  | 0.201 ms, 0.691 ms      | 0.054 ms, 0.074 ms      | 0.213 ms, 0.469 ms          |
+| 100   | 0.322 ms, 0.427 ms  | 0.576 ms, 1.374 ms      | 0.380 ms, 1.205 ms      | 0.619 ms, 1.138 ms          |
+| 1000  | 3.274 ms, 6.506 ms  | 4.018 ms, 7.710 ms      | 4.049 ms, 10.290 ms     | 5.489 ms, 9.563 ms          |
 
 The read of a pin is on the memory store with a warm cache: the fastest read there is, so the
 database is the largest share it can be.
 
+**The list of destinations made this read three to five times dearer, on both databases.** Before
+it, on 2026-10-10, `clientMap` for 1,000 sites was 0.8 ms on SQLite and 0.7 ms on PostgreSQL, and the
+first version of this section said « about one millisecond ». Where the rest goes, measured:
+
+- `clientOf` for 1,000 sites of two destinations is 0.93 ms, and 0.03 ms when they have none. 0.70 ms
+  of it is `destinationId`: one SHA-256 for each destination, on each request.
+- The statement, on the server, for 1,000 sites and 2,000 destinations: 0.7 ms, and 0.05 ms for the
+  one table before. With the id of the site in its `ORDER BY` it is 1.5 ms, which is why `clientMap`
+  orders by position alone.
+
 **Decision: no cache in this slice.** The ticket offered a short cache, or a version in the `Kv`.
 Neither was taken, for three reasons:
 
-- The cost is about one millisecond for 1,000 sites, on the same host. A read whose cache is cold
-  calls a tracker, which is hundreds of times that.
+- What PostgreSQL adds is the difference between two columns: less than 1.5 ms for 1,000 sites, and
+  0.25 ms for 100, on the same host. A read whose cache is cold calls a tracker, which is hundreds
+  of times that.
 - A cache changes what is observable. Today a site is served the moment it is added and refused the
   moment it is removed, and a test holds it on both databases. A short cache serves a removed site
   until it ends. A version in the `Kv` is exact only while the `Kv` is in the process: on two
   replicas it is a short cache again, and two replicas are what PostgreSQL is for.
-- What grows with the number of sites is not the exchange, it is reading the whole table to route one
-  client. The answer to that is to read one site by its id, and the origins for CORS apart. That is
-  a change to `withSites`, not a cache.
+- What grows with the number of sites is not the exchange. It is reading every site, and now naming
+  every destination, to route one client: 3 to 5 ms for 1,000 sites, on SQLite too. The answer to
+  that is to read one site by its id, and the origins for CORS apart. That is a change to
+  `withSites`, not a cache, and no slice of FRU-139 has it.
 
 **Not measured: a database on another host.** There the cost is the round trip of that network on
 every request, and this decision must be measured again before such a deployment. The same holds

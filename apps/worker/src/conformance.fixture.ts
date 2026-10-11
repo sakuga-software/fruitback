@@ -62,8 +62,10 @@ export function onFile<Store>(
  * A change that breaks one rule.
  *
  * `replace` changes the source of the reference implementation: the first `from` after `after`, or
- * the only `from` of the file. `wrap` is for a rule that the reference implementation cannot break:
- * it is synchronous, so only a store that waits between its read and its write loses a race.
+ * the only `from` of the file. `wrap` is for a rule that no change of that source breaks with an
+ * assertion. A race: the reference is synchronous, so only a store that waits between its read and
+ * its write loses one. A foreign key: without it the statement fails, and a store that throws proves
+ * nothing of the case.
  */
 export type Violation<Store> = {
   /** The name of the case that must fail. */

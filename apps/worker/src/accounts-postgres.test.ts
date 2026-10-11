@@ -288,6 +288,30 @@ describe('two sign-ins of one new address, on two connections (FRU-141)', () => 
 });
 
 /**
+ * Two lists for one site at the same moment (FRU-123 on PostgreSQL). `setDestinations` removes the
+ * rows of the site, then writes the new ones. With no lock on the row of the site, the second
+ * transaction does not see the rows of the first: both write position 0, and the key refuses one.
+ */
+describe('two lists of destinations for one site, on two connections (FRU-141)', () => {
+  const CASE = 'keeps one whole list when two calls set the destinations of one site at the same moment';
+  const WITHOUT_LOCK = {
+    from: 'SELECT 1 FROM sites WHERE id = $1 AND workspace_id = $2 FOR UPDATE',
+    to: 'SELECT 1 FROM sites WHERE id = $1 AND workspace_id = $2',
+  };
+
+  it('passes on PGlite with no lock on the site', async () => {
+    assert.equal(await outcomeOf(CASE, WITHOUT_LOCK, createPgliteDatabase), 'passed');
+  });
+
+  it('fails on a real server with no lock on the site', { skip: NO_REAL_POSTGRES }, async () => {
+    const outcome = await outcomeOf(CASE, WITHOUT_LOCK, createRealDatabase);
+
+    assert.ok(outcome instanceof Error, 'the case passed on a store that loses the race');
+    assert.equal((outcome as { code?: string }).code, '23505');
+  });
+});
+
+/**
  * « Without `FRUITBACK_DATABASE_URL`, the worker loads nothing of PostgreSQL ». Each run is a process
  * of its own: the modules that one test loaded would be loaded for the next.
  */
