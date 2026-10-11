@@ -4,6 +4,7 @@ import { type GitHubOAuth, parseGitHubOAuth } from './github-oauth.ts';
 import { type GoogleOAuth, parseGoogleOAuth } from './google-oauth.ts';
 import { type LinearOAuth, parseLinearOAuth } from './linear-oauth.ts';
 import { type ClientMap, originsFromClients, readClientMap, unreadableClients, workspacesOf } from './clients.ts';
+import { readDatabaseUrl } from './postgres.ts';
 import { DEFAULT_LIMIT } from './rate-limit.ts';
 import type { StoreConfig } from './store-config.ts';
 import { readStoreConfig } from './stores.ts';
@@ -74,6 +75,12 @@ export type WorkerEnv = {
    * Absent, the worker serves the clients of its environment, as before.
    */
   FRUITBACK_ACCOUNTS_PATH?: string;
+  /**
+   * The address of a PostgreSQL database that holds the accounts in place of that file (FRU-141),
+   * as `postgres://user:password@host:5432/database`. Refused beside `FRUITBACK_ACCOUNTS_PATH`: the
+   * accounts have one source. **It carries a password**, so no diagnostic quotes it.
+   */
+  FRUITBACK_DATABASE_URL?: string;
   /**
    * Where the console answers, for example `https://app.fruitback.com` (FRU-98). A sign-in link opens
    * it, and it is the one origin the console routes answer with a cookie. Required with accounts.
@@ -179,6 +186,8 @@ const configSchema = z.object({
   sessionPath: z.string().min(1).optional(),
   /** Where the accounts, workspaces and sites live (FRU-96). Absent: the clients come from the env. */
   accountsPath: z.string().min(1).optional(),
+  /** The PostgreSQL database that holds the accounts in place of the file (FRU-141). */
+  databaseUrl: z.string().min(1).optional(),
   /** The console's address, with no slash at the end (FRU-98). */
   consoleUrl: z.string().min(1).optional(),
   /** How the worker sends e-mail, or absent when it sends none (FRU-98). */
@@ -239,6 +248,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     clients: clients.ok ? clients.clients : Number.NaN,
     sessionPath: env.FRUITBACK_SESSION_PATH || undefined,
     accountsPath: env.FRUITBACK_ACCOUNTS_PATH || undefined,
+    databaseUrl: readDatabaseUrl(env.FRUITBACK_DATABASE_URL),
     consoleUrl: readConsoleUrl(env.FRUITBACK_CONSOLE_URL),
     mail: readMail(env),
     publicUrl: readConsoleUrl(env.FRUITBACK_PUBLIC_URL),
@@ -266,6 +276,21 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     return { ok: false, missing: missing.length > 0 ? [...new Set(missing)] : ['(invalid configuration)'] };
   }
 
+  // The reason never quotes the value: it holds the password of the database.
+  if (env.FRUITBACK_DATABASE_URL && result.data.databaseUrl === undefined) {
+    return { ok: false, missing: ['FRUITBACK_DATABASE_URL (a postgres:// address with a host)'] };
+  }
+  // One source for the accounts, as for the clients below (FRU-141).
+  if (result.data.databaseUrl !== undefined && result.data.accountsPath !== undefined) {
+    return {
+      ok: false,
+      missing: ['FRUITBACK_ACCOUNTS_PATH (FRUITBACK_DATABASE_URL is set, and the accounts are in that database)'],
+    };
+  }
+  const accounts = hasAccounts(result.data);
+  /** The variable that turned the accounts on, for a diagnostic that names what the operator wrote. */
+  const source = result.data.databaseUrl === undefined ? 'FRUITBACK_ACCOUNTS_PATH' : 'FRUITBACK_DATABASE_URL';
+
   // Refused at boot rather than served as a permanent 401 (FRU-40). A client that requires a
   // verified reader and has no key to verify one with answers nobody, for ever, and the symptom — a
   // widget showing no pins — points at the browser rather than at this line of configuration.
@@ -287,7 +312,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   if (result.data.secretsKey !== undefined && result.data.secretsKey === result.data.identitySecret) {
     return { ok: false, missing: ['FRUITBACK_SECRETS_KEY (it must differ from FRUITBACK_IDENTITY_SECRET)'] };
   }
-  if (result.data.secretsKey !== undefined && result.data.accountsPath === undefined) {
+  if (result.data.secretsKey !== undefined && !accounts) {
     return {
       ok: false,
       missing: ['FRUITBACK_ACCOUNTS_PATH (FRUITBACK_SECRETS_KEY encrypts the connectors of a workspace)'],
@@ -333,8 +358,8 @@ export function readConfig(env: WorkerEnv): ConfigResult {
 
   // A worker with accounts reads its clients from the file the console writes. Two sources for one
   // map would let a site exist in one and not in the other.
-  if (result.data.accountsPath !== undefined && result.data.clients !== undefined) {
-    return { ok: false, missing: ['FRUITBACK_CLIENTS (FRUITBACK_ACCOUNTS_PATH is set, and the sites come from it)'] };
+  if (accounts && result.data.clients !== undefined) {
+    return { ok: false, missing: [`FRUITBACK_CLIENTS (${source} is set, and the sites come from it)`] };
   }
 
   if (env.FRUITBACK_CONSOLE_URL && result.data.consoleUrl === undefined) {
@@ -342,10 +367,10 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   }
 
   // A sign-in link opens the console, so accounts with no console have nowhere to send a person.
-  if (result.data.accountsPath !== undefined && result.data.consoleUrl === undefined) {
+  if (accounts && result.data.consoleUrl === undefined) {
     return {
       ok: false,
-      missing: ['FRUITBACK_CONSOLE_URL (FRUITBACK_ACCOUNTS_PATH is set, and a sign-in opens the console)'],
+      missing: [`FRUITBACK_CONSOLE_URL (${source} is set, and a sign-in opens the console)`],
     };
   }
 
@@ -375,11 +400,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
         missing: ['FRUITBACK_LINEAR_OAUTH (<client id>:<client secret> of a Linear OAuth application)'],
       };
     }
-    if (
-      result.data.publicUrl === undefined ||
-      result.data.accountsPath === undefined ||
-      result.data.secretsKey === undefined
-    ) {
+    if (result.data.publicUrl === undefined || !accounts || result.data.secretsKey === undefined) {
       return {
         ok: false,
         missing: [
@@ -394,7 +415,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     if (result.data.google === undefined) {
       return { ok: false, missing: ['FRUITBACK_GOOGLE_OAUTH (<client id>:<client secret> of a Google OAuth client)'] };
     }
-    if (result.data.publicUrl === undefined || result.data.accountsPath === undefined) {
+    if (result.data.publicUrl === undefined || !accounts) {
       return {
         ok: false,
         missing: [
@@ -409,7 +430,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     if (result.data.github === undefined) {
       return { ok: false, missing: ['FRUITBACK_GITHUB_OAUTH (<client id>:<client secret> of a GitHub OAuth App)'] };
     }
-    if (result.data.publicUrl === undefined || result.data.accountsPath === undefined) {
+    if (result.data.publicUrl === undefined || !accounts) {
       return {
         ok: false,
         missing: [
@@ -420,14 +441,23 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   }
 
   // An account signs in to get a session, so accounts without sessions sign in to nothing.
-  if (result.data.accountsPath !== undefined && result.data.sessionPath === undefined) {
+  if (accounts && result.data.sessionPath === undefined) {
     return {
       ok: false,
-      missing: ['FRUITBACK_SESSION_PATH (FRUITBACK_ACCOUNTS_PATH is set, and signing in opens a session)'],
+      missing: [`FRUITBACK_SESSION_PATH (${source} is set, and signing in opens a session)`],
     };
   }
 
   return { ok: true, config: result.data };
+}
+
+/**
+ * Whether this worker keeps accounts: in a SQLite file, or in PostgreSQL (FRU-141).
+ *
+ * The one question for « are there accounts », so a route cannot ask it of one of the two sources.
+ */
+export function hasAccounts(config: Pick<WorkerConfig, 'accountsPath' | 'databaseUrl'>): boolean {
+  return config.accountsPath !== undefined || config.databaseUrl !== undefined;
 }
 
 /** The console's address with no slash at the end, or `undefined` when it cannot carry a sign-in. */
