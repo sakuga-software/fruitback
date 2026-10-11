@@ -362,6 +362,30 @@ export function accountCases(it: Declare<AccountStore>): void {
       visibility: 'everyone',
       destinations: reversed,
     });
+
+    // A second site, with the same places in the first order. A store that reads the places of
+    // every site in one answer gets the rows of the two sites one between the other: each site
+    // keeps its own order, in the list of the workspace and in the client map.
+    await pause();
+    const other = await store.addSite(workspace.id, { origin: 'https://other.dev', visibility: 'members' });
+    assert.equal(await store.setDestinations(workspace.id, other.id, places), true);
+
+    assert.deepEqual(
+      (await store.sites(workspace.id)).map((listed) => [listed.id, listed.destinations]),
+      [
+        [site.id, reversed],
+        [other.id, places],
+      ],
+    );
+    const map = await store.clientMap();
+    assert.deepEqual(
+      map[site.id]?.destinations,
+      reversed.map((place) => ({ id: destinationId(site.id, place), ...place })),
+    );
+    assert.deepEqual(
+      map[other.id]?.destinations,
+      places.map((place) => ({ id: destinationId(other.id, place), ...place })),
+    );
   });
 
   it('refuses a list of destinations in which one connector is of another workspace, and writes none of it', async (store) => {
