@@ -175,7 +175,9 @@ How this repository is formatted, tested and documented, and which test holds ea
   the line of the package. A line moves up by a commit that says why: `node tools/mutation/ratchet.ts
 write <package> <mutation.json>` prints it from the report of a full run.
 - **A pull request mutates the files of the scope that it changes, and those whose test it changes**
-  (`src/x.test.ts` for `src/x.ts`): a pull request that deletes a test is measured too. A full run happens every Monday,
+  (`src/x.test.ts` for `src/x.ts`), deleted or renamed included: a pull request that deletes a test is
+  measured too. A test of another name that also kills those mutants (`app.test.ts` for `identity.ts`),
+  and a fixture, are not mapped: the Monday run measures them. A full run happens every Monday,
   by hand (`workflow_dispatch`), and on a pull request that changes how mutation runs: the workflow,
   a `stryker.config.json`, or `tools/mutation/`.
 - **StrykerJS is installed apart**, from `tools/mutation/pnpm-lock.yaml`, by the mutation job alone.

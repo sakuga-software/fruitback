@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 /**
  * What a mutation job mutates, as two lines for `$GITHUB_OUTPUT` (FRU-172).
@@ -49,15 +49,28 @@ export function choose(
   return { mutate: scope.filter(tested), full: false };
 }
 
+/**
+ * The files a pull request changes since its base, deleted ones included.
+ *
+ * A test deleted whole is a test that changed: its file must be mutated (raised in review). Renames
+ * are read as a deletion and an addition, so that the old name of a test is seen too.
+ */
+export function changedSince(base: string, cwd?: string): string[] {
+  return execFileSync('git', ['diff', '--name-only', '--no-renames', '--diff-filter=AMD', `${base}...HEAD`], {
+    encoding: 'utf8',
+    cwd,
+  })
+    .split('\n')
+    .filter((line) => line !== '');
+}
+
 function main([pkg = '', event = '', base = '']: string[]): void {
   const config = JSON.parse(readFileSync(`${pkg}/stryker.config.json`, 'utf8')) as { mutate?: unknown };
-  const changed =
-    base === ''
-      ? undefined
-      : execFileSync('git', ['diff', '--name-only', '--diff-filter=AMR', `${base}...HEAD`], { encoding: 'utf8' })
-          .split('\n')
-          .filter((line) => line !== '');
-  const { mutate, full } = choose(pkg, scopeOf(config), event, changed);
+  const changed = base === '' ? undefined : changedSince(base);
+  const chosen = choose(pkg, scopeOf(config), event, changed);
+  // StrykerJS stops on a file that is not there: a source the pull request deletes is not mutated.
+  const mutate = chosen.mutate.filter((file) => existsSync(`${pkg}/${file}`));
+  const { full } = chosen;
 
   console.log(`mutate=${mutate.join(',')}`);
   console.log(`full=${full ? '--full' : ''}`);

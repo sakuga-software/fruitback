@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { parseDocument } from 'yaml';
 import {
@@ -10,7 +13,7 @@ import {
   regressions,
   scoreOf,
 } from '../../../tools/mutation/ratchet.ts';
-import { choose, scopeOf } from '../../../tools/mutation/scope.ts';
+import { changedSince, choose, scopeOf } from '../../../tools/mutation/scope.ts';
 
 /**
  * The mutation job, and the line its score may not go under (FRU-172).
@@ -122,6 +125,40 @@ describe('what a mutation job mutates', () => {
       'tools/mutation/ratchet.ts',
     ]) {
       assert.deepEqual(choose('packages/shared', scope, 'pull_request', [file]), { mutate: scope, full: true }, file);
+    }
+  });
+
+  /**
+   * A test deleted whole, or renamed, still brings its file into the run (raised in review). Run on
+   * a real repository of git, because the defect was in the flags of the diff, not in the choice.
+   */
+  it('sees a test the pull request deletes or renames, through git itself', () => {
+    const repository = mkdtempSync(join(tmpdir(), 'fruitback-scope-'));
+    const git = (...args: string[]) =>
+      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: repository });
+    try {
+      git('init', '-q', '-b', 'main');
+      mkdirSync(join(repository, 'packages/shared/src'), { recursive: true });
+      for (const file of ['issue', 'issue.test', 'seed', 'seed.test']) {
+        writeFileSync(join(repository, `packages/shared/src/${file}.ts`), `export const name = '${file}';\n`);
+      }
+      git('add', '.');
+      git('commit', '-q', '-m', 'base');
+      const base = git('rev-parse', 'HEAD').toString().trim();
+      rmSync(join(repository, 'packages/shared/src/issue.test.ts'));
+      renameSync(
+        join(repository, 'packages/shared/src/seed.test.ts'),
+        join(repository, 'packages/shared/src/x.test.ts'),
+      );
+      git('add', '-A');
+      git('commit', '-q', '-m', 'a test deleted, a test renamed');
+
+      assert.deepEqual(choose('packages/shared', scope, 'pull_request', changedSince(base, repository)), {
+        mutate: ['src/seed.ts', 'src/issue.ts'],
+        full: false,
+      });
+    } finally {
+      rmSync(repository, { recursive: true, force: true });
     }
   });
 
