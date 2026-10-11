@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import { afterEach, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { handleRequest, sessionStoreFor } from './app.ts';
 import { type WorkerEnv, hasSessions, readConfig } from './env.ts';
 import { type Database, closeDatabases } from './postgres.ts';
@@ -82,34 +83,54 @@ describe('a worker whose sessions are in PostgreSQL (FRU-142)', () => {
     assert.equal(sessionStoreFor(none.config), undefined);
   });
 
-  it('answers a session route as a store that is down when the database does not answer', async () => {
-    const routes: [string, Record<string, string>][] = [
-      ['/session/pair', { code: 'ABCD-EFGH-JKLM' }],
-      ['/session/refresh', { refreshToken: 'a'.repeat(43) }],
-      ['/session/logout', { refreshToken: 'a'.repeat(43) }],
-    ];
+  /**
+   * The worker reads its sites before it routes a request, so a database that is down answers `502`
+   * there, for every route, and the store of the sessions is never asked: that is the test of
+   * FRU-141. Here the accounts answer and the sessions do not, so a request reaches the three
+   * routes. The first version of this test did not give the accounts, and passed with a route that
+   * does not exist. Raised in review.
+   */
+  it('answers the three session routes as a store that is down when the sessions do not answer', async () => {
+    const answering = await createPgliteDatabase();
+    const accounts = createPostgresAccountStore(answering);
+    let ip = 40;
+    const post = (path: string, body: Record<string, string>) => {
+      ip += 1;
+
+      return handleRequest(
+        new Request(`https://worker.test${path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Origin: 'https://app.fruitback.test' },
+          body: JSON.stringify(body),
+        }),
+        // The address of the sessions is one where nothing listens.
+        envWith(),
+        { clientIp: `192.0.2.${ip}`, accounts },
+      );
+    };
 
     try {
-      for (const [index, [path, body]] of routes.entries()) {
-        const response = await handleRequest(
-          new Request(`https://worker.test${path}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Origin: 'https://app.fruitback.test' },
-            body: JSON.stringify(body),
-          }),
-          envWith(),
-          { clientIp: `192.0.2.${40 + index}` },
-        );
+      // The control: the request is routed. A path that is no session route answers `404` here,
+      // and `502` when the accounts do not answer either.
+      assert.equal((await post('/session/logout', { refreshToken: 'a'.repeat(43) })).status, 404);
+
+      for (const [path, body] of [
+        ['/session/pair', { code: 'ABCD-EFGH-JKLM' }],
+        ['/session/refresh', { refreshToken: 'a'.repeat(43) }],
+        ['/session/revoke', { refreshToken: 'a'.repeat(43) }],
+      ] as const) {
+        const response = await post(path, body);
         const said = await response.text();
 
-        // `502` and not `401`: the extension keeps its session and tries again, as with a file
-        // on a volume that is not mounted.
+        // `502` and not `401`: the extension keeps its session and tries again, as with a file on
+        // a volume that is not mounted.
         assert.equal(response.status, 502, `${path}: ${said}`);
         assert.deepEqual(JSON.parse(said), { error: 'store-unavailable' });
         assert.equal(said.includes(PASSWORD), false, said);
       }
     } finally {
       await closeDatabases();
+      await answering.close();
     }
   });
 });
