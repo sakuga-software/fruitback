@@ -872,4 +872,12 @@ const STYLES = `
   font-size: 13px;
   color: var(--fruitback-color-accent);
 }
+/*
+  A thumb, not a pointer (FRU-157). The cross stays 15 px and its button grows to 44 px. The negative
+  margins give the extra size back to the padding of the thread, so the head keeps its height.
+*/
+@media (pointer: coarse) {
+  .fruitback-thread-close { min-width: 44px; min-height: 44px; margin-block: -12px; margin-inline-end: -14px; }
+  .fruitback-thread-link { display: inline-flex; align-items: center; min-height: 32px; margin-top: 4px; }
+}
 `;

@@ -326,8 +326,11 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   function start(): void {
     capturing = true;
     container.dataset.fruitbackCapturing = '';
-    launchLabel.textContent = t.text('launch.capturing');
-    announcer.textContent = t.text('capture.instructions');
+    // A phone has no Escape key and no arrows (FRU-157). Read at each start: a tablet gains a
+    // keyboard and a mouse, and loses them.
+    const touch = view?.matchMedia?.('(pointer: coarse)').matches === true;
+    launchLabel.textContent = t.text(touch ? 'launch.capturingTouch' : 'launch.capturing');
+    announcer.textContent = t.text(touch ? 'capture.instructionsTouch' : 'capture.instructions');
   }
 
   function stop(): void {
@@ -505,5 +508,10 @@ li { display: list-item; }
   background: var(--fruitback-color-chip);
   /* The label is on the chip now. The foreground of the accent is dark in the dark scheme (FRU-93). */
   color: var(--fruitback-color-on-chip);
+}
+/* A thumb, not a pointer (FRU-157): the three buttons of the dock are 44 px on a touch screen. */
+@media (pointer: coarse) {
+  .fruitback-launch { min-height: 44px; padding-inline: 18px; }
+  .fruitback-configure, .fruitback-listing { width: 44px; height: 44px; }
 }
 `;

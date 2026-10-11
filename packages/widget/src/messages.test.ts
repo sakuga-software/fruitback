@@ -320,6 +320,12 @@ describe('every word the widget shows', () => {
     pressKey(page, 'ArrowDown');
     snapshots.push(...shown(host.root));
     host.stop();
+    // The same capture on a touch screen (FRU-157).
+    Object.defineProperty(page.view, 'matchMedia', { configurable: true, value: () => ({ matches: true }) });
+    host.start();
+    snapshots.push(...shown(host.root));
+    host.stop();
+    Reflect.deleteProperty(page.view, 'matchMedia');
     // The list of every note: with the three notes, then with none.
     const listed = {
       entries: overlay.resolutions().map((each) => ({ issue: each.issue, placement: placementOf(each) })),

@@ -105,6 +105,28 @@ describe('the chrome the reporter sees (FRU-36)', () => {
     assert.ok(launchButton().querySelector('svg.fruitback-icon'), 'stopping a capture removed the mark');
   });
 
+  it('says what a tap does on a touch screen, which has no Escape key (FRU-157)', () => {
+    const page = mountPage(PAGE, { width: 390, height: 844 });
+    const coarse = { value: true };
+    Object.defineProperty(page.view, 'matchMedia', {
+      configurable: true,
+      value: (query: string) => ({ matches: query === '(pointer: coarse)' && coarse.value }),
+    });
+    host = createCaptureHost({ document: page.document, engine: fakeEngine(page, () => null), onSelect: () => {} });
+    const announcer = host.root.querySelector('[data-fruitback-announcer]');
+
+    host.start();
+    assert.equal(launchButton().textContent, 'Cancel');
+    assert.equal(announcer?.textContent, 'Tap an element.');
+    host.stop();
+
+    // The same device with a mouse plugged in: read again at the next start.
+    coarse.value = false;
+    host.start();
+    assert.equal(launchButton().textContent, 'Esc to cancel');
+    assert.match(announcer?.textContent ?? '', /arrow keys/);
+  });
+
   it('keeps the host label over a translated one, before and after a capture (FRU-37)', () => {
     mount(
       () => null,

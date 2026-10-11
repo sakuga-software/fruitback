@@ -595,6 +595,13 @@ with no context and no instruction added.
   alone. Axe finds what the token test cannot, because that test compares the tokens a pair names and
   not the rule that paints them: text that the reset painted black, and a label that kept the
   foreground of the accent on the chip.
+- **On a touch screen, no control is under 24 × 24 px** (WCAG 2.5.8), and the close buttons and the
+  three buttons of the dock are 44 px (FRU-157). The rule is `@media (pointer: coarse)` in each
+  module, and the glyph keeps its size: the button grows around it. A box or a radio is measured by
+  its label, which a tap toggles. The fields are at 16 px there, because iOS Safari zooms the page
+  into a smaller field and stays zoomed. The launch button says `launch.capturingTouch` in the
+  capture mode, because a phone has no Escape key. `e2e/touch.spec.ts` measures every visible control
+  at 390 px, and its control plants a 10 px button.
 - **In the dark scheme the accent and the warning are light fills with dark text on them.** Each one
   is a fill under text and also text on the surface, and no single red does both with white text.
   A style that changes a background must change the foreground with it.

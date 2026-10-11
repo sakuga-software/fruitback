@@ -292,4 +292,8 @@ const STYLES = `
 @media (max-width: 480px) {
   .fruitback-sidebar { inset-block-start: auto; width: 100vw; max-height: 70vh; border-radius: var(--fruitback-radius-lg) var(--fruitback-radius-lg) 0 0; }
 }
+/* A thumb, not a pointer (FRU-157): the close button is 44 px, and the head keeps its height. */
+@media (pointer: coarse) {
+  .fruitback-sidebar-close { width: 44px; height: 44px; margin-block: -8px; margin-inline-end: -8px; }
+}
 `;

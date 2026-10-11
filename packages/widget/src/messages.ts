@@ -26,8 +26,11 @@ export type PluralMessage = { readonly [Category in Intl.LDMLPluralRule]?: strin
 export const ENGLISH = {
   'launch.label': 'Leave feedback',
   'launch.capturing': 'Esc to cancel',
+  // The same button on a touch screen, which has no Escape key (FRU-157).
+  'launch.capturingTouch': 'Cancel',
   'widget.label': 'Fruitback feedback',
   'capture.instructions': 'Point at an element, or move with the arrow keys and press Enter.',
+  'capture.instructionsTouch': 'Tap an element.',
   'capture.element': '{tag}: {text}',
   'capture.elementEmpty': '{tag}, no text',
 
