@@ -3,9 +3,9 @@ import { execFile } from 'node:child_process';
 import { afterEach, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { sessionStoreFor } from './app.ts';
+import { handleRequest, sessionStoreFor } from './app.ts';
 import { type WorkerEnv, hasSessions, readConfig } from './env.ts';
-import type { Database } from './postgres.ts';
+import { type Database, closeDatabases } from './postgres.ts';
 import {
   NO_REAL_POSTGRES,
   TEST_DATABASE_URL,
@@ -31,8 +31,9 @@ import {
 
 const run = promisify(execFile);
 const SECRET = 'a-worker-secret-of-exactly-enough';
+const PASSWORD = 'hunter2-not-for-a-log';
 // Port 1 of this machine: nothing listens there.
-const DATABASE_URL = 'postgres://fruitback:not-read-by-these-tests@127.0.0.1:1/fruitback';
+const DATABASE_URL = `postgres://fruitback:${PASSWORD}@127.0.0.1:1/fruitback`;
 
 /** A worker on a database: the accounts and the sessions are both in it. */
 function envWith(overrides: Partial<WorkerEnv> = {}): WorkerEnv {
@@ -79,6 +80,37 @@ describe('a worker whose sessions are in PostgreSQL (FRU-142)', () => {
     assert.ok(none.ok, none.ok ? '' : none.missing.join(', '));
     assert.equal(hasSessions(none.config), false);
     assert.equal(sessionStoreFor(none.config), undefined);
+  });
+
+  it('answers a session route as a store that is down when the database does not answer', async () => {
+    const routes: [string, Record<string, string>][] = [
+      ['/session/pair', { code: 'ABCD-EFGH-JKLM' }],
+      ['/session/refresh', { refreshToken: 'a'.repeat(43) }],
+      ['/session/logout', { refreshToken: 'a'.repeat(43) }],
+    ];
+
+    try {
+      for (const [index, [path, body]] of routes.entries()) {
+        const response = await handleRequest(
+          new Request(`https://worker.test${path}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Origin: 'https://app.fruitback.test' },
+            body: JSON.stringify(body),
+          }),
+          envWith(),
+          { clientIp: `192.0.2.${40 + index}` },
+        );
+        const said = await response.text();
+
+        // `502` and not `401`: the extension keeps its session and tries again, as with a file
+        // on a volume that is not mounted.
+        assert.equal(response.status, 502, `${path}: ${said}`);
+        assert.deepEqual(JSON.parse(said), { error: 'store-unavailable' });
+        assert.equal(said.includes(PASSWORD), false, said);
+      }
+    } finally {
+      await closeDatabases();
+    }
   });
 });
 
