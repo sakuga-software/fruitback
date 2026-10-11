@@ -202,13 +202,19 @@ async function refuseASearchPathThatIsNotPublic(db: Db): Promise<void> {
  */
 async function refuseARoleThatCannotCreate(db: Db): Promise<void> {
   const [row] = rowsOf(
-    await db.execute(sql`SELECT has_database_privilege(current_user, current_database(), 'CREATE') AS allowed`),
+    await db.execute(
+      sql`SELECT has_database_privilege(current_user, current_database(), 'CREATE') AS in_database,
+                 has_schema_privilege(current_user, 'public', 'CREATE') AS in_public`,
+    ),
   );
-  if (row?.allowed === true) return;
+  if (row?.in_database === true && row.in_public === true) return;
 
+  // Both are needed: the database for the `CREATE SCHEMA` of Drizzle, `public` for the tables. The
+  // owner of a database has both, unless somebody revoked one (raised in review, measured on 17.11).
   throw new StoreError(
-    'The role of FRUITBACK_DATABASE_URL cannot create in its database, and the migrations of the worker need it: ' +
-      'make that role the owner of the database, or grant it CREATE on the database (docs/self-hosting.md)',
+    `The role of FRUITBACK_DATABASE_URL cannot create ${row?.in_database === true ? 'in the schema « public »' : 'in its database'}, ` +
+      'and the migrations of the worker need it: make that role the owner of the database, or grant it CREATE ' +
+      'on the database and on the schema « public » (docs/self-hosting.md)',
   );
 }
 

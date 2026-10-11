@@ -275,6 +275,35 @@ describe('the migrations of the PostgreSQL database (FRU-180)', () => {
       });
     });
 
+    it('is refused too when it can create in its database and not in public', async () => {
+      await withALesserRole(async (database) => {
+        const admin = createPgDatabase(TEST_DATABASE_URL ?? '', { max: 1 });
+        const name = String(
+          (await rowsOf(database, 'SELECT current_database() AS name, current_user AS role'))[0]?.name,
+        );
+        const role = String((await rowsOf(database, 'SELECT current_user AS role'))[0]?.role);
+        try {
+          await rowsOf(admin, `GRANT CREATE ON DATABASE ${name} TO ${role}`);
+        } finally {
+          await admin.close();
+        }
+        const owner = createPgDatabase(new URL(`/${name}`, TEST_DATABASE_URL ?? '').href, { max: 1 });
+        try {
+          await rowsOf(owner, `REVOKE CREATE ON SCHEMA public FROM ${role}, PUBLIC`);
+        } finally {
+          await owner.close();
+        }
+
+        await assert.rejects(migrate(database, folderOf([FIRST])), (error: unknown) => {
+          assert.ok(error instanceof StoreError);
+          assert.match(error.message, /cannot create in the schema « public »/);
+          assert.doesNotMatch(error.message, /did not answer/);
+
+          return true;
+        });
+      });
+    });
+
     // The control: the role can make a table in `public`, and Drizzle alone is what PostgreSQL refuses.
     it('can make a table in public, and is refused by PostgreSQL when Drizzle alone migrates', async () => {
       await withALesserRole(async (database) => {
