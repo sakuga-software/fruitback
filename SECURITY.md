@@ -492,6 +492,30 @@ go there. **This is the first secret of a customer that the Cloud holds.**
 - A connector that cannot be used answers `502`, and the widget keeps the note. The note is never
   written to the worker's own store in its place: its team would not see it.
 
+### The places a site can send to, and who chooses (FRU-123)
+
+A site can send its notes to several places of its workspace, five at most. An owner or an admin
+sets the list in the console, and a note goes to the first place unless a member chose another one.
+
+- **The names of the places are for a person who may see the tracker**: an owner, an admin or a
+  member. `GET /feedback` answers them in a `destinations` field only to a session of the workspace
+  of the site, and it reads the role of the person at each request. A visitor, a guest, a session of
+  another workspace and a token that the site signed get no such field.
+- **The field is never in the cached answer.** One entry of the read cache serves everybody who may
+  read the page, so the field is added after the cache, for the caller of this request.
+- **A place is named by an opaque id.** It is a digest of the site, the connector, the team and the
+  project. The ids of the connector and of the team stay in the worker. The label is written by the
+  worker from what the tracker answers when an admin sets the list, never from the request.
+- **A member chooses with `POST /feedback?destination=<id>`.** The body stays the seed. An id the
+  site does not have, and a caller who may not see the tracker, both get `403
+destination-not-allowed`, and nothing is written, in the first place either.
+- **What says that a caller is a person of the workspace is the worker key, never a claim.** A site
+  signs its own identity tokens and can write a workspace in them. `verifyForClient` marks a token as
+  a session only when the worker key verified it.
+- **A read asks each place.** The cost of a page that opens is the number of places, which is why the
+  list is short. A place that cannot be read answers `502` for the page, like one connector that
+  cannot be used.
+
 ### Linear, connected with OAuth (FRU-134)
 
 Where the worker has a Linear application (`FRUITBACK_LINEAR_OAUTH`), a workspace connects its Linear

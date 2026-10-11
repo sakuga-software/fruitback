@@ -5,10 +5,12 @@ import {
   type ConnectorAttention,
   type ConnectorKind,
   type Destination,
+  MAX_DESTINATIONS,
   type Site,
   VISIBILITIES,
   type Visibility,
   can,
+  destinationId,
   siteOrigin,
   readLocaleTag,
 } from './accounts.ts';
@@ -80,16 +82,87 @@ function visibilityOf(value: unknown): Visibility | undefined {
 }
 
 /** The fields of a site the console shows, and the client id a script tag names. */
-type SiteView = { id: string; origin: string; visibility: Visibility; destination?: Destination };
+type SiteView = {
+  id: string;
+  origin: string;
+  visibility: Visibility;
+  destination?: Destination;
+  destinations?: Destination[];
+};
 
-/** WARNING: the destination names the tracker, so it is for a role that may see the tracker only. */
+/**
+ * WARNING: a destination names the tracker, so it is for a role that may see the tracker only.
+ *
+ * `destination` is the first of `destinations`: where a note goes when nobody chose. It stays for a
+ * console that knows one destination for a site.
+ */
 function siteView(site: Site, seesTracker: boolean): SiteView {
+  const [first] = site.destinations;
+
   return {
     id: site.id,
     origin: site.origin,
     visibility: site.visibility,
-    ...(seesTracker && site.destination !== undefined ? { destination: site.destination } : {}),
+    ...(seesTracker && first !== undefined ? { destination: first, destinations: site.destinations } : {}),
   };
+}
+
+/** What the worker calls each kind of source in the label of a destination. */
+const KIND_NAMES: Record<ConnectorKind, string> = { linear: 'Linear', rest: 'REST API' };
+
+/** The place does not exist in the tracker of the connector: nothing must be kept for it. */
+class UnknownPlace extends Error {}
+
+/**
+ * The destinations with the label a member reads when they choose one (FRU-123): « Linear · Design ».
+ *
+ * The worker writes the label from what the tracker answers, never from the request: a member
+ * chooses by this word, so it must name the place the note goes to. A tracker is asked once for a
+ * connector. It throws `UnknownPlace` for a team or a project the key does not reach.
+ */
+async function labelled(
+  context: ConsoleApiContext,
+  workspaceId: string,
+  wanted: readonly Destination[],
+): Promise<Destination[]> {
+  const connectors = await context.accounts.connectors(workspaceId);
+  const teamsOf = new Map<string, Awaited<ReturnType<typeof listLinearTeams>>['teams']>();
+  const out: Destination[] = [];
+
+  for (const destination of wanted) {
+    const connector = connectors.find((each) => each.id === destination.connector);
+    if (connector === undefined) throw new UnknownPlace();
+    if (connector.kind === 'rest') {
+      out.push({ ...destination, label: `${KIND_NAMES.rest} · ${connector.label}` });
+      continue;
+    }
+
+    let teams = teamsOf.get(connector.id);
+    if (teams === undefined) {
+      const kept = await context.accounts.sealedKey(connector.id);
+      if (kept === undefined) throw new UnknownPlace();
+      const authorization = await linearAuthorization(connector.id, kept.sealed, {
+        accounts: context.accounts,
+        secretsKey: context.secretsKey,
+        oauth: context.linearOAuth,
+      });
+      teams = (await listLinearTeams(authorization)).teams;
+      teamsOf.set(connector.id, teams);
+    }
+    const team = teams.find((each) => each.id === destination.teamId);
+    const project =
+      destination.projectId === undefined
+        ? undefined
+        : team?.projects.find((each) => each.id === destination.projectId);
+    if (team === undefined || (destination.projectId !== undefined && project === undefined)) throw new UnknownPlace();
+
+    out.push({
+      ...destination,
+      label: [KIND_NAMES[connector.kind], team.name, ...(project === undefined ? [] : [project.name])].join(' · '),
+    });
+  }
+
+  return out;
 }
 
 const CONNECTORS_UNAVAILABLE = { error: 'connectors-unavailable' } as const;
@@ -253,9 +326,59 @@ export async function handleConsoleApi(
     }
     const wanted = body?.connector === null || named === undefined ? undefined : destinationOf(body, named.kind);
     if (body?.connector !== null && wanted === undefined) return json(400, { error: 'invalid-destination' }, headers);
-    const set = await context.accounts.setDestination(workspaceId as string, destination[1] as string, wanted);
+    // This route sets the one destination of a site, as before FRU-123. The label is written when
+    // the tracker answers. A tracker that does not answer does not stop the change: the place is
+    // then shown with the name of its source only.
+    let kept = wanted;
+    if (wanted !== undefined) {
+      try {
+        [kept] = await labelled(context, workspaceId as string, [wanted]);
+      } catch (error) {
+        if (!(error instanceof StoreError) && !(error instanceof UnknownPlace)) throw error;
+      }
+    }
+    const set = await context.accounts.setDestination(workspaceId as string, destination[1] as string, kept);
 
     return set ? json(200, { destination: wanted ?? null }, headers) : json(404, { error: 'not-found' }, headers);
+  }
+
+  // Every place a site can send to, in order (FRU-123): the first one is where a note goes when
+  // nobody chose, and a member chooses among the others in the widget.
+  const places = /^\/sites\/([A-Za-z0-9_-]+)\/destinations$/.exec(rest);
+  if (places !== null) {
+    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+    if (!allowed('manage-sites')) return forbidden();
+
+    const body = await readBody(request);
+    const asked = body?.destinations;
+    if (!Array.isArray(asked) || asked.length > MAX_DESTINATIONS) {
+      return json(400, { error: 'invalid-destinations', max: MAX_DESTINATIONS }, headers);
+    }
+    const wanted: Destination[] = [];
+    for (const each of asked as unknown[]) {
+      const entry = typeof each === 'object' && each !== null ? (each as Record<string, unknown>) : undefined;
+      const named =
+        typeof entry?.connector === 'string' ? await context.accounts.sealedKey(entry.connector) : undefined;
+      // A connector of another workspace answers like one that does not exist.
+      if (named === undefined || named.workspaceId !== workspaceId) return json(404, { error: 'not-found' }, headers);
+      const one = destinationOf(entry, named.kind);
+      if (one === undefined) return json(400, { error: 'invalid-destination' }, headers);
+      wanted.push(one);
+    }
+    // The same place twice is one choice with two names: it is refused, not folded.
+    const names = wanted.map((one) => destinationId(places[1] as string, one));
+    if (new Set(names).size !== names.length) return json(400, { error: 'duplicate-destination' }, headers);
+
+    let kept: Destination[];
+    try {
+      kept = await labelled(context, workspaceId as string, wanted);
+    } catch (error) {
+      if (error instanceof UnknownPlace) return json(400, { error: 'invalid-destination' }, headers);
+      throw error;
+    }
+    const set = await context.accounts.setDestinations(workspaceId as string, places[1] as string, kept);
+
+    return set ? json(200, { destinations: kept }, headers) : json(404, { error: 'not-found' }, headers);
   }
 
   if (rest === '/connectors') {

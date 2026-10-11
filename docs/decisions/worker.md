@@ -1077,6 +1077,15 @@ client map were refused together at boot.
   workspace no client declares.
 - **What `/health` says is unchanged.** It counts open reads and names no client, and a workspace is
   the same kind of fact as a client id.
+- **A site sends to a list of places, and a member chooses one for a note** (FRU-123).
+  `Site.destinations` is ordered and holds five at most (`site_destinations`). The first one is where
+  the client routes, so a site with one place works as before. **A read asks each place**, with one
+  cache entry for each: Linear finds a note by its team. `GET /feedback` answers `destinations` after
+  the cache, **never in the cached answer**, and only to a session whose role has `see-tracker`
+  (`seesTracker`, the role is read at each request). A place has an opaque id (`destinationId`) and a
+  label that the worker writes from the tracker. The choice is `POST /feedback?destination=<id>`:
+  the body stays the seed, and the relay carries a query. **`verifyForClient` says `session` only for
+  a token that the worker key verified**: a site can write a workspace in its own tokens.
 
 ## Several client sites
 

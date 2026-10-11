@@ -26,7 +26,7 @@ type Sent = { query: string; body: Record<string, unknown> };
 /**
  * Make the worker answer like it does to a member: the read names `offered()`, and each write is
  * kept for the test to look at. `refuse` answers a write like the worker does for a place the site
- * no longer has.
+ * no longer has. A write that is not refused reaches the worker without its choice.
  */
 async function asMember(
   page: Page,
@@ -56,7 +56,9 @@ async function asMember(
         });
       }
 
-      return route.fallback();
+      // The real worker knows `?destination=` and has no such place: it would refuse the note. The
+      // place exists only in this answer, so the note goes on as one that names no place.
+      return url.search === '' ? route.fallback() : route.continue({ url: `${url.origin}${url.pathname}` });
     },
   );
 

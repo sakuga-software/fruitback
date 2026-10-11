@@ -70,7 +70,7 @@ describe('the words people paste', () => {
   });
 
   it('turns a site into a client of its workspace, read by members or by everyone', () => {
-    const site = { id: 'site_1', workspaceId: 'ws_1', origin: 'https://acme.dev' };
+    const site = { id: 'site_1', workspaceId: 'ws_1', origin: 'https://acme.dev', destinations: [] };
     assert.deepEqual(clientOf({ ...site, visibility: 'members' }), {
       workspace: 'ws_1',
       origins: ['https://acme.dev'],

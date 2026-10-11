@@ -7,6 +7,7 @@ import {
   type Connector,
   type ConnectorKind,
   type ConnectorTrouble,
+  type Destination,
   ROLES,
   type Role,
   type Site,
@@ -128,6 +129,26 @@ const MIGRATIONS: readonly string[] = [
   ALTER TABLE connectors ADD COLUMN attention TEXT;
   ALTER TABLE connectors ADD COLUMN attention_at INTEGER;
   `,
+  // Every place a site can send to, in order (FRU-123). The first row of a site is where a note
+  // goes when nobody chose. The three columns of `sites` held the one destination until here: they
+  // are copied, and nothing reads or writes them after this. A connector that goes takes its rows
+  // with it, and the next row of the site becomes the first.
+  `
+  CREATE TABLE site_destinations (
+    site_id TEXT NOT NULL REFERENCES sites (id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    connector_id TEXT NOT NULL REFERENCES connectors (id) ON DELETE CASCADE,
+    team_id TEXT,
+    project_id TEXT,
+    label TEXT,
+    PRIMARY KEY (site_id, position)
+  );
+
+  CREATE INDEX site_destinations_by_connector ON site_destinations (connector_id);
+
+  INSERT INTO site_destinations (site_id, position, connector_id, team_id, project_id)
+    SELECT id, 0, connector_id, team_id, project_id FROM sites WHERE connector_id IS NOT NULL;
+  `,
 ];
 
 const connections = new Map<string, DatabaseSync>();
@@ -206,7 +227,7 @@ function roleOf(value: unknown): Role | undefined {
   return (ROLES as readonly unknown[]).includes(value) ? (value as Role) : undefined;
 }
 
-function siteOf(row: Record<string, unknown>): Site | undefined {
+function siteOf(row: Record<string, unknown>, destinations: Destination[]): Site | undefined {
   const visibility = (VISIBILITIES as readonly unknown[]).includes(row.visibility)
     ? (row.visibility as Visibility)
     : undefined;
@@ -215,26 +236,39 @@ function siteOf(row: Record<string, unknown>): Site | undefined {
   }
   if (visibility === undefined) return undefined;
 
-  // A destination needs its connector: a connector that was removed leaves `connector_id` null.
-  const destination =
-    typeof row.connector_id === 'string'
-      ? {
-          connector: row.connector_id,
-          ...(typeof row.team_id === 'string' && row.team_id !== '' ? { teamId: row.team_id } : {}),
-          ...(typeof row.project_id === 'string' && row.project_id !== '' ? { projectId: row.project_id } : {}),
-        }
-      : undefined;
+  return { id: row.id, workspaceId: row.workspace_id, origin: row.origin, visibility, destinations };
+}
+
+const SITE_COLUMNS = 'id, workspace_id, origin, visibility';
+
+/** A row is parsed, never trusted. A row with no connector is no destination. */
+function destinationOf(row: Record<string, unknown>): Destination | undefined {
+  if (typeof row.connector_id !== 'string') return undefined;
 
   return {
-    id: row.id,
-    workspaceId: row.workspace_id,
-    origin: row.origin,
-    visibility,
-    ...(destination === undefined ? {} : { destination }),
+    connector: row.connector_id,
+    ...(typeof row.team_id === 'string' && row.team_id !== '' ? { teamId: row.team_id } : {}),
+    ...(typeof row.project_id === 'string' && row.project_id !== '' ? { projectId: row.project_id } : {}),
+    ...(typeof row.label === 'string' && row.label !== '' ? { label: row.label } : {}),
   };
 }
 
-const SITE_COLUMNS = 'id, workspace_id, origin, visibility, connector_id, team_id, project_id';
+/** The sites of these rows, each with its destinations in order. One read for all of them. */
+function sitesOf(database: DatabaseSync, rows: Record<string, unknown>[]): Site[] {
+  const places = database
+    .prepare(
+      'SELECT site_id, connector_id, team_id, project_id, label FROM site_destinations ORDER BY site_id, position',
+    )
+    .all() as Record<string, unknown>[];
+  const bySite = new Map<string, Destination[]>();
+  for (const place of places) {
+    const destination = destinationOf(place);
+    if (typeof place.site_id !== 'string' || destination === undefined) continue;
+    bySite.set(place.site_id, [...(bySite.get(place.site_id) ?? []), destination]);
+  }
+
+  return rows.flatMap((row) => siteOf(row, bySite.get(String(row.id)) ?? []) ?? []);
+}
 
 function connectorOf(row: Record<string, unknown> | undefined): Connector | undefined {
   const kind = (CONNECTOR_KINDS as readonly unknown[]).includes(row?.kind) ? (row?.kind as ConnectorKind) : undefined;
@@ -265,7 +299,7 @@ function connectorOf(row: Record<string, unknown> | undefined): Connector | unde
 }
 
 export function createSqliteAccountStore(path: string): AccountStore {
-  return {
+  const store: AccountStore = {
     async signIn({ provider, subject, email, name, locale }) {
       const address = normalizeEmail(email);
       if (address === undefined) throw new StoreError('A sign-in needs a valid address');
@@ -397,7 +431,7 @@ export function createSqliteAccountStore(path: string): AccountStore {
       const existing = database
         .prepare(`SELECT ${SITE_COLUMNS} FROM sites WHERE workspace_id = ? AND origin = ?`)
         .get(workspace, origin) as Record<string, unknown> | undefined;
-      const known = existing === undefined ? undefined : siteOf(existing);
+      const known = existing === undefined ? undefined : sitesOf(database, [existing])[0];
 
       // Adding the same address twice is the same site, with the visibility asked for last.
       if (known !== undefined) {
@@ -406,7 +440,7 @@ export function createSqliteAccountStore(path: string): AccountStore {
         return { ...known, visibility };
       }
 
-      const site: Site = { id: newId('site'), workspaceId: workspace, origin, visibility };
+      const site: Site = { id: newId('site'), workspaceId: workspace, origin, visibility, destinations: [] };
       database
         .prepare('INSERT INTO sites (id, workspace_id, origin, visibility, created_at) VALUES (?, ?, ?, ?, ?)')
         .run(site.id, workspace, origin, visibility, Date.now());
@@ -419,7 +453,7 @@ export function createSqliteAccountStore(path: string): AccountStore {
         .prepare(`SELECT ${SITE_COLUMNS} FROM sites WHERE workspace_id = ? ORDER BY created_at, id`)
         .all(workspace) as Record<string, unknown>[];
 
-      return rows.flatMap((row) => siteOf(row) ?? []);
+      return sitesOf(connect(path), rows);
     },
 
     async removeSite(workspace, site) {
@@ -480,35 +514,42 @@ export function createSqliteAccountStore(path: string): AccountStore {
     },
 
     async setDestination(workspace, site, destination) {
-      const database = connect(path);
-      if (destination === undefined) {
-        const cleared = database
-          .prepare(
-            'UPDATE sites SET connector_id = NULL, team_id = NULL, project_id = NULL WHERE workspace_id = ? AND id = ?',
-          )
-          .run(workspace, site);
+      return store.setDestinations(workspace, site, destination === undefined ? [] : [destination]);
+    },
 
-        return cleared.changes === 1;
+    async setDestinations(workspace, site, destinations) {
+      const database = connect(path);
+      const owned = (table: string, id: string): boolean =>
+        database.prepare(`SELECT 1 FROM ${table} WHERE id = ? AND workspace_id = ?`).get(id, workspace) !== undefined;
+      // A site must not write through the key of another team: each connector is of this workspace.
+      if (!owned('sites', site)) return false;
+      if (!destinations.every((destination) => owned('connectors', destination.connector))) return false;
+
+      // One transaction: a reader never sees half of a list.
+      database.exec('BEGIN IMMEDIATE');
+      try {
+        database.prepare('DELETE FROM site_destinations WHERE site_id = ?').run(site);
+        const insert = database.prepare(
+          `INSERT INTO site_destinations (site_id, position, connector_id, team_id, project_id, label)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+        );
+        destinations.forEach((destination, position) => {
+          insert.run(
+            site,
+            position,
+            destination.connector,
+            destination.teamId ?? null,
+            destination.projectId ?? null,
+            destination.label ?? null,
+          );
+        });
+        database.exec('COMMIT');
+      } catch (error) {
+        database.exec('ROLLBACK');
+        throw error;
       }
 
-      // One statement: the connector must be of the same workspace as the site.
-      const set = database
-        .prepare(
-          `UPDATE sites SET connector_id = ?, team_id = ?, project_id = ?
-           WHERE workspace_id = ? AND id = ?
-             AND EXISTS (SELECT 1 FROM connectors WHERE id = ? AND workspace_id = ?)`,
-        )
-        .run(
-          destination.connector,
-          destination.teamId ?? null,
-          destination.projectId ?? null,
-          workspace,
-          site,
-          destination.connector,
-          workspace,
-        );
-
-      return set.changes === 1;
+      return true;
     },
 
     async enqueueDelivery(connector, body, now) {
@@ -635,14 +676,14 @@ export function createSqliteAccountStore(path: string): AccountStore {
     },
 
     async clientMap() {
-      const rows = connect(path).prepare(`SELECT ${SITE_COLUMNS} FROM sites`).all() as Record<string, unknown>[];
+      const database = connect(path);
+      const rows = database.prepare(`SELECT ${SITE_COLUMNS} FROM sites`).all() as Record<string, unknown>[];
       const map: ClientMap = {};
-      for (const row of rows) {
-        const site = siteOf(row);
-        if (site !== undefined) map[site.id] = clientOf(site);
-      }
+      for (const site of sitesOf(database, rows)) map[site.id] = clientOf(site);
 
       return map;
     },
   };
+
+  return store;
 }
