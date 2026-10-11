@@ -210,11 +210,16 @@ write <package> <mutation.json>` prints it from the report of a full run.
   timed out of 794, in 8 minutes 44 seconds. The lowest files are `cache.ts` (65.90), `seed.ts`
   (72.12) and `identity.ts` (73.00). The holes that matter most are tickets: FRU-175, FRU-176,
   FRU-178 and FRU-179. A file that a pull request does not change costs it nothing.
-- **The job of a pull request takes 1 to 3 minutes for one file.** Measured on a pull request made
-  for it (#150), which changed `seed.ts` and `identity.ts`: 42 seconds for the job of the contract,
-  2 minutes 32 for the job of the worker, installs included. A pull request that changes every file
-  of the worker scope takes the full 9 minutes. So the job is not proposed as a required check yet:
-  it reports, and a red one says which file lost what.
+- **The job of a pull request takes 1 to 4 minutes for one file, so it reports and is not required.**
+  Measured on a pull request made for it (#150): 42 seconds for `seed.ts`, and for `identity.ts`
+  2 minutes 32, then 4 minutes 17 once `main` held the PostgreSQL tests of #138, installs included.
+  A pull request that changes every file of the worker scope takes the full run, about 10 minutes.
+  That is over the five minutes a required check may cost here. A red job says which file lost what.
+- **The ratchet was planted in CI, twice** (#150). Two tests of `seed.test.ts` deleted, and no source
+  file changed: the job mutated `seed.ts` because its test changed, measured 67.27 under its line of
+  72.12, and failed. Before that, one test of `identity.test.ts` deleted: the job mutated
+  `identity.ts`, measured the same 73.00, and passed, because other test files kill the same
+  mutants. A deleted test fails the job only when it was the one that held something.
 - **A timeout counts as killed, and that is the one result that can move between two runs.** One
   mutant of `identity.ts` timed out in the measured run. If it survives a later run, that file drops
   under its line by half a point, and the job says so in its summary. Look at the mutant before
