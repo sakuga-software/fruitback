@@ -318,6 +318,30 @@ describe('the list before a read answered (FRU-153)', () => {
     assert.equal(deepActiveElement(page.document), root.querySelector('.fruitback-sidebar-close'));
   });
 
+  it('keeps focus on « Réessayer » while the read runs, and after it fails again', () => {
+    const state = { read: 'failed' as ReadState };
+    const { page, sidebar, retries, shown, text, root } = mountIn(state);
+    sidebar.open();
+    const retry = root.querySelector('.fruitback-sidebar-retry') as HTMLElement;
+
+    retry.click();
+    state.read = 'pending';
+    sidebar.refresh();
+    assert.equal(shown('.fruitback-sidebar-failed'), true);
+    assert.equal(retry.getAttribute('aria-disabled'), 'true');
+    assert.equal(text('[role="status"]'), 'Lecture des notes de cette page…');
+    assert.equal(deepActiveElement(page.document), retry);
+    // Busy: a second press asks for nothing more.
+    retry.click();
+    assert.deepEqual(retries, [1]);
+
+    state.read = 'failed';
+    sidebar.refresh();
+    assert.equal(retry.getAttribute('aria-disabled'), 'false');
+    assert.match(text('[role="status"]'), /n’ont pas pu être lues/);
+    assert.equal(deepActiveElement(page.document), retry);
+  });
+
   it('shows the notes it holds while a read is in flight, rather than a guess', () => {
     const { sidebar, shown, text } = mountIn({ read: 'pending' }, [{ issue: note('a', 'Held'), placement: 'found' }]);
     sidebar.open();

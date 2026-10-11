@@ -1066,8 +1066,9 @@ describe('the list after a failed read (FRU-153)', () => {
     });
     observer.observe(sidebar, { subtree: true, childList: true, characterData: true });
     (sidebar.querySelector('.fruitback-sidebar-retry') as HTMLElement).click();
-    assert.equal(visible('.fruitback-sidebar-failed'), false);
-    assert.equal(text('.fruitback-sidebar-empty'), 'Reading the notes of this page…');
+    // The button stays, busy, while the read runs: focus does not move.
+    assert.equal(visible('.fruitback-sidebar-failed'), true);
+    assert.equal(text('[role="status"]'), 'Reading the notes of this page…');
     await done;
     observer.disconnect();
 

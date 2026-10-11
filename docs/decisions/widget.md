@@ -847,6 +847,7 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   `pending` until a read answers, `read` once one did, `failed` when none did and the last one
   failed. A navigation starts again at `pending`. Only `read` may show the empty state and a count
   of zero. `failed` says the notes could not be read, in a live region, and offers « Try again »,
-  which takes focus. A failed read after a good one changes nothing, so the pins stay.
+  which takes focus. The button stays, busy (`aria-disabled`), while the read it asked for runs, so
+  focus does not leave it and a second failure finds it. A failed read after a good one changes nothing, so the pins stay.
 - **The playground does not have it**: it assembles the widget part by part. `e2e/sidebar.spec.ts`
   loads the built script, like `package.spec.ts`, and runs axe in both schemes with its own control.

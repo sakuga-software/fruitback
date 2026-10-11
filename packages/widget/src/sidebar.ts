@@ -102,7 +102,14 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   retry.className = 'fruitback-sidebar-retry';
   retry.textContent = t.text('sidebar.retry');
   retry.setAttribute('aria-describedby', failedText.id);
-  retry.addEventListener('click', () => options.onRetry?.());
+  // The button stays while the read it asked for runs, so focus stays on it, and a second failure
+  // finds it where it was. It is busy, not disabled: a disabled button loses focus.
+  let retrying = false;
+  retry.addEventListener('click', () => {
+    if (retrying) return;
+    retrying = true;
+    options.onRetry?.();
+  });
   failed.append(retry);
 
   const list = document.createElement('ul');
@@ -121,20 +128,27 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     const focusedId =
       active !== null && list.contains(active) ? (active as HTMLElement).dataset.fruitbackNote : undefined;
     const state = options.readState?.() ?? 'read';
+    if (state !== 'pending') retrying = false;
     const failing = state === 'failed';
+    const asking = failing || retrying;
     const known = state === 'read' || entries.length > 0;
 
     // No count and no empty state while no read answered: zero notes would be a guess.
     count.textContent = failing || !known ? '' : t.plural('sidebar.count', entries.length);
     empty.textContent = t.text(state === 'pending' ? 'sidebar.loading' : 'sidebar.empty');
-    empty.hidden = failing || entries.length > 0;
-    // Set only when it changes, so a draw does not announce the same failure again.
-    const failedMessage = failing ? t.text('sidebar.failed') : '';
-    if (failedText.textContent !== failedMessage) failedText.textContent = failedMessage;
-    if (!failing && failed.contains(active)) close.focus();
-    failed.hidden = !failing;
-    list.hidden = failing || entries.length === 0;
-    list.replaceChildren(...(failing ? [] : entries.map((entry) => item(entry))));
+    empty.hidden = asking || entries.length > 0;
+    // Set only when it changes, so a draw does not announce the same words again.
+    let message = '';
+    if (failing) message = t.text('sidebar.failed');
+    else if (retrying) message = t.text('sidebar.loading');
+    if (failedText.textContent !== message) failedText.textContent = message;
+    retry.setAttribute('aria-disabled', String(retrying));
+    const leaving = !asking && failed.contains(active);
+    failed.hidden = !asking;
+    list.hidden = asking || entries.length === 0;
+    list.replaceChildren(...(asking ? [] : entries.map((entry) => item(entry))));
+    // The read answered: focus goes to the first note, or to the close button of an empty list.
+    if (leaving) (list.querySelector<HTMLElement>('[data-fruitback-note]') ?? close).focus();
 
     if (focusedId !== undefined) {
       const again = [...list.querySelectorAll<HTMLElement>('[data-fruitback-note]')].find(
@@ -294,6 +308,7 @@ const STYLES = `
 /* The dock sits over the bottom of the sheet on a phone, as over the list. */
 .fruitback-sidebar-failed { padding: 0 14px 64px; }
 .fruitback-sidebar-failed[hidden] { display: none; }
+.fruitback-sidebar-retry[aria-disabled='true'] { opacity: 0.6; cursor: progress; }
 .fruitback-sidebar-retry {
   padding: 6px 12px;
   border: 1px solid var(--fruitback-color-text-muted);
