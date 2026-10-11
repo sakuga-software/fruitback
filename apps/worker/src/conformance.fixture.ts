@@ -26,6 +26,8 @@ export type Subject<Store> = {
   open(): Store | Promise<Store>;
   /** Removes what `open` made. Called after each case. */
   close(): void | Promise<void>;
+  /** Why this implementation cannot run here. Its cases are then reported as skipped, never as passed. */
+  skip?: string;
 };
 
 /** What a module of a store on a file exports: the function that builds it, and the one that closes its files. */
@@ -60,8 +62,10 @@ export function onFile<Store>(
  * A change that breaks one rule.
  *
  * `replace` changes the source of the reference implementation: the first `from` after `after`, or
- * the only `from` of the file. `wrap` is for a rule that the reference implementation cannot break:
- * it is synchronous, so only a store that waits between its read and its write loses a race.
+ * the only `from` of the file. `wrap` is for a rule that no change of that source breaks with an
+ * assertion. A race: the reference is synchronous, so only a store that waits between its read and
+ * its write loses one. A foreign key: without it the statement fails, and a store that throws proves
+ * nothing of the case.
  */
 export type Violation<Store> = {
   /** The name of the case that must fail. */
@@ -70,7 +74,8 @@ export type Violation<Store> = {
   by: string;
 } & ({ replace: { after?: string; from: string; to: string } } | { wrap(real: Store): Store });
 
-function collect<Store>(cases: Cases<Store>): Map<string, (store: Store) => Promise<void>> {
+/** The cases by name, for a test that runs one of them on a store of its own. */
+export function collect<Store>(cases: Cases<Store>): Map<string, (store: Store) => Promise<void>> {
   const declared = new Map<string, (store: Store) => Promise<void>>();
   cases((name, run) => {
     assert.equal(declared.has(name), false, `two cases have one name: ${name}`);
@@ -83,7 +88,7 @@ function collect<Store>(cases: Cases<Store>): Map<string, (store: Store) => Prom
 export function describeConformance<Store>(promises: string, cases: Cases<Store>, subject: Subject<Store>): void {
   describe(`${subject.label} keeps the ${promises} promises`, () => {
     cases((name, run) => {
-      it(name, async () => {
+      it(name, { skip: subject.skip ?? false }, async () => {
         const store = await subject.open();
         try {
           await run(store);
