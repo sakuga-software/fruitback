@@ -136,6 +136,31 @@ describe('the configuration of the mutation job', () => {
     );
   });
 
+  /**
+   * A mutation run rewrites the text of the files it mutates. A test that reads that text, and not
+   * the module, fails on the first run and stops it: `security.test.ts` reads the constants of
+   * `session.ts` and `identity.ts` from their source (measured in CI on 2026-10-11).
+   */
+  it('leaves out of the run of the worker each test that reads a mutated file as text', () => {
+    const scope = new Set(scopeOf(WORKER).map((file) => file.replace(/^src\//, '')));
+    const readers = readdirSync(new URL('./', import.meta.url))
+      .filter((file) => file.endsWith('.test.ts'))
+      .filter((file) =>
+        [...readFileSync(new URL(file, import.meta.url), 'utf8').matchAll(/new URL\('\.\/([\w.-]+\.ts)'/g)].some(
+          (match) => scope.has(match[1] ?? ''),
+        ),
+      );
+    const run = (WORKER as { tap?: { testFiles?: string[] } }).tap?.testFiles ?? [];
+
+    assert.deepEqual(readers, ['security.test.ts'], 'the list of tests that read a mutated file as text changed');
+    for (const reader of readers) {
+      assert.ok(
+        run.some((glob) => glob.includes(`!(${reader.replace(/\.test\.ts$/, '')})`)),
+        `${reader} reads a mutated file as text and is not left out of tap.testFiles`,
+      );
+    }
+  });
+
   it('runs on every pull request, on a schedule and by hand', () => {
     const on = parseDocument(readFileSync(new URL('.github/workflows/mutation.yml', ROOT), 'utf8')).toJS().on as Record<
       string,
