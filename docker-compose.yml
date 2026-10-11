@@ -75,11 +75,39 @@ services:
       FRUITBACK_SECRETS_KEY: ${FRUITBACK_SECRETS_KEY:-}
       FRUITBACK_AUTH_SECRET: ${FRUITBACK_AUTH_SECRET:-}
 
+  # PostgreSQL, for a worker that has accounts (FRU-143). It starts only with its profile:
+  #   docker compose --profile postgres up -d --wait
+  # A worker with no accounts needs no database: `docker compose up` starts one container, as before.
+  # Set FRUITBACK_POSTGRES_PASSWORD in .env, and give the worker the same password in its address:
+  #   FRUITBACK_DATABASE_URL=postgres://fruitback:<that password>@postgres:5432/fruitback
+  # No port is published: the worker reaches the database on the network of this file, and nothing
+  # else does. Back it up with pg_dump, never with a copy of its volume: see docs/self-hosting.md.
+  postgres:
+    profiles: [postgres]
+    # The image CI tests the worker against. compose.test.ts compares the two.
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: fruitback
+      POSTGRES_DB: fruitback
+      # There is no default: with no password the image refuses to make the database.
+      POSTGRES_PASSWORD: ${FRUITBACK_POSTGRES_PASSWORD:-}
+    volumes:
+      - fruitback-postgres:/var/lib/postgresql/data
+    healthcheck:
+      # Over TCP: the image answers on its socket while it is still making the database.
+      test: ['CMD', 'pg_isready', '-h', '127.0.0.1', '-U', 'fruitback', '-d', 'fruitback']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
 volumes:
   # Compose prefixes this volume with the project name, so two stacks on one host keep separate data
   # and `docker compose down -v` in one stack cannot delete the other's. It is therefore not the
   # volume that `docker run -v fruitback-data:/data` opens.
   fruitback-data:
+  # The database of the `postgres` service. Compose makes it only when that service starts.
+  fruitback-postgres:
 
 # networks:
 #   traefik:

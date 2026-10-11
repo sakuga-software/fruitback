@@ -205,6 +205,35 @@ jobs:
           FRUITBACK_TEST_DATABASE_URL: postgres://postgres:ci-not-a-real-password@127.0.0.1:5432/fruitback
         run: pnpm --filter @fruitback/worker test:postgres
 
+  dependencies:
+    # FRU-143. The scan of the image reads the packages that a file of the image names. The worker is
+    # one bundle: `pg` and its packages are inside server.mjs, and no file names them. So the lockfile
+    # is asked. `--prod`: the dependencies of what runs, and not the tools. The job fails on any
+    # advisory the registry knows, and when the registry does not answer: a check that is skipped
+    # proves nothing. It does not see a devDependency that a build compiles into what ships: image.md.
+    name: dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing in this job runs git after the checkout, so the token has no reason to stay in .git/config.
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Ask the registry for the advisories of the production dependencies
+        # The lockfile is enough: nothing is installed.
+        run: pnpm audit --prod
+
   image:
     # Dokploy builds this same Dockerfile on push, so a broken one must fail here first.
     name: docker image
@@ -344,6 +373,15 @@ jobs:
           fi
           test "$(docker exec auth-db psql -U postgres -Atc 'SELECT name FROM schema_migrations ORDER BY version' | tail -1)" = better-auth
           docker rm -f worker-auth-on worker-auth-off auth-db
+
+      - name: Take a snapshot of the database, restore it on another server, and count the rows
+        # FRU-143. The backup of the Cloud is the dump that snapshot-pg.sh takes, and a backup that
+        # nobody restored is a hope. The script fills every table, takes the snapshot, restores it
+        # with the commands of the runbook, compares each table of the two databases, and checks that
+        # a dump that lost its end replaces nothing.
+        env:
+          WORKER_IMAGE: fruitback-worker:ci
+        run: sh apps/worker/cloud/restore-drill.sh
 
       - name: Build the image of the public demonstration
         # FRU-79. Dokploy builds this Dockerfile on push too. It is not published anywhere.

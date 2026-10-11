@@ -109,6 +109,44 @@ describe('docker-compose.yml', () => {
   });
 });
 
+/** The `postgres` service, as written, with the comments inside it. */
+function composePostgres(): string {
+  return /^ {2}postgres:\n((?: {4}.*\n| *#.*\n)*)/m.exec(COMPOSE)?.[1] ?? '';
+}
+
+describe('the PostgreSQL of docker-compose.yml (FRU-143)', () => {
+  it('starts only with its profile, so a worker with no accounts stays one container', () => {
+    assert.match(composePostgres(), /^ {4}profiles: \[postgres\]$/m);
+    // The worker waits for no other service: it opens the database at the first request that needs it.
+    assert.doesNotMatch(COMPOSE, /^ {4}depends_on:/m);
+  });
+
+  it('publishes no port of the database', () => {
+    assert.ok(composePostgres().includes('image: postgres:'), 'the service was not found');
+    assert.doesNotMatch(composePostgres(), /^ {4}(ports|network_mode):/m);
+  });
+
+  it('has no password of its own: the value comes from .env, and an empty one starts nothing', () => {
+    assert.match(composePostgres(), /^ {6}POSTGRES_PASSWORD: \$\{FRUITBACK_POSTGRES_PASSWORD:-\}$/m);
+    assert.doesNotMatch(composePostgres(), /POSTGRES_HOST_AUTH_METHOD/);
+  });
+
+  it('keeps the database in a volume scoped to the Compose project', () => {
+    assert.match(composePostgres(), /^ {6}- fruitback-postgres:\/var\/lib\/postgresql\/data$/m);
+    assert.match(COMPOSE, /^ {2}fruitback-postgres:$/m);
+  });
+
+  it('runs the PostgreSQL that CI and the restore drill run', () => {
+    const image = /^ {4}image: (postgres:\S+@sha256:[0-9a-f]{64})$/m.exec(composePostgres())?.[1];
+    assert.ok(image !== undefined, 'the image of the service is not pinned by its digest');
+
+    for (const path of ['../../../.github/workflows/ci.yml', '../cloud/restore-drill.sh']) {
+      const named = [...new Set(read(path).match(/postgres:[\w.-]+@sha256:[0-9a-f]{64}/g) ?? [])];
+      assert.deepEqual(named, [image], `${path} names another PostgreSQL`);
+    }
+  });
+});
+
 describe('.env.example', () => {
   it('lists each variable docker-compose.yml reads, once, and no other', () => {
     const assigned = [...ENV_EXAMPLE.matchAll(/^([A-Z][A-Z0-9_]*)=/gm)].map((match) => match[1] ?? '');

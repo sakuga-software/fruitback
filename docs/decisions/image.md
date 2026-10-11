@@ -120,13 +120,21 @@ immutable.
   one database, without the secret and with it: the one with the secret must write « better-auth is
   ready, and serves no route » in its log, the other must write nothing of better-auth, and both
   must answer `404` under `/console/auth/`. The numbers are in [worker.md](worker.md).
-- **The scan of the image does not see what is inside the bundle, and that gap is open.** Trivy reads
-  the packages of the image, and `server.mjs` is one file: it never saw `zod`, and it does not see
-  `pg` and its six packages, or better-auth and the sixteen packages it brings. A check of the
-  lockfile in CI is what closes it. It is named in FRU-139 and is in no slice yet: until it is, a
-  vulnerability of the driver or of better-auth reaches nobody's screen. What holds today is the
-  version: `pg` and `better-auth` are each pinned to one exact version in the catalog, and a test
-  refuses a range.
+- **The scan of the image does not see what is inside the bundle, so CI asks the lockfile**
+  (FRU-143). Trivy reads the packages of the image, and `server.mjs` is one file: it never saw `zod`,
+  and it does not see `pg` and its six packages, or better-auth and the sixteen packages it brings.
+  The `dependencies` job runs `pnpm audit --prod`, which needs the lockfile and installs nothing.
+  Measured on a copy of the manifests and the lockfile: with `minimist` 1.2.5 added to the
+  dependencies of the worker, it reports one critical advisory on `apps__worker>minimist` and exits 1;
+  on the lockfile as it is, it exits 0. `pg` and `better-auth` are also each pinned to one exact
+  version in the catalog, and a test refuses a range.
+- **`--prod` does not see a devDependency, and one gap stays open.** Measured: the same `minimist`
+  as a devDependency of the worker passes `pnpm audit --prod`, and fails `pnpm audit`. The widget
+  compiles `react-grab` and `zod` into what it publishes, and they are its devDependencies
+  (`packaging.md`): this job does not see them. `pnpm audit` with no flag would, and would also fail
+  on an advisory of a tool that ships nowhere. Not decided here.
+- **The job fails when the registry does not answer.** `--ignore-registry-errors` would make it
+  green that day, and a check that is skipped proves nothing. Run it again.
 - **Trivy runs with `ignore-unfixed`.** An Alpine CVE with no patch available reddens every release
   for something nobody can act on, and a gate that cannot be satisfied is a gate somebody deletes.
 - **Every action is pinned to a commit SHA, with its version as a comment (FRU-69).** A tag can be
@@ -170,6 +178,29 @@ immutable.
 - **CI's `image` job plants a pin through the compose file from an empty directory**, with the fresh
   build tagged under the name the file pulls. A variable exported in the shell wins over `.env`, so
   run the same check locally under `env -i`.
+- **The `postgres` service starts only with its profile** (FRU-143): `docker compose --profile
+postgres up`. A worker with no accounts needs no database, and the default path stays one
+  container and one volume (measured). `compose.test.ts` holds five things, each seen failing on a
+  planted change: the profile, no published port, no password in the file, a volume of its own, and
+  the image that CI and `restore-drill.sh` run, by its digest.
+- **`worker` stays the first service of the file.** `compose.test.ts` reads the first `environment:`
+  block as the worker's. The variables of another service are not the worker's:
+  `FRUITBACK_POSTGRES_PASSWORD` is in `.env.example` and in the guide, and the worker does not read it.
+- **The worker waits for no service** (`depends_on`). It opens the database at the first request
+  that needs it, and a failure is not kept: the next request tries again.
+- **A backup of PostgreSQL is checked by reading it to its end, never with `pg_restore --list`.**
+  Measured on a dump of 806,907 bytes: `--list` accepts it cut to 90 %, to 50 % and to 10 %, because
+  it reads the table of contents at the start of the file. `pg_restore -f /dev/null` refuses each
+  one. `snapshot-pg.sh` and the guide use the second.
+- **`restore-drill.sh` is the restore, run whole, in CI's `image` job.** It fills every table,
+  takes a snapshot with `snapshot-pg.sh`, restores it on another server with the commands of the
+  runbook, and compares each table: its number of rows and a digest of its rows. Seen failing on
+  four planted changes: a row lost, a row changed with the count the same, a table with no row in
+  `drill-seed.sql`, and `--list` in place of the whole read. A migration that adds a table adds its
+  rows to `drill-seed.sql`: the drill refuses a table with no row.
+- **The dump of the drill loses its last 100 bytes, and not its half.** A small dump cut to half
+  loses a part of its table of contents, and `--list` then refuses it too: the drill passed with the
+  weak check until the cut was moved to the end (measured).
 
 ### The reasons, and the history
 

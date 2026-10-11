@@ -16,6 +16,11 @@ Dokploy project `fruitback-cloud` on `em-sakuga-01`. Two applications follow `ma
 `/data` holds three SQLite files: `fb.db` (the notes), `sessions.db` (the sessions) and `accounts.db`
 (the accounts, the workspaces, the sites and the encrypted keys of the connectors).
 
+**After the move of the storage (switch 1, FRU-145), the accounts and the sessions are in PostgreSQL**:
+a database service `postgres` in the same Dokploy project, which publishes no port, and
+`FRUITBACK_DATABASE_URL` in the environment of the worker. `fb.db` stays on the volume. Until that
+day, the section « The database » below describes what is ready, and nothing of it runs.
+
 ## What is backed up
 
 1. **02:45, `snapshot.sh`**, from the crontab of the host. It writes a copy of each database into
@@ -26,7 +31,8 @@ Dokploy project `fruitback-cloud` on `em-sakuga-01`. Two applications follow `ma
 The archive of the volume holds the live files and the snapshots. **Restore from the snapshots**: a
 live file was open when it was archived.
 
-**`FRUITBACK_SECRETS_KEY` and `FRUITBACK_IDENTITY_SECRET` are in no backup.** They are in the
+**`FRUITBACK_SECRETS_KEY` and `FRUITBACK_IDENTITY_SECRET` are in no backup**, and neither is the
+password of the database once there is one. They are in the
 environment of the application in Dokploy, and in the Keychain of the operator's machine
 (`fruitback-cloud-secrets-key`, `fruitback-cloud-identity-secret`). Without the first, the keys of
 the connectors do not open, and each workspace must add its key again. Without the second, every
@@ -68,6 +74,102 @@ stop the restore, not empty the database. **The accounts and the sessions are re
 either snapshot the command stops before it touches a file, and the worker stays stopped, which is
 the state to investigate from. Only `fb.db` can be absent, for a worker that had taken no note when
 the snapshot was made; the notes file in the volume is then left as it is. Then check `https://api.fruitback.com/health`, and sign in.
+
+## The database (FRU-143)
+
+Nothing here runs yet. It is what the host does once the accounts and the sessions are in PostgreSQL,
+and the « What to do on the host » list says when.
+
+### What is backed up
+
+1. **02:40, `snapshot-pg.sh`**, from the crontab of the host. It dumps the database with `pg_dump
+-Fc` where the database runs, reads the dump to its end (`pg_restore -f /dev/null`), and copies it
+   into the volume of the worker, as `/data/snapshots/fruitback.pgdump`. It compares the copy with
+   the dump, and only then replaces the copy before. A dump that cannot be read to its end replaces
+   nothing, and the script exits 1.
+2. **02:45, `snapshot.sh`**, as before. Once the accounts and the sessions are in the database, it
+   finds only `fb.db` on the volume, and says « no accounts.db yet » for the two others: that is not a
+   failure.
+3. **03:00, the backup of the host**, as before. The archive of the volume of the worker holds the
+   dump, because the dump is in that volume. The volume of the database is archived too, and **it is
+   not a backup**: the files of a database that runs are not a copy to trust. Restore from the dump.
+
+The dump is checked by reading it to its end, and not with `pg_restore --list`: measured, `--list`
+accepts a dump cut to a tenth of its size, because it reads the table of contents at the start of
+the file.
+
+### Restore the database
+
+Stop the worker first, so that nothing writes while the database is replaced. The dump is restored
+in a new database, and the names are exchanged at the end: the database that was in service stays
+whole, as `fruitback_before`, until somebody removes it.
+
+```bash
+# 1. Get the archive of a day, and take the dump out of it.
+rclone copy scaleway:backup-elastic-metal/20261009/fruitback-cloud-data.tar.gz /tmp/restore/ &&
+  mkdir -p /tmp/restore/data && tar xzf /tmp/restore/fruitback-cloud-data.tar.gz -C /tmp/restore/data &&
+  test -s /tmp/restore/data/snapshots/fruitback.pgdump
+
+# 2. Stop the worker, restore the dump in a new database, exchange the names, start the worker.
+PG=$(docker ps -q --filter label=com.docker.swarm.service.name=fruitback-cloud-postgres | head -1) &&
+  test -n "$PG" &&
+  docker service scale fruitback-cloud-worker-a9zdeo=0 &&
+  docker cp /tmp/restore/data/snapshots/fruitback.pgdump "$PG:/tmp/fruitback.pgdump" &&
+  docker exec "$PG" pg_restore -f /dev/null /tmp/fruitback.pgdump &&
+  docker exec "$PG" createdb -U fruitback fruitback_restored &&
+  docker exec "$PG" pg_restore -U fruitback -d fruitback_restored --no-owner --exit-on-error /tmp/fruitback.pgdump &&
+  test "$(docker exec "$PG" psql -U fruitback -d fruitback_restored -Atc 'SELECT count(*) FROM accounts')" -gt 0 &&
+  docker exec "$PG" psql -U fruitback -d postgres -q \
+    -c 'ALTER DATABASE fruitback RENAME TO fruitback_before' \
+    -c 'ALTER DATABASE fruitback_restored RENAME TO fruitback' &&
+  docker service scale fruitback-cloud-worker-a9zdeo=1
+```
+
+Each step is chained with `&&`, and two checks come before the names are exchanged: the dump is read
+to its end, and the restored database has accounts. A failure leaves the worker stopped and the
+database in service whole: that is the state to investigate from. `ALTER DATABASE … RENAME` refuses
+a database that a session holds; the worker is stopped, so only a `psql` left open would hold it.
+Then check `https://api.fruitback.com/health`, and sign in.
+
+**Tried on 2026-10-11, on a laptop and never on the host**, by `restore-drill.sh`, which CI runs in
+the `docker image` job on every pull request to `main`. It starts a database and the worker of the
+pull request, fills every table (41 rows in 19 tables, `schema_migrations` and the seven tables of
+better-auth included), takes a snapshot with `snapshot-pg.sh`, and runs step 2 above on another
+server: every table had the same number of rows and the same rows on both sides. It then cut the end
+of a dump: the snapshot exited 1, and the copy before was the same, byte for byte.
+
+**Not tried:** step 1 (`rclone`, `tar`), `docker service scale`, the label of a Swarm service in
+`snapshot-pg.sh` (the drill names the containers directly), the crontab, a database of real size, and
+the time the dump takes on it. Run the whole of step 2 once on the host, on a copy, before the day
+it is needed.
+
+### What to do on the host, and in which order
+
+For the operator. **No agent did any of this**: no database was created, no service, no crontab line.
+Steps 1 to 3 come before switch 1 (the runbook of FRU-145), step 4 after it.
+
+1. **Create the database in Dokploy**, in the project `fruitback-cloud`: a PostgreSQL 17 service
+   named so that its Swarm service is `fruitback-cloud-postgres`, with no external port. The user and
+   the database are `fruitback`. If Dokploy names the service otherwise, set `PG_SERVICE` on the
+   crontab line of step 3.
+2. **Keep its password in the Keychain** of the operator (`fruitback-cloud-postgres-password`), as
+   the two other secrets: it is in no backup.
+3. **Copy `snapshot-pg.sh` next to `snapshot.sh` on the host, and add it to the crontab, before
+   `snapshot.sh`:**
+
+   ```cron
+   40 2 * * * sh /root/fruitback/snapshot-pg.sh >> /var/log/fruitback-snapshot.log 2>&1
+   ```
+
+   Run it once by hand. It must write `fruitback.pgdump … bytes`, and `/data/snapshots/` in the
+   volume of the worker must hold the file. Before switch 1 the database has no table yet: the dump
+   is small, and that is expected.
+
+4. **After switch 1**, the next morning: the log has the line of `snapshot-pg.sh` at 02:40, and the
+   archive of 03:00 holds `snapshots/fruitback.pgdump`. Restore it once on a copy, with step 2 above.
+
+`FRUITBACK_AUTH_SECRET` came with better-auth (FRU-144), which stays off on a worker that does not
+have it. When the Cloud sets it, it joins the secrets that are in no backup, and step 2 of this list.
 
 ## The two OAuth applications
 
