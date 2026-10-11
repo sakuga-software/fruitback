@@ -56,6 +56,12 @@ const DYNAMIC_READS: Record<string, string[]> = {
     'apps/*/package.json',
     'packages/*/package.json',
   ],
+  // The `test` script of each package, which must pass the bound of `pre-push` to Node.
+  'apps/worker/src/githooks.test.ts: `${directory}/`': ['apps/', 'packages/'],
+  'apps/worker/src/githooks.test.ts: `${directory}/${entry.name}/package.json`': [
+    'apps/*/package.json',
+    'packages/*/package.json',
+  ],
   // The test files the commands in CONTRIBUTING.md run.
   'apps/worker/src/contributing.test.ts: ../../../${dir}/${file}': ['**/*.test.ts'],
   "packages/widget/src/package.test.ts: join(root, '..', 'shared')": ['packages/shared/'],

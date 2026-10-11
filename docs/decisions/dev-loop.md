@@ -53,6 +53,11 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   - **`pre-push` typechecks and tests the packages that the branch changes**, against `main` of the
     remote, with `nx affected`. A file that no package owns runs the tests of the worker too: its
     guard tests read the documents, the workflows and the specs.
+- **`pre-push` runs two test files at a time.** It sets `FRUITBACK_TEST_CONCURRENCY` to 2 when the
+  variable is not already set. The `test` script of each package passes it to `node --test` as
+  `--test-concurrency`, before the files. CI does not set it, so there `node --test` uses every core
+  but one. `githooks.test.ts` fails on a package that does not pass it, and on a workflow that
+  sets it.
 - **CI is the gate. A hook only says it sooner.** `--no-verify` skips either one.
 - **The path is relative, so a worktree runs the hooks of its own branch.** The setting is in the
   configuration of the clone, which every worktree shares: one install sets it for all of them. A
@@ -93,9 +98,12 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
 - **Both hooks read the working tree.** `pre-commit` checks a file staged in part as a whole.
   `pre-push` checks a ref only when it is the commit that is checked out, and says so for another
   one. What is not committed is part of what it checks.
-- **The bound on `pre-push` is the number of packages**: two typechecks at a time, then one package
-  of tests at a time, and no daemon of Nx. `node --test` runs the files of a package on every core
-  but one, and `NODE_OPTIONS` refuses `--test-concurrency` (measured), so a hook cannot bound that.
+- **The bounds on `pre-push`**: two typechecks at a time, one package of tests at a time, two test
+  files at a time, and no daemon of Nx. Without the last one, `node --test` ran the files of a
+  package on every core but one, on a machine that ten sessions share. `NODE_OPTIONS` refuses
+  `--test-concurrency` (measured), so the variable goes through the script of each package. Node
+  ignores the option after the files: four files of 300 ms took 0.43 s with `--test-concurrency=1`
+  after them, and 1.58 s with it before them (measured on Node 25.8.1).
 - **The installer leaves another `core.hooksPath` as it is**, and says where the hooks are.
 - **In a French shell, `pre-push` stopped a branch that changes the widget** until its four tests
   stopped reading the locale (see [conventions.md](conventions.md)).
