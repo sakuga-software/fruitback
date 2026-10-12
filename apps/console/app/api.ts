@@ -76,7 +76,16 @@ export type Connector = {
   label: string;
   createdAt: string;
   attention?: ConnectorAttention;
+  /** Absent from a worker of before FRU-102: the panel then has no settings to show. */
+  settings?: ConnectorSettings;
 };
+/** The five stages of a pin, in the order of the widget. */
+export const STAGES = ['seeded', 'green', 'ripening', 'ripe', 'composted'] as const;
+export type Stage = (typeof STAGES)[number];
+/** What a workspace sets on a tracker (FRU-102): the replies, and the stages some states take. */
+export type ConnectorSettings = { showComments: boolean; stages: Record<string, Stage> };
+/** A state of a team of the tracker, with the stage of its type. */
+export type TrackerState = { id: string; name: string; type: string; teamId: string; team: string; stage: Stage };
 /** A note that did not reach the address of a connector yet. `nextAt` absent: the worker gave up. */
 export type Delivery = {
   id: string;

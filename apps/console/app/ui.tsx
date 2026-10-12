@@ -10,6 +10,7 @@ import {
   Radio,
   RadioGroup,
   Select,
+  Switch,
   TextField,
 } from '@heroui/react';
 import type { ChangeEvent, ReactNode } from 'react';
@@ -235,6 +236,33 @@ export function Pick<Value extends string>({ label, value, onChange, options }: 
         </Radio>
       ))}
     </RadioGroup>
+  );
+}
+
+type ToggleProps = {
+  label: string;
+  value: boolean;
+  onChange: (value: boolean) => void;
+  disabled?: boolean;
+};
+
+/** A setting that is on or off, as the switch of HeroUI: the label first, the switch at the end of the row. */
+export function Toggle({ label, value, onChange, disabled = false }: ToggleProps) {
+  return (
+    <Switch
+      isSelected={value}
+      isDisabled={disabled}
+      onChange={onChange}
+      className="group flex w-full flex-row-reverse items-center justify-between gap-3"
+    >
+      {/* Ink when it is on, as the boards draw it: the accent is the red of an alert. */}
+      <Switch.Control className="group-data-[selected=true]:bg-ink">
+        <Switch.Thumb />
+      </Switch.Control>
+      <Switch.Content>
+        <Label className="text-sm">{label}</Label>
+      </Switch.Content>
+    </Switch>
   );
 }
 
