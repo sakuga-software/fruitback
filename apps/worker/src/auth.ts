@@ -47,13 +47,14 @@ export const AUTH_PLUGINS = ['organization', 'magic-link', 'fruitback-at-rest'] 
  *
  * Not here, and on purpose: `/sign-in/magic-link` and `/magic-link/verify` (the worker's own routes
  * call them in the process: the token of a link travels after a `#`, and never in an address),
- * `/list-sessions` (a route of the worker lists them, with no token), and the five of
- * `DISABLED_PATHS`. The routes of the organization plugin have their own list, with a rule for each:
+ * `/list-sessions` (a route of the worker lists them, with no token), `/get-session` (FRU-206: the
+ * console reads who is signed in on `/console/me`, and this route answers the token of the session
+ * to a script; the worker reads a session with `auth.api.getSession`, in the process), and the five
+ * of `DISABLED_PATHS`. The routes of the organization plugin have their own list, with a rule for each:
  * `ORGANIZATION_PATHS` of `auth-organization.ts` (FRU-149).
  */
 export const SERVED_PATHS: Readonly<Record<string, string>> = {
   '/ok': 'it says that better-auth answers, and nothing else',
-  '/get-session': 'the console reads who is signed in',
   '/sign-out': 'it ends the session of this cookie',
   '/revoke-sessions': '« sign out everywhere »: every session of the person',
   '/sign-in/social': 'it starts a sign-in with GitHub or Google',

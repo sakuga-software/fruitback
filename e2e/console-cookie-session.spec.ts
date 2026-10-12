@@ -76,6 +76,46 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     await expect(page.getByText('https://staging.acme.dev')).toBeVisible();
   });
 
+  test('takes the token of a link out of the address bar, for a link that works and for one that does not (FRU-207)', async ({
+    page,
+  }) => {
+    // A link that opens nothing: the screen stays, and the address it shows holds no token. A reload,
+    // a shared screen or the history would show it.
+    const spent = 'a-token-of-a-link-that-opens-nothing';
+    await page.goto(`${CONSOLE}/sign-in#${spent}`);
+    await expect(page.getByRole('heading', { name: 'This link no longer works' })).toBeVisible();
+    expect(page.url()).toBe(`${CONSOLE}/sign-in`);
+    // The control: the worker is asked with that token, so the screen read it before it took it away.
+    // Asked for, and not read at once: in development React runs the effect twice, and the second run
+    // finds no token and draws this screen before the first call reaches the worker.
+    await expect
+      .poll(async () => (await worker.received()).map((each) => each.path))
+      .toContain('/console/auth/email/redeem');
+
+    // A link that works, held while the worker answers: the token is gone before the answer.
+    await page.goto(`${CONSOLE}/setup`);
+    await page.getByRole('textbox', { name: 'Work email' }).fill('ana@acme.dev');
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await expect.poll(async () => (await worker.sent()).length).toBe(1);
+    const link = await linkIn(worker);
+    const token = link.split('#')[1] as string;
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const redeem = `${WORKER_ORIGIN}/console/auth/email/redeem`;
+    await page.route(redeem, async (route) => {
+      await held;
+      await route.fallback();
+    });
+    const asked = page.waitForRequest(redeem);
+    await page.goto(link);
+    await asked;
+    expect(page.url()).toBe(`${CONSOLE}/sign-in`);
+    expect(await page.evaluate(() => window.location.href)).not.toContain(token);
+    release();
+    await expect(page).toHaveURL(/\/setup|\/sites$/);
+    await page.unroute(redeem);
+  });
+
   test('keeps what was typed when the session ended, says so, and goes on after a new sign-in', async ({
     page,
     context,

@@ -16,7 +16,7 @@ import { SESSION_SITES_PATH, handleSessionSites } from './session-sites.ts';
 import { type Auth, authFor } from './auth.ts';
 import { createWorkspaceWithPlugin, handleOrganizationRoutes } from './auth-organization.ts';
 import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
-import { AuthUnavailable, handleAuthRoutes, isAuthRoute, sessionOfCookie } from './auth-routes.ts';
+import { AuthUnavailable, handleAuthRoutes, isAuthRoute, sessionOfCookie, withRenewedCookie } from './auth-routes.ts';
 import { consoleCors, handleConsoleSession, isConsoleRoute } from './console-routes.ts';
 import { handleConsoleApi } from './console-api.ts';
 import { handleGitHub } from './github-oauth.ts';
@@ -234,6 +234,11 @@ export type RequestContext = {
 };
 
 export async function handleRequest(request: Request, env: WorkerEnv, context: RequestContext): Promise<Response> {
+  // FRU-208: a reading of the cookie of the console that renewed its session renews the cookie too.
+  return withRenewedCookie(request, await routed(request, env, context));
+}
+
+async function routed(request: Request, env: WorkerEnv, context: RequestContext): Promise<Response> {
   // FRU-133: a delivery of the REST connector that came back to a worker. Before everything, the
   // readiness probe included: `/health` would answer 200, and the sender would count the note as
   // arrived.

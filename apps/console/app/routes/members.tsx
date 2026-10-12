@@ -33,9 +33,6 @@ const INVITE_PROBLEMS: Readonly<Record<string, string>> = {
   USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION: msg(
     'This address is invited already. Send the invitation again from its row.',
   ),
-  'too-many-invitations': msg(
-    'This address received three invitations in the last fifteen minutes. Wait, then send it again.',
-  ),
   'mail-unavailable': msg('The invitation is kept, but its message did not leave. Send it again from its row.'),
   INVITATION_LIMIT_REACHED: msg('A workspace has a hundred invitations waiting at most. Cancel some first.'),
   forbidden: msg('Only an owner or an admin of the workspace invites.'),
@@ -67,7 +64,7 @@ export default function Members() {
   const [role, setRole] = useState<InvitedRole>('member');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | undefined>();
-  const [sentTo, setSentTo] = useState<string | undefined>();
+  const [sentTo, setSentTo] = useState<{ email: string; message: Message } | undefined>();
   const [stuck, setStuck] = useState<{ row: string; problem: string } | undefined>();
   const base = `${ORGANIZATION}`;
   const query = `organizationId=${encodeURIComponent(workspace.id)}`;
@@ -106,7 +103,7 @@ export default function Members() {
       // The field keeps what was typed: the sentence says the cause.
       return setProblem(problemOf(sent, INVITE_PROBLEMS, NOT_INVITED));
     }
-    setSentTo(sent.data.email);
+    setSentTo({ email: sent.data.email, message: messageOf(sent.data, mailed) });
     setEmail('');
     setInvitations((current) =>
       edited(current, (items) => [...items.filter((each) => each.id !== sent.data.id), sent.data]),
@@ -122,7 +119,7 @@ export default function Members() {
       resend: true,
     });
     if (!sent.ok) return setStuck({ row: invitation.id, problem: problemOf(sent, INVITE_PROBLEMS, NOT_INVITED) });
-    setSentTo(invitation.email);
+    setSentTo({ email: invitation.email, message: messageOf(sent.data, mailed) });
     setInvitations((current) =>
       edited(current, (items) => items.map((each) => (each.id === sent.data.id ? sent.data : each))),
     );
@@ -204,7 +201,7 @@ export default function Members() {
           <Problem>{t(problem)}</Problem>
         </div>
       )}
-      {sentTo === undefined ? null : <Invited email={sentTo} mailed={mailed} />}
+      {sentTo === undefined ? null : <Invited email={sentTo.email} message={sentTo.message} />}
 
       <Card>
         <div className="grid grid-cols-[1fr_auto] gap-4 border-b border-line px-4 py-3 text-xs text-muted sm:grid-cols-[1fr_110px_90px_200px]">
@@ -247,18 +244,35 @@ export default function Members() {
  * What an invitation became, and the link to send by hand (FRU-104, decided on FRU-107): the link
  * opens nothing by itself, so a chat is as good as a message. With a mailer, the message went too.
  */
-function Invited({ email, mailed }: { email: string; mailed: boolean }) {
+/** What became of the message of an invitation that the worker kept. */
+type Message = 'sent' | 'no-mailer' | 'held';
+
+/**
+ * `held`: the worker sends mail, and sent none for this one, because this workspace sent the address
+ * three in fifteen minutes. The invitation is kept all the same, and its link is given by hand.
+ */
+function messageOf(invitation: Invitation, mails: boolean): Message {
+  if (!mails) return 'no-mailer';
+
+  return invitation.mailed === false ? 'held' : 'sent';
+}
+
+const INVITED: Readonly<Record<Message, string>> = {
+  sent: msg('Invitation sent to {email}. You can also send them this link:'),
+  'no-mailer': msg('Invitation kept for {email}. Send them this link:'),
+  held: msg(
+    'Invitation kept for {email}, but no message was sent: this workspace sent that address three in fifteen minutes. Send them this link:',
+  ),
+};
+
+function Invited({ email, message }: { email: string; message: Message }) {
   useLocale();
   const [copied, setCopied] = useState<'no' | 'yes' | 'refused'>('no');
   const link = invitationLink();
 
   return (
     <div role="status" className="mb-4 rounded-[10px] border border-line bg-surface p-4 text-sm">
-      <p>
-        {mailed
-          ? t('Invitation sent to {email}. You can also send them this link:', { email })
-          : t('Invitation kept for {email}. Send them this link:', { email })}
-      </p>
+      <p>{t(INVITED[message], { email })}</p>
       <p className="mt-2 break-all rounded-md bg-chip px-3 py-2 font-mono text-xs">{link}</p>
       <p className="mt-2 text-xs text-muted">
         {t('They open it, sign in with {email}, and join. The link alone opens nothing.', { email })}
