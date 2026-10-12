@@ -246,6 +246,25 @@ describe('a batch of notes (FRU-124)', () => {
     assert.equal((await send(seeds(2), { kv, store })).status, 201);
   });
 
+  it('gives the notes back when the store throws an error nobody expected', async () => {
+    let broken = true;
+    const store: SeedStore = {
+      name: 'broken',
+      scope: () => '',
+      findForPage: async () => [],
+      async create(seed) {
+        if (broken) throw new TypeError('a defect');
+
+        return { id: seed.id, identifier: 'FB-1' };
+      },
+    };
+    const kv = createMemoryKv();
+
+    await assert.rejects(send(seeds(2), { kv, store }), TypeError);
+    broken = false;
+    assert.equal((await send(seeds(2), { kv, store })).status, 201);
+  });
+
   it('answers 502 when the store kept no note, as for one note', async () => {
     const down: SeedStore = {
       name: 'down',

@@ -1049,7 +1049,12 @@ async function postBatch(
   try {
     if (fresh.length > 0) planted = await createAll(store, fresh, target, route.policy);
   } catch (error) {
-    if (!(error instanceof StoreError)) throw error;
+    if (!(error instanceof StoreError)) {
+      // An error nobody expected answers `500`. The seeds are given back first: the next attempt
+      // must not wait for the hold to end.
+      await Promise.all(fresh.map((seed) => release(kv, clientId, seed.id)));
+      throw error;
+    }
     // Nothing of this attempt was kept. A seed of an earlier one still answers its issue.
     planted = fresh.map(() => ({ error: 'store-unavailable' }) as const);
   }
