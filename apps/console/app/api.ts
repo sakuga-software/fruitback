@@ -345,6 +345,7 @@ export function providerStart(provider: keyof Providers): string {
 }
 
 export async function requestLink(email: string, tag: string): Promise<Answer<{ sent: true }>> {
+  if (left !== undefined) return LEFT;
   const way = await pathOfWorker();
   if (typeof way !== 'string') return way;
 
@@ -356,6 +357,8 @@ export async function requestLink(email: string, tag: string): Promise<Answer<{ 
  * the account and sets the cookie; the console keeps nothing.
  */
 export async function redeemLink(code: string): Promise<Answer<{ account: Account }>> {
+  // A tab that stopped signs nobody in, and signs nobody out: it is loaded again first (FRU-210).
+  if (left !== undefined) return LEFT;
   const way = await pathOfWorker();
   // The link is not spent: no route was asked.
   if (typeof way !== 'string') return way;
@@ -395,6 +398,8 @@ function signedInHere(signed: { account?: { id?: unknown } }): void {
  * path of before.
  */
 export async function signOut(): Promise<boolean> {
+  // The session of the browser is of another account now: this tab does not end it.
+  if (left !== undefined) return false;
   const way = await pathOfWorker();
   // The worker did not say which sessions it keeps: nothing confirmed that one ended.
   if (typeof way !== 'string') return false;

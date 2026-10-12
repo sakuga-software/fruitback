@@ -65,6 +65,11 @@ describe('a tab of the console is of one account (FRU-210)', () => {
     assert.deepEqual(await api.call('DELETE', '/console/workspaces/ws_1'), LEFT);
     assert.equal(sent.length, before);
     assert.deepEqual(told, ['changed'], 'told once');
+    // Nor does it end the session of Bob, ask for a link, or spend one: those do not go through `call`.
+    assert.equal(await api.signOut(), false);
+    assert.deepEqual(await api.requestLink('ana@acme.dev', 'en'), LEFT);
+    assert.deepEqual(await api.redeemLink('a-token'), LEFT);
+    assert.equal(sent.length, before);
   });
 
   it('goes on when « Continue » finds the same account', async () => {
