@@ -335,8 +335,8 @@ describe('a worker that has better-auth switched off (FRU-144)', () => {
     try {
       const on = await worker(envWith({ FRUITBACK_DATABASE_URL: url }));
 
-      // FRU-147: `/ok` answers, and `/get-session` answers no session.
-      assert.deepEqual(on.statuses, [200, 200, 200]);
+      // FRU-147: `/ok` answers. FRU-206: `/get-session` is a route of better-auth the worker does not serve.
+      assert.deepEqual(on.statuses, [200, 200, 404]);
       assert.equal(on.announced, 'ready');
       assert.ok(on.library > 0);
       const made = createPgDatabase(url, { max: 1 });
@@ -412,7 +412,7 @@ describe('the bundle of the image, with better-auth in it (FRU-144)', () => {
 const AUTH_ROUTES: readonly (readonly [method: string, path: string, served: boolean])[] = [
   ['GET', '/ok', true],
   ['GET', '/error', true],
-  ['GET', '/get-session', true],
+  ['GET', '/get-session', false],
   ['POST', '/sign-out', true],
   ['POST', '/sign-in/social', true],
   ['GET', '/list-sessions', false],
