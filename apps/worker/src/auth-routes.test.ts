@@ -634,6 +634,10 @@ for (const { label, open, skip } of DATABASES) {
         }
         // Nothing changed: the session of the cookie is still there.
         assert.equal((await worker.call('/console/me', { headers: { Cookie: cookie } })).status, 200);
+        // With no cookie either: better-auth alone checks no origin at all for such a request.
+        const bare = await worker.call(`${AUTH_BASE_PATH}${path}`, { body, origin: null });
+        assert.equal(bare.status, 403, 'no cookie and no Origin');
+        assert.deepEqual(await bare.json(), { error: 'origin-not-allowed' });
 
         // The control: the same call from the console reaches better-auth, which answers it.
         const taken = await from({ origin: CONSOLE_URL });
