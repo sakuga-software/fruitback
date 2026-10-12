@@ -12,7 +12,7 @@ import {
 } from './messages.ts';
 import { FRENCH } from './locale-fr.ts';
 import { createCaptureHost } from './host.ts';
-import { createComposer } from './composer.ts';
+import { type SendFailure, createComposer } from './composer.ts';
 import { createOfferedDestinations } from './destinations.ts';
 import { createConfigPanel } from './panel.ts';
 import { type ReadState, createSidebar } from './sidebar.ts';
@@ -242,14 +242,14 @@ describe('every word the widget shows', () => {
       exportText: () => exported,
     });
     cleanup.push(() => panel.destroy());
-    let answer: (planted: boolean) => void = () => {};
+    let answer: (planted: boolean | SendFailure) => void = () => {};
     const places = createOfferedDestinations();
     places.set([{ id: 'dst_one', label: 'PLACE ONE' }, { id: 'dst_two' }]);
     const composer = createComposer({
       document: page.document,
       host: host.panel,
       translator,
-      onSubmit: () => new Promise<boolean>((resolve) => (answer = resolve)),
+      onSubmit: () => new Promise<boolean | SendFailure>((resolve) => (answer = resolve)),
       // Two places, so the line of where a note goes is drawn. The second has no name of its own.
       destinations: {
         offered: places.get,
@@ -369,6 +369,13 @@ describe('every word the widget shows', () => {
     answer(false);
     await settle();
     snapshots.push(...shown(host.root));
+    // Each cause of a failed send has its own sentence (FRU-156).
+    for (const failure of ['wait', 'refused', 'too-large'] as const) {
+      send.click();
+      answer(failure);
+      await settle();
+      snapshots.push(...shown(host.root));
+    }
     send.click();
     answer(true);
     await settle();

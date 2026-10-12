@@ -203,6 +203,11 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   place** (`destinationToSend`). The body stays the seed. `apps/extension/src/relay.test.ts` reads
   the paths of `embed.ts` up to the `?`: write the two addresses as two whole templates. A refusal
   with a choice reads again, so the composer shows the list of now and says which place is gone.
+- **A failed send says what to do next, by its cause** (FRU-156). `plant` answers `true` or a
+  `SendFailure` (`failureOf`): `retry` for no answer and a `5xx`, `wait` for a `429`, `refused` for a
+  `401` and a `403`, `too-large` for a `413`. A `403` that names a place gone
+  (`destination-not-allowed`) is a `retry`: the read after it makes the list right. The text is kept
+  in every case, and the sentence takes its own line above the buttons, in the live region.
 
 ### The reasons, and the history
 

@@ -1,7 +1,13 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { SeedReporter } from '@fruitback/shared';
-import { type Composer, type ComposerOptions, type DestinationChoice, createComposer } from './composer.ts';
+import {
+  type Composer,
+  type ComposerOptions,
+  type DestinationChoice,
+  type SendFailure,
+  createComposer,
+} from './composer.ts';
 import type { Destination } from './destinations.ts';
 import { deepActiveElement, focusables } from './focus.ts';
 import { type MountedPage, keyboardEventCtor, mountPage } from './dom.fixture.ts';
@@ -25,7 +31,7 @@ afterEach(() => {
 let mounted: MountedPage | null = null;
 
 function mount(
-  onSubmit: (note: string, reporter?: SeedReporter) => Promise<boolean | void>,
+  onSubmit: (note: string, reporter?: SeedReporter) => Promise<boolean | void | SendFailure>,
   more: Pick<ComposerOptions, 'memory' | 'identified'> = {},
 ) {
   const page = mountPage('<main><button id="cta">Commander</button></main>', { width: 1_000, height: 1_000 });
@@ -161,6 +167,29 @@ describe('createComposer', () => {
     assert.equal(field().value, 'Une remarque qui a pris du temps à écrire');
     assert.equal(composer?.element.hidden, false, 'the popover closed and took the note with it');
     assert.equal(sendButton().disabled, false, 'retrying should be one click');
+  });
+
+  it('says what to do next by the cause of the failure, and keeps the text each time (FRU-156)', async () => {
+    const said: Record<string, string> = {};
+    for (const failure of ['retry', 'wait', 'refused', 'too-large'] as const) {
+      mount(async () => failure);
+      composer?.open(ANCHOR);
+      field().value = `Une note, ${failure}`;
+      sendButton().click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      assert.equal(composer?.state(), 'failed');
+      assert.equal(field().value, `Une note, ${failure}`);
+      said[failure] = statusText();
+      composer?.destroy();
+      composer = null;
+    }
+
+    assert.equal(said.retry, 'did not go through — your text is kept, try again');
+    assert.match(said.wait ?? '', /in a minute/);
+    assert.match(said.refused ?? '', /tell the team of the site/);
+    assert.match(said['too-large'] ?? '', /shorten it/);
+    assert.equal(new Set(Object.values(said)).size, 4, 'four causes, four sentences');
   });
 
   it('treats a refusal like a failure, not like a success', async () => {
