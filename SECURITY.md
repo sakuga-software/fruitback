@@ -924,6 +924,17 @@ when it is accepted`. An invitation waits 7 days; one address gets one invitatio
   the same link (FRU-107), and it opens nothing more than the message does.
   test:`sends an invitation again when asked to, and no more than three messages to one address in the window`,
   test:`keeps the window of an address to its workspace: another workspace neither closes it nor learns of it (FRU-209)`.
+- **An invitation does not outlive the right of whoever made it** (FRU-209). When a member is
+  removed, leaves, or gets a role that does not invite, the invitations of theirs that wait in the
+  workspace are cancelled in the same call. Without it an admin who was removed left a second
+  admin behind: the invitation stayed good for 7 days, and « Resend » moved its end.
+  test:`cancels the invitations of an admin who is removed, demoted, or leaves, so nobody joins on their word (FRU-209)`.
+  The acceptance checks it again, for a cancellation that did not run (it comes after the write of
+  better-auth, in no transaction): an invitation whose inviter is no longer an owner or an admin
+  of the workspace is refused,
+  test:`refuses at the acceptance an invitation whose inviter no longer invites, when no cancellation ran (FRU-209)`.
+  **Both are on the routes of the worker**, not in better-auth: a call to the plugin in the process
+  passes neither, and no code of the worker makes one for these routes.
 - **A cancel names the workspace, and the invitation must be of it.** better-auth reads the
   workspace of an invitation from the invitation; the worker reads the role in the workspace of the
   call, so it checks first that the two are one:
