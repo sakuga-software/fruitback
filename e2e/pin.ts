@@ -26,10 +26,23 @@ export async function openPlayground(page: Page, testCase: string): Promise<void
   // failed after planting leaves its pin behind: replaying on the same URL then finds two notes with
   // the same text, and the retry can never pass — it reports an ambiguous locator instead of the
   // thing that actually broke. This is what made a CI flake look like a different bug.
-  const attempt = test.info().retry;
-  await page.goto(`/?case=${attempt === 0 ? testCase : `${testCase}-retry${attempt}`}`);
+  await page.goto(`/?case=${caseOf(testCase)}`);
   await expect(page.getByRole('heading', { name: 'Nos formules' })).toBeVisible();
   await expect(status(page)).toHaveText(/pin|^0/, { timeout: 15_000 });
+}
+
+/**
+ * The name of the page of one run of a spec. A retry, and each repetition of `--repeat-each`, gets a
+ * page of its own: the worker's store lives for the whole run, so a second run on the same URL finds
+ * the pins of the first. With one URL for all, `--repeat-each 20` failed 19 times out of 20 on a pin
+ * count (FRU-186), and a flake could not be measured.
+ */
+export function caseOf(testCase: string): string {
+  const { retry, repeatEachIndex } = test.info();
+
+  return [testCase, repeatEachIndex > 0 ? `repeat${repeatEachIndex}` : '', retry > 0 ? `retry${retry}` : '']
+    .filter((part) => part !== '')
+    .join('-');
 }
 
 /** Capture mode, a click on `target`, a note, send — and wait for the pin to come back. */
@@ -76,6 +89,19 @@ function escapeForRegExp(value: string): string {
 
 export function badgeFor(page: Page, note: string): Locator {
   return pinFor(page, note).getByRole('button');
+}
+
+/**
+ * Sends the note of the open composer, and waits until the playground has planted it.
+ *
+ * Synchronised on the identifier, never on the status line: the widget writes « 1 pin » there when
+ * it re-resolves by itself, and that can land after « planté · … » (FRU-186). Measured under load on
+ * `attribution.spec.ts`, 4 runs out of 80 read « 1 pin » for good.
+ */
+export async function sendNote(page: Page): Promise<void> {
+  const before = (await planted(page).textContent()) ?? '';
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(planted(page)).not.toHaveText(before);
 }
 
 /** The last identifier planted. Written once per plant, never overwritten. */

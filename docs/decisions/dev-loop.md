@@ -145,8 +145,13 @@ builds `dist` first, because `package.spec.ts` loads the real file.
 - **Assert on what you measured, never on a second measurement.** Poll until a value satisfies the
   check and keep _that_ value: a computed colour read mid-transition is the interpolated one (which
   Chromium serializes in another colour space), and the composer clears its confirmation 1.1s after
-  showing it. Synchronise on the harness's status line rather than on a pin count — the old pins are
-  still in the DOM while the new set is being fetched, so counting races.
+  showing it. Synchronise on the planted identifier (`sendNote`, `plantPin` of `e2e/pin.ts`), not on
+  a pin count and not on the status line. The old pins are still in the DOM while the new set is
+  being fetched, so counting races. The status line has two writers, and the widget's « 1 pin »
+  can land after « planté · … »: 4 runs out of 80 of `attribution.spec.ts` under load (FRU-186).
+- **Each run of a spec has a page of its own**, a retry and each `--repeat-each` repetition
+  included (`caseOf` of `e2e/pin.ts`). The worker's store lives for the whole run. A flaky spec is
+  measured with `--repeat-each 20 --workers 1`.
 - **An absence needs a control.** The no-rule spec then adds the rule and sees the widget; the token
   search fails unless it finds a token in both storage areas. A spec that counts zero proves nothing alone.
 
