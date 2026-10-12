@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { type BrowserContext, type Page, type Worker, test as base, chromium, expect } from '@playwright/test';
-import { WORKER_ORIGIN } from './pin.ts';
+import { WORKER_ORIGIN, caseOf } from './pin.ts';
 import { AUTHENTICATED_WORKER_ORIGIN, WORKER_SESSION_ENV } from './worker-sessions.ts';
 
 /**
@@ -96,8 +96,7 @@ function copyWithLocalAccess(directory: string): string {
  * The parameters are in canonical order, so `seedsOn` can read the stored seeds with the raw URL.
  */
 export async function openBareSite(page: Page, testCase: string): Promise<void> {
-  const attempt = test.info().retry;
-  await page.goto(`/?case=${attempt === 0 ? testCase : `${testCase}-retry${attempt}`}&widget=off`);
+  await page.goto(`/?case=${caseOf(testCase)}&widget=off`);
   await expect(page.getByRole('heading', { name: 'Nos formules' })).toBeVisible();
 }
 
