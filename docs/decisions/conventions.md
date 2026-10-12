@@ -194,8 +194,10 @@ write <package> <mutation.json>` prints it from the report of a full run.
 - **StrykerJS is installed apart**, from `tools/mutation/pnpm-lock.yaml`, by the mutation job alone.
 - **Never run it on a tree you care about.** `inPlace` rewrites the source files and puts them back
   at the end. A run that is killed leaves them mutated.
-- **A test that reads a mutated file as text is left out of the run**: `security.test.ts`, through
-  the `tap.testFiles` of the worker. `mutation.test.ts` fails on another one.
+- **No test reads a mutated file as text**, and the run of the worker leaves no test out.
+  `security.test.ts` read the constants of `identity.ts` and `session.ts` from their source, and the
+  first run stopped on it. It imports them now (FRU-179). `mutation.test.ts` fails on a test that
+  reads one.
 
 ### The reasons, and the history
 

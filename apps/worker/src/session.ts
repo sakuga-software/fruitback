@@ -91,7 +91,7 @@ export type SessionStore = {
  * a terminal and a popup actually use, and the fourth is left out so a random code cannot spell
  * something the operator has to apologise for.
  */
-const CODE_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+export const CODE_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
 /** Twelve characters of a 32-symbol alphabet: 60 bits. The rate limiter is the second lock. */
 const CODE_LENGTH = 12;

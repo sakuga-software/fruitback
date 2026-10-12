@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import {
   ACCESS_TTL_SECONDS,
+  CODE_ALPHABET,
   PAIRING_TTL_SECONDS,
   REFRESH_TTL_SECONDS,
   ROTATION_GRACE_SECONDS,
@@ -97,6 +98,43 @@ describe('pairing', () => {
 
     assert.equal(/[ILOU]/.test(drawn), false, `the alphabet emitted a rewritten letter: ${drawn}`);
     assert.equal(normalizePairingCode(drawn), drawn.replaceAll('-', ''));
+  });
+});
+
+describe('the pairing code, as it is drawn', () => {
+  it('is three groups of four characters, each from the alphabet', () => {
+    for (const code of Array.from({ length: 50 }, () => createPairingCode())) {
+      assert.match(code, /^[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}$/);
+    }
+  });
+
+  it('draws from the 32 symbols of Crockford base32, and from all of them', () => {
+    assert.equal(CODE_ALPHABET, '0123456789ABCDEFGHJKMNPQRSTVWXYZ');
+
+    // 24 000 characters. The chance that one of 32 symbols never comes is under 1e-300.
+    const drawn = new Set(
+      Array.from({ length: 2000 }, () => createPairingCode())
+        .join('')
+        .replaceAll('-', ''),
+    );
+
+    assert.deepEqual([...drawn].sort().join(''), CODE_ALPHABET);
+  });
+
+  it('does not draw the same code twice', () => {
+    const codes = Array.from({ length: 200 }, () => createPairingCode());
+
+    assert.equal(new Set(codes).size, codes.length);
+  });
+});
+
+describe('the lifetimes of a session', () => {
+  it('are a quarter of an hour for a pairing code, ten minutes for an access token, thirty days for a refresh token', () => {
+    // In seconds, written out. SECURITY.md and docs/reviewing.md state the same durations, and
+    // security.test.ts holds them to these constants.
+    assert.equal(PAIRING_TTL_SECONDS, 900);
+    assert.equal(ACCESS_TTL_SECONDS, 600);
+    assert.equal(REFRESH_TTL_SECONDS, 2_592_000);
   });
 });
 

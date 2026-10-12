@@ -4,11 +4,14 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   ACCESS_TTL_SECONDS,
+  CODE_ALPHABET,
   PAIRING_TTL_SECONDS,
   REFRESH_TTL_SECONDS,
   createPairingCode,
   createRefreshToken,
 } from './session.ts';
+// The constants come from the modules, never from their text: a mutation run rewrites that text (FRU-179).
+import { ALGORITHM, CLOCK_SKEW_SECONDS, MAX_TOKEN_BYTES, stripClaimedVerification } from './identity.ts';
 import { DEFAULT_TRUSTED_PROXY_HOPS } from './env.ts';
 import { DEFAULT_LIMIT } from './rate-limit.ts';
 import { readConfig } from './env.ts';
@@ -46,25 +49,6 @@ function readSecurityDoc(): string {
 }
 
 const SECURITY = readSecurityDoc();
-const IDENTITY = readFileSync(fileURLToPath(new URL('./identity.ts', import.meta.url)), 'utf8');
-const SESSION = readFileSync(fileURLToPath(new URL('./session.ts', import.meta.url)), 'utf8');
-
-/**
- * Reads a constant out of a source file, for the ones that are not exported.
- *
- * Plain literals only, and a computed one fails loudly rather than being evaluated: this file exists
- * to check a security document, and running source out of it to do that is the wrong trade.
- */
-function constantIn(source: string, name: string): string {
-  const match = new RegExp(`const ${name} = ('?[\\w.]+'?);`).exec(source);
-  const value = match?.[1];
-  assert.ok(
-    value !== undefined,
-    `${name} is gone from identity.ts, or is no longer a plain literal; SECURITY.md describes it`,
-  );
-
-  return value.replace(/^'|'$/g, '');
-}
 
 /**
  * The reviewer's guide states the same lifetimes, in the reviewer's words (FRU-46).
@@ -90,7 +74,7 @@ describe('the reviewer guide states the lifetimes the worker issues', () => {
    * than the code does. `SECURITY.md` had it right all along. Raised in review.
    */
   it('says how long an access token outlives a log out, skew included', () => {
-    const window = (ACCESS_TTL_SECONDS + Number(constantIn(IDENTITY, 'CLOCK_SKEW_SECONDS'))) / 60;
+    const window = (ACCESS_TTL_SECONDS + CLOCK_SKEW_SECONDS) / 60;
     const phrase = `**${window} minutes**`;
     assert.ok(
       REVIEWING.includes(phrase),
@@ -146,8 +130,8 @@ describe('SECURITY.md states what the code does', () => {
   });
 
   it('quotes the token cap and the clock skew the verifier enforces', () => {
-    const maxBytes = Number(constantIn(IDENTITY, 'MAX_TOKEN_BYTES'));
-    const skew = constantIn(IDENTITY, 'CLOCK_SKEW_SECONDS');
+    const maxBytes = MAX_TOKEN_BYTES;
+    const skew = CLOCK_SKEW_SECONDS;
 
     assert.ok(
       SECURITY.includes(`over ${maxBytes / 1024} KiB is refused`),
@@ -171,7 +155,7 @@ describe('SECURITY.md states what the code does', () => {
     // The radix comes from the implementation's own alphabet, not from a literal 32. A hard-coded
     // radix is the same defect one level down: shrink the alphabet to 31 symbols and the arithmetic
     // still says 60 bits while the document overstates what a code is worth. Raised in review.
-    const radix = constantIn(SESSION, 'CODE_ALPHABET').length;
+    const radix = CODE_ALPHABET.length;
     assert.ok(radix > 1, `CODE_ALPHABET has ${radix} symbols; a code drawn from it carries nothing`);
 
     const codeBits = Math.round(createPairingCode().replaceAll('-', '').length * Math.log2(radix));
@@ -188,7 +172,7 @@ describe('SECURITY.md states what the code does', () => {
   });
 
   it('names the only algorithm the verifier accepts', () => {
-    assert.ok(SECURITY.includes(`\`${constantIn(IDENTITY, 'ALGORITHM')}\` is **asserted against**`));
+    assert.ok(SECURITY.includes(`\`${ALGORITHM}\` is **asserted against**`));
   });
 
   /**
@@ -217,8 +201,11 @@ describe('SECURITY.md states what the code does', () => {
       'SECURITY.md no longer makes the claim this test guards',
     );
 
-    const stripped = /export function stripClaimedVerification/.test(IDENTITY);
-    assert.equal(stripped, true, 'SECURITY.md promises the flag is stripped, and nothing strips it');
+    assert.deepEqual(
+      stripClaimedVerification({ name: 'CEO', verified: true }),
+      { name: 'CEO' },
+      'SECURITY.md promises the flag is stripped, and nothing strips it',
+    );
   });
 });
 

@@ -51,13 +51,13 @@ export type IdentityResult =
 const encoder = new TextEncoder();
 
 /** The only algorithm this worker will verify. Not a default — a requirement. */
-const ALGORITHM = 'HS256';
+export const ALGORITHM = 'HS256';
 
 /** Longer than this and the payload is not an identity token, whatever it is. */
-const MAX_TOKEN_BYTES = 4096;
+export const MAX_TOKEN_BYTES = 4096;
 
 /** A minute of slack for a client clock that runs fast. Anything more is not clock drift. */
-const CLOCK_SKEW_SECONDS = 60;
+export const CLOCK_SKEW_SECONDS = 60;
 
 export function readBearerToken(header: string | null): string | undefined {
   if (header === null) return undefined;
