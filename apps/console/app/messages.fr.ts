@@ -95,6 +95,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Console · this browser': 'Console · ce navigateur',
   'Active now': 'Actif maintenant',
   'Sign out': 'Se déconnecter',
+  'You are still signed in: Fruitback did not confirm the sign-out. Try again.':
+    'Vous êtes toujours connecté : Fruitback n’a pas confirmé la déconnexion. Réessayez.',
   'Delete the workspace': 'Supprimer le workspace',
   'Sites, members and pin positions go. Items already in your sources stay there.':
     'Les sites, les membres et la position des pins disparaissent. Les éléments déjà dans vos sources y restent.',

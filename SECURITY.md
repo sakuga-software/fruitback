@@ -22,7 +22,7 @@ Please do not open a public issue for a vulnerability once the repository is pub
 
 ## What is supported
 
-Nothing is released yet. `@fruitback/shared`, `@fruitback/widget` and `fruitback` are at `0.1.0` and
+Nothing is released yet. `@fruitback/shared`, `@fruitback/widget` and `fruitback` are at `0.2.0` and
 **unpublished**; the worker image on GHCR is the only distributed artefact. There is no supported
 version policy to state, and pretending otherwise would be the first thing in this file that is not
 true.
@@ -464,6 +464,24 @@ surface, so:
 It is a small amount of cryptography and it is reviewed as such. If you find a flaw in it, that is
 squarely a vulnerability and we want to hear about it.
 
+### With accounts, the worker key opens the console (FRU-203)
+
+`FRUITBACK_IDENTITY_SECRET` signs the access token of every session. On a worker with accounts, the
+routes of the console take a token signed with it, with the id of an account in `sub`, for a
+console session of that account. **Whoever holds the key signs one for any account**, with no
+sign-in, and the id of an account is on every note its person leaves. Nothing in the token says
+that the worker minted it, and a claim that did would not help: the holder of the key writes any
+claim. test:`takes a token that the holder of the worker key signed for the console session of its sub`.
+
+**The condition that protects the console is that no site holds this key.** With accounts no site
+needs it: a site is a row the console wrote, and it signs nothing. A worker that served one site
+with this key, and then got accounts, must change it. Changing it refuses every token of the old
+key at once and ends no session:
+test:`refuses every token of the old key once the key changed, and a session that was open goes on at its next refresh`.
+The steps are in [docs/self-hosting.md](docs/self-hosting.md#change-fruitback_identity_secret). The
+cookie of better-auth is not signed with this key, and once the console signs in with that cookie
+only (FRU-150), no route of the console reads a token.
+
 ### The accounts, and what decides who reads a site (FRU-96)
 
 With `FRUITBACK_ACCOUNTS_PATH` the clients of the worker are the sites the console wrote, read from
@@ -597,6 +615,13 @@ it`. The value of the row is the address it was sent to.
 the cookie from another origin, or from none, and takes it from the console`. better-auth refuses
   the same two requests on its own routes. A call with the token of before in `Authorization` is not
   a cookie, and is checked as before.
+- **« Sign out » ends both sessions of the browser, or says that it did not** (FRU-204). A browser
+  that signed in before the worker served better-auth still holds the refresh cookie of the path of
+  before, good for 30 days, and the worker takes it for as long as it serves that path. The console
+  ends it with the cookie of better-auth, and stays on « My account » with « You are still signed
+  in » when the worker did not confirm one of the two. **What remains: a session of before in a
+  browser where nobody presses « Sign out »** goes on until its 30 days, or until the path of before
+  is removed (FRU-150).
 - **The console holds no token** (FRU-148): no access token in its memory, nothing in `localStorage`
   or `sessionStorage`, and a cookie that `document.cookie` does not show. A script injected into the
   console can call the worker while the page is open, as before; it has nothing to carry away.

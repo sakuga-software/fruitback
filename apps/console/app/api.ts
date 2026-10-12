@@ -248,14 +248,22 @@ export async function redeemLink(code: string): Promise<Answer<{ account: Accoun
   return result;
 }
 
-/** Ends the session on the worker: the cookie is refused at the next call, in every tab. */
-export async function signOut(): Promise<void> {
-  if ((await pathOfWorker()) === 'cookie') {
-    await send('POST', '/console/auth/sign-out', {});
+/**
+ * Ends the session on the worker: the cookie is refused at the next call, in every tab.
+ *
+ * `false` when the worker did not say that every session ended (FRU-204). The screen then says so
+ * and stays: somebody who reads « signed out » leaves the browser to the next person.
+ *
+ * With better-auth, the session of before is ended too. A browser that signed in before the worker
+ * served better-auth still holds its refresh cookie, good for 30 days, and the worker still takes
+ * it. Both calls are made, whatever the first one answers. FRU-150 removes the second one with the
+ * path of before.
+ */
+export async function signOut(): Promise<boolean> {
+  if ((await pathOfWorker()) !== 'cookie') return before.logOut();
+  const [ended, endedBefore] = await Promise.all([send('POST', '/console/auth/sign-out', {}), before.logOut()]);
 
-    return;
-  }
-  await before.logOut();
+  return ended?.ok === true && endedBefore;
 }
 
 /**
