@@ -1,64 +1,21 @@
 /**
  * The console's one way to the worker (FRU-99).
  *
- * The access token lives in this module, in memory, and nowhere else. The refresh token is a cookie
- * this script cannot read: `refresh()` asks the worker to spend it. A page reload loses the access
- * token and gets a new one from the cookie.
+ * **The console holds no token** (FRU-148). A worker that serves better-auth keeps the session of the
+ * console in a cookie that no script reads (`HttpOnly`, `SameSite=Strict`, `Path=/console`), and every
+ * call sends it (`credentials: 'include'`, in `transport.ts`). There is nothing to refresh: the worker
+ * reads the session in its database at each call.
+ *
+ * The worker says in `GET /auth/providers` which path it serves. Until it says `betterAuth`, the
+ * console signs in as before (`session-of-before.ts`): the console and the worker are not deployed at
+ * the same instant.
  */
 
 import { locale } from './i18n.ts';
+import * as before from './session-of-before.ts';
+import { API, UNREACHABLE, reach } from './transport.ts';
 
-export const API =
-  (import.meta.env?.VITE_FRUITBACK_API as string | undefined)?.replace(/\/+$/, '') ?? 'http://localhost:8788';
-
-/**
- * A worker that never answers must not hold a screen: every call stops after this long.
- */
-const CALL_TIMEOUT_MS = 15_000;
-
-/** What a call answers when the worker did not: no network, no name, no answer in time. */
-export const UNREACHABLE = { ok: false, status: 0, error: 'unreachable' } as const;
-
-type ReachListener = (reachable: boolean) => void;
-const reachListeners = new Set<ReachListener>();
-let reachable = true;
-
-/** Tells the listener each time the worker stops or starts to answer. Returns how to stop. */
-export function onReachability(listener: ReachListener): () => void {
-  reachListeners.add(listener);
-  listener(reachable);
-
-  return () => void reachListeners.delete(listener);
-}
-
-function reached(now: boolean): void {
-  if (now === reachable) return;
-  reachable = now;
-  for (const listener of reachListeners) listener(now);
-}
-
-/**
- * A request that answered, or `undefined`. WARNING: this must not reject. A caller that awaits a
- * rejected call sets no state, and its screen says "Loading…" until the tab closes.
- */
-async function reach(path: string, init: RequestInit): Promise<Response | undefined> {
-  try {
-    const response = await fetch(`${API}${path}`, {
-      ...init,
-      credentials: 'include',
-      signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-    });
-    reached(true);
-
-    return response;
-  } catch {
-    reached(false);
-
-    return undefined;
-  }
-}
-
-let access: string | undefined;
+export { API, UNREACHABLE, onReachability } from './transport.ts';
 
 export type Account = { id: string; email: string; name?: string; locale?: string };
 export type Role = 'owner' | 'admin' | 'member' | 'guest';
@@ -135,12 +92,39 @@ export type Me = { account: Account; workspaces: Workspace[] };
 
 export type Answer<T> = { ok: true; data: T } | { ok: false; status: number; error: string };
 
-function send(method: string, path: string, body?: unknown): Promise<Response | undefined> {
+/**
+ * Which way of signing in the worker serves: `cookie` (better-auth, FRU-147) or `token` (before).
+ * `undefined` until it said: the path of before is the one taken then.
+ */
+let path: 'cookie' | 'token' | undefined;
+
+/** The path of the worker, asked once: the answer of `/auth/providers` says it. */
+async function pathOfWorker(): Promise<'cookie' | 'token' | undefined> {
+  if (path === undefined) await signInProviders();
+
+  return path;
+}
+
+function send(method: string, to: string, body?: unknown): Promise<Response | undefined> {
   const headers: Record<string, string> = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  if (access !== undefined) headers.Authorization = `Bearer ${access}`;
+  // With the cookie of better-auth there is no header to add: the browser sends the cookie.
+  if (path !== 'cookie') Object.assign(headers, before.authorization());
 
-  return reach(path, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  return reach(to, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+}
+
+type SignedOutListener = () => void;
+const signedOutListeners = new Set<SignedOutListener>();
+
+/**
+ * Tells the listener when a call was refused because the session ended (FRU-148). The screen stays
+ * as it is, with what the person typed: the root says so above it. Returns how to stop.
+ */
+export function onSignedOut(listener: SignedOutListener): () => void {
+  signedOutListeners.add(listener);
+
+  return () => void signedOutListeners.delete(listener);
 }
 
 async function answer<T>(response: Response | undefined): Promise<Answer<T>> {
@@ -153,39 +137,6 @@ async function answer<T>(response: Response | undefined): Promise<Answer<T>> {
     : { ok: false, status: response.status, error: body.error ?? 'unknown' };
 }
 
-let inFlight: Promise<boolean> | undefined;
-
-/**
- * Spends the cookie for a fresh access token. `false` means signed out.
- *
- * WARNING: one refresh at a time. Two calls that spend the same refresh token race, and the worker
- * reads the second as a retry: whichever answer lands last decides which token the browser keeps.
- * Every caller joins the refresh already in flight, like `refreshOnce` in the extension.
- */
-export function refresh(): Promise<boolean> {
-  inFlight ??= spend().finally(() => {
-    inFlight = undefined;
-  });
-
-  return inFlight;
-}
-
-async function spend(): Promise<boolean> {
-  const response = await reach('/console/session/refresh', { method: 'POST' });
-  // No answer is not a refusal: the access token this tab holds can still be good.
-  if (response === undefined) return false;
-  if (!response.ok) {
-    access = undefined;
-
-    return false;
-  }
-  const body = (await response.json().catch(() => ({}))) as { accessToken?: unknown };
-  if (typeof body.accessToken !== 'string') return false;
-  access = body.accessToken;
-
-  return true;
-}
-
 const RETRY_MS = 5_000;
 
 /**
@@ -196,7 +147,8 @@ export function callUntilAnswered<T>(method: string, path: string, onAnswer: (an
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const ask = (): void => {
-    void call<T>(method, path).then((answer) => {
+    // The screen that asks decides what a refusal means: it has nothing typed to keep.
+    void call<T>(method, path, undefined, { quiet: true }).then((answer) => {
       if (stopped) return;
       if (!answer.ok && answer.status === 0) timer = setTimeout(ask, RETRY_MS);
       else onAnswer(answer);
@@ -210,11 +162,23 @@ export function callUntilAnswered<T>(method: string, path: string, onAnswer: (an
   };
 }
 
-/** A call with the access token, refreshed once when the worker says it expired. */
-export async function call<T>(method: string, path: string, body?: unknown): Promise<Answer<T>> {
-  if (access === undefined) await refresh();
-  let response = await send(method, path, body);
-  if (response?.status === 401 && (await refresh())) response = await send(method, path, body);
+/**
+ * A call of the console. With better-auth, the cookie goes with it and nothing is refreshed. With the
+ * path of before, the access token, refreshed once when the worker says it expired.
+ *
+ * A `401` tells `onSignedOut`, unless `quiet`: the screen keeps what the person typed.
+ */
+export async function call<T>(
+  method: string,
+  to: string,
+  body?: unknown,
+  options: { quiet?: boolean } = {},
+): Promise<Answer<T>> {
+  const way = await pathOfWorker();
+  if (way !== 'cookie' && !before.holdsToken()) await before.refresh();
+  let response = await send(method, to, body);
+  if (way !== 'cookie' && response?.status === 401 && (await before.refresh())) response = await send(method, to, body);
+  if (response?.status === 401 && options.quiet !== true) for (const listener of signedOutListeners) listener();
 
   return answer<T>(response);
 }
@@ -224,36 +188,71 @@ export function saveLanguage(tag: string): Promise<boolean> {
   return call('POST', '/console/me/locale', { locale: tag }).then((answer) => answer.ok);
 }
 
-/** Which providers the worker signs people in with (FRU-135). */
+/** Which providers the worker signs people in with (FRU-135), on the path it serves. */
 export type Providers = { github: boolean; google: boolean };
+
+type Announced = Partial<Providers> & { betterAuth?: Partial<Providers> & { email?: boolean } };
 
 /**
  * `undefined` when the worker did not say: no answer, or a refusal. That is not "none": a screen
  * must not tell a person that a provider is not set up when nobody said so.
+ *
+ * It also learns the path of the worker (FRU-148): `betterAuth` in the answer is better-auth, and
+ * its own providers; no `betterAuth` is the path of before, and its two booleans.
  */
 export async function signInProviders(): Promise<Providers | undefined> {
-  const asked = await answer<Partial<Providers>>(await send('GET', '/auth/providers'));
+  const asked = await answer<Announced>(await reach('/auth/providers', { method: 'GET' }));
   if (!asked.ok) return undefined;
+  // An answer with no body says nothing of better-auth: the path of before.
+  const said: Announced = typeof asked.data === 'object' && asked.data !== null ? asked.data : {};
+  const served = said.betterAuth;
+  path = typeof served === 'object' && served !== null ? 'cookie' : 'token';
+  const providers = path === 'cookie' ? (served as Partial<Providers>) : said;
 
-  return { github: asked.data.github === true, google: asked.data.google === true };
+  return { github: providers.github === true, google: providers.google === true };
 }
 
-export function requestLink(email: string, locale: string): Promise<Answer<{ sent: true }>> {
-  return send('POST', '/auth/email', { email, locale }).then((response) => answer(response));
+/**
+ * Where a sign-in with a provider starts: a navigation of the whole page to the worker. With
+ * better-auth, `/console/auth/start/<provider>` sets the cookie of the state in the first party: a
+ * `fetch` of `/sign-in/social` would set it on the answer of a call, which WebKit did not keep
+ * (measured in FRU-147).
+ */
+export function providerStart(provider: keyof Providers): string {
+  return path === 'cookie' ? `${API}/console/auth/start/${provider}` : `${API}/auth/${provider}`;
 }
 
+export async function requestLink(email: string, tag: string): Promise<Answer<{ sent: true }>> {
+  const way = await pathOfWorker();
+
+  return answer(await send('POST', way === 'cookie' ? '/console/auth/email' : '/auth/email', { email, locale: tag }));
+}
+
+/**
+ * Spends the token of a link, read after the `#` of the address. With better-auth the worker answers
+ * the account and sets the cookie; the console keeps nothing.
+ */
 export async function redeemLink(code: string): Promise<Answer<{ account: Account }>> {
+  const way = await pathOfWorker();
+  if (way === 'cookie') {
+    return answer(await send('POST', '/console/auth/email/redeem', { token: code, locale: locale() }));
+  }
   const result = await answer<{ accessToken: string; account: Account }>(
     await send('POST', '/auth/email/redeem', { code, locale: locale() }),
   );
-  if (result.ok) access = result.data.accessToken;
+  if (result.ok) before.holdAccess(result.data.accessToken);
 
   return result;
 }
 
+/** Ends the session on the worker: the cookie is refused at the next call, in every tab. */
 export async function signOut(): Promise<void> {
-  await reach('/console/session/logout', { method: 'POST' });
-  access = undefined;
+  if ((await pathOfWorker()) === 'cookie') {
+    await send('POST', '/console/auth/sign-out', {});
+
+    return;
+  }
+  await before.logOut();
 }
 
 /** The worker's pairing page with a code after the `#`: the extension reads it from there (FRU-92). */

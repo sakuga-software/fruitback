@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { SESSION_RENEWAL_SECONDS, SESSION_TTL_SECONDS } from './auth.ts';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
@@ -127,6 +128,16 @@ describe('SECURITY.md states what the code does', () => {
       SECURITY.includes(`${REFRESH_TTL_SECONDS / 86_400} days`),
       `SECURITY.md does not say a refresh token lasts ${REFRESH_TTL_SECONDS / 86_400} days`,
     );
+  });
+
+  it('quotes how long a session of better-auth lasts, and how often its end moves (FRU-147)', () => {
+    assert.ok(
+      SECURITY.includes(
+        `It lasts ${SESSION_TTL_SECONDS / 86_400} days, and each day it is used moves its end by ${SESSION_TTL_SECONDS / 86_400} days`,
+      ),
+      'SECURITY.md does not give the lifetime of a session of better-auth',
+    );
+    assert.equal(SESSION_RENEWAL_SECONDS, 86_400, 'SECURITY.md says « each day it is used »');
   });
 
   it('quotes the token cap and the clock skew the verifier enforces', () => {

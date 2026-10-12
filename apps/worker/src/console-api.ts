@@ -48,6 +48,13 @@ export type ConsoleApiContext = {
   /** The Linear application, when this worker has one: a workspace then connects Linear with no key. */
   linearOAuth?: LinearOAuth;
   publicUrl?: string;
+  /**
+   * The person of the cookie of better-auth, or `undefined` (FRU-147). Absent: better-auth is off,
+   * and a call takes the token of before only.
+   */
+  cookieSession?: (request: Request) => Promise<string | undefined>;
+  /** `FRUITBACK_CONSOLE_URL`: the one origin a call with the cookie may change something from. */
+  consoleUrl?: string;
 };
 
 function json(status: number, body: unknown, headers: Record<string, string>): Response {
@@ -242,6 +249,44 @@ function destinationOf(body: Record<string, unknown> | undefined, kind: Connecto
 
 const WORKSPACE_PATH = /^\/console\/workspaces\/([A-Za-z0-9_-]+)(\/.*)?$/;
 
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+/**
+ * Who calls (FRU-147): the token of before in `Authorization`, or the cookie of a session of
+ * better-auth. The token wins when both are there: a page of another site cannot write that header.
+ *
+ * **With the cookie, a call that changes something must come from the console**: its `Origin`, and
+ * not a request with none. The browser sends the cookie with a request of any page of the same site
+ * as the worker (`demo.fruitback.com` is one), whatever `SameSite` says, so these routes are open to
+ * CSRF from that slice on. `consoleCors` refuses another origin before this; a request with no
+ * `Origin` reaches this line, and is refused here.
+ */
+async function callerOf(
+  request: Request,
+  context: ConsoleApiContext,
+): Promise<{ ok: true; subject: string } | { ok: false; status: number; body: Record<string, string> }> {
+  const token = readBearerToken(request.headers.get('Authorization'));
+  if (token !== undefined) {
+    const verified = await verifyIdentityToken(token, context.secret, context.now);
+    if (!verified.ok) return { ok: false, status: 401, body: { error: 'identity-required', reason: verified.reason } };
+    const subject = verified.reporter.id;
+    if (subject === undefined) {
+      return { ok: false, status: 401, body: { error: 'identity-required', reason: 'invalid-claims' } };
+    }
+
+    return { ok: true, subject };
+  }
+
+  const subject = context.cookieSession === undefined ? undefined : await context.cookieSession(request);
+  if (subject === undefined) return { ok: false, status: 401, body: { error: 'identity-required' } };
+  const origin = context.consoleUrl === undefined ? undefined : new URL(context.consoleUrl).origin;
+  if (!SAFE_METHODS.has(request.method) && (origin === undefined || request.headers.get('Origin') !== origin)) {
+    return { ok: false, status: 403, body: { error: 'origin-not-allowed' } };
+  }
+
+  return { ok: true, subject };
+}
+
 /**
  * The console's routes under `/console/`, except the session ones, or `undefined` for a path that is
  * not one of them.
@@ -259,13 +304,9 @@ export async function handleConsoleApi(
     WORKSPACE_PATH.test(pathname);
   if (!isApi) return undefined;
 
-  const token = readBearerToken(request.headers.get('Authorization'));
-  if (token === undefined) return json(401, { error: 'identity-required' }, headers);
-  const verified = await verifyIdentityToken(token, context.secret, context.now);
-  if (!verified.ok) return json(401, { error: 'identity-required', reason: verified.reason }, headers);
-
-  const subject = verified.reporter.id;
-  if (subject === undefined) return json(401, { error: 'identity-required', reason: 'invalid-claims' }, headers);
+  const identified = await callerOf(request, context);
+  if (!identified.ok) return json(identified.status, identified.body, headers);
+  const subject = identified.subject;
   const account = await context.accounts.account(subject);
   if (account === undefined) return json(401, { error: 'identity-required', reason: 'no-account' }, headers);
 

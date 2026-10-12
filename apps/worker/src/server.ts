@@ -163,7 +163,7 @@ export function startServer(env: WorkerEnv = process.env): Server {
     server.on('close', () => clearInterval(pass));
   }
 
-  // FRU-144: better-auth is built here when it is on, and serves no route. See `announceAuth`.
+  // FRU-144: better-auth is built here when it is on, before its first request. See `announceAuth`.
   if (config.ok) void announceAuth(config.config);
 
   server.listen(port, host, () => {

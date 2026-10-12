@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, it } from 'node:test';
+import { afterEach, describe, it, mock } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { build } from 'esbuild';
@@ -14,7 +14,12 @@ import {
   AT_REST_PLUGIN,
   AUTH_BASE_PATH,
   AUTH_PLUGINS,
+  type Auth,
+  CLIENT_IP_HEADER,
   REFUSED_PLUGINS,
+  SERVED_PATHS,
+  SESSION_RENEWAL_SECONDS,
+  SESSION_TTL_SECONDS,
   announceAuth,
   authConfigOf,
   authFor,
@@ -127,7 +132,8 @@ describe('the secret of better-auth, and what it switches on (FRU-144)', () => {
 
   it('says in SECURITY.md the length under which the secret of better-auth is refused', () => {
     const security = readFileSync(fileURLToPath(new URL('../../../SECURITY.md', import.meta.url)), 'utf8');
-    const section = /### better-auth, built and switched off \(FRU-144\)\n([\s\S]*?)\n### /.exec(security)?.[1] ?? '';
+    const section =
+      /### better-auth, what it keeps and what it refuses \(FRU-144\)\n([\s\S]*?)\n### /.exec(security)?.[1] ?? '';
     const stated = Number(/when it is under (\d+) characters/.exec(section)?.[1]);
 
     assert.ok(Number.isInteger(stated), 'SECURITY.md no longer says how long the secret of better-auth must be');
@@ -160,6 +166,38 @@ describe('the secret of better-auth, and what it switches on (FRU-144)', () => {
     assert.equal(refusal(envWith({ FRUITBACK_PUBLIC_URL: undefined })), needed);
     assert.equal(refusal(envWith({ FRUITBACK_PUBLIC_URL: `${PUBLIC_URL}/worker` })), needed);
     assert.ok(readConfig(envWith({ FRUITBACK_PUBLIC_URL: `${PUBLIC_URL}/` })).ok);
+  });
+
+  it('reads the switch of the addresses as 1 or nothing, and only beside the secret (FRU-147)', () => {
+    const on = readConfig(envWith({ FRUITBACK_AUTH_TRACK_IP: '1' }));
+    assert.equal(on.ok && on.config.authTrackIp, true);
+    const off = readConfig(envWith());
+    assert.equal(off.ok && off.config.authTrackIp, false);
+    for (const value of ['true', 'yes', '0']) {
+      const refused = readConfig(envWith({ FRUITBACK_AUTH_TRACK_IP: value }));
+      assert.deepEqual(refused.ok ? [] : refused.missing, ['FRUITBACK_AUTH_TRACK_IP (1, or unset)'], value);
+    }
+    assert.equal(readConfig(envWith({ FRUITBACK_AUTH_TRACK_IP: '1', FRUITBACK_AUTH_SECRET: undefined })).ok, false);
+  });
+
+  it('takes a second GitHub App for better-auth, beside the secret, and never the App of before (FRU-147)', () => {
+    const second = readConfig(envWith({ FRUITBACK_AUTH_GITHUB_OAUTH: 'second-app:its-secret' }));
+    assert.deepEqual(second.ok && second.config.authGithub, { clientId: 'second-app', clientSecret: 'its-secret' });
+    assert.equal(readConfig(envWith({ FRUITBACK_AUTH_GITHUB_OAUTH: 'nocolon' })).ok, false);
+    assert.equal(
+      readConfig(envWith({ FRUITBACK_AUTH_GITHUB_OAUTH: 'second-app:its-secret', FRUITBACK_AUTH_SECRET: undefined }))
+        .ok,
+      false,
+    );
+    const same = readConfig(
+      envWith({ FRUITBACK_GITHUB_OAUTH: 'one-app:a-secret', FRUITBACK_AUTH_GITHUB_OAUTH: 'one-app:a-secret' }),
+    );
+    assert.match(same.ok ? '' : same.missing.join(), /another GitHub OAuth App than FRUITBACK_GITHUB_OAUTH/);
+    // The control: two Apps are taken.
+    assert.equal(
+      readConfig(envWith({ FRUITBACK_GITHUB_OAUTH: 'one-app:a-secret', FRUITBACK_AUTH_GITHUB_OAUTH: 'two-app:b' })).ok,
+      true,
+    );
   });
 
   it('refuses a variable that better-auth reads from the environment by itself, and never quotes it', () => {
@@ -288,14 +326,15 @@ describe('a worker that has better-auth switched off (FRU-144)', () => {
     assert.equal(down.library, 0);
   });
 
-  it('builds better-auth at boot on a real server, and still answers 404', { skip: NO_REAL_POSTGRES }, async () => {
+  it('builds better-auth at boot on a real server, and serves its routes', { skip: NO_REAL_POSTGRES }, async () => {
     // A database of its own, not a schema: see `postgres.fixture.ts`.
     const { url, drop } = await ownDatabase();
 
     try {
       const on = await worker(envWith({ FRUITBACK_DATABASE_URL: url }));
 
-      assert.deepEqual(on.statuses, [200, 404, 404]);
+      // FRU-147: `/ok` answers, and `/get-session` answers no session.
+      assert.deepEqual(on.statuses, [200, 200, 200]);
       assert.equal(on.announced, 'ready');
       assert.ok(on.library > 0);
       const made = createPgDatabase(url, { max: 1 });
@@ -367,21 +406,31 @@ describe('the bundle of the image, with better-auth in it (FRU-144)', () => {
 });
 
 /** Routes that better-auth has with the options of the worker. None of them is served. */
-const AUTH_ROUTES: readonly (readonly [method: string, path: string])[] = [
-  ['GET', '/ok'],
-  ['GET', '/error'],
-  ['GET', '/get-session'],
-  ['GET', '/list-sessions'],
-  ['POST', '/sign-out'],
-  ['POST', '/sign-in/social'],
-  ['GET', '/organization/list'],
-  ['POST', '/organization/create'],
-  ['GET', '/organization/list-members'],
+/** Routes of better-auth, each with whether the worker serves it (FRU-147): see `SERVED_PATHS`. */
+const AUTH_ROUTES: readonly (readonly [method: string, path: string, served: boolean])[] = [
+  ['GET', '/ok', true],
+  ['GET', '/error', true],
+  ['GET', '/get-session', true],
+  ['POST', '/sign-out', true],
+  ['POST', '/sign-in/social', true],
+  ['GET', '/list-sessions', false],
+  ['POST', '/sign-in/magic-link', false],
+  ['GET', '/magic-link/verify', false],
+  ['POST', '/update-user', false],
+  ['GET', '/organization/list', false],
+  ['POST', '/organization/create', false],
+  ['GET', '/organization/list-members', false],
 ];
 
-describe('the routes of better-auth, which the worker does not serve (FRU-144)', () => {
+describe('the routes of better-auth that the worker serves (FRU-144, FRU-147)', () => {
   let ip = 0;
-  const through = (env: WorkerEnv, method: string, path: string, database?: Database): Promise<Response> => {
+  const through = (
+    env: WorkerEnv,
+    method: string,
+    path: string,
+    database?: Database,
+    auth?: Auth,
+  ): Promise<Response> => {
     ip += 1;
 
     return handleRequest(
@@ -394,16 +443,16 @@ describe('the routes of better-auth, which the worker does not serve (FRU-144)',
       {
         clientIp: `192.0.2.${ip}`,
         ...(database === undefined ? {} : { accounts: createPostgresAccountStore(database) }),
+        ...(auth === undefined ? {} : { auth }),
       },
     );
   };
 
-  it('answers 404 on every route of better-auth, with or without a database, with or without its secret', async () => {
+  it('answers 404 on every route of better-auth when it is off, with or without a database', async () => {
     const database = await opening(createPgliteDatabase);
     const workers: [label: string, env: WorkerEnv, database?: Database][] = [
       ['no accounts', { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: CONSOLE_URL }],
       ['a database, and no secret of better-auth', envWith({ FRUITBACK_AUTH_SECRET: undefined }), database],
-      ['a database and the secret of better-auth', envWith(), database],
     ];
 
     for (const [label, env, accounts] of workers) {
@@ -418,11 +467,32 @@ describe('the routes of better-auth, which the worker does not serve (FRU-144)',
     }
   });
 
+  it('serves the routes of SERVED_PATHS when it is on, and answers 404 on any other one', async () => {
+    const database = await opening(createPgliteDatabase);
+    const { options } = await optionsOn(database);
+    const auth = await startAuth(options);
+
+    for (const [method, path, served] of AUTH_ROUTES) {
+      const answer = await through(envWith(), method, path, database, auth);
+
+      assert.equal(Object.hasOwn(SERVED_PATHS, path), served, `${path}: SERVED_PATHS and this list differ`);
+      if (served) {
+        assert.notEqual(answer.status, 404, `${method} ${path}`);
+        // better-auth sets no header of CORS: the worker adds the ones of the console.
+        assert.equal(answer.headers.get('Access-Control-Allow-Origin'), CONSOLE_URL, path);
+      } else {
+        assert.equal(answer.status, 404, `${method} ${path}`);
+        assert.deepEqual(await answer.json(), { error: 'not-found' });
+      }
+    }
+  });
+
   // The control: these are routes of better-auth, so the 404 above is the worker that does not
-  // serve them, and not a list of paths that nothing ever had.
+  // serve them, and not a list of paths that nothing ever had. The two of the link are closed to a
+  // request by better-auth itself, and open to `auth.api`: see `auth-routes.test.ts`.
   it('names routes that better-auth itself answers, so a 404 of the worker says something', async () => {
     const { options } = await optionsOn(await opening(createPgliteDatabase));
-    const auth = await startAuth(options);
+    const auth = await startAuth({ ...options, disabledPaths: [] });
 
     for (const [method, path] of AUTH_ROUTES) {
       const answer = await ask(auth, path, { method, ...(method === 'POST' ? { body: '{}' } : {}) });
@@ -430,6 +500,49 @@ describe('the routes of better-auth, which the worker does not serve (FRU-144)',
       assert.notEqual(answer.status, 404, `better-auth has no ${method} ${path}: take it out of AUTH_ROUTES`);
     }
     assert.equal((await ask(auth, '/a-path-nothing-has')).status, 404);
+  });
+
+  it('answers 502, and says why in its log, when better-auth rejects', async () => {
+    const database = await opening(createPgliteDatabase);
+    const rejecting = {
+      handler: async () => Promise.reject(new Error('SCHEMA_MISMATCH of a test')),
+    } as unknown as Auth;
+    const errors: string[] = [];
+    const logged = mock.method(console, 'error', (line: string) => void errors.push(line));
+    try {
+      const answer = await through(envWith(), 'GET', '/ok', database, rejecting);
+
+      assert.equal(answer.status, 502);
+      assert.deepEqual(await answer.json(), { error: 'auth-unavailable' });
+    } finally {
+      logged.mock.restore();
+    }
+    assert.deepEqual(errors, ['[fruitback] better-auth did not answer: SCHEMA_MISMATCH of a test']);
+  });
+
+  it('answers 502 to a call of the console with the cookie, when better-auth rejects its reading', async () => {
+    const database = await opening(createPgliteDatabase);
+    const rejecting = {
+      api: { getSession: async () => Promise.reject(new Error('SCHEMA_MISMATCH of a test')) },
+    } as unknown as Auth;
+    const errors: string[] = [];
+    const logged = mock.method(console, 'error', (line: string) => void errors.push(line));
+    try {
+      const answer = await handleRequest(
+        new Request('https://worker.test/console/me', {
+          headers: { Origin: CONSOLE_URL, Cookie: '__Secure-fruitback.session_token=a.b' },
+        }),
+        envWith(),
+        { clientIp: '192.0.2.200', accounts: createPostgresAccountStore(database), auth: rejecting },
+      );
+
+      assert.equal(answer.status, 502);
+      assert.deepEqual(await answer.json(), { error: 'auth-unavailable' });
+      assert.equal(answer.headers.get('Access-Control-Allow-Origin'), CONSOLE_URL);
+    } finally {
+      logged.mock.restore();
+    }
+    assert.deepEqual(errors, ['[fruitback] better-auth did not answer: SCHEMA_MISMATCH of a test']);
   });
 });
 
@@ -444,12 +557,48 @@ describe('the options of better-auth, as they are written (FRU-144)', () => {
     assert.deepEqual(options.telemetry, { enabled: false });
     assert.deepEqual(options.rateLimit, { enabled: false });
     assert.deepEqual(options.emailAndPassword, { enabled: false });
-    assert.deepEqual(options.session, { cookieCache: { enabled: false } });
+    assert.deepEqual(options.session, {
+      cookieCache: { enabled: false },
+      expiresIn: SESSION_TTL_SECONDS,
+      updateAge: SESSION_RENEWAL_SECONDS,
+    });
     assert.deepEqual(options.advanced?.ipAddress, { disableIpTracking: true });
     assert.deepEqual(options.advanced?.cookies, {
       session_token: { attributes: { sameSite: 'strict', path: '/console' } },
+      oauth_state: { attributes: { path: '/console/auth' } },
     });
-    assert.equal(options.socialProviders, undefined);
+    assert.deepEqual(options.socialProviders, {});
+    assert.deepEqual(options.onAPIError, { errorURL: `${CONSOLE_URL}/setup` });
+    assert.equal((options.account as { accountLinking?: { trustedProviders?: unknown } }).accountLinking, undefined);
+    assert.deepEqual(options.disabledPaths, [
+      '/revoke-session',
+      '/revoke-other-sessions',
+      '/get-access-token',
+      '/refresh-token',
+      '/account-info',
+      '/sign-in/magic-link',
+      '/magic-link/verify',
+    ]);
+  });
+
+  it('reads the address of the caller from the header the worker writes, and only when it keeps addresses', async () => {
+    const on = await authOptions({ ...AUTH_CONFIG, trackIp: true }, {} as never);
+
+    assert.deepEqual(on.rateLimit, { enabled: true });
+    assert.deepEqual(on.advanced?.ipAddress, { ipAddressHeaders: [CLIENT_IP_HEADER], disableIpTracking: false });
+  });
+
+  it('signs a person in with the second GitHub App and the Google client of before, and keeps no picture', async () => {
+    const github = { clientId: 'gh-of-better-auth', clientSecret: 'a-secret-of-github' };
+    const google = { clientId: 'the-google-client', clientSecret: 'a-secret-of-google' };
+    const options = await authOptions({ ...AUTH_CONFIG, github, google }, {} as never);
+    const providers = options.socialProviders as Record<string, Record<string, unknown>>;
+
+    assert.deepEqual(Object.keys(providers), ['github', 'google']);
+    assert.equal(providers.github?.clientId, 'gh-of-better-auth');
+    assert.equal(providers.google?.clientId, 'the-google-client');
+    const map = providers.github?.mapProfileToUser as () => Record<string, unknown>;
+    assert.deepEqual(map(), { image: undefined });
   });
 
   it('takes the origin of the console and of the worker, and no path', async () => {
@@ -640,13 +789,13 @@ describe('better-auth, built when the server starts (FRU-144)', () => {
     };
   };
 
-  it('applies the migrations of the worker, builds one instance, and says that it serves no route', async () => {
+  it('applies the migrations of the worker, builds one instance, and says that it is ready', async () => {
     const database = await opening(createPgliteDatabase);
     const config = configOf(envWith());
     const { lines, log } = listening();
 
     assert.equal(await announceAuth(config, log, () => database), 'ready');
-    assert.deepEqual(lines, ['log [fruitback] better-auth is ready, and serves no route']);
+    assert.deepEqual(lines, ['log [fruitback] better-auth is ready, under /console/auth']);
     assert.deepEqual(await appliedDates(database), journalDates());
 
     const first = authFor(config, () => database);
@@ -707,17 +856,10 @@ describe('better-auth, built when the server starts (FRU-144)', () => {
    * the boot lines of `stores.test.ts` are: every case above stays green with the call deleted, and
    * better-auth is then built by nobody.
    */
-  it('is built at boot by the file that has no test of its own, and by no route', () => {
+  it('is built at boot by the file that has no test of its own', () => {
     const read = (file: string): string => readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8');
 
     assert.match(read('./server.ts'), /if \(config\.ok\) void announceAuth\(config\.config\);/);
-    for (const file of ['./app.ts', './console-routes.ts', './console-api.ts']) {
-      assert.equal(
-        /from '\.\/auth\.ts'/.test(read(file)),
-        false,
-        `${file} reaches better-auth: a route would serve it`,
-      );
-    }
   });
 });
 

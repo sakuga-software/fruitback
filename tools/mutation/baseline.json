@@ -17,7 +17,7 @@
     }
   },
   "apps/worker": {
-    "score": 90.78,
+    "score": 92.5,
     "files": {
       "src/clients.ts": {
         "score": 89.42,
