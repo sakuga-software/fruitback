@@ -1,5 +1,5 @@
-import { type ChildProcess, spawn } from 'node:child_process';
 import { type Page, expect, test } from '@playwright/test';
+import { CONSOLE, SESSION_COOKIE, type Worker, cloudWorker, finished, linkIn, served } from './cloud-worker.ts';
 import { WORKER_ORIGIN } from './pin.ts';
 
 /**
@@ -10,93 +10,6 @@ import { WORKER_ORIGIN } from './pin.ts';
  * the worker: no stub decides an answer. The link is read where the worker was asked to send it, in the
  * mail, and never in the database.
  */
-const CONSOLE = 'http://localhost:5178';
-const SESSION_COOKIE = 'fruitback.session_token';
-
-type Received = { method: string; path: string; authorization: boolean; cookie: boolean };
-type Worker = {
-  /** Where the process of the worker listens. The console asks `WORKER_ORIGIN`: see `served`. */
-  origin: string;
-  /** The text of each message the worker was asked to send, in order. */
-  sent(): Promise<string[]>;
-  received(): Promise<Received[]>;
-  /** Stops the process, and answers when it is gone. */
-  close(): Promise<void>;
-};
-
-/**
- * Starts a worker of the Cloud on PGlite, in a process of its own: `cloud-worker.fixture.ts` says
- * why it is not imported here.
- */
-async function cloudWorker(options: { betterAuth: boolean }): Promise<Worker> {
-  const child: ChildProcess = spawn(process.execPath, ['src/cloud-worker.fixture.ts'], {
-    // Relative to the root of the repository, where Playwright runs: a spec has no `import.meta.url`.
-    cwd: 'apps/worker',
-    env: {
-      ...process.env,
-      CLOUD_WORKER: JSON.stringify({ ...options, consoleUrl: CONSOLE, publicUrl: WORKER_ORIGIN }),
-    },
-    stdio: ['ignore', 'pipe', 'inherit', 'ipc'],
-  });
-  const port = await new Promise<string>((resolve, reject) => {
-    let said = '';
-    child.stdout?.on('data', (chunk: Buffer) => {
-      said += chunk.toString();
-      const found = /cloud-worker listening on (\d+)/.exec(said)?.[1];
-      if (found !== undefined) resolve(found);
-    });
-    child.once('exit', (code) => reject(new Error(`the worker of the test stopped with ${code}: ${said}`)));
-  });
-  const origin = `http://127.0.0.1:${port}`;
-  const read = async <T>(path: string): Promise<T> => (await (await fetch(`${origin}${path}`)).json()) as T;
-
-  return {
-    origin,
-    sent: async () => (await read<{ text: string }[]>('/__test/sent')).map((each) => each.text),
-    received: () => read<Received[]>('/__test/received'),
-    close: () =>
-      new Promise<void>((resolve) => {
-        if (child.exitCode !== null || child.signalCode !== null) return resolve();
-        child.once('exit', () => resolve());
-        child.kill();
-      }),
-  };
-}
-
-/** Hands each request for the worker to `worker`, and its answer back to the browser, cookies included. */
-async function served(page: Page, worker: Worker): Promise<void> {
-  await page.context().route(`${WORKER_ORIGIN}/**`, async (route) => {
-    const asked = new URL(route.request().url());
-    const response = await route.fetch({ url: `${worker.origin}${asked.pathname}${asked.search}`, maxRedirects: 0 });
-
-    await route.fulfill({ response });
-  });
-}
-
-/**
- * Ends a test: the routes first, then the worker.
- *
- * WARNING: a screen of the console goes on asking after the element a test waited for is there (the
- * title of « Sites » is drawn before its list is read). A request that is still in the handler of
- * `served` when Playwright closes the context makes the handler throw « Target page, context or
- * browser has been closed », and Playwright fails a test whose every assertion passed: one run in
- * four of the last test of this file, measured with `--repeat-each 20`. `ignoreErrors` takes the
- * routes away and lets such a request fail in silence. The worker stops after: a request must not be
- * handed to a process that is gone.
- */
-async function finished(page: Page, worker: Worker | undefined): Promise<void> {
-  await page.context().unrouteAll({ behavior: 'ignoreErrors' });
-  await worker?.close();
-}
-
-/** The link of the last mail, as the person finds it in the message. */
-async function linkIn(worker: Worker): Promise<string> {
-  const link = /http:\/\/\S+/.exec((await worker.sent()).at(-1) ?? '')?.[0];
-  expect(link, 'no link in the mail').toMatch(new RegExp(`^${CONSOLE}/sign-in#`));
-
-  return link as string;
-}
-
 /** From the sign-in screen to the list of the sites, by a link. */
 async function signInByLink(page: Page, worker: Worker, email: string): Promise<void> {
   await page.goto(`${CONSOLE}/setup`);
@@ -161,6 +74,46 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     await page.getByRole('textbox', { name: 'Site address' }).fill('staging.acme.dev');
     await page.getByRole('button', { name: 'Add the site', exact: true }).click();
     await expect(page.getByText('https://staging.acme.dev')).toBeVisible();
+  });
+
+  test('takes the token of a link out of the address bar, for a link that works and for one that does not (FRU-207)', async ({
+    page,
+  }) => {
+    // A link that opens nothing: the screen stays, and the address it shows holds no token. A reload,
+    // a shared screen or the history would show it.
+    const spent = 'a-token-of-a-link-that-opens-nothing';
+    await page.goto(`${CONSOLE}/sign-in#${spent}`);
+    await expect(page.getByRole('heading', { name: 'This link no longer works' })).toBeVisible();
+    expect(page.url()).toBe(`${CONSOLE}/sign-in`);
+    // The control: the worker is asked with that token, so the screen read it before it took it away.
+    // Asked for, and not read at once: in development React runs the effect twice, and the second run
+    // finds no token and draws this screen before the first call reaches the worker.
+    await expect
+      .poll(async () => (await worker.received()).map((each) => each.path))
+      .toContain('/console/auth/email/redeem');
+
+    // A link that works, held while the worker answers: the token is gone before the answer.
+    await page.goto(`${CONSOLE}/setup`);
+    await page.getByRole('textbox', { name: 'Work email' }).fill('ana@acme.dev');
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await expect.poll(async () => (await worker.sent()).length).toBe(1);
+    const link = await linkIn(worker);
+    const token = link.split('#')[1] as string;
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const redeem = `${WORKER_ORIGIN}/console/auth/email/redeem`;
+    await page.route(redeem, async (route) => {
+      await held;
+      await route.fallback();
+    });
+    const asked = page.waitForRequest(redeem);
+    await page.goto(link);
+    await asked;
+    expect(page.url()).toBe(`${CONSOLE}/sign-in`);
+    expect(await page.evaluate(() => window.location.href)).not.toContain(token);
+    release();
+    await expect(page).toHaveURL(/\/setup|\/sites$/);
+    await page.unroute(redeem);
   });
 
   test('keeps what was typed when the session ended, says so, and goes on after a new sign-in', async ({
@@ -240,6 +193,77 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
       headers: { Origin: CONSOLE, Cookie: `${SESSION_COOKIE}=${before[0]?.value}` },
     });
     expect(again.status).toBe(401);
+  });
+
+  test('ends the session of before too when the person signs out (FRU-204)', async ({ page, context }) => {
+    await signInByLink(page, worker, 'ana@acme.dev');
+    // A session of before the worker served better-auth: opened on the routes of before, which the
+    // worker still serves, and kept by this browser in its refresh cookie of 30 days.
+    const calling = { Origin: CONSOLE, 'Content-Type': 'application/json' };
+    await fetch(`${worker.origin}/auth/email`, {
+      method: 'POST',
+      headers: calling,
+      body: JSON.stringify({ email: 'ana@acme.dev' }),
+    });
+    const code = (await linkIn(worker)).split('#')[1];
+    const opened = await fetch(`${worker.origin}/auth/email/redeem`, {
+      method: 'POST',
+      headers: calling,
+      body: JSON.stringify({ code }),
+    });
+    expect(opened.status).toBe(200);
+    const kept = (opened.headers.getSetCookie()[0] ?? '').split(';')[0] ?? '';
+    const [name, value] = kept.split('=') as [string, string];
+    expect(name).toBe('fruitback_console');
+    await context.addCookies([
+      { name, value, domain: 'localhost', path: '/console/session', httpOnly: true, secure: true, sameSite: 'Strict' },
+    ]);
+    const refresh = (): Promise<Response> =>
+      fetch(`${worker.origin}/console/session/refresh`, { method: 'POST', headers: { Origin: CONSOLE, Cookie: kept } });
+
+    await page.getByRole('link', { name: 'My account' }).click();
+    await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Create your workspace' })).toBeVisible();
+
+    const asked = (await worker.received()).filter((each) => each.path === '/console/session/logout');
+    expect(asked.map((each) => each.cookie)).toEqual([true]);
+    // The refresh cookie the browser held opens nothing, whoever presents it.
+    expect((await refresh()).status).toBe(401);
+  });
+
+  test('stays on the account, and says so, when the worker did not end the session (FRU-204)', async ({
+    page,
+    context,
+  }) => {
+    await signInByLink(page, worker, 'ana@acme.dev');
+    const session = (await context.cookies(`${WORKER_ORIGIN}/console/me`)).find((each) => each.name === SESSION_COOKIE);
+    const me = (): Promise<Response> =>
+      fetch(`${worker.origin}/console/me`, {
+        headers: { Origin: CONSOLE, Cookie: `${SESSION_COOKIE}=${session?.value}` },
+      });
+    await page.getByRole('link', { name: 'My account' }).click();
+
+    // better-auth does not answer: what the worker says then (`auth-unavailable`), as the console reads it.
+    const refused = `${WORKER_ORIGIN}/console/auth/sign-out`;
+    await page.route(refused, (route) =>
+      route.fulfill({
+        status: 502,
+        headers: { 'Access-Control-Allow-Origin': CONSOLE, 'Access-Control-Allow-Credentials': 'true' },
+        json: { error: 'auth-unavailable' },
+      }),
+    );
+    await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+
+    await expect(page.getByRole('alert').filter({ hasText: 'You are still signed in' })).toBeVisible();
+    await expect(page).toHaveURL(/\/account$/);
+    await expect(page.getByRole('heading', { name: 'My account' })).toBeVisible();
+    // The sentence is true: the cookie still opens the account.
+    expect((await me()).status).toBe(200);
+
+    await page.unroute(refused);
+    await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Create your workspace' })).toBeVisible();
+    expect((await me()).status).toBe(401);
   });
 });
 

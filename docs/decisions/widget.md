@@ -210,9 +210,15 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   with a choice reads again, so the composer shows the list of now and says which place is gone.
 - **A failed send says what to do next, by its cause** (FRU-156). `plant` answers `true` or a
   `SendFailure` (`failureOf`): `retry` for no answer and a `5xx`, `wait` for a `429`, `refused` for a
-  `401` and a `403`, `too-large` for a `413`. A `403` that names a place gone
+  `403`, `signed-out` for a `401` (FRU-193), `too-large` for a `413`. A `403` that names a place gone
   (`destination-not-allowed`) is a `retry`: the read after it makes the list right. The text is kept
   in every case, and the sentence takes its own line above the buttons, in the live region.
+- **A `401` has its own sentence** (FRU-193): « Your session has ended. Your text is kept: sign in
+  again, then send it. » It shared the sentence of the `403`, which sends the reporter to the team of
+  the site, and that team can do nothing about a session of the extension that ended or a token of the
+  host out of date. It does not say « try again » alone: the token is asked for again at each send,
+  and a host that mints a bad one mints it again. The widget does not know which of the two it is, so
+  the sentence names no extension and no button.
 
 ### The reasons, and the history
 
@@ -918,3 +924,41 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   focus does not leave it and a second failure finds it. A failed read after a good one changes nothing, so the pins stay.
 - **The playground does not have it**: it assembles the widget part by part. `e2e/sidebar.spec.ts`
   loads the built script, like `package.spec.ts`, and runs axe in both schemes with its own control.
+
+## Notes kept for later, and sent together (FRU-124)
+
+### The rules, in short
+
+- **« Keep for later » is a second action of the composer**, beside « Send », which keeps its
+  meaning. It is there **for everybody**, and only while the last read offered a batch
+  (`batch: { max, maxBytes }`, the worker half of #171). Arbitrated by the orchestrator on
+  2026-10-12, on delegation from Mathieu: the ticket listed this option as recommended, and set aside
+  a mode « several notes » to switch on (one more state, and a note one believes sent is not) and a
+  draft forced from the second note (« Send » would change its meaning unasked).
+- **A draft is a whole seed**, built when it is kept: the element, the place and the picture are
+  those of that moment. The picture is the address the host already uploaded, so a draft holds no
+  image of its own.
+- **`sessionStorage`, per tab** (`drafts.ts`), under `<configKey>:drafts`: the drafts outlive a reload
+  and a navigation in the tab, and go with the tab. A storage that refuses keeps them in memory for
+  the page. A stored value is read through `parseSeed`: what is not a seed is dropped, because the
+  worker refuses a whole batch for one thing that is not a seed.
+- **On its page, a draft is a pin** with a neutral colour (`--fruitback-color-text-muted`), the mark
+  `data-fruitback-draft`, and a thread that says « Not sent yet », with no identifier and no link. No
+  stage the reporter hid hides it. It is not in the list of notes, nor in the copied text.
+- **The list of every note has a group « Kept for later, not sent yet »** above the notes, with the
+  drafts of every page of the tab and one button, « Send the N notes ». No board draws it: it is
+  made of the parts of the list. A board is still to ask the design for.
+- **As few requests as the worker allows** (`cutIntoRequests`): one place for each request, because
+  `?destination=` is for the whole batch, then the number and the bytes the worker offers. A worker
+  that offers no batch gets one seed for each request, never an array.
+- **Only the notes answered « kept » leave the drafts.** After a `207` the others are sent again, never
+  the whole batch: the worker protects a kept note against a second copy for ten minutes, one minute
+  when its `Kv` refuses the trace. A request that fails stops the others and its sentence is the one
+  of the composer for the same cause; nothing is lost. When some notes went and some stay, the list
+  says both: how many were sent, then why the others stay.
+- **A draft follows the places of now** (`withPlacesOfNow`). A member kept a note for a place the
+  team took away since: the worker refuses it there at every try, and nothing in the list changes a
+  place. So a place no longer offered falls to the first one, as the composer does at the second try
+  of a single note, and a failed send reads again so the list of places is the one of now.
+- `e2e/drafts.spec.ts` keeps two notes, reloads, sends them from the list in one request and reads
+  them back from the worker; a `429` keeps the draft and says why; axe in both schemes.

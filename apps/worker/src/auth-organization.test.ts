@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import { describe, it, mock } from 'node:test';
 import { ROLES, type Role, can } from './accounts.ts';
 import { handleRequest } from './app.ts';
-import { type Auth, ROLE_REFUSED, startAuth } from './auth.ts';
+import { type Auth, INVITATION_SECONDS, ROLE_REFUSED, startAuth } from './auth.ts';
 import { CONSOLE_URL, DATABASES, PUBLIC_URL, ask, databasesOfACase } from './auth.fixture.ts';
 import { handleOrganizationRoutes } from './auth-organization.ts';
 import { type Call, workerOf } from './auth-worker.fixture.ts';
 import { MAX_BODY_BYTES } from './bounded-body.ts';
+import { MailError } from './mail.ts';
 import { ORGANIZATION_PATHS } from './organization-paths.ts';
 import type { PgDatabase } from './postgres.ts';
 import { rowsOf } from './postgres.fixture.ts';
@@ -77,6 +78,22 @@ async function team(worker: Worker, name = 'acme') {
   };
 
   return { workspace, ...people };
+}
+
+/** An invitation that waits, kept by the plugin for the owner of the workspace: its id. No message. */
+async function invited(
+  worker: Worker,
+  acme: { workspace: string; owner: Person },
+  email: string,
+  role = 'member',
+): Promise<string> {
+  const invitation = await api(worker).createInvitation?.({
+    body: { email, role, organizationId: acme.workspace },
+    headers: new Headers({ Cookie: acme.owner.cookie }),
+  });
+  assert.equal(typeof invitation?.id, 'string');
+
+  return invitation?.id as string;
 }
 
 async function roleOf(worker: Worker, member: string | undefined): Promise<unknown> {
@@ -199,8 +216,27 @@ for (const { label, open, skip } of DATABASES) {
       for (const role of ROLES) {
         spare[role] = await added(worker, acme.workspace, await person(worker, `spare-${role}@acme.dev`), 'guest');
       }
+      // An invitation to cancel for each role that tries, and for the two callers who are of no role.
+      const waiting = {} as Record<string, string>;
+      for (const who of [...ROLES, 'nobody']) {
+        waiting[who] = await invited(worker, acme, `waiting-for-${who}@client.dev`);
+      }
       const calls: Record<string, (who: Person, role: Role | undefined) => Promise<Response>> = {
         '/organization/list-members': (who) => as(worker, who, `${ORG}/list-members?organizationId=${acme.workspace}`),
+        '/organization/invite-member': (who, role) =>
+          as(worker, who, `${ORG}/invite-member`, {
+            body: {
+              organizationId: acme.workspace,
+              email: `invited-by-${role ?? who.cookie.length}@client.dev`,
+              role: 'member',
+            },
+          }),
+        '/organization/list-invitations': (who) =>
+          as(worker, who, `${ORG}/list-invitations?organizationId=${acme.workspace}`),
+        '/organization/cancel-invitation': (who, role) =>
+          as(worker, who, `${ORG}/cancel-invitation`, {
+            body: { organizationId: acme.workspace, invitationId: waiting[role ?? 'nobody'] },
+          }),
         '/organization/update-member-role': (who) =>
           as(worker, who, `${ORG}/update-member-role`, {
             body: { organizationId: acme.workspace, memberId: pawn.member, role: 'member' },
@@ -212,7 +248,11 @@ for (const { label, open, skip } of DATABASES) {
         '/organization/leave': (who) => as(worker, who, `${ORG}/leave`, { body: { organizationId: acme.workspace } }),
       };
       // Every open route is asked: a route that gains a rule fails here until it has its line.
-      assert.deepEqual(Object.keys(calls).toSorted(), Object.keys(ORGANIZATION_PATHS).toSorted());
+      // The routes of a person name no workspace and ask no role: they have their own cases, below.
+      const ofAWorkspace = Object.keys(ORGANIZATION_PATHS).filter(
+        (path) => ORGANIZATION_PATHS[path]?.scope !== 'person',
+      );
+      assert.deepEqual(Object.keys(calls).toSorted(), ofAWorkspace.toSorted());
 
       const answered: Record<string, Record<string, number>> = {};
       for (const [path, call] of Object.entries(calls)) {
@@ -236,11 +276,40 @@ for (const { label, open, skip } of DATABASES) {
         '/organization/list-members': { owner: 200, admin: 200, member: 200, guest: 403 },
         '/organization/update-member-role': { owner: 200, admin: 200, member: 403, guest: 403 },
         '/organization/remove-member': { owner: 200, admin: 200, member: 403, guest: 403 },
+        '/organization/invite-member': { owner: 200, admin: 200, member: 403, guest: 403 },
+        '/organization/list-invitations': { owner: 200, admin: 200, member: 403, guest: 403 },
+        '/organization/cancel-invitation': { owner: 200, admin: 200, member: 403, guest: 403 },
         // The owner is the last one: better-auth refuses, and the three others left.
         '/organization/leave': { owner: 400, admin: 200, member: 200, guest: 200 },
       });
       // What each call did, read in the database.
       assert.equal(await roleOf(worker, pawn.member), 'member');
+      assert.deepEqual(
+        await rowsOf(
+          worker.database,
+          `SELECT email, status FROM invitation WHERE email LIKE 'waiting-for-%' ORDER BY email`,
+        ),
+        [
+          { email: 'waiting-for-admin@client.dev', status: 'canceled' },
+          { email: 'waiting-for-guest@client.dev', status: 'pending' },
+          { email: 'waiting-for-member@client.dev', status: 'pending' },
+          { email: 'waiting-for-nobody@client.dev', status: 'pending' },
+          { email: 'waiting-for-owner@client.dev', status: 'canceled' },
+        ],
+      );
+      assert.deepEqual(
+        (
+          await rowsOf(worker.database, `SELECT email FROM invitation WHERE email LIKE 'invited-by-%' ORDER BY email`)
+        ).map((row) => row.email),
+        ['invited-by-admin@client.dev', 'invited-by-owner@client.dev'],
+      );
+      assert.deepEqual(
+        worker.mail.sent
+          .filter((each) => each.to.startsWith('invited-by-'))
+          .map((each) => each.to)
+          .toSorted(),
+        ['invited-by-admin@client.dev', 'invited-by-owner@client.dev'],
+      );
       assert.equal(await roleOf(worker, spare.owner.member), undefined);
       assert.equal(await roleOf(worker, spare.admin.member), undefined);
       assert.equal(await roleOf(worker, spare.member.member), 'guest');
@@ -277,7 +346,8 @@ for (const { label, open, skip } of DATABASES) {
     it('does not let a guest read the members or the invitations, on the API', async () => {
       const worker = await workerOn(open);
       const acme = await team(worker);
-      const closed = ['get-full-organization', 'list-invitations', 'list-user-invitations', 'get-invitation'];
+      const closed = ['get-full-organization', 'get-invitation'];
+      await invited(worker, acme, 'waiting@client.dev');
 
       const members = await as(worker, acme.guest, `${ORG}/list-members?organizationId=${acme.workspace}`);
       assert.equal(members.status, 403);
@@ -294,6 +364,13 @@ for (const { label, open, skip } of DATABASES) {
         });
         assert.equal(direct.status, 404, `better-auth answers ${route}`);
       }
+      // The invitations of the workspace are for whoever may invite: a guest is refused, and reads
+      // only the invitations that their own address received, which are none.
+      const waiting = await as(worker, acme.guest, `${ORG}/list-invitations?organizationId=${acme.workspace}`);
+      assert.equal(waiting.status, 403);
+      assert.deepEqual(await waiting.json(), { error: 'forbidden', role: 'guest' });
+      const theirs = await as(worker, acme.guest, `${ORG}/list-user-invitations`);
+      assert.deepEqual([theirs.status, await theirs.json()], [200, []]);
       // What a guest reads of the workspace: its name and their own role, and no other person.
       const me = await (await as(worker, acme.guest, '/console/me')).text();
       assert.match(me, /"role":"guest"/);
@@ -330,7 +407,7 @@ for (const { label, open, skip } of DATABASES) {
         Object.keys(ORGANIZATION_PATHS).filter((path) => !routes.some((route) => route.path === path)),
         [],
       );
-      assert.ok(withoutRule.length >= 18, `the plugin has only ${withoutRule.length} routes with no rule`);
+      assert.ok(withoutRule.length >= 12, `the plugin has only ${withoutRule.length} routes with no rule`);
 
       for (const { path, method } of withoutRule) {
         const body =
@@ -358,6 +435,8 @@ for (const { label, open, skip } of DATABASES) {
         auth: worker.auth,
         accounts: worker.accounts,
         sessions: worker.sessions,
+        mailer: worker.mail,
+        kv: worker.kv,
         consoleUrl: CONSOLE_URL,
         clientIp: '198.51.100.7',
         trackIp: false,
@@ -833,6 +912,460 @@ for (const { label, open, skip } of DATABASES) {
       );
       assert.equal((await refresh(worker, paired.refreshToken)).status, 401);
       assert.equal((await refresh(worker, elsewhere.refreshToken)).status, 200);
+    });
+
+    // --- The invitations (FRU-104)
+
+    /** An invitation sent through the route, as the console sends it. */
+    const invite = (worker: Worker, who: Person, workspace: string, body: Record<string, unknown>, init: Call = {}) =>
+      as(worker, who, `${ORG}/invite-member`, {
+        ...init,
+        body: { organizationId: workspace, role: 'member', ...body },
+      });
+    const theirInvitations = async (worker: Worker, who: Person) =>
+      (await (await as(worker, who, `${ORG}/list-user-invitations`)).json()) as Record<string, unknown>[];
+
+    it('takes somebody from an invitation to the workspace: a message with no id, then a session of that address', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const before = worker.mail.sent.length;
+
+      const sent = await invite(worker, acme.admin, acme.workspace, { email: ' Paul@Client.dev ' });
+
+      assert.equal(sent.status, 200, await sent.clone().text());
+      const invitation = (await sent.json()) as { id: string; email: string; role: string; status: string };
+      assert.deepEqual(
+        { email: invitation.email, role: invitation.role, status: invitation.status },
+        { email: 'paul@client.dev', role: 'member', status: 'pending' },
+      );
+      assert.match(invitation.id, /^inv_[0-9a-f]{20}$/);
+      // One message, to that address, that names who invites and where, and holds nothing to spend.
+      assert.equal(worker.mail.sent.length, before + 1);
+      const message = worker.mail.sent.at(-1);
+      assert.equal(message?.to, 'paul@client.dev');
+      assert.equal(message?.subject, 'You are invited to acme on Fruitback');
+      assert.match(
+        message?.text ?? '',
+        /admin@acme\.dev invites you to the workspace « acme » on Fruitback, as a member\./,
+      );
+      assert.match(message?.text ?? '', /It waits for 7 days\./);
+      const links = `${message?.text}\n${message?.html}`.match(/https?:\/\/[^\s"<]+/g) ?? [];
+      assert.deepEqual([...new Set(links)], [`${CONSOLE_URL}/invitations`]);
+      assert.equal(`${message?.text}${message?.html}`.includes(invitation.id), false, 'the message holds the id');
+
+      // Whoever invites sees it wait.
+      const waiting = await as(worker, acme.owner, `${ORG}/list-invitations?organizationId=${acme.workspace}`);
+      assert.deepEqual(
+        ((await waiting.json()) as { email: string; status: string }[]).map((each) => [each.email, each.status]),
+        [['paul@client.dev', 'pending']],
+      );
+
+      // Paul proves the address by signing in, and reads the invitation with the name of the workspace.
+      const paul = await person(worker, 'paul@client.dev');
+      const theirs = await theirInvitations(worker, paul);
+      assert.deepEqual(
+        theirs.map((each) => [each.id, each.organizationName, each.role]),
+        [[invitation.id, 'acme', 'member']],
+      );
+      assert.deepEqual(
+        ((await (await as(worker, paul, '/console/me')).json()) as { workspaces: unknown[] }).workspaces,
+        [],
+      );
+
+      const joined = await as(worker, paul, `${ORG}/accept-invitation`, { body: { invitationId: invitation.id } });
+
+      assert.equal(joined.status, 200, await joined.clone().text());
+      assert.deepEqual(await rowsOf(worker.database, `SELECT role FROM member WHERE "userId" = '${paul.id}'`), [
+        { role: 'member' },
+      ]);
+      const me = (await (await as(worker, paul, '/console/me')).json()) as { workspaces: unknown[] };
+      assert.deepEqual(me.workspaces, [{ id: acme.workspace, name: 'acme', role: 'member' }]);
+      assert.equal((await as(worker, paul, `/console/workspaces/${acme.workspace}/sites`)).status, 200);
+      // Spent: it is no longer theirs to read, and a second acceptance is refused.
+      assert.deepEqual(await theirInvitations(worker, paul), []);
+      assert.equal(
+        (await as(worker, paul, `${ORG}/accept-invitation`, { body: { invitationId: invitation.id } })).status,
+        400,
+      );
+      assert.equal((await rowsOf(worker.database, `SELECT id FROM member WHERE "userId" = '${paul.id}'`)).length, 1);
+    });
+
+    it('gives an invitation to the address it names, and to no other session', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const other = await team(worker, 'globex');
+      const id = await invited(worker, acme, 'paul@client.dev', 'admin');
+      const stranger = await person(worker, 'stranger@elsewhere.dev');
+
+      // Nobody but Paul reads it, accepts it or declines it: an id alone opens nothing.
+      for (const who of [stranger, acme.guest, acme.member, other.owner]) {
+        assert.deepEqual(await theirInvitations(worker, who), [], who.email);
+        for (const route of ['accept-invitation', 'reject-invitation']) {
+          const answer = await as(worker, who, `${ORG}/${route}`, { body: { invitationId: id } });
+          assert.equal(answer.status, 403, `${route} by ${who.email}`);
+          assert.equal(
+            ((await answer.json()) as { code?: string }).code,
+            'YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION',
+          );
+        }
+      }
+      // With no session, nobody; and a call that changes something comes from the console.
+      for (const route of ['list-user-invitations', 'accept-invitation', 'reject-invitation']) {
+        const body = route === 'list-user-invitations' ? undefined : { invitationId: id };
+        const nobody = await worker.call(`${ORG}/${route}`, body === undefined ? {} : { body });
+        assert.equal(nobody.status, 401, route);
+      }
+      const paul = await person(worker, 'paul@client.dev');
+      for (const origin of [null, 'https://demo.fruitback.test']) {
+        const answer = await as(worker, paul, `${ORG}/accept-invitation`, { body: { invitationId: id }, origin });
+        assert.equal(answer.status, 403, `origin ${origin}`);
+      }
+      // A route of the person takes no other field: not an address to read the invitations of.
+      const asked = await as(worker, stranger, `${ORG}/list-user-invitations?email=paul@client.dev`);
+      assert.deepEqual([asked.status, await asked.json()], [400, { error: 'invalid-request', field: 'email' }]);
+      const named = await as(worker, paul, `${ORG}/accept-invitation`, {
+        body: { invitationId: id, organizationId: other.workspace },
+      });
+      assert.deepEqual(
+        [named.status, await named.json()],
+        [400, { error: 'invalid-request', field: 'organizationId' }],
+      );
+      assert.deepEqual(await rowsOf(worker.database, `SELECT status FROM invitation WHERE id = '${id}'`), [
+        { status: 'pending' },
+      ]);
+      assert.deepEqual(await rowsOf(worker.database, `SELECT id FROM member WHERE "userId" = '${paul.id}'`), []);
+
+      // The control: Paul declines it, and it is over for everybody.
+      const declined = await as(worker, paul, `${ORG}/reject-invitation`, { body: { invitationId: id } });
+      assert.equal(declined.status, 200);
+      assert.deepEqual(await rowsOf(worker.database, `SELECT status FROM invitation WHERE id = '${id}'`), [
+        { status: 'rejected' },
+      ]);
+      assert.equal((await as(worker, paul, `${ORG}/accept-invitation`, { body: { invitationId: id } })).status, 400);
+      assert.deepEqual(await rowsOf(worker.database, `SELECT id FROM member WHERE "userId" = '${paul.id}'`), []);
+    });
+
+    it('invites as an admin or a member only, and nobody who is a member already', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const before = worker.mail.sent.length;
+
+      // Not an owner, not a guest yet, and never two roles.
+      for (const role of ['owner', 'guest', 'guest,admin', ['member', 'admin'], 'superuser', '']) {
+        const answer = await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev', role });
+        assert.deepEqual(
+          [answer.status, await answer.json()],
+          [400, { error: 'invalid-request', field: 'role' }],
+          JSON.stringify(role),
+        );
+      }
+      for (const email of ['not-an-address', '', 42]) {
+        const answer = await invite(worker, acme.owner, acme.workspace, { email });
+        assert.deepEqual([answer.status, await answer.json()], [400, { error: 'invalid-request', field: 'email' }]);
+      }
+      const member = await invite(worker, acme.owner, acme.workspace, { email: 'guest@acme.dev' });
+      assert.equal(member.status, 400);
+      assert.equal(((await member.json()) as { code?: string }).code, 'USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION');
+      assert.deepEqual(await rowsOf(worker.database, 'SELECT id FROM invitation'), []);
+      assert.equal(worker.mail.sent.length, before);
+
+      // The control: the same call with a role that may be invited keeps an invitation.
+      assert.equal(
+        (await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev', role: 'admin' })).status,
+        200,
+      );
+      assert.deepEqual(await rowsOf(worker.database, 'SELECT email, role FROM invitation'), [
+        { email: 'paul@client.dev', role: 'admin' },
+      ]);
+    });
+
+    it('refuses an invitation whose row holds two roles, when it is accepted', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const id = await invited(worker, acme, 'paul@client.dev');
+      const control = await invited(worker, acme, 'lea@client.dev');
+      const paul = await person(worker, 'paul@client.dev');
+      const lea = await person(worker, 'lea@client.dev');
+      // A row that no route writes: a hand, or a later version of the plugin.
+      await rowsOf(worker.database, `UPDATE invitation SET role = 'guest,admin' WHERE id = '${id}'`);
+
+      const answer = await as(worker, paul, `${ORG}/accept-invitation`, { body: { invitationId: id } });
+
+      assert.equal(answer.status, 400);
+      assert.equal(((await answer.json()) as { code?: string }).code, ROLE_REFUSED);
+      assert.deepEqual(await rowsOf(worker.database, `SELECT id FROM member WHERE "userId" = '${paul.id}'`), []);
+      // The control: the invitation beside it, with one role, is accepted.
+      assert.equal(
+        (await as(worker, lea, `${ORG}/accept-invitation`, { body: { invitationId: control } })).status,
+        200,
+      );
+    });
+
+    it('cancels an invitation of the workspace the call names, and of no other', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const other = await team(worker, 'globex');
+      const theirs = await invited(worker, other, 'paul@client.dev');
+      const ours = await invited(worker, acme, 'paul@client.dev');
+      const statusOf = async (id: string) =>
+        (await rowsOf(worker.database, `SELECT status FROM invitation WHERE id = '${id}'`))[0]?.status;
+      const cancel = (who: Person, workspace: string, invitationId: string) =>
+        as(worker, who, `${ORG}/cancel-invitation`, { body: { organizationId: workspace, invitationId } });
+
+      // An admin of acme names their own workspace and the invitation of another one.
+      const across = await cancel(acme.admin, acme.workspace, theirs);
+      assert.deepEqual([across.status, await across.json()], [404, { error: 'not-found' }]);
+      assert.equal((await cancel(acme.admin, other.workspace, theirs)).status, 404);
+      assert.equal((await cancel(acme.admin, acme.workspace, 'inv_00000000000000000000')).status, 404);
+      assert.equal(await statusOf(theirs), 'pending');
+
+      assert.equal((await cancel(acme.admin, acme.workspace, ours)).status, 200);
+      assert.equal(await statusOf(ours), 'canceled');
+      // Paul no longer reads it, and cannot accept it; the one of the other workspace still waits.
+      const paul = await person(worker, 'paul@client.dev');
+      assert.deepEqual(
+        (await theirInvitations(worker, paul)).map((each) => each.id),
+        [theirs],
+      );
+      assert.equal((await as(worker, paul, `${ORG}/accept-invitation`, { body: { invitationId: ours } })).status, 400);
+    });
+
+    it('keeps the window of an address to its workspace: another workspace neither closes it nor learns of it (FRU-209)', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const other = await team(worker, 'globex');
+      const toBob = () => worker.mail.sent.filter((each) => each.to === 'bob@corp.example').length;
+
+      // Somebody else spends three messages on the address, from a workspace of their own.
+      assert.equal((await invite(worker, other.owner, other.workspace, { email: 'bob@corp.example' })).status, 200);
+      for (let n = 0; n < 3; n += 1) {
+        await invite(worker, other.owner, other.workspace, { email: 'bob@corp.example', resend: true });
+      }
+      assert.equal(toBob(), 3);
+
+      // The workspace that does invite Bob is not refused, its invitation exists, and its message goes.
+      const ours = await invite(worker, acme.owner, acme.workspace, { email: 'bob@corp.example' });
+      assert.equal(ours.status, 200, await ours.clone().text());
+      assert.equal(((await ours.json()) as { mailed?: boolean }).mailed, true);
+      assert.equal(toBob(), 4);
+      assert.equal(
+        (
+          await rowsOf(
+            worker.database,
+            `SELECT id FROM invitation WHERE email = 'bob@corp.example' AND "organizationId" = '${acme.workspace}'`,
+          )
+        ).length,
+        1,
+      );
+    });
+
+    it('sends an invitation again when asked to, and no more than three messages to one address in the window', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const other = await team(worker, 'globex');
+      const toPaul = () => worker.mail.sent.filter((each) => each.to === 'paul@client.dev').length;
+
+      assert.equal((await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev' })).status, 200);
+      const [first] = await rowsOf(worker.database, 'SELECT id, "expiresAt" FROM invitation');
+      // A second invitation of the same address is refused while the first waits, and sends nothing.
+      const again = await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev' });
+      assert.equal(again.status, 400);
+      assert.equal(((await again.json()) as { code?: string }).code, 'USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION');
+      assert.equal(toPaul(), 1);
+      for (const resend of [false, 'true', 1]) {
+        const answer = await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev', resend });
+        assert.deepEqual([answer.status, await answer.json()], [400, { error: 'invalid-request', field: 'resend' }]);
+      }
+
+      const resent = await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev', resend: true });
+      assert.equal(resent.status, 200, await resent.clone().text());
+      assert.equal(toPaul(), 2);
+      const [after] = await rowsOf(worker.database, 'SELECT id, "expiresAt" FROM invitation');
+      assert.equal(after?.id, first?.id, 'a second invitation was written');
+      assert.ok(new Date(String(after?.expiresAt)) >= new Date(String(first?.expiresAt)));
+
+      // The four calls that were refused above counted nothing: the window counts the messages that
+      // went. A third one goes. The fourth is kept and sends nothing, and says so: no refusal.
+      const third = await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev', resend: true });
+      assert.equal(third.status, 200);
+      assert.equal(((await third.json()) as { mailed?: boolean }).mailed, true);
+      assert.equal(toPaul(), 3);
+      const fourth = await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev', resend: true });
+      assert.equal(fourth.status, 200);
+      assert.deepEqual(
+        (({ id, mailed }) => ({ id, mailed }))((await fourth.json()) as { id: string; mailed: boolean }),
+        { id: first?.id, mailed: false },
+      );
+      assert.equal(toPaul(), 3);
+      assert.equal((await rowsOf(worker.database, 'SELECT id FROM invitation')).length, 1);
+
+      // Two calls at the same moment: the count is taken in one step, and the one that comes back
+      // over the limit sends nothing. Its invitation is kept.
+      const racing = {
+        auth: worker.auth,
+        accounts: worker.accounts,
+        sessions: worker.sessions,
+        mailer: worker.mail,
+        kv: { ...worker.kv, get: async () => '2', incr: async () => 4 },
+        consoleUrl: CONSOLE_URL,
+        clientIp: '198.51.100.7',
+        trackIp: false,
+      };
+      const lost = await handleOrganizationRoutes(
+        new Request(`${PUBLIC_URL}${ORG}/invite-member`, {
+          method: 'POST',
+          headers: { Cookie: acme.owner.cookie, Origin: CONSOLE_URL, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ organizationId: acme.workspace, email: 'max@client.dev', role: 'member' }),
+        }),
+        `${ORG}/invite-member`,
+        racing,
+        {},
+      );
+      assert.ok(lost !== undefined);
+      assert.equal(lost.status, 200);
+      assert.equal(((await lost.json()) as { mailed?: boolean }).mailed, false);
+      assert.equal(worker.mail.sent.filter((each) => each.to === 'max@client.dev').length, 0);
+      assert.equal(
+        (await rowsOf(worker.database, `SELECT id FROM invitation WHERE email = 'max@client.dev'`)).length,
+        1,
+      );
+      // Another address is not held by it.
+      assert.equal((await invite(worker, other.owner, other.workspace, { email: 'lea@client.dev' })).status, 200);
+    });
+
+    it('sends no message, and counts none, for an answer of better-auth that names no invitation', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const before = worker.mail.sent.length;
+      // better-auth as a later version could answer: `200`, and nothing kept.
+      const hollow = {
+        ...worker.auth,
+        $context: worker.auth.$context,
+        api: worker.auth.api,
+        handler: async () => Response.json({}),
+      } as unknown as Auth;
+      const context = {
+        auth: hollow,
+        accounts: worker.accounts,
+        sessions: worker.sessions,
+        mailer: worker.mail,
+        kv: worker.kv,
+        consoleUrl: CONSOLE_URL,
+        clientIp: '198.51.100.7',
+        trackIp: false,
+      };
+      const asked = new Request(`${PUBLIC_URL}${ORG}/invite-member`, {
+        method: 'POST',
+        headers: { Cookie: acme.owner.cookie, Origin: CONSOLE_URL, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organizationId: acme.workspace, email: 'paul@client.dev', role: 'member' }),
+      });
+
+      await assert.rejects(handleOrganizationRoutes(asked, `${ORG}/invite-member`, context, {}), /no id/);
+
+      assert.equal(worker.mail.sent.length, before);
+      assert.equal(await worker.kv.get('fruitback:invitation:paul@client.dev'), undefined);
+    });
+
+    it('answers 502 when the message does not leave, keeps the invitation, and sends it again', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const said = mock.method(console, 'error', () => {});
+      const refused = mock.method(worker.mail, 'send', async () => {
+        throw new MailError('The mail provider refused the message: 503');
+      });
+      try {
+        const answer = await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev' });
+        assert.deepEqual([answer.status, await answer.json()], [502, { error: 'mail-unavailable' }]);
+        assert.deepEqual(
+          said.mock.calls.map((each) => each.arguments[0]),
+          ['[fruitback] The mail provider refused the message: 503'],
+        );
+      } finally {
+        refused.mock.restore();
+        said.mock.restore();
+      }
+      assert.deepEqual(await rowsOf(worker.database, 'SELECT email, status FROM invitation'), [
+        { email: 'paul@client.dev', status: 'pending' },
+      ]);
+
+      const resent = await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev', resend: true });
+      assert.equal(resent.status, 200);
+      assert.equal(worker.mail.sent.at(-1)?.to, 'paul@client.dev');
+    });
+
+    it('keeps an invitation on a worker that sends no mail, and sends nothing, so the link goes by hand', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const ask = (path: string, body?: unknown) =>
+        handleRequest(
+          new Request(`${PUBLIC_URL}${path}`, {
+            method: body === undefined ? 'GET' : 'POST',
+            headers: { Origin: CONSOLE_URL, Cookie: acme.owner.cookie, 'Content-Type': 'application/json' },
+            ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+          }),
+          worker.env,
+          {
+            clientIp: '198.51.100.11',
+            accounts: worker.accounts,
+            sessionStore: worker.sessions,
+            kv: worker.kv,
+            auth: worker.auth,
+          },
+        );
+      const before = worker.mail.sent.length;
+
+      // Four times: with no message, the window of a mailbox counts nothing.
+      for (const email of ['paul@client.dev', 'lea@client.dev', 'max@client.dev', 'ana@client.dev']) {
+        const answer = await ask(`${ORG}/invite-member`, { organizationId: acme.workspace, email, role: 'member' });
+        assert.equal(answer.status, 200, await answer.clone().text());
+      }
+
+      assert.equal(worker.mail.sent.length, before);
+      assert.equal((await rowsOf(worker.database, `SELECT id FROM invitation WHERE status = 'pending'`)).length, 4);
+      // Paul signs in by another way (a provider, here a test session), and finds it in the console.
+      const paul = await person(worker, 'paul@client.dev');
+      assert.equal((await theirInvitations(worker, paul)).length, 1);
+    });
+
+    it('writes an invitation in the language of the person it is for, or of the one who invites', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      await as(worker, acme.owner, '/console/me/locale', { body: { locale: 'fr' } });
+      const lea = await person(worker, 'lea@client.dev');
+      await as(worker, lea, '/console/me/locale', { body: { locale: 'en' } });
+
+      // Nobody knows the language of a new address: the one of the inviter.
+      await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev', role: 'admin' });
+      const french = worker.mail.sent.at(-1);
+      assert.equal(french?.subject, 'Vous êtes invité dans acme sur Fruitback');
+      assert.match(
+        french?.text ?? '',
+        /vous invite dans l'espace de travail « acme » sur Fruitback, comme administrateur\./,
+      );
+      assert.match(french?.text ?? '', /Elle attend 7 jours\./);
+
+      // Léa has an account that says English.
+      await invite(worker, acme.owner, acme.workspace, { email: 'lea@client.dev' });
+      assert.equal(worker.mail.sent.at(-1)?.subject, 'You are invited to acme on Fruitback');
+    });
+
+    it('refuses an invitation past its seven days', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const id = await invited(worker, acme, 'paul@client.dev');
+      const [row] = await rowsOf(worker.database, `SELECT "expiresAt", "createdAt" FROM invitation WHERE id = '${id}'`);
+      const lasts = new Date(String(row?.expiresAt)).getTime() - new Date(String(row?.createdAt)).getTime();
+      assert.ok(Math.abs(lasts - INVITATION_SECONDS * 1000) < 60_000, `an invitation lasts ${lasts} ms`);
+      const paul = await person(worker, 'paul@client.dev');
+      await rowsOf(
+        worker.database,
+        `UPDATE invitation SET "expiresAt" = now() - interval '1 second' WHERE id = '${id}'`,
+      );
+
+      const late = await as(worker, paul, `${ORG}/accept-invitation`, { body: { invitationId: id } });
+
+      assert.equal(late.status, 400);
+      assert.deepEqual(await rowsOf(worker.database, `SELECT id FROM member WHERE "userId" = '${paul.id}'`), []);
     });
 
     it('does not delete a workspace through the plugin, even called in the process by its owner', async () => {

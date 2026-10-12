@@ -85,3 +85,23 @@ test('in French, at 320 px of composer, the failure has a line of its own above 
   // The sentence ends above the top of both buttons: it shares no line with them.
   expect((status?.y ?? 0) + (status?.height ?? 0)).toBeLessThanOrEqual(Math.min(cancel?.y ?? 0, send?.y ?? 0));
 });
+
+for (const [locale, sentence] of [
+  ['en-US', 'Your session has ended. Your text is kept: sign in again, then send it.'],
+  ['fr-FR', 'Votre session a expiré. Le texte est gardé : reconnectez-vous, puis renvoyez-le.'],
+] as const) {
+  test(`a 401 says to sign in again, in ${locale}, and Send stays ready (FRU-193)`, async ({ page }) => {
+    // It said « tell the team of the site », and that team can do nothing about a session that ended.
+    await refuseWrites(page, 401, 'invalid-identity');
+    await mount(page, `send-failure-401-${locale}`, locale);
+    expect(await sendFailing(page, 'Kept through a 401')).toBe(sentence);
+
+    await expect(page.locator('[data-fruitback-send]')).toBeEnabled();
+    const status = await page.locator('[data-fruitback-status]').boundingBox();
+    const cancel = await page.locator('[data-fruitback-cancel]').boundingBox();
+    const send = await page.locator('[data-fruitback-send]').boundingBox();
+    const composer = await page.locator('[data-fruitback-state="failed"]').boundingBox();
+    expect(composer?.width).toBeLessThanOrEqual(320);
+    expect((status?.y ?? 0) + (status?.height ?? 0)).toBeLessThanOrEqual(Math.min(cancel?.y ?? 0, send?.y ?? 0));
+  });
+}

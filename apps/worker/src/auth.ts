@@ -47,13 +47,14 @@ export const AUTH_PLUGINS = ['organization', 'magic-link', 'fruitback-at-rest'] 
  *
  * Not here, and on purpose: `/sign-in/magic-link` and `/magic-link/verify` (the worker's own routes
  * call them in the process: the token of a link travels after a `#`, and never in an address),
- * `/list-sessions` (a route of the worker lists them, with no token), and the five of
- * `DISABLED_PATHS`. The routes of the organization plugin have their own list, with a rule for each:
+ * `/list-sessions` (a route of the worker lists them, with no token), `/get-session` (FRU-206: the
+ * console reads who is signed in on `/console/me`, and this route answers the token of the session
+ * to a script; the worker reads a session with `auth.api.getSession`, in the process), and the five
+ * of `DISABLED_PATHS`. The routes of the organization plugin have their own list, with a rule for each:
  * `ORGANIZATION_PATHS` of `auth-organization.ts` (FRU-149).
  */
 export const SERVED_PATHS: Readonly<Record<string, string>> = {
   '/ok': 'it says that better-auth answers, and nothing else',
-  '/get-session': 'the console reads who is signed in',
   '/sign-out': 'it ends the session of this cookie',
   '/revoke-sessions': '« sign out everywhere »: every session of the person',
   '/sign-in/social': 'it starts a sign-in with GitHub or Google',
@@ -61,6 +62,9 @@ export const SERVED_PATHS: Readonly<Record<string, string>> = {
   '/callback/google': 'Google sends the person back here',
   '/error': 'better-auth sends a person here when a sign-in fails before it knows the console',
 };
+
+/** How long an invitation waits (FRU-104). `auth-organization.ts` says the same number in its message. */
+export const INVITATION_SECONDS = 7 * 24 * 60 * 60;
 
 /** How long a link of the e-mail lives: as the link of before (`EMAIL_LINK_TTL_SECONDS`, FRU-98). */
 export const MAGIC_LINK_TTL_SECONDS = 15 * 60;
@@ -317,12 +321,22 @@ export async function authOptions(
     // trackers first and ends the sessions of its extensions. The route of the plugin does neither,
     // and a call to it in the process is refused too.
     disableOrganizationDeletion: true,
+    // The invitations (FRU-104). Written, though three are the defaults of 1.7.7: an invitation is
+    // read, accepted and declined by a session whose address is verified, a second invitation of one
+    // address is refused while the first waits, and a workspace has a hundred waiting at most.
+    invitationExpiresIn: INVITATION_SECONDS,
+    invitationLimit: 100,
+    cancelPendingInvitationsOnReInvite: false,
+    requireEmailVerificationOnInvitation: true,
     organizationHooks: {
       // Every way the plugin writes a role: a member it adds (the owner of a new workspace is one),
       // a role it changes, an invitation it keeps.
       beforeAddMember: async ({ member }) => refuseOtherRoles(member.role),
       beforeUpdateMemberRole: async ({ newRole }) => refuseOtherRoles(newRole),
       beforeCreateInvitation: async ({ invitation }) => refuseOtherRoles(invitation.role),
+      // Accepting writes the role of the invitation on a member, and runs no `beforeAddMember`
+      // (read in `routes/crud-invites.mjs` of 1.7.7): a row that holds another role is refused here.
+      beforeAcceptInvitation: async ({ invitation }) => refuseOtherRoles(invitation.role),
       // `/organization/leave` runs no hook (read in `routes/crud-members.mjs` of 1.7.7): the route of
       // the worker ends the sessions of somebody who leaves, in `auth-organization.ts`.
       afterRemoveMember: async ({ member }) =>

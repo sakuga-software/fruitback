@@ -1,6 +1,7 @@
 import {
   canonicalizePageUrl,
   offeredStages,
+  type Seed,
   type SeedIssue,
   type SeedReporter,
   type SeedScreenshot,
@@ -13,6 +14,16 @@ import { type CaptureHost, type CaptureTarget, createCaptureHost } from './host.
 import type { FruitbackTheme } from './theme.ts';
 import { type FruitbackTransport, fetchTransport } from './transport.ts';
 import { type Composer, type SendFailure, createComposer } from './composer.ts';
+import {
+  type BatchOffer,
+  type Draft,
+  batchBody,
+  createDraftStore,
+  cutIntoRequests,
+  offeredBatch,
+  sessionStorageOf,
+  withPlacesOfNow,
+} from './drafts.ts';
 import {
   type OfferedDestinations,
   createOfferedDestinations,
@@ -236,7 +247,9 @@ export function init(options: FruitbackOptions): Fruitback {
     document,
     translator,
     host: host.root,
-    shouldShow: (issue) => !config.get().hiddenStages.includes(issue.stage),
+    // A draft has no stage yet, so no stage the reporter hid can hide it.
+    shouldShow: (issue) => isDraft(issue) || !config.get().hiddenStages.includes(issue.stage),
+    isDraft,
     // The page changed under the pins: the list says what each one resolved to now.
     onResolve: () => sidebar.refresh(),
   });
@@ -244,8 +257,27 @@ export function init(options: FruitbackOptions): Fruitback {
   const stages = createOfferedStages();
   const destinations = createOfferedDestinations();
   // The worker's word at the last read that answered (FRU-112): it would sign a note of this reader.
-  const readerIdentity = { identified: false };
-  const reader = createReader(overlay, stages, destinations, readerIdentity, view, options);
+  // And whether it takes several notes in one request (FRU-124).
+  const readerIdentity: { identified: boolean; batch?: BatchOffer | undefined } = { identified: false };
+  // The notes kept for later, per tab (FRU-124). Next to the config, under its key.
+  const drafts = createDraftStore({
+    storage: sessionStorageOf(view),
+    key: `${options.configKey ?? 'fruitback:config'}:drafts`,
+  });
+  /** What the last read answered. The drafts of this page are drawn beside it. */
+  let readIssues: SeedIssue[] = [];
+  const show = (issues: SeedIssue[]): void => {
+    readIssues = issues;
+    const here = canonicalizePageUrl(view.location.href);
+    overlay.render([
+      ...issues,
+      ...drafts
+        .list()
+        .filter((draft) => draft.seed.page.url === here)
+        .map((draft) => draftIssue(draft)),
+    ]);
+  };
+  const reader = createReader(show, stages, destinations, readerIdentity, view, options);
   let lastReadAt = Number.NEGATIVE_INFINITY;
   // Per page (FRU-153): a navigation starts again at `pending`. A failed read after a good one
   // leaves the state and the pins alone, like it always did.
@@ -282,6 +314,18 @@ export function init(options: FruitbackOptions): Fruitback {
       remembered: () => config.get().destination,
       remember: (id) => config.set({ destination: id }),
     },
+    // Offered only while the worker takes several notes in one request (FRU-124).
+    keep: {
+      offered: () => readerIdentity.batch !== undefined,
+      onKeep: async (note, reporter, chosen) => {
+        const destination = destinationToSend(destinations.get(), chosen);
+        const seed = await seedFor({ note, target, place, reporter, config: config.get(), options });
+        if (seed === undefined) return 'retry';
+        drafts.add({ seed, ...(destination === undefined ? {} : { destination }) });
+
+        return true;
+      },
+    },
     onSubmit: async (note, reporter, chosen) => {
       const destination = destinationToSend(destinations.get(), chosen);
       const planted = await plant({ note, target, place, reporter, destination, config: config.get(), options });
@@ -304,7 +348,32 @@ export function init(options: FruitbackOptions): Fruitback {
 
   /** The notes the overlay draws now, with how each one was found. The list and the copied text read it. */
   const entries = (): FeedbackEntry[] =>
-    overlay.resolutions().map((resolution) => ({ issue: resolution.issue, placement: placementOf(resolution) }));
+    overlay
+      .resolutions()
+      .filter((resolution) => !isDraft(resolution.issue))
+      .map((resolution) => ({ issue: resolution.issue, placement: placementOf(resolution) }));
+
+  /** One request after another, then a read: the pins the reviewer sees next are the worker's. */
+  let sending = false;
+  const sendKept = async (): Promise<{ sent: number; failure?: SendFailure }> => {
+    if (sending) return { sent: 0 };
+    sending = true;
+    try {
+      const outcome = await sendDrafts({
+        drafts: withPlacesOfNow(drafts.list(), destinations.get()),
+        offer: readerIdentity.batch,
+        options,
+      });
+      drafts.remove(outcome.kept);
+      // After a failure too: the worker refuses a place the site no longer has, and the list of
+      // places on screen is then old. The read brings the list of now, and the next try follows it.
+      if (outcome.kept.length > 0 || outcome.failure !== undefined) await read();
+
+      return { sent: outcome.kept.length, ...(outcome.failure === undefined ? {} : { failure: outcome.failure }) };
+    } finally {
+      sending = false;
+    }
+  };
 
   const asText = (): string =>
     feedbackAsText(entries(), { pageUrl: canonicalizePageUrl(view.location.href), translator });
@@ -314,6 +383,8 @@ export function init(options: FruitbackOptions): Fruitback {
     translator,
     host: host.root,
     entries,
+    drafts: () => drafts.list(),
+    onSendDrafts: sendKept,
     onSelect: (id) => void overlay.select(id),
     readState: () => readState,
     onRetry: () => {
@@ -331,6 +402,12 @@ export function init(options: FruitbackOptions): Fruitback {
     stages,
     exportText: asText,
     screenshotSupported: options.captureScreenshot !== undefined,
+  });
+
+  // A note kept, or sent: the pins of the page and the list say it at once, with no request.
+  const stopFollowingDrafts = drafts.subscribe(() => {
+    show(readIssues);
+    sidebar.refresh();
   });
 
   // A preference change redraws from the issues already held, so it costs no request.
@@ -361,6 +438,7 @@ export function init(options: FruitbackOptions): Fruitback {
     settings: panel,
     destroy() {
       stopWatchingUrl();
+      stopFollowingDrafts();
       stopWatchingReturn();
       unsubscribe();
       panel.destroy();
@@ -381,10 +459,10 @@ export function init(options: FruitbackOptions): Fruitback {
  * Each call takes a generation, and only the newest may touch the screen.
  */
 function createReader(
-  overlay: Overlay,
+  show: (issues: SeedIssue[]) => void,
   stages: OfferedStages,
   destinations: OfferedDestinations,
-  identity: { identified: boolean },
+  identity: { identified: boolean; batch?: BatchOffer | undefined },
   view: Window & typeof globalThis,
   options: FruitbackOptions,
 ): () => Promise<ReadOutcome> {
@@ -418,6 +496,7 @@ function createReader(
         stages?: unknown;
         destinations?: unknown;
         identified?: unknown;
+        batch?: unknown;
       };
       if (mine !== generation) return 'stale';
 
@@ -428,7 +507,9 @@ function createReader(
       // Like the places: an answer without the field takes it back, so a reviewer whose session
       // ended is asked for a name again. A failed read changes nothing.
       identity.identified = body.identified === true;
-      overlay.render(body.issues);
+      // The same rule: a worker that stops offering a batch is sent one note at a time (FRU-124).
+      identity.batch = offeredBatch(body.batch);
+      show(body.issues);
 
       return 'read';
     } catch {
@@ -468,9 +549,47 @@ export async function plant({
   config: WidgetConfig;
   options: FruitbackOptions;
 }): Promise<true | SendFailure> {
-  if (target === null) return 'retry';
+  const seed = await seedFor({ note, target, place, reporter, config, options });
+  if (seed === undefined) return 'retry';
 
-  const seed = captureSeed({
+  // Asked for per write rather than once at init: a short-lived token that expired mid-session would
+  // otherwise turn every later note into a 401.
+  const token = await options.identityToken?.();
+
+  const response = await transportFor(options)({
+    // The choice is in the query and nowhere else. The body stays the seed, and the relay of the
+    // extension carries a query, and no header but the two below.
+    url: feedbackUrl(options, destination),
+    method: 'POST',
+    headers: writeHeaders(token),
+    body: JSON.stringify(seed),
+  });
+
+  return response.ok ? true : failureOf(response);
+}
+
+/**
+ * The seed of a note, as the click and the page give it now: sent at once, or kept for later
+ * (FRU-124). `undefined` when there is no element to anchor it to.
+ */
+async function seedFor({
+  note,
+  target,
+  place,
+  reporter,
+  config,
+  options,
+}: {
+  note: string;
+  target: CaptureTarget | null;
+  place?: CapturedPlace | undefined;
+  reporter: SeedReporter | undefined;
+  config: WidgetConfig;
+  options: FruitbackOptions;
+}): Promise<Seed | undefined> {
+  if (target === null) return undefined;
+
+  return captureSeed({
     element: target.element,
     note,
     client: { id: options.clientId },
@@ -482,28 +601,121 @@ export async function plant({
       stillThere(target.element, place) ? await screenshotFor(target.element, config, options) : undefined,
     ),
   });
+}
 
-  // Asked for per write rather than once at init: a short-lived token that expired mid-session would
-  // otherwise turn every later note into a 401.
-  const token = await options.identityToken?.();
+/** `?destination=` carries the choice, and nothing else does: the body stays the seed (FRU-123). */
+function feedbackUrl(options: FruitbackOptions, destination: string | undefined): string {
+  return destination === undefined
+    ? `${options.endpoint}/feedback`
+    : `${options.endpoint}/feedback?destination=${encodeURIComponent(destination)}`;
+}
 
-  const response = await transportFor(options)({
-    // The choice is in the query and nowhere else. The body stays the seed, and the relay of the
-    // extension carries a query, and no header but the two below.
-    url:
-      destination === undefined
-        ? `${options.endpoint}/feedback`
-        : `${options.endpoint}/feedback?destination=${encodeURIComponent(destination)}`,
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      // Never in the body: the seed is stored verbatim in a Linear description (FRU-9).
-      ...(token !== undefined ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(seed),
-  });
+/** Never the token in the body: the seed is stored verbatim in a Linear description (FRU-9). */
+function writeHeaders(token: string | undefined): Record<string, string> {
+  return { 'Content-Type': 'application/json', ...(token !== undefined ? { Authorization: `Bearer ${token}` } : {}) };
+}
 
-  return response.ok ? true : failureOf(response);
+/** A draft drawn on its page: no issue yet, so no identifier, no state and no link. */
+const DRAFT_PREFIX = 'draft:';
+
+function draftIssue(draft: Draft): SeedIssue {
+  return {
+    id: `${DRAFT_PREFIX}${draft.seed.id}`,
+    identifier: draft.seed.id,
+    title: '',
+    stage: 'seeded',
+    stateName: '',
+    updatedAt: draft.seed.createdAt,
+    seed: draft.seed,
+  };
+}
+
+function isDraft(issue: SeedIssue): boolean {
+  return issue.id.startsWith(DRAFT_PREFIX);
+}
+
+/**
+ * Exported for its tests, never from `public.ts`. Sends the drafts, as few requests as the worker
+ * allows (FRU-124), and says which ones it kept.
+ *
+ * - **Only the notes answered « kept » leave the drafts.** After a `207` the others are sent again,
+ *   never the whole batch: the worker protects a note against a second copy for ten minutes, and
+ *   for one only when its `Kv` refuses the trace.
+ * - A request that fails stops the others: a `429` or a `401` would refuse them the same way, and the
+ *   reviewer reads one sentence. Nothing is lost, the drafts stay.
+ * - The token is asked for at each request, like a single note.
+ */
+export async function sendDrafts({
+  drafts,
+  offer,
+  options,
+}: {
+  drafts: readonly Draft[];
+  offer: BatchOffer | undefined;
+  options: FruitbackOptions;
+}): Promise<{ kept: string[]; failure?: SendFailure }> {
+  const kept: string[] = [];
+  let partial = false;
+
+  for (const request of cutIntoRequests(drafts, offer)) {
+    const first = request[0];
+    if (first === undefined) continue;
+    let response: { ok: boolean; status: number; body: string };
+    try {
+      const token = await options.identityToken?.();
+      response = await transportFor(options)({
+        url: feedbackUrl(options, first.destination),
+        method: 'POST',
+        headers: writeHeaders(token),
+        body: offer === undefined ? JSON.stringify(first.seed) : batchBody(request),
+      });
+    } catch {
+      return { kept, failure: 'retry' };
+    }
+
+    if (offer === undefined) {
+      if (!response.ok) return { kept, failure: failureOf(response) };
+      kept.push(first.seed.id);
+      continue;
+    }
+
+    const ids = request.map((draft) => draft.seed.id);
+    if (response.ok && response.status !== 207) {
+      // Every note was kept: that is what a success that is not a `207` says. Not read from the
+      // body: an answer the widget cannot read would leave notes the worker holds in the drafts, and
+      // the next click would plant them a second time.
+      kept.push(...ids);
+      continue;
+    }
+
+    const answered = keptIn(response.body);
+    kept.push(...ids.filter((id) => answered.has(id)));
+    if (response.status === 207) partial = true;
+    else return { kept, failure: failureOf(response) };
+  }
+
+  return partial ? { kept, failure: 'retry' } : { kept };
+}
+
+/** The ids the worker answered with an issue, in a `201`, a `207` or a `502` of a batch. */
+function keptIn(body: string): Set<string> {
+  try {
+    const { results } = JSON.parse(body) as { results?: unknown };
+    if (!Array.isArray(results)) return new Set();
+
+    return new Set(
+      results.flatMap((result: unknown) => {
+        const { id, issue } = (typeof result === 'object' && result !== null ? result : {}) as {
+          id?: unknown;
+          issue?: unknown;
+        };
+
+        return typeof id === 'string' && issue !== undefined ? [id] : [];
+      }),
+    );
+  } catch {
+    return new Set();
+  }
 }
 
 /**
@@ -525,7 +737,8 @@ function placeOf(target: CaptureTarget): CapturedPlace | undefined {
 }
 
 /**
- * What a refused write means for the reporter (FRU-156): try again, wait, or tell the team.
+ * What a refused write means for the reporter (FRU-156): try again, wait, sign in again, or tell the
+ * team.
  *
  * A place the worker refuses (`destination-not-allowed`) is a `403` that a second try can pass: the
  * read that follows brings the list of now, and the composer says which place is gone (FRU-123).
@@ -533,7 +746,9 @@ function placeOf(target: CaptureTarget): CapturedPlace | undefined {
 export function failureOf(response: { status: number; body: string }): SendFailure {
   if (response.status === 429) return 'wait';
   if (response.status === 413) return 'too-large';
-  if (response.status === 401 || response.status === 403) {
+  // Not « try again »: a host that mints a bad token mints it again at the next send (FRU-193).
+  if (response.status === 401) return 'signed-out';
+  if (response.status === 403) {
     return errorOf(response.body) === 'destination-not-allowed' ? 'retry' : 'refused';
   }
 

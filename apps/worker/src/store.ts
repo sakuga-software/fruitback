@@ -66,6 +66,12 @@ export type SeedStore = {
    */
   readonly stages?: readonly SeedStage[];
   /**
+   * The stages for one client, when they depend on it (FRU-188): a worker whose sites send to the
+   * trackers of their workspaces reports the stages of the tracker of each site, not its own.
+   * Absent: `stages`, for every client.
+   */
+  stagesFor?(client: ClientConfig | undefined): Promise<readonly SeedStage[] | undefined>;
+  /**
    * What tells one tenant's answers from another's, for the read cache.
    *
    * The worker used to build its cache key from `routing.teamId`, which meant the read path knew

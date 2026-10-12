@@ -867,11 +867,16 @@ entry with no `mode` reads as private** — that is every entry a reviewer's bro
   resolves a wildcard. A reader that indexed the map by origin would mount the widget and then have
   the relay refuse its calls.
 - **A wildcard covers the default port only**, and its base host too, as a match pattern does. The
-  grant and the registration (`https://*.host/*`) cover every port; the pattern carries no port because
-  whether each browser accepts one was not measured, and one refused pattern stops every site. It needs
-  a base of at least two labels and no IP address: every pattern is registered in one call, so a pattern
-  that the browser refuses would stop the scripts on every site. If a browser registers the scripts on
-  another port, the bridge unmounts there. The opposite error shows a site as on where nothing runs.
+  grant and the registration (`https://*.host/*`) cover every port, and **stay so, measured**
+  (FRU-74): Firefox 146 accepts a pattern with a port and then runs the scripts on no page at all,
+  its own port included. A port in the pattern would turn the site off in Firefox, with the popup
+  saying **On**. It needs a base of at least two labels and no IP address. If a browser runs the
+  scripts on another port, the bridge unmounts there.
+- **Each origin has its own pair of scripts, registered in its own call** (FRU-74,
+  `scriptIdsFor`). Chromium 145 refuses a whole call when one pattern is invalid; with one pair for
+  every origin, one refused pattern stopped the extension on every site. A refusal now costs that
+  origin, and is written in the console. test:`registers every other origin when the browser refuses
+one, and names the one it refused`.
 - **Only the background writes the sites map.** The popup and the options page send the change as a
   runtime message; `createSiteOwner` applies one at a time, because each change reads the whole map and
   replaces it, and the two pages share no lock. `isExtensionPage` refuses the message from a content
@@ -939,14 +944,26 @@ because it is the permission for every site that FRU-41 refused to ask for at in
 The grant and the registration are wider than the resolver. `https://*.staging.acme.dev/*` names no
 port, and a match pattern with no port covers every port, so the browser grants access to, and runs
 the scripts on, `pr-12.staging.acme.dev:8443` too; the bridge then unmounts there. Putting `:443` in the
-pattern would narrow the grant to what the resolver covers. It was not done, because whether each
-browser accepts a port in a match pattern was not measured, and the background registers every
-pattern in one call: one pattern the browser refuses stops the scripts on every site. Raised in review.
+pattern would narrow the grant to what the resolver covers. **Measured on 2026-10-12 (FRU-74), and
+not done.** A probe extension registered `http://*.localhost:5191/*` and `http://127.0.0.1:5191/*`
+and opened the two hosts on ports 5191 and 5192:
+
+|                                                                                          | Chromium 145                      | Firefox 146        |
+| ---------------------------------------------------------------------------------------- | --------------------------------- | ------------------ |
+| `registerContentScripts` with a port                                                     | accepted                          | accepted           |
+| the scripts run on that port                                                             | yes                               | **no**, on no port |
+| the scripts run on another port                                                          | no                                | no                 |
+| `permissions.contains` of a pattern with a port, when the pattern without one is granted | `true`                            | `false`            |
+| a call with one invalid pattern (`:99999`)                                               | refused whole, nothing registered | accepted           |
+
+So a port in the pattern works in Chromium and switches the site off in Firefox. The grant stays
+wider than the resolver, as before: more access than the rule serves, and no site that fails. Each
+origin is registered in its own call now, so a pattern a browser refuses costs that origin only.
+Raised in review.
 
 A wildcard on a single label (`*.localhost`, or `*.localhost.` with its root dot) or an IP address is
-refused too. `syncRegistration` sends
-every pattern in one `registerContentScripts` call, so one pattern the browser refuses stops the
-scripts on every site, and the error is only logged. Which of these a browser refuses was not measured,
+refused too. Since FRU-74 a refused pattern costs its own origin only (see above), and the error is
+only logged. Which of these a browser refuses was not measured,
 so the conservative answer is to never store them.
 
 ### One writer for the map
