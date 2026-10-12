@@ -20,7 +20,8 @@ type Worker = {
   /** The text of each message the worker was asked to send, in order. */
   sent(): Promise<string[]>;
   received(): Promise<Received[]>;
-  close(): void;
+  /** Stops the process, and answers when it is gone. */
+  close(): Promise<void>;
 };
 
 /**
@@ -53,7 +54,12 @@ async function cloudWorker(options: { betterAuth: boolean }): Promise<Worker> {
     origin,
     sent: async () => (await read<{ text: string }[]>('/__test/sent')).map((each) => each.text),
     received: () => read<Received[]>('/__test/received'),
-    close: () => void child.kill(),
+    close: () =>
+      new Promise<void>((resolve) => {
+        if (child.exitCode !== null || child.signalCode !== null) return resolve();
+        child.once('exit', () => resolve());
+        child.kill();
+      }),
   };
 }
 
@@ -65,6 +71,22 @@ async function served(page: Page, worker: Worker): Promise<void> {
 
     await route.fulfill({ response });
   });
+}
+
+/**
+ * Ends a test: the routes first, then the worker.
+ *
+ * WARNING: a screen of the console goes on asking after the element a test waited for is there (the
+ * title of « Sites » is drawn before its list is read). A request that is still in the handler of
+ * `served` when Playwright closes the context makes the handler throw « Target page, context or
+ * browser has been closed », and Playwright fails a test whose every assertion passed: one run in
+ * four of the last test of this file, measured with `--repeat-each 20`. `ignoreErrors` takes the
+ * routes away and lets such a request fail in silence. The worker stops after: a request must not be
+ * handed to a process that is gone.
+ */
+async function finished(page: Page, worker: Worker | undefined): Promise<void> {
+  await page.context().unrouteAll({ behavior: 'ignoreErrors' });
+  await worker?.close();
 }
 
 /** The link of the last mail, as the person finds it in the message. */
@@ -89,6 +111,8 @@ async function signInByLink(page: Page, worker: Worker, email: string): Promise<
   await page.goto(CONSOLE);
   await expect(page).toHaveURL(/\/w\/ws_[0-9a-f]{20}\/sites$/);
   await expect(page.getByRole('heading', { name: 'Sites', level: 1 })).toBeVisible();
+  // The list was read: the title is there before the answer, and a test starts from a screen at rest.
+  await expect(page.getByText('No site yet. Paste the address of the one you review.')).toBeVisible();
 }
 
 test.describe('the console, signed in by the cookie of better-auth (FRU-148)', () => {
@@ -98,7 +122,7 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     worker = await cloudWorker({ betterAuth: true });
     await served(page, worker);
   });
-  test.afterEach(() => worker.close());
+  test.afterEach(({ page }) => finished(page, worker));
 
   test('goes from the sign-in screen to the sites by a link, and holds no token anywhere a script reads', async ({
     page,
@@ -226,7 +250,7 @@ test.describe('this console, against a worker of before (FRU-148)', () => {
     worker = await cloudWorker({ betterAuth: false });
     await served(page, worker);
   });
-  test.afterEach(() => worker.close());
+  test.afterEach(({ page }) => finished(page, worker));
 
   test('signs in by a link as before, with the token of before, while the worker does not say betterAuth', async ({
     page,
