@@ -11,7 +11,6 @@ import { WORKER_ORIGIN, storedSeeds } from './pin.ts';
  * back with the state the tracker gave them.
  */
 const IIFE = 'packages/widget/dist/fruitback.iife.js';
-const CAPTURES = process.env.CAPTURE_LABEL;
 
 async function mount(page: Page, testCase: string, locale = 'en-US'): Promise<void> {
   await page.goto(`/?widget=off&case=${testCase}-${test.info().retry}`);
@@ -42,34 +41,20 @@ function writes(page: Page): string[] {
   return bodies;
 }
 
-async function keep(page: Page, card: string, note: string, shot?: string): Promise<void> {
+async function keep(page: Page, card: string, note: string): Promise<void> {
   await page.locator('[data-fruitback-host-launch]').click();
   await page.locator(`[data-testid="${card}"] .add`).click();
   await page.locator('[data-fruitback-note]').fill(note);
-  if (shot !== undefined) await capture(page, shot);
   await page.getByRole('button', { name: 'Keep for later' }).click();
   await expect(page.locator('[data-fruitback-status]')).toHaveText('kept for later');
   await expect(page.locator('[data-fruitback-state]')).toBeHidden({ timeout: 5_000 });
-}
-
-/** The two widths of the PR, when the run is asked for its pictures. */
-async function capture(page: Page, name: string): Promise<void> {
-  if (CAPTURES === undefined) return;
-  const out = '/Users/sakuga-mini/.claude/agent-coord/scratch/fru-widget';
-  await page.waitForTimeout(400);
-  await page.screenshot({ path: `${out}/124-${CAPTURES}-${name}-1440.png` });
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.waitForTimeout(400);
-  await page.screenshot({ path: `${out}/124-${CAPTURES}-${name}-390.png` });
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.waitForTimeout(200);
 }
 
 test('notes kept for later outlive a reload, and go in one request from the list', async ({ page }) => {
   const posted = writes(page);
   await mount(page, 'drafts');
 
-  await keep(page, 'card-espresso', 'Gardée : le prix est faux', 'composer');
+  await keep(page, 'card-espresso', 'Gardée : le prix est faux');
   await keep(page, 'card-latte', 'Gardée : le bouton est trop petit');
 
   // Kept, not sent: no request, and two neutral pins that say so.
@@ -86,7 +71,6 @@ test('notes kept for later outlive a reload, and go in one request from the list
   await page.getByRole('button', { name: 'Show every note of this page' }).click();
   const list = page.getByRole('dialog', { name: 'Every note of this page' });
   await expect(list.getByText('Kept for later, not sent yet')).toBeVisible();
-  await capture(page, 'list');
   await list.getByRole('button', { name: 'Send the 2 notes' }).click();
   await expect(list.getByText('2 notes sent')).toBeVisible();
 
@@ -101,7 +85,6 @@ test('notes kept for later outlive a reload, and go in one request from the list
   expect((await storedSeeds(page)).map((seed) => seed.note).sort()).toEqual(
     ['Gardée : le bouton est trop petit', 'Gardée : le prix est faux'].sort(),
   );
-  await capture(page, 'sent');
   await page.reload();
   await mount(page, 'drafts');
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(2);
