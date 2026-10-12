@@ -760,6 +760,60 @@ describe('who carries the calls', () => {
     assert.equal(parseSeed(kept).ok, true);
   });
 
+  it('sends no picture of the page of now beside a place of the page before (FRU-152)', async () => {
+    const page = mountPage('<main><button id="cta">Commander</button></main>', {
+      url: 'https://preview.acme.test/pricing',
+    });
+    setDocumentSize(page.document, 1_000, 1_000);
+    const button = page.query('button');
+    setRect(button, { left: 100, top: 200, width: 200, height: 40 });
+    forbidFetch();
+
+    const pictures: Element[] = [];
+    const send = () =>
+      plant({
+        note: 'the price is wrong',
+        target: { element: button, source: undefined },
+        place,
+        reporter: undefined,
+        config: { hiddenStages: [], screenshot: true },
+        options: {
+          endpoint: ENDPOINT,
+          clientId: 'acme',
+          captureScreenshot: async (element) => {
+            pictures.push(element);
+
+            return { url: 'https://cdn.test/shot.png', width: 200, height: 40 };
+          },
+          transport: async (request) => {
+            bodies.push(JSON.parse(request.body ?? '{}') as { screenshot?: unknown });
+
+            return { ok: true, status: 201, body: '{}' };
+          },
+        },
+      });
+    const bodies: { screenshot?: unknown }[] = [];
+    const place = capturePlace(button);
+
+    // The control: on the same page, the picture goes with the note.
+    assert.equal(await send(), true);
+    assert.equal(pictures.length, 1);
+    assert.notEqual(bodies[0]?.screenshot, undefined);
+
+    // Another address, the element still in the page: no picture.
+    page.view.history.pushState(null, '', '/checkout');
+    assert.equal(await send(), true);
+    assert.equal(pictures.length, 1);
+    assert.equal(bodies[1]?.screenshot, undefined);
+
+    // Back on the address, the element gone: no picture either.
+    page.view.history.pushState(null, '', '/pricing');
+    page.document.body.innerHTML = '<main></main>';
+    assert.equal(await send(), true);
+    assert.equal(pictures.length, 1);
+    assert.equal(bodies[2]?.screenshot, undefined);
+  });
+
   it('names the place a member chose in the query, and leaves the body the seed it was (FRU-123)', async () => {
     const page = mountPage('<main><button id="cta">Commander</button></main>');
     setDocumentSize(page.document, 1_000, 1_000);
