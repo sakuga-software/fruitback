@@ -398,7 +398,13 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 
   /** A note is detached when nothing identified *or located* its element — resolveAnchor's last word. */
   function listOrphans(): void {
-    orphans.update(placed.filter((entry) => entry.resolution.element === null).map((entry) => entry.issue));
+    // Not a draft (FRU-124): that list names a stage and an identifier, and a draft has neither. It
+    // keeps its pin where it was planted, and it is in the group of drafts of the list of notes.
+    orphans.update(
+      placed
+        .filter((entry) => entry.resolution.element === null && !DRAFTS.has(entry.issue))
+        .map((entry) => entry.issue),
+    );
   }
 
   /** Re-render the open thread against a resolution that has just changed under it. */

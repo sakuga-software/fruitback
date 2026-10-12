@@ -672,10 +672,19 @@ export async function sendDrafts({
       continue;
     }
 
+    const ids = request.map((draft) => draft.seed.id);
+    if (response.ok && response.status !== 207) {
+      // Every note was kept: that is what a success that is not a `207` says. Not read from the
+      // body: an answer the widget cannot read would leave notes the worker holds in the drafts, and
+      // the next click would plant them a second time.
+      kept.push(...ids);
+      continue;
+    }
+
     const answered = keptIn(response.body);
-    kept.push(...request.map((draft) => draft.seed.id).filter((id) => answered.has(id)));
+    kept.push(...ids.filter((id) => answered.has(id)));
     if (response.status === 207) partial = true;
-    else if (!response.ok) return { kept, failure: failureOf(response) };
+    else return { kept, failure: failureOf(response) };
   }
 
   return partial ? { kept, failure: 'retry' } : { kept };

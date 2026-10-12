@@ -1291,6 +1291,38 @@ describe('sending the drafts', () => {
     );
   });
 
+  it('takes a 201 at its word when its body says nothing the widget can read', async () => {
+    // The worker holds the notes. Left in the drafts, the next click would plant them a second time.
+    for (const body of ['', '{}', '{"results":"all"}', '{"results":[{"id":"sd_other","issue":{}}]}']) {
+      const { options } = transportAnswering(() => ({ ok: true, status: 201, body }));
+
+      assert.deepEqual(
+        await sendDrafts({ drafts: [draftOf('sd_a'), draftOf('sd_b')], offer: { max: 10, maxBytes: 65_536 }, options }),
+        { kept: ['sd_a', 'sd_b'] },
+        body,
+      );
+    }
+  });
+
+  it('keeps every note of a batch the worker answers 502, its answer for each note included', async () => {
+    // The worker answers `502` when it kept none, with one result for each seed.
+    const { options } = transportAnswering(results(502, [], ['sd_a', 'sd_b']));
+
+    assert.deepEqual(
+      await sendDrafts({ drafts: [draftOf('sd_a'), draftOf('sd_b')], offer: { max: 10, maxBytes: 65_536 }, options }),
+      { kept: [], failure: 'retry' },
+    );
+  });
+
+  it('keeps a note that a 207 does not name, and takes out only the ones it answers « kept »', async () => {
+    const { options } = transportAnswering(() => ({ ok: true, status: 207, body: '{"results":[]}' }));
+
+    assert.deepEqual(await sendDrafts({ drafts: [draftOf('sd_a')], offer: { max: 10, maxBytes: 65_536 }, options }), {
+      kept: [],
+      failure: 'retry',
+    });
+  });
+
   it('stops at a request the worker refuses, and keeps every note it did not answer', async () => {
     const { requests, options } = transportAnswering(results(201, ['sd_a', 'sd_b']), () => ({
       ok: false,
