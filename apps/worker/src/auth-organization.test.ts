@@ -1155,14 +1155,54 @@ for (const { label, open, skip } of DATABASES) {
       assert.equal(after?.id, first?.id, 'a second invitation was written');
       assert.ok(new Date(String(after?.expiresAt)) >= new Date(String(first?.expiresAt)));
 
-      // Two calls were refused above before they counted, and two were sent. The window holds three
-      // attempts for one address, from every workspace together: the fourth is refused, unsent.
+      // The four calls that were refused above counted nothing: the window counts the messages that
+      // went. A third one goes, and the fourth is refused, unsent, from another workspace too.
+      assert.equal(
+        (await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev', resend: true })).status,
+        200,
+      );
+      assert.equal(toPaul(), 3);
+      const fourth = await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev', resend: true });
+      assert.deepEqual([fourth.status, await fourth.json()], [429, { error: 'too-many-invitations' }]);
       const fromElsewhere = await invite(worker, other.owner, other.workspace, { email: 'paul@client.dev' });
       assert.deepEqual([fromElsewhere.status, await fromElsewhere.json()], [429, { error: 'too-many-invitations' }]);
-      assert.equal(toPaul(), 2);
+      assert.equal(toPaul(), 3);
       assert.equal((await rowsOf(worker.database, 'SELECT id FROM invitation')).length, 1);
       // Another address is not held by it.
       assert.equal((await invite(worker, other.owner, other.workspace, { email: 'lea@client.dev' })).status, 200);
+    });
+
+    it('sends no message, and counts none, for an answer of better-auth that names no invitation', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const before = worker.mail.sent.length;
+      // better-auth as a later version could answer: `200`, and nothing kept.
+      const hollow = {
+        ...worker.auth,
+        $context: worker.auth.$context,
+        api: worker.auth.api,
+        handler: async () => Response.json({}),
+      } as unknown as Auth;
+      const context = {
+        auth: hollow,
+        accounts: worker.accounts,
+        sessions: worker.sessions,
+        mailer: worker.mail,
+        kv: worker.kv,
+        consoleUrl: CONSOLE_URL,
+        clientIp: '198.51.100.7',
+        trackIp: false,
+      };
+      const asked = new Request(`${PUBLIC_URL}${ORG}/invite-member`, {
+        method: 'POST',
+        headers: { Cookie: acme.owner.cookie, Origin: CONSOLE_URL, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organizationId: acme.workspace, email: 'paul@client.dev', role: 'member' }),
+      });
+
+      await assert.rejects(handleOrganizationRoutes(asked, `${ORG}/invite-member`, context, {}), /no id/);
+
+      assert.equal(worker.mail.sent.length, before);
+      assert.equal(await worker.kv.get('fruitback:invitation:paul@client.dev'), undefined);
     });
 
     it('answers 502 when the message does not leave, keeps the invitation, and sends it again', async () => {

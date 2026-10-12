@@ -1719,8 +1719,9 @@ joins. Six routes of the organization plugin more, under the rules of the sectio
   worker reads the workspace of the invitation before better-auth does, and answers `404` when it is
   not the one whose role it read. `cancel-invitation` needs it; a later route on an invitation does too.
 - **The worker sends the message, not the plugin** (`sendInvitationEmail` is not set). The route
-  counts the address in the window of the sign-in link (`fruitback:invitation:<address>`, 3 in
-  15 minutes), asks the plugin, then sends. A message that does not leave answers `502`, and the
+  reads the window of the address (`fruitback:invitation:<address>`, 3 in 15 minutes, the numbers
+  of the sign-in link), asks the plugin, and counts and sends only for an answer that names an
+  invitation: a call that the plugin refuses spends nothing of the window of somebody else. A message that does not leave answers `502`, and the
   invitation waits, to send again with `resend: true`. **A worker with no mailer still invites**
   (decided on FRU-107): the invitation is kept, nothing is sent and nothing is counted, and the
   console shows the link to send by hand. The link is the same `<console>/invitations`, so a link

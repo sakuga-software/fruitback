@@ -158,11 +158,14 @@ export async function handleOrganizationRoutes(
   }
 
   const invited = path === '/organization/invite-member' ? String(read.input.email) : undefined;
-  // Counted when a message goes: the window keeps a mailbox from being filled. A worker with no
-  // mailer sends nothing, and the person who invites sends the link of the console by hand.
+  // The window keeps a mailbox from being filled, so it counts the messages that go, below, and
+  // only reads the count here: a call that better-auth then refuses (somebody who is a member, an
+  // invitation that waits) spends nothing of the window of that address. A worker with no mailer
+  // sends nothing, and the person who invites sends the link of the console by hand.
+  const window = `fruitback:invitation:${invited}`;
   if (invited !== undefined && context.mailer !== undefined) {
-    const sent = await context.kv.incr(`fruitback:invitation:${invited}`, EMAIL_LINK_WINDOW_MS);
-    if (sent > INVITATIONS_PER_WINDOW) return json(429, { error: 'too-many-invitations' }, headers);
+    const sent = Number((await context.kv.get(window)) ?? 0);
+    if (sent >= INVITATIONS_PER_WINDOW) return json(429, { error: 'too-many-invitations' }, headers);
   }
 
   // The request better-auth reads is written here: the fields of the rule, as they were read.
@@ -189,6 +192,13 @@ export async function handleOrganizationRoutes(
   // The invitation is kept: its message goes now. A message that does not leave answers `502`, and
   // the invitation waits, to be sent again.
   if (invited !== undefined && answer.ok && workspace !== undefined && context.mailer !== undefined) {
+    // No message for an answer that names no invitation: nothing would wait for the person.
+    const kept = (await answer
+      .clone()
+      .json()
+      .catch(() => undefined)) as { id?: unknown } | undefined;
+    if (typeof kept?.id !== 'string') throw new AuthUnavailable('better-auth answered an invitation with no id');
+    await context.kv.incr(window, EMAIL_LINK_WINDOW_MS);
     try {
       await context.mailer.send(
         await messageOf(context, { to: invited, role: String(read.input.role), workspace, inviter: mine.userId }),
