@@ -739,6 +739,36 @@ destination-not-allowed`, and nothing is written, in the first place either.
   list is short. A place that cannot be read answers `502` for the page, like one connector that
   cannot be used.
 
+### A domain a workspace proves it owns, to cover its previews (FRU-103)
+
+A wildcard in team mode lends the reviewer's session to every page it covers, and nothing in a
+pattern tells `*.preview.acme.dev` from `*.vercel.app`. The DNS can: only who holds the zone of a
+domain writes a record under it. So the worker takes the subdomains of a domain as the previews of a
+site only while the workspace of that site proves the domain.
+
+- **The proof is a `TXT` record**, `_fruitback.<domain>`, whose value is a digest of the workspace id
+  and the domain (`proofRecord` in `domain-proof.ts`). It is public in the DNS and grants nothing to
+  whoever reads it: writing it is the proof. **The record of one workspace proves nothing for
+  another**, and the record of `preview.acme.dev` proves nothing for `acme.dev`.
+- **A domain under a shared host cannot be proven by its tenants.** A tenant of `vercel.app` writes
+  no record under `vercel.app` or under the names of the other tenants. **Limit:** a host that lets a
+  tenant write `TXT` records under its own subdomain (`_fruitback.myapp.example-host.com`) lets that
+  tenant prove that subdomain, and so cover what is under it, which is its own.
+- **Only an owner or an admin** adds a domain, asks the DNS, names the site whose previews it covers
+  (`manage-sites`). A site of another workspace and a domain of another workspace answer `404`. A
+  domain that is not proven cannot name a site (`409 domain-not-proven`).
+- **The proof is asked again** every six hours (`RECHECK_MS`). An answer of the DNS without the record
+  ends it at once: `GET /session/sites` stops listing the previews of the site, the console shows the
+  domain as lost with the moment, and the log says it once. A DNS that does not answer changes
+  nothing, **for 72 hours at most** (`PROOF_GRACE_MS`): after that a proof nobody confirmed is lost.
+  **Limit:** between two checks, a record that was removed still proves the domain, six hours at most.
+- **The worker asks the DNS of its host**, with no DNSSEC check of its own. Who can answer the
+  resolver of the worker in place of the zone can prove any domain. Tests never ask a real DNS: the
+  resolver is a seam, and every case hands over a double.
+- **What this does not open yet:** the worker lists the previews of a site in `GET /session/sites`
+  (`previews`), and nothing else reads them. The extension still refuses every wildcard in team mode
+  (`lendsSession`). Letting it take one that the worker lists is a separate change.
+
 ### Linear, connected with OAuth (FRU-134)
 
 Where the worker has a Linear application (`FRUITBACK_LINEAR_OAUTH`), a workspace connects its Linear

@@ -6,7 +6,9 @@ import {
   type ConnectorKind,
   type ConnectorSettings,
   type Destination,
+  type Domain,
   MAX_DESTINATIONS,
+  MAX_DOMAINS,
   type Site,
   VISIBILITIES,
   type Visibility,
@@ -17,6 +19,16 @@ import {
   readLocaleTag,
 } from './accounts.ts';
 import { readBearerToken, verifyIdentityToken } from './identity.ts';
+import {
+  type ProofState,
+  type TxtResolver,
+  checkProof,
+  previewPattern,
+  proofRecord,
+  proofState,
+  readDomain,
+  systemResolver,
+} from './domain-proof.ts';
 import { noteConnectorCall } from './connector-health.ts';
 import { LinearKeyForbidden, LinearKeyRefused, listLinearStates, listLinearTeams } from './linear.ts';
 import { isAcceptableSecret, newSecret, parseTargetUrl, sealTarget, targetLabel } from './rest-connector.ts';
@@ -55,7 +67,42 @@ export type ConsoleApiContext = {
   cookieSession?: (request: Request) => Promise<string | undefined>;
   /** `FRUITBACK_CONSOLE_URL`: the one origin a call with the cookie may change something from. */
   consoleUrl?: string;
+  /** What asks the DNS for the proof of a domain (FRU-103). A suite hands over a double. */
+  resolveTxt?: TxtResolver;
 };
+
+/** How long a domain is not asked again on a click: a person who presses twice asks the DNS once. */
+export const CHECK_AGAIN_MS = 10_000;
+
+/** A domain as the console reads it: what to write in the DNS, and where the proof stands. */
+type DomainView = {
+  id: string;
+  domain: string;
+  state: ProofState;
+  record: { type: 'TXT'; name: string; value: string };
+  /** The wildcard the previews of this domain are, as the extension writes it. */
+  previews: string;
+  previewsSite?: string;
+  verifiedAt?: string;
+  lostAt?: string;
+  checkedAt?: string;
+};
+
+function domainView(domain: Domain, now: number): DomainView {
+  const record = proofRecord(domain.workspaceId, domain.domain);
+  const iso = (time: number | undefined) => (time === undefined ? undefined : new Date(time).toISOString());
+  const at = { verifiedAt: iso(domain.verifiedAt), lostAt: iso(domain.lostAt), checkedAt: iso(domain.checkedAt) };
+
+  return {
+    id: domain.id,
+    domain: domain.domain,
+    state: proofState(domain, now),
+    record: { type: 'TXT', ...record },
+    previews: previewPattern(domain.domain),
+    ...(domain.previewsSite === undefined ? {} : { previewsSite: domain.previewsSite }),
+    ...Object.fromEntries(Object.entries(at).filter(([, value]) => value !== undefined)),
+  };
+}
 
 function json(status: number, body: unknown, headers: Record<string, string>): Response {
   return new Response(JSON.stringify(body), {
@@ -457,6 +504,13 @@ export async function handleConsoleApi(
     return set ? json(200, { destinations: kept }, headers) : json(404, { error: 'not-found' }, headers);
   }
 
+  // The domains a workspace proves it owns, to cover the previews of a site (FRU-103). An admin's
+  // business, like the sites: a domain is what lends a session to every page under it.
+  if (rest === '/domains' || rest.startsWith('/domains/')) {
+    if (!allowed('manage-sites')) return forbidden();
+    return domainRoute(request, rest, workspaceId as string, context, headers);
+  }
+
   if (rest === '/connectors') {
     if (request.method === 'GET') {
       if (!allowed('see-tracker')) return forbidden();
@@ -654,4 +708,77 @@ export async function handleConsoleApi(
   }
 
   return json(404, { error: 'not-found' }, headers);
+}
+
+/**
+ * `/domains` of a workspace (FRU-103): list, add, ask the DNS, name the site whose previews a
+ * proven domain covers, remove.
+ */
+async function domainRoute(
+  request: Request,
+  rest: string,
+  workspace: string,
+  context: ConsoleApiContext,
+  headers: Record<string, string>,
+): Promise<Response> {
+  const now = context.now ?? Date.now();
+  const { accounts } = context;
+
+  if (rest === '/domains') {
+    if (request.method === 'GET') {
+      return json(200, { domains: (await accounts.domains(workspace)).map((each) => domainView(each, now)) }, headers);
+    }
+    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+    const domain = readDomain((await readBody(request))?.domain);
+    if (domain === undefined) return json(400, { error: 'invalid-domain' }, headers);
+    const known = await accounts.domains(workspace);
+    if (!known.some((each) => each.domain === domain) && known.length >= MAX_DOMAINS) {
+      return json(409, { error: 'too-many-domains', max: MAX_DOMAINS }, headers);
+    }
+
+    // Not asked here: the record is written after the console shows it.
+    return json(201, domainView(await accounts.addDomain(workspace, domain, now), now), headers);
+  }
+
+  const match = /^\/domains\/([A-Za-z0-9_-]+)(\/check|\/previews)?$/.exec(rest);
+  // A domain of another workspace answers like one that does not exist.
+  const domain = match === null ? undefined : (await accounts.domains(workspace)).find((each) => each.id === match[1]);
+  if (match === null || domain === undefined) return json(404, { error: 'not-found' }, headers);
+
+  if (match[2] === undefined) {
+    if (request.method !== 'DELETE') return json(405, { error: 'method-not-allowed' }, headers);
+    await accounts.removeDomain(workspace, domain.id);
+
+    return new Response(null, { status: 204, headers });
+  }
+  if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+
+  if (match[2] === '/check') {
+    if (domain.checkedAt !== undefined && now - domain.checkedAt < CHECK_AGAIN_MS) {
+      return json(200, domainView(domain, now), headers);
+    }
+    const answer = await checkProof(context.resolveTxt ?? systemResolver, workspace, domain.domain);
+    await accounts.noteDomainCheck(domain.id, answer, now);
+    const checked = (await accounts.domains(workspace)).find((each) => each.id === domain.id);
+    if (checked === undefined) return json(404, { error: 'not-found' }, headers);
+
+    // `unknown`: the DNS did not answer, and the console says so rather than « not found ».
+    return json(200, { ...domainView(checked, now), ...(answer === 'unknown' ? { unanswered: true } : {}) }, headers);
+  }
+
+  // The previews: a proven domain only. Taking them away is always allowed.
+  const body = await readBody(request);
+  if (body?.site !== null && typeof body?.site !== 'string') return json(400, { error: 'invalid-site' }, headers);
+  const site = body.site ?? undefined;
+  if (site !== undefined && proofState(domain, now) !== 'proven') {
+    return json(409, { error: 'domain-not-proven', state: proofState(domain, now) }, headers);
+  }
+  const set = await accounts.setPreviews(workspace, domain.id, site);
+  if (!set) return json(404, { error: 'not-found' }, headers);
+
+  return json(
+    200,
+    domainView({ ...domain, ...(site === undefined ? { previewsSite: undefined } : { previewsSite: site }) }, now),
+    headers,
+  );
 }

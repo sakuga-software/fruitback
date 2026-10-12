@@ -108,6 +108,31 @@ export type Site = {
 };
 
 /**
+ * A domain a workspace says it owns (FRU-103), and what the DNS said of it. `domain-proof.ts` says
+ * what the proof is, and `proofState` reads the two instants.
+ *
+ * - `verifiedAt`: the last time the DNS showed the record. Absent: never.
+ * - `lostAt`: the first time the DNS answered without it, after it had shown it. Absent: not lost.
+ * - `checkedAt`: the last time the DNS was asked, whatever it said.
+ * - `previewsSite`: the site whose previews are the subdomains of this domain. One site at most: a
+ *   page under the domain must belong to one site. It says what an admin asked, and holds only
+ *   while the proof does.
+ */
+export type Domain = {
+  id: string;
+  workspaceId: string;
+  domain: string;
+  createdAt: number;
+  verifiedAt?: number;
+  lostAt?: number;
+  checkedAt?: number;
+  previewsSite?: string;
+};
+
+/** How many domains a workspace can hold. Each one is a question to the DNS, again and again. */
+export const MAX_DOMAINS = 20;
+
+/**
  * The name of a destination outside the worker (FRU-123): the widget of a member holds it, and sends
  * it back to choose. It says nothing of the connector or of the team, whose ids stay in the worker.
  * It is the same for as long as the site sends to that place.
@@ -300,6 +325,31 @@ export type AccountStore = {
   retryDelivery(workspace: string, connector: string, delivery: string, now: number): Promise<boolean>;
   /** Removes the deliveries that were given up before `before`. Answers how many. */
   dropAbandonedDeliveries(before: number): Promise<number>;
+  /**
+   * Keeps a domain for a workspace (FRU-103), not proven yet. The same domain twice is the same row,
+   * as it stands. The caller gives the domain as `readDomain` wrote it, and bounds the count.
+   */
+  addDomain(workspace: string, domain: string, now: number): Promise<Domain>;
+  /** The domains of a workspace, oldest first. */
+  domains(workspace: string): Promise<Domain[]>;
+  /** Removes a domain, and with it the previews it covered. `false` when it is not of this workspace. */
+  removeDomain(workspace: string, domain: string): Promise<boolean>;
+  /**
+   * What the DNS answered for a domain. `found` sets `verifiedAt` and clears `lostAt`. `missing`
+   * sets `lostAt` when the domain was proven and is not lost yet: the first moment stays. `unknown`
+   * changes neither. Each one sets `checkedAt`. A domain that is gone is ignored.
+   */
+  noteDomainCheck(domain: string, answer: 'found' | 'missing' | 'unknown', now: number): Promise<void>;
+  /**
+   * The domains to ask the DNS again: the ones it showed once, and that were not asked since
+   * `before`, longest ago first. A domain that was never proven is asked when somebody asks.
+   */
+  domainsToCheck(before: number, limit: number): Promise<Domain[]>;
+  /**
+   * Names the site whose previews a domain covers, or none. `false` when the domain or the site is
+   * not of this workspace, and then nothing changes. A site that goes takes its previews with it.
+   */
+  setPreviews(workspace: string, domain: string, site: string | undefined): Promise<boolean>;
   /** Removes the workspace, its members and its sites. Notes already in a tracker stay there. */
   deleteWorkspace(workspace: string): Promise<void>;
   /** Every site, as the client map the routing reads. */

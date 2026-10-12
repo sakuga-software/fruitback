@@ -466,6 +466,72 @@ const VIOLATIONS: Violation<AccountStore>[] = [
       to: 'DELETE FROM email_links WHERE ? IS NOT NULL',
     },
   },
+  {
+    breaks: 'keeps a domain once for a workspace, apart from the same domain of another one',
+    by: 'keeps the same domain twice',
+    wrap: (real) => {
+      // What a table with no unique key on the workspace and the domain answers: a new row each time.
+      const seen = new Set<string>();
+
+      return {
+        ...real,
+        async addDomain(workspace, domain, now) {
+          const row = await real.addDomain(workspace, domain, now);
+          const key = `${workspace}\n${domain}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+
+            return row;
+          }
+
+          return { ...row, id: `${row.id}_again`, createdAt: now };
+        },
+      };
+    },
+  },
+  {
+    breaks: 'removes a domain only from its own workspace',
+    by: 'removes a domain whatever its workspace',
+    replace: {
+      from: "'DELETE FROM domains WHERE workspace_id = ? AND id = ?'",
+      to: "'DELETE FROM domains WHERE ? IS NOT NULL AND id = ?'",
+    },
+  },
+  {
+    breaks: 'writes what the DNS said of a domain, and keeps the first moment of a loss',
+    by: 'writes each loss over the one before',
+    replace: { from: 'WHEN verified_at IS NOT NULL AND lost_at IS NULL THEN', to: 'WHEN verified_at IS NOT NULL THEN' },
+  },
+  {
+    breaks: 'gives the proven domains to ask again, longest ago first, up to the limit',
+    by: 'asks again the domains that were never proven',
+    replace: { from: 'WHERE verified_at IS NOT NULL AND (checked_at', to: 'WHERE 1 = 1 AND (checked_at' },
+  },
+  {
+    breaks: 'names the previews of a domain on a site of its own workspace only, and forgets them with the site',
+    by: 'names a site of any workspace',
+    replace: {
+      from: "'SELECT 1 FROM sites WHERE workspace_id = ? AND id = ?'",
+      to: "'SELECT 1 FROM sites WHERE ? IS NOT NULL AND id = ?'",
+    },
+  },
+  {
+    breaks: 'removes the domains of a workspace it deletes, and only those',
+    by: 'leaves the domains of a workspace it deletes',
+    wrap: (real) => {
+      // What a table with no cascade on the workspace would leave.
+      const left = new Map<string, Awaited<ReturnType<AccountStore['domains']>>>();
+
+      return {
+        ...real,
+        async deleteWorkspace(workspace) {
+          left.set(workspace, await real.domains(workspace));
+          await real.deleteWorkspace(workspace);
+        },
+        domains: async (workspace) => left.get(workspace) ?? real.domains(workspace),
+      };
+    },
+  },
 ];
 
 describeControls('AccountStore', accountCases, VIOLATIONS, SQLITE, async (change) => {

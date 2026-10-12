@@ -425,6 +425,22 @@ for (const subject of SUBJECTS) {
       assert.match(outcome.lines[0] ?? '', /the table accounts differs: nickname is not in PostgreSQL/);
     });
 
+    it('refuses a file that holds a domain, which the copy does not carry (FRU-103)', async () => {
+      const files = await filesOfAWorker();
+      database = await subject.open();
+      const store = createSqliteAccountStore(files.accountsPath);
+      const [workspace] = await store.memberships(
+        (await store.signIn({ provider: 'email', subject: 'alice@acme.dev', email: 'alice@acme.dev' })).id,
+      );
+      await store.addDomain(workspace?.workspace.id as string, 'acme.dev', 1_000);
+
+      const outcome = await copySqliteFiles({ ...files, database, dryRun: false });
+
+      assert.equal(outcome.ok, false);
+      assert.match(outcome.lines[0] ?? '', /the accounts file holds 1 domain\(s\), which the copy does not carry/);
+      assert.deepEqual(await counts(database).catch(() => EMPTY), EMPTY);
+    });
+
     it('refuses a file that a worker of another version wrote', async () => {
       const files = await filesOfAWorker();
       database = await subject.open();

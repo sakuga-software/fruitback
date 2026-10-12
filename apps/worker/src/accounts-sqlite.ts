@@ -3,6 +3,8 @@ import {
   accountOf,
   connectorOf,
   destinationOf,
+  domainOf,
+  DOMAIN_COLUMNS,
   dueDeliveryOf,
   newId,
   pendingDeliveryOf,
@@ -155,6 +157,26 @@ const MIGRATIONS: readonly string[] = [
   // column, so the next setting of a connector needs no migration.
   `
   ALTER TABLE connectors ADD COLUMN settings TEXT NOT NULL DEFAULT '{}';
+  `,
+  // The domains a workspace says it owns, and what the DNS said of each (FRU-103): `domain-proof.ts`.
+  // `verified_at` NULL: never proven. `lost_at` is the first answer of the DNS without the record.
+  // `previews_site_id` names the one site whose previews the domain covers. A table of its own, and
+  // no column on `sites`: the tables that `migrate-to-postgres` copies do not change.
+  `
+  CREATE TABLE domains (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
+    domain TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    verified_at INTEGER,
+    lost_at INTEGER,
+    checked_at INTEGER,
+    previews_site_id TEXT REFERENCES sites (id) ON DELETE SET NULL,
+    UNIQUE (workspace_id, domain)
+  );
+
+  CREATE INDEX domains_by_check ON domains (checked_at);
+  CREATE INDEX domains_by_site ON domains (previews_site_id);
   `,
 ];
 
@@ -570,6 +592,91 @@ export function createSqliteAccountStore(path: string): AccountStore {
 
     async deleteWorkspace(workspace) {
       connect(path).prepare('DELETE FROM workspaces WHERE id = ?').run(workspace);
+    },
+
+    async addDomain(workspace, domain, now) {
+      const database = connect(path);
+      database
+        .prepare(
+          'INSERT INTO domains (id, workspace_id, domain, created_at) VALUES (?, ?, ?, ?) ON CONFLICT (workspace_id, domain) DO NOTHING',
+        )
+        .run(newId('dom'), workspace, domain, now);
+      const added = domainOf(
+        database
+          .prepare(`SELECT ${DOMAIN_COLUMNS} FROM domains WHERE workspace_id = ? AND domain = ?`)
+          .get(workspace, domain) as Record<string, unknown> | undefined,
+      );
+      if (added === undefined) throw new StoreError('The domain could not be read back');
+
+      return added;
+    },
+
+    async domains(workspace) {
+      const rows = connect(path)
+        .prepare(`SELECT ${DOMAIN_COLUMNS} FROM domains WHERE workspace_id = ? ORDER BY created_at, id`)
+        .all(workspace) as Record<string, unknown>[];
+
+      return rows.flatMap((row) => domainOf(row) ?? []);
+    },
+
+    async removeDomain(workspace, domain) {
+      const result = connect(path)
+        .prepare('DELETE FROM domains WHERE workspace_id = ? AND id = ?')
+        .run(workspace, domain);
+
+      return result.changes === 1;
+    },
+
+    async noteDomainCheck(domain, answer, now) {
+      const database = connect(path);
+      if (answer === 'found') {
+        database
+          .prepare('UPDATE domains SET verified_at = ?, lost_at = NULL, checked_at = ? WHERE id = ?')
+          .run(now, now, domain);
+      } else if (answer === 'missing') {
+        // The first moment of a loss stays. A domain never proven has nothing to lose.
+        database
+          .prepare(
+            'UPDATE domains SET lost_at = CASE WHEN verified_at IS NOT NULL AND lost_at IS NULL THEN ? ELSE lost_at END, checked_at = ? WHERE id = ?',
+          )
+          .run(now, now, domain);
+      } else {
+        database.prepare('UPDATE domains SET checked_at = ? WHERE id = ?').run(now, domain);
+      }
+    },
+
+    async domainsToCheck(before, limit) {
+      const rows = connect(path)
+        .prepare(
+          `SELECT ${DOMAIN_COLUMNS} FROM domains WHERE verified_at IS NOT NULL AND (checked_at IS NULL OR checked_at < ?) ORDER BY checked_at, id LIMIT ?`,
+        )
+        .all(before, limit) as Record<string, unknown>[];
+
+      return rows.flatMap((row) => domainOf(row) ?? []);
+    },
+
+    async setPreviews(workspace, domain, site) {
+      const database = connect(path);
+      database.exec('BEGIN IMMEDIATE');
+      try {
+        if (site !== undefined) {
+          const owned = database.prepare('SELECT 1 FROM sites WHERE workspace_id = ? AND id = ?').get(workspace, site);
+          if (owned === undefined) {
+            database.exec('ROLLBACK');
+
+            return false;
+          }
+        }
+        const result = database
+          .prepare('UPDATE domains SET previews_site_id = ? WHERE workspace_id = ? AND id = ?')
+          .run(site ?? null, workspace, domain);
+        database.exec('COMMIT');
+
+        return result.changes === 1;
+      } catch (error) {
+        database.exec('ROLLBACK');
+        throw error;
+      }
     },
 
     async createEmailLink({ codeHash, email, expiresAt }) {

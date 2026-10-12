@@ -195,6 +195,18 @@ function readFile(copy: string, file: 'accounts' | 'sessions', version: number):
       );
     }
 
+    // The domains of a workspace (FRU-103) came after `COPY_SCHEMA`, and the copy does not carry them:
+    // a file that holds one is refused, where a copy would lose it in silence.
+    if (file === 'accounts') {
+      const { count } = source.prepare('SELECT count(*) AS count FROM domains').get() as { count: number };
+      if (count > 0) {
+        throw new Refused(
+          `the accounts file holds ${count} domain(s), which the copy does not carry: remove them in the console, ` +
+            'run the copy, then add them again: the record in the DNS still proves them',
+        );
+      }
+    }
+
     const rows = new Map<PgTable, Row[]>();
     for (const { table } of COPIED.filter((copied) => copied.file === file)) {
       const name = getTableName(table);
