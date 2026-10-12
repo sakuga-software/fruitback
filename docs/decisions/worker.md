@@ -115,21 +115,50 @@ consequences, all deliberate:
   second time — the worker cannot tell. So it answers `201` and logs, and the pin shows up one TTL
   late.
 
-### Redis, built and taken out
+### Redis, built, taken out, and back (FRU-67)
 
-The first version of this ticket shipped a Redis implementation: a RESP2 client over `node:net` with
-no dependency, verified against a real Redis with ACL users, and reviewed over four rounds. It was
-removed before merging, on the maintainer's decision, for two reasons:
+The first version of FRU-49 shipped a Redis implementation: a RESP2 client over `node:net` with no
+dependency, verified against a real Redis with ACL users, and reviewed over four rounds. It was
+removed before merging, on the maintainer's decision: the deployment was one container, and nearly
+every defect the reviews found was in that client, which nobody ran. FRU-67 brings it back for the
+day there are several replicas, with what makes it code that somebody runs.
 
-- the deployment is one container behind Traefik, where the memory store is already the right
-  answer, and nothing needs a second replica;
-- nearly every defect the reviews found was in that client or in its parity with the memory store.
-  Code nobody runs in production goes on collecting those, with nobody to see them.
+- **Off by default.** `FRUITBACK_KV` is `memory` unless it says `redis`, and a worker on memory
+  loads no client: `kvs.ts` imports `redis.ts` at the first call of a worker that asked for it, and
+  `redis-url.ts`, which the boot check of every worker reads, holds no socket.
+- **The contract suite runs against a real Redis in CI.** `kv.test.ts` is one suite for both
+  stores. Its Redis half needs `FRUITBACK_TEST_REDIS_URL`; the job « postgres » has a `redis`
+  service and runs `test:redis`, which fails when the address is missing: a suite that is skipped
+  proves nothing. `redis.test.ts` drives the client with a server that speaks just enough RESP.
+- **`INCRBY` and `PEXPIRE` in one script, and the expiry is set when the key has none.** Two
+  commands can leave a counter with no expiry, and its address is then refused for ever. « The count
+  is 1 » told a new key apart while every increment was one; a batch counts its size (FRU-124), and
+  a key that held `0` would have got a second expiry. `PTTL < 0` is the key that this call made.
+- **Each command is bounded by a timeout that destroys the connection.** The limiter runs on every
+  request, and on a pipelined connection a late reply would go to the next caller.
+- **One reading of the URL** (`parseRedisUrl`), for the boot check and for the client. Two readings
+  let a database that is not a number pass the boot and fail at every request, and a `%zz` in the
+  password throw `URIError`, a `500` in place of a `503`.
+- **`redis://alice@host` sends `AUTH alice ''`.** Without it every command runs as the default user.
+- **The same integers as the memory store**: an increment that is not a positive integer is refused
+  before anything is sent, and a count past 2^53 is refused in `incr`, not in the parser, where a
+  throw would end the connection of every caller.
+- **SNI for a host name only**, never for an IP address: Node refuses it.
+- **No message quotes the URL**, which carries the password, and a refused `AUTH` is not quoted
+  either: some servers repeat what they were sent.
+- **TLS is the operator's choice**: `redis://` is accepted with credentials, and `SECURITY.md` says
+  what then travels in the clear.
 
-What it learned is written up in FRU-67: the atomic `INCR` and `PEXPIRE` script, the timeout that
-destroys a pipelined connection, one URL parser for the boot check and the client, `AUTH` for a
-named user with no password, the 2^53 ceiling, and TLS as the maintainer's call. So is the option to
-measure first, Traefik's `RateLimit` middleware. The removed code is in the history of PR #46.
+**Measured on redis:7 (7.4.11), in a container of this machine**: the whole contract (13 cases, the
+batch and the stored zero among them); a named user with no password and an ACL is held to its
+pattern (`NOPERM` outside it); a password with a space, percent-encoded, signs in, and a wrong one
+is refused without being quoted; two worker processes with a limit of 6 answer six `200` then six
+`429` to twelve reads sent in turn, where on memory they answer twelve `200`; with the Redis paused
+a read answers `503` and `/health` `200`. `rediss://` against a server whose certificate nobody
+signed is refused before a command is sent. **Not measured**: a Redis behind TLS with a certificate
+that an authority signed, Valkey, a cluster or a sentinel (the client speaks to one server), and
+Traefik's `RateLimit` middleware, which the ticket asked to weigh first: it would give one limit
+with no code, and no shared cache.
 
 ### What this does not do
 

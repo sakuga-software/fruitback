@@ -49,6 +49,10 @@ services:
       # caller in one bucket.
       TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-0}
       RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-}
+      # Where the rate limiter and the read cache keep their state. Empty is `memory`: inside the
+      # container, so two replicas are two rate limits. See docs/self-hosting.md for the Redis.
+      FRUITBACK_KV: ${FRUITBACK_KV:-}
+      FRUITBACK_REDIS_URL: ${FRUITBACK_REDIS_URL:-}
       FRUITBACK_STORE: ${FRUITBACK_STORE:-sqlite}
       FRUITBACK_SQLITE_PATH: ${FRUITBACK_SQLITE_PATH:-/data/fruitback.db}
       LINEAR_API_KEY: ${LINEAR_API_KEY:-}

@@ -8,6 +8,7 @@ import { readDatabaseUrl } from './postgres.ts';
 import { DEFAULT_LIMIT } from './rate-limit.ts';
 import type { StoreConfig } from './store-config.ts';
 import { readStoreConfig } from './stores.ts';
+import { type KvConfig, readKvConfig } from './kvs.ts';
 
 /**
  * Configuration comes from the process environment — Dokploy injects it, `docker compose` reads it
@@ -69,6 +70,13 @@ export type WorkerEnv = {
    * store still keeps its sessions on a disk it owns. A separate file, with its own schema.
    */
   FRUITBACK_SESSION_PATH?: string;
+  /**
+   * Where the rate limiter and the read cache keep their state: `memory` (the default) or `redis`
+   * (FRU-67). Each replica on `memory` counts on its own, so two replicas double the rate limit.
+   */
+  FRUITBACK_KV?: string;
+  /** `redis://` or `rediss://`, read only when `FRUITBACK_KV=redis`. It can carry a password. */
+  FRUITBACK_REDIS_URL?: string;
   /**
    * SQLite file holding the accounts, the workspaces and their sites (FRU-96). Set, the worker reads
    * its clients from that file, and the console writes them: `FRUITBACK_CLIENTS` is then refused.
@@ -159,6 +167,8 @@ const configSchema = z.object({
    * Validated by the provider, in `stores.ts`.
    */
   store: z.custom<StoreConfig>(),
+  /** Validated in `kvs.ts`, like the store in `stores.ts` (FRU-67). */
+  kv: z.custom<KvConfig>(),
   /**
    * Shared with the client site so it can mint identity tokens (FRU-9). Absent — the default —
    * means every reporter is self-declared, which is a perfectly good way to run this.
@@ -253,8 +263,10 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   // The selected provider validates its own environment (FRU-33). The in-memory store needs none,
   // which is what removed the stand-in Linear credentials the dev loop used to be handed.
   const store = readStoreConfig(env);
+  const kv = readKvConfig(env);
   const candidate = {
     store: store.ok ? store.config : undefined,
+    kv: kv.ok ? kv.config : undefined,
     identitySecret: env.FRUITBACK_IDENTITY_SECRET || undefined,
     secretsKey: env.FRUITBACK_SECRETS_KEY || undefined,
     authSecret: env.FRUITBACK_AUTH_SECRET || undefined,
@@ -294,6 +306,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   const missing = [
     ...missingFrom(result),
     ...(store.ok ? [] : store.missing),
+    ...(kv.ok ? [] : kv.missing),
     ...(clients.ok ? [] : [`FRUITBACK_CLIENTS (${clients.reason})`]),
   ];
 

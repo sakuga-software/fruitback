@@ -35,7 +35,8 @@ import { type CorsDecision, diagnosticCorsHeaders, openCors, resolveCors } from 
 import { PAIR_PATH, pairPage } from './pair-page.ts';
 import { chargeRateLimit, checkRateLimit, maxBatch } from './rate-limit.ts';
 import { cached, invalidate } from './cache.ts';
-import { type Kv, KvError, processKv } from './kv.ts';
+import { type Kv, KvError } from './kv.ts';
+import { kvFor } from './kvs.ts';
 import { postgresAccountStore, postgresSessionStore } from './postgres-stores.ts';
 import { withoutAddress } from './postgres.ts';
 import {
@@ -228,7 +229,7 @@ export type RequestContext = {
   auth?: Auth | Promise<Auth>;
   /**
    * Where the rate limiter and the read cache keep their state (FRU-49). When it is absent, the
-   * handler uses `processKv`, which gives the one instance of this process and never a new empty one.
+   * handler uses `kvFor`, which gives the one instance of this process and never a new empty one.
    */
   kv?: Kv;
 };
@@ -338,7 +339,7 @@ async function routed(request: Request, env: WorkerEnv, context: RequestContext)
   // burn the same provider quota, and `/session/pair` is a code-guessing oracle without a limit —
   // this check used to sit *below* the `404`, so a new route would have been unmetered by default.
   // An unknown path costs quota too now, which is the right answer for something being probed.
-  const kv = context.kv ?? processKv();
+  const kv = context.kv ?? kvFor(served.kv);
   let allowed: boolean;
 
   try {

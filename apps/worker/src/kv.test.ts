@@ -1,19 +1,23 @@
 import { after, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { type Kv, KvError, createMemoryKv } from './kv.ts';
+import { closeSharedKvs, kvFor, readKvConfig } from './kvs.ts';
+import { createRedisKv } from './redis.ts';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * What every `Kv` must answer. It runs against the memory store here, and a shared store (FRU-67)
- * must pass it too.
+ * What every `Kv` must answer: one suite for the memory store and for Redis (FRU-67).
  *
  * Every other test runs on the memory store, so it answers the way Redis answers: its integer rules
  * were measured against redis:7. A fake that answers differently passes whatever is written next.
+ * **The Redis half runs against a real Redis**, named by `FRUITBACK_TEST_REDIS_URL`: the job
+ * « postgres » of CI sets it, and without it the half is skipped, and says so.
  */
-function contract(name: string, connect: () => Kv) {
-  describe(`the ${name} Kv`, () => {
+function contract(name: string, connect: () => Kv, skip?: string) {
+  describe(`the ${name} Kv`, { skip }, () => {
     const opened: Kv[] = [];
     const open = () => {
       const kv = connect();
@@ -57,6 +61,37 @@ function contract(name: string, connect: () => Kv) {
       assert.equal(await kv.incr(k, 60), 2);
       await sleep(120);
       assert.equal(await kv.incr(k, 60), 1);
+    });
+
+    it('counts a batch by its size, from nothing and from a count', async () => {
+      const kv = open();
+      const k = key();
+
+      assert.equal(await kv.incr(k, 60, 4), 4);
+      assert.equal(await kv.incr(k, 60), 5);
+      assert.equal(await kv.incr(k, 60, 3), 8);
+      await sleep(120);
+      assert.equal(await kv.incr(k, 60, 2), 2, 'a count that starts above one has its expiry too');
+    });
+
+    it('refuses an increment that is not a positive integer, and counts nothing', async () => {
+      const kv = open();
+      const k = key();
+
+      for (const by of [0, -1, 1.5, Number.NaN]) await assert.rejects(kv.incr(k, 10_000, by), KvError, String(by));
+      assert.equal(await kv.get(k), undefined);
+    });
+
+    it('gives an expiry to a count that starts from a stored zero, and keeps the one of a stored value', async () => {
+      // « The count equals the increment » is not « the key is new »: a key that held `0` would get
+      // a second expiry, and one that held `-1` and counts 2 would get none.
+      const kv = open();
+      const k = key();
+
+      await kv.set(k, '0', 150);
+      assert.equal(await kv.incr(k, 10_000), 1);
+      await sleep(250);
+      assert.equal(await kv.get(k), undefined, 'the count outlived the expiry of the value it started from');
     });
 
     it('keeps the first expiry when it counts again', async () => {
@@ -128,6 +163,88 @@ function contract(name: string, connect: () => Kv) {
 
 const memory = createMemoryKv();
 contract('memory', () => ({ ...memory, close: async () => {} }));
+
+const redisUrl = process.env.FRUITBACK_TEST_REDIS_URL;
+// `test:redis` sets this, and CI runs it: with no address the Redis half would be skipped, and a suite
+// that is skipped proves nothing.
+if (process.env.FRUITBACK_TEST_REDIS === 'required' && redisUrl === undefined) {
+  throw new Error('FRUITBACK_TEST_REDIS=required, and FRUITBACK_TEST_REDIS_URL names no Redis');
+}
+contract(
+  'redis',
+  () => createRedisKv(redisUrl as string),
+  redisUrl === undefined ? 'FRUITBACK_TEST_REDIS_URL is not set: the CI job « postgres » sets it' : undefined,
+);
+
+describe('which Kv a worker runs on (FRU-67)', () => {
+  after(closeSharedKvs);
+
+  it('keeps the state in memory when nothing is set, as before', () => {
+    assert.deepEqual(readKvConfig({}), { ok: true, config: { provider: 'memory' } });
+    assert.deepEqual(readKvConfig({ FRUITBACK_KV: ' memory ' }), { ok: true, config: { provider: 'memory' } });
+  });
+
+  it('reads the Redis URL when FRUITBACK_KV=redis', () => {
+    const env = { FRUITBACK_KV: 'redis', FRUITBACK_REDIS_URL: 'rediss://kv.internal:6380/2' };
+
+    assert.deepEqual(readKvConfig(env), {
+      ok: true,
+      config: { provider: 'redis', url: 'rediss://kv.internal:6380/2' },
+    });
+  });
+
+  it('names the variable an operator has to fix', () => {
+    const cases = [
+      { env: { FRUITBACK_KV: 'memcached' }, names: 'FRUITBACK_KV' },
+      { env: { FRUITBACK_KV: 'redis' }, names: 'FRUITBACK_REDIS_URL' },
+      { env: { FRUITBACK_KV: 'redis', FRUITBACK_REDIS_URL: 'http://kv.internal' }, names: 'FRUITBACK_REDIS_URL' },
+      { env: { FRUITBACK_KV: 'redis', FRUITBACK_REDIS_URL: 'not a url' }, names: 'FRUITBACK_REDIS_URL' },
+      // Both used to pass the boot check and fail on every request.
+      {
+        env: { FRUITBACK_KV: 'redis', FRUITBACK_REDIS_URL: 'redis://kv.internal/not-a-db' },
+        names: 'FRUITBACK_REDIS_URL',
+      },
+      { env: { FRUITBACK_KV: 'redis', FRUITBACK_REDIS_URL: 'redis://:%zz@kv.internal' }, names: 'FRUITBACK_REDIS_URL' },
+      // The mistake that leaves two replicas with two limits and no message anywhere.
+      { env: { FRUITBACK_REDIS_URL: 'redis://kv.internal' }, names: 'FRUITBACK_KV' },
+    ];
+
+    for (const { env, names } of cases) {
+      const result = readKvConfig(env);
+      assert.ok(!result.ok && result.missing.some((name) => name.startsWith(names)), JSON.stringify(env));
+    }
+  });
+
+  it('never quotes the URL, which can carry a password', () => {
+    for (const env of [
+      { FRUITBACK_REDIS_URL: 'redis://:hunter2-password@kv.internal' },
+      { FRUITBACK_KV: 'memory', FRUITBACK_REDIS_URL: 'redis://:hunter2-password@kv.internal' },
+      { FRUITBACK_KV: 'redis', FRUITBACK_REDIS_URL: 'redis://:hunter2-password@kv.internal/x' },
+    ]) {
+      const result = readKvConfig(env);
+      assert.ok(!result.ok && !result.missing.join(' ').includes('hunter2'));
+    }
+  });
+
+  it('loads the client of Redis only for a worker that asked for it: no file of every worker imports it', () => {
+    // A worker on memory runs none of that code. `kvs.ts` imports `redis.ts` when it is first called.
+    for (const file of ['kvs.ts', 'kv.ts', 'env.ts', 'app.ts', 'server.ts', 'redis-url.ts']) {
+      const source = readFileSync(new URL(`./${file}`, import.meta.url), 'utf8');
+      assert.doesNotMatch(source, /from '\.\/redis\.ts'/, `${file} imports the client of Redis when it loads`);
+      assert.doesNotMatch(source, /from 'node:(net|tls)'/, `${file} loads a socket`);
+    }
+    assert.match(readFileSync(new URL('./kvs.ts', import.meta.url), 'utf8'), /import\('\.\/redis\.ts'\)/);
+  });
+
+  it('gives one instance for one configuration, and the memory of the process for memory', () => {
+    const redis = { provider: 'redis', url: 'redis://127.0.0.1:1' } as const;
+
+    assert.equal(kvFor(redis), kvFor({ ...redis }));
+    assert.notEqual(kvFor(redis), kvFor({ provider: 'redis', url: 'redis://127.0.0.1:2' }));
+    assert.equal(kvFor({ provider: 'memory' }), kvFor({ provider: 'memory' }));
+    assert.notEqual(kvFor({ provider: 'memory' }), kvFor(redis));
+  });
+});
 
 describe('the memory Kv, bounded', () => {
   /** A hundred entries that expire after one second, and a counter that does not. */

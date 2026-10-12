@@ -262,11 +262,13 @@ empty value counts as absent.
 
 ### Who may call the worker
 
-| Variable                | Default                                        | What it does                                                                                                                    | When it is wrong                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| ----------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ALLOWED_ORIGINS`       | none: required                                 | The sites that may call the worker, comma-separated, or `*`. The `origins` of each client in `FRUITBACK_CLIENTS` join the list. | Absent: Compose does not start. With `docker run`, the container runs and is refused: `/health` answers `503` naming it, and Docker marks it `unhealthy` (measured). An origin that is not exactly what the browser sends — a trailing slash, `http` for `https`, a missing port — is accepted at boot, and each call from the site answers `403 origin-not-allowed`, which the browser shows as a CORS error. A request with no `Origin`, such as `curl`, is not checked. `*` accepts every site. |
-| `TRUSTED_PROXY_HOPS`    | `1` in the worker, `0` in `docker-compose.yml` | The number of proxies between the internet and the container.                                                                   | Not a whole number from 0 up: refused. Too high or too low: see [Behind a reverse proxy](#behind-a-reverse-proxy).                                                                                                                                                                                                                                                                                                                                                                                 |
-| `RATE_LIMIT_PER_MINUTE` | `20`                                           | Requests a minute per client address, reads and writes together, per container. `/health` is not counted.                       | Not a whole number above 0: refused. Too low for a team behind one office address: they share a bucket and get `429 rate-limited`.                                                                                                                                                                                                                                                                                                                                                                 |
+| Variable                | Default                                        | What it does                                                                                                                                                                   | When it is wrong                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ALLOWED_ORIGINS`       | none: required                                 | The sites that may call the worker, comma-separated, or `*`. The `origins` of each client in `FRUITBACK_CLIENTS` join the list.                                                | Absent: Compose does not start. With `docker run`, the container runs and is refused: `/health` answers `503` naming it, and Docker marks it `unhealthy` (measured). An origin that is not exactly what the browser sends — a trailing slash, `http` for `https`, a missing port — is accepted at boot, and each call from the site answers `403 origin-not-allowed`, which the browser shows as a CORS error. A request with no `Origin`, such as `curl`, is not checked. `*` accepts every site. |
+| `TRUSTED_PROXY_HOPS`    | `1` in the worker, `0` in `docker-compose.yml` | The number of proxies between the internet and the container.                                                                                                                  | Not a whole number from 0 up: refused. Too high or too low: see [Behind a reverse proxy](#behind-a-reverse-proxy).                                                                                                                                                                                                                                                                                                                                                                                 |
+| `RATE_LIMIT_PER_MINUTE` | `20`                                           | Requests a minute per client address, reads and writes together, per container unless `FRUITBACK_KV=redis`. `/health` is not counted.                                          | Not a whole number above 0: refused. Too low for a team behind one office address: they share a bucket and get `429 rate-limited`.                                                                                                                                                                                                                                                                                                                                                                 |
+| `FRUITBACK_KV`          | `memory`: inside each container                | Where the rate limiter and the read cache keep their state: `memory` or `redis`. See [Sizing](#sizing-and-more-than-one-replica).                                              | A value that is neither: refused. `redis` with no `FRUITBACK_REDIS_URL`: refused. `memory` with several replicas: each one counts alone, and the limit is multiplied by their number.                                                                                                                                                                                                                                                                                                              |
+| `FRUITBACK_REDIS_URL`   | none                                           | The Redis the replicas share, as `redis://[user]:password@host:port/db`, or `rediss://` for TLS. Read only with `FRUITBACK_KV=redis`. Keep it secret: it carries the password. | Set without `FRUITBACK_KV=redis`: refused. Not a Redis URL, or a database that is not a number, or a password that does not percent-decode: refused, and the message never quotes it. A Redis that does not answer: every metered call answers `503 limiter-unavailable`, and `/health` stays `200`.                                                                                                                                                                                               |
 
 ### Where the seeds live
 
@@ -723,12 +725,50 @@ The database held 2 020 pins in 4.8 MB. Read these numbers with three limits in 
 - **Another machine gives other numbers.** A small VPS core is slower than this one. The shape holds:
   memory stays under 200 MiB, and a page with thousands of pins is the expensive case.
 
-**Run one container.** The rate limiter and the read cache keep their state inside each container.
-Two are two rate limits: `RATE_LIMIT_PER_MINUTE=20` lets 40 a minute through — and up to 78 in a
-burst at a window edge, twice the bound `SECURITY.md` gives for one — with nothing said anywhere, and
-a cold page costs one store call per replica. SQLite adds its own reason: one file on one volume
-belongs to one container. A state the replicas share is not built: it is FRU-67, written up with what
-a first implementation learned.
+**Run one container, unless you give the replicas a Redis.** The rate limiter and the read cache keep
+their state where `FRUITBACK_KV` says. It is `memory` by default: inside each container. Two
+containers are then two rate limits: `RATE_LIMIT_PER_MINUTE=20` lets 40 a minute through, and up to
+78 in a burst at a window edge, twice the bound `SECURITY.md` gives for one, with nothing said
+anywhere, and a cold page costs one store call per replica. SQLite adds its own reason: one file on
+one volume belongs to one container, so several replicas are for a worker on a tracker or on
+PostgreSQL.
+
+Point the replicas at one Redis and they share one limit and one cache (FRU-67):
+
+```yaml
+services:
+  worker:
+    environment:
+      FRUITBACK_KV: redis
+      FRUITBACK_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+  redis:
+    image: redis:7-alpine
+    command: ['redis-server', '--requirepass', '${REDIS_PASSWORD}', '--save', '']
+    restart: unless-stopped
+```
+
+**Generate that password as hex**, with `openssl rand -hex 32`. `REDIS_PASSWORD` goes raw to
+`--requirepass` and inside the URL, and hex is the one form that needs no encoding in either place. A
+password you did not choose is written twice: raw for Redis, percent-encoded in the URL (`@`, `:`,
+`/`, `?`, `#` and `%` among others; an unencoded `#` starts the fragment, and the rest is lost).
+
+`--save ''` on purpose: nothing here outlives its expiry, so there is nothing to write to disk. A
+named user works too (`redis://fruitback:<password>@…`): it needs `GET`, `SET`, `EVAL`, `INCRBY`,
+`PTTL` and `PEXPIRE` on the keys `fruitback:*`, and nothing else. The log line of a worker that
+starts ends with `kv redis`, and a Redis it cannot reach is named there once.
+
+**Treat it as the worker's own memory.** Anyone who can write to that Redis can plant pins on a page
+and clear a rate limit, and a cached answer holds notes and their authors for 15 seconds. Private
+network, password, its own database. `redis://` is plaintext, the password and every cached answer
+alike: the day the path to that Redis leaves a network you control, use `rediss://`.
+
+A Redis that stops answering refuses every metered call with `503`: `/feedback`, `/session/*` and
+the console. `/health` never touches it, so the replicas stay in the load balancer, and they recover
+by themselves when the Redis is back.
+
+**Measured** on two worker processes with `RATE_LIMIT_PER_MINUTE=6`, twelve reads sent in turn to
+one and the other: on `memory`, twelve `200`; on one `redis:7` (7.4.11), six `200` then six `429`.
+With that Redis paused: `503` on a read, `200` on `/health`, and `429` again when it was back.
 
 ## Deploying with Dokploy
 

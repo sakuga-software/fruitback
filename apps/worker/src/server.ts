@@ -10,6 +10,7 @@ import { fakeLinearDeprecationNotice, fakeLinearIgnoredReason } from './store-co
 import { isDevOnlyProvider } from './stores.ts';
 import { resolveClientIp } from './rate-limit.ts';
 import { type Kv, processKv } from './kv.ts';
+import { kvFor } from './kvs.ts';
 import { createSender } from './rest-send.ts';
 
 /** How often the worker looks for a delivery that is due. A first attempt waits this long at most. */
@@ -39,8 +40,9 @@ export function createFruitbackServer(env: WorkerEnv, provided?: SeedStore): Ser
    * lands. A misconfigured process has no store: it only ever answers `/health` and the diagnostic.
    */
   const store = provided ?? (config.ok ? storeFor(config.config) : undefined);
-  // One per process, like the store. The handler falls back to this same instance.
-  const kv = processKv();
+  // One per process, like the store. `kvFor` gives the handler's fallback this same instance. A
+  // worker that is misconfigured meters its diagnostic in memory: it has no address to count at.
+  const kv = config.ok ? kvFor(config.config.kv) : processKv();
 
   return createServer((incoming, response) => {
     void respond(incoming, response, env, trustedProxyHops, store, kv);
@@ -174,8 +176,16 @@ export function startServer(env: WorkerEnv = process.env): Server {
         // thing an operator cannot tell from their own env, and naming a team here was the last
         // place the worker's own logging assumed one.
         `[fruitback] listening on ${host}:${port} · store ${store?.name ?? 'none'} · ` +
-          `origins ${config.config.allowedOrigins.join(', ')} · trusted proxy hops ${config.config.trustedProxyHops}`,
+          `origins ${config.config.allowedOrigins.join(', ')} · trusted proxy hops ${config.config.trustedProxyHops} · ` +
+          `kv ${config.config.kv.provider}`,
       );
+      // FRU-67: asked once, so a Redis that cannot be reached is named at boot, and not first seen
+      // as a `503` on a metered call. The message of a `KvError` never holds the address.
+      if (config.config.kv.provider === 'redis') {
+        kvFor(config.config.kv)
+          .get('fruitback:boot')
+          .catch((error: Error) => console.error(`[fruitback] kv redis did not answer at boot: ${error.message}`));
+      }
       // Asked of the registry rather than of a provider name spelled here, so a second dev-only
       // store (a fixture, a demo) warns without this line having to hear about it.
       if (isDevOnlyProvider(config.config.store.provider)) {

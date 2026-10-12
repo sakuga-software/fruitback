@@ -1,3 +1,4 @@
+import { CACHE_TTL_MS } from './cache.ts';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { SESSION_RENEWAL_SECONDS, SESSION_TTL_SECONDS } from './auth.ts';
@@ -144,6 +145,12 @@ describe('SECURITY.md states what the code does', () => {
       'SECURITY.md does not give the lifetime of a session of better-auth',
     );
     assert.equal(SESSION_RENEWAL_SECONDS, 86_400, 'SECURITY.md says « each day it is used »');
+  });
+
+  it('quotes how long a cached answer sits in the shared store (FRU-67)', () => {
+    const phrase = `for ${CACHE_TTL_MS / 1000} seconds, in the clear`;
+
+    assert.ok(SECURITY.includes(phrase), `SECURITY.md does not say a cached answer is readable ${phrase}`);
   });
 
   it('quotes the token cap and the clock skew the verifier enforces', () => {
