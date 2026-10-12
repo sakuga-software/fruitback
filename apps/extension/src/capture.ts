@@ -76,10 +76,17 @@ async function take(
   return pictureOn(answer.body, site.endpoint);
 }
 
-/** The end of the address of a picture: the route, and the id the worker gave. */
-const PICTURE_PATH = /\/screenshot\/shot_[0-9a-f]{32}$/;
+/** The id that the worker gives a picture: 128 random bits. */
+const PICTURE_ID = /^shot_[0-9a-f]{32}$/;
 
-/** The answer of the worker, read field by field, and only the address of a picture. */
+/**
+ * The picture that the worker kept, at the address the extension reaches that worker by.
+ *
+ * **The address is built here, from the id and the endpoint of the stored entry**, and the `url` of
+ * the answer is not read. A worker behind a proxy sees an inner address for itself when
+ * `FRUITBACK_PUBLIC_URL` is not set, and would name a picture nobody reaches (raised in review). The
+ * endpoint is the one address of that worker that is known to answer from here.
+ */
 function pictureOn(body: string, endpoint: string): CapturedPicture | undefined {
   let parsed: unknown;
   try {
@@ -88,21 +95,11 @@ function pictureOn(body: string, endpoint: string): CapturedPicture | undefined 
     return undefined;
   }
   if (typeof parsed !== 'object' || parsed === null) return undefined;
-  const { url, width, height } = parsed as Record<string, unknown>;
-  if (typeof url !== 'string' || typeof width !== 'number' || typeof height !== 'number') return undefined;
-  try {
-    const address = new URL(url);
-    // The worker names the picture under its public address, which is not always the address the
-    // extension calls it at (a proxy, another host). So the origin is free when it is `https`, and
-    // the path is what is held: a picture of the route, and nothing else of that host.
-    const sameOrigin = address.origin === new URL(endpoint).origin;
-    if (!sameOrigin && address.protocol !== 'https:') return undefined;
-    if (!PICTURE_PATH.test(address.pathname)) return undefined;
-  } catch {
-    return undefined;
-  }
+  const { id, width, height } = parsed as Record<string, unknown>;
+  if (typeof id !== 'string' || !PICTURE_ID.test(id)) return undefined;
+  if (typeof width !== 'number' || typeof height !== 'number') return undefined;
 
-  return { url, width, height };
+  return { url: `${endpoint}${SCREENSHOT_PATH}/${id}`, width, height };
 }
 
 /**

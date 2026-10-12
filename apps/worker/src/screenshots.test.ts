@@ -153,7 +153,9 @@ describe('a picture of a note, sent by the extension (FRU-44)', () => {
 
     const sent = await call(env, store, send, { method: 'POST', token: alice_token, body: picture });
     assert.equal(sent.status, 201);
-    const answer = (await sent.json()) as { url: string; width: number; height: number };
+    const answer = (await sent.json()) as { id: string; url: string; width: number; height: number };
+    assert.equal(answer.url, `https://api.fruitback.test/screenshot/${answer.id}`);
+    assert.match(answer.id, /^shot_[0-9a-f]{32}$/);
     assert.equal(answer.width, 120);
     assert.equal(answer.height, 60);
     const { pathname, origin } = new URL(answer.url);

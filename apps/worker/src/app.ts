@@ -740,7 +740,10 @@ async function handleScreenshot(
     await store.put({ id, workspace, account, png: body, ...size, createdAt: Date.now() });
     const base = config.publicUrl ?? new URL(request.url).origin;
 
-    return json(201, { url: `${base}${SCREENSHOT_PATH}/${id}`, ...size }, headers);
+    // `id` is what a caller builds the address from, at the address it reaches this worker by: `url`
+    // is this worker's own idea of itself, which behind a proxy and with no `FRUITBACK_PUBLIC_URL`
+    // is an inner address (raised in review).
+    return json(201, { id, url: `${base}${SCREENSHOT_PATH}/${id}`, ...size }, headers);
   }
 
   const id = screenshotIdOf(pathname);

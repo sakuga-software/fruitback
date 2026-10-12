@@ -34,7 +34,7 @@ function harness(overrides: Partial<CaptureSeams> = {}) {
       return {
         status: 201,
         body: JSON.stringify({
-          url: 'https://worker.test/screenshot/shot_0123456789abcdef0123456789abcdef',
+          id: 'shot_0123456789abcdef0123456789abcdef',
           width: 200,
           height: 80,
         }),
@@ -99,28 +99,38 @@ describe('the picture of a note (FRU-44)', () => {
     assert.deepEqual(calls, []);
   });
 
-  // FRU-44, raised in review: a worker names its pictures under FRUITBACK_PUBLIC_URL, which can be
-  // another host than the one the extension calls.
-  it('takes the address of a picture under the public address of the worker, when it is https', async () => {
-    const url = 'https://api.acme.dev/fruitback/screenshot/shot_0123456789abcdef0123456789abcdef';
+  // FRU-44, raised in review: behind a proxy, a worker with no FRUITBACK_PUBLIC_URL names itself by
+  // an inner address. The extension builds the address from the endpoint it called.
+  it('names the picture at the endpoint of the stored entry, whatever address the worker gives itself', async () => {
+    const inner = {
+      id: 'shot_0123456789abcdef0123456789abcdef',
+      url: 'http://10.0.0.7:8080/screenshot/shot_0123456789abcdef0123456789abcdef',
+      width: 2,
+      height: 1,
+    };
+    const behind: SiteConfig = { ...PRIVATE, endpoint: 'https://api.acme.dev/fruitback' };
     const { capture } = harness({
-      upload: async () => ({ status: 201, body: JSON.stringify({ url, width: 2, height: 1 }) }),
+      readSite: async () => behind,
+      upload: async () => ({ status: 201, body: JSON.stringify(inner) }),
     });
 
-    assert.deepEqual(await capture(AREA, 'https://acme.dev'), { url, width: 2, height: 1 });
+    assert.deepEqual(await capture(AREA, 'https://acme.dev'), {
+      url: 'https://api.acme.dev/fruitback/screenshot/shot_0123456789abcdef0123456789abcdef',
+      width: 2,
+      height: 1,
+    });
   });
 
-  it('keeps no answer of the worker that is not the address of a picture', async () => {
+  it('keeps no answer of the worker that does not name a picture', async () => {
     for (const answer of [
       { status: 413, body: '{"error":"payload-too-large"}' },
       { status: 201, body: 'not json' },
-      { status: 201, body: '{"url":"https://elsewhere.test/x.png","width":1,"height":1}' },
-      { status: 201, body: '{"url":"https://worker.test/screenshot/shot_0123456789abcdef0123456789abcdef"}' },
       {
         status: 201,
-        body: '{"url":"http://elsewhere.test/screenshot/shot_0123456789abcdef0123456789abcdef","width":1,"height":1}',
+        body: '{"url":"https://worker.test/screenshot/shot_0123456789abcdef0123456789abcdef","width":1,"height":1}',
       },
-      { status: 201, body: '{"url":"https://worker.test/feedback","width":1,"height":1}' },
+      { status: 201, body: '{"id":"../feedback","width":1,"height":1}' },
+      { status: 201, body: '{"id":"shot_0123456789abcdef0123456789abcdef"}' },
     ]) {
       const { capture } = harness({ upload: async () => answer });
 
