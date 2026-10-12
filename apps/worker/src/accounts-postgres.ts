@@ -1,8 +1,9 @@
-import { and, desc, eq, exists, gt, isNotNull, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import {
   accountOf,
   connectorOf,
   destinationOf,
+  domainOf,
   dueDeliveryOf,
   newId,
   pendingDeliveryOf,
@@ -15,11 +16,12 @@ import type { ClientMap } from './clients.ts';
 import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
 import { account, member, organization, user } from './auth-schema.ts';
-import { connectors, deliveries, email_links, site_destinations, sites } from './postgres-schema.ts';
+import { connectors, deliveries, domains, site_destinations, sites } from './postgres-schema.ts';
 import { StoreError } from './store.ts';
 
 /**
- * The accounts in PostgreSQL (FRU-141): the same interface as `accounts-sqlite.ts`, and the same ids.
+ * The accounts in PostgreSQL (FRU-141), the one place they live since FRU-150. The store on a file
+ * that it took the place of is a test fixture now (`accounts-sqlite.fixture.ts`): same interface, same ids.
  * `account-conformance.test.ts` holds both to the same cases.
  *
  * The statements are written with Drizzle (FRU-180). A site, a connector and what goes with them are
@@ -67,6 +69,18 @@ const SITE_WITH_DESTINATION = {
   team_id: site_destinations.team_id,
   project_id: site_destinations.project_id,
   label: site_destinations.label,
+};
+
+/** A domain as `domainOf` reads one. */
+const DOMAIN = {
+  id: domains.id,
+  workspace_id: domains.workspace_id,
+  domain: domains.domain,
+  created_at: domains.created_at,
+  verified_at: domains.verified_at,
+  lost_at: domains.lost_at,
+  checked_at: domains.checked_at,
+  previews_site_id: domains.previews_site_id,
 };
 
 /** A person as `accountOf` reads one: a row of `user`. */
@@ -596,33 +610,104 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       await run((db) => db.delete(organization).where(eq(organization.id, workspace)));
     },
 
-    async createEmailLink({ codeHash, email, expiresAt }) {
-      const now = Date.now();
-      // Old links go when a new one is made, so the table holds what can still be spent.
-      await run((db) =>
-        db.delete(email_links).where(or(lte(email_links.expires_at, now), isNotNull(email_links.spent_at))),
-      );
-      await run((db) =>
-        db.insert(email_links).values({ code_hash: codeHash, email, created_at: now, expires_at: expiresAt }),
-      );
+    async addDomain(workspace, domain, now) {
+      given(now, 'addDomain: now');
+      const rows = await run(async (db) => {
+        await db
+          .insert(domains)
+          .values({ id: newId('dom'), workspace_id: workspace, domain, created_at: now })
+          .onConflictDoNothing({ target: [domains.workspace_id, domains.domain] });
+
+        return db
+          .select(DOMAIN)
+          .from(domains)
+          .where(and(eq(domains.workspace_id, workspace), eq(domains.domain, domain)));
+      });
+      const added = domainOf(rows[0]);
+      if (added === undefined) throw new StoreError('The domain could not be read back');
+
+      return added;
     },
 
-    async spendEmailLink(codeHash, now) {
-      given(codeHash, 'spendEmailLink: codeHash');
-      given(now, 'spendEmailLink: now');
-      // One statement decides who spent it: two tabs that open the same link get one sign-in. The
-      // second update waits for the row, reads `spent_at` again, and changes nothing.
+    async domains(workspace) {
       const rows = await run((db) =>
         db
-          .update(email_links)
-          .set({ spent_at: now })
-          .where(
-            and(eq(email_links.code_hash, codeHash), isNull(email_links.spent_at), gt(email_links.expires_at, now)),
-          )
-          .returning({ email: email_links.email }),
+          .select(DOMAIN)
+          .from(domains)
+          .where(eq(domains.workspace_id, workspace))
+          .orderBy(domains.created_at, domains.id),
       );
 
-      return rows[0]?.email;
+      return rows.flatMap((row) => domainOf(row) ?? []);
+    },
+
+    async removeDomain(workspace, domain) {
+      const removed = await run((db) =>
+        db
+          .delete(domains)
+          .where(and(eq(domains.workspace_id, workspace), eq(domains.id, domain)))
+          .returning({ id: domains.id }),
+      );
+
+      return removed.length === 1;
+    },
+
+    async noteDomainCheck(domain, answer, now) {
+      given(domain, 'noteDomainCheck: domain');
+      given(now, 'noteDomainCheck: now');
+      const changes = {
+        found: { verified_at: now, lost_at: null, checked_at: now },
+        missing: {
+          // The first moment of a loss stays. A domain never proven has nothing to lose.
+          lost_at: sql`CASE WHEN ${domains.verified_at} IS NOT NULL AND ${domains.lost_at} IS NULL THEN ${now}::bigint ELSE ${domains.lost_at} END`,
+          checked_at: now,
+        },
+        unknown: { checked_at: now },
+      };
+      await run((db) => db.update(domains).set(changes[answer]).where(eq(domains.id, domain)));
+    },
+
+    async domainsToCheck(before, limit) {
+      given(before, 'domainsToCheck: before');
+      rowLimit(limit);
+      const rows = await run((db) =>
+        db
+          .select(DOMAIN)
+          .from(domains)
+          .where(and(isNotNull(domains.verified_at), or(isNull(domains.checked_at), lt(domains.checked_at, before))))
+          // A proven domain was asked, so `checked_at` holds a number: no NULL to place.
+          .orderBy(domains.checked_at, domains.id)
+          .limit(limit),
+      );
+
+      return rows.flatMap((row) => domainOf(row) ?? []);
+    },
+
+    async setPreviews(workspace, domain, site) {
+      // One statement: the site is checked in the statement that writes it, so no site of another
+      // workspace is ever named, even by two calls at the same moment.
+      const changed = await run((db) =>
+        db
+          .update(domains)
+          .set({ previews_site_id: site ?? null })
+          .where(
+            and(
+              eq(domains.workspace_id, workspace),
+              eq(domains.id, domain),
+              site === undefined
+                ? undefined
+                : exists(
+                    db
+                      .select({ id: sites.id })
+                      .from(sites)
+                      .where(and(eq(sites.workspace_id, workspace), eq(sites.id, site))),
+                  ),
+            ),
+          )
+          .returning({ id: domains.id }),
+      );
+
+      return changed.length === 1;
     },
 
     async clientMap() {

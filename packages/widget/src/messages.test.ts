@@ -14,6 +14,7 @@ import { FRENCH } from './locale-fr.ts';
 import { createCaptureHost } from './host.ts';
 import { type SendFailure, createComposer } from './composer.ts';
 import { createOfferedDestinations } from './destinations.ts';
+import type { Draft } from './drafts.ts';
 import { createConfigPanel } from './panel.ts';
 import { type ReadState, createSidebar } from './sidebar.ts';
 import { feedbackAsText, placementOf } from './export.ts';
@@ -250,6 +251,8 @@ describe('every word the widget shows', () => {
       host: host.panel,
       translator,
       onSubmit: () => new Promise<boolean | SendFailure>((resolve) => (answer = resolve)),
+      // Offered, so « Keep for later » is drawn (FRU-124).
+      keep: { offered: () => true, onKeep: async () => true },
       // Two places, so the line of where a note goes is drawn. The second has no name of its own.
       destinations: {
         offered: places.get,
@@ -259,7 +262,14 @@ describe('every word the widget shows', () => {
       },
     });
     cleanup.push(() => composer.destroy());
-    const overlay = createOverlay({ document: page.document, host: host.root, translator });
+    // The first issue is drawn as a note kept for later, not sent (FRU-124).
+    let draftIssue: unknown;
+    const overlay = createOverlay({
+      document: page.document,
+      host: host.root,
+      translator,
+      isDraft: (issue) => issue === draftIssue,
+    });
     cleanup.push(() => overlay.destroy());
 
     const found = seedIssueFixture({
@@ -308,7 +318,9 @@ describe('every word the widget shows', () => {
         },
       }),
     });
-    overlay.render([found, detached, placedByPosition]);
+    const kept = seedIssueFixture({ id: 'draft:sd_kept', seed: seedFixture({ id: 'sd_kept', note: 'NOTE KEPT' }) });
+    draftIssue = kept;
+    overlay.render([found, detached, placedByPosition, kept]);
 
     const snapshots: string[] = [];
     host.start();
@@ -330,17 +342,28 @@ describe('every word the widget shows', () => {
     const listed = {
       entries: overlay.resolutions().map((each) => ({ issue: each.issue, placement: placementOf(each) })),
       state: 'read' as ReadState,
+      drafts: [{ seed: kept.seed }] as Draft[],
     };
     const sidebar = createSidebar({
       document: page.document,
       host: host.root,
       translator,
       entries: () => listed.entries,
+      // One note kept for later, then none once it is sent (FRU-124).
+      drafts: () => listed.drafts,
+      onSendDrafts: async () => {
+        listed.drafts = [];
+
+        return { sent: 1 };
+      },
       onSelect: () => {},
       readState: () => listed.state,
     });
     cleanup.push(() => sidebar.destroy());
     sidebar.open();
+    snapshots.push(...shown(host.root));
+    (host.root.querySelector('[data-fruitback-send-drafts]') as HTMLButtonElement).click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
     snapshots.push(...shown(host.root));
     listed.entries = [];
     sidebar.refresh();
@@ -370,7 +393,7 @@ describe('every word the widget shows', () => {
     await settle();
     snapshots.push(...shown(host.root));
     // Each cause of a failed send has its own sentence (FRU-156).
-    for (const failure of ['wait', 'refused', 'too-large'] as const) {
+    for (const failure of ['wait', 'refused', 'signed-out', 'too-large'] as const) {
       send.click();
       answer(failure);
       await settle();
@@ -378,6 +401,11 @@ describe('every word the widget shows', () => {
     }
     send.click();
     answer(true);
+    await settle();
+    snapshots.push(...shown(host.root));
+    // Kept for later rather than sent (FRU-124).
+    composer.open({ left: 0, top: 0, bottom: 10, right: 10 });
+    (composer.element.querySelector('[data-fruitback-keep]') as HTMLButtonElement).click();
     await settle();
     snapshots.push(...shown(host.root));
 
@@ -427,7 +455,7 @@ describe('every word the widget shows', () => {
     );
 
     // A relative date comes from `Intl`, not from a catalog, so it counts as data here.
-    const relativeDates = [found, detached, placedByPosition]
+    const relativeDates = [found, detached, placedByPosition, kept]
       .flatMap((issue) => [issue.seed.createdAt, ...(issue.comments ?? []).map((comment) => comment.createdAt)])
       .map((written) => translator.relative(new Date(written)));
     const data = [
@@ -441,6 +469,9 @@ describe('every word the widget shows', () => {
       'https://…',
       'acme',
       'PLACE ONE',
+      // A note kept for later, and the path of its page (FRU-124).
+      'NOTE KEPT',
+      '/pricing',
     ];
     const untranslated = snapshots.filter((text) => {
       const rest = data.reduce((left, value) => left.split(value).join(''), text.replace(/⟦[^⟧]+⟧/g, ''));

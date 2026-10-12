@@ -36,7 +36,6 @@ async function stubWorker(page: Page, locale: Locale): Promise<string[]> {
 
       return route.fulfill({ status: 204 });
     }
-    if (pathname === '/console/session/refresh') return json({ accessToken: 'token' });
     if (pathname === '/console/me') return json(me);
     if (pathname === '/console/workspaces/w1/sites') return json({ sites: [site] });
     if (pathname === '/console/workspaces/w1/connectors') return json({ connectors: [connector], available: true });

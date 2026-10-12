@@ -18,6 +18,14 @@ describe('a list read from the worker (FRU-162)', () => {
     assert.deepEqual(listedOf({ ok: true, data: { sites: ['a'] } }, sites), ['a']);
   });
 
+  it('is failed for an answer that says yes and holds no list', () => {
+    assert.equal(listedOf({ ok: true, data: undefined as unknown as { sites: string[] } }, sites), 'failed');
+    assert.equal(listedOf({ ok: true, data: {} as { sites: string[] } }, sites), 'failed');
+    // A selector written for a list, on an answer that is an object: it throws, and that is `failed`.
+    const pending = (data: { status: string }[]) => data.filter((each) => each.status === 'pending');
+    assert.equal(listedOf({ ok: true, data: {} as { status: string }[] }, pending), 'failed');
+  });
+
   it('has no items to count while it is loading or failed', () => {
     assert.equal(known('loading'), undefined);
     assert.equal(known('failed'), undefined);

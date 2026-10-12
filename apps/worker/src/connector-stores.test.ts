@@ -1,49 +1,23 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { type AccountStore, DEFAULT_CONNECTOR_SETTINGS } from './accounts.ts';
-import { closeAccountConnections, createSqliteAccountStore } from './accounts-sqlite.ts';
-import { handleRequest } from './app.ts';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
 import { createConnectorStores } from './connectors.ts';
-import type { WorkerEnv } from './env.ts';
-import { signIdentityToken } from './identity.ts';
+import { type CallOptions, type World, callOn, memberOf, signInTo, worlds } from './console-world.fixture.ts';
 import { createMemoryKv } from './kv.ts';
 import { seal } from './secrets.ts';
-import { closeSessionConnections } from './session-sqlite.ts';
 import { type SeedStore, StoreError } from './store.ts';
 
-const SECRET = 'a-worker-secret-of-exactly-enough';
 const SECRETS_KEY = 'another-secret-that-opens-the-connectors';
-const CONSOLE = 'https://app.fruitback.test';
-const directories: string[] = [];
+const opened = worlds();
 
 afterEach(() => {
   mock.restoreAll();
-  closeAccountConnections();
-  closeSessionConnections();
-  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
 });
 
-function envWith(): WorkerEnv {
-  const directory = mkdtempSync(join(tmpdir(), 'fruitback-connector-stores-'));
-  directories.push(directory);
-
-  return {
-    FRUITBACK_STORE: 'sqlite',
-    FRUITBACK_SQLITE_PATH: join(directory, 'fb.db'),
-    ALLOWED_ORIGINS: CONSOLE,
-    FRUITBACK_IDENTITY_SECRET: SECRET,
-    FRUITBACK_SECRETS_KEY: SECRETS_KEY,
-    FRUITBACK_SESSION_PATH: join(directory, 'sessions.db'),
-    FRUITBACK_ACCOUNTS_PATH: join(directory, 'accounts.db'),
-    FRUITBACK_CONSOLE_URL: CONSOLE,
-    // The path of the SQLite store is that store's own variable, so `WorkerEnv` does not name it.
-  } as WorkerEnv;
+function envWith(): Promise<World> {
+  return opened({ env: { FRUITBACK_SECRETS_KEY: SECRETS_KEY } });
 }
 
 /** Every `contains` of a filter, whatever its shape: a read names the page, and can name more. */
@@ -145,36 +119,16 @@ function linearOf(organisations: Record<string, string>) {
   return issues;
 }
 
-let ip = 0;
-function call(
-  env: WorkerEnv,
-  method: string,
-  path: string,
-  options: { token?: string; body?: unknown; origin?: string } = {},
-): Promise<Response> {
-  ip += 1;
-
-  return handleRequest(
-    new Request(`https://api.fruitback.test${path}`, {
-      method,
-      headers: {
-        Origin: options.origin ?? CONSOLE,
-        ...(options.token === undefined ? {} : { Authorization: `Bearer ${options.token}` }),
-        ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
-      },
-      ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
-    }),
-    env,
-    { clientIp: `203.0.113.${ip % 250}`, kv: createMemoryKv() },
-  );
+/** A request with a cache of its own: no read is answered by the cache of the request before. */
+function call(env: World, method: string, path: string, options: CallOptions = {}): Promise<Response> {
+  return callOn(env, method, path, options, { kv: createMemoryKv() });
 }
 
 /** A workspace with its owner and one site, connected to Linear with its own key, through the console. */
-async function tenant(env: WorkerEnv, name: string, origin: string, apiKey: string) {
-  const accounts = createSqliteAccountStore(env.FRUITBACK_ACCOUNTS_PATH as string);
-  const email = `owner@${name.toLowerCase()}.dev`;
-  const account = await accounts.signIn({ provider: 'email', subject: email, email });
-  const token = await signIdentityToken({ sub: account.id, exp: Math.floor(Date.now() / 1000) + 600 }, SECRET);
+async function tenant(env: World, name: string, origin: string, apiKey: string) {
+  const accounts = env.accounts;
+  const { id, token } = await signInTo(env, `owner@${name.toLowerCase()}.dev`);
+  const account = { id };
   const workspace = await accounts.createWorkspace(name, account.id);
   const site = await accounts.addSite(workspace.id, { origin, visibility: 'everyone' });
   const base = `/console/workspaces/${workspace.id}`;
@@ -219,7 +173,7 @@ async function tenant(env: WorkerEnv, name: string, origin: string, apiKey: stri
 
 describe('two workspaces on one worker, each with its own tracker (FRU-102)', () => {
   it('writes the notes of each one in its own tracker, and reads them back from there only', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = linearOf({ lin_api_the_key_of_acme: 'acme', lin_api_the_key_of_globex: 'globex' });
     const acme = await tenant(env, 'Acme', 'https://staging.acme.dev', 'lin_api_the_key_of_acme');
     const globex = await tenant(env, 'Globex', 'https://staging.globex.dev', 'lin_api_the_key_of_globex');
@@ -243,7 +197,7 @@ describe('two workspaces on one worker, each with its own tracker (FRU-102)', ()
   });
 
   it('keeps the notes of one workspace when the other one loses its connector', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = linearOf({ lin_api_the_key_of_acme: 'acme', lin_api_the_key_of_globex: 'globex' });
     const acme = await tenant(env, 'Acme', 'https://staging.acme.dev', 'lin_api_the_key_of_acme');
     const globex = await tenant(env, 'Globex', 'https://staging.globex.dev', 'lin_api_the_key_of_globex');
@@ -262,6 +216,49 @@ describe('two workspaces on one worker, each with its own tracker (FRU-102)', ()
       (await globex.read()).map(([, text]) => text),
       ['Globex: before.', 'Globex: after.'],
     );
+  });
+});
+
+describe('the stages a read reports, for a site that sends to the tracker of its workspace (FRU-188)', () => {
+  it('are the stages of that tracker, not the ones of the store of the worker', async () => {
+    const env = await envWith();
+    linearOf({ lin_api_the_key_of_acme: 'acme' });
+    const acme = await tenant(env, 'Acme', 'https://staging.acme.dev', 'lin_api_the_key_of_acme');
+    const plain = await acme.accounts.addSite(acme.workspace.id, {
+      origin: 'https://plain.acme.dev',
+      visibility: 'everyone',
+    });
+    // The store of the worker reports three stages, as GitHub does (`GITHUB_STAGES`).
+    const own: SeedStore = {
+      name: 'three-stages',
+      stages: ['green', 'ripe', 'composted'],
+      scope: () => '',
+      create: async () => ({ id: 'x', identifier: 'X-1' }),
+      findForPage: async () => [],
+    };
+    const stagesOf = async (origin: string, site: string) => {
+      const answer = await callOn(
+        env,
+        'GET',
+        `/feedback?url=${encodeURIComponent(`${origin}/`)}&client=${site}`,
+        { origin },
+        { kv: createMemoryKv(), store: own },
+      );
+      assert.equal(answer.status, 200, await answer.clone().text());
+
+      return ((await answer.json()) as { stages: string[] }).stages;
+    };
+
+    // Linear answers for this site: its five stages.
+    assert.deepEqual(await stagesOf('https://staging.acme.dev', acme.site.id), [
+      'seeded',
+      'green',
+      'ripening',
+      'ripe',
+      'composted',
+    ]);
+    // A site with no destination is read in the store of the worker: its three.
+    assert.deepEqual(await stagesOf('https://plain.acme.dev', plain.id), ['green', 'ripe', 'composted']);
   });
 });
 
@@ -332,7 +329,7 @@ describe('the store of a connector, built for the request that asks for it (FRU-
 
 describe('what a workspace sets on its connector (FRU-102)', () => {
   it('takes the replies away and gives a state another stage, for the connector it is set on only', async () => {
-    const env = envWith();
+    const env = await envWith();
     linearOf({ lin_api_the_key_of_acme: 'acme', lin_api_the_key_of_globex: 'globex' });
     const acme = await tenant(env, 'Acme', 'https://staging.acme.dev', 'lin_api_the_key_of_acme');
     const globex = await tenant(env, 'Globex', 'https://staging.globex.dev', 'lin_api_the_key_of_globex');
@@ -366,7 +363,7 @@ describe('what a workspace sets on its connector (FRU-102)', () => {
   });
 
   it('lists the states of the teams its sites send to, each with the stage of its type, and its settings', async () => {
-    const env = envWith();
+    const env = await envWith();
     linearOf({ lin_api_the_key_of_acme: 'acme' });
     const acme = await tenant(env, 'Acme', 'https://staging.acme.dev', 'lin_api_the_key_of_acme');
 
@@ -383,7 +380,7 @@ describe('what a workspace sets on its connector (FRU-102)', () => {
   });
 
   it('refuses settings that are not settings, a role that does not manage the workspace, and another workspace', async () => {
-    const env = envWith();
+    const env = await envWith();
     linearOf({ lin_api_the_key_of_acme: 'acme', lin_api_the_key_of_globex: 'globex' });
     const acme = await tenant(env, 'Acme', 'https://staging.acme.dev', 'lin_api_the_key_of_acme');
     const globex = await tenant(env, 'Globex', 'https://staging.globex.dev', 'lin_api_the_key_of_globex');
@@ -406,21 +403,13 @@ describe('what a workspace sets on its connector (FRU-102)', () => {
     const read = await call(env, 'GET', `${globex.base}/connectors/${acme.connector}/states`, { token: globex.token });
     assert.equal(read.status, 404);
 
-    // A member sees the tracker and does not change what the workspace set; an admin does. The file
-    // is written by hand: no route invites yet (FRU-104).
+    // A member sees the tracker and does not change what the workspace set; an admin does.
     for (const [role, status] of [
       ['member', 403],
       ['admin', 200],
     ] as const) {
-      const email = `${role}@acme.dev`;
-      const person = await acme.accounts.signIn({ provider: 'email', subject: email, email });
-      closeAccountConnections();
-      const database = new DatabaseSync(env.FRUITBACK_ACCOUNTS_PATH as string);
-      database
-        .prepare('INSERT INTO members (workspace_id, account_id, role, created_at) VALUES (?, ?, ?, ?)')
-        .run(acme.workspace.id, person.id, role, Date.now());
-      database.close();
-      const token = await signIdentityToken({ sub: person.id, exp: Math.floor(Date.now() / 1000) + 600 }, SECRET);
+      const { id: person, token } = await signInTo(env, `${role}@acme.dev`);
+      await memberOf(env, acme.workspace.id, person, role);
 
       const asked = await call(env, 'POST', `${acme.base}/connectors/${acme.connector}/settings`, {
         token,

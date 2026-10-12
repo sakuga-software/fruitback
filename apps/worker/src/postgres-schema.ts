@@ -17,7 +17,7 @@ import { organization } from './auth-schema.ts';
  * Every instant is a `BIGINT` of milliseconds, as in the SQLite files: `now` comes from the worker,
  * and the same number goes in both. `mode: 'number'` answers it as a number.
  *
- * The tables are the ones of `accounts-sqlite.ts` after its seven migrations, and of
+ * The tables are the ones of `accounts-sqlite.fixture.ts` after its seven migrations, and of
  * `session-sqlite.ts` after its three, with the same names, **but four** (FRU-146): a person, a way
  * to sign in, a workspace and a membership are rows of `user`, `account`, `organization` and
  * `member`, the tables of better-auth in `auth-schema.ts`. `drizzle.config.ts` reads both files. A
@@ -118,6 +118,40 @@ export const deliveries = pgTable(
     }).onDelete('cascade'),
     index('deliveries_due').on(table.next_at),
     index('deliveries_by_connector').on(table.connector_id),
+  ],
+);
+
+/**
+ * The domains a workspace says it owns, and what the DNS said of each (FRU-103): `domain-proof.ts`.
+ * `verified_at` NULL: never proven. `lost_at` is the first answer of the DNS without the record.
+ * `previews_site_id` names the one site whose previews the domain covers.
+ */
+export const domains = pgTable(
+  'domains',
+  {
+    id: text('id').primaryKey(),
+    workspace_id: text('workspace_id').notNull(),
+    domain: text('domain').notNull(),
+    created_at: instant('created_at').notNull(),
+    verified_at: instant('verified_at'),
+    lost_at: instant('lost_at'),
+    checked_at: instant('checked_at'),
+    previews_site_id: text('previews_site_id'),
+  },
+  (table) => [
+    foreignKey({
+      name: 'domains_workspace_id_fkey',
+      columns: [table.workspace_id],
+      foreignColumns: [organization.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'domains_previews_site_id_fkey',
+      columns: [table.previews_site_id],
+      foreignColumns: [sites.id],
+    }).onDelete('set null'),
+    unique('domains_workspace_id_domain_key').on(table.workspace_id, table.domain),
+    index('domains_by_check').on(table.checked_at),
+    index('domains_by_site').on(table.previews_site_id),
   ],
 );
 

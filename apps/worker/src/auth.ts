@@ -8,7 +8,7 @@ import { type AdapterOfAuth, keepAtRest } from './auth-at-rest.ts';
 import { ORGANIZATION_PATHS } from './organization-paths.ts';
 import { FRUITBACK_RESOURCE, roleStatements } from './auth-roles.ts';
 import { type WorkerConfig, hasAuth } from './env.ts';
-import type { OAuthClient } from './oauth-sign-in.ts';
+import type { OAuthClient } from './oauth-client.ts';
 import { type PgDatabase, type PgPool, databaseFor, withoutAddress } from './postgres.ts';
 import { migrated, sessionStoreOn } from './postgres-stores.ts';
 import type { SessionStore } from './session.ts';
@@ -19,7 +19,8 @@ import type { SessionStore } from './session.ts';
  *
  * This file says how better-auth is configured for the console, and builds one instance for the
  * process when `FRUITBACK_AUTH_SECRET` and `FRUITBACK_DATABASE_URL` are both set. `auth-routes.ts`
- * serves it under `/console/auth/`, the paths of `SERVED_PATHS` only, beside the path of before.
+ * serves it under `/console/auth/`, the paths of `SERVED_PATHS` only. It is the one way to sign in to
+ * the console since FRU-150.
  *
  * **This file imports better-auth as types only, and loads it when the instance is built**, as
  * `postgres.ts` does for its driver. A worker that has better-auth switched off loads nothing of it:
@@ -47,13 +48,14 @@ export const AUTH_PLUGINS = ['organization', 'magic-link', 'fruitback-at-rest'] 
  *
  * Not here, and on purpose: `/sign-in/magic-link` and `/magic-link/verify` (the worker's own routes
  * call them in the process: the token of a link travels after a `#`, and never in an address),
- * `/list-sessions` (a route of the worker lists them, with no token), and the five of
- * `DISABLED_PATHS`. The routes of the organization plugin have their own list, with a rule for each:
+ * `/list-sessions` (a route of the worker lists them, with no token), `/get-session` (FRU-206: the
+ * console reads who is signed in on `/console/me`, and this route answers the token of the session
+ * to a script; the worker reads a session with `auth.api.getSession`, in the process), and the five
+ * of `DISABLED_PATHS`. The routes of the organization plugin have their own list, with a rule for each:
  * `ORGANIZATION_PATHS` of `auth-organization.ts` (FRU-149).
  */
 export const SERVED_PATHS: Readonly<Record<string, string>> = {
   '/ok': 'it says that better-auth answers, and nothing else',
-  '/get-session': 'the console reads who is signed in',
   '/sign-out': 'it ends the session of this cookie',
   '/revoke-sessions': '« sign out everywhere »: every session of the person',
   '/sign-in/social': 'it starts a sign-in with GitHub or Google',
@@ -62,7 +64,10 @@ export const SERVED_PATHS: Readonly<Record<string, string>> = {
   '/error': 'better-auth sends a person here when a sign-in fails before it knows the console',
 };
 
-/** How long a link of the e-mail lives: as the link of before (`EMAIL_LINK_TTL_SECONDS`, FRU-98). */
+/** How long an invitation waits (FRU-104). `auth-organization.ts` says the same number in its message. */
+export const INVITATION_SECONDS = 7 * 24 * 60 * 60;
+
+/** How long a link of the e-mail lives: fifteen minutes, as since FRU-98. */
 export const MAGIC_LINK_TTL_SECONDS = 15 * 60;
 
 /**
@@ -193,6 +198,12 @@ export const REFUSED_PLUGINS: Readonly<Record<string, string>> = {
  */
 export const ROLE_REFUSED = 'ROLE_IS_NOT_ONE_OF_THE_FOUR';
 
+/**
+ * The code of an invitation that nobody stands behind any more (FRU-209): whoever made it was
+ * removed from the workspace, left it, or may no longer invite there.
+ */
+export const INVITER_GONE = 'INVITER_NO_LONGER_INVITES';
+
 /** The part of the configuration of the worker that better-auth is built from. */
 export type AuthConfig = {
   /** `FRUITBACK_AUTH_SECRET`. It signs the cookie of a session. */
@@ -205,7 +216,7 @@ export type AuthConfig = {
   databaseUrl: string;
   /** `FRUITBACK_AUTH_GITHUB_OAUTH`: the second GitHub App, the one of better-auth (FRU-147). */
   github?: OAuthClient;
-  /** `FRUITBACK_GOOGLE_OAUTH`: the same client as the path of before, with a second callback. */
+  /** `FRUITBACK_GOOGLE_OAUTH`: the Google client, with the callback of better-auth. */
   google?: OAuthClient;
   /** `FRUITBACK_AUTH_TRACK_IP`: keep the address and the user agent of a session, and limit by address. */
   trackIp: boolean;
@@ -317,12 +328,22 @@ export async function authOptions(
     // trackers first and ends the sessions of its extensions. The route of the plugin does neither,
     // and a call to it in the process is refused too.
     disableOrganizationDeletion: true,
+    // The invitations (FRU-104). Written, though three are the defaults of 1.7.7: an invitation is
+    // read, accepted and declined by a session whose address is verified, a second invitation of one
+    // address is refused while the first waits, and a workspace has a hundred waiting at most.
+    invitationExpiresIn: INVITATION_SECONDS,
+    invitationLimit: 100,
+    cancelPendingInvitationsOnReInvite: false,
+    requireEmailVerificationOnInvitation: true,
     organizationHooks: {
       // Every way the plugin writes a role: a member it adds (the owner of a new workspace is one),
       // a role it changes, an invitation it keeps.
       beforeAddMember: async ({ member }) => refuseOtherRoles(member.role),
       beforeUpdateMemberRole: async ({ newRole }) => refuseOtherRoles(newRole),
       beforeCreateInvitation: async ({ invitation }) => refuseOtherRoles(invitation.role),
+      // Accepting writes the role of the invitation on a member, and runs no `beforeAddMember`
+      // (read in `routes/crud-invites.mjs` of 1.7.7): a row that holds another role is refused here.
+      beforeAcceptInvitation: async ({ invitation }) => refuseOtherRoles(invitation.role),
       // `/organization/leave` runs no hook (read in `routes/crud-members.mjs` of 1.7.7): the route of
       // the worker ends the sessions of somebody who leaves, in `auth-organization.ts`.
       afterRemoveMember: async ({ member }) =>

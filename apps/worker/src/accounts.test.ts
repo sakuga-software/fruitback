@@ -16,14 +16,13 @@ import {
   normalizeEmail,
   siteOrigin,
 } from './accounts.ts';
-import { closeAccountConnections, createSqliteAccountStore } from './accounts-sqlite.ts';
+import { closeAccountConnections, createSqliteAccountStore } from './accounts-sqlite.fixture.ts';
 import { readExposureNotice } from './clients.ts';
-import { type WorkerEnv, readConfig } from './env.ts';
-import { closeSessionConnections, createSqliteSessionStore } from './session-sqlite.ts';
+import { WORKER, type World, callOn, signInTo, worlds } from './console-world.fixture.ts';
+import { readConfig } from './env.ts';
 import { createPairing, redeemPairing } from './session.ts';
 import { handleRequest } from './app.ts';
 
-const SECRET = 'a-worker-secret-of-exactly-enough';
 const directories: string[] = [];
 
 function scratch(): string {
@@ -35,7 +34,6 @@ function scratch(): string {
 
 afterEach(() => {
   closeAccountConnections();
-  closeSessionConnections();
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
 });
 
@@ -100,8 +98,10 @@ describe('the words people paste', () => {
 });
 
 /**
- * What is true of the SQLite file alone. The rules of every `AccountStore` are in
- * `account-conformance.fixture.ts`, and `account-conformance.test.ts` runs them on this store.
+ * What is true of the SQLite file alone. Since FRU-150 this store is a fixture: the worker keeps its
+ * accounts in PostgreSQL, and the copy command `migrate-to-postgres` reads the file. The rules of
+ * every `AccountStore` are in `account-conformance.fixture.ts`, and `account-conformance.test.ts`
+ * runs them on this store.
  */
 describe('the SQLite account store', () => {
   it('leaves no site of a deleted workspace in the file, read with the foreign keys off', async () => {
@@ -124,50 +124,30 @@ describe('the SQLite account store', () => {
 });
 
 describe('a worker that reads its clients from the accounts (FRU-96)', () => {
-  function envWith(directory: string, overrides: Partial<WorkerEnv> = {}): WorkerEnv {
-    return {
-      FRUITBACK_STORE: 'memory',
-      // The console's own origin. A site's origin is added when the site is.
-      ALLOWED_ORIGINS: 'https://app.fruitback.test',
-      FRUITBACK_IDENTITY_SECRET: SECRET,
-      FRUITBACK_SESSION_PATH: join(directory, 'sessions.db'),
-      FRUITBACK_ACCOUNTS_PATH: join(directory, 'accounts.db'),
-      FRUITBACK_CONSOLE_URL: 'https://app.fruitback.test',
-      ...overrides,
-    };
-  }
+  const envWith = worlds();
 
-  let ip = 0;
-  function read(env: WorkerEnv, client: string, origin: string, token?: string): Promise<Response> {
+  function read(env: World, client: string, origin: string, token?: string): Promise<Response> {
     const url = encodeURIComponent(`${origin}/pricing`);
-    const headers: Record<string, string> = { Origin: origin };
-    if (token !== undefined) headers.Authorization = `Bearer ${token}`;
-    ip += 1;
 
-    return handleRequest(new Request(`https://worker.test/feedback?url=${url}&client=${client}`, { headers }), env, {
-      clientIp: `192.0.2.${ip}`,
+    return callOn(env, 'GET', `/feedback?url=${url}&client=${client}`, {
+      origin,
+      ...(token === undefined ? {} : { token }),
     });
   }
 
-  async function sessionIn(env: WorkerEnv, account: string, workspace: string): Promise<string> {
-    const sessions = createSqliteSessionStore(env.FRUITBACK_SESSION_PATH as string);
-    const { code } = await createPairing(sessions, { subject: account, workspace });
-    const redeemed = await redeemPairing(sessions, code, SECRET);
+  async function sessionIn(env: World, account: string, workspace: string): Promise<string> {
+    const { code } = await createPairing(env.sessions, { subject: account, workspace });
+    const redeemed = await redeemPairing(env.sessions, code, env.env.FRUITBACK_IDENTITY_SECRET as string);
     assert.ok(redeemed.ok);
 
     return redeemed.session.accessToken;
   }
 
   it('serves a site the moment it is added, to the members of its workspace and to nobody else', async () => {
-    const directory = scratch();
-    const env = envWith(directory);
-    const accounts = createSqliteAccountStore(env.FRUITBACK_ACCOUNTS_PATH as string);
-    const alice = await accounts.signIn({ provider: 'email', subject: 'alice@acme.dev', email: 'alice@acme.dev' });
-    const mallory = await accounts.signIn({
-      provider: 'email',
-      subject: 'mallory@evil.dev',
-      email: 'mallory@evil.dev',
-    });
+    const env = await envWith();
+    const { accounts } = env;
+    const alice = await signInTo(env, 'alice@acme.dev');
+    const mallory = await signInTo(env, 'mallory@evil.dev');
     const acme = await accounts.createWorkspace('Acme', alice.id);
     const evil = await accounts.createWorkspace('Evil', mallory.id);
 
@@ -181,10 +161,9 @@ describe('a worker that reads its clients from the accounts (FRU-96)', () => {
   });
 
   it('answers everyone on a site its workspace opened to everyone', async () => {
-    const directory = scratch();
-    const env = envWith(directory);
-    const accounts = createSqliteAccountStore(env.FRUITBACK_ACCOUNTS_PATH as string);
-    const alice = await accounts.signIn({ provider: 'email', subject: 'alice@acme.dev', email: 'alice@acme.dev' });
+    const env = await envWith();
+    const { accounts } = env;
+    const alice = await signInTo(env, 'alice@acme.dev');
     const acme = await accounts.createWorkspace('Acme', alice.id);
     const site = await accounts.addSite(acme.id, { origin: 'https://acme.dev', visibility: 'everyone' });
 
@@ -192,26 +171,25 @@ describe('a worker that reads its clients from the accounts (FRU-96)', () => {
   });
 
   it('serves no client before a site exists, rather than every page to anybody', async () => {
-    const env = envWith(scratch(), { ALLOWED_ORIGINS: 'https://acme.dev' });
+    const env = await envWith({ env: { ALLOWED_ORIGINS: 'https://acme.dev' } });
 
     const response = await read(env, 'anything', 'https://acme.dev');
     assert.equal(response.status, 400);
     assert.deepEqual(await response.json(), { error: 'unknown-client' });
   });
 
-  it('refuses a client map beside the accounts, and accounts with no sessions', () => {
-    const directory = scratch();
-    const both = readConfig(envWith(directory, { FRUITBACK_CLIENTS: '{"acme":{"workspace":"ws"}}' }));
-    assert.ok(both.ok === false && both.missing.some((name) => name.startsWith('FRUITBACK_CLIENTS')));
+  it('refuses a client map beside the accounts', async () => {
+    const { env } = await envWith();
+    assert.equal(readConfig(env).ok, true, 'the control: the same environment with no map');
 
-    const alone = readConfig(envWith(directory, { FRUITBACK_SESSION_PATH: undefined }));
-    assert.ok(alone.ok === false && alone.missing.some((name) => name.startsWith('FRUITBACK_SESSION_PATH')));
+    const both = readConfig({ ...env, FRUITBACK_CLIENTS: '{"acme":{"workspace":"ws"}}' });
+    assert.ok(both.ok === false && both.missing.some((name) => name.startsWith('FRUITBACK_CLIENTS')));
   });
 
-  it('says nothing of the sites on /health, which never opens a file', async () => {
-    const response = await handleRequest(new Request('https://worker.test/health'), envWith(scratch()), {
-      clientIp: '192.0.2.250',
-    });
+  it('says nothing of the sites on /health, which never opens a database', async () => {
+    // Only the environment of the world is given: its address of a database has nothing behind it.
+    const { env } = await envWith();
+    const response = await handleRequest(new Request(`${WORKER}/health`), env, { clientIp: '192.0.2.250' });
 
     assert.deepEqual(await response.json(), { ok: true, store: 'memory' });
   });

@@ -57,14 +57,6 @@ export function matchPatternFor(origin: string): string {
 }
 
 /**
- * Register, update or unregister so that exactly `origins` are covered.
- *
- * The three cases are separate calls in the API and picking the wrong one throws: registering an id
- * that exists is an error, and so is updating one that does not. An empty set has to unregister
- * rather than update with no matches — `matches: []` is refused, which would leave the previous
- * origins registered and the extension running on a site somebody just switched off.
- */
-/**
  * One sync at a time, however many events ask for one.
  *
  * Install, startup, a storage change and a revoked permission all call this, and `syncRegistration`
@@ -84,39 +76,62 @@ export function serialize<T extends unknown[]>(run: (...args: T) => Promise<void
   };
 }
 
-export async function syncRegistration(scripting: ScriptRegistrar, origins: readonly string[]): Promise<void> {
-  const existing = new Set((await scripting.getRegisteredContentScripts()).map((script) => script.id));
-  const ours = [BRIDGE_SCRIPT_ID, PAGE_SCRIPT_ID].filter((id) => existing.has(id));
+/** The ids of the two scripts of one origin. Each origin has its own pair (FRU-74). */
+export function scriptIdsFor(origin: string): { bridge: string; page: string } {
+  return { bridge: `${BRIDGE_SCRIPT_ID}:${origin}`, page: `${PAGE_SCRIPT_ID}:${origin}` };
+}
 
-  if (origins.length === 0) {
-    if (ours.length > 0) await scripting.unregisterContentScripts({ ids: ours });
+function isOurs(id: string): boolean {
+  return [BRIDGE_SCRIPT_ID, PAGE_SCRIPT_ID].some((ours) => id === ours || id.startsWith(`${ours}:`));
+}
 
-    return;
+/**
+ * Register and unregister so that exactly `origins` are covered, **one origin per call** (FRU-74).
+ *
+ * Measured on 2026-10-12: Chromium 145 refuses a whole `registerContentScripts` call when one of its
+ * patterns is invalid (« Invalid port »), and registers none of the others; Firefox 146 accepts
+ * patterns that match nothing. With one pair of scripts for every origin, a single pattern the
+ * browser refuses stopped the extension on every site, with one line in the console. Each origin has
+ * its own pair now, registered in its own call: a refusal costs that origin, and is said.
+ *
+ * The scripts of an origin never change: an origin that stays keeps its pair, one that goes is
+ * unregistered, a new one is registered. The pair of before FRU-74 (one id for every origin) is
+ * unregistered at the first sync.
+ *
+ * Answers the origins the browser refused.
+ */
+export async function syncRegistration(scripting: ScriptRegistrar, origins: readonly string[]): Promise<string[]> {
+  const existing = new Set(
+    (await scripting.getRegisteredContentScripts()).map((script) => script.id).filter((id) => isOurs(id)),
+  );
+  const wanted = new Set(origins.flatMap((origin) => Object.values(scriptIdsFor(origin))));
+
+  const stale = [...existing].filter((id) => !wanted.has(id));
+  if (stale.length > 0) await scripting.unregisterContentScripts({ ids: stale });
+
+  const refused: string[] = [];
+  for (const origin of origins) {
+    const ids = scriptIdsFor(origin);
+    const missing = scriptsFor(origin, ids).filter((script) => !existing.has(script.id));
+    if (missing.length === 0) continue;
+    try {
+      await scripting.registerContentScripts(missing);
+    } catch (error) {
+      refused.push(origin);
+      console.warn(`[fruitback] the browser refused the scripts of ${origin}`, error);
+    }
   }
 
-  const matches = origins.map(matchPatternFor);
-  const scripts: RegisteredScript[] = [
-    {
-      id: BRIDGE_SCRIPT_ID,
-      matches,
-      js: [BRIDGE_FILE],
-      runAt: 'document_idle',
-      world: 'ISOLATED',
-    },
-    {
-      // The widget, in the page's own world. See entrypoints/page.content.ts for why that is not a
-      // preference: from the isolated world every fiber the seed's `source` comes from is invisible.
-      id: PAGE_SCRIPT_ID,
-      matches,
-      js: [PAGE_FILE],
-      runAt: 'document_idle',
-      world: 'MAIN',
-    },
+  return refused;
+}
+
+function scriptsFor(origin: string, ids: { bridge: string; page: string }): RegisteredScript[] {
+  const matches = [matchPatternFor(origin)];
+
+  return [
+    { id: ids.bridge, matches, js: [BRIDGE_FILE], runAt: 'document_idle', world: 'ISOLATED' },
+    // The widget, in the page's own world. See entrypoints/page.content.ts for why that is not a
+    // preference: from the isolated world every fiber the seed's `source` comes from is invisible.
+    { id: ids.page, matches, js: [PAGE_FILE], runAt: 'document_idle', world: 'MAIN' },
   ];
-
-  const toUpdate = scripts.filter((script) => existing.has(script.id));
-  const toRegister = scripts.filter((script) => !existing.has(script.id));
-
-  if (toUpdate.length > 0) await scripting.updateContentScripts(toUpdate);
-  if (toRegister.length > 0) await scripting.registerContentScripts(toRegister);
 }

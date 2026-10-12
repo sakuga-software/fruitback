@@ -183,7 +183,8 @@ for (const { label, open, skip } of DATABASES) {
         },
       ]);
       assert.equal((await accounts.sealedKey('con_linear'))?.sealed, 'sealed-key-of-linear');
-      assert.equal(await accounts.spendEmailLink('digest-of-an-email-code', THEN + 1), 'alice@acme.dev');
+      // The link of before stays a row: nothing spends it since FRU-150.
+      assert.deepEqual(await rowsOf(database, 'SELECT email FROM email_links'), [{ email: 'alice@acme.dev' }]);
 
       const sessions = createPostgresSessionStore(database);
       assert.deepEqual(

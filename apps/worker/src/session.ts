@@ -21,7 +21,8 @@ import { type IdentityClaims, signIdentityToken } from './identity.ts';
  * on disk for weeks, so a copy of the database must not be a set of working logins. Nothing here
  * compares a secret byte by byte either: a lookup is by digest, on a primary key.
  *
- * No OAuth, no identity provider, no user table to administer. A self-hoster runs one container.
+ * A worker with no accounts has no OAuth, no identity provider and no user table to administer: a
+ * self-hoster runs one container.
  */
 
 /** Who a session speaks for. The worker's word, taken from the pairing the operator created. */

@@ -6,7 +6,9 @@ import {
   type ConnectorKind,
   type ConnectorSettings,
   type Destination,
+  type Domain,
   MAX_DESTINATIONS,
+  MAX_DOMAINS,
   type Site,
   VISIBILITIES,
   type Workspace,
@@ -17,7 +19,17 @@ import {
   readConnectorSettings,
   readLocaleTag,
 } from './accounts.ts';
-import { readBearerToken, verifyIdentityToken } from './identity.ts';
+import {
+  type ProofState,
+  type TxtResolver,
+  checkProof,
+  previewPattern,
+  proofRecord,
+  proofState,
+  readDomain,
+  sayLoss,
+  systemResolver,
+} from './domain-proof.ts';
 import { noteConnectorCall } from './connector-health.ts';
 import { LinearKeyForbidden, LinearKeyRefused, listLinearStates, listLinearTeams } from './linear.ts';
 import { isAcceptableSecret, newSecret, parseTargetUrl, sealTarget, targetLabel } from './rest-connector.ts';
@@ -31,16 +43,14 @@ import { PAIRING_TTL_SECONDS, type SessionStore, createPairing } from './session
  * What the console reads and writes (FRU-99): the account, its workspaces, their sites, and the code
  * that connects a browser (FRU-100).
  *
- * **Every call is a person, checked twice.** The access token says who, and the role this person has
- * in the workspace, read from the accounts on every call, says what. A token says nothing about a
- * role: a member removed a minute ago still holds a token for ten minutes, and the role is what stops
- * them.
+ * **Every call is a person, checked twice.** The cookie of a session of better-auth says who, read
+ * in the database at each call, and the role this person has in the workspace, read from the
+ * accounts on every call, says what: a member removed a minute ago is refused at once.
  */
 
 export type ConsoleApiContext = {
   accounts: AccountStore;
   sessions: SessionStore;
-  secret: string;
   now?: number;
   /** What opens and closes the connector keys (FRU-121). Absent, a workspace connects no tracker. */
   secretsKey?: string;
@@ -51,18 +61,52 @@ export type ConsoleApiContext = {
   publicUrl?: string;
   /**
    * The person of the cookie of better-auth, or `undefined` (FRU-147). Absent: better-auth is off,
-   * and a call takes the token of before only.
+   * and every call answers `401`: nobody signs in to the console without it (FRU-150).
    */
   cookieSession?: (request: Request) => Promise<string | undefined>;
   /** `FRUITBACK_CONSOLE_URL`: the one origin a call with the cookie may change something from. */
   consoleUrl?: string;
+  /** What asks the DNS for the proof of a domain (FRU-103). A suite hands over a double. */
+  resolveTxt?: TxtResolver;
   /**
    * Makes a workspace for the person of the cookie of this request, through the organization plugin
-   * of better-auth (FRU-149). Absent: better-auth is off, and the store makes it, as for a call that
-   * came with the token of before.
+   * of better-auth (FRU-149). Absent, the store makes it: a test that gives no plugin.
    */
   createWorkspace?: (request: Request, name: string) => Promise<Workspace>;
 };
+
+/** How long a domain is not asked again on a click: a person who presses twice asks the DNS once. */
+export const CHECK_AGAIN_MS = 10_000;
+
+/** A domain as the console reads it: what to write in the DNS, and where the proof stands. */
+type DomainView = {
+  id: string;
+  domain: string;
+  state: ProofState;
+  record: { type: 'TXT'; name: string; value: string };
+  /** The wildcard the previews of this domain are, as the extension writes it. */
+  previews: string;
+  previewsSite?: string;
+  verifiedAt?: string;
+  lostAt?: string;
+  checkedAt?: string;
+};
+
+function domainView(domain: Domain, now: number): DomainView {
+  const record = proofRecord(domain.workspaceId, domain.domain);
+  const iso = (time: number | undefined) => (time === undefined ? undefined : new Date(time).toISOString());
+  const at = { verifiedAt: iso(domain.verifiedAt), lostAt: iso(domain.lostAt), checkedAt: iso(domain.checkedAt) };
+
+  return {
+    id: domain.id,
+    domain: domain.domain,
+    state: proofState(domain, now),
+    record: { type: 'TXT', ...record },
+    previews: previewPattern(domain.domain),
+    ...(domain.previewsSite === undefined ? {} : { previewsSite: domain.previewsSite }),
+    ...Object.fromEntries(Object.entries(at).filter(([, value]) => value !== undefined)),
+  };
+}
 
 function json(status: number, body: unknown, headers: Record<string, string>): Response {
   return new Response(JSON.stringify(body), {
@@ -259,33 +303,18 @@ const WORKSPACE_PATH = /^\/console\/workspaces\/([A-Za-z0-9_-]+)(\/.*)?$/;
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 /**
- * Who calls (FRU-147): the token of before in `Authorization`, or the cookie of a session of
- * better-auth. The token wins when both are there: a page of another site cannot write that header.
+ * Who calls: the person of the cookie of a session of better-auth (FRU-147). Since FRU-150 it is the
+ * one way: a token in `Authorization` names nobody on these routes.
  *
- * **With the cookie, a call that changes something must come from the console**: its `Origin`, and
- * not a request with none. The browser sends the cookie with a request of any page of the same site
- * as the worker (`demo.fruitback.com` is one), whatever `SameSite` says, so these routes are open to
- * CSRF from that slice on. `consoleCors` refuses another origin before this; a request with no
- * `Origin` reaches this line, and is refused here.
+ * **A call that changes something must come from the console**: its `Origin`, and not a request with
+ * none. The browser sends the cookie with a request of any page of the same site as the worker
+ * (`demo.fruitback.com` is one), whatever `SameSite` says. `consoleCors` refuses another origin
+ * before this; a request with no `Origin` reaches this line, and is refused here.
  */
 async function callerOf(
   request: Request,
   context: ConsoleApiContext,
-): Promise<
-  { ok: true; subject: string; by: 'token' | 'cookie' } | { ok: false; status: number; body: Record<string, string> }
-> {
-  const token = readBearerToken(request.headers.get('Authorization'));
-  if (token !== undefined) {
-    const verified = await verifyIdentityToken(token, context.secret, context.now);
-    if (!verified.ok) return { ok: false, status: 401, body: { error: 'identity-required', reason: verified.reason } };
-    const subject = verified.reporter.id;
-    if (subject === undefined) {
-      return { ok: false, status: 401, body: { error: 'identity-required', reason: 'invalid-claims' } };
-    }
-
-    return { ok: true, subject, by: 'token' };
-  }
-
+): Promise<{ ok: true; subject: string } | { ok: false; status: number; body: Record<string, string> }> {
   const subject = context.cookieSession === undefined ? undefined : await context.cookieSession(request);
   if (subject === undefined) return { ok: false, status: 401, body: { error: 'identity-required' } };
   const origin = context.consoleUrl === undefined ? undefined : new URL(context.consoleUrl).origin;
@@ -293,7 +322,7 @@ async function callerOf(
     return { ok: false, status: 403, body: { error: 'origin-not-allowed' } };
   }
 
-  return { ok: true, subject, by: 'cookie' };
+  return { ok: true, subject };
 }
 
 /**
@@ -345,13 +374,11 @@ export async function handleConsoleApi(
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
     const name = workspaceName((await readBody(request))?.name);
     if (name === undefined) return json(400, { error: 'invalid-name' }, headers);
-    // By the organization plugin for somebody of the cookie (FRU-149): its hooks see the workspace
-    // and its first member. A call with the token of before has no session of better-auth to make it
-    // for, and the store writes the same two rows.
+    // By the organization plugin (FRU-149): its hooks see the workspace and its first member.
     const workspace =
-      identified.by === 'cookie' && context.createWorkspace !== undefined
-        ? await context.createWorkspace(request, name)
-        : await context.accounts.createWorkspace(name, account.id);
+      context.createWorkspace === undefined
+        ? await context.accounts.createWorkspace(name, account.id)
+        : await context.createWorkspace(request, name);
 
     return json(201, { ...workspace, role: 'owner' }, headers);
   }
@@ -470,6 +497,13 @@ export async function handleConsoleApi(
     const set = await context.accounts.setDestinations(workspaceId as string, places[1] as string, kept);
 
     return set ? json(200, { destinations: kept }, headers) : json(404, { error: 'not-found' }, headers);
+  }
+
+  // The domains a workspace proves it owns, to cover the previews of a site (FRU-103). An admin's
+  // business, like the sites: a domain is what lends a session to every page under it.
+  if (rest === '/domains' || rest.startsWith('/domains/')) {
+    if (!allowed('manage-sites')) return forbidden();
+    return domainRoute(request, rest, workspaceId as string, context, headers);
   }
 
   if (rest === '/connectors') {
@@ -679,4 +713,82 @@ export async function handleConsoleApi(
   }
 
   return json(404, { error: 'not-found' }, headers);
+}
+
+/**
+ * `/domains` of a workspace (FRU-103): list, add, ask the DNS, name the site whose previews a
+ * proven domain covers, remove.
+ */
+async function domainRoute(
+  request: Request,
+  rest: string,
+  workspace: string,
+  context: ConsoleApiContext,
+  headers: Record<string, string>,
+): Promise<Response> {
+  const now = context.now ?? Date.now();
+  const { accounts } = context;
+
+  if (rest === '/domains') {
+    if (request.method === 'GET') {
+      return json(200, { domains: (await accounts.domains(workspace)).map((each) => domainView(each, now)) }, headers);
+    }
+    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+    const domain = readDomain((await readBody(request))?.domain);
+    if (domain === undefined) return json(400, { error: 'invalid-domain' }, headers);
+    const known = await accounts.domains(workspace);
+    // Counted, then written: two calls of one admin at the same moment can both pass at 19, and leave
+    // 21. The bound is the cost of the DNS for one workspace, not a wall between two: it is not held
+    // in a transaction.
+    if (!known.some((each) => each.domain === domain) && known.length >= MAX_DOMAINS) {
+      return json(409, { error: 'too-many-domains', max: MAX_DOMAINS }, headers);
+    }
+
+    // Not asked here: the record is written after the console shows it.
+    return json(201, domainView(await accounts.addDomain(workspace, domain, now), now), headers);
+  }
+
+  const match = /^\/domains\/([A-Za-z0-9_-]+)(\/check|\/previews)?$/.exec(rest);
+  // A domain of another workspace answers like one that does not exist.
+  const domain = match === null ? undefined : (await accounts.domains(workspace)).find((each) => each.id === match[1]);
+  if (match === null || domain === undefined) return json(404, { error: 'not-found' }, headers);
+
+  if (match[2] === undefined) {
+    if (request.method !== 'DELETE') return json(405, { error: 'method-not-allowed' }, headers);
+    await accounts.removeDomain(workspace, domain.id);
+
+    return new Response(null, { status: 204, headers });
+  }
+  if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+
+  if (match[2] === '/check') {
+    if (domain.checkedAt !== undefined && now - domain.checkedAt < CHECK_AGAIN_MS) {
+      return json(200, domainView(domain, now), headers);
+    }
+    const answer = await checkProof(context.resolveTxt ?? systemResolver, workspace, domain.domain);
+    await accounts.noteDomainCheck(domain.id, answer, now);
+    // The same line as the timer writes, when this click is the check that finds the proof ended.
+    sayLoss(domain, answer, now);
+    const checked = (await accounts.domains(workspace)).find((each) => each.id === domain.id);
+    if (checked === undefined) return json(404, { error: 'not-found' }, headers);
+
+    // `unknown`: the DNS did not answer, and the console says so rather than « not found ».
+    return json(200, { ...domainView(checked, now), ...(answer === 'unknown' ? { unanswered: true } : {}) }, headers);
+  }
+
+  // The previews: a proven domain only. Taking them away is always allowed.
+  const body = await readBody(request);
+  if (body?.site !== null && typeof body?.site !== 'string') return json(400, { error: 'invalid-site' }, headers);
+  const site = body.site ?? undefined;
+  if (site !== undefined && proofState(domain, now) !== 'proven') {
+    return json(409, { error: 'domain-not-proven', state: proofState(domain, now) }, headers);
+  }
+  const set = await accounts.setPreviews(workspace, domain.id, site);
+  if (!set) return json(404, { error: 'not-found' }, headers);
+
+  return json(
+    200,
+    domainView({ ...domain, ...(site === undefined ? { previewsSite: undefined } : { previewsSite: site }) }, now),
+    headers,
+  );
 }

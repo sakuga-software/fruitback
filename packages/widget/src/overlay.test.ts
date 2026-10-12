@@ -66,6 +66,44 @@ describe('createOverlay', () => {
     assert.equal(pin.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-stage-ripe)');
   });
 
+  it('draws a note kept for later as a neutral pin that says it is not sent (FRU-124)', () => {
+    const page = mountWithCta();
+    // As `embed.ts` builds it: no issue yet, so no address of an issue.
+    const { url: _none, ...draft } = issueOnCta({ id: 'draft:sd_kept' });
+    const sent = issueOnCta({ id: 'issue_sent', stage: 'ripe' });
+    overlay = createOverlay({ document: page.document, isDraft: (issue) => issue === draft });
+    overlay.render([sent, draft]);
+
+    const [first, second] = [...page.document.querySelectorAll<HTMLElement>('[data-fruitback-pin]')];
+    // The control: the same seed, sent, wears its stage.
+    assert.equal(first?.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-stage-ripe)');
+    assert.equal(first?.dataset.fruitbackDraft, undefined);
+    assert.equal(second?.style.getPropertyValue('--fruitback-pin-color'), 'var(--fruitback-color-text-muted)');
+    assert.equal(second?.dataset.fruitbackDraft, '');
+    const badge = second?.querySelector('.fruitback-pin-badge') as HTMLElement;
+    assert.match(badge.getAttribute('aria-label') ?? '', /^Not sent yet · /);
+
+    badge.click();
+    assert.equal(page.document.querySelector('.fruitback-thread-stage')?.textContent, 'Not sent yet');
+    // A boolean, not the node: a failed comparison of a DOM node never finishes printing it.
+    assert.equal(page.document.querySelector('.fruitback-thread-link') === null, true);
+  });
+
+  it('keeps a draft whose element is gone out of the detached notes, which name a stage (FRU-124)', () => {
+    const page = mountWithCta();
+    page.query('button').remove();
+    const draft = issueOnCta({ id: 'draft:sd_kept' });
+    overlay = createOverlay({ document: page.document, isDraft: (issue) => issue === draft });
+
+    overlay.render([draft]);
+    assert.equal((page.document.querySelector('[data-fruitback-orphans]') as HTMLElement).hidden, true);
+    assert.ok(page.document.querySelector('[data-fruitback-pin]'), 'the draft lost its pin');
+
+    // The control: the same note, sent, is listed there.
+    overlay.render([issueOnCta()]);
+    assert.equal((page.document.querySelector('[data-fruitback-orphans]') as HTMLElement).hidden, false);
+  });
+
   it('places a pin whose element is gone at its remembered position, and says so', () => {
     const page = mountWithCta();
     page.query('button').remove();

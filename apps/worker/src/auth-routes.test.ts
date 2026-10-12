@@ -3,7 +3,7 @@ import { createHash, createHmac } from 'node:crypto';
 import { describe, it, mock } from 'node:test';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { handleRequest } from './app.ts';
-import { type Auth, CLIENT_IP_HEADER, authOptions, startAuth } from './auth.ts';
+import { AUTH_BASE_PATH, type Auth, CLIENT_IP_HEADER, SERVED_PATHS, authOptions, startAuth } from './auth.ts';
 import {
   AUTH_CONFIG,
   AUTH_SECRET,
@@ -219,8 +219,8 @@ for (const { label, open, skip } of DATABASES) {
       const unknown = await worker.call('/console/auth/email', { body: { email: 'nobody@acme.dev' } });
       assert.deepEqual([known.status, await known.text()], [unknown.status, await unknown.text()]);
 
-      // One of the window is spent above. The path of before counts in the same window.
-      await worker.call('/auth/email', { body: { email: 'alice@acme.dev' } });
+      // One of the window is spent above.
+      assert.equal((await worker.call('/console/auth/email', { body: { email: 'alice@acme.dev' } })).status, 202);
       assert.equal((await worker.call('/console/auth/email', { body: { email: 'alice@acme.dev' } })).status, 202);
       const fourth = await worker.call('/console/auth/email', { body: { email: 'alice@acme.dev' } });
       assert.equal(fourth.status, 429);
@@ -371,6 +371,31 @@ for (const { label, open, skip } of DATABASES) {
       assert.equal((await worker.call('/console/me', { headers: { Cookie: cookie } })).status, 401);
     });
 
+    // FRU-204: the console says « signed out » only when this route answers `ok`. A route that
+    // refused somebody with no session would hold them on « You are still signed in » for ever.
+    it('answers a sign-out with a session that already ended, or with none, as it answers the first one', async () => {
+      const worker = await workerOn(open);
+      const cookie = await worker.signIn('alice@acme.dev');
+      const signOut = (headers: Record<string, string>): Promise<Response> =>
+        worker.call('/console/auth/sign-out', { body: {}, headers });
+
+      const first = await signOut({ Cookie: cookie });
+      assert.equal(first.status, 200);
+      assert.equal((await worker.call('/console/me', { headers: { Cookie: cookie } })).status, 401);
+
+      // Another tab that still shows « My account », a session that expired, a cookie that is not one.
+      const without: Record<string, string>[] = [
+        { Cookie: cookie },
+        {},
+        { Cookie: `${SESSION_COOKIE}=not-a-session.not-a-signature` },
+      ];
+      for (const headers of without) {
+        const again = await signOut(headers);
+        assert.equal(again.status, 200, JSON.stringify(headers));
+        assert.deepEqual(await again.json(), { success: true });
+      }
+    });
+
     it('ends a session by its id for its person only, and from the console only', async () => {
       const worker = await workerOn(open);
       const alice = await worker.signIn('alice@acme.dev');
@@ -392,6 +417,179 @@ for (const { label, open, skip } of DATABASES) {
       });
       assert.equal(noOrigin.status, 403);
       assert.equal((await worker.call('/console/me', { headers: { Cookie: bob } })).status, 200);
+    });
+
+    it('answers no route that hands the token of the session to a script of the console', async () => {
+      const worker = await workerOn(open);
+      const cookie = await worker.signIn('alice@acme.dev');
+      const token = tokenIn(cookie);
+      const headers = { Cookie: cookie };
+
+      // FRU-206: `/get-session` of better-auth answers the session with its token, and it was served.
+      for (const method of ['GET', 'POST']) {
+        const answer = await worker.call(`${AUTH_BASE_PATH}/get-session`, { method, headers });
+        assert.equal(answer.status, 404, method);
+        assert.deepEqual(await answer.json(), { error: 'not-found' });
+      }
+      // The control: better-auth has that route, and it answers the token to whoever has the cookie.
+      const inside = await worker.auth.handler(
+        new Request(`https://api.fruitback.test${AUTH_BASE_PATH}/get-session`, { headers }),
+      );
+      assert.equal(inside.status, 200);
+      assert.ok((await inside.text()).includes(token), 'better-auth no longer answers the token: read this test again');
+
+      // No route a script of the console can read answers it: the served ones, and the worker's own.
+      const read = [
+        ...Object.keys(SERVED_PATHS).map((path) => `${AUTH_BASE_PATH}${path}`),
+        '/console/me',
+        '/console/sessions',
+      ];
+      for (const path of read) {
+        const answer = await worker.call(path, { headers });
+        assert.equal((await answer.text()).includes(token), false, path);
+        assert.equal(answer.headers.get('Location')?.includes(token) ?? false, false, path);
+      }
+      // The session is still read in the process: the cookie opens the console as before.
+      assert.equal((await worker.call('/console/me', { headers })).status, 200);
+    });
+  });
+
+  describe(`the cookie of a session that is renewed, on ${label} (FRU-208)`, { skip }, () => {
+    /** A session last renewed two days ago: better-auth renews it at the next read (a day). */
+    const aged = (worker: Awaited<ReturnType<typeof workerOn>>) =>
+      rowsOf(
+        worker.database,
+        `UPDATE "session" SET "expiresAt" = now() + interval '5 days', "updatedAt" = now() - interval '2 days'`,
+      );
+    const endOf = async (worker: Awaited<ReturnType<typeof workerOn>>): Promise<number> =>
+      new Date(String((await rowsOf(worker.database, 'SELECT "expiresAt" FROM "session"'))[0]?.expiresAt)).getTime();
+    const sessionCookies = (answer: Response): string[] =>
+      answer.headers.getSetCookie().filter((each) => each.includes('fruitback.session_token='));
+
+    it('renews the cookie with the session, on each route that reads the cookie, and on no other call', async () => {
+      const worker = await workerOn(open);
+      const opened = await worker.call('/console/auth/email', { body: { email: 'alice@acme.dev' } });
+      assert.equal(opened.status, 202);
+      const redeemed = await worker.call('/console/auth/email/redeem', { body: { token: worker.lastToken() } });
+      const atSignIn = sessionCookies(redeemed)[0] ?? '';
+      const cookie = cookieOf(redeemed);
+      const headers = { Cookie: cookie };
+      const created = await worker.call('/console/workspaces', { body: { name: 'Acme' }, headers });
+      const { id } = (await created.json()) as { id: string };
+      // A session of today is not renewed: no call above set the cookie again.
+      assert.deepEqual(sessionCookies(created), []);
+
+      for (const path of [
+        '/console/me',
+        '/console/sessions',
+        `/console/auth/organization/list-members?organizationId=${id}`,
+      ]) {
+        await aged(worker);
+        const before = await endOf(worker);
+
+        const answer = await worker.call(path, { headers });
+        assert.equal(answer.status, 200, path);
+        // The row moved: better-auth renewed the session. Without this the lines below test nothing.
+        assert.ok((await endOf(worker)) > before + 24 * 60 * 60 * 1000, `${path}: the session was not renewed`);
+        // The cookie of the sign-in again, to the letter: the same token, and seven days from now.
+        assert.deepEqual(sessionCookies(answer), [atSignIn], path);
+        assert.match(atSignIn, /; Max-Age=604800; Path=\/console; HttpOnly; Secure; SameSite=Strict$/);
+        assert.equal(answer.headers.get('Access-Control-Allow-Origin'), CONSOLE_URL, path);
+
+        // The control: the next call finds a session renewed a moment ago, and sets nothing.
+        const next = await worker.call(path, { headers });
+        assert.equal(next.status, 200, path);
+        assert.deepEqual(sessionCookies(next), [], path);
+      }
+    });
+
+    it('sets no cookie for a cookie that opens nothing, and none for the session that a call ends', async () => {
+      const worker = await workerOn(open);
+      const cookie = await worker.signIn('alice@acme.dev');
+      const headers = { Cookie: cookie };
+
+      const nothing: Record<string, string>[] = [{}, { Cookie: `${SESSION_COOKIE}=not-a-session.not-a-signature` }];
+      for (const refused of nothing) {
+        const answer = await worker.call('/console/me', { headers: refused });
+        assert.equal(answer.status, 401);
+        assert.deepEqual(answer.headers.getSetCookie(), []);
+      }
+      // A session that expired: better-auth sets cookies on that reading too (it clears them), and
+      // none of them leaves by this way. Somebody of another session signs in for this half.
+      const late = await worker.signIn('bob@acme.dev');
+      await rowsOf(
+        worker.database,
+        `UPDATE "session" SET "expiresAt" = now() - interval '1 minute' WHERE "token" <> '${await digest(tokenIn(cookie))}'`,
+      );
+      const expired = await worker.call('/console/me', { headers: { Cookie: late } });
+      assert.equal(expired.status, 401);
+      assert.deepEqual(expired.headers.getSetCookie(), []);
+
+      // The person ends this very session, and the reading of that call renewed it a moment before.
+      const listed = await worker.call('/console/sessions', { headers });
+      const { sessions } = (await listed.json()) as { sessions: { id: string; current: boolean }[] };
+      await aged(worker);
+      const ended = await worker.call(`/console/sessions/${sessions[0]?.id}`, { method: 'DELETE', headers });
+      assert.equal(ended.status, 204);
+      assert.deepEqual(ended.headers.getSetCookie(), []);
+      assert.equal((await worker.call('/console/me', { headers })).status, 401);
+
+      // The two routes of better-auth that end the session of the cookie do not go through the
+      // reading of the worker. « Sign out » clears the cookie. « Sign out everywhere » is better-auth
+      // alone, before and after FRU-208: it can set the cookie again on its own answer, and whatever
+      // it sets opens nothing, because every session of the person is gone.
+      for (const route of ['sign-out', 'revoke-sessions']) {
+        const again = { Cookie: await worker.signIn('alice@acme.dev') };
+        await aged(worker);
+        const out = await worker.call(`/console/auth/${route}`, { body: {}, headers: again });
+        assert.equal(out.status, 200, route);
+        if (route === 'sign-out') {
+          for (const each of sessionCookies(out)) assert.match(each, /fruitback\.session_token=;.*Max-Age=0/);
+        }
+        for (const held of [again.Cookie, cookieOf(out)].filter((each) => each !== '')) {
+          assert.equal((await worker.call('/console/me', { headers: { Cookie: held } })).status, 401, route);
+        }
+      }
+    });
+  });
+
+  describe(`what a reading of better-auth may set, on ${label} (FRU-208)`, { skip }, () => {
+    it('hands the browser the cookie of the session and no other header of a reading', async () => {
+      const database = await opening(open);
+      await make(database);
+      const renewed = '__Secure-fruitback.session_token=a-token.a-signature; Max-Age=604800; Path=/console';
+      // A reading that sets more than the cookie of the session, as a later better-auth could.
+      const setting = {
+        api: {
+          getSession: async () => ({
+            headers: new Headers([
+              ['Set-Cookie', renewed],
+              ['Set-Cookie', '__Secure-fruitback.session_data=a-cache; Max-Age=300; Path=/'],
+              ['Set-Cookie', 'another=1; Path=/'],
+              ['X-Of-Better-Auth', 'a-header'],
+            ]),
+            response: { user: { id: 'acc_nobody' }, session: { id: 'a-session' } },
+          }),
+        },
+      } as unknown as Auth;
+
+      const answer = await handleRequest(
+        new Request('https://worker.test/console/me', {
+          headers: { Origin: CONSOLE_URL, Cookie: '__Secure-fruitback.session_token=a-token.a-signature' },
+        }),
+        envWith(),
+        {
+          clientIp: '192.0.2.201',
+          accounts: createPostgresAccountStore(database),
+          auth: setting,
+          kv: createMemoryKv(),
+        },
+      );
+
+      assert.deepEqual(answer.headers.getSetCookie(), [renewed]);
+      assert.equal(answer.headers.get('X-Of-Better-Auth'), null);
+      // An answer that sets a cookie is kept by no cache: every answer of the console says so already.
+      assert.equal(answer.headers.get('Cache-Control'), 'no-store');
     });
   });
 
@@ -558,6 +756,136 @@ for (const { label, open, skip } of DATABASES) {
       assert.equal((await worker.call('/console/me', { headers: { Cookie: cookieOf(back) } })).status, 200);
     });
 
+    it('starts a sign-in with a provider on a GET only, and sets no cookie of a state on another method (FRU-207)', async () => {
+      const worker = await workerOn(open);
+
+      // A form of another site posts where a link only navigates, and a `fetch` chooses its method.
+      for (const method of ['POST', 'PUT', 'PATCH', 'DELETE', 'HEAD']) {
+        for (const origin of [null, CONSOLE_URL]) {
+          const refused = await worker.call('/console/auth/start/github', { method, origin });
+          assert.equal(refused.status, 405, `${method} from ${origin}`);
+          assert.deepEqual(refused.headers.getSetCookie(), [], `${method} from ${origin}`);
+          assert.equal(refused.headers.get('Location'), null, `${method} from ${origin}`);
+        }
+      }
+      // The control: the same address, by a GET, starts the sign-in.
+      const started = await worker.call('/console/auth/start/github', { origin: null });
+      assert.equal(started.status, 302);
+      assert.equal(started.headers.getSetCookie().length > 0, true);
+    });
+
+    it('sends the address of the start to no provider: the redirect says no-referrer, and is not kept (FRU-207)', async () => {
+      const worker = await workerOn(open);
+
+      for (const provider of ['github', 'google']) {
+        const started = await worker.call(`/console/auth/start/${provider}`, { origin: null });
+        assert.equal(started.status, 302, provider);
+        assert.equal(started.headers.get('Referrer-Policy'), 'no-referrer', provider);
+        assert.equal(started.headers.get('Cache-Control'), 'no-store', provider);
+      }
+    });
+
+    it('sends the person back to the console, whatever the address of the start asks for (FRU-207)', async () => {
+      const worker = await workerOn(open);
+      await worker.accounts.signIn({ provider: 'github', subject: '4242', email: 'alice@acme.dev' });
+      // Every name a return address goes by, each with another site: an open redirect reads one.
+      const elsewhere = 'https://evil.example/landing';
+      const asked = new URLSearchParams();
+      for (const name of [
+        'to',
+        'callbackURL',
+        'callbackUrl',
+        'callback',
+        'errorCallbackURL',
+        'newUserCallbackURL',
+        'redirect',
+        'redirectTo',
+        'redirect_uri',
+        'returnTo',
+        'return_to',
+        'next',
+        'url',
+        'continue',
+      ]) {
+        asked.set(name, elsewhere);
+      }
+
+      const start = await worker.call(`/console/auth/start/github?${asked}`, { origin: null });
+      assert.equal(start.status, 302);
+      const to = new URL(start.headers.get('Location') ?? '');
+      assert.equal(`${to.origin}${to.pathname}`, 'https://github.com/login/oauth/authorize');
+      // The provider is sent back to the worker, and is told of no other site.
+      assert.equal(to.searchParams.get('redirect_uri'), `${PUBLIC_URL}/console/auth/callback/github`);
+      assert.equal(to.href.includes('evil.example'), false, to.href);
+      const stateCookie = start.headers
+        .getSetCookie()
+        .map((each) => each.split(';')[0])
+        .join('; ');
+      const state = to.searchParams.get('state');
+
+      // The way back that works lands on the console.
+      const back = await withProvider(
+        {
+          ...GITHUB_TOKEN,
+          'https://api.github.com/user': { id: 4242, login: 'alice', name: 'Alice', email: 'alice@acme.dev' },
+          'https://api.github.com/user/emails': [{ email: 'alice@acme.dev', primary: true, verified: true }],
+        },
+        () =>
+          worker.call(`/console/auth/callback/github?code=a-code&state=${state}`, {
+            origin: null,
+            headers: { Cookie: stateCookie },
+          }),
+      );
+      assert.equal(back.headers.get('Location'), `${CONSOLE_URL}/`);
+
+      // And the way back that fails lands on the console too: the provider refused, with the same state.
+      const again = await worker.call(`/console/auth/start/github?${asked}`, { origin: null });
+      const refused = await worker.call(
+        `/console/auth/callback/github?error=access_denied&state=${new URL(again.headers.get('Location') ?? '').searchParams.get('state')}`,
+        {
+          origin: null,
+          headers: {
+            Cookie: again.headers
+              .getSetCookie()
+              .map((each) => each.split(';')[0])
+              .join('; '),
+          },
+        },
+      );
+      assert.equal(refused.status, 302);
+      const failedAt = new URL(refused.headers.get('Location') ?? '');
+      assert.equal(`${failedAt.origin}${failedAt.pathname}`, `${CONSOLE_URL}/setup`);
+      assert.equal(failedAt.searchParams.get('error'), 'access_denied');
+    });
+
+    it('starts no sign-in for a navigation that a page of another site made (FRU-211)', async () => {
+      const worker = await workerOn(open);
+      const from = (site: string | undefined) =>
+        worker.call('/console/auth/start/github', {
+          origin: null,
+          headers: site === undefined ? {} : { 'Sec-Fetch-Site': site },
+        });
+
+      // A link or a redirect of another site: the browser says so, and no state is made.
+      const refused = await from('cross-site');
+      assert.equal(refused.status, 302);
+      const to = new URL(refused.headers.get('Location') ?? '');
+      assert.equal(`${to.origin}${to.pathname}`, `${CONSOLE_URL}/setup`);
+      assert.equal(to.searchParams.get('error'), 'started_from_another_site');
+      assert.deepEqual(refused.headers.getSetCookie(), []);
+      assert.equal(refused.headers.get('Cache-Control'), 'no-store');
+      assert.deepEqual(await rowsOf(worker.database, 'SELECT 1 FROM "verification"'), []);
+
+      // The control: the button of the console (the same site), the address typed by hand, and a
+      // browser that sends no such header all start the sign-in, as before.
+      for (const site of ['same-site', 'same-origin', 'none', undefined]) {
+        const started = await from(site);
+        assert.equal(started.status, 302, String(site));
+        assert.equal(new URL(started.headers.get('Location') ?? '').origin, 'https://github.com', String(site));
+        assert.equal(started.headers.getSetCookie().length > 0, true, String(site));
+      }
+    });
+
     it('sends the console a code of better-auth when a sign-in with a provider fails (FRU-148)', async () => {
       const worker = await workerOn(open);
       // The person came back with no cookie of the state: another browser, or a link that is old.
@@ -614,15 +942,24 @@ for (const { label, open, skip } of DATABASES) {
       assert.deepEqual(errors, ['[fruitback] better-auth did not answer: SCHEMA_MISMATCH of a test']);
     });
 
-    it('says which ways the routes of better-auth offer, beside the two booleans of before', async () => {
+    it('says which ways the routes of better-auth offer, and no boolean of the path of before', async () => {
       const worker = await workerOn(open);
       const answer = await worker.call('/auth/providers');
 
-      assert.deepEqual(await answer.json(), {
-        github: false,
-        google: false,
-        betterAuth: { email: true, github: false, google: false },
-      });
+      assert.deepEqual(await answer.json(), { betterAuth: { email: true, github: false, google: false } });
+      // The routes of the path of before are gone (FRU-150).
+      for (const [method, path] of [
+        ['POST', '/auth/email'],
+        ['POST', '/auth/email/redeem'],
+        ['POST', '/console/session/refresh'],
+        ['POST', '/console/session/logout'],
+        ['GET', '/auth/github'],
+        ['GET', '/auth/google'],
+        ['GET', '/auth/github/callback'],
+      ] as const) {
+        const gone = await worker.call(path, method === 'POST' ? { body: {} } : {});
+        assert.equal(gone.status, 404, `${method} ${path}`);
+      }
     });
   });
 

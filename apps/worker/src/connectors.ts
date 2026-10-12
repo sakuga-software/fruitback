@@ -1,3 +1,4 @@
+import { SEED_STAGES } from '@fruitback/shared';
 import type { AccountStore, ConnectorKind, ConnectorSettings } from './accounts.ts';
 import { createAll } from './batch.ts';
 import type { ClientConfig } from './clients.ts';
@@ -128,6 +129,10 @@ export function createRoutedStore(base: SeedStore, connectors: ConnectorStores):
   return {
     name: base.name,
     ...(base.stages === undefined ? {} : { stages: base.stages }),
+    // The stages of the tracker that answers for the client: GitHub says three, Linear says five, and
+    // the store of the worker can be either (FRU-188). `stages` above stays for a caller with no client.
+    // A store with no `stages` reports every stage, so the answer is never left to the worker's own.
+    stagesFor: async (client) => (await pick(client)).stages ?? SEED_STAGES,
     // The connector is in the key: two sites of one team in two workspaces must not share an entry.
     scope: (client) =>
       client?.connector === undefined ? base.scope(client) : `${client.connector}:${client.teamId ?? ''}`,

@@ -7,12 +7,11 @@ import {
   SERVED_PATHS,
   sendLinkThrough,
 } from './auth.ts';
-import { EMAIL_LINKS_PER_WINDOW, EMAIL_LINK_WINDOW_MS } from './console-routes.ts';
 import type { Kv } from './kv.ts';
 import { MailError, type Mailer, signInMessage } from './mail.ts';
 
 /**
- * The console signs in with better-auth (FRU-147), beside the path of before (`console-routes.ts`).
+ * The console signs in with better-auth (FRU-147): since FRU-150, the one way.
  *
  * - **`/console/auth/<path>` reaches better-auth for the paths of `SERVED_PATHS` only.** Any other path
  *   answers `404` here, before better-auth reads it: a route that a plugin adds stays closed until it
@@ -41,6 +40,10 @@ export type AuthRouteContext = {
   clientIp: string;
   trackIp: boolean;
 };
+
+/** Links per address, per window: enough for a lost one, too few to fill someone's mailbox (FRU-98). */
+export const EMAIL_LINKS_PER_WINDOW = 3;
+export const EMAIL_LINK_WINDOW_MS = 15 * 60 * 1000;
 
 /** The routes of the worker that this file answers, beside the ones of better-auth. */
 export const EMAIL_LINK_PATH = `${AUTH_BASE_PATH}/email`;
@@ -120,6 +123,34 @@ export function headersFor(request: Request, context: Pick<AuthRouteContext, 'cl
 export class AuthUnavailable extends Error {}
 
 /**
+ * The `Set-Cookie` that renews the cookie of a session, for the request whose reading renewed the
+ * session (FRU-208). Kept beside the request and not handed back by `sessionOfCookie`: three routes
+ * read a session, each with several answers, and `handleRequest` adds it to whichever one leaves.
+ */
+const renewals = new WeakMap<Request, string[]>();
+
+/** The cookie of a session of better-auth in a `Set-Cookie`, with or without the `__Secure-` prefix. */
+const SESSION_SET_COOKIE = /^(?:__Secure-)?fruitback\.session_token=[^;]+;/;
+
+/**
+ * The answer, with the cookie of the session renewed when the reading of this request renewed the
+ * session (FRU-208).
+ *
+ * better-auth moves the end of a session that was last renewed more than `SESSION_RENEWAL_SECONDS`
+ * ago, and sets the cookie again with a new `Max-Age` (read in `api/routes/session.mjs` of 1.7.7, and
+ * measured). A call in the process answers the session and drops that header: the row lived on and
+ * the cookie of the browser ended 7 days after the sign-in, whatever the person did.
+ */
+export function withRenewedCookie(request: Request, answer: Response): Response {
+  const cookies = renewals.get(request);
+  if (cookies === undefined) return answer;
+  const headers = new Headers(answer.headers);
+  for (const cookie of cookies) headers.append('Set-Cookie', cookie);
+
+  return new Response(answer.body, { status: answer.status, statusText: answer.statusText, headers });
+}
+
+/**
  * The person and the session of the cookie of this request, or `undefined`.
  *
  * better-auth reads the session in the database at each call, through the layer of `auth-at-rest.ts`:
@@ -129,18 +160,25 @@ export async function sessionOfCookie(
   auth: Auth | Promise<Auth>,
   request: Request,
 ): Promise<{ userId: string; sessionId: string } | undefined> {
-  // No cookie of a session, no call: a request of the path of before reads no database here.
+  // No cookie of a session, no call: a request that names nobody reads no database here.
   if (!(request.headers.get('Cookie') ?? '').includes('fruitback.session_token=')) return undefined;
-  let found: { user?: { id?: unknown }; session?: { id?: unknown } } | null;
+  type Found = { user?: { id?: unknown }; session?: { id?: unknown } } | null;
+  let read: { headers?: Headers; response?: Found } | null;
   try {
-    found = (await (await auth).api.getSession({ headers: request.headers })) as typeof found;
+    // `returnHeaders`: the headers better-auth would set on its own route, beside what it answers.
+    read = (await (await auth).api.getSession({ headers: request.headers, returnHeaders: true })) as typeof read;
   } catch (error) {
     throw new AuthUnavailable(error instanceof Error ? error.message : String(error), { cause: error });
   }
-  const userId = found?.user?.id;
-  const sessionId = found?.session?.id;
+  const userId = read?.response?.user?.id;
+  const sessionId = read?.response?.session?.id;
+  if (typeof userId !== 'string' || typeof sessionId !== 'string') return undefined;
+  // Only the cookie of the session, and only for a session that is there: nothing else better-auth
+  // sets on a reading goes to the browser by this way.
+  const renewed = (read?.headers?.getSetCookie() ?? []).filter((each) => SESSION_SET_COOKIE.test(each));
+  if (renewed.length > 0) renewals.set(request, renewed);
 
-  return typeof userId === 'string' && typeof sessionId === 'string' ? { userId, sessionId } : undefined;
+  return { userId, sessionId };
 }
 
 /** The answer of better-auth with the headers of CORS of the console added: it sets none. */
@@ -161,6 +199,12 @@ function failed(consoleUrl: string, code: string): Response {
 
 async function startWithProvider(request: Request, provider: string, context: AuthRouteContext): Promise<Response> {
   if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, {});
+  // FRU-211: a page of another site does not start a sign-in. This route calls better-auth in the
+  // process, so the check better-auth makes on its own route does not run. The person lands on the
+  // sign-in screen of the console, and starts from there if they want to. A browser that sends no
+  // `Sec-Fetch-Site` is served as before: the header cannot be asked of a browser that has none.
+  if (request.headers.get('Sec-Fetch-Site') === 'cross-site')
+    return failed(context.consoleUrl, 'started_from_another_site');
   const auth = await context.auth;
   const consoleOrigin = new URL(context.consoleUrl).origin;
   // A provider that this worker does not have: the console says so. Read in the options, and not in
@@ -199,14 +243,14 @@ async function sendLink(
   const body = await readBody(request);
   const email = typeof body?.email === 'string' ? normalizeEmail(body.email) : undefined;
   if (email === undefined) return json(400, { error: 'invalid-email' }, headers);
-  // The words of the message, never the link (FRU-119), as on the path of before.
+  // The words of the message, never the link (FRU-119).
   const locale =
     (await context.accounts.localeOf(email)) ??
     readLocaleTag(body?.locale) ??
     readLocaleTag(request.headers.get('Accept-Language')?.split(',')[0]?.split(';')[0]) ??
     'en';
 
-  // The same key as the path of before: the two paths together send three links in the window.
+  // Three links to one address in the window.
   const sent = await context.kv.incr(`fruitback:mail:${email}`, EMAIL_LINK_WINDOW_MS);
   if (sent > EMAIL_LINKS_PER_WINDOW) return json(429, { error: 'too-many-links' }, headers);
 
@@ -335,6 +379,8 @@ async function sessions(
   const found = await adapter.findMany({ model: 'session', where });
   if (found.length === 0) return json(404, { error: 'not-found' }, headers);
   await adapter.delete({ model: 'session', where });
+  // The session of this cookie is the one that ended: its cookie is not renewed (FRU-208).
+  if (id === mine.sessionId) renewals.delete(request);
 
   return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store', ...headers } });
 }

@@ -1,6 +1,6 @@
 {
   "name": "@fruitback/element",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "The Fruitback widget as a custom element: <fruitback-widget endpoint client-id>.",
   "license": "MIT",
   "files": [

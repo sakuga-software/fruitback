@@ -722,49 +722,133 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.equal(await store.dropAbandonedDeliveries(5_000), 0);
   });
 
-  // --- Sign-in links
+  // --- Domains (FRU-103)
 
-  it('spends a sign-in link once, and answers its address', async (store) => {
-    const now = Date.now();
-    await store.createEmailLink({ codeHash: 'digest-1', email: 'alice@acme.dev', expiresAt: now + 60_000 });
+  it('keeps a domain once for a workspace, apart from the same domain of another one', async (store) => {
+    const { workspace } = await world(store);
+    const { workspace: other } = await otherWorld(store);
 
-    assert.equal(await store.spendEmailLink('digest-unknown', now), undefined);
-    assert.equal(await store.spendEmailLink('digest-1', now), 'alice@acme.dev');
-    assert.equal(await store.spendEmailLink('digest-1', now + 1), undefined);
-    // A link makes no account: only `signIn` does, when the link was opened.
-    assert.equal(await store.localeOf('alice@acme.dev'), undefined);
-  });
+    const first = await store.addDomain(workspace.id, 'acme.dev', 1_000);
+    const again = await store.addDomain(workspace.id, 'acme.dev', 2_000);
+    const second = await store.addDomain(workspace.id, 'preview.acme.dev', 3_000);
+    const theirs = await store.addDomain(other.id, 'acme.dev', 4_000);
 
-  it('refuses a sign-in link at its expiry, and after', async (store) => {
-    const now = Date.now();
-    await store.createEmailLink({ codeHash: 'digest-1', email: 'alice@acme.dev', expiresAt: now + 60_000 });
-    await store.createEmailLink({ codeHash: 'digest-2', email: 'bob@acme.dev', expiresAt: now + 60_000 });
-
-    assert.equal(await store.spendEmailLink('digest-1', now + 60_000), undefined);
-    assert.equal(await store.spendEmailLink('digest-1', now + 59_999), 'alice@acme.dev');
-    assert.equal(await store.spendEmailLink('digest-2', now + 120_000), undefined);
-  });
-
-  it('gives one sign-in to two calls that spend one link at the same moment', async (store) => {
-    const now = Date.now();
-    await store.createEmailLink({ codeHash: 'digest-1', email: 'alice@acme.dev', expiresAt: now + 60_000 });
-
-    const answers = await Promise.all([1, 2, 3].map(() => store.spendEmailLink('digest-1', now)));
-
+    assert.match(first.id, /^dom_/);
+    assert.deepEqual(again, first, 'the same domain twice is the same row, as it stands');
+    assert.deepEqual(first, { id: first.id, workspaceId: workspace.id, domain: 'acme.dev', createdAt: 1_000 });
+    assert.notEqual(theirs.id, first.id);
     assert.deepEqual(
-      answers.filter((answer) => answer !== undefined),
-      ['alice@acme.dev'],
+      (await store.domains(workspace.id)).map((domain) => domain.id),
+      [first.id, second.id],
+    );
+    assert.deepEqual(
+      (await store.domains(other.id)).map((domain) => domain.id),
+      [theirs.id],
     );
   });
 
-  it('keeps a link that can still be spent when another one is made', async (store) => {
-    const now = Date.now();
-    await store.createEmailLink({ codeHash: 'digest-1', email: 'alice@acme.dev', expiresAt: now + 60_000 });
-    await store.createEmailLink({ codeHash: 'digest-2', email: 'alice@acme.dev', expiresAt: now + 60_000 });
-    await store.createEmailLink({ codeHash: 'digest-3', email: 'bob@acme.dev', expiresAt: now + 60_000 });
+  it('removes a domain only from its own workspace', async (store) => {
+    const { workspace } = await world(store);
+    const { workspace: other } = await otherWorld(store);
+    const domain = await store.addDomain(workspace.id, 'acme.dev', 1_000);
 
-    assert.equal(await store.spendEmailLink('digest-1', now), 'alice@acme.dev');
-    assert.equal(await store.spendEmailLink('digest-2', now), 'alice@acme.dev');
-    assert.equal(await store.spendEmailLink('digest-3', now), 'bob@acme.dev');
+    assert.equal(await store.removeDomain(other.id, domain.id), false);
+    assert.equal((await store.domains(workspace.id)).length, 1);
+    assert.equal(await store.removeDomain(workspace.id, domain.id), true);
+    assert.deepEqual(await store.domains(workspace.id), []);
+  });
+
+  it('writes what the DNS said of a domain, and keeps the first moment of a loss', async (store) => {
+    const { workspace } = await world(store);
+    const { id } = await store.addDomain(workspace.id, 'acme.dev', 1_000);
+    const read = async () => (await store.domains(workspace.id))[0];
+
+    // Never proven: an answer without the record loses nothing.
+    await store.noteDomainCheck(id, 'missing', 2_000);
+    assert.deepEqual(await read(), {
+      id,
+      workspaceId: workspace.id,
+      domain: 'acme.dev',
+      createdAt: 1_000,
+      checkedAt: 2_000,
+    });
+
+    await store.noteDomainCheck(id, 'found', 3_000);
+    assert.equal((await read())?.verifiedAt, 3_000);
+    assert.equal((await read())?.lostAt, undefined);
+
+    // A DNS that did not answer says nothing of the record.
+    await store.noteDomainCheck(id, 'unknown', 4_000);
+    assert.deepEqual(
+      { verified: (await read())?.verifiedAt, lost: (await read())?.lostAt, checked: (await read())?.checkedAt },
+      { verified: 3_000, lost: undefined, checked: 4_000 },
+    );
+
+    await store.noteDomainCheck(id, 'missing', 5_000);
+    await store.noteDomainCheck(id, 'missing', 6_000);
+    assert.equal((await read())?.lostAt, 5_000, 'the first moment of a loss stays');
+    assert.equal((await read())?.verifiedAt, 3_000);
+
+    await store.noteDomainCheck(id, 'found', 7_000);
+    assert.equal((await read())?.lostAt, undefined, 'a record that is back ends the loss');
+    assert.equal((await read())?.verifiedAt, 7_000);
+  });
+
+  it('gives the proven domains to ask again, longest ago first, up to the limit', async (store) => {
+    const { workspace } = await world(store);
+    const never = await store.addDomain(workspace.id, 'never.dev', 1_000);
+    const old = await store.addDomain(workspace.id, 'old.dev', 1_000);
+    const recent = await store.addDomain(workspace.id, 'recent.dev', 1_000);
+    const older = await store.addDomain(workspace.id, 'older.dev', 1_000);
+    await store.noteDomainCheck(never.id, 'missing', 1_500);
+    await store.noteDomainCheck(old.id, 'found', 2_000);
+    await store.noteDomainCheck(older.id, 'found', 1_800);
+    await store.noteDomainCheck(recent.id, 'found', 9_000);
+
+    assert.deepEqual(
+      (await store.domainsToCheck(5_000, 10)).map((domain) => domain.domain),
+      ['older.dev', 'old.dev'],
+    );
+    assert.deepEqual(
+      (await store.domainsToCheck(5_000, 1)).map((domain) => domain.domain),
+      ['older.dev'],
+    );
+    assert.deepEqual(await store.domainsToCheck(1_800, 10), []);
+  });
+
+  it('names the previews of a domain on a site of its own workspace only, and forgets them with the site', async (store) => {
+    const { workspace } = await world(store);
+    const { workspace: other } = await otherWorld(store);
+    const site = await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'members' });
+    const theirs = await store.addSite(other.id, { origin: 'https://globex.dev', visibility: 'members' });
+    const domain = await store.addDomain(workspace.id, 'preview.acme.dev', 1_000);
+    const read = async () => (await store.domains(workspace.id))[0]?.previewsSite;
+
+    assert.equal(await store.setPreviews(workspace.id, domain.id, theirs.id), false);
+    assert.equal(await read(), undefined);
+    assert.equal(await store.setPreviews(other.id, domain.id, theirs.id), false);
+    assert.equal(await read(), undefined);
+
+    assert.equal(await store.setPreviews(workspace.id, domain.id, site.id), true);
+    assert.equal(await read(), site.id);
+    assert.equal(await store.setPreviews(workspace.id, domain.id, undefined), true);
+    assert.equal(await read(), undefined);
+
+    await store.setPreviews(workspace.id, domain.id, site.id);
+    await store.removeSite(workspace.id, site.id);
+    assert.equal(await read(), undefined, 'a site that goes takes its previews with it');
+    assert.equal((await store.domains(workspace.id)).length, 1, 'and the domain stays');
+  });
+
+  it('removes the domains of a workspace it deletes, and only those', async (store) => {
+    const { workspace } = await world(store);
+    const { workspace: other } = await otherWorld(store);
+    await store.addDomain(workspace.id, 'acme.dev', 1_000);
+    await store.addDomain(other.id, 'globex.dev', 1_000);
+
+    await store.deleteWorkspace(workspace.id);
+
+    assert.deepEqual(await store.domains(workspace.id), []);
+    assert.equal((await store.domains(other.id)).length, 1);
   });
 }

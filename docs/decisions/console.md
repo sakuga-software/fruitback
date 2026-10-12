@@ -51,6 +51,13 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the code of the worker, « Fruitback did not answer. Try again. » for no answer and a `5xx`, and a
   sentence of the screen that blames no field for the rest. No failure clears a field. A copy goes
   through `copyText`, and a copy the browser refuses says so: the text stays on screen to select.
+- **The members and the invitations come from the worker's routes of the organization plugin**
+  (FRU-104): `members.tsx` lists the members to whoever may read them, and the invitations that
+  wait to an owner or an admin, with « Resend » and « Cancel ». A guest sees their own row only, as
+  the worker answers them nothing more. **The front door looks for an invitation first**
+  (`home.tsx`): somebody who signed in from the message of an invitation lands on `/invitations`,
+  not on the setup that makes a workspace of their own. A worker of before has no member list: the
+  screen draws the row of the person and says that invitations come later.
 - **The address of a site is read by `site-address.ts`, on every screen that asks for one**
   (FRU-167). A host with no scheme is `https://`, as in the extension. The field is not `type="url"`:
   the browser stopped the form with its own bubble, in its own language, and the sentence of the
@@ -64,7 +71,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   it fails** (FRU-163): it lightens a hovered button, and white on that red was 3.9:1, so
   `--accent-hover` is the strong accent (6.47:1). It draws an alert as a white card with muted text, so
   `.alert--danger` puts the danger of the theme on the text and the border (5.84:1 on its tint).
-  `e2e/console-kit.spec.ts` measures both. **A button takes no `title`**: a tooltip does not open on a disabled
+  `e2e/console-kit.spec.ts` measures both. **The shapes are the boards', not HeroUI's** (FRU-168):
+  HeroUI draws every button as a pill and a field at 12 px with a shadow and a border of 1.49:1.
+  `app.css` gives `--field-radius` 8 px, `--field-shadow` nothing to paint and `--field-border`
+  `#8f8883` (3.49:1); `.wide-button` is 6 px with that border, and the pill stays for the action of
+  a step; the asterisk of a required label is taken off, as on the boards. The same spec measures them. **A button takes no `title`**: a tooltip does not open on a disabled
   control, so the reason is written beside it. The overlays of React Aria position with inline
   styles, which the console's CSP allows (`style-src 'unsafe-inline'`); its scripts stay hashed.
 
@@ -72,19 +83,26 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 
 ### The rules, in short
 
-- **The console holds no token.** Against a worker that serves better-auth (FRU-147), a call is a
-  `fetch` with the cookie of the worker and no `Authorization`. The cookie is `HttpOnly`,
+- **The console holds no token.** A call is a `fetch` with the cookie of the worker and no
+  `Authorization` (FRU-147, and no other way since FRU-150). The cookie is `HttpOnly`,
   `SameSite=Strict`, `Path=/console`: `document.cookie` does not show it, and nothing is in
   `localStorage` or `sessionStorage`. `e2e/console-cookie-session.spec.ts` reads all three, after it
   checked that the browser does hold the cookie.
 - **No client of better-auth.** The console calls the routes of the worker with `fetch`
   (`/console/auth/email`, `/console/auth/email/redeem`, `/console/auth/sign-out`). The bundle and the
   policy of the image do not change: `csp.mjs`, hashed scripts, no `'unsafe-inline'` for a script.
-- **The worker says which path it serves, in `GET /auth/providers`.** With `betterAuth` in the
-  answer, the console takes the cookie, and the providers of `betterAuth`. Without it, and until the
-  worker answered, it signs in as before: `session-of-before.ts` holds the access token and the one
-  refresh in flight of FRU-99. The console and the worker are not deployed at the same instant.
-  **FRU-150 removes `session-of-before.ts`**, and with it every token of the console.
+- **The worker says what it offers, in `GET /auth/providers`**: the providers of `betterAuth`, and
+  whether it sends mail. A worker that says no `betterAuth` signs nobody in, and the console offers
+  nothing (test:`signs nobody in: no provider, no token, and no route of the sign-in of before`). Until FRU-150 the console signed
+  in as before against such a worker, with an access token in `session-of-before.ts`; that file is
+  gone, and with it every token of the console. **So this console is deployed after its worker says
+  `betterAuth`**, and not before.
+- **A worker that refuses `GET /auth/providers` said nothing, and that costs nothing any more**
+  (FRU-205, then FRU-150). While the console had two paths, it took the path of before on a `429`
+  or a `5xx`, spent the refresh cookie of before and held a token; FRU-205 made every call wait
+  for the answer. There is one path now: a call needs no answer of that route, and goes with the
+  cookie. A refusal there still shows no provider as « not set up »: `signInProviders` answers
+  `undefined`.
 - **A sign-in with a provider is a navigation of the whole page**, to
   `<worker>/console/auth/start/<provider>` (`providerStart`). Never a `fetch` of `/sign-in/social`:
   the cookie of the state would be set on the answer of a call, and WebKit did not send it back when
@@ -100,16 +118,22 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the sign-in itself: it has nothing typed to keep.
 - **« Sign out » ends the session on the worker** (`/console/auth/sign-out`): the cookie is refused
   at the next call, in every tab and for whoever copied it.
+- **« Sign out » says when it failed.** `signOut` answers `false` unless the worker said that the
+  session ended (FRU-204), and « My account » then stays, with « You are still signed in ». A screen that
+  says « signed out » over a session that is still good leaves the browser open to the next person.
+  better-auth 1.7.7 answers `200` to a sign-out with no session, with one that already ended, and
+  with a cookie that is not one (measured, and held by a test of the worker): somebody who signs
+  out in a second tab is not held on that sentence.
 
 ### The reasons, and the measurements
 
-- **Why the path of before stays in the console, where the ticket says the token goes.** The ticket
-  asks both that the token disappears and that this console works against a worker of before. The
-  second one decides: a console that is deployed before its worker would sign nobody in. So the
-  token of before is in one file that nothing calls once the worker says `betterAuth`, and
-  `api.test.ts` holds that no call has an `Authorization` then.
-- **An answer of `/auth/providers` with no body is a worker of before.** A stub of a spec answers
-  `204` there. Read as better-auth, or read without a check, it broke every console spec (measured).
+- **Why the path of before stayed in the console until FRU-150, where FRU-148 said the token goes.**
+  FRU-148 asked both that the token disappears and that the console works against a worker of
+  before. The second one decided: a console that is deployed before its worker would sign nobody
+  in. So the token of before was in one file that nothing called once the worker said `betterAuth`.
+  FRU-150 removed the file, after the switch of the production.
+- **An answer of `/auth/providers` with no body offers nothing.** A stub of a spec answers `204`
+  there. Read without a check, it broke every console spec (measured).
 - **The spec starts its worker as a process** (`apps/worker/src/cloud-worker.fixture.ts`): Playwright
   compiles a spec as CommonJS and cannot import the worker, which is ES modules. The spec hands the
   process each request that the console sends to the address of the worker, and reads the mail from

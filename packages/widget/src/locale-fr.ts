@@ -38,9 +38,12 @@ export const FRENCH: Catalog = {
   'composer.send': 'Envoyer',
   'composer.sending': 'envoi…',
   'composer.sent': 'envoyé',
+  'composer.keep': 'Garder pour plus tard',
+  'composer.kept': 'gardée pour plus tard',
   'composer.failed': 'pas passé — le texte est gardé, réessayez',
   'composer.failedWait': 'Trop de notes en ce moment. Le texte est gardé : renvoyez-le dans une minute.',
   'composer.failedRefused': 'Ce site n’accepte pas votre note d’ici. Le texte est gardé : prévenez l’équipe du site.',
+  'composer.failedSignedOut': 'Votre session a expiré. Le texte est gardé : reconnectez-vous, puis renvoyez-le.',
   'composer.failedTooLarge':
     'Cette note est trop lourde. Le texte est gardé : raccourcissez-la, ou désactivez l’image dans les réglages.',
   'composer.destination': 'Envoyer vers : {destination}',
@@ -51,9 +54,12 @@ export const FRENCH: Catalog = {
 
   'pin.label': '{stage} · {note}',
   'pin.labelUncertain': '{stage} · {note} (position approximative)',
+  'pin.labelDraft': 'Pas encore envoyée · {note}',
 
   'thread.close': 'Fermer',
   'thread.dialog': 'Feedback {identifier}',
+  'thread.draft': 'Pas encore envoyée',
+  'thread.draftDialog': 'Note pas encore envoyée',
   'thread.noNote': 'Aucune note.',
   'thread.noReplies': 'Pas encore de réponse.',
   'thread.replies': 'Réponses',
@@ -78,6 +84,9 @@ export const FRENCH: Catalog = {
   'sidebar.count': { one: '{count} note', other: '{count} notes' },
   'sidebar.approximate': 'Position approximative',
   'sidebar.detached': 'Élément introuvable sur cette page',
+  'sidebar.drafts': 'Gardées pour plus tard, pas encore envoyées',
+  'sidebar.sendDrafts': { one: 'Envoyer {count} note', other: 'Envoyer les {count} notes' },
+  'sidebar.draftsSent': { one: '{count} note envoyée', other: '{count} notes envoyées' },
 
   'export.title': 'Feedback sur {url}',
   'export.empty': 'Aucun feedback sur cette page.',
