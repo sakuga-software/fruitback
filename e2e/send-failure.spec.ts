@@ -16,7 +16,7 @@ async function mount(page: Page, testCase: string, locale: string): Promise<void
   await page.addScriptTag({ path: IIFE });
   await page.evaluate(
     ([endpoint, tag]) =>
-      (globalThis as { Fruitback: { init(options: Record<string, string>): unknown } }).Fruitback.init({
+      (globalThis as unknown as { Fruitback: { init(options: Record<string, string>): unknown } }).Fruitback.init({
         endpoint: endpoint as string,
         clientId: 'playground',
         locale: tag as string,
