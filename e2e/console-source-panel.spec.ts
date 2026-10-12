@@ -28,7 +28,6 @@ async function stubWorker(page: Page, locale: 'en' | 'fr'): Promise<void> {
   await page.route(`${WORKER_ORIGIN}/**`, (route) => {
     const { pathname } = new URL(route.request().url());
     const json = (body: unknown) => route.fulfill({ json: body });
-    if (pathname === '/console/session/refresh') return json({ accessToken: 'token' });
     if (pathname === '/console/me') return json(me);
     if (pathname === '/console/workspaces/w1/sites') {
       return json({ sites: [{ id: 's1', origin: 'https://staging.acme.dev', visibility: 'members' }] });
