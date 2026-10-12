@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { chainOf, identityOf } from './session-rows.ts';
-import type { RotationOutcome, SessionStore } from './session.ts';
+import { type RotationOutcome, type SessionStore, namedSessionsOf } from './session.ts';
 import { StoreError } from './store.ts';
 
 /**
@@ -474,6 +474,40 @@ export function createSqliteSessionStore(path: string): SessionStore {
         database.exec('COMMIT');
 
         return revoked.changes === 1;
+      } catch (error) {
+        database.exec('ROLLBACK');
+        throw error;
+      }
+    },
+
+    /**
+     * Ends the sessions of a person, of a workspace, or of a person in a workspace (FRU-149).
+     *
+     * Every row of each chain carries the person and the workspace of its pairing, so one statement
+     * reaches every link, live head and orphan alike. A code that was minted and not redeemed is
+     * marked spent: it would open a session for a membership that is gone.
+     *
+     * A table scan: no index names a person. It runs when a member is removed, never on a request of
+     * the widget.
+     */
+    async endSessionsOf(of, now) {
+      const { subject, workspace } = namedSessionsOf(of);
+      const database = connect(path);
+      const named = [subject ?? null, subject ?? null, workspace ?? null, workspace ?? null];
+
+      database.exec('BEGIN IMMEDIATE');
+      try {
+        database
+          .prepare(
+            'UPDATE sessions SET revoked_at = ? WHERE revoked_at IS NULL AND (? IS NULL OR subject = ?) AND (? IS NULL OR workspace = ?)',
+          )
+          .run(now, ...named);
+        database
+          .prepare(
+            'UPDATE pairings SET redeemed_at = ? WHERE redeemed_at IS NULL AND (? IS NULL OR subject = ?) AND (? IS NULL OR workspace = ?)',
+          )
+          .run(now, ...named);
+        database.exec('COMMIT');
       } catch (error) {
         database.exec('ROLLBACK');
         throw error;

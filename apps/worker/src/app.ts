@@ -14,6 +14,8 @@ import {
 import { type AccountStore, type Role, can } from './accounts.ts';
 import { SESSION_SITES_PATH, handleSessionSites } from './session-sites.ts';
 import { type Auth, authFor } from './auth.ts';
+import { createWorkspaceWithPlugin, handleOrganizationRoutes } from './auth-organization.ts';
+import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
 import { AuthUnavailable, handleAuthRoutes, isAuthRoute, sessionOfCookie } from './auth-routes.ts';
 import { consoleCors, handleConsoleSession, isConsoleRoute } from './console-routes.ts';
 import { handleConsoleApi } from './console-api.ts';
@@ -37,6 +39,7 @@ import { type Kv, KvError, processKv } from './kv.ts';
 import { postgresAccountStore, postgresSessionStore } from './postgres-stores.ts';
 import { withoutAddress } from './postgres.ts';
 import {
+  type SessionIdentity,
   type SessionStore,
   createPairing as openPairing,
   redeemPairing,
@@ -54,9 +57,6 @@ import { createSqliteSessionStore } from './session-sqlite.ts';
  * `server.ts` adapts `node:http` onto it. That keeps every behaviour testable without opening a
  * socket, and keeps the door open if this ever moves to another runtime.
  */
-
-/** A seed with a long note and a DOM path is a few KB. 64 is generous; unbounded is an invitation. */
-const MAX_BODY_BYTES = 64 * 1_024;
 
 /**
  * Which store this process writes to (FRU-29, FRU-33).
@@ -393,20 +393,20 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
         if (auth === undefined || served.consoleUrl === undefined)
           return json(404, { error: 'not-found' }, cors.headers);
         try {
-          const answer = await handleAuthRoutes(
-            request,
-            pathname,
-            {
-              auth,
-              accounts,
-              mailer,
-              kv,
-              consoleUrl: served.consoleUrl,
-              clientIp: context.clientIp,
-              trackIp: served.authTrackIp,
-            },
-            cors.headers,
-          );
+          const routes = {
+            auth,
+            accounts,
+            mailer,
+            kv,
+            consoleUrl: served.consoleUrl,
+            clientIp: context.clientIp,
+            trackIp: served.authTrackIp,
+          };
+          // The routes of the organization plugin first, each under its rule (FRU-149). A path of the
+          // plugin that has none answers `404` there, and never reaches the list below.
+          const answer =
+            (await handleOrganizationRoutes(request, pathname, { ...routes, sessions }, cors.headers)) ??
+            (await handleAuthRoutes(request, pathname, routes, cors.headers));
           if (answer !== undefined) return answer;
         } catch (error) {
           if (error instanceof StoreError) throw error;
@@ -485,6 +485,9 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
               : {
                   cookieSession: async (each: Request) => (await sessionOfCookie(auth, each))?.userId,
                   consoleUrl: served.consoleUrl,
+                  // A workspace is made by the organization plugin for somebody of the cookie (FRU-149).
+                  createWorkspace: async (each: Request, name: string) =>
+                    createWorkspaceWithPlugin(await auth, each.headers, name),
                 }),
           },
           cors.headers,
@@ -566,7 +569,7 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
 async function handleSession(
   request: Request,
   pathname: string,
-  config: WorkerConfig,
+  config: Served,
   context: RequestContext,
   headers: Record<string, string>,
 ): Promise<Response> {
@@ -593,6 +596,12 @@ async function handleSession(
     // One answer for a code that never existed and one already spent: telling them apart is how a
     // caller works out which codes exist. `session.ts` returns the same reason for both.
     if (!redeemed.ok) return json(401, { error: redeemed.reason }, headers);
+    // A code minted for somebody who left the workspace since: the same answer, and no session stays.
+    if (!(await stillOfTheWorkspace(config, redeemed.session.identity))) {
+      await revokeSession(store, redeemed.session.refreshToken);
+
+      return json(401, { error: 'code-spent-or-expired' }, headers);
+    }
 
     return json(200, redeemed.session, headers);
   }
@@ -602,6 +611,13 @@ async function handleSession(
 
   if (pathname === '/session/refresh') {
     const refreshed = await refreshSession(store, refreshToken, config.identitySecret);
+    // The session of somebody who is no longer of the workspace ends here (FRU-149), whatever
+    // removed them. The answer is the one of a session that ended: it says nothing of the workspace.
+    if (refreshed.ok && !(await stillOfTheWorkspace(config, refreshed.identity))) {
+      await revokeSession(store, refreshed.refreshToken);
+
+      return json(401, { error: 'session-revoked-or-expired' }, headers);
+    }
 
     return refreshed.ok
       ? json(
@@ -630,6 +646,24 @@ async function handleSession(
   }
 
   return json(404, { error: 'not-found' }, headers);
+}
+
+/**
+ * Whether the person of a session is still a member of the workspace it names (FRU-149).
+ *
+ * `verifyForClient` compares the workspace of an access token, and never a role: until a person
+ * could be removed, a session of a workspace was a member of it. Now the refresh is where a session
+ * that outlived its membership ends, ten minutes at most after the access token it last minted.
+ * Removing a member also ends their sessions at once (`endSessionsOf`); this is the second lock, for
+ * a removal that did not go through that call, and for a row somebody deleted by hand.
+ *
+ * `true` on a worker with no accounts, and for a session that names no workspace: nobody is a member
+ * of anything there, and the operator named the person with the pairing.
+ */
+async function stillOfTheWorkspace(config: Served, identity: SessionIdentity): Promise<boolean> {
+  if (config.roleIn === undefined || identity.workspace === undefined) return true;
+
+  return (await config.roleIn(identity.workspace, identity.subject)) !== undefined;
 }
 
 /** Mints a pairing code. Not reachable over HTTP — see `handleSession` and `main.ts`. */
@@ -1241,51 +1275,6 @@ async function postBatch(
   if (kept.length === 0) return json(502, { error: 'store-unavailable', results }, corsHeaders);
 
   return json(kept.length === results.length ? 201 : 207, { results }, corsHeaders);
-}
-
-/**
- * Read the body, refusing anything over the cap.
- *
- * Streamed rather than `request.text()`: a client that omits or forges `Content-Length` would
- * otherwise get the whole payload buffered in memory before being told it was too large, which
- * defeats the point of having a cap.
- */
-async function readBoundedText(request: Request): Promise<string | null> {
-  const declared = Number(request.headers.get('Content-Length') ?? '');
-  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) return null;
-  if (request.body === null) return '';
-
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    size += value.byteLength;
-    if (size > MAX_BODY_BYTES) {
-      // Stop pulling instead of draining the rest of the upload.
-      await reader.cancel();
-      return null;
-    }
-
-    chunks.push(value);
-  }
-
-  return new TextDecoder().decode(concat(chunks, size));
-}
-
-function concat(chunks: Uint8Array[], size: number): Uint8Array {
-  const body = new Uint8Array(size);
-  let offset = 0;
-
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-
-  return body;
 }
 
 function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {

@@ -19,6 +19,7 @@ import {
 import { sessionCases } from './session-conformance.fixture.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
 import {
+  type SessionStore,
   createPairing,
   digest,
   normalizePairingCode,
@@ -243,7 +244,11 @@ describe('two calls on one session at the same moment, on two connections (FRU-1
     ].join('\n'),
   };
   // Nothing holds the chain: two calls read the token before either writes.
-  const WITHOUT_THE_CHAIN = { from: ".for('update')", to: '' };
+  // (The text is the one of `holdChain`, by its indentation: `endSessionsOf` holds rows too.)
+  const WITHOUT_THE_CHAIN = {
+    from: ".orderBy(sessions.token_hash)\n    .for('update');",
+    to: '.orderBy(sessions.token_hash);',
+  };
   // The first call has decided, and has not written the session yet.
   const A_SESSION = { table: 'sessions' };
   const A_SUCCESSOR = { table: 'sessions', when: 'NEW.predecessor_hash IS NOT NULL' };
@@ -291,6 +296,73 @@ describe('two calls on one session at the same moment, on two connections (FRU-1
       failedOnItsAssertion(await outcomeOf(TOKEN_AND_SUCCESSOR, WITHOUT_THE_CHAIN, A_SUCCESSOR, createRealDatabase));
     },
   );
+});
+
+/**
+ * A member is removed while their extension refreshes (FRU-149). The refresh holds its chain and has
+ * written a successor that it did not commit yet; the end of the sessions waits for it. One statement
+ * that ends the tokens it could see when it started does not see that successor, which stays live:
+ * the store holds every chain of the person first, and only then reads what to end.
+ */
+describe('the sessions of a member end while one of them refreshes, on two connections (FRU-149)', () => {
+  const IN_FLIGHT = 'ends the successor of a refresh that was in flight';
+  const identity = { subject: 'alice', workspace: 'ws_acme' };
+  const inFlight = (it: (name: string, run: (store: SessionStore) => Promise<void>) => void): void =>
+    it(IN_FLIGHT, async (store) => {
+      const now = Date.now();
+      const redeemed = await redeemPairing(store, (await createPairing(store, identity, now)).code, SECRET, now);
+      assert.ok(redeemed.ok);
+      const [tokenHash, successorHash] = await Promise.all([
+        digest(redeemed.session.refreshToken),
+        digest('a-successor'),
+      ]);
+
+      const rotating = store.rotateSession({ tokenHash, successorHash, now: now + 1, graceMs: 60_000 });
+      // The trigger holds the successor inside the transaction of the refresh: the end starts then.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      await store.endSessionsOf(identity, now + 2);
+
+      assert.deepEqual(await rotating, { outcome: 'rotated', identity }, 'the refresh did not run first');
+      const after = await store.rotateSession({
+        tokenHash: successorHash,
+        successorHash: await digest('another'),
+        now: now + 3,
+        graceMs: 60_000,
+      });
+      assert.notEqual(after.outcome, 'rotated', 'the successor of the refresh is live after the sessions ended');
+    });
+  const outcomeOf = (change: { from: string; to: string }, open: () => Promise<Database>) =>
+    outcomeOnChangedStore({
+      file: 'session-postgres.ts',
+      factory: 'createPostgresSessionStore',
+      cases: inFlight,
+      name: IN_FLIGHT,
+      change,
+      held: { table: 'sessions', when: 'NEW.predecessor_hash IS NOT NULL' },
+      open,
+    });
+  // The chains are read, and not held.
+  const WITHOUT_THE_HOLD = {
+    from: ".orderBy(sessions.token_hash)\n          .for('update');",
+    to: '.orderBy(sessions.token_hash);',
+  };
+  // The store as it is, through the same machinery: the case can pass.
+  const AS_IT_IS = { from: 'A code that nobody redeemed yet', to: 'A code that nobody has redeemed yet' };
+
+  it('passes on PGlite with no hold on the chains of the person', async () => {
+    assert.equal(await outcomeOf(WITHOUT_THE_HOLD, createPgliteDatabase), 'passed');
+  });
+
+  it('fails on a real server with no hold on the chains of the person', { skip: NO_REAL_POSTGRES }, async () => {
+    const outcome = await outcomeOf(WITHOUT_THE_HOLD, createRealDatabase);
+
+    assert.ok(outcome instanceof assert.AssertionError, `the case did not fail on its assertion: ${String(outcome)}`);
+    assert.match(outcome.message, /the successor of the refresh is live/);
+  });
+
+  it('passes on a real server with the store as it is', { skip: NO_REAL_POSTGRES }, async () => {
+    assert.equal(await outcomeOf(AS_IT_IS, createRealDatabase), 'passed');
+  });
 });
 
 /**

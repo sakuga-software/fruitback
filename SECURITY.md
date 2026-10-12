@@ -605,8 +605,9 @@ the cookie from another origin, or from none, and takes it from the console`. be
   person still consents at the provider, and comes back with a state that only this browser holds.
 - **Only the routes it names are served.** `SERVED_PATHS` of `auth.ts` lists them: `/ok`,
   `/get-session`, `/sign-out`, `/revoke-sessions`, `/sign-in/social`, the two callbacks and `/error`.
-  Any other path under `/console/auth/`, the routes of the organization plugin included, answers
-  `404` before better-auth reads it.
+  Any other path under `/console/auth/` answers `404` before better-auth reads it. The routes of the
+  organization plugin have a list of their own, with a rule for each of the four that are open: see
+  [What the console may change, and who](#what-the-console-may-change-and-who-fru-99).
 
 ### better-auth, what it keeps and what it refuses (FRU-144)
 
@@ -690,8 +691,8 @@ caller writes`. Left alone, better-auth takes an `X-Forwarded-For` that holds on
   its rotation and its replay detection. Its table is `sessions`, which holds digests; the table of
   better-auth is `session`, without the `s`.
 - **A guest and the tracker.** The four roles reach better-auth from the one table of `accounts.ts`:
-  a guest has no `see-tracker` there either. That is a table for the routes of the organization
-  plugin, and none of them is served (FRU-149).
+  a guest has no `see-tracker` there either. No route of the organization plugin answers a connector
+  or a destination: its four open routes answer members, and a guest reads none of them (FRU-149).
 
 ### The key of a connector (FRU-121)
 
@@ -848,6 +849,75 @@ does not exist. Adding a site keeps the origin of the pasted address and nothing
 (FRU-100). The console puts it after the `#` of the worker's pairing page, and the extension spends it
 as it spends a code an operator minted. **A guest's session reaches every site of its workspace
 today**: sharing one site with one guest is FRU-104, and until it lands the console creates no guest.
+
+**The members of a workspace (FRU-149).** With better-auth on, four routes of its organization
+plugin are served under `/console/auth/organization/`, with the cookie of the console. Each one has
+a rule in `ORGANIZATION_PATHS` (`organization-paths.ts`):
+
+| Route                | Who                                          | What it does                |
+| -------------------- | -------------------------------------------- | --------------------------- |
+| `list-members`       | owner, admin, member                         | names, addresses and roles  |
+| `update-member-role` | owner, admin                                 | one role, one of the four   |
+| `remove-member`      | owner, admin                                 | the member, and their codes |
+| `leave`              | anybody of the workspace, but its last owner | themselves                  |
+
+- **better-auth is the second reader of a call, never the first.** Before it reads a request the
+  worker has checked the cookie, the `Origin` of a call that changes something, the fields of the
+  request, the **one** role of the caller in the workspace the call names, and what `can` gives that
+  role. Then better-auth is handed a request that the worker wrote, and its own checks stay.
+  test:`answers each role, on each open route of the plugin, what its rule says` asks the four
+  routes as each role, as somebody of another workspace (`404`) and as nobody (`401`).
+- **What a guest does not read: who the members are, and the invitations.** A guest is a reviewer
+  from outside, often the client of the team: the list holds the name and the address of every
+  member, the other guests among them. The plugin asks no permission to list the members, and
+  answers them and the invitations to a guest (measured, and kept measured by the control of
+  test:`does not let a guest read the members or the invitations, on the API`). So `list-members`
+  asks `can(role, 'read-members')`, which a guest does not have, and the routes that answer an
+  invitation are closed to every role: the id of an invitation is worth its link, and the
+  invitations are FRU-104. A guest reads the name of the workspace, their own role, and its sites
+  without their destinations, as before.
+- **Every other route of the plugin answers `404`, twice.** The worker answers it for a path that
+  has no rule, and better-auth is built with that path closed to a request: the list of the closed
+  paths is read from the plugin as it is installed, so a route that a later version adds is closed
+  before anybody reads its name.
+  test:`answers 404 on every route of the plugin that has no rule, and on an open one taken out of the list`.
+- **A call names its workspace by its id, once.** The worker reads the role in that workspace, so
+  better-auth must not read another one: a slug, a field given twice, and any field the rule does
+  not have refuse the call (`400`).
+  test:`refuses a call that names its workspace twice, by a slug, or with a field the rule does not have`.
+- **A member has one role, one of the four.** better-auth takes a list of roles, writes
+  `guest,admin`, and gives the union of what each one may do (measured). Three things hold one role:
+  the route refuses a role that is not one of the four, a hook of the plugin refuses the same for a
+  caller that is not the route, and the worker reads a row that holds anything else as **no role**:
+  a `guest,admin` written straight in the database is a member of nothing, on the routes of the
+  console, on these four, and for the extension.
+  test:`gives a member one role, one of the four: on the route, and in the plugin called in the process`,
+  test:`gives no right for a row « guest,admin » planted in the database`. No role is made at run
+  time, and there is no team.
+- **The last owner stays.** They cannot leave, be removed or be demoted, by themselves or by an
+  admin, and an admin cannot make an owner:
+  test:`keeps the last owner: they cannot leave, be removed, or be demoted, by themselves or by an admin`.
+  These are checks of better-auth 1.7.7, held by that test.
+- **Somebody who is removed, or who leaves, keeps no extension for the workspace.** Every chain of
+  refresh tokens of the person for that workspace is ended at once, and so is a pairing code that
+  was minted for them and not redeemed. The refresh and the pairing also read the membership: a
+  session of somebody who is no longer a member ends at its next refresh, whatever removed them.
+  `GET /session/sites` reads the role at each call.
+  test:`stops the extension of a member who is removed: no refresh, no site, no code, and the others go on`,
+  test:`ends at the next refresh the session of somebody whose membership went by another way`.
+  **What remains: an access token that was already minted.** It reads the notes of the sites of
+  the workspace, and leaves notes under the name of the person, until it expires: **11 minutes at
+  most**, its 10 minutes and the 60 seconds of clock skew. `GET /feedback` and `POST /feedback`
+  compare the workspace of the token, and read no role.
+- **A workspace is deleted by its owner only**, by `DELETE /console/workspaces/<id>`. The tokens of
+  its Linear connectors are revoked at Linear first, as when one connector is removed; then its
+  members, sites, connectors and waiting deliveries go, and every extension paired for it stops.
+  The route of the plugin that deletes a workspace does none of that: it is closed to a request,
+  and refused to a call in the process.
+  test:`deletes a workspace for its owner only: the tokens of Linear first, then its sites, connectors, deliveries and extensions`.
+- **A workspace is made by the plugin for somebody of the cookie**: `POST /console/workspaces`
+  reads the name, then calls it in the process. Its route stays closed to a request: it takes a
+  slug, a logo and metadata that nothing reads.
 
 ### Personal data
 

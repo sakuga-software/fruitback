@@ -602,8 +602,9 @@ any store` asks it of every spec rather than of Linear.
   no change to the SQLite store loses a race. The cases that run calls at the same moment have a
   store that reads, waits a turn of the event loop, then writes: one account for one address, one
   sign-in for one link, one whole list of destinations for one site, one session for one code, one
-  live successor for one token, one end for a token and its successor. On SQLite these cases prove
-  nothing: they are there for a store on a network.
+  live successor for one token, one end for a token and its successor, no live successor of a
+  refresh when the sessions of a member end (FRU-149). On SQLite these cases prove nothing: they are
+  there for a store on a network.
 - **A rule that a foreign key holds has a store around the real one too.** A destination goes with
   its site, its connector and its workspace, and only with them. Without the key the statement
   fails, and a store that throws proves nothing of the case: the control wants an assertion of the
@@ -893,6 +894,8 @@ migrate` and `runMigrations()` never run on a database of the worker. **A plugin
   an action gives in the words of the plugin: `manage-members` invites and removes,
   `manage-workspace` renames, `delete-workspace` deletes. An action with no line there does not
   compile, and `roleStatements` refuses it at run time. The routes of the worker go on calling `can`.
+  `read-members` (FRU-149) gives nothing in the plugin, which asks no permission to list the members:
+  the route of the worker asks `can` for it.
 - **The limit of the worker is the only one, and better-auth reads no address.** Its own limit is
   off (`rateLimit.enabled: false`) and it tracks no address (`disableIpTracking`). The worker counts
   above the dispatch, for every route, with the address that `resolveClientIp` read.
@@ -1032,9 +1035,9 @@ nothing`.
   test:`builds better-auth at boot on a real server, and serves its routes` gives each run an empty
   database, and better-auth reads the search path (read: adapters/postgresql).
 - **The organization plugin is in the configuration for its tables and its roles.** `getMigrations`
-  reads the schema from the plugins, and `member` is a table of that plugin. None of its routes is
-  served. What a guest reads through them, and two roles on one member, are the next slices: the
-  constraint on `member` closes only the second row for one person.
+  reads the schema from the plugins, and `member` is a table of that plugin. None of its routes was
+  served in this slice. What a guest reads through them, and two roles on one member, are FRU-149,
+  below: the constraint on `member` closes only the second row for one person.
 - **What was left to the slice that serves a route** (FRU-147 decided each one, below): how long a
   session lasts, which ways to sign in, how two providers that prove one address are linked, and
   whether the `session` table keeps an address.
@@ -1509,7 +1512,7 @@ The console moves in FRU-148, and FRU-150 removes the path of before.
   `consoleCors` added to the answer: better-auth sets none. **Only the paths of `SERVED_PATHS`** in
   `auth.ts` reach better-auth; any other one answers `404` before it reads the request. A route that a
   plugin adds is closed until somebody names it there with its reason. The routes of the organization
-  plugin are closed until FRU-149.
+  plugin have their own list and their own file: see _The organization plugin_ below (FRU-149).
 - **A rejection of better-auth is a `502`**, with its reason in the log and no address of the
   database: `auth.handler` rejects on a schema that is wrong.
 - **The link of the e-mail is the worker's own two routes.** `POST /console/auth/email` calls
@@ -1589,6 +1592,113 @@ SHA-256 of the token>`, `verification.storeIdentifier: 'hashed'` digests that, a
 
 **Not measured here:** Safari; and the two OAuth applications for real, which need Mathieu. The
 measures in a browser are in the pull request of FRU-147.
+
+## The organization plugin: one role for a member, and what a guest does not read (FRU-149)
+
+Four routes of the organization plugin of better-auth are served, each under a rule. It is what the
+screen of the members and the invitations are built on (FRU-104). `SECURITY.md`, « What the console
+may change, and who », says what is protected; this section says how to change it.
+
+### The rules, in short
+
+- **A route of the plugin is open when `ORGANIZATION_PATHS` of `organization-paths.ts` has a rule for
+  it, and for no other reason.** A rule is a method, the action of `RIGHTS` the caller needs (or
+  none: any member), and the fields the call may hold, each with what reads it. To open a route,
+  write its rule, its line in `SECURITY.md`, and its line in the matrix of
+  test:`answers each role, on each open route of the plugin, what its rule says`, which fails on an
+  open route that it does not ask.
+- **`auth-organization.ts` reads a call before better-auth does**: the path and the method, the
+  cookie, the `Origin` of a change, the fields, the one role of the caller in the workspace the call
+  names, then `can`. It then writes the request that better-auth reads, with those fields and no
+  other. Never forward the request of the caller: `organizationSlug` names another workspace than
+  the one whose role was read, and `filterField` reads any column of `member`. The body is read
+  under the cap of the worker (`bounded-body.ts`, `413` over it). The other routes of the console
+  still read theirs with `request.text()`: that is older than this slice, and not changed by it.
+- **Every open route names its workspace in `organizationId`.** No call of the worker reads the
+  « active » workspace of a session, and nothing writes one: `createWorkspaceWithPlugin` passes
+  `keepCurrentActiveOrganization`. Do not open `set-active`.
+- **A path with no rule is closed twice**: `404` from the worker, and `disabledPaths` in the options
+  of better-auth, which `authOptions` computes from the endpoints of the plugin as it is installed.
+  A later version that adds a route adds it to that list with no change here.
+- **A role is written in three places, and each refuses what is not one role of the four**: the
+  reader of the field `role` in the rule, the hooks `beforeAddMember`, `beforeUpdateMemberRole` and
+  `beforeCreateInvitation` of the plugin (`ROLE_REFUSED`), and `roleOf` of `account-rows.ts`, which
+  reads `guest,admin` as no role. The store writes `owner` and nothing else. A new way to write a
+  member goes through one of the three hooks, or gets its own.
+- **Whoever stops being a member keeps no extension for the workspace**, by two locks.
+  `SessionStore.endSessionsOf` ends their chains and spends their codes at once: the hook
+  `afterRemoveMember` calls it, `auth-organization.ts` calls it after `leave` (which runs no hook in
+  1.7.7), `DELETE /console/workspaces/<id>` calls it for the workspace, and the hook
+  `user.delete.after` for an account. Then `/session/refresh` and `/session/pair` read the
+  membership (`stillOfTheWorkspace` in `app.ts`), for a removal that called nothing. A new way to
+  remove a member calls `endSessionsOf`; the second lock is not a reason to skip it, because it acts
+  ten minutes later.
+- **A workspace is made and deleted by the routes of the worker**, `POST /console/workspaces` and
+  `DELETE /console/workspaces/<id>`. The first calls the plugin in the process for somebody of the
+  cookie, and the store for a call with the token of before, until FRU-150. The second does not use
+  the plugin, whose deletion is off (`disableOrganizationDeletion`): it revokes the tokens of Linear
+  first, and the foreign keys take the rest.
+- **`endSessionsOf` holds every chain of the person before it ends them** (`session-postgres.ts`).
+  Without the hold, a refresh in flight leaves a live successor:
+  test:`fails on a real server with no hold on the chains of the person`.
+
+### The reasons, and the measurements
+
+Read on better-auth 1.7.7, in `plugins/organization/routes/crud-members.mjs`, `crud-org.mjs` and
+`adapter.mjs`; measured in `auth-organization.test.ts`, on PGlite and on PostgreSQL 17.
+
+- **What the plugin registers**: 22 routes with a path, and `addMember` with none (a call in the
+  process only). With teams and « dynamic access control » off, it registers no route of a team or
+  of a role. 4 have a rule, 18 are closed. `organization-paths.ts` says why for each family.
+- **`list-members`, `get-full-organization` and `list-invitations` answer `200` to a guest** on
+  better-auth alone: the plugin checks that the caller is a member, and no permission. The control
+  of test:`does not let a guest read the members or the invitations, on the API` builds an instance
+  with nothing closed and asks it.
+- **The decision on the members**: a guest does not read them. A guest is a reviewer from outside,
+  and the list is the names and the addresses of everybody, the other guests among them. A member
+  reads them: it is their team. The action is `read-members` in `RIGHTS`, so changing the decision
+  is one line there.
+- **What the plugin holds for the last owner** (and the test holds it against a later version): an
+  owner who is alone cannot leave, remove themselves or take another role; somebody who is not an
+  owner cannot remove an owner, change the role of one, or give that role. The answers are `400` and
+  `403` with the codes of the plugin, which the route hands over.
+  test:`keeps the last owner: they cannot leave, be removed, or be demoted, by themselves or by an admin`.
+- **An admin may remove another admin, and change their role.** The plugin has one permission for
+  members, and `RIGHTS` has one action. Nothing here ranks two admins.
+- **`leave` runs no hook**, and `remove-member` runs `afterRemoveMember`. So the end of the sessions
+  is in two places, each with its test: taking either one away fails
+  test:`stops the extension of a member who is removed: no refresh, no site, no code, and the others go on`
+  or test:`stops the extension of a member who leaves: no refresh, no site, no code, and the others go on`.
+- **The hook runs after the member is removed.** If the store of the sessions fails then, the call
+  answers `502` and the member is gone: the second lock ends their session at its next refresh.
+  Before the removal, a refresh between the two would leave a live chain for ten minutes more than
+  after it.
+- **A session whose row names an « active » workspace**: the plugin takes it out when the person
+  leaves, and finds the session by its token, through the layer that keeps a digest.
+  test:`lets somebody leave whose session names the workspace as its « active » one`.
+- **`create` through the plugin wants a slug.** The store writes the id of the workspace there. The
+  plugin makes the id itself, so the route gives a random `slug_…` that nothing reads.
+- **`beforeCreateOrganization` is not used**: when it answers data, 1.7.7 merges it over the whole
+  body of the call, `keepCurrentActiveOrganization` and `userId` included (read in `crud-org.mjs`,
+  not measured). The route gives the plugin what it validated, and needs no hook.
+- **An invitation with a role that is not one of the four is refused by the plugin itself**
+  (`ROLE_NOT_FOUND`), and one with two roles by the hook: test:`keeps an invitation to one role
+too, for the day its route opens`. The route that accepts an invitation runs no `beforeAddMember`
+  (read): FRU-104 measures what it writes before it opens it.
+- **`endSessionsOf` on PostgreSQL, measured on two connections.** A refresh holds the head of its
+  chain, writes its successor, and commits. One `UPDATE` that started meanwhile waits for the head,
+  then ends the rows it could see when it started: not the successor. With every row of the person
+  held first (`FOR UPDATE`, in the order of the tokens, as a rotation holds its two), the refresh
+  ends before the hold answers, and the statement that follows reads the successor. A trigger holds
+  the successor inside the transaction of the refresh to make the overlap, as for the other races
+  of the sessions.
+- **No index names a person in `sessions`**, so `endSessionsOf` reads the table. It runs when a
+  member is removed, never on a request of the widget.
+
+**Not done here**: the invitations and the screen of the members (FRU-104), a rename of a
+workspace (no screen asks for it; `organization: update` stays in the roles), and a membership check
+on `GET /feedback`, which would read the accounts on every pin: an access token that was minted
+before the removal lives its eleven minutes, and `SECURITY.md` says so.
 
 ## The markdown codec, and the file that outlived its name
 

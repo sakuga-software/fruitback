@@ -694,6 +694,125 @@ export function sessionCases(it: Declare<SessionStore>): void {
     assert.equal(await presented(store, afterSecond, at + 3000), 'gone');
   });
 
+  // --- A person who is removed from a workspace (FRU-149)
+
+  /** A session of `identity`, refreshed `times` times: every token it was handed, oldest first. */
+  const chainOf = async (store: SessionStore, identity: typeof ALICE & { workspace?: string }, times: number) => {
+    const at = Date.now();
+    const redeemed = await redeemPairing(store, (await createPairing(store, identity, at)).code, SECRET, at);
+    assert.ok(redeemed.ok);
+    const tokens = [redeemed.session.refreshToken];
+    for (let turnOf = 1; turnOf <= times; turnOf += 1) {
+      const next = await refreshSession(store, tokens.at(-1) as string, SECRET, at + turnOf);
+      assert.ok(next.ok);
+      tokens.push(next.refreshToken);
+    }
+
+    return { tokens, at: at + times };
+  };
+  const BOB = { subject: 'bob', name: 'Bob Durand', email: 'bob@acme.dev' };
+
+  it('ends every session of a person in a workspace, from any link of each chain', async (store) => {
+    const alice = { ...ALICE, workspace: 'ws_acme' };
+    const laptop = await chainOf(store, alice, 2);
+    const desktop = await chainOf(store, alice, 0);
+
+    await store.endSessionsOf({ subject: 'alice', workspace: 'ws_acme' }, laptop.at + 10);
+
+    // `gone`, and not `reused`: nothing of these chains is live, so no token of them is a replay.
+    for (const token of [...laptop.tokens, ...desktop.tokens]) {
+      assert.equal(await presented(store, token, laptop.at + 20), 'gone');
+    }
+  });
+
+  it('leaves the same person in another workspace, and another person in the same one', async (store) => {
+    const elsewhere = await chainOf(store, { ...ALICE, workspace: 'ws_other' }, 1);
+    const colleague = await chainOf(store, { ...BOB, workspace: 'ws_acme' }, 1);
+    const alone = await chainOf(store, ALICE, 0);
+    await chainOf(store, { ...ALICE, workspace: 'ws_acme' }, 0);
+
+    await store.endSessionsOf({ subject: 'alice', workspace: 'ws_acme' }, elsewhere.at + 10);
+
+    assert.equal(await presented(store, elsewhere.tokens.at(-1) as string, elsewhere.at + 20), 'rotated');
+    assert.equal(await presented(store, colleague.tokens.at(-1) as string, colleague.at + 20), 'rotated');
+    assert.equal(await presented(store, alone.tokens.at(-1) as string, alone.at + 20), 'rotated');
+  });
+
+  it('ends every session of a workspace when no person is named, and of a person when no workspace is', async (store) => {
+    const alice = await chainOf(store, { ...ALICE, workspace: 'ws_acme' }, 1);
+    const bob = await chainOf(store, { ...BOB, workspace: 'ws_acme' }, 0);
+    const elsewhere = await chainOf(store, { ...ALICE, workspace: 'ws_other' }, 0);
+    const alone = await chainOf(store, ALICE, 0);
+    const other = await chainOf(store, { ...BOB, workspace: 'ws_other' }, 0);
+
+    await store.endSessionsOf({ workspace: 'ws_acme' }, alice.at + 10);
+
+    assert.equal(await presented(store, alice.tokens.at(-1) as string, alice.at + 20), 'gone');
+    assert.equal(await presented(store, bob.tokens[0] as string, alice.at + 20), 'gone');
+
+    await store.endSessionsOf({ subject: 'alice' }, alice.at + 30);
+
+    assert.equal(await presented(store, elsewhere.tokens[0] as string, alice.at + 40), 'gone');
+    // A session that names no workspace is the person's too.
+    assert.equal(await presented(store, alone.tokens[0] as string, alice.at + 40), 'gone');
+    assert.equal(await presented(store, other.tokens[0] as string, alice.at + 40), 'rotated');
+  });
+
+  it('spends the codes minted for the person in the workspace, and no other code', async (store) => {
+    const theirs = await createPairing(store, { ...ALICE, workspace: 'ws_acme' });
+    const elsewhere = await createPairing(store, { ...ALICE, workspace: 'ws_other' });
+    const colleague = await createPairing(store, { ...BOB, workspace: 'ws_acme' });
+
+    await store.endSessionsOf({ subject: 'alice', workspace: 'ws_acme' }, Date.now());
+
+    assert.equal(
+      (await redeemPairing(store, theirs.code, SECRET)).ok,
+      false,
+      'the code of a removed member opened a session',
+    );
+    assert.ok((await redeemPairing(store, elsewhere.code, SECRET)).ok);
+    assert.ok((await redeemPairing(store, colleague.code, SECRET)).ok);
+  });
+
+  it('ends nothing, and throws, when neither a person nor a workspace is named', async (store) => {
+    const { token, at } = await opened(store);
+
+    await assert.rejects(
+      store.endSessionsOf({ subject: '' } as never, at + 1),
+      /names neither a person nor a workspace/,
+    );
+    await assert.rejects(
+      store.endSessionsOf({ workspace: '' } as never, at + 1),
+      /names neither a person nor a workspace/,
+    );
+    await assert.rejects(store.endSessionsOf({} as never, at + 1), /names neither a person nor a workspace/);
+
+    assert.equal(await presented(store, token, at + 2), 'rotated');
+  });
+
+  /**
+   * A refresh in flight when the member is removed. Whichever runs first, nothing of the chain is
+   * live after both: a store that reads the live tokens, then ends the ones it read, misses the
+   * successor that the refresh wrote meanwhile. On one connection nothing interleaves, and the case
+   * holds a server and its control.
+   */
+  it('leaves no live successor when a refresh and the end of the sessions run at the same moment', async (store) => {
+    const alice = { ...ALICE, workspace: 'ws_acme' };
+    const { tokens, at } = await chainOf(store, alice, 0);
+    const successor = createRefreshToken();
+    // Digested before: the two calls below start in the same turn.
+    const [tokenHash, successorHash] = await Promise.all([digest(tokens[0] as string), digest(successor)]);
+
+    const [rotation] = await Promise.all([
+      store.rotateSession({ tokenHash, successorHash, now: at + 1, graceMs: GRACE }),
+      store.endSessionsOf({ subject: 'alice', workspace: 'ws_acme' }, at + 1),
+    ]);
+
+    assert.notEqual(rotation.outcome, 'reused');
+    assert.notEqual(await presented(store, successor, at + 2), 'rotated', 'the successor of the refresh is live');
+    assert.notEqual(await presented(store, tokens[0] as string, at + 3), 'rotated');
+  });
+
   // --- The purge
 
   it('drops the codes and the sessions that are expired, and nothing that is not', async (store) => {
