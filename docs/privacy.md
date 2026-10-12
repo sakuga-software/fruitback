@@ -143,6 +143,10 @@ Since FRU-119 an account also holds the language its person reads, taken from th
   « Remember me on this site »**. For a member of a team who chose where a note goes, the identifier of that place: an opaque
   value, with no name of the tracker (FRU-123). No e-mail, no note. In private mode the extension writes `fruitback:config:extension` into **the site's**
   storage, so a site can see that a reviewer used the extension on it.
+- `sessionStorage`, under `fruitback:config:drafts` (or the `configKey` with `:drafts`): **the notes a
+  reporter chose to keep for later and has not sent yet** (FRU-124), each a whole seed, with the name
+  they typed if any. Only after a click on « Keep for later ». They go when they are sent, and with
+  the tab. Any script of the page can read them while they are there.
 - The extension keeps its rules and its session tokens in its own storage, which no page can read.
   It also keeps the language of the reviewer's account there. That language goes to a page where
   the extension mounts the widget, so the widget speaks it: a site a reviewer turned on can read

@@ -32,7 +32,7 @@ let mounted: MountedPage | null = null;
 
 function mount(
   onSubmit: (note: string, reporter?: SeedReporter) => Promise<boolean | void | SendFailure>,
-  more: Pick<ComposerOptions, 'memory' | 'identified'> = {},
+  more: Pick<ComposerOptions, 'memory' | 'identified' | 'keep'> = {},
 ) {
   const page = mountPage('<main><button id="cta">Commander</button></main>', { width: 1_000, height: 1_000 });
   const host = page.document.createElement('div');
@@ -1040,5 +1040,55 @@ describe('where the note goes (FRU-123)', () => {
 
     assert.match(styles, /\.fruitback-composer-places\[hidden\] \{ display: none; \}/);
     assert.match(styles, /\.fruitback-composer-identify\[hidden\] \{ display: none; \}/);
+  });
+});
+
+describe('keep for later (FRU-124)', () => {
+  const keepButton = () => composer?.element.querySelector('[data-fruitback-keep]') as HTMLButtonElement;
+
+  it('is offered only while the worker takes several notes, asked at each open', () => {
+    let offered = false;
+    mount(async () => true, { keep: { offered: () => offered, onKeep: async () => true } });
+
+    composer?.open(ANCHOR);
+    assert.equal(keepButton().hidden, true);
+    composer?.close();
+    offered = true;
+    composer?.open(ANCHOR);
+    assert.equal(keepButton().hidden, false);
+    assert.equal(keepButton().textContent, 'Keep for later');
+  });
+
+  it('is not there at all for a host that gives no way to keep a note', () => {
+    mount(async () => true);
+    composer?.open(ANCHOR);
+
+    assert.equal(keepButton().hidden, true);
+  });
+
+  it('keeps the note rather than send it, says so, and keeps the text when keeping fails', async () => {
+    const sent: string[] = [];
+    const kept: string[] = [];
+    let answer: true | SendFailure = 'retry';
+    mount(async (note) => void sent.push(note), {
+      keep: { offered: () => true, onKeep: async (note) => (kept.push(note), answer) },
+    });
+    composer?.open(ANCHOR);
+    field().value = 'Pour plus tard';
+
+    keepButton().click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(composer?.state(), 'failed');
+    assert.equal(field().value, 'Pour plus tard');
+
+    answer = true;
+    keepButton().click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(composer?.state(), 'kept');
+    assert.equal(statusText(), 'kept for later');
+    assert.equal(sendButton().disabled, true);
+    assert.equal(keepButton().disabled, true);
+    assert.deepEqual(kept, ['Pour plus tard', 'Pour plus tard']);
+    assert.deepEqual(sent, [], 'keeping a note sent it');
   });
 });
