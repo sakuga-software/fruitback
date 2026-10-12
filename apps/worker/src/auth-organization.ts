@@ -1,9 +1,12 @@
 import { type AccountStore, type Workspace, can } from './accounts.ts';
 import { newId } from './account-rows.ts';
-import { AUTH_BASE_PATH, type Auth } from './auth.ts';
+import { AUTH_BASE_PATH, type Auth, INVITATION_SECONDS } from './auth.ts';
 import { type AuthRouteContext, AuthUnavailable, headersFor, mutationAllowed, sessionOfCookie } from './auth-routes.ts';
 import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
 import { ORGANIZATION_PATHS, type OrganizationRule, readOrganizationInput } from './organization-paths.ts';
+import { EMAIL_LINKS_PER_WINDOW, EMAIL_LINK_WINDOW_MS } from './console-routes.ts';
+import type { Kv } from './kv.ts';
+import { MailError, type Mailer, invitationMessage } from './mail.ts';
 import type { SessionStore } from './session.ts';
 
 /**
@@ -16,6 +19,8 @@ import type { SessionStore } from './session.ts';
  * 2. the cookie is a session: else `401`;
  * 3. a call that changes something comes from the console: else `403` (`mutationAllowed`);
  * 4. the request holds the fields of the rule and no other, and names its workspace: else `400`;
+ *    (a route of the person, `scope: 'person'`, names none: it is about the invitations that the
+ *    address of the session received, and points 5 and 6 do not apply to it);
  * 5. the caller has **one** role in that workspace, read by `accounts.role`, which reads `guest,admin`
  *    as no role: else `404`, as for a workspace that does not exist;
  * 6. that role may do what the rule needs, by `can`: else `403`.
@@ -28,8 +33,31 @@ import type { SessionStore } from './session.ts';
 
 export type OrganizationRouteContext = Pick<AuthRouteContext, 'consoleUrl' | 'clientIp' | 'trackIp'> & {
   auth: Auth | Promise<Auth>;
-  accounts: Pick<AccountStore, 'role'>;
+  accounts: Pick<AccountStore, 'role' | 'account' | 'memberships' | 'localeOf'>;
   sessions: Pick<SessionStore, 'endSessionsOf'>;
+  /**
+   * What sends an invitation (FRU-104). Absent: the invitation is kept all the same, and the console
+   * gives the link to send by hand (the decision on FRU-107).
+   */
+  mailer: Mailer | undefined;
+  kv: Kv;
+};
+
+/** How long an invitation waits, in days: the message says the number that the plugin was given. */
+export const INVITATION_DAYS = INVITATION_SECONDS / 86_400;
+
+/**
+ * How many invitations one address is sent in a window, from every workspace together: the numbers
+ * of the sign-in link. An admin cannot fill the mailbox of somebody with the name of Fruitback.
+ */
+export const INVITATIONS_PER_WINDOW = EMAIL_LINKS_PER_WINDOW;
+
+/** The adapter of better-auth, to read which workspace an invitation is of. */
+type InvitationAdapter = {
+  findOne(input: {
+    model: 'invitation';
+    where: { field: string; value: string }[];
+  }): Promise<{ organizationId?: unknown } | null>;
 };
 
 const PREFIX = `${AUTH_BASE_PATH}/organization/`;
@@ -107,13 +135,35 @@ export async function handleOrganizationRoutes(
   if (sent === undefined) return json(400, { error: 'invalid-request' }, headers);
   const read = readOrganizationInput(rule, sent);
   if (!read.ok) return json(400, { error: 'invalid-request', field: read.field }, headers);
-  const workspace = String(read.input.organizationId);
+  // A route of the person names no workspace: better-auth reads the address of the session.
+  const workspace = rule.scope === 'person' ? undefined : String(read.input.organizationId);
 
-  // Read by the store of the worker, which takes one role of the four and nothing else. Not a member
-  // answers like a workspace that does not exist, as on the routes of the console.
-  const role = await context.accounts.role(workspace, mine.userId);
-  if (role === undefined) return json(404, { error: 'not-found' }, headers);
-  if (rule.needs !== undefined && !can(role, rule.needs)) return json(403, { error: 'forbidden', role }, headers);
+  if (workspace !== undefined) {
+    // Read by the store of the worker, which takes one role of the four and nothing else. Not a
+    // member answers like a workspace that does not exist, as on the routes of the console.
+    const role = await context.accounts.role(workspace, mine.userId);
+    if (role === undefined) return json(404, { error: 'not-found' }, headers);
+    if (rule.needs !== undefined && !can(role, rule.needs)) return json(403, { error: 'forbidden', role }, headers);
+
+    // better-auth finds the workspace of an invitation from the invitation. The role was read in the
+    // workspace the call names: the invitation must be one of it, or it does not exist.
+    if (rule.ofTheWorkspace === 'invitation') {
+      const adapter = (await auth.$context).adapter as unknown as InvitationAdapter;
+      const invitation = await adapter.findOne({
+        model: 'invitation',
+        where: [{ field: 'id', value: String(read.input.invitationId) }],
+      });
+      if (invitation?.organizationId !== workspace) return json(404, { error: 'not-found' }, headers);
+    }
+  }
+
+  const invited = path === '/organization/invite-member' ? String(read.input.email) : undefined;
+  // Counted when a message goes: the window keeps a mailbox from being filled. A worker with no
+  // mailer sends nothing, and the person who invites sends the link of the console by hand.
+  if (invited !== undefined && context.mailer !== undefined) {
+    const sent = await context.kv.incr(`fruitback:invitation:${invited}`, EMAIL_LINK_WINDOW_MS);
+    if (sent > INVITATIONS_PER_WINDOW) return json(429, { error: 'too-many-invitations' }, headers);
+  }
 
   // The request better-auth reads is written here: the fields of the rule, as they were read.
   const address = new URL(`${AUTH_BASE_PATH}${path}`, request.url);
@@ -132,14 +182,59 @@ export async function handleOrganizationRoutes(
 
   // Somebody who left keeps no extension for the workspace. `remove-member` does the same in a hook
   // of the plugin (`auth.ts`); `leave` runs none in 1.7.7, so it is here.
-  if (path === '/organization/leave' && answer.ok) {
+  if (path === '/organization/leave' && answer.ok && workspace !== undefined) {
     await context.sessions.endSessionsOf({ subject: mine.userId, workspace }, Date.now());
+  }
+
+  // The invitation is kept: its message goes now. A message that does not leave answers `502`, and
+  // the invitation waits, to be sent again.
+  if (invited !== undefined && answer.ok && workspace !== undefined && context.mailer !== undefined) {
+    try {
+      await context.mailer.send(
+        await messageOf(context, { to: invited, role: String(read.input.role), workspace, inviter: mine.userId }),
+      );
+    } catch (error) {
+      if (!(error instanceof MailError)) throw error;
+      console.error(`[fruitback] ${error.message}`);
+
+      return json(502, { error: 'mail-unavailable' }, headers);
+    }
   }
 
   const merged = new Headers(answer.headers);
   for (const [name, value] of Object.entries(headers)) merged.set(name, value);
 
   return new Response(answer.body, { status: answer.status, statusText: answer.statusText, headers: merged });
+}
+
+/**
+ * The message of an invitation: who invites, to which workspace, in the language of the person it is
+ * for when they have an account that says one, else in the language of the person who invites.
+ *
+ * The link is the page of the console that lists the invitations of whoever signed in. It names no
+ * invitation.
+ */
+async function messageOf(
+  context: OrganizationRouteContext,
+  invitation: { to: string; role: string; workspace: string; inviter: string },
+) {
+  const inviter = await context.accounts.account(invitation.inviter);
+  const named = (await context.accounts.memberships(invitation.inviter)).find(
+    (each) => each.workspace.id === invitation.workspace,
+  );
+  const locale = (await context.accounts.localeOf(invitation.to)) ?? inviter?.locale ?? 'en';
+
+  return invitationMessage(
+    invitation.to,
+    {
+      inviter: inviter?.name || inviter?.email || 'Somebody',
+      workspace: named?.workspace.name ?? 'a workspace',
+      role: invitation.role,
+      link: `${new URL(context.consoleUrl).origin}/invitations`,
+      days: INVITATION_DAYS,
+    },
+    locale,
+  );
 }
 
 /**

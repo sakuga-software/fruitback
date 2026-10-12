@@ -163,6 +163,64 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Invitations come after the beta. Until then, each person signs in and makes their own workspace.':
     'Les invitations arrivent après la bêta. D’ici là, chacun se connecte et crée son propre workspace.',
   Invite: 'Inviter',
+  'Role of the person to invite': 'Rôle de la personne à inviter',
+  'The person signs in with that address, and joins. Guests, who see one site only, come later.':
+    'La personne se connecte avec cette adresse, et rejoint l’espace. Les invités, qui ne voient qu’un site, viendront plus tard.',
+  'Invitation sent to {email}. You can also send them this link:':
+    'Invitation envoyée à {email}. Vous pouvez aussi lui envoyer ce lien :',
+  'Invitation kept for {email}. Send them this link:': 'Invitation gardée pour {email}. Envoyez-lui ce lien :',
+  'They open it, sign in with {email}, and join. The link alone opens nothing.':
+    'La personne l’ouvre, se connecte avec {email}, et rejoint l’espace. Le lien seul n’ouvre rien.',
+  'Copy the link': 'Copier le lien',
+  'The browser refused the copy. Select the link above and copy it by hand.':
+    'Le navigateur a refusé la copie. Sélectionnez le lien ci-dessus et copiez-le à la main.',
+  '{name} (you)': '{name} (vous)',
+  'Shared ones': 'Partagés',
+  'Remove {name}': 'Retirer {name}',
+  '{name} leaves the workspace, and their extension stops reading its sites. Their notes stay.':
+    '{name} quitte l’espace de travail, et son extension cesse de lire ses sites. Ses notes restent.',
+  'Invited as {role}, until {date}': 'Invité comme {role}, jusqu’au {date}',
+  Invited: 'Invité',
+  Resend: 'Renvoyer',
+  'Cancel the invitation of {email}': 'Annuler l’invitation de {email}',
+  'The message already sent no longer lets {email} join.':
+    'Le message déjà envoyé ne permet plus à {email} de rejoindre l’espace.',
+  'Type the full address of the person, like name@company.com.':
+    'Tapez l’adresse complète de la personne, comme nom@entreprise.com.',
+  'This person is already a member of the workspace.': 'Cette personne est déjà membre de l’espace de travail.',
+  'This address is invited already. Send the invitation again from its row.':
+    'Cette adresse est déjà invitée. Renvoyez l’invitation depuis sa ligne.',
+  'This address received three invitations in the last fifteen minutes. Wait, then send it again.':
+    'Cette adresse a reçu trois invitations dans le dernier quart d’heure. Attendez, puis renvoyez-la.',
+  'The invitation is kept, but its message did not leave. Send it again from its row.':
+    'L’invitation est gardée, mais son message n’est pas parti. Renvoyez-la depuis sa ligne.',
+  'A workspace has a hundred invitations waiting at most. Cancel some first.':
+    'Un espace de travail a au plus cent invitations en attente. Annulez-en d’abord.',
+  'Only an owner or an admin of the workspace invites.':
+    'Seul un propriétaire ou un administrateur de l’espace de travail invite.',
+  'The invitation was not sent. Try again.': 'L’invitation n’a pas été envoyée. Réessayez.',
+  'That did not go through. Try again.': 'Cela n’a pas abouti. Réessayez.',
+  'The last owner of a workspace stays in it.': 'Le dernier propriétaire d’un espace de travail y reste.',
+  'Only an owner removes an owner.': 'Seul un propriétaire retire un propriétaire.',
+  'Only an owner or an admin of the workspace changes its members.':
+    'Seul un propriétaire ou un administrateur de l’espace de travail change ses membres.',
+
+  Invitations: 'Invitations',
+  'This invitation was cancelled, or it ended. Ask for another one.':
+    'Cette invitation a été annulée, ou elle a pris fin. Demandez-en une autre.',
+  'The invitation could not be answered. Try again.': 'L’invitation n’a pas pu recevoir de réponse. Réessayez.',
+  'Sign in with the address the invitation was sent to, and it shows here.':
+    'Connectez-vous avec l’adresse à laquelle l’invitation a été envoyée, et elle s’affiche ici.',
+  'Fruitback did not answer. Your invitations are not lost.':
+    'Fruitback n’a pas répondu. Vos invitations ne sont pas perdues.',
+  'No invitation waits for {email}. An invitation sent to another address shows to that address only.':
+    'Aucune invitation n’attend {email}. Une invitation envoyée à une autre adresse ne s’affiche qu’à cette adresse.',
+  'Go to the console': 'Aller à la console',
+  'For {email}.': 'Pour {email}.',
+  'Until {date}': 'Jusqu’au {date}',
+  Decline: 'Refuser',
+  'Joining…': 'Arrivée…',
+  'Join {workspace}': 'Rejoindre {workspace}',
   Person: 'Personne',
   Role: 'Rôle',
   Sites: 'Sites',

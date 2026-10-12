@@ -4,6 +4,7 @@ export default [
   index('routes/home.tsx'),
   route('setup', 'routes/setup.tsx'),
   route('sign-in', 'routes/sign-in.tsx'),
+  route('invitations', 'routes/invitations.tsx'),
   layout('routes/workspace.tsx', [
     route('w/:workspace/sites', 'routes/sites.tsx'),
     route('w/:workspace/connectors', 'routes/connectors.tsx'),
