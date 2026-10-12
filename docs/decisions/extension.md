@@ -24,6 +24,12 @@ it changes who is shown the feedback and never who may fetch it.
 - **The popup offers pairing in team mode only** (FRU-88). A session changes nothing in private mode,
   and a form that does nothing reads as the fix for a page with no pins. A session the extension
   already holds with that worker stays on the screen with its log out: a credential is never hidden.
+- **In the popup a button stays on one line, and two buttons never touch** (FRU-169). Buttons side by
+  side go through `actions()` in `popup/main.ts`, which gives them 8 px and lets them go under each
+  other. In a `.row` the words give way, not the button, and the buttons go under the words when the
+  row is short: French is a third longer, and the popup starts at 280 px. One button may wrap, the
+  one of a rule that covers many sites. `e2e/popup-layout.spec.ts` measures the five states at 280
+  and 340 px, in both languages.
 - **The popup and the options page speak English and French** (FRU-131). `i18n.ts` keys a sentence
   by its English text, like the console. **A constant keeps its English sentence, and `t` runs where
   the text goes on the screen**: `remedyFor` finds a problem by its English text, and the guide is
