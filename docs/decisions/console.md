@@ -115,6 +115,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **« Sign out » says when it failed.** `signOut` answers `false` unless the worker said that both
   sessions ended, and « My account » then stays, with « You are still signed in ». A screen that
   says « signed out » over a session that is still good leaves the browser open to the next person.
+  better-auth 1.7.7 answers `200` to a sign-out with no session, with one that already ended, and
+  with a cookie that is not one (measured, and held by a test of the worker): somebody who signs
+  out in a second tab is not held on that sentence.
 
 ### The reasons, and the measurements
 
