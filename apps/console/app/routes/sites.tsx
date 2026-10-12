@@ -1,12 +1,18 @@
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react';
 import { type Site, type Visibility, call } from '../api';
 import { Confirm } from '../confirm';
+import { SITE_NOT_ADDED, SITE_PROBLEMS, problemOf } from '../problems';
 import { type Listed, edited, listedOf } from '../listed';
 import { Button, Card, Chip, Choice, Field, Problem } from '../ui';
 import { InstallOptions } from './setup';
 import { PageHead, useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
+
+const REMOVAL_PROBLEMS: Readonly<Record<string, string>> = {
+  forbidden: msg('Only an owner or an admin of the workspace removes a site.'),
+};
+const SITE_NOT_REMOVED = msg('This site is still here. Try again.');
 
 /** The sites of the workspace: a site is an address and who sees its notes (P2, P3 of the design). */
 export default function Sites() {
@@ -17,6 +23,7 @@ export default function Sites() {
   const [url, setUrl] = useState('');
   const [visibility, setVisibility] = useState<Visibility>('members');
   const [problem, setProblem] = useState<string | undefined>();
+  const [stuck, setStuck] = useState<{ site: string; problem: string } | undefined>();
   const manages = workspace.role === 'owner' || workspace.role === 'admin';
 
   // A read that failed says so, and is asked again: it never reads as « No site yet » (FRU-162).
@@ -32,7 +39,8 @@ export default function Sites() {
     event.preventDefault();
     setProblem(undefined);
     const added = await call<Site>('POST', `/console/workspaces/${workspace.id}/sites`, { url, visibility });
-    if (!added.ok) return setProblem(msg('Paste the full address of the site, starting with https://.'));
+    // The field keeps its value: the sentence says the cause, and the address is often right (FRU-164).
+    if (!added.ok) return setProblem(problemOf(added, SITE_PROBLEMS, SITE_NOT_ADDED));
     // On a list that was never read, the site alone would hide the others: read them all.
     if (typeof sites === 'string') void read();
     else
@@ -44,9 +52,13 @@ export default function Sites() {
   }
 
   async function remove(site: Site) {
+    setStuck(undefined);
     const removed = await call('DELETE', `/console/workspaces/${workspace.id}/sites/${site.id}`);
+    // A site that is still there says so on its own row, beside the button (FRU-164).
+    if (!removed.ok)
+      return setStuck({ site: site.id, problem: problemOf(removed, REMOVAL_PROBLEMS, SITE_NOT_REMOVED) });
     // A list that was not read stays what it is (`edited`).
-    if (removed.ok) setSites((current) => edited(current, (items) => items.filter((each) => each.id !== site.id)));
+    setSites((current) => edited(current, (items) => items.filter((each) => each.id !== site.id)));
   }
 
   return (
@@ -92,6 +104,7 @@ export default function Sites() {
           open={open}
           manages={manages}
           onToggle={(site) => setOpen(open === site.id ? undefined : site.id)}
+          stuck={stuck}
           onRemove={(site) => void remove(site)}
           onRetry={() => void read()}
           install={(site) => <InstallOptions workspace={workspace} site={site} />}
@@ -105,6 +118,7 @@ function SiteList({
   sites,
   open,
   manages,
+  stuck,
   onToggle,
   onRemove,
   onRetry,
@@ -114,6 +128,8 @@ function SiteList({
   open: string | undefined;
   manages: boolean;
   onToggle: (site: Site) => void;
+  /** The site whose removal failed, and why. */
+  stuck: { site: string; problem: string } | undefined;
   onRemove: (site: Site) => void;
   onRetry: () => void;
   install: (site: Site) => ReactNode;
@@ -167,6 +183,11 @@ function SiteList({
               ) : null}
             </span>
           </div>
+          {stuck?.site === site.id ? (
+            <div className="px-5 pb-4">
+              <Problem>{t(stuck.problem)}</Problem>
+            </div>
+          ) : null}
           {open === site.id ? <div className="border-t border-line bg-page px-5 py-5">{install(site)}</div> : null}
         </li>
       ))}

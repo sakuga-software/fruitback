@@ -263,6 +263,20 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Fruitback n’a pas répondu. Les sources et leurs sites n’ont pas pu être lus.',
   Close: 'Fermer',
   Remove: 'Retirer',
+  'Only an owner or an admin of the workspace adds a site.':
+    'Seul un propriétaire ou un administrateur du workspace ajoute un site.',
+  'The site was not added. Try again.': 'Le site n’a pas été ajouté. Réessayez.',
+  'The workspace was not created. Try again.': 'Le workspace n’a pas été créé. Réessayez.',
+  'Only an owner or an admin of the workspace removes a site.':
+    'Seul un propriétaire ou un administrateur du workspace retire un site.',
+  'This site is still here. Try again.': 'Ce site est toujours là. Réessayez.',
+  'This browser was not connected. Try again.': 'Ce navigateur n’a pas été connecté. Réessayez.',
+  'The browser refused the copy. Select the script above and copy it by hand.':
+    'Le navigateur a refusé la copie. Sélectionnez le script ci-dessus et copiez-le à la main.',
+  'The browser refused the copy. Select the secret above and copy it by hand.':
+    'Le navigateur a refusé la copie. Sélectionnez le secret ci-dessus et copiez-le à la main.',
+  'Only the owner of the workspace deletes it.': 'Seul le propriétaire du workspace le supprime.',
+  'The workspace was not deleted. Try again.': 'Le workspace n’a pas été supprimé. Réessayez.',
   'Remove {site}': 'Retirer {site}',
   'The widget stops on {site}, and the script pasted there no longer works: adding the site again gives it a new script. The notes already in a tracker stay there.':
     'Le widget s’arrête sur {site}, et le script collé là ne marche plus : ajouter le site à nouveau lui donne un nouveau script. Les notes déjà dans un tracker y restent.',

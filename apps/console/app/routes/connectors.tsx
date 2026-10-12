@@ -2,6 +2,7 @@ import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { type Connector, type Delivery, type Destination, type Site, type Team, call } from '../api';
 import { Confirm } from '../confirm';
+import { copyText } from '../problems';
 import { type Listed, known, listedOf } from '../listed';
 import { Button, Card, Choice, Field, Problem } from '../ui';
 import { PageHead, useWorkspace } from './workspace';
@@ -417,7 +418,7 @@ function AddRest({
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | undefined>();
   const [made, setMade] = useState<string | undefined>();
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'no' | 'yes' | 'refused'>('no');
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -451,18 +452,18 @@ function AddRest({
         <div className="flex gap-2">
           <Button
             tone="outline"
-            onClick={() =>
-              void navigator.clipboard.writeText(made).then(
-                () => setCopied(true),
-                // A clipboard can refuse. The secret is on the screen, to select by hand.
-                () => setCopied(false),
-              )
-            }
+            onClick={() => void copyText(made).then((taken) => setCopied(taken ? 'yes' : 'refused'))}
           >
-            {copied ? t('Copied') : t('Copy')}
+            {copied === 'yes' ? t('Copied') : t('Copy')}
           </Button>
           <Button onClick={onDone}>{t('I kept it')}</Button>
         </div>
+        {/* A clipboard can refuse. The secret is on the screen, to select by hand, and this says so. */}
+        {copied === 'refused' ? (
+          <p role="alert" className="text-xs text-muted">
+            {t('The browser refused the copy. Select the secret above and copy it by hand.')}
+          </p>
+        ) : null}
       </div>
     );
   }
