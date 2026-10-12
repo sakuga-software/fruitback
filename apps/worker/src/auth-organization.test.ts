@@ -4,7 +4,7 @@ import { ROLES, type Role, can } from './accounts.ts';
 import { handleRequest } from './app.ts';
 import { type Auth, INVITATION_SECONDS, INVITER_GONE, ROLE_REFUSED, startAuth } from './auth.ts';
 import { CONSOLE_URL, DATABASES, PUBLIC_URL, ask, databasesOfACase } from './auth.fixture.ts';
-import { handleOrganizationRoutes } from './auth-organization.ts';
+import { INVITATIONS_PER_INVITER, INVITATIONS_PER_WORKSPACE, handleOrganizationRoutes } from './auth-organization.ts';
 import { type Call, workerOf } from './auth-worker.fixture.ts';
 import { MAX_BODY_BYTES } from './bounded-body.ts';
 import { MailError } from './mail.ts';
@@ -943,9 +943,9 @@ for (const { label, open, skip } of DATABASES) {
       assert.equal(worker.mail.sent.length, before + 1);
       const message = worker.mail.sent.at(-1);
       assert.equal(message?.to, 'paul@client.dev');
-      assert.equal(message?.subject, 'You are invited to acme on Fruitback');
+      assert.equal(message?.subject, 'You are invited to a workspace on Fruitback');
       assert.match(
-        message?.text ?? '',
+        (message?.text ?? '').replaceAll('\u200B', ''),
         /admin@acme\.dev invites you to the workspace « acme » on Fruitback, as a member\./,
       );
       assert.match(message?.text ?? '', /It waits for 7 days\./);
@@ -1128,6 +1128,75 @@ for (const { label, open, skip } of DATABASES) {
         [theirs],
       );
       assert.equal((await as(worker, paul, `${ORG}/accept-invitation`, { body: { invitationId: ours } })).status, 400);
+    });
+
+    it('writes no text of a person in the subject, and makes no link of a name in the body (FRU-209)', async () => {
+      const worker = await workerOn(open);
+      const owner = await person(worker, 'owner@acme.dev');
+      const name = 'Your invoice is ready: https://evil.example/pay now www.evil.example';
+      const made = await as(worker, owner, '/console/workspaces', { body: { name } });
+      assert.equal(made.status, 201, await made.clone().text());
+      const workspace = ((await made.json()) as { id: string }).id;
+
+      for (const [email, locale, subject] of [
+        ['paul@client.dev', 'en', 'You are invited to a workspace on Fruitback'],
+        ['lea@client.dev', 'fr', 'Vous êtes invité dans un espace de travail sur Fruitback'],
+      ] as const) {
+        if (locale === 'fr') await worker.accounts.setLocale(owner.id, 'fr');
+        assert.equal((await invite(worker, owner, workspace, { email })).status, 200);
+        const message = worker.mail.sent.at(-1);
+        assert.equal(message?.subject, subject);
+        // The name is in the body, for whoever reads it, and nothing of it is an address to a client.
+        for (const body of [message?.text ?? '', message?.html ?? '']) {
+          assert.ok(body.replaceAll('\u200B', '').includes(name), body);
+          assert.deepEqual([...new Set(body.match(/https?:\/\/[^\s"<]+/g) ?? [])], [`${CONSOLE_URL}/invitations`]);
+          assert.doesNotMatch(body, /www\.evil|evil\.example|owner@acme\.dev/);
+        }
+      }
+    });
+
+    it('sends no more messages than one account may in an hour, in every workspace together, and keeps the invitations (FRU-209)', async () => {
+      const worker = await workerOn(open);
+      const owner = await person(worker, 'solo@many.dev');
+      const workspaces: string[] = [];
+      for (const name of ['one', 'two', 'three']) {
+        const made = await as(worker, owner, '/console/workspaces', { body: { name } });
+        workspaces.push(((await made.json()) as { id: string }).id);
+      }
+      const before = worker.mail.sent.length;
+      const mailed: boolean[] = [];
+      for (let n = 0; n < INVITATIONS_PER_INVITER + 2; n += 1) {
+        const answer = await invite(worker, owner, workspaces[n % 3] as string, { email: `person${n}@client.dev` });
+        assert.equal(answer.status, 200, await answer.clone().text());
+        mailed.push(((await answer.json()) as { mailed: boolean }).mailed);
+      }
+
+      assert.deepEqual(mailed, [...Array(INVITATIONS_PER_INVITER).fill(true), false, false]);
+      assert.equal(worker.mail.sent.length - before, INVITATIONS_PER_INVITER);
+      assert.equal((await rowsOf(worker.database, 'SELECT id FROM invitation')).length, INVITATIONS_PER_INVITER + 2);
+      // Another account is not held by it.
+      const acme = await team(worker);
+      const other = await invite(worker, acme.owner, acme.workspace, { email: 'person0@client.dev' });
+      assert.equal(((await other.json()) as { mailed: boolean }).mailed, true);
+    });
+
+    it('sends no more messages than one workspace may in an hour, whoever invites (FRU-209)', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const third = await added(worker, acme.workspace, await person(worker, 'third@acme.dev'), 'admin');
+      const before = worker.mail.sent.length;
+      const mailed: boolean[] = [];
+      const inviters = [acme.owner, acme.admin, third];
+      for (let n = 0; n < INVITATIONS_PER_WORKSPACE + 1; n += 1) {
+        const who = inviters[Math.floor(n / INVITATIONS_PER_INVITER)] as Person;
+        const answer = await invite(worker, who, acme.workspace, { email: `person${n}@client.dev` });
+        assert.equal(answer.status, 200, await answer.clone().text());
+        mailed.push(((await answer.json()) as { mailed: boolean }).mailed);
+      }
+
+      // Nobody is over their own count: the workspace is.
+      assert.deepEqual(mailed, [...Array(INVITATIONS_PER_WORKSPACE).fill(true), false]);
+      assert.equal(worker.mail.sent.length - before, INVITATIONS_PER_WORKSPACE);
     });
 
     it('keeps the window of an address to its workspace: another workspace neither closes it nor learns of it (FRU-209)', async () => {
@@ -1479,7 +1548,7 @@ for (const { label, open, skip } of DATABASES) {
       // Nobody knows the language of a new address: the one of the inviter.
       await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev', role: 'admin' });
       const french = worker.mail.sent.at(-1);
-      assert.equal(french?.subject, 'Vous êtes invité dans acme sur Fruitback');
+      assert.equal(french?.subject, 'Vous êtes invité dans un espace de travail sur Fruitback');
       assert.match(
         french?.text ?? '',
         /vous invite dans l'espace de travail « acme » sur Fruitback, comme administrateur\./,
@@ -1488,7 +1557,7 @@ for (const { label, open, skip } of DATABASES) {
 
       // Léa has an account that says English.
       await invite(worker, acme.owner, acme.workspace, { email: 'lea@client.dev' });
-      assert.equal(worker.mail.sent.at(-1)?.subject, 'You are invited to acme on Fruitback');
+      assert.equal(worker.mail.sent.at(-1)?.subject, 'You are invited to a workspace on Fruitback');
     });
 
     it('refuses an invitation past its seven days', async () => {

@@ -54,6 +54,18 @@ export const INVITATION_DAYS = INVITATION_SECONDS / 86_400;
  */
 export const INVITATIONS_PER_WINDOW = EMAIL_LINKS_PER_WINDOW;
 
+/**
+ * How many invitation messages one account sends, in every workspace together, and how many one
+ * workspace sends, whoever invites (FRU-209). The window of an address bounds neither: one account
+ * made 12 workspaces and sent 60 messages to 60 addresses (measured), and anybody makes a
+ * workspace. Past either, the invitation is kept and no message goes, as for the address.
+ *
+ * The numbers are for a team that invites its people in one sitting; they are not measured.
+ */
+export const INVITATIONS_PER_INVITER = 20;
+export const INVITATIONS_PER_WORKSPACE = 40;
+export const INVITER_WINDOW_MS = 60 * 60 * 1000;
+
 /** The adapter of better-auth, to read which workspace an invitation is of, and who made it. */
 type InvitationAdapter = {
   findOne(input: {
@@ -279,11 +291,7 @@ export async function handleOrganizationRoutes(
     let mailed = false;
     // The count is taken in one step, after better-auth kept the invitation: a call that it refused
     // spends nothing, and of two calls at the same moment the one that goes over sends nothing.
-    const window = `fruitback:invitation:${workspace}:${invited}`;
-    if (
-      context.mailer !== undefined &&
-      (await context.kv.incr(window, EMAIL_LINK_WINDOW_MS)) <= INVITATIONS_PER_WINDOW
-    ) {
+    if (context.mailer !== undefined && (await mayMail(context.kv, { workspace, invited, inviter: mine.userId }))) {
       try {
         await context.mailer.send(
           await messageOf(context, { to: invited, role: String(read.input.role), workspace, inviter: mine.userId }),
@@ -305,6 +313,24 @@ export async function handleOrganizationRoutes(
   if (told !== undefined) merged.delete('Content-Length');
 
   return new Response(told ?? answer.body, { status: answer.status, statusText: answer.statusText, headers: merged });
+}
+
+/**
+ * Whether one more invitation message may go: under the window of the address in this workspace,
+ * of the account that invites, and of the workspace. Each count is taken in one step, and the next
+ * one is not asked when one is over: a message that does not go spends nothing further.
+ */
+async function mayMail(kv: Kv, sent: { workspace: string; invited: string; inviter: string }): Promise<boolean> {
+  const windows: [string, number, number][] = [
+    [`fruitback:invitation:${sent.workspace}:${sent.invited}`, EMAIL_LINK_WINDOW_MS, INVITATIONS_PER_WINDOW],
+    [`fruitback:invitations-of:${sent.inviter}`, INVITER_WINDOW_MS, INVITATIONS_PER_INVITER],
+    [`fruitback:invitations-in:${sent.workspace}`, INVITER_WINDOW_MS, INVITATIONS_PER_WORKSPACE],
+  ];
+  for (const [key, ttl, most] of windows) {
+    if ((await kv.incr(key, ttl)) > most) return false;
+  }
+
+  return true;
 }
 
 /**

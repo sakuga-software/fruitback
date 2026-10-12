@@ -248,8 +248,8 @@ export default function Members() {
 type Message = 'sent' | 'no-mailer' | 'held';
 
 /**
- * `held`: the worker sends mail, and sent none for this one, because this workspace sent the address
- * three in fifteen minutes. The invitation is kept all the same, and its link is given by hand.
+ * `held`: the worker sends mail, and sent none for this one: the address, the person who invites or
+ * the workspace is past its count. The invitation is kept all the same, and its link is given by hand.
  */
 function messageOf(invitation: Invitation, mails: boolean): Message {
   if (!mails) return 'no-mailer';
@@ -261,7 +261,7 @@ const INVITED: Readonly<Record<Message, string>> = {
   sent: msg('Invitation sent to {email}. You can also send them this link:'),
   'no-mailer': msg('Invitation kept for {email}. Send them this link:'),
   held: msg(
-    'Invitation kept for {email}, but no message was sent: this workspace sent that address three in fifteen minutes. Send them this link:',
+    'Invitation kept for {email}, but no message was sent: too many invitation messages went in a short time. Send them this link:',
   ),
 };
 
