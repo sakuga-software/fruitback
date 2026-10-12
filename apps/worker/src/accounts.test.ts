@@ -4,7 +4,18 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { ACTIONS, type Action, ROLES, type Role, can, clientOf, normalizeEmail, siteOrigin } from './accounts.ts';
+import { connectorSettingsOf } from './account-rows.ts';
+import {
+  ACTIONS,
+  type Action,
+  DEFAULT_CONNECTOR_SETTINGS,
+  ROLES,
+  type Role,
+  can,
+  clientOf,
+  normalizeEmail,
+  siteOrigin,
+} from './accounts.ts';
 import { closeAccountConnections, createSqliteAccountStore } from './accounts-sqlite.ts';
 import { readExposureNotice } from './clients.ts';
 import { type WorkerEnv, readConfig } from './env.ts';
@@ -264,5 +275,25 @@ describe('the accounts file of a version before (FRU-119)', () => {
       locale: 'en-US',
     });
     assert.equal(again.locale, 'fr-FR', 'a later sign-in does not change a language somebody has');
+  });
+});
+
+describe('the settings a row of a connector holds (FRU-102)', () => {
+  it('keeps each exception that is one, and loses only the entry that is not', () => {
+    const row = JSON.stringify({
+      showComments: false,
+      stages: { s_kept: 'ripe', s_broken: 'purple', 'not an id': 'green' },
+    });
+
+    assert.deepEqual(connectorSettingsOf(row), { showComments: false, stages: { s_kept: 'ripe' } });
+  });
+
+  it('reads the defaults from a value that is not settings, field by field', () => {
+    assert.deepEqual(connectorSettingsOf('not json'), DEFAULT_CONNECTOR_SETTINGS);
+    assert.deepEqual(connectorSettingsOf(undefined), DEFAULT_CONNECTOR_SETTINGS);
+    assert.deepEqual(connectorSettingsOf('{"showComments":"no","stages":{"s1":"green"}}'), {
+      showComments: true,
+      stages: { s1: 'green' },
+    });
   });
 });

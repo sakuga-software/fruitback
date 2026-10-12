@@ -312,7 +312,9 @@ describe('a database of before that two workers meet at once (FRU-180)', { skip:
       await withRows(first);
       const content = await contentOf(first);
 
-      await Promise.all([migrate(first), migrate(second)]);
+      // The baseline alone: the two adopt it, and nothing of the database changes.
+      const folder = baselineAlone();
+      await Promise.all([migrate(first, folder), migrate(second, folder)]);
 
       assert.deepEqual(await drizzleJournal(first), [
         { hash: BASELINE_FILE.hash, created_at: BASELINE_FILE.folderMillis },

@@ -91,7 +91,11 @@ export function connectorSettingsOf(value: unknown): ConnectorSettings {
   }
   if (typeof parsed !== 'object' || parsed === null) return DEFAULT_CONNECTOR_SETTINGS;
   const { showComments, stages } = parsed as Record<string, unknown>;
-  const kept = readConnectorSettings({ stages })?.stages ?? {};
+  // Entry by entry: one entry that is not an exception does not take the others with it.
+  const entries = typeof stages === 'object' && stages !== null ? Object.entries(stages) : [];
+  const kept = Object.fromEntries(
+    entries.filter(([state, stage]) => readConnectorSettings({ stages: { [state]: stage } }) !== undefined),
+  ) as ConnectorSettings['stages'];
 
   return { showComments: typeof showComments === 'boolean' ? showComments : true, stages: kept };
 }
