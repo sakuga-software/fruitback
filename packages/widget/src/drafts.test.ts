@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
-import { type Draft, batchBody, createDraftStore, cutIntoRequests, offeredBatch } from './drafts.ts';
+import { type Draft, batchBody, createDraftStore, cutIntoRequests, offeredBatch, withPlacesOfNow } from './drafts.ts';
 
 /** A `Storage` with nothing behind it, and a switch that makes it refuse writes like a full quota. */
 function memoryStorage(): Storage & { refuse: boolean } {
@@ -123,6 +123,17 @@ describe('the requests that send the drafts (FRU-124)', () => {
     for (const request of cut.slice(0, 2)) {
       assert.ok(new TextEncoder().encode(batchBody(request)).length <= one + 10);
     }
+  });
+
+  it('sends to the first place a draft whose place the team took away, like the composer at its second try', () => {
+    const offered = [{ id: 'dst_web' }, { id: 'dst_design' }];
+    const drafts = [draft('a', { destination: 'dst_design' }), draft('b', { destination: 'dst_gone' }), draft('c')];
+    const places = (list: Draft[]) => list.map((each) => each.destination);
+
+    // The control: a place still offered is kept.
+    assert.deepEqual(places(withPlacesOfNow(drafts, offered)), ['dst_design', undefined, undefined]);
+    // A reader who lost the right to choose: every draft goes where the site sends by default.
+    assert.deepEqual(places(withPlacesOfNow(drafts, [])), [undefined, undefined, undefined]);
   });
 
   it('reads the offer of the worker tolerantly', () => {

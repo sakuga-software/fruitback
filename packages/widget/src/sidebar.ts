@@ -155,10 +155,14 @@ export function createSidebar(options: SidebarOptions): Sidebar {
       .catch(() => ({ sent: 0, failure: 'retry' as const }))
       .then((outcome) => {
         sendingDrafts = false;
-        sentText.textContent =
-          outcome.failure === undefined
-            ? t.plural('sidebar.draftsSent', outcome.sent)
-            : failureText(t, outcome.failure);
+        // Both when some left and some stay: the rows that went are gone from the group, and the
+        // sentence of the failure alone would not say where.
+        sentText.textContent = [
+          outcome.sent > 0 || outcome.failure === undefined ? t.plural('sidebar.draftsSent', outcome.sent) : '',
+          outcome.failure === undefined ? '' : failureText(t, outcome.failure),
+        ]
+          .filter((part) => part !== '')
+          .join(' — ');
         draw();
       });
   });

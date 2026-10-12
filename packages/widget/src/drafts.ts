@@ -1,4 +1,5 @@
 import { type Seed, parseSeed } from '@fruitback/shared';
+import { type Destination, destinationToSend } from './destinations.ts';
 
 /**
  * The notes kept for later, not sent yet (FRU-124).
@@ -104,6 +105,22 @@ export function sessionStorageOf(view: Window | null): Storage | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * The drafts with the places the worker offers now.
+ *
+ * A member kept a note for a place, and the team took that place away since. The worker refuses the
+ * note there (`403 destination-not-allowed`) at every try, and nothing in the list changes a place.
+ * So a place that is no longer offered falls to the first one, which is what the composer does at
+ * the second try of a single note (`destinationToSend`).
+ */
+export function withPlacesOfNow(drafts: readonly Draft[], offered: readonly Destination[]): Draft[] {
+  return drafts.map(({ seed, destination }) => {
+    const now = destinationToSend(offered, destination);
+
+    return now === undefined ? { seed } : { seed, destination: now };
+  });
 }
 
 /** What a worker takes in one request (FRU-124), from the envelope of a read. */

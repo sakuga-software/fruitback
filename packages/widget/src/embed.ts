@@ -22,6 +22,7 @@ import {
   cutIntoRequests,
   offeredBatch,
   sessionStorageOf,
+  withPlacesOfNow,
 } from './drafts.ts';
 import {
   type OfferedDestinations,
@@ -358,9 +359,15 @@ export function init(options: FruitbackOptions): Fruitback {
     if (sending) return { sent: 0 };
     sending = true;
     try {
-      const outcome = await sendDrafts({ drafts: drafts.list(), offer: readerIdentity.batch, options });
+      const outcome = await sendDrafts({
+        drafts: withPlacesOfNow(drafts.list(), destinations.get()),
+        offer: readerIdentity.batch,
+        options,
+      });
       drafts.remove(outcome.kept);
-      if (outcome.kept.length > 0) await read();
+      // After a failure too: the worker refuses a place the site no longer has, and the list of
+      // places on screen is then old. The read brings the list of now, and the next try follows it.
+      if (outcome.kept.length > 0 || outcome.failure !== undefined) await read();
 
       return { sent: outcome.kept.length, ...(outcome.failure === undefined ? {} : { failure: outcome.failure }) };
     } finally {

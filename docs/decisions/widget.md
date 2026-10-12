@@ -954,6 +954,11 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 - **Only the notes answered « kept » leave the drafts.** After a `207` the others are sent again, never
   the whole batch: the worker protects a kept note against a second copy for ten minutes, one minute
   when its `Kv` refuses the trace. A request that fails stops the others and its sentence is the one
-  of the composer for the same cause; nothing is lost.
+  of the composer for the same cause; nothing is lost. When some notes went and some stay, the list
+  says both: how many were sent, then why the others stay.
+- **A draft follows the places of now** (`withPlacesOfNow`). A member kept a note for a place the
+  team took away since: the worker refuses it there at every try, and nothing in the list changes a
+  place. So a place no longer offered falls to the first one, as the composer does at the second try
+  of a single note, and a failed send reads again so the list of places is the one of now.
 - `e2e/drafts.spec.ts` keeps two notes, reloads, sends them from the list in one request and reads
   them back from the worker; a `429` keeps the draft and says why; axe in both schemes.
