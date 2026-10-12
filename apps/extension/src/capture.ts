@@ -76,7 +76,10 @@ async function take(
   return pictureOn(answer.body, site.endpoint);
 }
 
-/** The answer of the worker, read field by field, and only an address on that worker. */
+/** The end of the address of a picture: the route, and the id the worker gave. */
+const PICTURE_PATH = /\/screenshot\/shot_[0-9a-f]{32}$/;
+
+/** The answer of the worker, read field by field, and only the address of a picture. */
 function pictureOn(body: string, endpoint: string): CapturedPicture | undefined {
   let parsed: unknown;
   try {
@@ -88,7 +91,13 @@ function pictureOn(body: string, endpoint: string): CapturedPicture | undefined 
   const { url, width, height } = parsed as Record<string, unknown>;
   if (typeof url !== 'string' || typeof width !== 'number' || typeof height !== 'number') return undefined;
   try {
-    if (new URL(url).origin !== new URL(endpoint).origin) return undefined;
+    const address = new URL(url);
+    // The worker names the picture under its public address, which is not always the address the
+    // extension calls it at (a proxy, another host). So the origin is free when it is `https`, and
+    // the path is what is held: a picture of the route, and nothing else of that host.
+    const sameOrigin = address.origin === new URL(endpoint).origin;
+    if (!sameOrigin && address.protocol !== 'https:') return undefined;
+    if (!PICTURE_PATH.test(address.pathname)) return undefined;
   } catch {
     return undefined;
   }

@@ -65,3 +65,7 @@ INSERT INTO "verification" ("id", "identifier", "value", "expiresAt", "createdAt
 
 INSERT INTO "invitation" ("id", "organizationId", "email", "role", "status", "expiresAt", "createdAt", "inviterId") VALUES
   ('inv_drill1', 'ws_drill1', 'carol@acme.dev', 'member', 'pending', '2026-10-18 10:00:00+00', '2026-10-11 10:00:00+00', 'acc_drill1');
+
+-- The picture of a note (FRU-44): the first bytes of a PNG, enough for a row that the drill compares.
+INSERT INTO screenshots (id, workspace_id, account_id, content, width, height, created_at) VALUES
+  ('shot_drill1', 'ws_drill1', 'acc_drill1', '\x89504e470d0a1a0a0000000d49484452', 120, 60, 1);
