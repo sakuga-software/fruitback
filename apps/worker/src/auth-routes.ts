@@ -46,6 +46,16 @@ export type AuthRouteContext = {
 export const EMAIL_LINK_PATH = `${AUTH_BASE_PATH}/email`;
 export const EMAIL_REDEEM_PATH = `${AUTH_BASE_PATH}/email/redeem`;
 export const SESSIONS_PATH = '/console/sessions';
+/**
+ * `GET /console/auth/start/<provider>` (FRU-148): a sign-in with a provider, started by a navigation.
+ *
+ * `/sign-in/social` answers the address of the provider to a `fetch`, and sets the cookie of the state
+ * on that answer. WebKit kept no such cookie when the console and the worker are not one site
+ * (measured in FRU-147, on `*.fruitback.localhost`), and the way back failed with `state_mismatch`. A
+ * navigation sets it in the first party, in every engine: the console sends the browser here, and this
+ * answers `302` to the provider with the cookie.
+ */
+const START_PATH = new RegExp(`^${AUTH_BASE_PATH}/start/(github|google)$`);
 const SESSION_PATH = /^\/console\/sessions\/([A-Za-z0-9_-]{1,80})$/;
 
 /** Whether this path is one that `handleAuthRoutes` answers. */
@@ -139,6 +149,43 @@ function withHeaders(answer: Response, headers: Record<string, string>): Respons
   for (const [name, value] of Object.entries(headers)) merged.set(name, value);
 
   return new Response(answer.body, { status: answer.status, statusText: answer.statusText, headers: merged });
+}
+
+/** The page of the console that says why a sign-in failed, with the code of better-auth. */
+function failed(consoleUrl: string, code: string): Response {
+  const back = new URL('/setup', consoleUrl);
+  back.searchParams.set('error', code);
+
+  return new Response(null, { status: 302, headers: { Location: back.href, 'Cache-Control': 'no-store' } });
+}
+
+async function startWithProvider(request: Request, provider: string, context: AuthRouteContext): Promise<Response> {
+  if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, {});
+  const auth = await context.auth;
+  const consoleOrigin = new URL(context.consoleUrl).origin;
+  // A provider that this worker does not have: the console says so. Read in the options, and not in
+  // a failure of the call: a database that is down is not a provider that is not set up.
+  const configured = (auth.options.socialProviders ?? {}) as Record<string, unknown>;
+  if (!Object.hasOwn(configured, provider)) return failed(context.consoleUrl, 'oauth_provider_not_found');
+
+  // A rejection goes up: the caller answers `502`, and writes the reason in the log.
+  const answer = await (auth.api as unknown as { signInSocial(input: object): Promise<Response> }).signInSocial({
+    body: { provider, callbackURL: `${consoleOrigin}/`, errorCallbackURL: `${consoleOrigin}/setup` },
+    headers: headersFor(request, context),
+    asResponse: true,
+  });
+  const body = answer.ok ? ((await answer.json()) as { url?: unknown }) : undefined;
+  if (typeof body?.url !== 'string') {
+    // better-auth refused, and said why in its own log line. The person is told that it did not finish.
+    console.error(`[fruitback] better-auth answered ${answer.status} to the start of a sign-in with ${provider}`);
+
+    return failed(context.consoleUrl, 'internal_server_error');
+  }
+
+  const headers = new Headers({ Location: body.url, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
+  for (const cookie of answer.headers.getSetCookie()) headers.append('Set-Cookie', cookie);
+
+  return new Response(null, { status: 302, headers });
 }
 
 async function sendLink(
@@ -307,6 +354,9 @@ export async function handleAuthRoutes(
   if (!isAuthRoute(pathname)) return undefined;
   if (pathname === EMAIL_LINK_PATH) return sendLink(request, context, headers);
   if (pathname === EMAIL_REDEEM_PATH) return redeemLink(request, context, headers);
+  // A navigation, and not a call of the console: no header of CORS.
+  const started = START_PATH.exec(pathname);
+  if (started !== null) return startWithProvider(request, started[1] ?? '', context);
   if (pathname === SESSIONS_PATH || SESSION_PATH.test(pathname)) return sessions(request, pathname, context, headers);
 
   const path = pathname.slice(AUTH_BASE_PATH.length);

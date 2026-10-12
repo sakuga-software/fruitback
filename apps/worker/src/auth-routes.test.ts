@@ -622,6 +622,92 @@ for (const { label, open, skip } of DATABASES) {
       }
     });
 
+    it('starts a sign-in with GitHub by a navigation, and sets the cookie of the state on it (FRU-148)', async () => {
+      const worker = await workerOn(open);
+      await worker.accounts.signIn({ provider: 'github', subject: '4242', email: 'alice@acme.dev' });
+
+      // A navigation of the browser: no `Origin`, and the answer is a redirect, not a body to read.
+      const start = await worker.call('/console/auth/start/github', { origin: null });
+      assert.equal(start.status, 302);
+      const to = new URL(start.headers.get('Location') ?? '');
+      assert.equal(`${to.origin}${to.pathname}`, 'https://github.com/login/oauth/authorize');
+      assert.equal(to.searchParams.get('redirect_uri'), `${PUBLIC_URL}/console/auth/callback/github`);
+      assert.equal(start.headers.get('Access-Control-Allow-Origin'), null);
+      const set = start.headers.getSetCookie().join('\n');
+      assert.match(set, /oauth_state=[^;]+;.*Path=\/console\/auth;.*HttpOnly.*SameSite=Lax/i);
+      const stateCookie = start.headers
+        .getSetCookie()
+        .map((each) => each.split(';')[0])
+        .join('; ');
+
+      const back = await withProvider(
+        {
+          ...GITHUB_TOKEN,
+          'https://api.github.com/user': { id: 4242, login: 'alice', name: 'Alice', email: 'alice@acme.dev' },
+          'https://api.github.com/user/emails': [{ email: 'alice@acme.dev', primary: true, verified: true }],
+        },
+        () =>
+          worker.call(`/console/auth/callback/github?code=a-code&state=${to.searchParams.get('state')}`, {
+            origin: null,
+            headers: { Cookie: stateCookie },
+          }),
+      );
+      assert.equal(back.headers.get('Location'), `${CONSOLE_URL}/`);
+      assert.equal((await worker.call('/console/me', { headers: { Cookie: cookieOf(back) } })).status, 200);
+    });
+
+    it('sends the console a code of better-auth when a sign-in with a provider fails (FRU-148)', async () => {
+      const worker = await workerOn(open);
+      // The person came back with no cookie of the state: another browser, or a link that is old.
+      const back = await worker.call('/console/auth/callback/github?code=a-code&state=a-state', { origin: null });
+
+      assert.equal(back.status, 302);
+      const to = new URL(back.headers.get('Location') ?? '');
+      assert.equal(`${to.origin}${to.pathname}`, `${CONSOLE_URL}/setup`);
+      assert.match(to.searchParams.get('error') ?? '', /^state_/);
+      assert.equal((await worker.call('/console/auth/start/linear', { origin: null })).status, 404);
+    });
+
+    it('says that a provider is not set up only when it is not, and answers 502 when better-auth rejects (FRU-148)', async () => {
+      const database = await opening(open);
+      await make(database);
+      // GitHub only: this worker has no client of Google.
+      const options = await authOptions({ ...AUTH_CONFIG, github: GITHUB, trackIp: false }, await database.pool());
+      const auth = await startAuth(options);
+      const through = (path: string, instance: Auth) =>
+        handleRequest(new Request(`${PUBLIC_URL}${path}`), envWith(), {
+          clientIp: '198.51.100.201',
+          accounts: createPostgresAccountStore(database),
+          sessionStore: createPostgresSessionStore(database),
+          kv: createMemoryKv(),
+          auth: instance,
+        });
+
+      const absent = await through('/console/auth/start/google', auth);
+      assert.equal(absent.headers.get('Location'), `${CONSOLE_URL}/setup?error=oauth_provider_not_found`);
+      assert.equal(
+        (await through('/console/auth/start/github', auth)).headers.get('Location')?.startsWith('https://github.com/'),
+        true,
+      );
+
+      // A provider that is set up, and a better-auth that rejects: not « not set up », and in the log.
+      const rejecting = {
+        options: auth.options,
+        api: { signInSocial: async () => Promise.reject(new Error('SCHEMA_MISMATCH of a test')) },
+      } as unknown as Auth;
+      const errors: string[] = [];
+      const logged = mock.method(console, 'error', (line: string) => void errors.push(line));
+      try {
+        const down = await through('/console/auth/start/github', rejecting);
+
+        assert.equal(down.status, 502);
+        assert.equal(down.headers.get('Location'), null);
+      } finally {
+        logged.mock.restore();
+      }
+      assert.deepEqual(errors, ['[fruitback] better-auth did not answer: SCHEMA_MISMATCH of a test']);
+    });
+
     it('says which ways the routes of better-auth offer, beside the two booleans of before', async () => {
       const worker = await workerOn(open);
       const answer = await worker.call('/auth/providers');

@@ -1535,7 +1535,12 @@ The console moves in FRU-148, and FRU-150 removes the path of before.
   `resolveClientIp` read in `x-fruitback-client-ip`, over anything the caller sent, and that header
   is the only one better-auth reads (`ipAddressHeaders`).
 - **A sign-in that fails goes back to `<console>/setup?error=<code of better-auth>`**
-  (`onAPIError.errorURL`). FRU-148 gives each code its sentence.
+  (`onAPIError.errorURL`). The console gives each code its sentence (FRU-148).
+- **A sign-in with a provider starts by a navigation**: `GET /console/auth/start/<github|google>`
+  (FRU-148) calls `signInSocial` in the process and answers `302` to the provider, with the cookie of
+  the state. `/sign-in/social` stays served, and sets that cookie on the answer of a `fetch`, which
+  WebKit did not send back between two sites. A provider this worker does not have goes back to the
+  console with `oauth_provider_not_found`.
 - **`GET /auth/providers` says `betterAuth: { email, github, google }`** when better-auth is on, and
   nothing more when it is off: a console of before reads the answer it always read.
 
