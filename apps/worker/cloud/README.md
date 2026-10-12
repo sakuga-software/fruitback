@@ -323,8 +323,7 @@ another version, and a folder that it cannot write.
 **Not tried:** step 2 (`snapshot.sh` on the host), `docker service scale`, « Deploy » in Dokploy, the
 label of the Swarm service, the network of Dokploy, a sign-in to the console and a note from an
 extension (steps 7.3 and 7.4 were checked by a refresh of the session only), the files of the Cloud
-and the time the copy takes on them. The copy holds every row in memory: the files of the Cloud are
-small (counted on 2026-10-09), and a file of hundreds of megabytes was not tried.
+and the time the copy takes on them. The copy holds every row of the two files in memory, and a file of hundreds of megabytes was not tried.
 
 ## The two OAuth applications
 
