@@ -197,8 +197,9 @@ for (const subject of SUBJECTS) {
       database = await subject.open();
       // The rows are in the journal: the file alone, copied without it, holds no account.
       assert.ok(statSync(`${files.accountsPath}-wal`).size > 0);
-      const alone = join(mkdtempSync(join(tmpdir(), 'fruitback-copy-alone-')), 'accounts.db');
-      folders.push(join(alone, '..'));
+      const aloneFolder = mkdtempSync(join(tmpdir(), 'fruitback-copy-alone-'));
+      folders.push(aloneFolder);
+      const alone = join(aloneFolder, 'accounts.db');
       copyFileSync(files.accountsPath, alone);
       const control = new DatabaseSync(alone);
       const tables = control.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name = 'accounts'").get();
