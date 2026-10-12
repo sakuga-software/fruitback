@@ -104,6 +104,12 @@ export function headersFor(request: Request, context: Pick<AuthRouteContext, 'cl
 }
 
 /**
+ * better-auth did not answer: a schema that is not the one it expects, a database that is down. The
+ * caller answers `502 auth-unavailable`, with the headers of CORS, and writes the reason in its log.
+ */
+export class AuthUnavailable extends Error {}
+
+/**
  * The person and the session of the cookie of this request, or `undefined`.
  *
  * better-auth reads the session in the database at each call, through the layer of `auth-at-rest.ts`:
@@ -115,10 +121,12 @@ export async function sessionOfCookie(
 ): Promise<{ userId: string; sessionId: string } | undefined> {
   // No cookie of a session, no call: a request of the path of before reads no database here.
   if (!(request.headers.get('Cookie') ?? '').includes('fruitback.session_token=')) return undefined;
-  const found = (await (await auth).api.getSession({ headers: request.headers })) as {
-    user?: { id?: unknown };
-    session?: { id?: unknown };
-  } | null;
+  let found: { user?: { id?: unknown }; session?: { id?: unknown } } | null;
+  try {
+    found = (await (await auth).api.getSession({ headers: request.headers })) as typeof found;
+  } catch (error) {
+    throw new AuthUnavailable(error instanceof Error ? error.message : String(error), { cause: error });
+  }
   const userId = found?.user?.id;
   const sessionId = found?.session?.id;
 

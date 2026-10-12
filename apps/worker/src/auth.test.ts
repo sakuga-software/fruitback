@@ -519,6 +519,31 @@ describe('the routes of better-auth that the worker serves (FRU-144, FRU-147)', 
     }
     assert.deepEqual(errors, ['[fruitback] better-auth did not answer: SCHEMA_MISMATCH of a test']);
   });
+
+  it('answers 502 to a call of the console with the cookie, when better-auth rejects its reading', async () => {
+    const database = await opening(createPgliteDatabase);
+    const rejecting = {
+      api: { getSession: async () => Promise.reject(new Error('SCHEMA_MISMATCH of a test')) },
+    } as unknown as Auth;
+    const errors: string[] = [];
+    const logged = mock.method(console, 'error', (line: string) => void errors.push(line));
+    try {
+      const answer = await handleRequest(
+        new Request('https://worker.test/console/me', {
+          headers: { Origin: CONSOLE_URL, Cookie: '__Secure-fruitback.session_token=a.b' },
+        }),
+        envWith(),
+        { clientIp: '192.0.2.200', accounts: createPostgresAccountStore(database), auth: rejecting },
+      );
+
+      assert.equal(answer.status, 502);
+      assert.deepEqual(await answer.json(), { error: 'auth-unavailable' });
+      assert.equal(answer.headers.get('Access-Control-Allow-Origin'), CONSOLE_URL);
+    } finally {
+      logged.mock.restore();
+    }
+    assert.deepEqual(errors, ['[fruitback] better-auth did not answer: SCHEMA_MISMATCH of a test']);
+  });
 });
 
 describe('the options of better-auth, as they are written (FRU-144)', () => {

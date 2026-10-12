@@ -14,7 +14,7 @@ import {
 import { type AccountStore, type Role, can } from './accounts.ts';
 import { SESSION_SITES_PATH, handleSessionSites } from './session-sites.ts';
 import { type Auth, authFor } from './auth.ts';
-import { handleAuthRoutes, isAuthRoute, sessionOfCookie } from './auth-routes.ts';
+import { AuthUnavailable, handleAuthRoutes, isAuthRoute, sessionOfCookie } from './auth-routes.ts';
 import { consoleCors, handleConsoleSession, isConsoleRoute } from './console-routes.ts';
 import { handleConsoleApi } from './console-api.ts';
 import { handleGitHub } from './github-oauth.ts';
@@ -477,6 +477,15 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
       return answer ?? json(404, { error: 'not-found' }, cors.headers);
     } catch (error) {
       if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, cors.headers);
+      // The cookie of a call of the console is read by better-auth (FRU-147): the same answer as on
+      // its own routes when it does not answer.
+      if (error instanceof AuthUnavailable) {
+        console.error(
+          `[fruitback] better-auth did not answer: ${served.databaseUrl === undefined ? error.message : withoutAddress(error.message, served.databaseUrl)}`,
+        );
+
+        return json(502, { error: 'auth-unavailable' }, cors.headers);
+      }
       throw error;
     }
   }
