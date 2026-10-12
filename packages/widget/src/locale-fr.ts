@@ -52,6 +52,7 @@ export const FRENCH: Catalog = {
   'thread.dialog': 'Feedback {identifier}',
   'thread.noNote': 'Aucune note.',
   'thread.noReplies': 'Pas encore de réponse.',
+  'thread.replies': 'Réponses',
   'thread.team': 'Équipe',
   'thread.anonymous': 'Anonyme',
   'thread.orphan': 'Élément introuvable — position approximative.',
