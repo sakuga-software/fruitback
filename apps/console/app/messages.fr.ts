@@ -148,7 +148,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Fruitback, in this workspace': 'Fruitback, dans ce workspace',
   '{team}, no project': '{team}, sans projet',
   Disconnect: 'Déconnecter',
-  'Its sites keep their notes in the workspace again.': 'Ses sites gardent de nouveau leurs notes dans le workspace.',
 
   Owner: 'Propriétaire',
   Admin: 'Administrateur',
@@ -264,5 +263,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Fruitback n’a pas répondu. Les sources et leurs sites n’ont pas pu être lus.',
   Close: 'Fermer',
   Remove: 'Retirer',
+  'Remove {site}': 'Retirer {site}',
+  'The widget stops on {site}, and the script pasted there no longer works: adding the site again gives it a new script. The notes already in a tracker stay there.':
+    'Le widget s’arrête sur {site}, et le script collé là ne marche plus : ajouter le site à nouveau lui donne un nouveau script. Les notes déjà dans un tracker y restent.',
+  'Disconnect {source}': 'Déconnecter {source}',
+  'Its sites keep their notes in the workspace again. The issues already in Linear stay there.':
+    'Ses sites gardent de nouveau leurs notes dans le workspace. Les issues déjà dans Linear y restent.',
   'Cloud workspace · beta': 'Workspace Cloud · bêta',
 };

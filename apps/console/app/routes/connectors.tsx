@@ -1,6 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { type Connector, type Delivery, type Destination, type Site, type Team, call } from '../api';
+import { Confirm } from '../confirm';
 import { type Listed, known, listedOf } from '../listed';
 import { Button, Card, Choice, Field, Problem } from '../ui';
 import { PageHead, useWorkspace } from './workspace';
@@ -507,6 +508,16 @@ function hostOf(connector: Connector): string {
   return connector.label.replace(/^REST · /, '');
 }
 
+/** The host of an address alone, so a button that names it fits the panel (FRU-165). */
+function shortHost(connector: Connector): string {
+  const address = hostOf(connector);
+  try {
+    return new URL(address).host;
+  } catch {
+    return address;
+  }
+}
+
 /** A moment, in the language of the console. */
 function moment(iso: string): string {
   const date = new Date(iso);
@@ -651,12 +662,13 @@ function RestDetail({
       </div>
       {manages ? (
         <div className="border-t border-line px-5 py-3">
-          <Button tone="quiet" className="-ml-4" onClick={() => void disconnect()}>
-            {t('Disconnect')}
-          </Button>
-          <p className="text-xs text-muted">
-            {t('Its sites keep their notes in the workspace, and the notes that waited are not sent.')}
-          </p>
+          <Confirm
+            label={t('Disconnect')}
+            confirmLabel={t('Disconnect {source}', { source: shortHost(connector) })}
+            consequence={t('Its sites keep their notes in the workspace, and the notes that waited are not sent.')}
+            onConfirm={() => void disconnect()}
+            className="-ml-4"
+          />
         </div>
       ) : null}
     </Card>
@@ -818,10 +830,15 @@ function Detail({
       </div>
       {manages ? (
         <div className="border-t border-line px-5 py-3">
-          <Button tone="quiet" className="-ml-4" onClick={() => void disconnect()}>
-            {t('Disconnect')}
-          </Button>
-          <p className="text-xs text-muted">{t('Its sites keep their notes in the workspace again.')}</p>
+          <Confirm
+            label={t('Disconnect')}
+            confirmLabel={t('Disconnect {source}', { source: sourceLine(connector) })}
+            consequence={t(
+              'Its sites keep their notes in the workspace again. The issues already in Linear stay there.',
+            )}
+            onConfirm={() => void disconnect()}
+            className="-ml-4"
+          />
         </div>
       ) : null}
     </Card>

@@ -39,6 +39,8 @@ type ButtonProps = {
   disabled?: boolean;
   onClick?: () => void;
   className?: string;
+  /** Takes focus when it appears: the way back of a confirmation, and the button it gives focus back to. */
+  autoFocus?: boolean;
   children: ReactNode;
 };
 
@@ -54,6 +56,7 @@ export function Button({
   disabled = false,
   onClick,
   className = '',
+  autoFocus = false,
   children,
 }: ButtonProps) {
   return (
@@ -61,6 +64,7 @@ export function Button({
       type={type}
       variant={VARIANTS[tone]}
       isDisabled={disabled}
+      autoFocus={autoFocus}
       {...(onClick === undefined ? {} : { onPress: onClick })}
       className={`rounded-full font-semibold ${className}`}
     >

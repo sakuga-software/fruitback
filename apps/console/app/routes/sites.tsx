@@ -1,5 +1,6 @@
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react';
 import { type Site, type Visibility, call } from '../api';
+import { Confirm } from '../confirm';
 import { type Listed, known, listedOf } from '../listed';
 import { Button, Card, Chip, Choice, Field, Problem } from '../ui';
 import { InstallOptions } from './setup';
@@ -150,9 +151,15 @@ function SiteList({
                 {open === site.id ? t('Close') : t('Install')}
               </Button>
               {manages ? (
-                <Button tone="quiet" onClick={() => onRemove(site)}>
-                  {t('Remove')}
-                </Button>
+                <Confirm
+                  label={t('Remove')}
+                  confirmLabel={t('Remove {site}', { site: new URL(site.origin).host })}
+                  consequence={t(
+                    'The widget stops on {site}, and the script pasted there no longer works: adding the site again gives it a new script. The notes already in a tracker stay there.',
+                    { site: new URL(site.origin).host },
+                  )}
+                  onConfirm={() => onRemove(site)}
+                />
               ) : null}
             </span>
           </div>
