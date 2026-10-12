@@ -587,6 +587,13 @@ step back from the path above, written and accepted (FRU-139, point 3 of 2026-10
   `Path=/console`. **It never rotates, so a stolen cookie is good until it ends or is ended, and
   nothing detects the theft**: there is no second token to replay. The refresh token of the path
   above rotates, and a replay ends its chain.
+- **The cookie is renewed with the session** (FRU-208). When a call of the console renews the
+  session, the worker sets the cookie again on its answer, with the same token and attributes and
+  7 days more. Until then the row lived on and the cookie of the browser ended 7 days after the
+  sign-in, whatever the person did. Only the cookie of the session leaves by this way, only for a
+  session that is there, and not for the session that the call itself ends.
+  test:`renews the cookie with the session, on each route that reads the cookie, and on no other call`,
+  test:`hands the browser the cookie of the session and no other header of a reading`.
 - **It is read in the database at each call**, with no cache. A session that is ended, by « sign
   out », by « sign out everywhere » (`/console/auth/revoke-sessions`) or by its id
   (`DELETE /console/sessions/<id>`), is refused at the next call, and so is a member who was removed

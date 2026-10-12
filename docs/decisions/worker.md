@@ -1518,6 +1518,13 @@ The console moves in FRU-148, and FRU-150 removes the path of before.
   `auth.ts` reach better-auth; any other one answers `404` before it reads the request. A route that a
   plugin adds is closed until somebody names it there with its reason. The routes of the organization
   plugin have their own list and their own file: see _The organization plugin_ below (FRU-149).
+- **A reading of the cookie that renews the session renews the cookie** (FRU-208). `sessionOfCookie`
+  asks `getSession` with `returnHeaders`, keeps the `Set-Cookie` of the session beside the request,
+  and `handleRequest` adds it to the answer that leaves (`withRenewedCookie`). Measured on 1.7.7: a
+  session last renewed two days ago moves its end in the row at the next `GET /console/me`, and the
+  answer had no `Set-Cookie`; the same reading with `returnHeaders` hands back the cookie of the
+  sign-in, token and attributes, with `Max-Age=604800`. A new route that reads the cookie through
+  `sessionOfCookie` gets this with nothing to write.
 - **A rejection of better-auth is a `502`**, with its reason in the log and no address of the
   database: `auth.handler` rejects on a schema that is wrong.
 - **The link of the e-mail is the worker's own two routes.** `POST /console/auth/email` calls
