@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import type { Database } from './postgres.ts';
 import { rowsOf } from './postgres.fixture.ts';
+import { catalogueOf as catalogueOfPublic } from './postgres-migrate.ts';
 
 /**
  * The migrations of the tool of before, as they shipped (FRU-180). **A copy, never edited.**
@@ -303,37 +304,9 @@ export const TABLES = [
   'invitation',
 ] as const;
 
-/** The two journals: `schema_migrations` of the tool of before, `__drizzle_migrations` of Drizzle. */
-const JOURNALS = ['schema_migrations', '__drizzle_migrations'];
-
-/**
- * The catalogue of `public`, one line for each column (with its place), constraint (with its name)
- * and index, in the order of their text. The journals of the two tools are left out.
- */
-export async function catalogueOf(database: Database): Promise<string[]> {
-  const rows = await rowsOf(
-    database,
-    sql`SELECT line FROM (
-          SELECT table_name AS t, 'column ' || table_name || '.' || column_name || ' #' || ordinal_position || ' ' ||
-                 data_type || ' null:' || is_nullable || ' default:' || coalesce(column_default, '') AS line
-            FROM information_schema.columns WHERE table_schema = 'public'
-          UNION ALL
-          SELECT t.relname, 'constraint ' || t.relname || ' ' || c.conname || ': ' || pg_get_constraintdef(c.oid)
-            FROM pg_constraint c
-            JOIN pg_class t ON t.oid = c.conrelid
-            JOIN pg_namespace n ON n.oid = c.connamespace
-           WHERE n.nspname = 'public'
-          UNION ALL
-          SELECT tablename, 'index ' || indexname || ': ' || indexdef FROM pg_indexes WHERE schemaname = 'public'
-        ) AS catalogue
-        WHERE t NOT IN (${sql.join(
-          JOURNALS.map((name) => sql`${name}`),
-          sql`, `,
-        )})
-        ORDER BY line COLLATE "C"`,
-  );
-
-  return rows.map((row) => String(row.line));
+/** The catalogue of `public` without the two journals, as the adoption reads it (`postgres-migrate.ts`). */
+export function catalogueOf(database: Database): Promise<string[]> {
+  return database.run((db) => catalogueOfPublic(db));
 }
 
 /** For each table, its number of rows and a digest of all of them, in a fixed order. */

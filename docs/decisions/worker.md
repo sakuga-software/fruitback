@@ -1103,6 +1103,12 @@ variable` holds the rest.
   what comes after. `schema_migrations` stays. A database left at an earlier migration of that tool,
   or whose list was edited, is refused before any write, with what to do. **The baseline is never
   edited**, as no migration is: the adoption writes its digest.
+- **The adoption first compares the tables of the database with the ones that the baseline makes**
+  (FRU-189): `BASELINE_CATALOGUE` of `postgres-baseline-catalogue.ts`, never edited. A column, a
+  constraint or an index that is gone, changed or added by hand is refused before any write, and
+  the message names the first line of each kind. The operator changes the database until it is what
+  the image of before made, and starts the worker again. A table that the baseline does not make is
+  left alone.
 - **The role of `FRUITBACK_DATABASE_URL` owns its database, or has `CREATE` on it.** The tool of
   before needed `CREATE` on the schema `public` only. A role without it is refused at the first
   call, with what to grant: see the reasons.
@@ -1227,6 +1233,23 @@ alone breaks on`. Such a database moves its tables to `public` by hand
   test:`makes the database that the tool of before made, to the last name` holds it on PGlite and on
   a server. Before the names were written in the schema, only the names of the constraints differed
   (`logins_provider_subject_pk` for `logins_pkey`, `accounts_email_unique` for `accounts_email_key`).
+- **A database of before that was changed by hand is not adopted** (FRU-189). The adoption runs
+  nothing: it writes that the baseline is applied, which is true only of the database that the
+  baseline makes. Before, a database without `sites_workspace_id_origin_key` was adopted, and the
+  stores count on that constraint. Now `postgres-migrate.ts` reads the catalogue of `public` (the
+  lines of the comparison above) and compares it with `BASELINE_CATALOGUE`, which
+  test:`is the catalogue that the baseline makes` holds to the baseline on PGlite and on a server.
+  `postgres-adopt.test.ts` then changes a database of before by hand, one case for each line of
+  its `CHANGES`: a column, an index or a constraint that is gone, a foreign key that deletes nothing
+  any more, a type, a « not null », a column that was added, a table that is gone. Each is refused
+  with its line named, and leaves no journal of Drizzle, the same catalogue and the same rows
+  after the refusal. test:`is adopted once the database is again what the image of before made`.
+  **The lines do not depend on the version of the server, and that was measured**: the baseline
+  gives the same 204 lines on PostgreSQL 16.14, 17.11, 18.3 and PGlite, once the rows of
+  `pg_constraint` for « not null » are left out. PostgreSQL 18 writes one for each such column (85
+  for the baseline), and 17 writes none: with them a database on 18 was never adopted. A table
+  that the baseline does not make is another application's: test:`leaves alone a table that the
+baseline does not make: it is adopted with it`.
 - **Why the baseline is marked and not run on a database of before.** Drizzle alone runs it, and
   fails on the first `CREATE TABLE`: test:`fails on its first CREATE TABLE when Drizzle alone meets
 it, and writes no row of its journal` is the control of the adoption. Rows cannot be replayed into
