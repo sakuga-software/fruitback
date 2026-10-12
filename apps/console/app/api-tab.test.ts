@@ -179,7 +179,6 @@ describe('a tab of the console is of one account (FRU-210)', () => {
       me: () => me(),
       routes: {
         'POST /console/auth/sign-out': () => Response.json({ success: true }),
-        'POST /console/session/logout': () => new Response(null, { status: 204 }),
         'POST /console/auth/email/redeem': () => Response.json({ account: BOB.account }),
       },
     });
