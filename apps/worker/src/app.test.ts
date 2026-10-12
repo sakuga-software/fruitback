@@ -1283,6 +1283,20 @@ describe('who may read a pin (FRU-40)', () => {
     assert.equal(await identifiedFor(), false);
     assert.equal(await identifiedFor({ Authorization: `Bearer ${forged}` }), false);
     assert.equal(await identifiedFor({ Authorization: `Bearer ${expired}` }), false);
+    // A public read never verified a token before FRU-112, so anything could sit in the header.
+    // None of it may turn a read that answered into a failure.
+    for (const junk of [
+      '',
+      'x',
+      '..',
+      'a.b.c',
+      '%%%.%%%.%%%',
+      `${good}x`,
+      `${good.split('.').slice(0, 2).join('.')}.`,
+      'é'.repeat(4_000),
+    ]) {
+      assert.equal(await identifiedFor({ Authorization: `Bearer ${junk}` }), false, `Bearer ${junk.slice(0, 20)}`);
+    }
     // No identity secret at all: the same good token names nobody.
     const response = await get(path, { headers: { Authorization: `Bearer ${good}` } });
     assert.equal('identified' in ((await response.json()) as object), false);
