@@ -40,6 +40,12 @@ const THREAD_GAP = 8;
  */
 const BADGE_STEP = 30;
 
+/**
+ * The room a badge needs on the left of its element, from the document's edge: the 26 px drop
+ * (FRU-158). With less, the fan goes back above the element.
+ */
+const BADGE_ROOM = 26;
+
 /** A framework commit arrives as several mutation bursts. Resolving on each one repeats the cascade. */
 const RESOLVE_DEBOUNCE_MS = 100;
 
@@ -198,21 +204,34 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   }
 
   /**
-   * Several notes on one spot fan their badges out along the top edge, in render order (FRU-155).
+   * Several notes on one spot fan their badges out, in render order (FRU-155).
    *
    * Without it the badges lay exactly on top of each other: one drop showed, and only the last one
    * took the click. A badge hangs from the top-left corner of its pin, so pins that share that
    * corner share a badge position, whether they are on one element or on two of the same box. Each
    * note keeps its own drop, its own stage colour and its own thread.
+   *
+   * The badge sits outside that corner, up and to the left, and the fan goes on to the left
+   * (FRU-158): above the element is where a label, a title or a price is written. An element too
+   * close to the left edge of the document for the whole fan keeps it above itself, going right —
+   * `fruitback-pin-tight` — because a badge off the page cannot be clicked at all.
    */
   function fan(): void {
-    const taken = new Map<string, number>();
+    const corners = placed.map((entry) => {
+      const left = Number.parseFloat(entry.pin.style.left) || 0;
+      const top = Number.parseFloat(entry.pin.style.top) || 0;
 
-    for (const entry of placed) {
-      const corner = `${Math.round(Number.parseFloat(entry.pin.style.left) || 0)},${Math.round(Number.parseFloat(entry.pin.style.top) || 0)}`;
-      const slot = taken.get(corner) ?? 0;
-      taken.set(corner, slot + 1);
-      entry.pin.style.setProperty('--fruitback-pin-slot', String(slot));
+      return { pin: entry.pin, left, key: `${Math.round(left)},${Math.round(top)}` };
+    });
+    const counts = new Map<string, number>();
+    for (const { key } of corners) counts.set(key, (counts.get(key) ?? 0) + 1);
+
+    const taken = new Map<string, number>();
+    for (const { pin, left, key } of corners) {
+      const slot = taken.get(key) ?? 0;
+      taken.set(key, slot + 1);
+      pin.style.setProperty('--fruitback-pin-slot', String(slot));
+      pin.classList.toggle('fruitback-pin-tight', left < BADGE_ROOM + ((counts.get(key) ?? 1) - 1) * BADGE_STEP);
     }
   }
 
@@ -802,16 +821,30 @@ const STYLES = `
   pointer-events: none;
   border: 2px solid var(--fruitback-pin-color);
   border-radius: var(--fruitback-radius-sm);
+}
+/*
+  The tint only while its note is pointed at, focused or open (FRU-158). Left on, it greyed every
+  annotated element of the page, and the more a page was annotated, the less it could be read.
+
+  Two rules and not one list: a browser with no :has() drops the whole rule that names it, and the
+  tint of an open thread must not go with it.
+*/
+.fruitback-pin[data-fruitback-open] { background: color-mix(in srgb, var(--fruitback-pin-color) 12%, transparent); }
+.fruitback-pin:has(.fruitback-pin-badge:hover),
+.fruitback-pin:has(.fruitback-pin-badge:focus-visible) {
   background: color-mix(in srgb, var(--fruitback-pin-color) 12%, transparent);
 }
 .fruitback-pin-uncertain { border-style: dashed; opacity: 0.85; }
 .fruitback-pin-orphan { border-style: dotted; }
 .fruitback-pin-badge {
   position: absolute;
+  /*
+    Outside the top-left corner, its point on the corner of the frame and not one pixel over the element (FRU-158). Above the element is
+    where its label or its price is written, and the badge covered it. One step to the left for each
+    note before this one on the same spot (FRU-155).
+  */
   bottom: 100%;
-  /* One step to the right for each note before this one on the same spot (FRU-155). */
-  left: calc(-6px + var(--fruitback-pin-slot, 0) * ${BADGE_STEP}px);
-  margin-bottom: 6px;
+  right: calc(100% + var(--fruitback-pin-slot, 0) * ${BADGE_STEP}px);
   /* …except this, which is the one thing you can click. */
   pointer-events: auto;
   display: grid;
@@ -820,9 +853,9 @@ const STYLES = `
   height: 26px;
   border: 0;
   padding: 0;
-  /* Three round corners and one sharp: a seed, pointing down at the element it belongs to. */
+  /* Three round corners and one sharp: a seed, pointing down and in at the corner of its element. */
   border-radius: 50% 50% 50% 0;
-  transform: rotate(-45deg);
+  transform: rotate(-90deg);
   background: var(--fruitback-pin-color);
   color: var(--fruitback-color-on-stage);
   font: 13px/1 var(--fruitback-font-sans);
@@ -831,14 +864,20 @@ const STYLES = `
   /* Squash and stretch: the drop lands, flattens, and settles. */
   animation: fruitback-pin-drop var(--fruitback-duration-slow) cubic-bezier(0.2, 1.4, 0.35, 1);
 }
-.fruitback-pin-glyph { transform: rotate(45deg); font-size: 13px; line-height: 1; }
+.fruitback-pin-glyph { transform: rotate(90deg); font-size: 13px; line-height: 1; }
+/* No room on the left: above the element, going right, as before FRU-158. */
+.fruitback-pin-tight .fruitback-pin-badge {
+  right: auto;
+  left: calc(var(--fruitback-pin-slot, 0) * ${BADGE_STEP}px);
+  bottom: calc(100% + 4px);
+}
 .fruitback-pin-badge:hover { filter: brightness(1.06); }
 .fruitback-pin-badge:focus-visible { outline: 2px solid var(--fruitback-color-text); outline-offset: 2px; }
 
 @keyframes fruitback-pin-drop {
-  0% { opacity: 0; transform: rotate(-45deg) translate(0, -10px) scale(0.7, 1.25); }
-  55% { opacity: 1; transform: rotate(-45deg) translate(0, 0) scale(1.18, 0.82); }
-  100% { opacity: 1; transform: rotate(-45deg) scale(1, 1); }
+  0% { opacity: 0; transform: translate(-7px, -7px) rotate(-90deg) scale(0.7, 1.25); }
+  55% { opacity: 1; transform: translate(0, 0) rotate(-90deg) scale(1.18, 0.82); }
+  100% { opacity: 1; transform: rotate(-90deg) scale(1, 1); }
 }
 
 @media (prefers-reduced-motion: reduce) {

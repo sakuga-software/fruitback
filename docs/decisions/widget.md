@@ -237,7 +237,7 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   element added to the widget does not meet the surprise again.
 - `prefers-reduced-motion` turns the animations **off**, both here and on the pin. A widget that
   overlays someone else's site is the last thing that should ignore that setting.
-- The pin is a drop: three round corners and one sharp, rotated to point at its element, with a
+- The pin is a drop: three round corners and one sharp, rotated to point at the corner of its element, with a
   squash-and-stretch entrance. The note moved to the badge's `aria-label` — that is what keeps it
   reachable by a screen reader, and by a test looking for it by role.
 - **One field to say who you are, and a box to be remembered (FRU-91).** The disclosure opened two
@@ -843,7 +843,7 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 - **Pins let clicks through**; only the badge is clickable. A widget that swallows the client's own
   buttons is one they turn off.
 - **Several notes on one spot fan their badges out** (FRU-155), one step of 30 px (a 26 px drop and
-  a 4 px gap) to the right for each note before it, in render order. Before, the badges lay on one
+  a 4 px gap) to the left for each note before it, in render order (to the right until FRU-158). Before, the badges lay on one
   point: one drop showed, and only the last one took the click. Each note keeps its own drop, its own
   stage colour and its own thread, so a reviewer counts the drops and opens each one; no count badge,
   no shared thread. The key is the pin's top-left corner, rounded to the pixel, and not the element:
@@ -851,6 +851,24 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   fan stays physical, like the pin, in both reading directions. `e2e/pin-stack.spec.ts` plants three
   notes on one button and reaches each badge with the pointer. Open question in the ticket: a count
   on one pin, if a spot ever carries more notes than its element is wide.
+- **A pin does not cover what it annotates** (FRU-158).
+  - **The badge sits outside the top-left corner of its element**, up and to the left, its sharp
+    corner on the corner of the frame and not one pixel over the element: the drop is turned by
+    -90deg instead of -45deg, so it points down and in. Above the element is where its label, its
+    title or its price is written, and the badge hid the first digit of « 19 € ». Left of an element
+    is usually a margin or the padding of its container.
+  - **Not enough room on the left** (less than 26 px from the edge of the document, plus 30 px per
+    other note on the spot): the badges go back above the element, going right, with the class
+    `fruitback-pin-tight`. A badge off the page cannot be clicked at all, and that is worse than one
+    over a word.
+  - **The frame is drawn always and tinted only while its badge is pointed at or focused, or its
+    thread is open**, through `:has()`. A tint left on greyed every annotated element, and a page
+    with many notes became hard to read. A browser with no `:has()` shows the tint for an open thread
+    only.
+  - `e2e/pin-placement.spec.ts` plants a note on each « Ajouter » and one on a price, and checks that
+    no badge overlaps the glyphs of a card title or price (measured on a `Range`, not on the box).
+  - Open questions in the ticket: a key or a dock button to see the bare page for a moment; the
+    nearest free margin rather than a fixed corner.
 - `createOverlay({ host })` takes where to render. It defaults to `<body>`; FRU-3's Shadow root
   passes itself there, which is what finally isolates these styles.
 - Tests run against **happy-dom** (`dom.fixture.ts`), a devDependency of this package only —
