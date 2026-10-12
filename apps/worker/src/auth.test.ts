@@ -43,7 +43,7 @@ import {
 } from './auth.fixture.ts';
 import { FRUITBACK_RESOURCE, IMPLIED, roleStatements } from './auth-roles.ts';
 import { ORGANIZATION_PATHS } from './organization-paths.ts';
-import { type WorkerEnv, hasAuth, readConfig } from './env.ts';
+import { ACCOUNTS_FILE_REFUSED, GITHUB_APP_REFUSED, type WorkerEnv, hasAuth, readConfig } from './env.ts';
 import { type Database, closeDatabases, createPgDatabase } from './postgres.ts';
 import { NO_REAL_POSTGRES, appliedDates, createPgliteDatabase, journalDates, ownDatabase } from './postgres.fixture.ts';
 import { closeSessionConnections } from './session-sqlite.ts';
@@ -87,8 +87,9 @@ function filesOnly(overrides: Record<string, string | undefined> = {}): WorkerEn
   directories.push(directory);
 
   return envWith({
+    // A worker with no accounts: its sessions are in a file, and it has no console.
     FRUITBACK_DATABASE_URL: undefined,
-    FRUITBACK_ACCOUNTS_PATH: join(directory, 'accounts.db'),
+    FRUITBACK_CONSOLE_URL: undefined,
     FRUITBACK_SESSION_PATH: join(directory, 'sessions.db'),
     ...overrides,
   });
@@ -152,7 +153,7 @@ describe('the secret of better-auth, and what it switches on (FRU-144)', () => {
     assert.ok(readConfig(envWith({ FRUITBACK_SECRETS_KEY: SECRETS_KEY })).ok);
   });
 
-  it('refuses the secret of better-auth without a database: the accounts in a file have no better-auth', () => {
+  it('refuses the secret of better-auth without a database: a worker with no accounts has no better-auth', () => {
     for (const env of [envWith({ FRUITBACK_DATABASE_URL: undefined, FRUITBACK_CONSOLE_URL: undefined }), filesOnly()]) {
       assert.equal(
         refusal(env),
@@ -191,15 +192,23 @@ describe('the secret of better-auth, and what it switches on (FRU-144)', () => {
         .ok,
       false,
     );
-    const same = readConfig(
-      envWith({ FRUITBACK_GITHUB_OAUTH: 'one-app:a-secret', FRUITBACK_AUTH_GITHUB_OAUTH: 'one-app:a-secret' }),
-    );
-    assert.match(same.ok ? '' : same.missing.join(), /another GitHub OAuth App than FRUITBACK_GITHUB_OAUTH/);
-    // The control: two Apps are taken.
-    assert.equal(
-      readConfig(envWith({ FRUITBACK_GITHUB_OAUTH: 'one-app:a-secret', FRUITBACK_AUTH_GITHUB_OAUTH: 'two-app:b' })).ok,
-      true,
-    );
+    // The App of the sign-in of before stops the worker, with or without the second one (FRU-150).
+    for (const more of [{}, { FRUITBACK_AUTH_GITHUB_OAUTH: 'two-app:b' }]) {
+      assert.equal(refusal(envWith({ FRUITBACK_GITHUB_OAUTH: 'one-app:a-secret', ...more })), GITHUB_APP_REFUSED);
+    }
+    assert.match(GITHUB_APP_REFUSED, /^FRUITBACK_GITHUB_OAUTH \(.*FRUITBACK_AUTH_GITHUB_OAUTH/);
+  });
+
+  it('refuses the accounts file of before, and says what to set and where to read how (FRU-150)', () => {
+    for (const more of [{}, { FRUITBACK_DATABASE_URL: undefined, FRUITBACK_AUTH_SECRET: undefined }]) {
+      assert.equal(refusal(envWith({ FRUITBACK_ACCOUNTS_PATH: '/data/accounts.db', ...more })), ACCOUNTS_FILE_REFUSED);
+    }
+    assert.match(ACCOUNTS_FILE_REFUSED, /^FRUITBACK_ACCOUNTS_PATH \(/);
+    for (const named of ['FRUITBACK_DATABASE_URL', 'migrate-to-postgres', 'docs/self-hosting.md']) {
+      assert.ok(ACCOUNTS_FILE_REFUSED.includes(named), `the refusal does not name ${named}`);
+    }
+    // An empty value is an absent one.
+    assert.ok(readConfig(envWith({ FRUITBACK_ACCOUNTS_PATH: '', FRUITBACK_GITHUB_OAUTH: '' })).ok);
   });
 
   it('refuses a variable that better-auth reads from the environment by itself, and never quotes it', () => {

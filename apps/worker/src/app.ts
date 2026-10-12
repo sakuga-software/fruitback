@@ -17,16 +17,12 @@ import { type Auth, authFor } from './auth.ts';
 import { createWorkspaceWithPlugin, handleOrganizationRoutes } from './auth-organization.ts';
 import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
 import { AuthUnavailable, handleAuthRoutes, isAuthRoute, sessionOfCookie, withRenewedCookie } from './auth-routes.ts';
-import { consoleCors, handleConsoleSession, isConsoleRoute } from './console-routes.ts';
+import { SIGN_IN_PROVIDERS, consoleCors, isConsoleRoute } from './console-cors.ts';
 import { handleConsoleApi } from './console-api.ts';
-import { handleGitHub } from './github-oauth.ts';
-import { handleGoogle } from './google-oauth.ts';
-import { SIGN_IN_PROVIDERS } from './oauth-sign-in.ts';
 import { handleLinearOAuth } from './linear-oauth.ts';
 import { createConnectorStores, createRoutedStore } from './connectors.ts';
 import { DELIVERY_HEADER, LOOP_STATUS, type Send, deliverDue } from './rest-connector.ts';
 import { type Mailer, createTemMailer } from './mail.ts';
-import { createSqliteAccountStore } from './accounts-sqlite.ts';
 import { type WorkerConfig, type WorkerEnv, hasAccounts, hasSessions, readAllowedOrigins, readConfig } from './env.ts';
 import { type BatchAnswer, type BatchMemory, type CreatedIssue, type SeedStore, StoreError } from './store.ts';
 import { createAll } from './batch.ts';
@@ -95,10 +91,7 @@ export function mailerFor(config: WorkerConfig): Mailer | undefined {
 
 /** The accounts of this worker, or `undefined` when its clients come from the env (FRU-96). */
 export function accountStoreFor(config: WorkerConfig): AccountStore | undefined {
-  // `readConfig` refuses the two together, so the order here decides nothing.
-  if (config.databaseUrl !== undefined) return postgresAccountStore(config.databaseUrl);
-
-  return config.accountsPath === undefined ? undefined : createSqliteAccountStore(config.accountsPath);
+  return config.databaseUrl === undefined ? undefined : postgresAccountStore(config.databaseUrl);
 }
 
 /**
@@ -187,10 +180,17 @@ async function signsNotes(request: Request, policy: ClientPolicy): Promise<boole
  * The server calls it on a timer. It is here and not in `server.ts` so a test reaches it with no
  * socket: it reads the same configuration as a request does.
  */
-export async function deliverPending(env: WorkerEnv, send: Send, now?: () => number): Promise<void> {
+export async function deliverPending(
+  env: WorkerEnv,
+  send: Send,
+  now?: () => number,
+  /** The accounts a test opened, as `RequestContext.accounts`. Absent, the ones of the environment. */
+  held?: AccountStore,
+): Promise<void> {
   const config = readConfig(env);
-  const accounts = config.ok ? accountStoreFor(config.config) : undefined;
-  if (!config.ok || accounts === undefined) return;
+  if (!config.ok) return;
+  const accounts = held ?? accountStoreFor(config.config);
+  if (accounts === undefined) return;
 
   await deliverDue({ accounts, secretsKey: config.config.secretsKey, send, ...(now === undefined ? {} : { now }) });
 }
@@ -365,29 +365,21 @@ async function routed(request: Request, env: WorkerEnv, context: RequestContext)
     const mailer = context.mailer ?? mailerFor(served);
 
     try {
-      // Which providers this worker signs people in with (FRU-135). The console asks before it draws
-      // a button: a button for a provider the worker does not have leads to a `404`. `betterAuth`
-      // says which ways the routes of better-auth offer (FRU-147), so a console of after takes them,
-      // and a console of before reads the two booleans it always read.
+      // Which ways the routes of better-auth offer (FRU-135, FRU-147): the console asks before it
+      // draws a button. `betterAuth` is absent when it is off: then nobody signs in to the console.
+      // The two booleans of the path of before are gone with it (FRU-150).
       if (pathname === SIGN_IN_PROVIDERS && request.method === 'GET') {
-        const ready = served.publicUrl !== undefined && served.consoleUrl !== undefined;
-
         return json(
           200,
-          {
-            github: ready && served.github !== undefined,
-            google: ready && served.google !== undefined,
-            // Absent when better-auth is off: the answer of before, to the letter.
-            ...(auth === undefined
-              ? {}
-              : {
-                  betterAuth: {
-                    email: mailer !== undefined,
-                    github: served.authGithub !== undefined,
-                    google: served.google !== undefined,
-                  },
-                }),
-          },
+          auth === undefined
+            ? {}
+            : {
+                betterAuth: {
+                  email: mailer !== undefined,
+                  github: served.authGithub !== undefined,
+                  google: served.google !== undefined,
+                },
+              },
           cors.headers,
         );
       }
@@ -426,27 +418,6 @@ async function routed(request: Request, env: WorkerEnv, context: RequestContext)
         }
       }
 
-      // Top-level navigations to and from a provider, not calls of the console (FRU-97, FRU-135).
-      if (served.publicUrl !== undefined && served.consoleUrl !== undefined) {
-        const signIn = {
-          publicUrl: served.publicUrl,
-          consoleUrl: served.consoleUrl,
-          accounts,
-          sessions,
-          kv,
-          secret: served.identitySecret,
-          ...(context.fetcher === undefined ? {} : { fetcher: context.fetcher }),
-        };
-        const viaProvider =
-          (served.github === undefined
-            ? undefined
-            : await handleGitHub(request, pathname, { ...signIn, oauth: served.github })) ??
-          (served.google === undefined
-            ? undefined
-            : await handleGoogle(request, pathname, { ...signIn, oauth: served.google }));
-        if (viaProvider !== undefined) return viaProvider;
-      }
-
       // The way to Linear and back, for a workspace that connects it (FRU-134). Navigations too.
       if (
         served.linearOAuth !== undefined &&
@@ -465,38 +436,29 @@ async function routed(request: Request, env: WorkerEnv, context: RequestContext)
         if (viaLinear !== undefined) return viaLinear;
       }
 
-      const answer =
-        (await handleConsoleSession(
-          request,
-          pathname,
-          served,
-          { accounts, sessions, mailer, kv, secret: served.identitySecret },
-          cors.headers,
-        )) ??
-        (await handleConsoleApi(
-          request,
-          pathname,
-          {
-            accounts,
-            sessions,
-            secret: served.identitySecret,
-            ...(served.secretsKey === undefined ? {} : { secretsKey: served.secretsKey }),
-            kv,
-            ...(served.linearOAuth === undefined ? {} : { linearOAuth: served.linearOAuth }),
-            ...(served.publicUrl === undefined ? {} : { publicUrl: served.publicUrl }),
-            // The cookie of better-auth, beside the token of before (FRU-147).
-            ...(auth === undefined || served.consoleUrl === undefined
-              ? {}
-              : {
-                  cookieSession: async (each: Request) => (await sessionOfCookie(auth, each))?.userId,
-                  consoleUrl: served.consoleUrl,
-                  // A workspace is made by the organization plugin for somebody of the cookie (FRU-149).
-                  createWorkspace: async (each: Request, name: string) =>
-                    createWorkspaceWithPlugin(await auth, each.headers, name),
-                }),
-          },
-          cors.headers,
-        ));
+      const answer = await handleConsoleApi(
+        request,
+        pathname,
+        {
+          accounts,
+          sessions,
+          ...(served.secretsKey === undefined ? {} : { secretsKey: served.secretsKey }),
+          kv,
+          ...(served.linearOAuth === undefined ? {} : { linearOAuth: served.linearOAuth }),
+          ...(served.publicUrl === undefined ? {} : { publicUrl: served.publicUrl }),
+          // Who calls is the person of the cookie of better-auth (FRU-147), and nobody without it.
+          ...(auth === undefined || served.consoleUrl === undefined
+            ? {}
+            : {
+                cookieSession: async (each: Request) => (await sessionOfCookie(auth, each))?.userId,
+                consoleUrl: served.consoleUrl,
+                // A workspace is made by the organization plugin for somebody of the cookie (FRU-149).
+                createWorkspace: async (each: Request, name: string) =>
+                  createWorkspaceWithPlugin(await auth, each.headers, name),
+              }),
+        },
+        cors.headers,
+      );
 
       return answer ?? json(404, { error: 'not-found' }, cors.headers);
     } catch (error) {

@@ -20,7 +20,6 @@ async function openSites(page: Page): Promise<void> {
   await page.route(`${WORKER_ORIGIN}/**`, (route) => {
     const { pathname } = new URL(route.request().url());
     const json = (body: unknown, status = 200) => route.fulfill({ status, json: body });
-    if (pathname === '/console/session/refresh') return json({ accessToken: 'token' });
     if (pathname === '/console/me') return json(me);
     if (pathname === '/console/workspaces/w1/sites') {
       // Reading the sites works. Adding one fails, which is what shows the alert.
@@ -115,8 +114,8 @@ async function openSetup(page: Page): Promise<void> {
   await page.route(`${WORKER_ORIGIN}/**`, (route) => {
     const { pathname } = new URL(route.request().url());
     const json = (body: unknown, status = 200) => route.fulfill({ status, json: body });
-    if (pathname === '/auth/providers') return json({ github: true, google: true });
-    if (pathname === '/console/session/refresh' || pathname === '/console/me') return json({}, 401);
+    if (pathname === '/auth/providers') return json({ betterAuth: { email: true, github: true, google: true } });
+    if (pathname === '/console/me') return json({}, 401);
 
     return route.fulfill({ status: 204 });
   });
