@@ -597,6 +597,13 @@ it`. The value of the row is the address it was sent to.
 the cookie from another origin, or from none, and takes it from the console`. better-auth refuses
   the same two requests on its own routes. A call with the token of before in `Authorization` is not
   a cookie, and is checked as before.
+- **« Sign out » ends both sessions of the browser, or says that it did not** (FRU-204). A browser
+  that signed in before the worker served better-auth still holds the refresh cookie of the path of
+  before, good for 30 days, and the worker takes it for as long as it serves that path. The console
+  ends it with the cookie of better-auth, and stays on « My account » with « You are still signed
+  in » when the worker did not confirm one of the two. **What remains: a session of before in a
+  browser where nobody presses « Sign out »** goes on until its 30 days, or until the path of before
+  is removed (FRU-150).
 - **The console holds no token** (FRU-148): no access token in its memory, nothing in `localStorage`
   or `sessionStorage`, and a cookie that `document.cookie` does not show. A script injected into the
   console can call the worker while the page is open, as before; it has nothing to carry away.

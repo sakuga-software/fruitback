@@ -107,6 +107,14 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the sign-in itself: it has nothing typed to keep.
 - **« Sign out » ends the session on the worker** (`/console/auth/sign-out`): the cookie is refused
   at the next call, in every tab and for whoever copied it.
+- **« Sign out » ends the session of before too** (`/console/session/logout`, FRU-204). A browser
+  that signed in before the worker served better-auth still holds the refresh cookie of before, good
+  for 30 days, and the worker takes it while it serves the path of before. Both calls are made,
+  whatever the first one answers. A `404` on the second one is a worker with no path of before: it
+  reads no refresh cookie, and that is an end. FRU-150 removes this call.
+- **« Sign out » says when it failed.** `signOut` answers `false` unless the worker said that both
+  sessions ended, and « My account » then stays, with « You are still signed in ». A screen that
+  says « signed out » over a session that is still good leaves the browser open to the next person.
 
 ### The reasons, and the measurements
 
