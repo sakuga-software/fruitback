@@ -170,6 +170,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Workspace: 'Workspace',
   'Sign in, name it': 'Se connecter, le nommer',
   Source: 'Source',
+  Sources: 'Sources',
   'Where feedback goes': 'Où vont les retours',
   Site: 'Site',
   'The address you review': 'L’adresse que vous relisez',
@@ -216,6 +217,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Notes stay in this workspace. Nothing to connect.': 'Les notes restent dans ce workspace. Rien à connecter.',
   'Where should feedback go?': 'Où doivent aller les retours ?',
   Selected: 'Sélectionné',
+  'In Connectors, after the set-up': 'Dans Connecteurs, après la mise en place',
+  'For now the notes stay in this workspace. Linear and a REST API connect after the set-up, in Connectors.':
+    'Pour l’instant, les notes restent dans ce workspace. Linear et une API REST se connectent après la mise en place, dans Connecteurs.',
   'Paste the full address of the site, starting with https://.':
     'Collez l’adresse complète du site, en commençant par https://.',
   'Which site do you review?': 'Quel site relisez-vous ?',

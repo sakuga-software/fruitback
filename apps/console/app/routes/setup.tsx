@@ -393,15 +393,36 @@ function NameIt({ onCreated }: { onCreated: (workspace: Workspace) => void }) {
   );
 }
 
+/**
+ * Where the notes go, as it is at the end of the set-up (FRU-166). The step chooses nothing: Fruitback
+ * keeps the notes, and the sources that the Connectors screen connects say so, rather than « After the
+ * beta ». When the step connects a source itself, it becomes a choice again.
+ */
 const SOURCES = [
   {
     key: 'fruitback',
     name: 'Fruitback',
     detail: msg('Notes stay in this workspace. Nothing to connect.'),
-    ready: true,
+    state: msg('Selected'),
   },
-  { key: 'linear', name: 'Linear', detail: msg('An issue per note, in the team you choose.'), ready: false },
-  { key: 'github', name: 'GitHub Issues', detail: msg('An issue per note, in one repository.'), ready: false },
+  {
+    key: 'linear',
+    name: 'Linear',
+    detail: msg('An issue per note, in the team you choose.'),
+    state: msg('In Connectors, after the set-up'),
+  },
+  {
+    key: 'rest',
+    name: msg('REST API'),
+    detail: msg('POST each note to your own endpoint.'),
+    state: msg('In Connectors, after the set-up'),
+  },
+  {
+    key: 'github',
+    name: 'GitHub Issues',
+    detail: msg('An issue per note, in one repository.'),
+    state: msg('After the beta'),
+  },
 ] as const;
 
 function Source({ onNext }: { onNext: () => void }) {
@@ -410,31 +431,35 @@ function Source({ onNext }: { onNext: () => void }) {
     <Frame
       step={2}
       title={t('Where should feedback go?')}
-      lead={t('Connect a source once. Every site of the workspace can then send its feedback there.')}
+      lead={t(
+        'For now the notes stay in this workspace. Linear and a REST API connect after the set-up, in Connectors.',
+      )}
       action={<Button onClick={onNext}>{t('Continue')}</Button>}
     >
-      <div role="radiogroup" aria-label={t('Source')} className="space-y-2">
+      {/* A list to read, not a choice: nothing here is chosen, so it is no radio group (FRU-166). */}
+      <ul aria-label={t('Sources')} className="space-y-2">
         {SOURCES.map((source) => (
-          <div
+          <li
             key={source.key}
-            role="radio"
-            aria-checked={source.ready}
-            aria-disabled={!source.ready}
-            className={`flex items-center gap-3 rounded-[10px] border px-4 py-3 ${
-              source.ready ? 'border-ink' : 'border-line text-muted'
+            className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[10px] border px-4 py-3 ${
+              source.key === 'fruitback' ? 'border-ink' : 'border-line text-muted'
             }`}
           >
-            <span className="flex h-8 w-8 flex-none items-center justify-center rounded-md bg-chip text-xs font-bold text-ink">
-              {source.name.charAt(0)}
+            <span
+              aria-hidden="true"
+              className="flex h-8 w-8 flex-none items-center justify-center rounded-md bg-chip text-xs font-bold text-ink"
+            >
+              {source.key === 'rest' ? '{}' : source.name.charAt(0)}
             </span>
-            <span className="flex-1">
-              <span className="block text-sm font-semibold text-ink">{source.name}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-ink">{t(source.name)}</span>
               <span className="block text-xs">{t(source.detail)}</span>
             </span>
-            <span className="text-xs font-semibold">{source.ready ? t('Selected') : t('After the beta')}</span>
-          </div>
+            {/* On a phone the state has its own line, under the words: beside them it squeezed them (FRU-166). */}
+            <span className="w-full pl-11 text-xs font-semibold sm:w-auto sm:pl-0">{t(source.state)}</span>
+          </li>
         ))}
-      </div>
+      </ul>
     </Frame>
   );
 }
