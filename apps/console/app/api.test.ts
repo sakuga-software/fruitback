@@ -1,9 +1,12 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  MAX_DESTINATIONS,
+  type Site,
   UNREACHABLE,
   call,
   callUntilAnswered,
+  hasRoomFor,
   onReachability,
   redeemLink,
   refresh,
@@ -103,5 +106,30 @@ describe('the providers the worker signs people in with (FRU-135)', () => {
     mock.restoreAll();
     mock.method(globalThis, 'fetch', async () => Response.json({ error: 'not-found' }, { status: 404 }));
     assert.equal(await signInProviders(), undefined);
+  });
+});
+
+describe('a site that sends to several places (FRU-123)', () => {
+  const site = (places: number, connector = 'con_linear'): Site => ({
+    id: 'site_1',
+    origin: 'https://acme.dev',
+    visibility: 'members',
+    destinations: Array.from({ length: places }, (_, index) => ({ connector, teamId: `team_${index}` })),
+  });
+
+  it('has room for one more place under the bound of the worker, and none at the bound', () => {
+    assert.equal(MAX_DESTINATIONS, 5);
+    assert.equal(hasRoomFor(site(4), 'con_rest'), true);
+    assert.equal(hasRoomFor(site(5), 'con_rest'), false);
+    assert.equal(hasRoomFor(site(0), 'con_rest'), true);
+  });
+
+  it('keeps the choice of a source the site already sends to, even when the site is full', () => {
+    assert.equal(hasRoomFor(site(5, 'con_rest'), 'con_rest'), true);
+    // A worker of before sends one destination, and no list.
+    assert.equal(
+      hasRoomFor({ ...site(0), destinations: undefined as never, destination: { connector: 'c' } }, 'x'),
+      true,
+    );
   });
 });

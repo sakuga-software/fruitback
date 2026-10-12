@@ -89,6 +89,16 @@ export function placesOf(site: Site): Destination[] {
   return site.destination === undefined ? [] : [site.destination];
 }
 
+/**
+ * Whether a site can take one more place from this source: it sends there already, or it has room.
+ * The worker refuses a sixth place, so a screen says the limit and does not offer the choice.
+ */
+export function hasRoomFor(site: Site, connector: string): boolean {
+  const places = placesOf(site);
+
+  return places.some((each) => each.connector === connector) || places.length < MAX_DESTINATIONS;
+}
+
 /** Whether two places are one: the same source, team and project. */
 export function samePlace(one: Destination, other: Destination): boolean {
   return one.connector === other.connector && one.teamId === other.teamId && one.projectId === other.projectId;

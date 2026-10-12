@@ -13,6 +13,7 @@ import {
   type TrackerState,
   UNREACHABLE,
   call,
+  hasRoomFor,
   placesOf,
   samePlace,
   setPlaces,
@@ -573,6 +574,10 @@ function RestDetail({
 }) {
   useLocale();
   const [late, setLate] = useState<Delivery[] | undefined>();
+  // A list is written whole, from the list on the screen. A second change before the first one is
+  // kept and read again would be made from the list of before, and would take the first one away:
+  // the controls wait.
+  const [writing, setWriting] = useState(false);
   const [problem, setProblem] = useState<string | undefined>();
 
   const read = useCallback(async () => {
@@ -584,12 +589,16 @@ function RestDetail({
   useEffect(() => void read(), [read]);
 
   async function place(site: Site, value: string) {
+    // One write at a time: see `writing`.
+    if (writing) return;
+    setWriting(true);
     setProblem(undefined);
     // The other places of the site stay, in their order: this address is added last, or taken out.
     const others = placesOf(site).filter((each) => each.connector !== connector.id);
     const set = await setPlaces(base, site, value === THERE ? [...others, { connector: connector.id }] : others);
     if (!set.ok) setProblem(msg('The destination of this site did not change. Try again.'));
     await onChanged();
+    setWriting(false);
   }
 
   async function retry(delivery: Delivery) {
@@ -622,7 +631,7 @@ function RestDetail({
             const places = placesOf(site);
             const sends = places.some((each) => each.connector === connector.id);
             // The worker refuses a sixth place: the reason is said here, and the choice is not offered.
-            const full = !sends && places.length >= MAX_DESTINATIONS;
+            const full = !hasRoomFor(site, connector.id);
             const elsewhere = places.some((each) => each.connector !== connector.id);
 
             return (
@@ -631,7 +640,7 @@ function RestDetail({
                   label={new URL(site.origin).host}
                   labelStrong
                   value={sends ? THERE : HERE}
-                  disabled={!manages || full}
+                  disabled={!manages || full || writing}
                   onChange={(value) => void place(site, value)}
                   options={[
                     { value: HERE, label: elsewhere ? t('Another source') : t('Fruitback only') },
@@ -871,6 +880,10 @@ function Detail({
   const [teams, setTeams] = useState<Team[] | undefined>();
   const [problem, setProblem] = useState<string | undefined>();
   const [silent, setSilent] = useState(false);
+  // A list is written whole, from the list on the screen. A second change before the first one is
+  // kept and read again would be made from the list of before, and would take the first one away:
+  // the controls wait.
+  const [writing, setWriting] = useState(false);
 
   useEffect(() => {
     if (!manages) return;
@@ -888,10 +901,14 @@ function Detail({
 
   /** Writes the whole list of a site: the worker keeps all of it, or none of it. */
   async function place(site: Site, places: Destination[]) {
+    // One write at a time: see `writing`.
+    if (writing) return;
+    setWriting(true);
     setProblem(undefined);
     const set = await setPlaces(base, site, places);
     if (!set.ok) setProblem(msg('The destinations of this site did not change. Try again.'));
     await onChanged();
+    setWriting(false);
   }
 
   /** The place a value of the list of teams names: `team`, or `team/project`. */
@@ -983,11 +1000,11 @@ function Detail({
                         {manages && own ? (
                           <span className="-ml-3 flex flex-wrap">
                             {index === 0 ? null : (
-                              <Button tone="quiet" onClick={() => void place(site, [each, ...rest])}>
+                              <Button tone="quiet" disabled={writing} onClick={() => void place(site, [each, ...rest])}>
                                 {t('Make it the default')}
                               </Button>
                             )}
-                            <Button tone="quiet" onClick={() => void place(site, rest)}>
+                            <Button tone="quiet" disabled={writing} onClick={() => void place(site, rest)}>
                               {t('Remove')}
                             </Button>
                           </span>
@@ -1002,7 +1019,7 @@ function Detail({
                       label={t('Add a destination for {site}', { site: host })}
                       labelHidden
                       value={HERE}
-                      disabled={teams === undefined}
+                      disabled={teams === undefined || writing}
                       onChange={(value) => {
                         const added = placeOf(value);
                         if (value !== HERE && added !== undefined) void place(site, [...places, added]);
