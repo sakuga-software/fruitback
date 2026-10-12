@@ -107,6 +107,69 @@ describe('parseSeed', () => {
 });
 
 describe('canonicalizePageUrl', () => {
+  it('drops each tracking parameter by its exact name, whatever its case', () => {
+    const tracking = [
+      'utm_source',
+      'utm_whatever',
+      'UTM_Medium',
+      'gclid',
+      'gbraid',
+      'wbraid',
+      'dclid',
+      'fbclid',
+      'igshid',
+      'msclkid',
+      'ttclid',
+      'twclid',
+      'yclid',
+      'li_fat_id',
+      'mc_cid',
+      'mc_eid',
+      '_ga',
+      '_gl',
+    ];
+    for (const key of tracking) {
+      assert.equal(canonicalizePageUrl(`https://acme.test/p?${key}=1&tab=2`), 'https://acme.test/p?tab=2', key);
+    }
+  });
+
+  it('keeps a parameter that only contains the name of a tracking one, because it can name a screen', () => {
+    // Two screens that differ by `?xgclid=1` are two screens: dropping that parameter would make them
+    // share their pins.
+    const kept = [
+      'xutm_source',
+      'xgclid',
+      'gclidx',
+      'xgbraid',
+      'gbraidx',
+      'xwbraid',
+      'wbraidx',
+      'xdclid',
+      'dclidx',
+      'xfbclid',
+      'fbclid_note',
+      'xigshid',
+      'igshidx',
+      'xmsclkid',
+      'msclkidx',
+      'xttclid',
+      'ttclidx',
+      'xtwclid',
+      'twclidx',
+      'xyclid',
+      'yclidx',
+      'xli_fat_id',
+      'li_fat_idx',
+      'xmc_cid',
+      'mc_cidx',
+      'x_ga',
+      '_gax',
+    ];
+    for (const key of kept) {
+      assert.equal(canonicalizePageUrl(`https://acme.test/p?${key}=1`), `https://acme.test/p?${key}=1`, key);
+    }
+  });
+
   it('drops the fragment, the credentials and the default port', () => {
     assert.equal(canonicalizePageUrl('https://user:pass@Acme.test:443/pricing#cta'), 'https://acme.test/pricing');
   });

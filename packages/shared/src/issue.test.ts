@@ -1,6 +1,14 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_SEED_STAGE, FRUITBACK_LABEL, SEED_STAGES, buildIssueLabels, offeredStages } from './issue.ts';
+import {
+  DEFAULT_SEED_STAGE,
+  FRUITBACK_LABEL,
+  SEED_STAGES,
+  buildIssueLabels,
+  offeredStages,
+  seedCommentSchema,
+  seedIssueSchema,
+} from './issue.ts';
 import { minimalSeedFixture, seedFixture } from './seed.fixture.ts';
 
 describe('labels', () => {
@@ -42,5 +50,50 @@ describe('offeredStages (FRU-32)', () => {
     for (const value of [undefined, null, 'seeded', [], ['blue']]) {
       assert.deepEqual(offeredStages(value), [...SEED_STAGES], JSON.stringify(value));
     }
+  });
+});
+
+describe('the read envelope (FRU-10, FRU-13)', () => {
+  /** A planted seed as a worker answers it, with one reply from the team. */
+  function realisticIssue(overrides: Record<string, unknown> = {}) {
+    return {
+      id: '6f1c2d3e-0a1b-4c5d-8e9f-a0b1c2d3e4f5',
+      identifier: 'FRU-2',
+      url: 'https://linear.app/sakuga-software/issue/FRU-2/le-bouton-est-trop-petit',
+      title: 'Le bouton est trop petit',
+      stage: 'ripening',
+      stateName: 'In Progress',
+      updatedAt: '2026-08-05T10:00:00.000Z',
+      comments: [
+        { id: 'c_1', body: 'Corrigé sur la preview.', createdAt: '2026-08-05T11:00:00.000Z', author: 'Mathieu' },
+      ],
+      seed: seedFixture(),
+      ...overrides,
+    };
+  }
+
+  it('reads a realistic answer of a worker', () => {
+    const issue = realisticIssue();
+
+    assert.deepEqual(seedIssueSchema.parse(issue), issue);
+  });
+
+  it('reads an answer with no URL, as a store with no web interface gives it', () => {
+    const { url: _none, ...issue } = realisticIssue();
+
+    assert.deepEqual(seedIssueSchema.parse(issue), issue);
+  });
+
+  it('refuses an empty id, identifier or URL', () => {
+    for (const field of ['id', 'identifier', 'url']) {
+      assert.equal(seedIssueSchema.safeParse(realisticIssue({ [field]: '' })).success, false, field);
+    }
+  });
+
+  it('reads a realistic comment, and refuses one with an empty id', () => {
+    const comment = { id: 'c_42', body: 'On regarde ça demain.', createdAt: '2026-08-05T11:00:00.000Z' };
+
+    assert.deepEqual(seedCommentSchema.parse(comment), comment);
+    assert.equal(seedCommentSchema.safeParse({ ...comment, id: '' }).success, false);
   });
 });
