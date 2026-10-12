@@ -88,10 +88,16 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   (`/console/auth/email`, `/console/auth/email/redeem`, `/console/auth/sign-out`). The bundle and the
   policy of the image do not change: `csp.mjs`, hashed scripts, no `'unsafe-inline'` for a script.
 - **The worker says which path it serves, in `GET /auth/providers`.** With `betterAuth` in the
-  answer, the console takes the cookie, and the providers of `betterAuth`. Without it, and until the
-  worker answered, it signs in as before: `session-of-before.ts` holds the access token and the one
-  refresh in flight of FRU-99. The console and the worker are not deployed at the same instant.
+  answer, the console takes the cookie, and the providers of `betterAuth`. With an answer that has
+  none, it signs in as before: `session-of-before.ts` holds the access token and the one refresh in
+  flight of FRU-99. The console and the worker are not deployed at the same instant.
   **FRU-150 removes `session-of-before.ts`**, and with it every token of the console.
+- **A worker that refuses that question said nothing** (FRU-205). On a `429`, a `5xx` or no answer,
+  no call leaves on either path: each one answers that refusal, a sign-out answers `false`, and the
+  question is asked again at the next call, once for the calls of one moment. The console used to
+  take the path of before then: against a worker that serves better-auth, it spent the refresh
+  cookie of before and held an access token, for the session of whoever used the browser last. A
+  link opened during a refusal is not spent, and its screen offers « Try again ».
 - **A sign-in with a provider is a navigation of the whole page**, to
   `<worker>/console/auth/start/<provider>` (`providerStart`). Never a `fetch` of `/sign-in/social`:
   the cookie of the state would be set on the answer of a call, and WebKit did not send it back when
@@ -107,6 +113,17 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the sign-in itself: it has nothing typed to keep.
 - **« Sign out » ends the session on the worker** (`/console/auth/sign-out`): the cookie is refused
   at the next call, in every tab and for whoever copied it.
+- **« Sign out » ends the session of before too** (`/console/session/logout`, FRU-204). A browser
+  that signed in before the worker served better-auth still holds the refresh cookie of before, good
+  for 30 days, and the worker takes it while it serves the path of before. Both calls are made,
+  whatever the first one answers. A `404` on the second one is a worker with no path of before: it
+  reads no refresh cookie, and that is an end. FRU-150 removes this call.
+- **« Sign out » says when it failed.** `signOut` answers `false` unless the worker said that both
+  sessions ended, and « My account » then stays, with « You are still signed in ». A screen that
+  says « signed out » over a session that is still good leaves the browser open to the next person.
+  better-auth 1.7.7 answers `200` to a sign-out with no session, with one that already ended, and
+  with a cookie that is not one (measured, and held by a test of the worker): somebody who signs
+  out in a second tab is not held on that sentence.
 
 ### The reasons, and the measurements
 

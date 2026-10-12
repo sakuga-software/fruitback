@@ -60,7 +60,16 @@ export function holdAccess(token: string): void {
   access = token;
 }
 
-export async function logOut(): Promise<void> {
-  await reach('/console/session/logout', { method: 'POST' });
+/**
+ * Ends the session of before on the worker. `false`: the worker did not say that it ended, and the
+ * refresh cookie can still be good.
+ *
+ * `404` is a worker that no longer serves the path of before (FRU-150): it reads no refresh cookie,
+ * so there is nothing to end.
+ */
+export async function logOut(): Promise<boolean> {
+  const response = await reach('/console/session/logout', { method: 'POST' });
   access = undefined;
+
+  return response !== undefined && (response.ok || response.status === 404);
 }

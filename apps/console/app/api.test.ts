@@ -32,7 +32,7 @@ describe('a worker that does not answer', () => {
     assert.deepEqual(await call('GET', '/console/me'), UNREACHABLE);
     assert.deepEqual(await requestLink('a@b.dev', 'en'), UNREACHABLE);
     assert.deepEqual(await redeemLink('code'), UNREACHABLE);
-    await signOut();
+    assert.equal(await signOut(), false, 'nobody said that the session ended');
   });
 
   it('says so to whoever listens, and says when the worker is back', async () => {
@@ -146,16 +146,69 @@ describe('a worker that serves better-auth (FRU-148)', () => {
       'GET /auth/providers': BETTER_AUTH,
       'POST /console/auth/email': () => Response.json({ sent: true }, { status: 202 }),
       'POST /console/auth/sign-out': () => Response.json({ success: true }),
+      'POST /console/session/logout': () => new Response(null, { status: 204 }),
     });
     await signInProviders();
 
     assert.equal((await requestLink('a@b.dev', 'fr')).ok, true);
-    await signOut();
+    assert.equal(await signOut(), true);
 
+    // The session of before is ended too (FRU-204): its refresh cookie is good for 30 days.
     assert.deepEqual(sent.map((each) => `${each.init.method} ${new URL(each.url).pathname}`).slice(1), [
       'POST /console/auth/email',
       'POST /console/auth/sign-out',
+      'POST /console/session/logout',
     ]);
+  });
+
+  it('says that the sign-out failed when the worker did not end one of the two sessions (FRU-204)', async () => {
+    const ended = () => Response.json({ success: true });
+    const endedBefore = () => new Response(null, { status: 204 });
+    const refused = () => Response.json({ error: 'auth-unavailable' }, { status: 502 });
+    const limited = () => Response.json({ error: 'rate-limited' }, { status: 429 });
+    const cases: [string, Record<string, () => Response>, boolean][] = [
+      ['both ended', { 'POST /console/auth/sign-out': ended, 'POST /console/session/logout': endedBefore }, true],
+      [
+        'better-auth refused',
+        { 'POST /console/auth/sign-out': refused, 'POST /console/session/logout': endedBefore },
+        false,
+      ],
+      [
+        'better-auth limited',
+        { 'POST /console/auth/sign-out': limited, 'POST /console/session/logout': endedBefore },
+        false,
+      ],
+      [
+        'the path of before refused',
+        { 'POST /console/auth/sign-out': ended, 'POST /console/session/logout': refused },
+        false,
+      ],
+      // A worker that no longer serves the path of before (FRU-150) reads no refresh cookie.
+      ['no path of before', { 'POST /console/auth/sign-out': ended }, true],
+    ];
+
+    for (const [name, routes, expected] of cases) {
+      const sent = worker({ 'GET /auth/providers': BETTER_AUTH, ...routes });
+      await signInProviders();
+
+      assert.equal(await signOut(), expected, name);
+      // Both are asked, whatever the first one answers.
+      assert.deepEqual(
+        sent.map((each) => new URL(each.url).pathname).slice(1),
+        ['/console/auth/sign-out', '/console/session/logout'],
+        name,
+      );
+      mock.restoreAll();
+    }
+  });
+
+  it('says that the sign-out failed when the worker stops answering (FRU-204)', async () => {
+    worker({ 'GET /auth/providers': BETTER_AUTH });
+    await signInProviders();
+    mock.restoreAll();
+    down();
+
+    assert.equal(await signOut(), false);
   });
 
   it('tells whoever listens when a call is refused because the session ended, and not for a quiet call', async () => {
@@ -194,6 +247,26 @@ describe('a worker of before, which does not say betterAuth (FRU-148)', () => {
     const me = sent.find((each) => each.url.endsWith('/console/me'));
     assert.equal(new Headers(me?.init.headers).get('Authorization'), 'Bearer an-access-token');
     assert.deepEqual(JSON.parse(String(sent.find((each) => each.url.endsWith('/redeem'))?.init.body)).code, 'a-code');
+  });
+});
+
+describe('the sign-out of a worker of before (FRU-204)', () => {
+  it('says whether the worker ended the session, on the route of before and no other', async () => {
+    const sent = worker({
+      'GET /auth/providers': BEFORE,
+      'POST /console/session/logout': () => new Response(null, { status: 204 }),
+    });
+    await signInProviders();
+    assert.equal(await signOut(), true);
+    assert.deepEqual(sent.map((each) => new URL(each.url).pathname).slice(1), ['/console/session/logout']);
+
+    mock.restoreAll();
+    worker({
+      'GET /auth/providers': BEFORE,
+      'POST /console/session/logout': () => Response.json({ error: 'rate-limited' }, { status: 429 }),
+    });
+    await signInProviders();
+    assert.equal(await signOut(), false);
   });
 });
 
