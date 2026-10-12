@@ -297,11 +297,34 @@ the tables of better-auth. After it there is no way back to the two files. Then:
 
 ### What was tried, and what was not
 
-**Tried on 2026-10-11, on a laptop and never on the host**, by `postgres-copy.test.ts`: files made
-by the stores of the worker with their real migrations, their rows still in the `-wal`, copied into
-PGlite and into PostgreSQL 17 (dry run, copy, second run, refusals, a planted interruption, a planted
-lost row). **Not tried yet:** the steps of this runbook with the image, `docker service scale`,
-the label of the Swarm service, the files of a worker of real size and the time the copy takes.
+**Tried on 2026-10-12, on a laptop and never on the host**, with the image built from this branch,
+a PostgreSQL 17 container and a scratch volume. The files were made by the stores of the worker, then
+served by the image on SQLite: one extension refreshed its session and another one paired, so the
+last rows were in `sessions.db-wal` when the worker stopped. Steps 1 and 3 to 7 were run as written,
+with `docker stop` and `docker run` in place of `docker service scale` and « Deploy »:
+
+- the command without arguments printed its usage and exited 1;
+- the dry run and the copy exited 0, with `same` on the ten tables; a third run said that PostgreSQL
+  already holds these rows, and exited 0;
+- `__drizzle_migrations` had as many rows as the journal has entries;
+- the digests of the two files, their `-wal` and their `-shm`, taken after the stop, were the same
+  after the copy: the volume was mounted read-only;
+- the worker on PostgreSQL answered `/health` with `200` and the read probe with `unknown-client`;
+  the session refreshed before the switch and the session paired before it both refreshed; the
+  sealed key of a connector opened with `FRUITBACK_SECRETS_KEY`;
+- the way back: the worker on SQLite again refreshed a session that had not refreshed since the
+  switch (`200`), and refused the token that another extension got from PostgreSQL (`401`): that
+  extension must pair again, as « What it costs » says.
+
+The command is also held by `postgres-copy.test.ts`, on PGlite and on PostgreSQL 17: a planted
+interruption, a planted lost row, a database with other rows, a column on one side only, a file of
+another version, and a folder that it cannot write.
+
+**Not tried:** step 2 (`snapshot.sh` on the host), `docker service scale`, « Deploy » in Dokploy, the
+label of the Swarm service, the network of Dokploy, a sign-in to the console and a note from an
+extension (steps 7.3 and 7.4 were checked by a refresh of the session only), the files of the Cloud
+and the time the copy takes on them. The copy holds every row in memory: the files of the Cloud are
+small (counted on 2026-10-09), and a file of hundreds of megabytes was not tried.
 
 ## The two OAuth applications
 
