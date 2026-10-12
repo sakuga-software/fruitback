@@ -61,6 +61,40 @@ describe('parseSeed', () => {
     assert.ok(result.message.includes('anchor'), result.message);
   });
 
+  it('still reads a seed written at version 1', () => {
+    // A seed as a widget wrote it before FRU-9 moved the version to 2: no `reporter.verified`. Such
+    // seeds live in issues already in Linear, and readers accept older versions (CONTRIBUTING.md).
+    const v1 = {
+      kind: 'fruitback.seed',
+      v: 1,
+      id: 'sd_v1_7c41',
+      createdAt: '2026-08-01T10:00:00.000Z',
+      note: 'Le titre passe sous le menu.',
+      page: { url: 'https://preview.acme.test/pricing', path: '/pricing', title: 'Pricing — Acme' },
+      viewport: { width: 1440, height: 900, dpr: 2 },
+      anchor: {
+        selector: '[data-testid="hero-title"]',
+        tag: 'h1',
+        text: 'Pricing',
+        bounds: { xPct: 10, yPct: 5, wPct: 80, hPct: 6 },
+      },
+      client: { id: 'acme' },
+      reporter: { name: 'Alice', email: 'alice@acme.test' },
+    };
+
+    assert.deepEqual(parseSeed(JSON.parse(JSON.stringify(v1))), { ok: true, seed: v1 });
+  });
+
+  it('reports a version that is not a positive integer as malformed', () => {
+    for (const v of [0, -1, 1.5, '2', null, Number.NaN]) {
+      assert.deepEqual(
+        parseSeed({ ...seedFixture(), v }),
+        { ok: false, reason: 'invalid', message: 'missing or malformed seed version' },
+        `v ${JSON.stringify(v)} should be malformed`,
+      );
+    }
+  });
+
   it('reports a missing version as invalid rather than unsupported', () => {
     const { v: _dropped, ...withoutVersion } = seedFixture();
 
