@@ -73,7 +73,7 @@ async function mount(page: Page, testCase: string): Promise<void> {
   const read = page.waitForResponse((response) => response.url().startsWith(`${WORKER_ORIGIN}/feedback?url=`));
   await page.evaluate(
     (endpoint) =>
-      (globalThis as { Fruitback: { init(options: Record<string, string>): unknown } }).Fruitback.init({
+      (globalThis as unknown as { Fruitback: { init(options: Record<string, string>): unknown } }).Fruitback.init({
         endpoint,
         clientId: 'playground',
         locale: 'en-US',

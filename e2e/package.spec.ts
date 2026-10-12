@@ -25,7 +25,7 @@ async function mountFromScriptTag(page: import('@playwright/test').Page): Promis
   await page.addScriptTag({ path: IIFE });
   await page.evaluate(
     (endpoint) =>
-      (globalThis as { Fruitback: { init(options: Record<string, string>): unknown } }).Fruitback.init({
+      (globalThis as unknown as { Fruitback: { init(options: Record<string, string>): unknown } }).Fruitback.init({
         endpoint,
         clientId: 'playground',
         // An emoji on purpose: a host's label is the host's word, and FRU-36 took our emoji out of
@@ -100,7 +100,7 @@ test('a host catalog reaches the built widget, over the bundled one, key by key 
   await page.addScriptTag({ path: IIFE });
   await page.evaluate(
     (endpoint) =>
-      (globalThis as { Fruitback: { init(options: Record<string, unknown>): unknown } }).Fruitback.init({
+      (globalThis as unknown as { Fruitback: { init(options: Record<string, unknown>): unknown } }).Fruitback.init({
         endpoint,
         clientId: 'playground',
         locale: 'fr',

@@ -5,6 +5,7 @@
   "compilerOptions": {
     "types": ["node"]
   },
-  "include": ["src/**/*"],
+  // `*.ts` is `build.ts`: it runs on Node too, and no other configuration reads it (FRU-173).
+  "include": ["src/**/*", "*.ts"],
   "exclude": []
 }

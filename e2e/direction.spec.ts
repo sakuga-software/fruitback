@@ -28,7 +28,7 @@ test('in Arabic the dock and the popover move, and the pin stays on its element'
   await page.addScriptTag({ path: IIFE });
   await page.evaluate(
     ({ endpoint, messages }) =>
-      (globalThis as { Fruitback: { init(options: Record<string, unknown>): unknown } }).Fruitback.init({
+      (globalThis as unknown as { Fruitback: { init(options: Record<string, unknown>): unknown } }).Fruitback.init({
         endpoint,
         clientId: 'playground',
         locale: 'ar',

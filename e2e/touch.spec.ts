@@ -21,12 +21,12 @@ async function mount(page: Page, testCase: string, locale = 'en-US'): Promise<vo
   await page.addScriptTag({ path: IIFE });
   await page.evaluate(
     ([endpoint, language]) =>
-      (globalThis as { Fruitback: { init(options: Record<string, string>): unknown } }).Fruitback.init({
+      (globalThis as unknown as { Fruitback: { init(options: Record<string, string>): unknown } }).Fruitback.init({
         endpoint,
         clientId: 'playground',
         locale: language,
       }),
-    [WORKER_ORIGIN, locale],
+    [WORKER_ORIGIN, locale] as const,
   );
 }
 
