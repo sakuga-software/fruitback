@@ -621,6 +621,8 @@ function RestDetail({
           {(known(sites) ?? []).map((site) => {
             const places = placesOf(site);
             const sends = places.some((each) => each.connector === connector.id);
+            // The worker refuses a sixth place: the reason is said here, and the choice is not offered.
+            const full = !sends && places.length >= MAX_DESTINATIONS;
             const elsewhere = places.some((each) => each.connector !== connector.id);
 
             return (
@@ -629,13 +631,18 @@ function RestDetail({
                   label={new URL(site.origin).host}
                   labelStrong
                   value={sends ? THERE : HERE}
-                  disabled={!manages}
+                  disabled={!manages || full}
                   onChange={(value) => void place(site, value)}
                   options={[
                     { value: HERE, label: elsewhere ? t('Another source') : t('Fruitback only') },
                     { value: THERE, label: t('Fruitback, and this address') },
                   ]}
                 />
+                {manages && full ? (
+                  <p className="mt-1 text-xs text-muted">
+                    {t('A site sends to {count} places at most.', { count: MAX_DESTINATIONS })}
+                  </p>
+                ) : null}
               </li>
             );
           })}
