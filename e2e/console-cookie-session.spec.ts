@@ -85,8 +85,12 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     await page.goto(`${CONSOLE}/sign-in#${spent}`);
     await expect(page.getByRole('heading', { name: 'This link no longer works' })).toBeVisible();
     expect(page.url()).toBe(`${CONSOLE}/sign-in`);
-    // The control: the worker was asked with that token, so the screen read it before it took it away.
-    expect((await worker.received()).map((each) => each.path)).toContain('/console/auth/email/redeem');
+    // The control: the worker is asked with that token, so the screen read it before it took it away.
+    // Asked for, and not read at once: in development React runs the effect twice, and the second run
+    // finds no token and draws this screen before the first call reaches the worker.
+    await expect
+      .poll(async () => (await worker.received()).map((each) => each.path))
+      .toContain('/console/auth/email/redeem');
 
     // A link that works, held while the worker answers: the token is gone before the answer.
     await page.goto(`${CONSOLE}/setup`);
