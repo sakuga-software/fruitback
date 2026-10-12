@@ -215,6 +215,32 @@ describe('the rules of a reviewer in two browsers (FRU-72)', () => {
     assert.deepEqual(here.self.known, []);
   });
 
+  // Raised in review: a merge reads what is known, then waits on its writes. A rule stored during
+  // that wait was dropped from the list when the merge wrote it back, and came back after a removal.
+  it('keeps as known a rule that is stored while a merge waits on the account', async () => {
+    const shared = account();
+    const here = browserOn(shared, { 'https://acme.dev': ACME });
+    const area = shared.areaOf(here.self);
+    let release = (): void => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const slow = createSiteSync({
+      enabled: async () => true,
+      known: { read: async () => here.self.known, write: async (patterns) => void (here.self.known = patterns) },
+      readLocal: async () => here.self.map,
+      area: { ...area, set: async (items) => (await held, area.set(items)) },
+      apply: async () => {},
+    });
+
+    const merging = slow.merge();
+    // While the merge waits, the reviewer adds a rule, and its copy ends first.
+    await here.sync.stored({ kind: 'write', entries: { 'https://globex.dev': GLOBEX } });
+    assert.deepEqual(here.self.known, ['https://globex.dev']);
+    release();
+    await merging;
+
+    assert.deepEqual(here.self.known, ['https://acme.dev', 'https://globex.dev']);
+  });
+
   it('sends nothing and takes nothing while the reviewer has not turned it on', async () => {
     const shared = account();
     const here = browserOn(shared);

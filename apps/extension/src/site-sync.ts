@@ -106,11 +106,22 @@ function sorted(value: unknown): unknown {
 export function createSiteSync({ enabled, known, readLocal, area, apply }: SiteSyncSeams) {
   /** The mutations that came from `sync`: they are stored here, and not sent back there. */
   const arrived = new WeakSet<SiteMutation>();
-  const remember = async (add: string[], drop: string[] = []): Promise<void> => {
-    const now = new Set(await known.read());
-    for (const pattern of add) now.add(pattern);
-    for (const pattern of drop) now.delete(pattern);
-    await known.write([...now].sort());
+  /**
+   * What is known changes by additions and removals, one after the other, and never by a list that
+   * was read earlier: a merge waits on several writes, and a change stored meanwhile must not be
+   * forgotten by the list the merge read at its start (raised in review).
+   */
+  let remembering: Promise<void> = Promise.resolve();
+  const remember = (add: string[], drop: string[] = []): Promise<void> => {
+    const next = remembering.then(async () => {
+      const now = new Set(await known.read());
+      for (const pattern of add) now.add(pattern);
+      for (const pattern of drop) now.delete(pattern);
+      await known.write([...now].sort());
+    });
+    remembering = next.catch(() => undefined);
+
+    return next;
   };
 
   return {
@@ -206,10 +217,10 @@ export function createSiteSync({ enabled, known, readLocal, area, apply }: SiteS
         );
       }
 
-      const both = [...Object.keys(remote), ...Object.keys(sendThere)].filter(
-        (pattern) => !removeThere.includes(pattern) && !removeHere.includes(pattern),
+      const inBoth = [...Object.keys(remote), ...Object.keys(sendThere)].filter(
+        (pattern) => !removeThere.includes(pattern),
       );
-      await known.write([...new Set(both)].sort());
+      await remember(inBoth, [...removeThere, ...removeHere]);
     },
   };
 }
