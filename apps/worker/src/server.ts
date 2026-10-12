@@ -1,7 +1,7 @@
 import { type IncomingMessage, type Server, type ServerResponse, createServer } from 'node:http';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { handleRequest, storeFor, deliverPending } from './app.ts';
+import { announceFirstReviewer, handleRequest, storeFor, deliverPending } from './app.ts';
 import { announceAuth } from './auth.ts';
 import type { SeedStore } from './store.ts';
 import { readExposureNotice } from './clients.ts';
@@ -194,6 +194,9 @@ export function startServer(env: WorkerEnv = process.env): Server {
         accounts: hasAccounts(config.config),
       });
       if (exposure !== undefined) console.warn(exposure);
+
+      // FRU-108: after the lines above, so the code is the last thing a person reads in `docker logs`.
+      void announceFirstReviewer(config.config);
     } else {
       // Loud, but still serving: /health reports 503 with the same list, so the platform can see it.
       console.error(`[fruitback] misconfigured, missing: ${config.missing.join(', ')} — /health will report 503`);

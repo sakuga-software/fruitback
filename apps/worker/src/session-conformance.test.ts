@@ -377,6 +377,11 @@ const VIOLATIONS: Violation<SessionStore>[] = [
     replace: { from: DROP_ORPHANS, to: '' },
   },
   {
+    breaks: 'holds no session until a code is spent, and holds one after, ended or not',
+    by: 'counts a code that nobody spent as a session',
+    replace: { from: "'SELECT 1 FROM sessions LIMIT 1'", to: "'SELECT 1 FROM pairings LIMIT 1'" },
+  },
+  {
     breaks: 'drops the codes and the sessions that are expired, and nothing that is not',
     by: 'keeps the codes that are expired',
     replace: {

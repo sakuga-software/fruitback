@@ -94,6 +94,11 @@ export type SessionStore = {
   endSessionsOf(of: SessionsOf, now: number): Promise<void>;
   /** Drops what is expired. Called on redeem, so a worker nobody administers still stays small. */
   purge(now: number): Promise<void>;
+  /**
+   * Whether the store holds a session, live or ended (FRU-108). A worker that holds none has no
+   * reviewer yet. A code that nobody spent is not a session.
+   */
+  holdsSession(): Promise<boolean>;
 };
 
 /** Whose sessions end: a person, a workspace, or a person in a workspace. Never everybody. */

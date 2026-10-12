@@ -19,6 +19,7 @@ import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
 import { AuthUnavailable, handleAuthRoutes, isAuthRoute, sessionOfCookie } from './auth-routes.ts';
 import { consoleCors, handleConsoleSession, isConsoleRoute } from './console-routes.ts';
 import { handleConsoleApi } from './console-api.ts';
+import { firstReviewerLines } from './first-reviewer.ts';
 import { handleGitHub } from './github-oauth.ts';
 import { handleGoogle } from './google-oauth.ts';
 import { SIGN_IN_PROVIDERS } from './oauth-sign-in.ts';
@@ -86,6 +87,26 @@ export function sessionStoreFor(config: WorkerConfig): SessionStore | undefined 
   if (config.databaseUrl !== undefined) return postgresSessionStore(config.databaseUrl);
 
   return config.sessionPath === undefined ? undefined : createSqliteSessionStore(config.sessionPath);
+}
+
+/**
+ * Writes the pairing code of the first reviewer in the log, on a worker that names one and holds no
+ * session yet (FRU-108). `server.ts` calls it when the server listens. It never rejects: a store
+ * that does not open must not stop a worker that can still serve, and the next start tries again.
+ */
+export async function announceFirstReviewer(
+  config: WorkerConfig,
+  log: (line: string) => void = (line) => console.log(`[fruitback] ${line}`),
+): Promise<void> {
+  const store = config.firstReviewer === undefined ? undefined : sessionStoreFor(config);
+  if (config.firstReviewer === undefined || store === undefined) return;
+  try {
+    for (const line of await firstReviewerLines(store, config.firstReviewer, config.publicUrl)) log(line);
+  } catch (error) {
+    console.error(
+      `[fruitback] the pairing code of FRUITBACK_FIRST_REVIEWER was not minted: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 }
 
 /** What sends the e-mail of this worker, or `undefined` when it sends none (FRU-98). */

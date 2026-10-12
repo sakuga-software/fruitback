@@ -413,6 +413,18 @@ that reviewer signs a note with it, and not before. test:`tells a reader it woul
 identified, and tells nobody who (FRU-112)` holds the worker's half, and
 test:`names nothing of who the session is in code the page can read` holds the extension's.
 
+**`FRUITBACK_FIRST_REVIEWER` writes a pairing code in the log** (FRU-108). It is off unless the
+operator sets it. A worker that holds no session yet then mints a code for the person the variable
+names each time it starts, and writes it in the log of the container, in the clear: as a code, or as
+a link when `FRUITBACK_PUBLIC_URL` is set. **Whoever reads that log while the code is valid pairs as
+that person**, and gets their session: reading the log is then enough to become the first reviewer.
+A log that is shipped elsewhere keeps the line after the code is dead. The code is an ordinary one:
+valid 15 minutes, usable once, kept as a digest. Once the store holds a session, live or ended, the
+worker mints nothing, so the variable left in place opens nothing later; a worker whose sessions
+were all purged after their 30 days is a worker with no session again, so empty the variable once
+paired. The worker refuses the variable with accounts or with a client that declares a workspace: a
+session there names a workspace, and the variable names none. The browser never names the person.
+
 **`FRUITBACK_SESSION_PATH` is a credentials file.** Give it the same care as a key: a copy of it is
 not a set of working logins, but it is a list of who holds a session and until when. Back it up with
 `sqlite3 … ".backup"` rather than `cp`, which loses the write-ahead log. With
