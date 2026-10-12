@@ -109,8 +109,8 @@ can read them, with or without the widget.
   subject, name and e-mail the operator gave when minting the pairing code, its dates, and a SHA-256
   digest of the code or token, never the token itself. Expired rows are removed when a new code is
   redeemed.
-- **The accounts, on disk**, when `FRUITBACK_ACCOUNTS_PATH` is set (FRU-96), or in the PostgreSQL
-  database of `FRUITBACK_DATABASE_URL` in place of that file (FRU-141): the same things, in one or the other. For each person: the
+- **The accounts, in the PostgreSQL database** of `FRUITBACK_DATABASE_URL` (FRU-141, and nowhere
+  else since FRU-150). For each person: the
   address a provider or a link proved, the name the provider gave, and which provider signed them in
   with the id it gives them, and the language they read (the browser that opened their first sign-in
   link, or their own choice), which their e-mails are written in. For each workspace: the key of each
@@ -139,7 +139,7 @@ can read them, with or without the widget.
   is sent when the note is written**, so a note that is kept for later (FRU-124) and never sent
   leaves its picture on the worker, with no note that names it.
 
-- **The notes that wait to be sent to a connected address, on disk** (FRU-122), in the accounts file.
+- **The notes that wait to be sent to a connected address** (FRU-122), in the database of the accounts.
   A note goes from there when it arrives, and 30 days after its last attempt when it never does.
 
 ### What stays in the reporter's browser

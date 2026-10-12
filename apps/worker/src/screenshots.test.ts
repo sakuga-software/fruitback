@@ -1,14 +1,9 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { deflateSync } from 'node:zlib';
-import { closeAccountConnections, createSqliteAccountStore } from './accounts-sqlite.ts';
-import type { WorkerEnv } from './env.ts';
-import { closeSessionConnections, createSqliteSessionStore } from './session-sqlite.ts';
 import { createPairing, redeemPairing } from './session.ts';
 import { handleRequest } from './app.ts';
+import { WORKER, type World, signInTo, worlds } from './console-world.fixture.ts';
 import { signIdentityToken } from './identity.ts';
 import { createMemoryKv } from './kv.ts';
 import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase } from './postgres.fixture.ts';
@@ -27,15 +22,9 @@ import type { Database } from './postgres.ts';
  * member of a workspace and nobody else, and the store on PostgreSQL that keeps them.
  */
 
-const SECRET = 'a-worker-secret-of-exactly-enough';
 const EXTENSION = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
-const directories: string[] = [];
-
-afterEach(() => {
-  closeAccountConnections();
-  closeSessionConnections();
-  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
-});
+/** A worker with accounts on PGlite, where a person signs in as the console does (FRU-150). */
+const envWith = worlds();
 
 /** A real PNG of `width` by `height`, one grey pixel repeated: what the extension sends. */
 function png(width: number, height: number): Uint8Array {
@@ -81,33 +70,19 @@ function png(width: number, height: number): Uint8Array {
   return all;
 }
 
-function envWith(): WorkerEnv {
-  const directory = mkdtempSync(join(tmpdir(), 'fruitback-screenshots-'));
-  directories.push(directory);
-
-  return {
-    FRUITBACK_STORE: 'memory',
-    ALLOWED_ORIGINS: 'https://app.fruitback.test',
-    FRUITBACK_IDENTITY_SECRET: SECRET,
-    FRUITBACK_SESSION_PATH: join(directory, 'sessions.db'),
-    FRUITBACK_ACCOUNTS_PATH: join(directory, 'accounts.db'),
-    FRUITBACK_CONSOLE_URL: 'https://app.fruitback.test',
-  };
-}
-
 /** Alice of Acme, Bob of Globex, each with a session of the extension. */
-async function setUp(env: WorkerEnv) {
-  const accounts = createSqliteAccountStore(env.FRUITBACK_ACCOUNTS_PATH as string);
-  const sessions = createSqliteSessionStore(env.FRUITBACK_SESSION_PATH as string);
+async function setUp(env: World) {
+  const { accounts, sessions } = env;
+  const secret = env.env.FRUITBACK_IDENTITY_SECRET as string;
   const tokenOf = async (subject: string, workspace: string): Promise<string> => {
     const { code } = await createPairing(sessions, { subject, workspace });
-    const redeemed = await redeemPairing(sessions, code, SECRET);
+    const redeemed = await redeemPairing(sessions, code, secret);
     assert.ok(redeemed.ok);
 
     return redeemed.session.accessToken;
   };
-  const alice = await accounts.signIn({ provider: 'email', subject: 'alice@acme.dev', email: 'alice@acme.dev' });
-  const bob = await accounts.signIn({ provider: 'email', subject: 'bob@globex.dev', email: 'bob@globex.dev' });
+  const alice = await signInTo(env, 'alice@acme.dev');
+  const bob = await signInTo(env, 'bob@globex.dev');
   const acme = await accounts.createWorkspace('Acme', alice.id);
   const globex = await accounts.createWorkspace('Globex', bob.id);
   const site = await accounts.addSite(acme.id, { origin: 'https://staging.acme.dev', visibility: 'members' });
@@ -116,6 +91,7 @@ async function setUp(env: WorkerEnv) {
   return {
     alice,
     acme,
+    secret,
     send: `/screenshot?client=${site.id}`,
     sendToGlobex: `/screenshot?client=${other.id}`,
     alice_token: await tokenOf(alice.id, acme.id),
@@ -123,14 +99,18 @@ async function setUp(env: WorkerEnv) {
   };
 }
 
+let ip = 0;
+
 function call(
-  env: WorkerEnv,
-  store: ScreenshotStore,
+  env: World,
+  store: ScreenshotStore | undefined,
   path: string,
   init: { method?: string; token?: string; body?: Uint8Array; headers?: Record<string, string> } = {},
 ): Promise<Response> {
+  ip += 1;
+
   return handleRequest(
-    new Request(`https://api.fruitback.test${path}`, {
+    new Request(`${WORKER}${path}`, {
       method: init.method ?? 'GET',
       headers: {
         Origin: EXTENSION,
@@ -139,14 +119,14 @@ function call(
       },
       ...(init.body === undefined ? {} : { body: init.body }),
     }),
-    env,
-    { clientIp: '198.51.100.9', kv: createMemoryKv(), screenshots: store },
+    env.env,
+    { clientIp: `198.18.1.${ip % 250}`, ...env.context, ...(store === undefined ? {} : { screenshots: store }) },
   );
 }
 
 describe('a picture of a note, sent by the extension (FRU-44)', () => {
   it('is kept for a member, and read back by a member of the same workspace, to the byte', async () => {
-    const env = envWith();
+    const env = await envWith();
     const { alice_token, send } = await setUp(env);
     const store = createMemoryScreenshotStore();
     const picture = png(120, 60);
@@ -154,12 +134,12 @@ describe('a picture of a note, sent by the extension (FRU-44)', () => {
     const sent = await call(env, store, send, { method: 'POST', token: alice_token, body: picture });
     assert.equal(sent.status, 201);
     const answer = (await sent.json()) as { id: string; url: string; width: number; height: number };
-    assert.equal(answer.url, `https://api.fruitback.test/screenshot/${answer.id}`);
+    assert.equal(answer.url, `${WORKER}/screenshot/${answer.id}`);
     assert.match(answer.id, /^shot_[0-9a-f]{32}$/);
     assert.equal(answer.width, 120);
     assert.equal(answer.height, 60);
     const { pathname, origin } = new URL(answer.url);
-    assert.equal(origin, 'https://api.fruitback.test');
+    assert.equal(origin, WORKER);
     assert.equal(sent.headers.get('Access-Control-Allow-Origin'), EXTENSION);
 
     const read = await call(env, store, pathname, { token: alice_token });
@@ -171,12 +151,12 @@ describe('a picture of a note, sent by the extension (FRU-44)', () => {
   });
 
   it('is read by nobody else: no token, a member of another workspace, a token of a site', async () => {
-    const env = envWith();
-    const { alice, alice_token, bob_token, send } = await setUp(env);
+    const env = await envWith();
+    const { alice, alice_token, bob_token, send, secret } = await setUp(env);
     const store = createMemoryScreenshotStore();
     const sent = await call(env, store, send, { method: 'POST', token: alice_token, body: png(4, 4) });
     const { pathname } = new URL(((await sent.json()) as { url: string }).url);
-    const site = await signIdentityToken({ sub: alice.id, exp: Math.floor(Date.now() / 1000) + 600 }, SECRET);
+    const site = await signIdentityToken({ sub: alice.id, exp: Math.floor(Date.now() / 1000) + 600 }, secret);
 
     assert.equal((await call(env, store, pathname)).status, 401);
     assert.equal(
@@ -195,13 +175,13 @@ describe('a picture of a note, sent by the extension (FRU-44)', () => {
   });
 
   it('is refused to anybody who is not a member, and keeps nothing', async () => {
-    const env = envWith();
-    const { alice, acme, alice_token, bob_token, send, sendToGlobex } = await setUp(env);
+    const env = await envWith();
+    const { alice, acme, alice_token, bob_token, send, sendToGlobex, secret } = await setUp(env);
     const store = createMemoryScreenshotStore();
-    const site = await signIdentityToken({ sub: alice.id, exp: Math.floor(Date.now() / 1000) + 600 }, SECRET);
+    const site = await signIdentityToken({ sub: alice.id, exp: Math.floor(Date.now() / 1000) + 600 }, secret);
     const stranger = await signIdentityToken(
       { sub: 'acc_nobody', ws: acme.id, exp: Math.floor(Date.now() / 1000) + 600 },
-      SECRET,
+      secret,
     );
 
     for (const token of [undefined, site, stranger, `${alice_token}x`]) {
@@ -227,7 +207,7 @@ describe('a picture of a note, sent by the extension (FRU-44)', () => {
   });
 
   it('refuses a body that is not a PNG, and one over a megabyte, before it keeps anything', async () => {
-    const env = envWith();
+    const env = await envWith();
     const { alice_token, send } = await setUp(env);
     const store = createMemoryScreenshotStore();
     const post = (body: Uint8Array, headers: Record<string, string> = {}) =>
@@ -246,7 +226,7 @@ describe('a picture of a note, sent by the extension (FRU-44)', () => {
   });
 
   it('takes POST on the collection and GET on a picture, and nothing else', async () => {
-    const env = envWith();
+    const env = await envWith();
     const { alice_token, send } = await setUp(env);
     const store = createMemoryScreenshotStore();
 
@@ -255,19 +235,24 @@ describe('a picture of a note, sent by the extension (FRU-44)', () => {
   });
 
   it('does not exist on a worker with no database', async () => {
-    const env = envWith();
-    const { alice_token, send } = await setUp(env);
+    // A worker with no accounts: it has no database, so it keeps no picture, whatever the token says.
+    const secret = 'a-worker-secret-of-exactly-enough';
+    const token = await signIdentityToken(
+      { sub: 'alice', ws: 'ws_1', exp: Math.floor(Date.now() / 1000) + 600 },
+      secret,
+    );
     const answer = await handleRequest(
-      new Request(`https://api.fruitback.test${send}`, {
+      new Request(`${WORKER}/screenshot?client=acme`, {
         method: 'POST',
-        headers: { Origin: EXTENSION, Authorization: `Bearer ${alice_token}` },
+        headers: { Origin: EXTENSION, Authorization: `Bearer ${token}` },
         body: png(4, 4),
       }),
-      env,
-      { clientIp: '198.51.100.9', kv: createMemoryKv() },
+      { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: 'https://app.fruitback.test', FRUITBACK_IDENTITY_SECRET: secret },
+      { clientIp: '198.18.2.1', kv: createMemoryKv() },
     );
 
     assert.equal(answer.status, 404);
+    assert.deepEqual(await answer.json(), { error: 'not-found' });
   });
 });
 
