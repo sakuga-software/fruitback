@@ -1195,8 +1195,15 @@ describe('why a send failed', () => {
     assert.equal(failureOf(answer(429, 'rate-limited')), 'wait');
   });
 
-  it('says a second try will not work on a 401 or a 403, and on a note too large', () => {
-    assert.equal(failureOf(answer(401, 'unauthenticated')), 'refused');
+  it('says to sign in again on a 401, whatever the worker calls it (FRU-193)', () => {
+    // The team of the site can do nothing about a session that ended: the reporter can.
+    assert.equal(failureOf(answer(401, 'identity-required')), 'signed-out');
+    assert.equal(failureOf(answer(401)), 'signed-out');
+    // A place cannot be gone on a 401: the worker did not get as far as the places.
+    assert.equal(failureOf(answer(401, 'destination-not-allowed')), 'signed-out');
+  });
+
+  it('says a second try will not work on a 403, and on a note too large', () => {
     assert.equal(failureOf(answer(403, 'origin-not-allowed')), 'refused');
     assert.equal(failureOf(answer(403)), 'refused');
     assert.equal(failureOf(answer(413, 'too-large')), 'too-large');
