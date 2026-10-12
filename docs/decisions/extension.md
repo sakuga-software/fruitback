@@ -164,6 +164,13 @@ it changes who is shown the feedback and never who may fetch it.
   and loses what the reviewer was typing. That is the one failure this widget cannot afford, so the
   bridge compares against what it last sent. The `ready` handshake forces past the comparison,
   because the page world may have missed that same message. Raised in review.
+- **The page world builds the widget again only for a mount that differs from the one on screen**
+  (FRU-186). The `ready` handshake forces the bridge past its comparison, so when the page world
+  had in fact received the first message, the same `mount` arrives twice. Before, the second one
+  rebuilt the widget under an open composer: the CI flake of `extension.spec.ts` in private mode
+  (the composer field « not visible » for 30 s, twice in a row on `e47f5b0`). A page that posts
+  `ready` itself got the same effect. test:`private mode: the same decision posted again keeps the
+open composer and its note` fails without the check, 3 runs out of 3.
 - **The first browser check of that guard proved nothing, and the mutation is what said so.** It
   marked `[data-fruitback-host]` at index 1 and called it the extension's — but the playground mounts
   its own and the order is not promised, so it may have been watching a host that never rebuilds. It

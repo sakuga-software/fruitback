@@ -43,6 +43,16 @@ export default defineContentScript({
     window[PAGE_SCRIPT_FLAG] = true;
 
     let widget: ReturnType<typeof init> | undefined;
+    /**
+     * The mount that built `widget`, as it was posted (FRU-186).
+     *
+     * The isolated world posts its decision when it starts, and posts it again when this world says
+     * it is ready. When both reach this listener, the second one is the same mount. Building the
+     * widget again for it closed a composer the reviewer had just opened, and lost the note: measured
+     * on CI, where the second message came after the click (`extension.spec.ts`, private mode). A
+     * page can post `ready` too, and gets the same answer. Only a mount that differs builds again.
+     */
+    let mounted: string | undefined;
     const relayListeners: ((message: BridgeMessage) => void)[] = [];
 
     const api: FruitbackExtensionApi = {
@@ -109,6 +119,7 @@ export default defineContentScript({
         // Team mode mounts nothing: the widget on this page is the site's own.
         widget?.destroy();
         widget = undefined;
+        mounted = undefined;
         announce();
 
         return;
@@ -117,10 +128,15 @@ export default defineContentScript({
       if (message.kind === 'unmount') {
         widget?.destroy();
         widget = undefined;
+        mounted = undefined;
         withdraw();
 
         return;
       }
+
+      // The same decision, posted again: the widget on screen is already this one.
+      const signature = JSON.stringify(message);
+      if (widget !== undefined && signature === mounted) return;
 
       // Private mode. The transport goes away with the announcement, so the site's own widget — if
       // this page has one — cannot pick up a relay the reviewer's entry no longer allows.
@@ -128,6 +144,9 @@ export default defineContentScript({
       // Mounting twice would put a second dock and a second set of pins on the page. A second mount
       // is a config change, so the old one goes first.
       widget?.destroy();
+      // Forgotten until `init` returns: a mount that threw is tried again when it is posted again.
+      widget = undefined;
+      mounted = undefined;
       widget = init({
         endpoint: message.endpoint,
         clientId: message.clientId,
@@ -143,6 +162,7 @@ export default defineContentScript({
         // background relays only for a site its own storage says is in team mode.
         ...(message.relay === true ? { transport: api.transport } : {}),
       });
+      mounted = signature;
     });
 
     // The isolated script may have decided before this listener existed — it has no way to know when
