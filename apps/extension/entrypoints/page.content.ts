@@ -144,7 +144,9 @@ export default defineContentScript({
       // Mounting twice would put a second dock and a second set of pins on the page. A second mount
       // is a config change, so the old one goes first.
       widget?.destroy();
-      mounted = signature;
+      // Forgotten until `init` returns: a mount that threw is tried again when it is posted again.
+      widget = undefined;
+      mounted = undefined;
       widget = init({
         endpoint: message.endpoint,
         clientId: message.clientId,
@@ -160,6 +162,7 @@ export default defineContentScript({
         // background relays only for a site its own storage says is in team mode.
         ...(message.relay === true ? { transport: api.transport } : {}),
       });
+      mounted = signature;
     });
 
     // The isolated script may have decided before this listener existed — it has no way to know when
