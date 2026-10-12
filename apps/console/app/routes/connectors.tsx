@@ -10,6 +10,7 @@ import {
   type Stage,
   type Team,
   type TrackerState,
+  UNREACHABLE,
   call,
 } from '../api';
 import { Confirm } from '../confirm';
@@ -735,7 +736,8 @@ const STAGE_NAMES: Record<Stage, string> = {
 function Settings({ base, connector }: { base: string; connector: Connector & { settings: ConnectorSettings } }) {
   useLocale();
   const [settings, setSettings] = useState<ConnectorSettings>(connector.settings);
-  const [states, setStates] = useState<TrackerState[] | undefined>();
+  // No list is not an empty list (FRU-162): a read that failed says so, and is asked again.
+  const [states, setStates] = useState<Listed<TrackerState>>('loading');
   const [problem, setProblem] = useState<string | undefined>();
   // What the worker keeps, and the writes in flight, one after the other: a later change starts from
   // the earlier one, and the answers cannot land out of order.
@@ -743,19 +745,21 @@ function Settings({ base, connector }: { base: string; connector: Connector & { 
   const chosen = useRef(false);
   const writes = useRef<Promise<void>>(Promise.resolve());
 
-  useEffect(() => {
+  const read = useCallback(() => {
+    setStates('loading');
     void call<{ states: TrackerState[]; settings: ConnectorSettings }>(
       'GET',
       `${base}/connectors/${connector.id}/states`,
     ).then((answer) => {
-      if (!answer.ok) return setStates([]);
-      setStates(answer.data.states);
+      setStates(listedOf(answer, (data) => data.states));
       // A choice made while the states were read wins: its write is in flight, or done.
-      if (chosen.current) return;
+      if (!answer.ok || chosen.current) return;
       kept.current = answer.data.settings;
       setSettings(answer.data.settings);
     });
   }, [base, connector.id]);
+
+  useEffect(() => read(), [read]);
 
   function save(change: (current: ConnectorSettings) => ConnectorSettings) {
     chosen.current = true;
@@ -763,7 +767,9 @@ function Settings({ base, connector }: { base: string; connector: Connector & { 
     setSettings((current) => change(current));
     writes.current = writes.current.then(async () => {
       const next = change(kept.current);
-      const set = await call('POST', `${base}/connectors/${connector.id}/settings`, next);
+      // `call` answers a failure and does not reject. `UNREACHABLE` all the same if it ever does: a
+      // rejected link would stop every later write of this chain, with no word on the screen.
+      const set = await call('POST', `${base}/connectors/${connector.id}/settings`, next).catch(() => UNREACHABLE);
       if (set.ok) {
         kept.current = next;
         // The setting that failed before is kept now: its sentence goes.
@@ -785,17 +791,28 @@ function Settings({ base, connector }: { base: string; connector: Connector & { 
     });
   }
 
-  const teams = new Set((states ?? []).map((state) => state.teamId)).size;
+  const rows = known(states) ?? [];
+  const teams = new Set(rows.map((state) => state.teamId)).size;
 
   return (
     <div className="mt-5">
       <h3 className="text-sm font-semibold">{t('Status of the pins')}</h3>
       <p className="mb-2 text-xs text-muted">{t('Which Linear state gives which colour on the page.')}</p>
-      {states !== undefined && states.length === 0 ? (
+      {states === 'failed' ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <p role="alert" className="flex-1 text-sm text-muted">
+            {t('Fruitback could not read the states of Linear. The colours you set are not lost.')}
+          </p>
+          <Button tone="outline" onClick={read}>
+            {t('Try again')}
+          </Button>
+        </div>
+      ) : null}
+      {known(states)?.length === 0 ? (
         <p className="text-sm text-muted">{t('The states appear here once a site sends its notes to a team.')}</p>
       ) : null}
       <ul className="space-y-2">
-        {(states ?? []).map((state) => (
+        {rows.map((state) => (
           <li key={state.id}>
             <Choice
               label={teams > 1 ? `${state.team} · ${state.name}` : state.name}

@@ -296,4 +296,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The states appear here once a site sends its notes to a team.':
     'Les états apparaissent ici dès qu’un site envoie ses notes à une équipe.',
   'Show Linear comments as replies': 'Montrer les commentaires de Linear comme réponses',
+  'Fruitback could not read the states of Linear. The colours you set are not lost.':
+    'Fruitback n’a pas pu lire les états de Linear. Les couleurs que vous avez réglées ne sont pas perdues.',
 };
