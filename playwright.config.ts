@@ -82,5 +82,13 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       env: { VITE_FRUITBACK_WORKER: WORKER },
     },
+    {
+      // The console of the Cloud, on its own fixed port (FRU-159). Its specs measure layout and answer
+      // the worker's calls with stubs, so it needs no worker with accounts.
+      command: 'pnpm --filter @fruitback/console dev',
+      url: 'http://localhost:5178',
+      reuseExistingServer: !process.env.CI,
+      env: { VITE_FRUITBACK_API: WORKER },
+    },
   ],
 });

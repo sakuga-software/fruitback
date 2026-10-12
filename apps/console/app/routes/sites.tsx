@@ -114,21 +114,27 @@ function SiteList({
       {sites.map((site) => (
         <li key={site.id} className="border-b border-line last:border-b-0">
           <div className="flex flex-wrap items-center gap-3 px-5 py-4">
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[15px] font-semibold">{new URL(site.origin).host}</span>
-              <span className="block text-xs text-muted">{site.origin}</span>
+            {/* The host is what a person looks for here, so it wraps rather than being cut. The chip
+                and the buttons move as one group, under the host when the row has no room (FRU-159). */}
+            <span className="min-w-0 grow basis-32">
+              <span className="block text-[15px] font-semibold [overflow-wrap:anywhere]">
+                {new URL(site.origin).host}
+              </span>
+              <span className="block text-xs text-muted [overflow-wrap:anywhere]">{site.origin}</span>
             </span>
-            <Chip tone={site.visibility === 'members' ? 'neutral' : 'accent'}>
-              {site.visibility === 'members' ? t('Members') : t('Everyone')}
-            </Chip>
-            <Button tone="outline" onClick={() => onToggle(site)}>
-              {open === site.id ? t('Close') : t('Install')}
-            </Button>
-            {manages ? (
-              <Button tone="quiet" onClick={() => onRemove(site)}>
-                {t('Remove')}
+            <span className="flex flex-wrap items-center gap-3">
+              <Chip tone={site.visibility === 'members' ? 'neutral' : 'accent'}>
+                {site.visibility === 'members' ? t('Members') : t('Everyone')}
+              </Chip>
+              <Button tone="outline" onClick={() => onToggle(site)}>
+                {open === site.id ? t('Close') : t('Install')}
               </Button>
-            ) : null}
+              {manages ? (
+                <Button tone="quiet" onClick={() => onRemove(site)}>
+                  {t('Remove')}
+                </Button>
+              ) : null}
+            </span>
           </div>
           {open === site.id ? <div className="border-t border-line bg-page px-5 py-5">{install(site)}</div> : null}
         </li>
