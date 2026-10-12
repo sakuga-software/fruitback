@@ -371,6 +371,31 @@ for (const { label, open, skip } of DATABASES) {
       assert.equal((await worker.call('/console/me', { headers: { Cookie: cookie } })).status, 401);
     });
 
+    // FRU-204: the console says « signed out » only when this route answers `ok`. A route that
+    // refused somebody with no session would hold them on « You are still signed in » for ever.
+    it('answers a sign-out with a session that already ended, or with none, as it answers the first one', async () => {
+      const worker = await workerOn(open);
+      const cookie = await worker.signIn('alice@acme.dev');
+      const signOut = (headers: Record<string, string>): Promise<Response> =>
+        worker.call('/console/auth/sign-out', { body: {}, headers });
+
+      const first = await signOut({ Cookie: cookie });
+      assert.equal(first.status, 200);
+      assert.equal((await worker.call('/console/me', { headers: { Cookie: cookie } })).status, 401);
+
+      // Another tab that still shows « My account », a session that expired, a cookie that is not one.
+      const without: Record<string, string>[] = [
+        { Cookie: cookie },
+        {},
+        { Cookie: `${SESSION_COOKIE}=not-a-session.not-a-signature` },
+      ];
+      for (const headers of without) {
+        const again = await signOut(headers);
+        assert.equal(again.status, 200, JSON.stringify(headers));
+        assert.deepEqual(await again.json(), { success: true });
+      }
+    });
+
     it('ends a session by its id for its person only, and from the console only', async () => {
       const worker = await workerOn(open);
       const alice = await worker.signIn('alice@acme.dev');
