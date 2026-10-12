@@ -858,6 +858,34 @@ for (const { label, open, skip } of DATABASES) {
       assert.equal(failedAt.searchParams.get('error'), 'access_denied');
     });
 
+    it('starts no sign-in for a navigation that a page of another site made (FRU-211)', async () => {
+      const worker = await workerOn(open);
+      const from = (site: string | undefined) =>
+        worker.call('/console/auth/start/github', {
+          origin: null,
+          headers: site === undefined ? {} : { 'Sec-Fetch-Site': site },
+        });
+
+      // A link or a redirect of another site: the browser says so, and no state is made.
+      const refused = await from('cross-site');
+      assert.equal(refused.status, 302);
+      const to = new URL(refused.headers.get('Location') ?? '');
+      assert.equal(`${to.origin}${to.pathname}`, `${CONSOLE_URL}/setup`);
+      assert.equal(to.searchParams.get('error'), 'started_from_another_site');
+      assert.deepEqual(refused.headers.getSetCookie(), []);
+      assert.equal(refused.headers.get('Cache-Control'), 'no-store');
+      assert.deepEqual(await rowsOf(worker.database, 'SELECT 1 FROM "verification"'), []);
+
+      // The control: the button of the console (the same site), the address typed by hand, and a
+      // browser that sends no such header all start the sign-in, as before.
+      for (const site of ['same-site', 'same-origin', 'none', undefined]) {
+        const started = await from(site);
+        assert.equal(started.status, 302, String(site));
+        assert.equal(new URL(started.headers.get('Location') ?? '').origin, 'https://github.com', String(site));
+        assert.equal(started.headers.getSetCookie().length > 0, true, String(site));
+      }
+    });
+
     it('sends the console a code of better-auth when a sign-in with a provider fails (FRU-148)', async () => {
       const worker = await workerOn(open);
       // The person came back with no cookie of the state: another browser, or a link that is old.

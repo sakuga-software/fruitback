@@ -79,6 +79,12 @@ export function postgresAccountStore(url: string): AccountStore {
     deliveries: true,
     retryDelivery: true,
     dropAbandonedDeliveries: true,
+    addDomain: true,
+    domains: true,
+    removeDomain: true,
+    noteDomainCheck: true,
+    domainsToCheck: true,
+    setPreviews: true,
     deleteWorkspace: true,
     clientMap: true,
   });
