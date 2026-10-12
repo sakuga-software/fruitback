@@ -143,6 +143,15 @@ Since FRU-119 an account also holds the language its person reads, taken from th
   « Remember me on this site »**. For a member of a team who chose where a note goes, the identifier of that place: an opaque
   value, with no name of the tracker (FRU-123). No e-mail, no note. In private mode the extension writes `fruitback:config:extension` into **the site's**
   storage, so a site can see that a reviewer used the extension on it.
+- **The rules of the extension leave the browser only when the reviewer asks** (FRU-72). With
+  « Keep my rules in the account of this browser » ticked in the options page, the extension copies
+  its rules to `storage.sync`, which the vendor of the browser keeps with the reviewer's account
+  (Google for Chrome, Mozilla for Firefox) and gives to their other browsers. A rule holds the
+  address of a site, or its pattern, the address of its worker, a client id, and whether it is on.
+  **No session token, no access, no note and no name travel.** The box is off by default, and
+  turning it off stops the copy; what the account already holds stays there until the rules are
+  removed while it is on. That vendor is a recipient you did not have before: say so to a reviewer
+  whose staging addresses are confidential.
 - The extension keeps its rules and its session tokens in its own storage, which no page can read.
   It also keeps the language of the reviewer's account there. That language goes to a page where
   the extension mounts the widget, so the widget speaks it: a site a reviewer turned on can read

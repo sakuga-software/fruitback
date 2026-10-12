@@ -5,6 +5,7 @@ import { STALE_TEAM_WILDCARD } from '../../src/site-form.ts';
 import { lendsSession, parseSitePattern } from '../../src/site-patterns.ts';
 import { injectIntoOpenTabs } from '../../src/tab-injection.ts';
 import { browserTabScripting as scripting } from '../../src/tab-scripting-browser.ts';
+import { SYNC_SETTING } from '../../src/site-sync.ts';
 import { exportSites, importSites } from '../../src/site-transfer.ts';
 import { type SiteConfig, type SiteMode, readAll, removeSite, writeSite, writeSites } from '../../src/sites.ts';
 import { showProblem } from '../../src/problem-view.ts';
@@ -61,6 +62,7 @@ if (app !== null) {
     notice,
     addForm(),
     transfer(),
+    await synchronise(),
   );
 }
 
@@ -285,6 +287,34 @@ function transfer(): HTMLElement {
     exporter,
     label,
     result,
+  );
+
+  return wrapper;
+}
+
+/**
+ * The rules in the account of the browser (FRU-72). Off until the reviewer ticks the box: a rule that
+ * is synchronised leaves this computer. The background does the copy; this writes the choice only.
+ */
+async function synchronise(): Promise<HTMLElement> {
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.checked = (await browser.storage.local.get(SYNC_SETTING))[SYNC_SETTING] === true;
+  box.addEventListener('change', () => void browser.storage.local.set({ [SYNC_SETTING]: box.checked }));
+  const label = document.createElement('label');
+  label.className = 'choice';
+  label.append(box, t('Keep my rules in the account of this browser'));
+
+  const wrapper = document.createElement('section');
+  wrapper.append(
+    element('h2', t('Synchronise rules')),
+    element(
+      'p',
+      t(
+        'When this is on, your rules (patterns, modes, endpoints and client ids) are kept by the account of this browser, and reach your other browsers where it is on too. No session and no access travel: on another browser, grant access to each site. Turning it off stops the copy, and removes nothing from the account.',
+      ),
+    ),
+    label,
   );
 
   return wrapper;

@@ -185,8 +185,22 @@ skipped, and the page names it.
 
 The file holds patterns, modes, endpoints and client ids. It holds no session and no access, so an
 imported rule reads `No access in this browser` until you press **Grant access**, and a team-mode worker
-still needs you to pair. A rule that is off reads `No access while it is off`: **Turn on** asks for it. The rules stay in the browser that holds them: they do not sync to your other
-browsers yet (FRU-72).
+still needs you to pair. A rule that is off reads `No access while it is off`: **Turn on** asks for it.
+
+### Keep your rules in your other browsers
+
+The rules stay in the browser that holds them, unless you tick **Keep my rules in the account of
+this browser**, at the end of the options page. The browser then keeps them with the account you
+signed it in with, and they reach your other browsers where the box is ticked too.
+
+- **What travels**: patterns, modes, endpoints and client ids, and whether a rule is on. **No session
+  and no access**: on another browser a rule reads `No access in this browser` until you press
+  **Grant access**, and a team-mode worker still needs you to pair there.
+- **Who keeps them**: the vendor of the browser (Google for Chrome, Mozilla for Firefox), under its
+  own terms. The addresses of your staging sites are in those rules.
+- A rule you remove is removed in your other browsers. Turning the box off stops the copy, and
+  removes nothing from the account.
+- Firefox with no account keeps them on the machine, as before.
 
 ## What log out does, and what it cannot undo
 

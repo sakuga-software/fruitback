@@ -253,6 +253,43 @@ three were settled on 2026-10-12 by the orchestrator of the agents, to whom Math
 current decisions, with the simplest answer that fits what exists. The layout of the options page
 did not change: the fields of 760 px and the file input of the browser are as they were.
 
+## The rules in the reviewer's other browsers (FRU-72)
+
+### The rules, in short
+
+- **Off until the reviewer ticks the box** of the options page. `storage.sync` is kept by the
+  vendor of the browser: the address of a staging site does not go there by a default.
+- **The map in `local` stays the one that everything reads.** The bridge, the relay, the popup and
+  the registration read what they always read, and no stored shape moves: there is no upgrade to
+  run, and a version of before reads its rules.
+- **`sync` holds a copy, one key for each pattern** (`site:<pattern>`). Two browsers that change two
+  rules do not write one item, and the quota of 8 KB is for one rule.
+- **Three moves** (`src/site-sync.ts`): a change made here goes to `sync` as that change; a change
+  that arrives is applied by the one writer of the map and is not sent back; a merge, when the box
+  is ticked and when the browser starts, gives each side the rules it does not have. **A merge
+  removes nothing**: a browser that holds fewer rules must not erase the rules of the others.
+- **The access and the session do not travel.** A rule that arrives runs nowhere until access is
+  granted in that browser; the options page says « No access in this browser » beside it, with the
+  button. test:`the rules go to the account of the browser only when the reviewer asks, and a rule
+that arrives has no access`.
+
+### The reasons, and what is not done
+
+The ticket asked to move the rules to `sync`, one key for each pattern, with an upgrade from `local`.
+That makes every reader list an area, and puts the one stored shape a release cannot re-run at risk
+for a feature most reviewers will not turn on. A copy beside the map gives the same result with no
+upgrade: this is the simplest answer that fits what exists, and it was taken by the agent under the
+rule of 2026-10-12 (the orchestrator decides the current choices on Mathieu's delegation).
+
+- **A rule of both browsers that differs stays as it is on each**, until one of them changes it:
+  the merge does not choose. A change, made after, is carried.
+- **A browser that was closed** hears of the removals made meanwhile from `storage.sync` itself,
+  when the browser brings its copy up to date. Not measured between two real browsers: the E2E
+  Chromium has no account, so its `sync` area stays on the machine.
+- **Turning the box off removes nothing from the account.** Removing there would remove the rules of
+  the other browsers.
+- **A quota of `sync` that refuses a write** is logged, and the rule stays in `local`.
+
 ## A problem, and the one thing to do about it (FRU-90)
 
 ### The rules, in short
