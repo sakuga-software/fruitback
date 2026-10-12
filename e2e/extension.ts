@@ -15,7 +15,7 @@ import { AUTHENTICATED_WORKER_ORIGIN, WORKER_SESSION_ENV } from './worker-sessio
 
 /** The only `chrome.*` calls the specs make, from the service worker. */
 declare const chrome: {
-  scripting: { getRegisteredContentScripts(): Promise<unknown[]> };
+  scripting: { getRegisteredContentScripts(): Promise<{ matches?: string[] }[]> };
   storage: Record<'local' | 'session', { get(keys: null): Promise<Record<string, unknown>> }>;
   tabs: { create(properties: { url: string; active: boolean }): Promise<unknown> };
 };
@@ -141,10 +141,17 @@ export async function addRule(
   await expect(options.locator('.rules li').filter({ hasText: PLAYGROUND_ORIGIN })).toContainText('Access granted');
   await options.close();
 
-  // The background registers the two scripts after the storage change. A page loaded before that
-  // gets neither.
+  // The background registers the two scripts of the origin after the storage change (FRU-74: a
+  // pair for each origin). A page loaded before that gets neither.
   await expect
-    .poll(() => extension.worker.evaluate(async () => (await chrome.scripting.getRegisteredContentScripts()).length))
+    .poll(() =>
+      extension.worker.evaluate(
+        async (pattern) =>
+          (await chrome.scripting.getRegisteredContentScripts()).filter((script) => script.matches?.includes(pattern))
+            .length,
+        `${PLAYGROUND_ORIGIN}/*`,
+      ),
+    )
     .toBe(2);
 }
 
