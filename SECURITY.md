@@ -572,7 +572,10 @@ the worker in no address`. A link works once, for 15 minutes, and two calls at t
   one session (test:`opens one session for a link spent twice, or by two calls at the same moment`).
   It answers the same with or without an account, and the 3 links per address per 15 minutes are
   counted with the path above. The redeem hands the browser the cookie, and not the answer of
-  better-auth, which holds the token of the session.
+  better-auth, which holds the token of the session. **It answers the console only**, and not a
+  request with no `Origin`: another page that spent a link of its own in this browser would sign the
+  person in to its account (test:`spends a link for the console only, and not for a request with no
+Origin`).
 - **The database keeps the link as a digest of a digest of a digest**, and a copy of the row opens
   nothing: test:`keeps the link as a digest of a digest, which opens nothing when a copy presents
 it`. The value of the row is the address it was sent to.

@@ -375,6 +375,20 @@ for (const { label, open, skip } of DATABASES) {
       assert.equal(worker.mail.sent.length, 1);
     });
 
+    it('spends a link for the console only, and not for a request with no Origin', async () => {
+      const worker = await workerOn(open);
+      await worker.call('/console/auth/email', { body: { email: 'mallory@acme.dev' } });
+      const token = worker.lastToken();
+
+      for (const origin of [null, 'https://demo.fruitback.test']) {
+        const answer = await worker.call('/console/auth/email/redeem', { body: { token }, origin });
+        assert.equal(answer.status, 403, String(origin));
+        assert.equal(answer.headers.get('Set-Cookie'), null);
+      }
+      // The control: the link was not spent by the two refusals, and the console spends it.
+      assert.equal((await worker.call('/console/auth/email/redeem', { body: { token } })).status, 200);
+    });
+
     it('closes the routes of better-auth that put a token in an address', async () => {
       const worker = await workerOn(open);
 

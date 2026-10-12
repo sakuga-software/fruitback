@@ -181,6 +181,10 @@ async function redeemLink(
   headers: Record<string, string>,
 ): Promise<Response> {
   if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+  // The console only. Another page that spends a link of its own in this browser signs the person in
+  // to the account of that page (a login CSRF): `consoleCors` refuses another origin, and this
+  // refuses a request with none.
+  if (!mutationAllowed(request, context.consoleUrl)) return json(403, { error: 'origin-not-allowed' }, headers);
   const body = await readBody(request);
   const token = typeof body?.token === 'string' ? body.token.trim() : '';
   if (!LINK_TOKEN.test(token)) return json(400, { error: 'invalid-code' }, headers);
