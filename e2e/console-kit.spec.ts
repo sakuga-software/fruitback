@@ -109,3 +109,83 @@ test('the main button keeps 4.5:1 under the pointer, when pressed and with focus
   await page.waitForTimeout(400);
   expect(await ratio()).toBeGreaterThanOrEqual(4.5);
 });
+
+/** `/setup` as nobody signed in meets it, on a worker that signs people in with Google and GitHub. */
+async function openSetup(page: Page): Promise<void> {
+  await page.route(`${WORKER_ORIGIN}/**`, (route) => {
+    const { pathname } = new URL(route.request().url());
+    const json = (body: unknown, status = 200) => route.fulfill({ status, json: body });
+    if (pathname === '/auth/providers') return json({ github: true, google: true });
+    if (pathname === '/console/session/refresh' || pathname === '/console/me') return json({}, 401);
+
+    return route.fulfill({ status: 204 });
+  });
+  await page.goto(`${CONSOLE}/setup`);
+  await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeEnabled();
+}
+
+/** The colour of the border as painted, and the corner, of the box that draws a control. */
+async function boxOf(locator: Locator): Promise<{ radius: string; border: number[]; width: string; shadow: string }> {
+  const style = await locator.evaluate((element) => {
+    const computed = getComputedStyle(element);
+
+    return {
+      radius: computed.borderTopLeftRadius,
+      width: computed.borderTopWidth,
+      shadow: computed.boxShadow,
+    };
+  });
+  const border = await locator.evaluate((element) => {
+    const context = document.createElement('canvas').getContext('2d', { willReadFrequently: true })!;
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, 1, 1);
+    context.fillStyle = getComputedStyle(element).borderTopColor;
+    context.fillRect(0, 0, 1, 1);
+
+    return [...context.getImageData(0, 0, 1, 1).data].slice(0, 3);
+  });
+
+  return { ...style, border };
+}
+
+test('the wide buttons and the fields have the shape and the border of the board (FRU-168)', async ({ page }) => {
+  // `design/boards/2-onboarding.png`: four controls of one shape in a column, and the pill kept for
+  // the action of the step. The screen drew the wide buttons as pills too, with a border of 1.26:1.
+  await openSetup(page);
+  const white = [255, 255, 255];
+
+  for (const name of ['Continue with Google', 'Continue with GitHub']) {
+    const button = await boxOf(page.getByRole('button', { name }));
+    expect.soft(button.radius, name).toBe('6px');
+    expect.soft(button.width, name).toBe('1px');
+    // WCAG 1.4.11: the border is what says where the control is.
+    expect.soft(contrast(button.border, white), name).toBeGreaterThanOrEqual(3);
+  }
+
+  for (const name of ['Work email', 'Workspace name']) {
+    const field = await boxOf(page.getByRole('textbox', { name }));
+    expect.soft(Number.parseFloat(field.radius), name).toBeGreaterThanOrEqual(8);
+    expect.soft(Number.parseFloat(field.radius), name).toBeLessThanOrEqual(10);
+    expect.soft(contrast(field.border, white), name).toBeGreaterThanOrEqual(3);
+    // Flat: no shadow, or one that paints nothing.
+    expect.soft(field.shadow, name).toMatch(/^none$|^(rgba\(0, 0, 0, 0\) 0px 0px 0px 0px(, )?)+$/);
+  }
+
+  // The action of the step keeps the pill: its shape is what tells it from the four controls.
+  const action = await boxOf(page.getByRole('button', { name: 'Continue', exact: true }));
+  expect.soft(Number.parseFloat(action.radius)).toBeGreaterThanOrEqual(20);
+});
+
+test('a required field has no mark the board does not draw, and stays required (FRU-168)', async ({ page }) => {
+  await openSetup(page);
+  const email = page.getByRole('textbox', { name: 'Work email' });
+
+  // Required for the browser and for a screen reader, with no asterisk after the label.
+  await expect(email).toHaveAttribute('required', '');
+  const label = page.locator('label', { hasText: 'Work email' });
+  const marks = await label.evaluate((element) =>
+    ['::before', '::after'].map((pseudo) => getComputedStyle(element, pseudo).content),
+  );
+  expect(marks).toEqual(['none', 'none']);
+  await expect(label).toHaveText('Work email');
+});

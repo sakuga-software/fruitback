@@ -7,13 +7,13 @@ layout, the words and the tokens of a screen that has a board come from that boa
 
 The export holds five boards. `boards/` holds a picture of each, rendered at 1600 px wide.
 
-| Board                     | What it shows                                                                  | Ticket                 |
-| ------------------------- | ------------------------------------------------------------------------------ | ---------------------- |
-| `1-propositions.png`      | The eight propositions (P1 to P8), the path to a first note, the two settings | FRU-95 to FRU-106      |
-| `2-onboarding.png`        | « Create your workspace », the four steps of the setup                        | FRU-97, FRU-98, FRU-99 |
-| `3-offers.png`            | « Two ways to run Fruitback »: Cloud and self-hosted, side by side            | FRU-105                |
-| `4-connectors.png`        | The sources of a workspace, connected once                                    | FRU-102                |
-| `5-workspace.png`         | Members and « My account »                                                     | FRU-96, FRU-104        |
+| Board                | What it shows                                                                 | Ticket                 |
+| -------------------- | ----------------------------------------------------------------------------- | ---------------------- |
+| `1-propositions.png` | The eight propositions (P1 to P8), the path to a first note, the two settings | FRU-95 to FRU-106      |
+| `2-onboarding.png`   | « Create your workspace », the four steps of the setup                        | FRU-97, FRU-98, FRU-99 |
+| `3-offers.png`       | « Two ways to run Fruitback »: Cloud and self-hosted, side by side            | FRU-105                |
+| `4-connectors.png`   | The sources of a workspace, connected once                                    | FRU-102                |
+| `5-workspace.png`    | Members and « My account »                                                    | FRU-96, FRU-104        |
 
 **What has no board.** The name of the export says « overlay, sidebar, extension, landing », and that
 is the name of the project, not a list of screens: there is no board for the sidebar, the popup or the
@@ -25,15 +25,25 @@ page (FRU-129) was built that way, on the tokens of the widget.
 The boards use the same tokens as the widget (`packages/widget/src/theme.ts`), measured from the
 export:
 
-| Token        | Value                                                    |
-| ------------ | -------------------------------------------------------- |
-| Text         | `#1c1917`, muted `#78716c`, faint `#a8a29e`              |
-| Lines        | `#e7e5e4`                                                |
-| Surfaces     | page `#faf9f5`, card `#ffffff`, setup page `#f6f4f1`     |
-| Accent       | `#dd2c27`                                                |
-| Green (done) | `#56802e`                                                |
-| Font         | the system font (`-apple-system, BlinkMacSystemFont`)    |
+| Token        | Value                                                       |
+| ------------ | ----------------------------------------------------------- |
+| Text         | `#1c1917`, muted `#78716c`, faint `#a8a29e`                 |
+| Lines        | `#e7e5e4`                                                   |
+| Surfaces     | page `#faf9f5`, card `#ffffff`, setup page `#f6f4f1`        |
+| Accent       | `#dd2c27`                                                   |
+| Green (done) | `#56802e`                                                   |
+| Font         | the system font (`-apple-system, BlinkMacSystemFont`)       |
 | Radius       | 6 px controls, 8 to 10 px fields, 14 px cards, 999 px pills |
 
 **One value is not the board's.** The console writes muted text in `#736c67`. The board's `#78716c` is
 4.37:1 on the board's own tinted surfaces, under the 4.5:1 a small text needs (axe, FRU-125).
+
+**The border of a field and of a wide button has no token on the boards**, which draw it dark. The
+console writes it `#8f8883`, the strong border of the widget: 3.49:1 on white, over the 3:1 a border
+needs when it alone says where a control is (WCAG 1.4.11). A wide button is a control, 6 px; a field
+is 8 px, and flat. The pill is for the action of a step (FRU-168).
+
+**A required field has no mark.** The boards draw no asterisk after « Work email », and the screen
+follows them: the field stays required for the browser and for a screen reader, and the step says
+what is missing when it is sent empty. Arbitrated by the orchestrator on 2026-10-12, on delegation
+from Mathieu (FRU-168): what the board shows.
