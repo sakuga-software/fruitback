@@ -245,11 +245,13 @@ write <package> <mutation.json>` prints it from the report of a full run.
   mutant of `identity.ts` timed out in the measured run. If it survives a later run, that file drops
   under its line by half a point, and the job says so in its summary. Look at the mutant before
   you lower a line.
-  It happened on 2026-10-12, between two full runs of the same sources of the worker: two mutants of
-  `kv.ts` (line 46 and 47, the sweep) and one of `store-config.ts` (line 118) timed out in the
-  first and survived the second, 83.58 against 80.59 and 90.8 against 89.65. **A line is the lower
-  of the runs you have**, so those two did not move. Do not write a line from one run that scored
-  higher on a timeout.
+  It happened on 2026-10-12, over three full runs of the worker: eight mutants are a timeout in one
+  run and a survivor in another. They are the sweep of `kv.ts` (three mutants), line 118 of
+  `store-config.ts`, lines 328 to 330 of `session.ts`, and line 170 of `identity.ts`. `kv.ts` scored
+  83.58 then 80.59 on the same sources, and the package 91.05, 90.68 and 90.93. **A line is the
+  lowest that these mutants allow**: the lines of FRU-172 are written from a full run with those
+  eight counted as survivors. Do not write a line from one run that scored higher on a timeout.
+  The three timeouts of `clients.ts` did not move in three runs, and count as killed.
 - **The run of a package uses the tests of that package only.** A survivor of `packages/shared` may be
   killed by a test of the worker or of the widget. The contract is tested where it is written, so the
   survivor is still a hole there.

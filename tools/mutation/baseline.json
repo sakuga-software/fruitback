@@ -17,7 +17,7 @@
     }
   },
   "apps/worker": {
-    "score": 90.68,
+    "score": 90.78,
     "files": {
       "src/clients.ts": {
         "score": 89.42,
@@ -28,12 +28,12 @@
         "mutants": 200
       },
       "src/kv.ts": {
-        "score": 80.59,
-        "mutants": 67
+        "score": 81.08,
+        "mutants": 74
       },
       "src/rate-limit.ts": {
-        "score": 86.79,
-        "mutants": 53
+        "score": 89.39,
+        "mutants": 66
       },
       "src/cache.ts": {
         "score": 86.36,
