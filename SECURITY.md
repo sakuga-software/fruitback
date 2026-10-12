@@ -638,7 +638,11 @@ the cookie from another origin, or from none, and takes it from the console`. be
   consented at the provider through a sign-in they did not ask for, and replace the session they
   had with one of their own provider account. **The condition: a browser that sends
   `Sec-Fetch-Site`.** One that sends none is served as before; and a page of the same site as the
-  worker is not « another site », as for the cookie above.
+  worker is not « another site », as for the cookie above. **The console is of the same site as
+  the worker**: a console on another site has no session at all, because the browser does not keep
+  a `SameSite=Strict` cookie from the answer of its `fetch` (measured in Chromium, Firefox and
+  WebKit: the sign-in answers `200`, no cookie is kept, the next call answers `401`). So this
+  refusal takes nothing from a deployment that signs in.
   test:`starts no sign-in for a navigation that a page of another site made (FRU-211)`.
 - **Only the routes it names are served.** `SERVED_PATHS` of `auth.ts` lists them: `/ok`,
   `/sign-out`, `/revoke-sessions`, `/sign-in/social`, the two callbacks and `/error`.
