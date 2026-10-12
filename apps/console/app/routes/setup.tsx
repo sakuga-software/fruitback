@@ -108,24 +108,35 @@ export default function Setup() {
     <div className="min-h-screen bg-setup">
       <header className="border-b border-line bg-surface">
         <div className="mx-auto flex h-16 max-w-[1080px] items-center justify-between px-4">
-          <div className="flex items-center gap-2.5">
+          {/* On a phone each label stays on one line (FRU-160): « Set up » is left to the screen
+              reader, which the card's title repeats, and the tabs are tighter. Under 360 px the name
+              goes too, and the mark stays. */}
+          <div className="flex items-center gap-2.5 whitespace-nowrap">
             <Mark />
-            <span className="text-[15px] font-semibold">{t('Fruitback')}</span>
-            <span className="ml-3 text-[15px] text-muted">{t('Set up')}</span>
+            <span className="text-[15px] font-semibold max-[359px]:sr-only">{t('Fruitback')}</span>
+            <span className="ml-3 text-[15px] text-muted max-sm:sr-only">{t('Set up')}</span>
           </div>
-          <nav aria-label={t('How to run Fruitback')} className="flex rounded-lg bg-chip p-1 text-sm font-semibold">
-            <span aria-current="page" className="rounded-md bg-surface px-3.5 py-1.5 text-ink shadow-sm">
+          <nav
+            aria-label={t('How to run Fruitback')}
+            className="flex rounded-lg bg-chip p-1 text-[13px] font-semibold whitespace-nowrap sm:text-sm"
+          >
+            <span aria-current="page" className="rounded-md bg-surface px-2.5 py-1.5 text-ink shadow-sm sm:px-3.5">
               {t('Fruitback Cloud')}
             </span>
-            <a href={`${DOCS}/self-hosting.html`} className="rounded-md px-3.5 py-1.5 text-muted hover:text-ink">
+            <a
+              href={`${DOCS}/self-hosting.html`}
+              className="rounded-md px-2.5 py-1.5 text-muted hover:text-ink sm:px-3.5"
+            >
               {t('Self-hosted')}
             </a>
           </nav>
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-[1080px] gap-8 px-4 py-10 md:grid-cols-[220px_1fr]">
-        <ol className="space-y-1.5" aria-label={t('Steps')}>
+      {/* Under md the steps are a row of numbers, with the title of the current one, so the card and its
+          action come up the screen (FRU-160). */}
+      <main className="mx-auto grid max-w-[1080px] gap-4 px-4 py-6 md:grid-cols-[220px_1fr] md:gap-8 md:py-10">
+        <ol className="flex items-center gap-2 md:block md:space-y-1.5" aria-label={t('Steps')}>
           {STEPS.map((step, index) => {
             const number = index + 1;
             const current = number === stepOf(stage);
@@ -134,7 +145,9 @@ export default function Setup() {
               <li
                 key={step.title}
                 aria-current={current ? 'step' : undefined}
-                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${current ? 'border border-line bg-surface' : ''}`}
+                className={`flex items-center gap-3 rounded-xl md:px-3 md:py-2.5 ${
+                  current ? 'min-w-0 flex-1 md:border md:border-line md:bg-surface' : ''
+                }`}
               >
                 <span
                   className={`flex h-7 w-7 flex-none items-center justify-center rounded-full text-xs font-semibold ${
@@ -143,9 +156,9 @@ export default function Setup() {
                 >
                   {number}
                 </span>
-                <span>
+                <span className={current ? 'min-w-0' : 'max-md:sr-only'}>
                   <span className="block text-sm font-semibold">{t(step.title)}</span>
-                  <span className="block text-xs text-muted">{t(step.hint)}</span>
+                  <span className="block text-xs text-muted max-md:sr-only">{t(step.hint)}</span>
                 </span>
               </li>
             );
@@ -198,14 +211,14 @@ function Frame({
   return (
     <form
       onSubmit={onSubmit ?? ((event) => event.preventDefault())}
-      className="flex min-h-[540px] flex-col rounded-[14px] border border-line bg-surface shadow-[0_24px_60px_-30px_rgba(28,25,23,0.25)]"
+      className="flex min-w-0 flex-col rounded-[14px] border border-line bg-surface shadow-[0_24px_60px_-30px_rgba(28,25,23,0.25)] md:min-h-[540px]"
     >
-      <div className="flex-1 px-7 pt-8 pb-6">
+      <div className="flex-1 px-5 pt-6 pb-6 md:px-7 md:pt-8">
         <h1 className="text-2xl font-bold tracking-[-0.02em]">{title}</h1>
         {lead === undefined ? null : <p className="mt-2 text-[15px] text-muted">{lead}</p>}
         <div className="mt-6 max-w-[420px] space-y-4">{children}</div>
       </div>
-      <div className="flex items-center justify-end gap-4 border-t border-line px-7 py-4">
+      <div className="flex items-center justify-end gap-4 border-t border-line px-5 py-4 md:px-7">
         <span className="text-sm text-muted">{t('Step {step} of {total}', { step, total: 4 })}</span>
         {action}
       </div>
