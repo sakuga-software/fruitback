@@ -40,6 +40,16 @@ INSERT INTO site_destinations (site_id, position, connector_id, team_id, project
   ('site_drill1', 1, 'con_drill1', 'team_1', NULL, 'Hook, team 1'),
   ('site_drill2', 0, 'con_drill1', NULL, NULL, NULL);
 
+-- The domains of a workspace (FRU-103): one never proven, one proven that covers the previews of a
+-- site, one whose proof is lost, and three more so the count is no other table's.
+INSERT INTO domains (id, workspace_id, domain, created_at, verified_at, lost_at, checked_at, previews_site_id) VALUES
+  ('dom_drill1', 'ws_drill1', 'pending.acme.dev', 1, NULL, NULL, NULL, NULL),
+  ('dom_drill2', 'ws_drill1', 'preview.acme.dev', 2, 3, NULL, 3, 'site_drill1'),
+  ('dom_drill3', 'ws_drill1', 'lost.acme.dev', 3, 4, 5, 5, 'site_drill2'),
+  ('dom_drill4', 'ws_drill1', 'four.acme.dev', 4, NULL, NULL, 4, NULL),
+  ('dom_drill5', 'ws_drill1', 'five.acme.dev', 5, 6, NULL, 6, NULL),
+  ('dom_drill6', 'ws_drill1', 'six.acme.dev', 6, NULL, NULL, NULL, NULL);
+
 INSERT INTO deliveries (id, connector_id, body, created_at, next_at) VALUES
   ('dlv_drill1', 'con_drill1', '{"note":"one"}', 1, 1),
   ('dlv_drill2', 'con_drill1', '{"note":"two"}', 2, NULL);

@@ -19,6 +19,7 @@ import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
 import { AuthUnavailable, handleAuthRoutes, isAuthRoute, sessionOfCookie, withRenewedCookie } from './auth-routes.ts';
 import { SIGN_IN_PROVIDERS, consoleCors, isConsoleRoute } from './console-cors.ts';
 import { handleConsoleApi } from './console-api.ts';
+import { type TxtResolver, recheckDomains } from './domain-proof.ts';
 import { handleLinearOAuth } from './linear-oauth.ts';
 import { createConnectorStores, createRoutedStore } from './connectors.ts';
 import { DELIVERY_HEADER, LOOP_STATUS, type Send, deliverDue } from './rest-connector.ts';
@@ -180,6 +181,18 @@ async function signsNotes(request: Request, policy: ClientPolicy): Promise<boole
  * The server calls it on a timer. It is here and not in `server.ts` so a test reaches it with no
  * socket: it reads the same configuration as a request does.
  */
+/**
+ * Asks the DNS again for the proofs of the domains that were not asked for `RECHECK_MS` (FRU-103).
+ * `server.ts` calls it on a timer, like `deliverPending`.
+ */
+export async function recheckPending(env: WorkerEnv, resolve: TxtResolver, now?: () => number): Promise<void> {
+  const config = readConfig(env);
+  const accounts = config.ok ? accountStoreFor(config.config) : undefined;
+  if (!config.ok || accounts === undefined) return;
+
+  await recheckDomains(accounts, resolve, (now ?? Date.now)());
+}
+
 export async function deliverPending(
   env: WorkerEnv,
   send: Send,
@@ -221,6 +234,8 @@ export type RequestContext = {
   mailer?: Mailer;
   /** What reaches GitHub on a sign-in (FRU-97). A suite hands over a double of GitHub. */
   fetcher?: typeof fetch;
+  /** What asks the DNS for the proof of a domain (FRU-103). A suite hands over a double. */
+  resolveTxt?: TxtResolver;
   /**
    * better-auth, for a worker that has it on (FRU-147). Absent, the handler takes the one instance of
    * the process (`authFor`), built when the server started. A suite hands over one on PGlite.
@@ -446,6 +461,7 @@ async function routed(request: Request, env: WorkerEnv, context: RequestContext)
           kv,
           ...(served.linearOAuth === undefined ? {} : { linearOAuth: served.linearOAuth }),
           ...(served.publicUrl === undefined ? {} : { publicUrl: served.publicUrl }),
+          ...(context.resolveTxt === undefined ? {} : { resolveTxt: context.resolveTxt }),
           // Who calls is the person of the cookie of better-auth (FRU-147), and nobody without it.
           ...(auth === undefined || served.consoleUrl === undefined
             ? {}
