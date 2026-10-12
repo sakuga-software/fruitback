@@ -3,7 +3,7 @@ import { createHash, createHmac } from 'node:crypto';
 import { describe, it, mock } from 'node:test';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { handleRequest } from './app.ts';
-import { type Auth, CLIENT_IP_HEADER, authOptions, startAuth } from './auth.ts';
+import { AUTH_BASE_PATH, type Auth, CLIENT_IP_HEADER, SERVED_PATHS, authOptions, startAuth } from './auth.ts';
 import {
   AUTH_CONFIG,
   AUTH_SECRET,
@@ -417,6 +417,40 @@ for (const { label, open, skip } of DATABASES) {
       });
       assert.equal(noOrigin.status, 403);
       assert.equal((await worker.call('/console/me', { headers: { Cookie: bob } })).status, 200);
+    });
+
+    it('answers no route that hands the token of the session to a script of the console', async () => {
+      const worker = await workerOn(open);
+      const cookie = await worker.signIn('alice@acme.dev');
+      const token = tokenIn(cookie);
+      const headers = { Cookie: cookie };
+
+      // FRU-206: `/get-session` of better-auth answers the session with its token, and it was served.
+      for (const method of ['GET', 'POST']) {
+        const answer = await worker.call(`${AUTH_BASE_PATH}/get-session`, { method, headers });
+        assert.equal(answer.status, 404, method);
+        assert.deepEqual(await answer.json(), { error: 'not-found' });
+      }
+      // The control: better-auth has that route, and it answers the token to whoever has the cookie.
+      const inside = await worker.auth.handler(
+        new Request(`https://api.fruitback.test${AUTH_BASE_PATH}/get-session`, { headers }),
+      );
+      assert.equal(inside.status, 200);
+      assert.ok((await inside.text()).includes(token), 'better-auth no longer answers the token: read this test again');
+
+      // No route a script of the console can read answers it: the served ones, and the worker's own.
+      const read = [
+        ...Object.keys(SERVED_PATHS).map((path) => `${AUTH_BASE_PATH}${path}`),
+        '/console/me',
+        '/console/sessions',
+      ];
+      for (const path of read) {
+        const answer = await worker.call(path, { headers });
+        assert.equal((await answer.text()).includes(token), false, path);
+        assert.equal(answer.headers.get('Location')?.includes(token) ?? false, false, path);
+      }
+      // The session is still read in the process: the cookie opens the console as before.
+      assert.equal((await worker.call('/console/me', { headers })).status, 200);
     });
   });
 
