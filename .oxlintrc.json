@@ -195,6 +195,7 @@
         "apps/worker/src/postgres-schema.ts",
         "apps/worker/src/auth-schema.ts",
         "apps/worker/src/postgres-migrate.ts",
+        "apps/worker/src/postgres-copy.ts",
         "apps/worker/src/postgres-stores.ts"
       ],
       "rules": {
@@ -222,7 +223,7 @@
               },
               {
                 "group": ["drizzle-orm", "drizzle-orm/*", "drizzle-kit"],
-                "message": "Drizzle is named by the files of the PostgreSQL database only: postgres-schema.ts, auth-schema.ts, postgres-migrate.ts and the two stores. Any other file takes a store from postgres-stores.ts (docs/decisions/worker.md, FRU-180)."
+                "message": "Drizzle is named by the files of the PostgreSQL database only: postgres-schema.ts, auth-schema.ts, postgres-migrate.ts, postgres-copy.ts and the two stores. Any other file takes a store from postgres-stores.ts (docs/decisions/worker.md, FRU-180)."
               },
               {
                 "group": [
@@ -230,7 +231,8 @@
                   "./session-postgres.ts",
                   "./postgres-schema.ts",
                   "./auth-schema.ts",
-                  "./postgres-migrate.ts"
+                  "./postgres-migrate.ts",
+                  "./postgres-copy.ts"
                 ],
                 "message": "These files import Drizzle, so no file that every worker loads may import them: postgres-stores.ts loads them at their first call (docs/decisions/worker.md, FRU-180)."
               }
@@ -262,7 +264,7 @@
             "patterns": [
               {
                 "group": ["drizzle-orm", "drizzle-orm/*", "drizzle-kit"],
-                "message": "Drizzle is named by the files of the PostgreSQL database only: postgres-schema.ts, auth-schema.ts, postgres-migrate.ts and the two stores. Any other file takes a store from postgres-stores.ts (docs/decisions/worker.md, FRU-180)."
+                "message": "Drizzle is named by the files of the PostgreSQL database only: postgres-schema.ts, auth-schema.ts, postgres-migrate.ts, postgres-copy.ts and the two stores. Any other file takes a store from postgres-stores.ts (docs/decisions/worker.md, FRU-180)."
               },
               {
                 "group": [
@@ -270,7 +272,8 @@
                   "./session-postgres.ts",
                   "./postgres-schema.ts",
                   "./auth-schema.ts",
-                  "./postgres-migrate.ts"
+                  "./postgres-migrate.ts",
+                  "./postgres-copy.ts"
                 ],
                 "message": "These files import Drizzle, so no file that every worker loads may import them: postgres-stores.ts loads them at their first call (docs/decisions/worker.md, FRU-180)."
               }
@@ -306,7 +309,8 @@
                   "./session-postgres.ts",
                   "./postgres-schema.ts",
                   "./auth-schema.ts",
-                  "./postgres-migrate.ts"
+                  "./postgres-migrate.ts",
+                  "./postgres-copy.ts"
                 ],
                 "message": "These files import Drizzle, so no file that every worker loads may import them: postgres-stores.ts loads them at their first call (docs/decisions/worker.md, FRU-180)."
               }
@@ -332,7 +336,7 @@
               },
               {
                 "group": ["drizzle-orm", "drizzle-orm/*", "drizzle-kit"],
-                "message": "Drizzle is named by the files of the PostgreSQL database only: postgres-schema.ts, auth-schema.ts, postgres-migrate.ts and the two stores. Any other file takes a store from postgres-stores.ts (docs/decisions/worker.md, FRU-180)."
+                "message": "Drizzle is named by the files of the PostgreSQL database only: postgres-schema.ts, auth-schema.ts, postgres-migrate.ts, postgres-copy.ts and the two stores. Any other file takes a store from postgres-stores.ts (docs/decisions/worker.md, FRU-180)."
               },
               {
                 "group": [
@@ -340,7 +344,8 @@
                   "./session-postgres.ts",
                   "./postgres-schema.ts",
                   "./auth-schema.ts",
-                  "./postgres-migrate.ts"
+                  "./postgres-migrate.ts",
+                  "./postgres-copy.ts"
                 ],
                 "message": "These files import Drizzle, so no file that every worker loads may import them: postgres-stores.ts loads them at their first call (docs/decisions/worker.md, FRU-180)."
               }
@@ -369,7 +374,8 @@
         "apps/worker/src/session-postgres.ts",
         "apps/worker/src/postgres-schema.ts",
         "apps/worker/src/auth-schema.ts",
-        "apps/worker/src/postgres-migrate.ts"
+        "apps/worker/src/postgres-migrate.ts",
+        "apps/worker/src/postgres-copy.ts"
       ],
       "rules": {
         "no-restricted-imports": [
@@ -422,7 +428,7 @@
             "patterns": [
               {
                 "group": ["drizzle-orm", "drizzle-orm/*", "drizzle-kit"],
-                "message": "Drizzle is named by the files of the PostgreSQL database only: postgres-schema.ts, auth-schema.ts, postgres-migrate.ts and the two stores. Any other file takes a store from postgres-stores.ts (docs/decisions/worker.md, FRU-180)."
+                "message": "Drizzle is named by the files of the PostgreSQL database only: postgres-schema.ts, auth-schema.ts, postgres-migrate.ts, postgres-copy.ts and the two stores. Any other file takes a store from postgres-stores.ts (docs/decisions/worker.md, FRU-180)."
               },
               {
                 "group": ["better-auth", "better-auth/**", "@better-auth/**", "kysely", "kysely/**"],

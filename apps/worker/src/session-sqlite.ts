@@ -78,6 +78,9 @@ const MIGRATIONS: readonly string[] = [
   `,
 ];
 
+/** The `user_version` of a sessions file that this worker migrated: what `migrate-to-postgres` copies (FRU-145). */
+export const SESSIONS_FILE_VERSION = MIGRATIONS.length;
+
 /**
  * One connection per file, for the lifetime of the process.
  *

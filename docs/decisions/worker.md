@@ -1248,6 +1248,66 @@ an earlier migration, and writes nothing`.
 - **Not measured: Node 26 on a developer machine.** The measurements of this section ran on Node 25.8
   and on the runners of CI, which have the version of `.nvmrc`.
 
+## The copy of the SQLite files into PostgreSQL (FRU-145)
+
+`node server.mjs migrate-to-postgres --accounts <file> --sessions <file> [--dry-run]` copies the
+accounts and the sessions of a worker on SQLite into the database of `FRUITBACK_DATABASE_URL`. It is
+the tool of the first switch of the Cloud, and of any self-hoster who moves. The steps of the switch
+are in `apps/worker/cloud/README.md`.
+
+### The rules, in short
+
+- **A command, and not a route**, for the reason `pair` gives: whoever can run it already holds the
+  secrets. It is in `cli.ts`, and `postgres-copy.ts` does the copy. That file imports Drizzle, so
+  `cli.ts` reaches it through `postgres-stores.ts`, at the call.
+- **The two files are never opened.** Each one is copied with its `-wal` into a folder of the
+  system, and the copy is read. The files are the way back of the switch.
+- **The target is made by the migrations of Drizzle** (`migrated`), and the copy writes rows only.
+  The columns of each table are compared on both sides first, and a file of another version is
+  refused: a column on one side only would be lost in silence.
+- **One transaction, with an advisory lock in it** (`pg_advisory_xact_lock`, a number that the
+  migrations do not use). An interruption leaves nothing.
+- **A database with a row in any of the eleven tables is refused**, unless it holds exactly the rows
+  of the files: then the command writes nothing and ends with 0. That is a run that went to its end.
+- **The end is a count and a digest of the rows of each table, file against database**, read again
+  inside the transaction through the schema. A difference rolls back and ends with 1. `--dry-run`
+  does everything and rolls back.
+- **The sign-in links are not copied.** They live 15 minutes, and the worker is stopped for longer.
+- **No message holds the address of the database**, as everywhere in `postgres.ts`.
+
+### The reasons, and the measurements
+
+- **Why a copy of the files.** SQLite writes a `-shm` beside a file in WAL mode as soon as a reader
+  opens it, and a checkpoint moves the journal into the file: a reader changes the digest of what
+  it reads. With the files opened in place of their copies,
+  test:`writes nothing beside the two files, and leaves them as they were` fails (control planted,
+  2026-10-11). The rows of a worker that was just stopped can be in the journal only: the same test
+  reads the file without its `-wal` and finds no table, and with the line that copies the `-wal`
+  removed, test:`copies every row: a session opened before refreshes after, and a sealed connector
+opens` fails. So the copy reads a folder that it cannot write:
+  test:`reads the two files in a folder that it cannot write`.
+- **What « the same » means after the copy.** The digests of the tokens and the sealed keys are
+  copied as they are, so the test reads them as a worker would: the refresh token of a session of
+  the file is accepted by the session store of PostgreSQL, and the key of a connector opens with
+  `FRUITBACK_SECRETS_KEY`.
+- **A row is compared by its values, in the order of the columns of the schema**, as JSON. An
+  instant is a number on both sides: the schema answers a `BIGINT` as a number, which is why the
+  target is read through it and not with a raw statement. The rows are sorted as text in the
+  process: SQLite and PostgreSQL do not sort text in the same way.
+- **The interruption is planted, and so is the lost row.** A trigger stops the insert of the last
+  table: test:`leaves nothing when it stops in the middle, and gives the same result when it runs
+again`. Another one removes a pairing as soon as it is written:
+  test:`fails its final count when a row goes missing in the target, and keeps nothing`.
+- **Idempotence is « the same rows », not « a mark that the copy ran ».** A mark would say nothing
+  of what a worker wrote after it: test:`writes nothing again when it runs a second time`,
+  test:`refuses a database that holds other rows, and writes nothing`. A row in a table that
+  is not copied counts too (raised in review): a sign-in link made since the copy is a row that
+  the files do not have, test:`refuses a database that holds these rows and a sign-in link made
+since`.
+- **The command runs as a process against a server** in
+  test:`copies, ends with 0, and never prints the address of the database`: a dry run, the copy, a
+  second run, and a file that does not exist, which `node:sqlite` would otherwise make.
+
 ## The markdown codec, and the file that outlived its name
 
 ### The rules, in short
