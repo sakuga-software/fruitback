@@ -89,6 +89,8 @@ function SignedOut() {
 
   async function resume() {
     const me = await call('GET', '/console/me', undefined, { quiet: true });
+    // No answer is not « still signed out »: the banner of the worker that does not answer says it.
+    if (!me.ok && me.status === 0) return;
     setStill(!me.ok);
     if (me.ok) setEnded(false);
   }

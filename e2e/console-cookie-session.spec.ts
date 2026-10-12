@@ -166,6 +166,15 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     await expect(field).toHaveValue('staging.acme.dev');
     await expect(page).toHaveURL(/\/sites$/);
 
+    // The worker does not answer « Continue »: that is not « still signed out ».
+    const down = `${WORKER_ORIGIN}/console/me`;
+    await page.route(down, (route) => route.abort());
+    await notice.getByRole('button', { name: 'Continue', exact: true }).click();
+    await expect(page.getByRole('alert').filter({ hasText: 'cannot reach its server' })).toBeVisible();
+    await expect(notice).toBeVisible();
+    await expect(page.getByRole('alert').filter({ hasText: 'You are still signed out' })).toHaveCount(0);
+    await page.unroute(down);
+
     // Still signed out: « Continue » says so, and the field keeps its text.
     await notice.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(page.getByRole('alert').filter({ hasText: 'You are still signed out' })).toBeVisible();
