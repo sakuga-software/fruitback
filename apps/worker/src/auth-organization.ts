@@ -2,6 +2,7 @@ import { type AccountStore, type Workspace, can } from './accounts.ts';
 import { newId } from './account-rows.ts';
 import { AUTH_BASE_PATH, type Auth } from './auth.ts';
 import { type AuthRouteContext, AuthUnavailable, headersFor, mutationAllowed, sessionOfCookie } from './auth-routes.ts';
+import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
 import { ORGANIZATION_PATHS, type OrganizationRule, readOrganizationInput } from './organization-paths.ts';
 import type { SessionStore } from './session.ts';
 
@@ -40,8 +41,14 @@ function json(status: number, body: unknown, headers: Record<string, string>): R
   });
 }
 
-/** What the caller sent: the query of a `GET`, the body of a `POST`. `undefined`: not an object. */
-async function sentBy(request: Request, rule: OrganizationRule): Promise<Record<string, unknown> | undefined> {
+/**
+ * What the caller sent: the query of a `GET`, the body of a `POST`. `undefined`: not an object.
+ * `'too-large'`: a body over the cap of the worker, which is not read to its end.
+ */
+async function sentBy(
+  request: Request,
+  rule: OrganizationRule,
+): Promise<Record<string, unknown> | 'too-large' | undefined> {
   if (rule.method === 'GET') {
     const query = new URL(request.url).searchParams;
     const sent: Record<string, unknown> = {};
@@ -55,8 +62,10 @@ async function sentBy(request: Request, rule: OrganizationRule): Promise<Record<
     return sent;
   }
 
+  const text = await readBoundedText(request);
+  if (text === null) return 'too-large';
   try {
-    const parsed: unknown = JSON.parse(await request.text());
+    const parsed: unknown = JSON.parse(text);
 
     return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)
@@ -94,6 +103,7 @@ export async function handleOrganizationRoutes(
   if (!mutationAllowed(request, context.consoleUrl)) return json(403, { error: 'origin-not-allowed' }, headers);
 
   const sent = await sentBy(request, rule);
+  if (sent === 'too-large') return json(413, { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES }, headers);
   if (sent === undefined) return json(400, { error: 'invalid-request' }, headers);
   const read = readOrganizationInput(rule, sent);
   if (!read.ok) return json(400, { error: 'invalid-request', field: read.field }, headers);

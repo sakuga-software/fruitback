@@ -6,6 +6,7 @@ import { type Auth, ROLE_REFUSED, startAuth } from './auth.ts';
 import { CONSOLE_URL, DATABASES, PUBLIC_URL, ask, databasesOfACase } from './auth.fixture.ts';
 import { handleOrganizationRoutes } from './auth-organization.ts';
 import { type Call, workerOf } from './auth-worker.fixture.ts';
+import { MAX_BODY_BYTES } from './bounded-body.ts';
 import { ORGANIZATION_PATHS } from './organization-paths.ts';
 import type { PgDatabase } from './postgres.ts';
 import { rowsOf } from './postgres.fixture.ts';
@@ -399,6 +400,16 @@ for (const { label, open, skip } of DATABASES) {
       );
       await refused(await as(worker, acme.admin, `${ORG}/leave`, { body: {} }), 'organizationId');
       await refused(await as(worker, acme.admin, `${ORG}/leave`, { body: [acme.workspace] }));
+      // A body over the cap of the worker is not read to its end, with or without its length said.
+      for (const headers of [{}, { 'Content-Length': '12' }] as Record<string, string>[]) {
+        const large = await as(worker, acme.admin, `${ORG}/leave`, {
+          body: { organizationId: acme.workspace, padding: 'x'.repeat(MAX_BODY_BYTES) },
+          headers,
+        });
+        assert.equal(large.status, 413);
+        assert.deepEqual(await large.json(), { error: 'payload-too-large', maxBytes: MAX_BODY_BYTES });
+      }
+      assert.equal(await roleOf(worker, acme.admin.member), 'admin');
       assert.equal(
         (await as(worker, acme.admin, `${ORG}/leave`, { method: 'GET' })).status,
         405,

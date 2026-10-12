@@ -15,6 +15,7 @@ import { type AccountStore, type Role, can } from './accounts.ts';
 import { SESSION_SITES_PATH, handleSessionSites } from './session-sites.ts';
 import { type Auth, authFor } from './auth.ts';
 import { createWorkspaceWithPlugin, handleOrganizationRoutes } from './auth-organization.ts';
+import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
 import { AuthUnavailable, handleAuthRoutes, isAuthRoute, sessionOfCookie } from './auth-routes.ts';
 import { consoleCors, handleConsoleSession, isConsoleRoute } from './console-routes.ts';
 import { handleConsoleApi } from './console-api.ts';
@@ -56,9 +57,6 @@ import { createSqliteSessionStore } from './session-sqlite.ts';
  * `server.ts` adapts `node:http` onto it. That keeps every behaviour testable without opening a
  * socket, and keeps the door open if this ever moves to another runtime.
  */
-
-/** A seed with a long note and a DOM path is a few KB. 64 is generous; unbounded is an invitation. */
-const MAX_BODY_BYTES = 64 * 1_024;
 
 /**
  * Which store this process writes to (FRU-29, FRU-33).
@@ -1253,51 +1251,6 @@ async function postBatch(
   if (kept.length === 0) return json(502, { error: 'store-unavailable', results }, corsHeaders);
 
   return json(kept.length === results.length ? 201 : 207, { results }, corsHeaders);
-}
-
-/**
- * Read the body, refusing anything over the cap.
- *
- * Streamed rather than `request.text()`: a client that omits or forges `Content-Length` would
- * otherwise get the whole payload buffered in memory before being told it was too large, which
- * defeats the point of having a cap.
- */
-async function readBoundedText(request: Request): Promise<string | null> {
-  const declared = Number(request.headers.get('Content-Length') ?? '');
-  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) return null;
-  if (request.body === null) return '';
-
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    size += value.byteLength;
-    if (size > MAX_BODY_BYTES) {
-      // Stop pulling instead of draining the rest of the upload.
-      await reader.cancel();
-      return null;
-    }
-
-    chunks.push(value);
-  }
-
-  return new TextDecoder().decode(concat(chunks, size));
-}
-
-function concat(chunks: Uint8Array[], size: number): Uint8Array {
-  const body = new Uint8Array(size);
-  let offset = 0;
-
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-
-  return body;
 }
 
 function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
