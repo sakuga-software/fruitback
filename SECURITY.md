@@ -845,6 +845,14 @@ what they may do, so a member removed a minute ago is refused at once. `can(role
 `accounts.ts` is the one table. A workspace somebody is not a member of answers `404`, like one that
 does not exist. Adding a site keeps the origin of the pasted address and nothing else.
 
+**The access token of an extension opens none of these routes** (FRU-202). It is signed with the
+same worker key as the token of a console session, and only the `ws` claim tells them apart: a
+token with a `ws` is refused with `401`, in its own workspace too. Until then, the 10-minute token
+of an extension paired for one workspace read and changed every workspace of the person, with the
+role of the person, and could mint a pairing code, so a new 30-day session, in any of them.
+test:`refuses POST connect to the token of an extension, in another workspace and in its own`, and
+one test for each other route.
+
 `POST /console/workspaces/<id>/connect` mints a pairing code for the person, in that workspace
 (FRU-100). The console puts it after the `#` of the worker's pairing page, and the extension spends it
 as it spends a code an operator minted. **A guest's session reaches every site of its workspace

@@ -270,6 +270,109 @@ describe('from a link in a mailbox to a note on the page (FRU-99, FRU-100)', () 
   });
 });
 
+/**
+ * The access token of an extension, against each route of the console it opened before FRU-202.
+ *
+ * Alice owns A and B, and pairs an extension for A. Each case also shows that the console session
+ * of Alice is still served, so a refusal is about the token and not about the route.
+ */
+describe('the token of an extension on the console API (FRU-202)', () => {
+  async function extensionOf(): Promise<{
+    env: WorkerEnv;
+    alice: { id: string; token: string };
+    a: string;
+    b: string;
+    token: string;
+  }> {
+    const env = envWith();
+    const alice = await signIn(env, 'alice@acme.dev');
+    const a = await workspaceOf(env, alice.token, 'A');
+    const b = await workspaceOf(env, alice.token, 'B');
+    const connect = (await (
+      await call(env, 'POST', `/console/workspaces/${a}/connect`, { token: alice.token, body: {} })
+    ).json()) as { code: string };
+    const paired = await call(env, 'POST', '/session/pair', {
+      origin: 'chrome-extension://abcdefghijklmnopabcdefghijklmnop',
+      body: { code: connect.code },
+    });
+    assert.equal(paired.status, 200);
+    const token = ((await paired.json()) as { accessToken: string }).accessToken;
+    // The control: this token is good where it belongs, the notes of a site of A.
+    const site = (await (
+      await call(env, 'POST', `/console/workspaces/${a}/sites`, { token: alice.token, body: { url: SITE } })
+    ).json()) as { id: string };
+    const read = await call(env, 'GET', `/feedback?url=${encodeURIComponent(`${SITE}/`)}&client=${site.id}`, {
+      origin: SITE,
+      token,
+    });
+    assert.equal(read.status, 200);
+
+    return { env, alice, a, b, token };
+  }
+
+  async function sitesOf(env: WorkerEnv, token: string, workspace: string): Promise<unknown[]> {
+    const answer = await call(env, 'GET', `/console/workspaces/${workspace}/sites`, { token });
+    assert.equal(answer.status, 200);
+
+    return ((await answer.json()) as { sites: unknown[] }).sites;
+  }
+
+  it('refuses GET /console/me to the token of an extension', async () => {
+    const { env, alice, token } = await extensionOf();
+
+    const refused = await call(env, 'GET', '/console/me', { token });
+    assert.equal(refused.status, 401);
+    assert.deepEqual(await refused.json(), { error: 'identity-required', reason: 'not-a-console-session' });
+    assert.equal((await call(env, 'GET', '/console/me', { token: alice.token })).status, 200);
+  });
+
+  it('refuses POST /console/workspaces to the token of an extension, and creates nothing', async () => {
+    const { env, alice, token } = await extensionOf();
+
+    assert.equal((await call(env, 'POST', '/console/workspaces', { token, body: { name: 'C' } })).status, 401);
+    const me = (await (await call(env, 'GET', '/console/me', { token: alice.token })).json()) as {
+      workspaces: unknown[];
+    };
+    assert.equal(me.workspaces.length, 2);
+  });
+
+  it('refuses DELETE of its own workspace to the token of an extension, and the workspace stays', async () => {
+    const { env, alice, a, b, token } = await extensionOf();
+
+    assert.equal((await call(env, 'DELETE', `/console/workspaces/${a}`, { token })).status, 401);
+    assert.equal((await call(env, 'DELETE', `/console/workspaces/${b}`, { token })).status, 401);
+    assert.equal((await sitesOf(env, alice.token, a)).length, 1);
+    assert.equal((await sitesOf(env, alice.token, b)).length, 0);
+  });
+
+  it('refuses the sites of another workspace, and of its own, to the token of an extension', async () => {
+    const { env, alice, a, b, token } = await extensionOf();
+
+    for (const workspace of [a, b]) {
+      assert.equal((await call(env, 'GET', `/console/workspaces/${workspace}/sites`, { token })).status, 401);
+      const added = await call(env, 'POST', `/console/workspaces/${workspace}/sites`, {
+        token,
+        body: { url: 'https://other.acme.test' },
+      });
+      assert.equal(added.status, 401);
+    }
+    assert.equal((await sitesOf(env, alice.token, a)).length, 1);
+    assert.equal((await sitesOf(env, alice.token, b)).length, 0);
+  });
+
+  it('refuses POST connect to the token of an extension, in another workspace and in its own', async () => {
+    const { env, alice, a, b, token } = await extensionOf();
+
+    // A code would turn a token of 10 minutes into a session of 30 days, in any workspace.
+    assert.equal((await call(env, 'POST', `/console/workspaces/${b}/connect`, { token, body: {} })).status, 401);
+    assert.equal((await call(env, 'POST', `/console/workspaces/${a}/connect`, { token, body: {} })).status, 401);
+    assert.equal(
+      (await call(env, 'POST', `/console/workspaces/${b}/connect`, { token: alice.token, body: {} })).status,
+      201,
+    );
+  });
+});
+
 describe('the store behind the API', () => {
   it('is the same file the routing reads', async () => {
     const env = envWith();
