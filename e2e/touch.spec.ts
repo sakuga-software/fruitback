@@ -48,7 +48,8 @@ function controls(page: Page): Promise<Box[]> {
         const target = element.matches('input') ? (element.closest('label') ?? element) : element;
         const rect = target.getBoundingClientRect();
         const name =
-          element.getAttribute('aria-label') ?? (target.textContent?.trim() || element.className || element.tagName);
+          element.getAttribute('aria-label') ??
+          (target.textContent?.trim() || element.id || element.className || element.tagName);
 
         return { name: `${element.tagName.toLowerCase()} "${name}"`, width: rect.width, height: rect.height };
       })
@@ -80,14 +81,17 @@ test.describe('on a touch screen at 390 px', () => {
 
   test('the launch button says what a tap does, in English and in French', async ({ page }) => {
     await mount(page, 'touch-label');
-    const launch = page.getByRole('button', { name: 'Leave feedback' });
+    // By its attribute: the accessible name is the label, which is what changes.
+    const launch = page.locator('[data-fruitback-host-launch]');
+    await expect(launch).toHaveText('Leave feedback');
     await launch.tap();
     await expect(launch).toHaveText('Cancel');
     await launch.tap();
     await expect(launch).toHaveText('Leave feedback');
 
     await mount(page, 'touch-label-fr', 'fr-FR');
-    const lancer = page.getByRole('button', { name: 'Laisser un feedback' });
+    const lancer = page.locator('[data-fruitback-host-launch]');
+    await expect(lancer).toHaveText('Laisser un feedback');
     await lancer.tap();
     await expect(lancer).toHaveText('Annuler');
     await expect(lancer).not.toHaveText(/Esc|Échap/);
@@ -158,7 +162,7 @@ test.describe('on a touch screen at 390 px', () => {
 
 test('with a mouse and a keyboard, the launch button still says Escape', async ({ page }) => {
   await mount(page, 'touch-desktop');
-  const launch = page.getByRole('button', { name: 'Leave feedback' });
+  const launch = page.locator('[data-fruitback-host-launch]');
   await launch.click();
   await expect(launch).toHaveText('Esc to cancel');
 });
