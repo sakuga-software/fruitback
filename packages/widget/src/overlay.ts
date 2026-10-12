@@ -825,10 +825,13 @@ const STYLES = `
 /*
   The tint only while its note is pointed at, focused or open (FRU-158). Left on, it greyed every
   annotated element of the page, and the more a page was annotated, the less it could be read.
+
+  Two rules and not one list: a browser with no :has() drops the whole rule that names it, and the
+  tint of an open thread must not go with it.
 */
+.fruitback-pin[data-fruitback-open] { background: color-mix(in srgb, var(--fruitback-pin-color) 12%, transparent); }
 .fruitback-pin:has(.fruitback-pin-badge:hover),
-.fruitback-pin:has(.fruitback-pin-badge:focus-visible),
-.fruitback-pin[data-fruitback-open] {
+.fruitback-pin:has(.fruitback-pin-badge:focus-visible) {
   background: color-mix(in srgb, var(--fruitback-pin-color) 12%, transparent);
 }
 .fruitback-pin-uncertain { border-style: dashed; opacity: 0.85; }

@@ -244,7 +244,11 @@ describe('createOverlay', () => {
     const sheet = page.document.querySelector('style')?.textContent ?? '';
     const pinRule = /\.fruitback-pin \{[^}]*\}/.exec(sheet)?.[0] ?? '';
     assert.doesNotMatch(pinRule, /background/);
-    assert.match(sheet, /\.fruitback-pin\[data-fruitback-open\] \{\s*background: color-mix/);
+    // In a rule of its own: a browser with no :has() drops the whole rule that names it.
+    const rules = sheet.replace(/\/\*[\s\S]*?\*\//g, '');
+    const openRule = /[^}]*\.fruitback-pin\[data-fruitback-open\][^{]*\{[^}]*\}/.exec(rules)?.[0] ?? '';
+    assert.match(openRule, /background: color-mix/);
+    assert.doesNotMatch(openRule, /:has\(/);
   });
 
   it('falls back to the stage when the store reports no state name (FRU-24)', () => {
