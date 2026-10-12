@@ -9,10 +9,14 @@ import { after, afterEach, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
-import { closeAccountConnections, createSqliteAccountStore } from './accounts-sqlite.ts';
+import {
+  ACCOUNTS_FILE_VERSION as VERSION_OF_THE_FILE_STORE,
+  closeAccountConnections,
+  createSqliteAccountStore,
+} from './accounts-sqlite.fixture.ts';
 import { parseMigrateArgs } from './cli.ts';
 import { type Database, createPgDatabase } from './postgres.ts';
-import { COPY_SCHEMA, copySqliteFiles } from './postgres-copy.ts';
+import { ACCOUNTS_FILE_VERSION, COPY_SCHEMA, copySqliteFiles } from './postgres-copy.ts';
 import {
   NO_REAL_POSTGRES,
   appliedDates,
@@ -87,7 +91,12 @@ async function filesOfAWorker() {
   const delivery = await accounts.enqueueDelivery(hook.id, '{"n":1}', 2_000);
   await accounts.settleDelivery(delivery, { delivered: false, attempts: 0, at: 3_000, status: 503 });
   await accounts.enqueueDelivery(hook.id, '{"n":2}', 4_000);
-  await accounts.createEmailLink({ codeHash: 'digest-1', email: 'carol@acme.dev', expiresAt: Date.now() + 60_000 });
+  // A link of the sign-in of before, which waits in the file: the store no longer writes one (FRU-150).
+  const file = new DatabaseSync(accountsPath);
+  file
+    .prepare('INSERT INTO email_links (code_hash, email, created_at, expires_at) VALUES (?, ?, ?, ?)')
+    .run('digest-1', 'carol@acme.dev', Date.now(), Date.now() + 60_000);
+  file.close();
 
   const redeemed = await redeemPairing(
     sessions,
@@ -425,22 +434,6 @@ for (const subject of SUBJECTS) {
       assert.match(outcome.lines[0] ?? '', /the table accounts differs: nickname is not in PostgreSQL/);
     });
 
-    it('refuses a file that holds a domain, which the copy does not carry (FRU-103)', async () => {
-      const files = await filesOfAWorker();
-      database = await subject.open();
-      const store = createSqliteAccountStore(files.accountsPath);
-      const [workspace] = await store.memberships(
-        (await store.signIn({ provider: 'email', subject: 'alice@acme.dev', email: 'alice@acme.dev' })).id,
-      );
-      await store.addDomain(workspace?.workspace.id as string, 'acme.dev', 1_000);
-
-      const outcome = await copySqliteFiles({ ...files, database, dryRun: false });
-
-      assert.equal(outcome.ok, false);
-      assert.match(outcome.lines[0] ?? '', /the accounts file holds 1 domain\(s\), which the copy does not carry/);
-      assert.deepEqual(await counts(database).catch(() => EMPTY), EMPTY);
-    });
-
     it('refuses a file that a worker of another version wrote', async () => {
       const files = await filesOfAWorker();
       database = await subject.open();
@@ -457,6 +450,12 @@ for (const subject of SUBJECTS) {
     });
   });
 }
+
+describe('the version of the accounts file that the copy takes (FRU-150)', () => {
+  it('is the one of the store that wrote the files, which is a fixture now', () => {
+    assert.equal(ACCOUNTS_FILE_VERSION, VERSION_OF_THE_FILE_STORE);
+  });
+});
 
 describe('the arguments of migrate-to-postgres (FRU-145)', () => {
   it('takes the two files, and --dry-run', () => {

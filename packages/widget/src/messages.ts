@@ -56,6 +56,9 @@ export const ENGLISH = {
   'composer.send': 'Send',
   'composer.sending': 'sending…',
   'composer.sent': 'sent',
+  // A note kept for later rather than sent (FRU-124): the second action, and what it says once done.
+  'composer.keep': 'Keep for later',
+  'composer.kept': 'kept for later',
   'composer.failed': 'did not go through — your text is kept, try again',
   // Why a send failed, when trying again at once will not help (FRU-156).
   'composer.failedWait': 'Too many notes just now. Your text is kept: send it again in a minute.',
@@ -75,9 +78,13 @@ export const ENGLISH = {
 
   'pin.label': '{stage} · {note}',
   'pin.labelUncertain': '{stage} · {note} (approximate position)',
+  'pin.labelDraft': 'Not sent yet · {note}',
 
   'thread.close': 'Close',
   'thread.dialog': 'Feedback {identifier}',
+  'thread.draft': 'Not sent yet',
+  // Must not start like `sidebar.dialog`: both can be open at once.
+  'thread.draftDialog': 'Note not sent yet',
   'thread.noNote': 'No note.',
   'thread.noReplies': 'No reply yet.',
   'thread.replies': 'Replies',
@@ -106,6 +113,10 @@ export const ENGLISH = {
   'sidebar.count': { one: '{count} note', other: '{count} notes' },
   'sidebar.approximate': 'Approximate position',
   'sidebar.detached': 'Element not found on this page',
+  // The notes kept for later in this tab, on every page, and the button that sends them (FRU-124).
+  'sidebar.drafts': 'Kept for later, not sent yet',
+  'sidebar.sendDrafts': { one: 'Send {count} note', other: 'Send the {count} notes' },
+  'sidebar.draftsSent': { one: '{count} note sent', other: '{count} notes sent' },
 
   // The words of the text a reviewer copies (FRU-109). They are labels in front of a value.
   'export.title': 'Feedback on {url}',

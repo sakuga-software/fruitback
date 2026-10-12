@@ -1,4 +1,4 @@
-import { and, desc, eq, exists, gt, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import {
   accountOf,
   connectorOf,
@@ -16,11 +16,12 @@ import type { ClientMap } from './clients.ts';
 import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
 import { account, member, organization, user } from './auth-schema.ts';
-import { connectors, deliveries, domains, email_links, site_destinations, sites } from './postgres-schema.ts';
+import { connectors, deliveries, domains, site_destinations, sites } from './postgres-schema.ts';
 import { StoreError } from './store.ts';
 
 /**
- * The accounts in PostgreSQL (FRU-141): the same interface as `accounts-sqlite.ts`, and the same ids.
+ * The accounts in PostgreSQL (FRU-141), the one place they live since FRU-150. The store on a file
+ * that it took the place of is a test fixture now (`accounts-sqlite.fixture.ts`): same interface, same ids.
  * `account-conformance.test.ts` holds both to the same cases.
  *
  * The statements are written with Drizzle (FRU-180). A site, a connector and what goes with them are
@@ -707,35 +708,6 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       );
 
       return changed.length === 1;
-    },
-
-    async createEmailLink({ codeHash, email, expiresAt }) {
-      const now = Date.now();
-      // Old links go when a new one is made, so the table holds what can still be spent.
-      await run((db) =>
-        db.delete(email_links).where(or(lte(email_links.expires_at, now), isNotNull(email_links.spent_at))),
-      );
-      await run((db) =>
-        db.insert(email_links).values({ code_hash: codeHash, email, created_at: now, expires_at: expiresAt }),
-      );
-    },
-
-    async spendEmailLink(codeHash, now) {
-      given(codeHash, 'spendEmailLink: codeHash');
-      given(now, 'spendEmailLink: now');
-      // One statement decides who spent it: two tabs that open the same link get one sign-in. The
-      // second update waits for the row, reads `spent_at` again, and changes nothing.
-      const rows = await run((db) =>
-        db
-          .update(email_links)
-          .set({ spent_at: now })
-          .where(
-            and(eq(email_links.code_hash, codeHash), isNull(email_links.spent_at), gt(email_links.expires_at, now)),
-          )
-          .returning({ email: email_links.email }),
-      );
-
-      return rows[0]?.email;
     },
 
     async clientMap() {

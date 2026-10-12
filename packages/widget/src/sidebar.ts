@@ -1,3 +1,5 @@
+import { type SendFailure, failureText } from './composer.ts';
+import { type Draft } from './drafts.ts';
 import { type FeedbackEntry } from './export.ts';
 import { deepActiveElement } from './focus.ts';
 import { createIcon } from './icons.ts';
@@ -45,6 +47,13 @@ export type SidebarOptions = {
   readState?: () => ReadState;
   /** The reviewer asked to read the notes again, after a failed read. */
   onRetry?: () => void;
+  /**
+   * The notes kept for later in this tab, on every page (FRU-124). Read on each draw. They are listed
+   * in a group of their own above the notes, with one button that sends them all.
+   */
+  drafts?: () => readonly Draft[];
+  /** Send every draft. Says how many the worker kept, and why the others stay. */
+  onSendDrafts?: () => Promise<{ sent: number; failure?: SendFailure }>;
   document?: Document;
   /** The widget's words (FRU-37). Left out: English, with dates in this document's language. */
   translator?: Translator;
@@ -115,7 +124,51 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   const list = document.createElement('ul');
   list.className = 'fruitback-sidebar-list';
 
-  root.append(head, empty, failedText, failed, list);
+  // The notes kept for later (FRU-124). No board draws this group: it is made of the parts of this
+  // list, a title, rows and the button of « Try again ».
+  const drafted = document.createElement('div');
+  drafted.className = 'fruitback-sidebar-drafts';
+  drafted.dataset.fruitbackDrafts = '';
+  drafted.hidden = true;
+  const draftsTitle = document.createElement('p');
+  draftsTitle.className = 'fruitback-sidebar-drafts-title';
+  const draftList = document.createElement('ul');
+  draftList.className = 'fruitback-sidebar-drafts-list';
+  const sendAll = document.createElement('button');
+  sendAll.type = 'button';
+  sendAll.className = 'fruitback-sidebar-send';
+  sendAll.dataset.fruitbackSendDrafts = '';
+  // Always in the tree: a live region that was hidden announces nothing. It says what the last send did.
+  // `aria-live` without the role: the list has one status, the one of its read (FRU-153).
+  const sentText = document.createElement('p');
+  sentText.className = 'fruitback-sidebar-sent';
+  sentText.dataset.fruitbackDraftsSent = '';
+  sentText.setAttribute('aria-live', 'polite');
+  let sendingDrafts = false;
+  sendAll.addEventListener('click', () => {
+    if (sendingDrafts || options.onSendDrafts === undefined) return;
+    sendingDrafts = true;
+    sentText.textContent = '';
+    draw();
+    void options
+      .onSendDrafts()
+      .catch(() => ({ sent: 0, failure: 'retry' as const }))
+      .then((outcome) => {
+        sendingDrafts = false;
+        // Both when some left and some stay: the rows that went are gone from the group, and the
+        // sentence of the failure alone would not say where.
+        sentText.textContent = [
+          outcome.sent > 0 || outcome.failure === undefined ? t.plural('sidebar.draftsSent', outcome.sent) : '',
+          outcome.failure === undefined ? '' : failureText(t, outcome.failure),
+        ]
+          .filter((part) => part !== '')
+          .join(' — ');
+        draw();
+      });
+  });
+  drafted.append(draftsTitle, draftList, sendAll);
+
+  root.append(head, drafted, sentText, empty, failedText, failed, list);
   options.host.append(style, root);
 
   /** What had focus when the list opened, to give it back. */
@@ -127,6 +180,7 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     const active = deepActiveElement(document);
     const focusedId =
       active !== null && list.contains(active) ? (active as HTMLElement).dataset.fruitbackNote : undefined;
+    drawDrafts();
     const state = options.readState?.() ?? 'read';
     if (state !== 'pending') retrying = false;
     const failing = state === 'failed';
@@ -156,6 +210,35 @@ export function createSidebar(options: SidebarOptions): Sidebar {
       );
       (again ?? close).focus();
     }
+  }
+
+  function drawDrafts(): void {
+    const kept = options.drafts?.() ?? [];
+    const active = deepActiveElement(document);
+    drafted.hidden = kept.length === 0;
+    // No words at all with no draft: a hidden « Send the 0 notes » is still text a reader of the DOM finds.
+    draftsTitle.textContent = kept.length === 0 ? '' : t.text('sidebar.drafts');
+    sendAll.textContent = kept.length === 0 ? '' : t.plural('sidebar.sendDrafts', kept.length);
+    // Busy, not disabled, like « Try again »: a disabled button loses focus.
+    sendAll.setAttribute('aria-disabled', String(sendingDrafts));
+    draftList.replaceChildren(
+      ...kept.map((draft) => {
+        const row = document.createElement('li');
+        row.className = 'fruitback-sidebar-draft';
+        const note = document.createElement('span');
+        note.className = 'fruitback-sidebar-note';
+        note.textContent = excerpt(draft.seed.note) ?? t.text('thread.noNote');
+        // The page, because the drafts of a tab come from every page the reviewer read.
+        const where = document.createElement('span');
+        where.className = 'fruitback-sidebar-meta';
+        where.textContent = draft.seed.page.path;
+        row.append(note, where);
+
+        return row;
+      }),
+    );
+    // All sent: the group goes, and focus goes to what stays.
+    if (kept.length === 0 && active === sendAll) close.focus();
   }
 
   function item({ issue, placement }: FeedbackEntry): HTMLElement {
@@ -301,15 +384,24 @@ const STYLES = `
   font-size: 15px;
   cursor: pointer;
 }
-.fruitback-sidebar-empty { padding: 4px 14px 14px; color: var(--fruitback-color-text-muted); }
+/* The dock sits over the bottom of the sheet on a phone: under the drafts, these words must clear it (FRU-124). */
+.fruitback-sidebar-empty { padding: 4px 14px 64px; color: var(--fruitback-color-text-muted); }
+.fruitback-sidebar-drafts { margin: 0 8px 8px; padding: 10px; border-radius: var(--fruitback-radius-md); box-shadow: inset 0 0 0 1px var(--fruitback-color-border); }
+.fruitback-sidebar-drafts[hidden] { display: none; }
+.fruitback-sidebar-drafts-title { margin: 0 0 6px; font-weight: 600; font-size: 12px; }
+.fruitback-sidebar-drafts-list { margin: 0 0 10px; padding: 0; list-style: none; }
+.fruitback-sidebar-draft { display: flex; flex-direction: column; gap: 2px; padding: 4px 0; }
+.fruitback-sidebar-draft + .fruitback-sidebar-draft { border-top: 1px solid var(--fruitback-color-border); }
 .fruitback-sidebar-empty[hidden] { display: none; }
 .fruitback-sidebar-failed-text { margin: 0; padding: 4px 14px 8px; }
 .fruitback-sidebar-failed-text:empty { padding: 0; }
 /* The dock sits over the bottom of the sheet on a phone, as over the list. */
 .fruitback-sidebar-failed { padding: 0 14px 64px; }
 .fruitback-sidebar-failed[hidden] { display: none; }
-.fruitback-sidebar-retry[aria-disabled='true'] { opacity: 0.6; cursor: progress; }
-.fruitback-sidebar-retry {
+.fruitback-sidebar-retry[aria-disabled='true'], .fruitback-sidebar-send[aria-disabled='true'] { opacity: 0.6; cursor: progress; }
+.fruitback-sidebar-sent { margin: 0; padding: 0 14px 8px; }
+.fruitback-sidebar-sent:empty { padding: 0; }
+.fruitback-sidebar-retry, .fruitback-sidebar-send {
   padding: 6px 12px;
   border: 1px solid var(--fruitback-color-text-muted);
   border-radius: var(--fruitback-radius-sm);

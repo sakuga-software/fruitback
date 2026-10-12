@@ -1,52 +1,27 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import type { AccountStore, ConnectorAttention } from './accounts.ts';
-import { closeAccountConnections, createSqliteAccountStore } from './accounts-sqlite.ts';
-import { handleRequest } from './app.ts';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
 import { noteConnectorCall, troubleOf, watchedStore } from './connector-health.ts';
-import type { WorkerEnv } from './env.ts';
-import { signIdentityToken } from './identity.ts';
+import { type CallOptions, type World, callOn, signInTo, worlds } from './console-world.fixture.ts';
 import { createMemoryKv } from './kv.ts';
 import { LinearKeyForbidden, LinearKeyRefused } from './linear.ts';
 import { LinearConnectionEnded } from './linear-oauth.ts';
-import { closeSessionConnections } from './session-sqlite.ts';
 import { type SeedStore, StoreError } from './store.ts';
 
-const SECRET = 'a-worker-secret-of-exactly-enough';
 const SECRETS_KEY = 'another-secret-that-opens-the-connectors';
-const CONSOLE = 'https://app.fruitback.test';
 const SITE = 'https://staging.acme.dev';
 const PAGE = `${SITE}/pricing`;
 const LINEAR_KEY = 'lin_api_the_real_key_of_acme';
-const directories: string[] = [];
+const opened = worlds();
 
 afterEach(() => {
   mock.restoreAll();
-  closeAccountConnections();
-  closeSessionConnections();
-  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
 });
 
-function envWith(): WorkerEnv {
-  const directory = mkdtempSync(join(tmpdir(), 'fruitback-connector-health-'));
-  directories.push(directory);
-
-  return {
-    FRUITBACK_STORE: 'sqlite',
-    FRUITBACK_SQLITE_PATH: join(directory, 'fb.db'),
-    ALLOWED_ORIGINS: CONSOLE,
-    FRUITBACK_IDENTITY_SECRET: SECRET,
-    FRUITBACK_SECRETS_KEY: SECRETS_KEY,
-    FRUITBACK_SESSION_PATH: join(directory, 'sessions.db'),
-    FRUITBACK_ACCOUNTS_PATH: join(directory, 'accounts.db'),
-    FRUITBACK_CONSOLE_URL: CONSOLE,
-    // The path of the SQLite store is that store's own variable, so `WorkerEnv` does not name it.
-  } as WorkerEnv;
+function envWith(): Promise<World> {
+  return opened({ env: { FRUITBACK_SECRETS_KEY: SECRETS_KEY } });
 }
 
 /**
@@ -103,36 +78,16 @@ function linearWith() {
   return world;
 }
 
-let ip = 0;
-function call(
-  env: WorkerEnv,
-  method: string,
-  path: string,
-  options: { token?: string; body?: unknown; origin?: string } = {},
-): Promise<Response> {
-  ip += 1;
-
-  return handleRequest(
-    new Request(`https://api.fruitback.test${path}`, {
-      method,
-      headers: {
-        Origin: options.origin ?? CONSOLE,
-        ...(options.token === undefined ? {} : { Authorization: `Bearer ${options.token}` }),
-        ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
-      },
-      ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
-    }),
-    env,
-    // A new `Kv` for each call: a read that the cache answers asks the tracker nothing.
-    { clientIp: `203.0.113.${ip % 250}`, kv: createMemoryKv() },
-  );
+// A new `Kv` for each call: a read that the cache answers asks the tracker nothing.
+function call(env: World, method: string, path: string, options: CallOptions = {}): Promise<Response> {
+  return callOn(env, method, path, options, { kv: createMemoryKv() });
 }
 
 /** A workspace whose one site sends its notes to Linear, connected with a key through the console. */
-async function acme(env: WorkerEnv) {
-  const accounts = createSqliteAccountStore(env.FRUITBACK_ACCOUNTS_PATH as string);
-  const account = await accounts.signIn({ provider: 'email', subject: 'owner@acme.dev', email: 'owner@acme.dev' });
-  const token = await signIdentityToken({ sub: account.id, exp: Math.floor(Date.now() / 1000) + 600 }, SECRET);
+async function acme(env: World) {
+  const accounts = env.accounts;
+  const { id, token } = await signInTo(env, 'owner@acme.dev');
+  const account = { id };
   const workspace = await accounts.createWorkspace('Acme', account.id);
   const site = await accounts.addSite(workspace.id, { origin: SITE, visibility: 'everyone' });
   const base = `/console/workspaces/${workspace.id}`;
@@ -164,7 +119,7 @@ async function acme(env: WorkerEnv) {
 
 describe('a connector that its tracker refuses (FRU-102)', () => {
   it('answers 502 for a key revoked at Linear, writes nowhere else, and needs attention', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = linearWith();
     const world = await acme(env);
     assert.equal((await world.write()).status, 201);
@@ -185,7 +140,7 @@ describe('a connector that its tracker refuses (FRU-102)', () => {
   });
 
   it('needs attention after a read too: a page that only shows its pins asks the tracker as well', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = linearWith();
     const world = await acme(env);
 
@@ -196,7 +151,7 @@ describe('a connector that its tracker refuses (FRU-102)', () => {
   });
 
   it('works again at the first call Linear answers', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = linearWith();
     const world = await acme(env);
     linear.mode = 'revoked';
@@ -210,7 +165,7 @@ describe('a connector that its tracker refuses (FRU-102)', () => {
   });
 
   it('says a key that may not write apart from a key that is refused', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = linearWith();
     const world = await acme(env);
 
@@ -221,7 +176,7 @@ describe('a connector that its tracker refuses (FRU-102)', () => {
   });
 
   it('needs no attention for a Linear that is down: nobody of the workspace can fix that', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = linearWith();
     const world = await acme(env);
 
@@ -238,7 +193,7 @@ describe('a connector that its tracker refuses (FRU-102)', () => {
   });
 
   it('keeps the moment of the first refusal, so the console says since when the notes do not leave', async () => {
-    const accounts = createSqliteAccountStore(envWith().FRUITBACK_ACCOUNTS_PATH as string);
+    const { accounts } = await envWith();
     const account = await accounts.signIn({ provider: 'email', subject: 'a@acme.dev', email: 'a@acme.dev' });
     const workspace = await accounts.createWorkspace('Acme', account.id);
     const { id } = await accounts.addConnector(workspace.id, { kind: 'linear', label: 'Linear · A', sealed: 'x' });
@@ -257,7 +212,7 @@ describe('a connector that its tracker refuses (FRU-102)', () => {
   });
 
   it('sees the refusal when somebody opens the panel of the connector, with no note written', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = linearWith();
     const world = await acme(env);
 

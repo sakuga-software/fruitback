@@ -1,48 +1,24 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { type Role, destinationId } from './accounts.ts';
-import { closeAccountConnections, createSqliteAccountStore } from './accounts-sqlite.ts';
-import { handleRequest } from './app.ts';
-import type { WorkerEnv } from './env.ts';
+import { IDENTITY_SECRET } from './auth-worker.fixture.ts';
+import { type CallOptions, type World, callOn, memberOf, signInTo, worlds } from './console-world.fixture.ts';
 import { signIdentityToken } from './identity.ts';
 import { type Kv, createMemoryKv } from './kv.ts';
-import { closeSessionConnections } from './session-sqlite.ts';
 
-const SECRET = 'a-worker-secret-of-exactly-enough';
 const SECRETS_KEY = 'another-secret-that-opens-the-connectors';
-const CONSOLE = 'https://app.fruitback.test';
 const SITE = 'https://staging.acme.dev';
 const PAGE = `${SITE}/pricing`;
 const LINEAR_KEY = 'lin_api_the_real_key_of_acme';
-const directories: string[] = [];
+const opened = worlds();
 
 afterEach(() => {
   mock.restoreAll();
-  closeAccountConnections();
-  closeSessionConnections();
-  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
 });
 
-function envWith(): WorkerEnv {
-  const directory = mkdtempSync(join(tmpdir(), 'fruitback-destinations-'));
-  directories.push(directory);
-
-  return {
-    FRUITBACK_STORE: 'sqlite',
-    FRUITBACK_SQLITE_PATH: join(directory, 'fb.db'),
-    ALLOWED_ORIGINS: CONSOLE,
-    FRUITBACK_IDENTITY_SECRET: SECRET,
-    FRUITBACK_SECRETS_KEY: SECRETS_KEY,
-    FRUITBACK_SESSION_PATH: join(directory, 'sessions.db'),
-    FRUITBACK_ACCOUNTS_PATH: join(directory, 'accounts.db'),
-    FRUITBACK_CONSOLE_URL: CONSOLE,
-    // The path of the SQLite store is that store's own variable, so `WorkerEnv` does not name it.
-  } as WorkerEnv;
+function envWith(): Promise<World> {
+  return opened({ env: { FRUITBACK_SECRETS_KEY: SECRETS_KEY } });
 }
 
 /** Every text a filter of Linear looks for in a description, wherever the clause is. */
@@ -140,55 +116,35 @@ function twoTeams() {
   return { issues, reads, answers };
 }
 
-let ip = 0;
+/** A request with a cache of its own, unless it gives one: `kv` is the cache two requests share. */
 function call(
-  env: WorkerEnv,
+  env: World,
   method: string,
   path: string,
-  options: { token?: string; body?: unknown; origin?: string; kv?: Kv } = {},
+  { kv, ...options }: CallOptions & { kv?: Kv } = {},
 ): Promise<Response> {
-  ip += 1;
-
-  return handleRequest(
-    new Request(`https://api.fruitback.test${path}`, {
-      method,
-      headers: {
-        Origin: options.origin ?? CONSOLE,
-        ...(options.token === undefined ? {} : { Authorization: `Bearer ${options.token}` }),
-        ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
-      },
-      ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
-    }),
-    env,
-    { clientIp: `203.0.113.${ip % 250}`, kv: options.kv ?? createMemoryKv() },
-  );
+  return callOn(env, method, path, options, { kv: kv ?? createMemoryKv() });
 }
 
 type Offered = { id: string; label?: string }[];
 
-/** A workspace with a Linear connector and one site. Each person has a console token and a session. */
-async function acme(env: WorkerEnv) {
-  const accounts = createSqliteAccountStore(env.FRUITBACK_ACCOUNTS_PATH as string);
+/** A workspace with a Linear connector and one site. Each person has a console cookie and a session. */
+async function acme(env: World) {
+  const accounts = env.accounts;
   const exp = Math.floor(Date.now() / 1000) + 600;
-  const owner = await accounts.signIn({ provider: 'email', subject: 'owner@acme.dev', email: 'owner@acme.dev' });
-  const workspace = await accounts.createWorkspace('Acme', owner.id);
+  const { id: owner, token: consoleToken } = await signInTo(env, 'owner@acme.dev');
+  const workspace = await accounts.createWorkspace('Acme', owner);
   const site = await accounts.addSite(workspace.id, { origin: SITE, visibility: 'everyone' });
   const base = `/console/workspaces/${workspace.id}`;
-  const consoleToken = await signIdentityToken({ sub: owner.id, exp }, SECRET);
   /** The token of an extension session: the worker key, and the workspace of the session. */
-  const sessionOf = (account: string, ws = workspace.id) => signIdentityToken({ sub: account, ws, exp }, SECRET);
-  /** Somebody of the workspace with this role. The file is written by hand: no route invites yet (FRU-104). */
+  const sessionOf = (account: string, ws = workspace.id) =>
+    signIdentityToken({ sub: account, ws, exp }, IDENTITY_SECRET);
+  /** Somebody of the workspace with this role: the row an accepted invitation leaves. */
   const person = async (role: Role) => {
-    const email = `${role}@acme.dev`;
-    const account = await accounts.signIn({ provider: 'email', subject: email, email });
-    closeAccountConnections();
-    const database = new DatabaseSync(env.FRUITBACK_ACCOUNTS_PATH as string);
-    database
-      .prepare('INSERT INTO members (workspace_id, account_id, role, created_at) VALUES (?, ?, ?, ?)')
-      .run(workspace.id, account.id, role, Date.now());
-    database.close();
+    const { id, token } = await signInTo(env, `${role}@acme.dev`);
+    await memberOf(env, workspace.id, id, role);
 
-    return { account, session: await sessionOf(account.id) };
+    return { account: { id }, console: token, session: await sessionOf(id) };
   };
 
   const added = await call(env, 'POST', `${base}/connectors`, {
@@ -239,7 +195,7 @@ async function acme(env: WorkerEnv) {
     base,
     connector,
     consoleToken,
-    ownerSession: await sessionOf(owner.id),
+    ownerSession: await sessionOf(owner),
     sessionOf,
     person,
     place,
@@ -253,7 +209,7 @@ const SUPPORT = 'team_support';
 
 describe('a site that can send to several places (FRU-123)', () => {
   it('keeps the places in order, each with the label the tracker gives, and the first is the one of the client', async () => {
-    const env = envWith();
+    const env = await envWith();
     twoTeams();
     const world = await acme(env);
 
@@ -274,7 +230,7 @@ describe('a site that can send to several places (FRU-123)', () => {
   });
 
   it('refuses a sixth place, the same place twice, and a team the key does not reach, and keeps nothing', async () => {
-    const env = envWith();
+    const env = await envWith();
     twoTeams();
     const world = await acme(env);
     const one = { connector: world.connector, teamId: DESIGN };
@@ -290,7 +246,7 @@ describe('a site that can send to several places (FRU-123)', () => {
 
   it('keeps the one destination with no label, and keeps no list, when the tracker refuses the key or is down', async () => {
     for (const as of ['revoked', 'down'] as const) {
-      const env = envWith();
+      const env = await envWith();
       const linear = twoTeams();
       const world = await acme(env);
       const one = { connector: world.connector, teamId: DESIGN };
@@ -313,13 +269,12 @@ describe('a site that can send to several places (FRU-123)', () => {
       assert.deepEqual((await world.accounts.sites(world.workspace.id))[0]?.destinations, [one], as);
 
       mock.restoreAll();
-      closeAccountConnections();
     }
   });
 
   it('notes a refused key on the connector from both routes, as the read of its teams does, and an answer ends it', async () => {
     /** What the console reads of the connector: the reason it needs somebody, or nothing. */
-    const reasonOf = async (world: Awaited<ReturnType<typeof acme>>, env: WorkerEnv) => {
+    const reasonOf = async (world: Awaited<ReturnType<typeof acme>>, env: World) => {
       const listed = await call(env, 'GET', `${world.base}/connectors`, { token: world.consoleToken });
       const body = (await listed.json()) as { connectors: { attention?: { reason: string } }[] };
 
@@ -327,7 +282,7 @@ describe('a site that can send to several places (FRU-123)', () => {
     };
     for (const route of ['list', 'one'] as const) {
       for (const as of ['revoked', 'down'] as const) {
-        const env = envWith();
+        const env = await envWith();
         const linear = twoTeams();
         const world = await acme(env);
         const one = { connector: world.connector, teamId: DESIGN };
@@ -350,13 +305,12 @@ describe('a site that can send to several places (FRU-123)', () => {
         assert.equal(await reasonOf(world, env), undefined, `${route} ${as}`);
 
         mock.restoreAll();
-        closeAccountConnections();
       }
     }
   });
 
   it('refuses one destination for a site that has two places or more, and keeps its list', async () => {
-    const env = envWith();
+    const env = await envWith();
     twoTeams();
     const world = await acme(env);
     const both = [
@@ -388,20 +342,16 @@ describe('a site that can send to several places (FRU-123)', () => {
   });
 
   it('lets an owner set the places, and not a member', async () => {
-    const env = envWith();
+    const env = await envWith();
     twoTeams();
     const world = await acme(env);
     const member = await world.person('member');
-    const memberConsole = await signIdentityToken(
-      { sub: member.account.id, exp: Math.floor(Date.now() / 1000) + 600 },
-      SECRET,
-    );
 
-    assert.equal((await world.place([{ connector: world.connector, teamId: DESIGN }], memberConsole)).status, 403);
+    assert.equal((await world.place([{ connector: world.connector, teamId: DESIGN }], member.console)).status, 403);
   });
 
   it('gives the next place to a site whose first connector goes', async () => {
-    const env = envWith();
+    const env = await envWith();
     twoTeams();
     const world = await acme(env);
     const second = await call(env, 'POST', `${world.base}/connectors`, {
@@ -421,36 +371,10 @@ describe('a site that can send to several places (FRU-123)', () => {
       [[other, SUPPORT]],
     );
   });
-
-  it('keeps the one destination a site had before the list existed', async () => {
-    const env = envWith();
-    twoTeams();
-    const world = await acme(env);
-    // The file as the version before held it: the three columns of the site, and no table.
-    closeAccountConnections();
-    const database = new DatabaseSync(env.FRUITBACK_ACCOUNTS_PATH as string);
-    const { user_version: version } = database.prepare('PRAGMA user_version').get() as { user_version: number };
-    database.exec('DROP TABLE site_destinations');
-    // And the domains came after both (FRU-103).
-    database.exec('DROP TABLE domains');
-    // The settings of a connector came after the list (FRU-102): the file of before had neither.
-    database.exec('ALTER TABLE connectors DROP COLUMN settings');
-    database
-      .prepare("UPDATE sites SET connector_id = ?, team_id = 'team_design', project_id = 'proj_site' WHERE id = ?")
-      .run(world.connector, world.site.id);
-    database.exec(`PRAGMA user_version = ${version - 3}`);
-    database.close();
-
-    const after = createSqliteAccountStore(env.FRUITBACK_ACCOUNTS_PATH as string);
-
-    assert.deepEqual((await after.sites(world.workspace.id))[0]?.destinations, [
-      { connector: world.connector, teamId: DESIGN, projectId: 'proj_site' },
-    ]);
-  });
 });
 
 describe('who reads the places of a site (FRU-123)', () => {
-  async function placed(env: WorkerEnv) {
+  async function placed(env: World) {
     const world = await acme(env);
     await world.place([
       { connector: world.connector, teamId: DESIGN },
@@ -461,7 +385,7 @@ describe('who reads the places of a site (FRU-123)', () => {
   }
 
   it('offers them to a member, by a name that says nothing of the connector or of the team', async () => {
-    const env = envWith();
+    const env = await envWith();
     twoTeams();
     const world = await placed(env);
     const member = await world.person('member');
@@ -484,7 +408,7 @@ describe('who reads the places of a site (FRU-123)', () => {
   });
 
   it('offers them to nobody else: a visitor, a guest, a session of another workspace, a token of the site', async () => {
-    const env = envWith();
+    const env = await envWith();
     twoTeams();
     const world = await placed(env);
     const guest = await world.person('guest');
@@ -503,7 +427,7 @@ describe('who reads the places of a site (FRU-123)', () => {
   });
 
   it('never keeps them in the cached answer: a visitor who reads after a member gets none', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = twoTeams();
     const world = await placed(env);
     const member = await world.person('member');
@@ -520,7 +444,7 @@ describe('who reads the places of a site (FRU-123)', () => {
   });
 
   it('offers nothing for a site that keeps its notes in the worker', async () => {
-    const env = envWith();
+    const env = await envWith();
     twoTeams();
     const world = await acme(env);
 
@@ -529,7 +453,7 @@ describe('who reads the places of a site (FRU-123)', () => {
 });
 
 describe('a note that goes where a member chose (FRU-123)', () => {
-  async function placed(env: WorkerEnv) {
+  async function placed(env: World) {
     const world = await acme(env);
     await world.place([
       { connector: world.connector, teamId: DESIGN },
@@ -541,7 +465,7 @@ describe('a note that goes where a member chose (FRU-123)', () => {
   }
 
   it('writes in the place chosen, in the first one when nobody chose, and reads the page from both', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = twoTeams();
     const { world, support } = await placed(env);
     const member = await world.person('member');
@@ -557,7 +481,7 @@ describe('a note that goes where a member chose (FRU-123)', () => {
   });
 
   it('refuses a choice from somebody who may not see the tracker, and a place the site does not have', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = twoTeams();
     const { world, support } = await placed(env);
     const guest = await world.person('guest');
@@ -577,7 +501,7 @@ describe('a note that goes where a member chose (FRU-123)', () => {
   });
 
   it('shows each note once when two places are in one team', async () => {
-    const env = envWith();
+    const env = await envWith();
     twoTeams();
     const world = await acme(env);
     await world.place([
@@ -591,7 +515,7 @@ describe('a note that goes where a member chose (FRU-123)', () => {
   });
 
   it('asks the tracker once for a site with one place, as before', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = twoTeams();
     const world = await acme(env);
     await world.place([{ connector: world.connector, teamId: DESIGN }]);

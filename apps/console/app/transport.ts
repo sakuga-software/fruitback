@@ -3,7 +3,7 @@
  *
  * Every request of the console goes through `reach`, with the cookies of the worker
  * (`credentials: 'include'`): the cookie of a session of better-auth (FRU-148), and the refresh
- * cookie of the path of before.
+ * cookie of a session.
  */
 
 export const API =

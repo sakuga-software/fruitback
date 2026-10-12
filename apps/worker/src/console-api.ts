@@ -19,7 +19,6 @@ import {
   readConnectorSettings,
   readLocaleTag,
 } from './accounts.ts';
-import { readBearerToken, verifyIdentityToken } from './identity.ts';
 import {
   type ProofState,
   type TxtResolver,
@@ -44,16 +43,14 @@ import { PAIRING_TTL_SECONDS, type SessionStore, createPairing } from './session
  * What the console reads and writes (FRU-99): the account, its workspaces, their sites, and the code
  * that connects a browser (FRU-100).
  *
- * **Every call is a person, checked twice.** The access token says who, and the role this person has
- * in the workspace, read from the accounts on every call, says what. A token says nothing about a
- * role: a member removed a minute ago still holds a token for ten minutes, and the role is what stops
- * them.
+ * **Every call is a person, checked twice.** The cookie of a session of better-auth says who, read
+ * in the database at each call, and the role this person has in the workspace, read from the
+ * accounts on every call, says what: a member removed a minute ago is refused at once.
  */
 
 export type ConsoleApiContext = {
   accounts: AccountStore;
   sessions: SessionStore;
-  secret: string;
   now?: number;
   /** What opens and closes the connector keys (FRU-121). Absent, a workspace connects no tracker. */
   secretsKey?: string;
@@ -64,7 +61,7 @@ export type ConsoleApiContext = {
   publicUrl?: string;
   /**
    * The person of the cookie of better-auth, or `undefined` (FRU-147). Absent: better-auth is off,
-   * and a call takes the token of before only.
+   * and every call answers `401`: nobody signs in to the console without it (FRU-150).
    */
   cookieSession?: (request: Request) => Promise<string | undefined>;
   /** `FRUITBACK_CONSOLE_URL`: the one origin a call with the cookie may change something from. */
@@ -73,8 +70,7 @@ export type ConsoleApiContext = {
   resolveTxt?: TxtResolver;
   /**
    * Makes a workspace for the person of the cookie of this request, through the organization plugin
-   * of better-auth (FRU-149). Absent: better-auth is off, and the store makes it, as for a call that
-   * came with the token of before.
+   * of better-auth (FRU-149). Absent, the store makes it: a test that gives no plugin.
    */
   createWorkspace?: (request: Request, name: string) => Promise<Workspace>;
 };
@@ -307,39 +303,18 @@ const WORKSPACE_PATH = /^\/console\/workspaces\/([A-Za-z0-9_-]+)(\/.*)?$/;
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 /**
- * Who calls (FRU-147): the token of before in `Authorization`, or the cookie of a session of
- * better-auth. The token wins when both are there: a page of another site cannot write that header.
+ * Who calls: the person of the cookie of a session of better-auth (FRU-147). Since FRU-150 it is the
+ * one way: a token in `Authorization` names nobody on these routes.
  *
- * **With the cookie, a call that changes something must come from the console**: its `Origin`, and
- * not a request with none. The browser sends the cookie with a request of any page of the same site
- * as the worker (`demo.fruitback.com` is one), whatever `SameSite` says, so these routes are open to
- * CSRF from that slice on. `consoleCors` refuses another origin before this; a request with no
- * `Origin` reaches this line, and is refused here.
+ * **A call that changes something must come from the console**: its `Origin`, and not a request with
+ * none. The browser sends the cookie with a request of any page of the same site as the worker
+ * (`demo.fruitback.com` is one), whatever `SameSite` says. `consoleCors` refuses another origin
+ * before this; a request with no `Origin` reaches this line, and is refused here.
  */
 async function callerOf(
   request: Request,
   context: ConsoleApiContext,
-): Promise<
-  { ok: true; subject: string; by: 'token' | 'cookie' } | { ok: false; status: number; body: Record<string, string> }
-> {
-  const token = readBearerToken(request.headers.get('Authorization'));
-  if (token !== undefined) {
-    const verified = await verifyIdentityToken(token, context.secret, context.now);
-    if (!verified.ok) return { ok: false, status: 401, body: { error: 'identity-required', reason: verified.reason } };
-    const subject = verified.reporter.id;
-    if (subject === undefined) {
-      return { ok: false, status: 401, body: { error: 'identity-required', reason: 'invalid-claims' } };
-    }
-    // FRU-202: only the session of an extension carries `ws`, and the extension calls no route here.
-    // Its token is good for the notes of its own workspace. Without this check it opened every
-    // workspace of the person here, with the role of the person.
-    if (verified.workspace !== undefined) {
-      return { ok: false, status: 401, body: { error: 'identity-required', reason: 'not-a-console-session' } };
-    }
-
-    return { ok: true, subject, by: 'token' };
-  }
-
+): Promise<{ ok: true; subject: string } | { ok: false; status: number; body: Record<string, string> }> {
   const subject = context.cookieSession === undefined ? undefined : await context.cookieSession(request);
   if (subject === undefined) return { ok: false, status: 401, body: { error: 'identity-required' } };
   const origin = context.consoleUrl === undefined ? undefined : new URL(context.consoleUrl).origin;
@@ -347,7 +322,7 @@ async function callerOf(
     return { ok: false, status: 403, body: { error: 'origin-not-allowed' } };
   }
 
-  return { ok: true, subject, by: 'cookie' };
+  return { ok: true, subject };
 }
 
 /**
@@ -399,13 +374,11 @@ export async function handleConsoleApi(
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
     const name = workspaceName((await readBody(request))?.name);
     if (name === undefined) return json(400, { error: 'invalid-name' }, headers);
-    // By the organization plugin for somebody of the cookie (FRU-149): its hooks see the workspace
-    // and its first member. A call with the token of before has no session of better-auth to make it
-    // for, and the store writes the same two rows.
+    // By the organization plugin (FRU-149): its hooks see the workspace and its first member.
     const workspace =
-      identified.by === 'cookie' && context.createWorkspace !== undefined
-        ? await context.createWorkspace(request, name)
-        : await context.accounts.createWorkspace(name, account.id);
+      context.createWorkspace === undefined
+        ? await context.accounts.createWorkspace(name, account.id)
+        : await context.createWorkspace(request, name);
 
     return json(201, { ...workspace, role: 'owner' }, headers);
   }

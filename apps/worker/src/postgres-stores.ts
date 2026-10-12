@@ -86,8 +86,6 @@ export function postgresAccountStore(url: string): AccountStore {
     setPreviews: true,
     deleteWorkspace: true,
     clientMap: true,
-    createEmailLink: true,
-    spendEmailLink: true,
   });
 }
 

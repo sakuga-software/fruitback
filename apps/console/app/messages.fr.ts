@@ -162,8 +162,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Members: 'Membres',
   'Who can see and leave feedback, and who can change the workspace.':
     'Qui peut voir et laisser des retours, et qui peut modifier le workspace.',
-  'Invitations come after the beta. Until then, each person signs in and makes their own workspace.':
-    'Les invitations arrivent après la bêta. D’ici là, chacun se connecte et crée son propre workspace.',
   Invite: 'Inviter',
   'Role of the person to invite': 'Rôle de la personne à inviter',
   'The person signs in with that address, and joins. Guests, who see one site only, come later.':
@@ -192,8 +190,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'This person is already a member of the workspace.': 'Cette personne est déjà membre de l’espace de travail.',
   'This address is invited already. Send the invitation again from its row.':
     'Cette adresse est déjà invitée. Renvoyez l’invitation depuis sa ligne.',
-  'This address received three invitations in the last fifteen minutes. Wait, then send it again.':
-    'Cette adresse a reçu trois invitations dans le dernier quart d’heure. Attendez, puis renvoyez-la.',
+  'Invitation kept for {email}, but no message was sent: this workspace sent that address three in fifteen minutes. Send them this link:':
+    'Invitation gardée pour {email}, mais aucun message n’est parti : cet espace a déjà écrit trois fois à cette adresse en un quart d’heure. Envoyez-lui ce lien :',
   'The invitation is kept, but its message did not leave. Send it again from its row.':
     'L’invitation est gardée, mais son message n’est pas parti. Renvoyez-la depuis sa ligne.',
   'A workspace has a hundred invitations waiting at most. Cancel some first.':

@@ -20,7 +20,6 @@ async function stubWorker(page: Page, locale: 'en' | 'fr'): Promise<void> {
   await page.route(`${WORKER_ORIGIN}/**`, (route) => {
     const { pathname } = new URL(route.request().url());
     const json = (body: unknown) => route.fulfill({ json: body });
-    if (pathname === '/console/session/refresh') return json({ accessToken: 'token' });
     if (pathname === '/console/me') return json(me);
     if (pathname === '/console/workspaces/w1/sites') return json(sites);
     if (pathname === '/console/workspaces/w1/connectors') return json({ connectors: [], available: true });
@@ -78,7 +77,6 @@ async function stubSetup(page: Page, signedIn: boolean): Promise<void> {
   await page.route(`${WORKER_ORIGIN}/**`, (route) => {
     const { pathname } = new URL(route.request().url());
     const json = (body: unknown, status = 200) => route.fulfill({ status, json: body });
-    if (pathname === '/console/session/refresh') return signedIn ? json({ accessToken: 'token' }) : json({}, 401);
     if (pathname === '/console/me') return signedIn ? json(me) : json({ error: 'unauthorized' }, 401);
     if (pathname === '/console/workspaces/w1/sites') return json(site, 201);
     if (pathname === '/auth/providers') return json({});

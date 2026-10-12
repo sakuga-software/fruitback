@@ -18,7 +18,6 @@ async function stubWorker(page: Page): Promise<void> {
   await page.route(`${WORKER_ORIGIN}/**`, (route) => {
     const { pathname } = new URL(route.request().url());
     const json = (body: unknown) => route.fulfill({ json: body });
-    if (pathname === '/console/session/refresh') return json({ accessToken: 'token' });
     if (pathname === '/console/me') return json(me);
     if (pathname === '/auth/providers') return json({});
 

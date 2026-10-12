@@ -158,12 +158,18 @@ const MIGRATIONS: readonly string[] = [
   `
   ALTER TABLE connectors ADD COLUMN settings TEXT NOT NULL DEFAULT '{}';
   `,
-  // The domains a workspace says it owns, and what the DNS said of each (FRU-103): `domain-proof.ts`.
-  // `verified_at` NULL: never proven. `lost_at` is the first answer of the DNS without the record.
-  // `previews_site_id` names the one site whose previews the domain covers. A table of its own, and
-  // no column on `sites`: the tables that `migrate-to-postgres` copies do not change.
-  `
-  CREATE TABLE domains (
+];
+
+/**
+ * The domains a workspace says it owns (FRU-103), for the conformance cases only.
+ *
+ * WARNING: not a migration, and it must not become one. The domains came after the accounts left the
+ * file (FRU-150): no worker ever wrote a file that holds them, and `migrate-to-postgres` copies a
+ * file at `ACCOUNTS_FILE_VERSION`, which a real file would then not be. The table is made beside the
+ * migrations, each time the file opens, and the version of the file does not move.
+ */
+const DOMAINS_OF_THE_FIXTURE = `
+  CREATE TABLE IF NOT EXISTS domains (
     id TEXT PRIMARY KEY,
     workspace_id TEXT NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
     domain TEXT NOT NULL,
@@ -174,11 +180,7 @@ const MIGRATIONS: readonly string[] = [
     previews_site_id TEXT REFERENCES sites (id) ON DELETE SET NULL,
     UNIQUE (workspace_id, domain)
   );
-
-  CREATE INDEX domains_by_check ON domains (checked_at);
-  CREATE INDEX domains_by_site ON domains (previews_site_id);
-  `,
-];
+`;
 
 /** The `user_version` of a accounts file that this worker migrated: what `migrate-to-postgres` copies (FRU-145). */
 export const ACCOUNTS_FILE_VERSION = MIGRATIONS.length;
@@ -202,6 +204,7 @@ function connect(path: string): DatabaseSync {
     // turns this on by default, and it is written anyway: the cascade is the rule, not a default.
     database.exec('PRAGMA foreign_keys = ON');
     migrate(database);
+    database.exec(DOMAINS_OF_THE_FIXTURE);
   } catch (error) {
     database.close();
     throw new StoreError(`Account store could not initialise ${path}: ${String(error)}`);
@@ -677,31 +680,6 @@ export function createSqliteAccountStore(path: string): AccountStore {
         database.exec('ROLLBACK');
         throw error;
       }
-    },
-
-    async createEmailLink({ codeHash, email, expiresAt }) {
-      const database = connect(path);
-      const now = Date.now();
-      // Old links go when a new one is made, so the table holds what can still be spent.
-      database.prepare('DELETE FROM email_links WHERE expires_at <= ? OR spent_at IS NOT NULL').run(now);
-      database
-        .prepare('INSERT INTO email_links (code_hash, email, created_at, expires_at) VALUES (?, ?, ?, ?)')
-        .run(codeHash, email, now, expiresAt);
-    },
-
-    async spendEmailLink(codeHash, now) {
-      const database = connect(path);
-      // One statement decides who spent it: two tabs that open the same link get one sign-in.
-      const spent = database
-        .prepare('UPDATE email_links SET spent_at = ? WHERE code_hash = ? AND spent_at IS NULL AND expires_at > ?')
-        .run(now, codeHash, now);
-      if (spent.changes !== 1) return undefined;
-
-      const row = database.prepare('SELECT email FROM email_links WHERE code_hash = ?').get(codeHash) as
-        | { email: unknown }
-        | undefined;
-
-      return typeof row?.email === 'string' ? row.email : undefined;
     },
 
     async clientMap() {

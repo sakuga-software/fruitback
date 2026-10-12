@@ -3,8 +3,17 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { closeAccountConnections, createSqliteAccountStore } from './accounts-sqlite.ts';
-import { type RequestContext, handleRequest } from './app.ts';
+import { closeAccountConnections, createSqliteAccountStore } from './accounts-sqlite.fixture.ts';
+import type { RequestContext } from './app.ts';
+import {
+  type CallOptions,
+  type World,
+  callOn,
+  memberOf,
+  signInTo,
+  workspaceIn,
+  worlds,
+} from './console-world.fixture.ts';
 import {
   PROOF_GRACE_MS,
   RECHECK_MS,
@@ -15,10 +24,6 @@ import {
   readDomain,
   recheckDomains,
 } from './domain-proof.ts';
-import type { WorkerEnv } from './env.ts';
-import { createMemoryKv } from './kv.ts';
-import type { MailMessage, Mailer } from './mail.ts';
-import { closeSessionConnections, createSqliteSessionStore } from './session-sqlite.ts';
 import { createPairing, redeemPairing } from './session.ts';
 
 /**
@@ -26,14 +31,13 @@ import { createPairing, redeemPairing } from './session.ts';
  * here is a double that holds a zone in a map, and `noRealDns` fails a test that would reach one.
  */
 
-const SECRET = 'a-worker-secret-of-exactly-enough';
-const CONSOLE = 'https://app.fruitback.test';
 const EXTENSION = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
 const directories: string[] = [];
 
+const envWith = worlds();
+
 afterEach(() => {
   closeAccountConnections();
-  closeSessionConnections();
   mock.restoreAll();
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
 });
@@ -212,13 +216,13 @@ describe('the proofs, asked again', () => {
   });
 
   it('says the lapse once when a click in the console finds it before the timer does', async () => {
-    const env = envWith();
+    const env = await envWith();
     const { alice, workspace } = await world(env);
     const base = `/console/workspaces/${workspace}/domains`;
     const domain = (await (
       await call(env, 'POST', base, { token: alice.token, body: { domain: 'acme.dev' } })
     ).json()) as View;
-    const accounts = createSqliteAccountStore(env.FRUITBACK_ACCOUNTS_PATH as string);
+    const accounts = env.accounts;
     // Proven long ago, and last asked inside the grace.
     await accounts.noteDomainCheck(domain.id, 'found', Date.now() - PROOF_GRACE_MS - 60_000);
     await accounts.noteDomainCheck(domain.id, 'unknown', Date.now() - RECHECK_MS - 60_000);
@@ -256,61 +260,24 @@ describe('the proofs, asked again', () => {
   });
 });
 
-// --- Through the routes: the console, then the extension.
-
-function envWith(): WorkerEnv {
-  const directory = mkdtempSync(join(tmpdir(), 'fruitback-domain-routes-'));
-  directories.push(directory);
-
-  return {
-    FRUITBACK_STORE: 'memory',
-    ALLOWED_ORIGINS: CONSOLE,
-    FRUITBACK_IDENTITY_SECRET: SECRET,
-    FRUITBACK_SESSION_PATH: join(directory, 'sessions.db'),
-    FRUITBACK_ACCOUNTS_PATH: join(directory, 'accounts.db'),
-    FRUITBACK_CONSOLE_URL: CONSOLE,
-  };
-}
-
-let ip = 0;
-function call(
-  env: WorkerEnv,
-  method: string,
-  path: string,
-  options: { token?: string; body?: unknown; origin?: string } = {},
-  context: Partial<RequestContext> = {},
-): Promise<Response> {
-  const headers: Record<string, string> = { Origin: options.origin ?? CONSOLE };
-  if (options.token !== undefined) headers.Authorization = `Bearer ${options.token}`;
-  if (options.body !== undefined) headers['Content-Type'] = 'application/json';
-  ip += 1;
-
-  return handleRequest(
-    new Request(`https://api.fruitback.test${path}`, {
-      method,
-      headers,
-      ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
-    }),
-    env,
-    { clientIp: `198.18.1.${ip % 250}`, kv: createMemoryKv(), resolveTxt: noRealDns, ...context },
-  );
-}
+// --- Through the routes: the console, then the extension. The accounts are in PostgreSQL (PGlite).
 
 /** The resolver of a call that names none: a test that reaches it would have asked a real DNS. */
 const noRealDns: TxtResolver = async (name) => {
   throw new Error(`a test asked the DNS for ${name}`);
 };
 
-async function signIn(env: WorkerEnv, email: string): Promise<{ id: string; token: string }> {
-  const sent: MailMessage[] = [];
-  const mailer: Mailer = { send: async (message) => void sent.push(message) };
-  await call(env, 'POST', '/auth/email', { body: { email } }, { mailer });
-  const code = /#([A-Za-z0-9_-]+)/.exec(sent[0]?.text ?? '')?.[1];
-  const opened = await call(env, 'POST', '/auth/email/redeem', { body: { code } });
-  const body = (await opened.json()) as { accessToken: string; account: { id: string } };
-
-  return { id: body.account.id, token: body.accessToken };
+function call(
+  env: World,
+  method: string,
+  path: string,
+  options: CallOptions = {},
+  context: Partial<RequestContext> = {},
+): Promise<Response> {
+  return callOn(env, method, path, options, { resolveTxt: noRealDns, ...context });
 }
+
+const signIn = signInTo;
 
 type View = {
   id: string;
@@ -324,25 +291,23 @@ type View = {
 };
 
 /** A workspace of Alice with one site, and a session of the extension in it. */
-async function world(env: WorkerEnv) {
+async function world(env: World) {
   const alice = await signIn(env, 'alice@acme.dev');
-  const created = await call(env, 'POST', '/console/workspaces', { token: alice.token, body: { name: 'Acme' } });
-  const workspace = ((await created.json()) as { id: string }).id;
+  const workspace = await workspaceIn(env, alice.token);
   const added = await call(env, 'POST', `/console/workspaces/${workspace}/sites`, {
     token: alice.token,
     body: { url: 'https://acme.dev' },
   });
   const site = ((await added.json()) as { id: string }).id;
-  const sessions = createSqliteSessionStore(env.FRUITBACK_SESSION_PATH as string);
-  const { code } = await createPairing(sessions, { subject: alice.id, workspace });
-  const redeemed = await redeemPairing(sessions, code, SECRET);
+  const { code } = await createPairing(env.sessions, { subject: alice.id, workspace });
+  const redeemed = await redeemPairing(env.sessions, code, env.env.FRUITBACK_IDENTITY_SECRET as string);
   assert.ok(redeemed.ok);
 
   return { alice, workspace, site, extension: redeemed.session.accessToken };
 }
 
 /** What `GET /session/sites` says of the previews of each site. */
-async function previewsSeen(env: WorkerEnv, token: string): Promise<Record<string, string[] | undefined>> {
+async function previewsSeen(env: World, token: string): Promise<Record<string, string[] | undefined>> {
   const response = await call(env, 'GET', '/session/sites', { token, origin: EXTENSION });
   assert.equal(response.status, 200);
   const { sites } = (await response.json()) as { sites: { id: string; previews?: string[] }[] };
@@ -352,7 +317,7 @@ async function previewsSeen(env: WorkerEnv, token: string): Promise<Record<strin
 
 describe('a domain in the console, and the previews it covers (FRU-103)', () => {
   it('shows the record to write, proves the domain when the DNS holds it, and covers the previews of a site', async () => {
-    const env = envWith();
+    const env = await envWith();
     const { alice, workspace, site, extension } = await world(env);
     const base = `/console/workspaces/${workspace}/domains`;
 
@@ -387,7 +352,7 @@ describe('a domain in the console, and the previews it covers (FRU-103)', () => 
   });
 
   it('stops covering the previews when the record is gone, and says since when', async () => {
-    const env = envWith();
+    const env = await envWith();
     const { alice, workspace, site, extension } = await world(env);
     const base = `/console/workspaces/${workspace}/domains`;
     const domain = (await (
@@ -403,7 +368,7 @@ describe('a domain in the console, and the previews it covers (FRU-103)', () => 
     // The owner of the zone takes the record away, and the next pass asks the DNS.
     delete records[domain.record.name];
     mock.method(console, 'warn', () => {});
-    const accounts = createSqliteAccountStore(env.FRUITBACK_ACCOUNTS_PATH as string);
+    const accounts = env.accounts;
     await recheckDomains(accounts, dns, t0 + RECHECK_MS + 60_000);
 
     assert.deepEqual(await previewsSeen(env, extension), { [site]: undefined });
@@ -419,7 +384,7 @@ describe('a domain in the console, and the previews it covers (FRU-103)', () => 
   });
 
   it('covers nothing for a workspace whose record is not the one in the DNS, even under a domain another one proved', async () => {
-    const env = envWith();
+    const env = await envWith();
     const acme = await world(env);
     const bob = await signIn(env, 'bob@globex.dev');
     const theirs = (
@@ -486,7 +451,7 @@ describe('a domain in the console, and the previews it covers (FRU-103)', () => 
   });
 
   it('says when the DNS did not answer, and changes nothing', async () => {
-    const env = envWith();
+    const env = await envWith();
     const { alice, workspace } = await world(env);
     const base = `/console/workspaces/${workspace}/domains`;
     const domain = (await (
@@ -502,7 +467,7 @@ describe('a domain in the console, and the previews it covers (FRU-103)', () => 
   });
 
   it('asks the DNS once for two clicks in a row', async () => {
-    const env = envWith();
+    const env = await envWith();
     const { alice, workspace } = await world(env);
     const base = `/console/workspaces/${workspace}/domains`;
     const domain = (await (
@@ -517,7 +482,7 @@ describe('a domain in the console, and the previews it covers (FRU-103)', () => 
   });
 
   it('refuses what is not a domain, a domain too many, and a member who is not an admin', async () => {
-    const env = envWith();
+    const env = await envWith();
     const { alice, workspace } = await world(env);
     const base = `/console/workspaces/${workspace}/domains`;
 
@@ -535,20 +500,14 @@ describe('a domain in the console, and the previews it covers (FRU-103)', () => 
     assert.equal((await call(env, 'POST', base, { token: alice.token, body: { domain: 'd0.acme.dev' } })).status, 201);
 
     const bob = await signIn(env, 'bob@acme.dev');
-    closeAccountConnections();
-    const { DatabaseSync } = await import('node:sqlite');
-    const database = new DatabaseSync(env.FRUITBACK_ACCOUNTS_PATH as string);
-    database
-      .prepare('INSERT INTO members (workspace_id, account_id, role, created_at) VALUES (?, ?, ?, ?)')
-      .run(workspace, bob.id, 'member', 0);
-    database.close();
+    await memberOf(env, workspace, bob.id, 'member');
 
     assert.equal((await call(env, 'GET', base, { token: bob.token })).status, 403);
     assert.equal((await call(env, 'POST', base, { token: bob.token, body: { domain: 'x.dev' } })).status, 403);
   });
 
   it('removes a domain, and the previews it covered go with it', async () => {
-    const env = envWith();
+    const env = await envWith();
     const { alice, workspace, site, extension } = await world(env);
     const base = `/console/workspaces/${workspace}/domains`;
     const domain = (await (

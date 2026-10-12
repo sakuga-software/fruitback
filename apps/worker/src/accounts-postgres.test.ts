@@ -49,7 +49,6 @@ describe('a worker whose accounts are in PostgreSQL (FRU-141)', () => {
     const config = readConfig(envWith());
 
     assert.ok(config.ok, config.ok ? '' : config.missing.join(', '));
-    assert.equal(config.config.accountsPath, undefined);
     assert.equal(hasAccounts(config.config), true);
     assert.ok(accountStoreFor(config.config) !== undefined);
   });
@@ -381,7 +380,6 @@ describe('a value that the types say is given, and that a caller leaves out (FRU
       await store.enqueueDelivery(hook.id, '{"n":2}', 200),
       await store.enqueueDelivery(hook.id, '{"n":3}', 300),
     ];
-    await store.createEmailLink({ codeHash: 'digest-1', email: 'alice@acme.dev', expiresAt: Date.now() + 60_000 });
 
     return { store, workspace, hook, ids };
   }
@@ -396,7 +394,6 @@ describe('a value that the types say is given, and that a caller leaves out (FRU
         database,
         'SELECT id, attempts, next_at, last_at, last_status, last_error FROM deliveries ORDER BY id',
       ),
-      links: await rowsOf(database, 'SELECT code_hash, spent_at FROM email_links ORDER BY code_hash'),
     };
   }
 
@@ -428,7 +425,6 @@ describe('a value that the types say is given, and that a caller leaves out (FRU
       ['settleDelivery: id', () => store.settleDelivery(none, { delivered: true })],
       ['retryDelivery: now', () => store.retryDelivery(workspace.id, hook.id, second, none)],
       ['dropAbandonedDeliveries: before', () => store.dropAbandonedDeliveries(none)],
-      ['spendEmailLink: now', () => store.spendEmailLink('digest-1', none)],
     ];
     for (const [what, call] of calls) {
       await assert.rejects(call(), { name: 'TypeError', message: `${what} is required` }, what);

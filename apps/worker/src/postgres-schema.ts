@@ -17,7 +17,7 @@ import { organization } from './auth-schema.ts';
  * Every instant is a `BIGINT` of milliseconds, as in the SQLite files: `now` comes from the worker,
  * and the same number goes in both. `mode: 'number'` answers it as a number.
  *
- * The tables are the ones of `accounts-sqlite.ts` after its seven migrations, and of
+ * The tables are the ones of `accounts-sqlite.fixture.ts` after its seven migrations, and of
  * `session-sqlite.ts` after its three, with the same names, **but four** (FRU-146): a person, a way
  * to sign in, a workspace and a membership are rows of `user`, `account`, `organization` and
  * `member`, the tables of better-auth in `auth-schema.ts`. `drizzle.config.ts` reads both files. A
