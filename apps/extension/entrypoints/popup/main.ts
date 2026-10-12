@@ -90,7 +90,7 @@ async function render(editing = false): Promise<void> {
     // `/pair` with a fragment that looks like a code. The way to the site's own screen stays open.
     const site = element('button', t(NOT_A_LINK), 'secondary');
     site.addEventListener('click', () => void render(true));
-    app.append(site, optionsButton());
+    app.append(actions(site, optionsButton()));
 
     return;
   }
@@ -534,8 +534,9 @@ function status({ pattern, site }: ResolvedSite): HTMLElement {
   change.className = 'secondary';
   change.addEventListener('click', () => void render(true));
 
-  const buttons = document.createElement('span');
-  buttons.append(change, toggle);
+  // The sentence of a rule that covers many sites is longer than the popup: that button may wrap.
+  if (wide) toggle.classList.add('long');
+  const buttons = actions(change, toggle);
 
   const row = document.createElement('div');
   row.className = 'row';
@@ -612,6 +613,15 @@ function field(label: string, placeholder: string): { label: HTMLLabelElement; i
   wrapper.append(label, input);
 
   return { label: wrapper, input };
+}
+
+/** Buttons side by side, with a space between them, that go under each other when the room is short (FRU-169). */
+function actions(...buttons: HTMLElement[]): HTMLElement {
+  const group = document.createElement('div');
+  group.className = 'actions';
+  group.append(...buttons);
+
+  return group;
 }
 
 function element<K extends keyof HTMLElementTagNameMap>(
