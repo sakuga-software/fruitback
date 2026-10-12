@@ -3,9 +3,9 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:
 /**
  * The key of a connector, encrypted at rest (FRU-121).
  *
- * A workspace hands the worker the API key of its tracker. A copy of the accounts file must not be a
- * set of working keys, so the file holds the ciphertext and `FRUITBACK_SECRETS_KEY` stays in the
- * environment. AES-256-GCM: a value somebody changed in the file does not decrypt.
+ * A workspace hands the worker the API key of its tracker. A copy of the database must not be a
+ * set of working keys, so it holds the ciphertext and `FRUITBACK_SECRETS_KEY` stays in the
+ * environment. AES-256-GCM: a value somebody changed in the database does not decrypt.
  *
  * WARNING: a digest is not possible here, unlike a pairing code. The worker must send the key itself
  * to the tracker on every call.

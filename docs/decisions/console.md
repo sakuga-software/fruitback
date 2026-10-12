@@ -83,25 +83,26 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 
 ### The rules, in short
 
-- **The console holds no token.** Against a worker that serves better-auth (FRU-147), a call is a
-  `fetch` with the cookie of the worker and no `Authorization`. The cookie is `HttpOnly`,
+- **The console holds no token.** A call is a `fetch` with the cookie of the worker and no
+  `Authorization` (FRU-147, and no other way since FRU-150). The cookie is `HttpOnly`,
   `SameSite=Strict`, `Path=/console`: `document.cookie` does not show it, and nothing is in
   `localStorage` or `sessionStorage`. `e2e/console-cookie-session.spec.ts` reads all three, after it
   checked that the browser does hold the cookie.
 - **No client of better-auth.** The console calls the routes of the worker with `fetch`
   (`/console/auth/email`, `/console/auth/email/redeem`, `/console/auth/sign-out`). The bundle and the
   policy of the image do not change: `csp.mjs`, hashed scripts, no `'unsafe-inline'` for a script.
-- **The worker says which path it serves, in `GET /auth/providers`.** With `betterAuth` in the
-  answer, the console takes the cookie, and the providers of `betterAuth`. With an answer that has
-  none, it signs in as before: `session-of-before.ts` holds the access token and the one refresh in
-  flight of FRU-99. The console and the worker are not deployed at the same instant.
-  **FRU-150 removes `session-of-before.ts`**, and with it every token of the console.
-- **A worker that refuses that question said nothing** (FRU-205). On a `429`, a `5xx` or no answer,
-  no call leaves on either path: each one answers that refusal, a sign-out answers `false`, and the
-  question is asked again at the next call, once for the calls of one moment. The console used to
-  take the path of before then: against a worker that serves better-auth, it spent the refresh
-  cookie of before and held an access token, for the session of whoever used the browser last. A
-  link opened during a refusal is not spent, and its screen offers « Try again ».
+- **The worker says what it offers, in `GET /auth/providers`**: the providers of `betterAuth`, and
+  whether it sends mail. A worker that says no `betterAuth` signs nobody in, and the console offers
+  nothing (test:`signs nobody in: no provider, no token, and no route of the sign-in of before`). Until FRU-150 the console signed
+  in as before against such a worker, with an access token in `session-of-before.ts`; that file is
+  gone, and with it every token of the console. **So this console is deployed after its worker says
+  `betterAuth`**, and not before.
+- **A worker that refuses `GET /auth/providers` said nothing, and that costs nothing any more**
+  (FRU-205, then FRU-150). While the console had two paths, it took the path of before on a `429`
+  or a `5xx`, spent the refresh cookie of before and held a token; FRU-205 made every call wait
+  for the answer. There is one path now: a call needs no answer of that route, and goes with the
+  cookie. A refusal there still shows no provider as « not set up »: `signInProviders` answers
+  `undefined`.
 - **A sign-in with a provider is a navigation of the whole page**, to
   `<worker>/console/auth/start/<provider>` (`providerStart`). Never a `fetch` of `/sign-in/social`:
   the cookie of the state would be set on the answer of a call, and WebKit did not send it back when
@@ -117,13 +118,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the sign-in itself: it has nothing typed to keep.
 - **« Sign out » ends the session on the worker** (`/console/auth/sign-out`): the cookie is refused
   at the next call, in every tab and for whoever copied it.
-- **« Sign out » ends the session of before too** (`/console/session/logout`, FRU-204). A browser
-  that signed in before the worker served better-auth still holds the refresh cookie of before, good
-  for 30 days, and the worker takes it while it serves the path of before. Both calls are made,
-  whatever the first one answers. A `404` on the second one is a worker with no path of before: it
-  reads no refresh cookie, and that is an end. FRU-150 removes this call.
-- **« Sign out » says when it failed.** `signOut` answers `false` unless the worker said that both
-  sessions ended, and « My account » then stays, with « You are still signed in ». A screen that
+- **« Sign out » says when it failed.** `signOut` answers `false` unless the worker said that the
+  session ended (FRU-204), and « My account » then stays, with « You are still signed in ». A screen that
   says « signed out » over a session that is still good leaves the browser open to the next person.
   better-auth 1.7.7 answers `200` to a sign-out with no session, with one that already ended, and
   with a cookie that is not one (measured, and held by a test of the worker): somebody who signs
@@ -131,13 +127,13 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 
 ### The reasons, and the measurements
 
-- **Why the path of before stays in the console, where the ticket says the token goes.** The ticket
-  asks both that the token disappears and that this console works against a worker of before. The
-  second one decides: a console that is deployed before its worker would sign nobody in. So the
-  token of before is in one file that nothing calls once the worker says `betterAuth`, and
-  `api.test.ts` holds that no call has an `Authorization` then.
-- **An answer of `/auth/providers` with no body is a worker of before.** A stub of a spec answers
-  `204` there. Read as better-auth, or read without a check, it broke every console spec (measured).
+- **Why the path of before stayed in the console until FRU-150, where FRU-148 said the token goes.**
+  FRU-148 asked both that the token disappears and that the console works against a worker of
+  before. The second one decided: a console that is deployed before its worker would sign nobody
+  in. So the token of before was in one file that nothing called once the worker said `betterAuth`.
+  FRU-150 removed the file, after the switch of the production.
+- **An answer of `/auth/providers` with no body offers nothing.** A stub of a spec answers `204`
+  there. Read without a check, it broke every console spec (measured).
 - **The spec starts its worker as a process** (`apps/worker/src/cloud-worker.fixture.ts`): Playwright
   compiles a spec as CommonJS and cannot import the worker, which is ES modules. The spec hands the
   process each request that the console sends to the address of the worker, and reads the mail from

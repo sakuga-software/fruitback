@@ -20,7 +20,6 @@ async function openSites(page: Page): Promise<void> {
   await page.route(`${WORKER_ORIGIN}/**`, (route) => {
     const { pathname } = new URL(route.request().url());
     const json = (body: unknown, status = 200) => route.fulfill({ status, json: body });
-    if (pathname === '/console/session/refresh') return json({ accessToken: 'token' });
     if (pathname === '/console/me') return json(me);
     if (pathname === '/console/workspaces/w1/sites') {
       // Reading the sites works. Adding one fails, which is what shows the alert.

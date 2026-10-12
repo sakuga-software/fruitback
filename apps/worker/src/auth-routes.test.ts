@@ -219,8 +219,8 @@ for (const { label, open, skip } of DATABASES) {
       const unknown = await worker.call('/console/auth/email', { body: { email: 'nobody@acme.dev' } });
       assert.deepEqual([known.status, await known.text()], [unknown.status, await unknown.text()]);
 
-      // One of the window is spent above. The path of before counts in the same window.
-      await worker.call('/auth/email', { body: { email: 'alice@acme.dev' } });
+      // One of the window is spent above.
+      assert.equal((await worker.call('/console/auth/email', { body: { email: 'alice@acme.dev' } })).status, 202);
       assert.equal((await worker.call('/console/auth/email', { body: { email: 'alice@acme.dev' } })).status, 202);
       const fourth = await worker.call('/console/auth/email', { body: { email: 'alice@acme.dev' } });
       assert.equal(fourth.status, 429);
@@ -914,15 +914,24 @@ for (const { label, open, skip } of DATABASES) {
       assert.deepEqual(errors, ['[fruitback] better-auth did not answer: SCHEMA_MISMATCH of a test']);
     });
 
-    it('says which ways the routes of better-auth offer, beside the two booleans of before', async () => {
+    it('says which ways the routes of better-auth offer, and no boolean of the path of before', async () => {
       const worker = await workerOn(open);
       const answer = await worker.call('/auth/providers');
 
-      assert.deepEqual(await answer.json(), {
-        github: false,
-        google: false,
-        betterAuth: { email: true, github: false, google: false },
-      });
+      assert.deepEqual(await answer.json(), { betterAuth: { email: true, github: false, google: false } });
+      // The routes of the path of before are gone (FRU-150).
+      for (const [method, path] of [
+        ['POST', '/auth/email'],
+        ['POST', '/auth/email/redeem'],
+        ['POST', '/console/session/refresh'],
+        ['POST', '/console/session/logout'],
+        ['GET', '/auth/github'],
+        ['GET', '/auth/google'],
+        ['GET', '/auth/github/callback'],
+      ] as const) {
+        const gone = await worker.call(path, method === 'POST' ? { body: {} } : {});
+        assert.equal(gone.status, 404, `${method} ${path}`);
+      }
     });
   });
 
