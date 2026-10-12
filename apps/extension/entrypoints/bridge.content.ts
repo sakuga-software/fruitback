@@ -85,6 +85,25 @@ export default defineContentScript({
       }
 
       if (message?.kind === 'relay-request') void relay(message);
+      // FRU-44: carried across, and answered whatever happens, as a relay is.
+      if (message?.kind === 'capture-request') {
+        void browser.runtime
+          .sendMessage(message)
+          .catch(() => undefined)
+          .then((answer: unknown) => {
+            const parsed = parseBridgeMessage({
+              ...(typeof answer === 'object' ? answer : {}),
+              channel: CHANNEL,
+              kind: 'capture-response',
+              id: message.id,
+            });
+            post(
+              parsed?.kind === 'capture-response'
+                ? parsed
+                : { channel: CHANNEL, kind: 'capture-response', id: message.id },
+            );
+          });
+      }
     });
 
     // The popup writes to storage rather than messaging tabs, so the switch reaches every open tab

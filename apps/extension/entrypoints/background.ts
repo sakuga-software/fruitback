@@ -18,6 +18,7 @@ import {
 } from '../src/protocol.ts';
 import { createRelay } from '../src/relay.ts';
 import { KNOWN_SETTING, SYNC_SETTING, createSiteSync } from '../src/site-sync.ts';
+import { type CaptureArea, createCapture, pixelsOf } from '../src/capture.ts';
 
 /** Named once: the alarm is created, cleared and answered in three different places. */
 const SESSION_ALARM = 'fruitback-session-refresh';
@@ -117,6 +118,26 @@ export default defineBackground(() => {
    */
   const relay = createRelay({ readSite, ensureAccess: (endpoint) => sessions.ensureAccess(endpoint), send });
 
+  /** The picture of a note (FRU-44): see `src/capture.ts`. */
+  const capture = (area: CaptureArea, origin: string | undefined, windowId: number) =>
+    createCapture({
+      readSite,
+      ensureAccess: (endpoint) => sessions.ensureAccess(endpoint),
+      captureTab: async () => (await fetch(await browser.tabs.captureVisibleTab(windowId, { format: 'png' }))).blob(),
+      crop: cropPicture,
+      upload: async (url, accessToken, png) => {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'image/png' },
+          credentials: 'omit',
+          signal: AbortSignal.timeout(RELAY_CALL_TIMEOUT_MS),
+          body: png,
+        });
+
+        return { status: response.status, body: await response.text() };
+      },
+    })(area, origin);
+
   /** The only writer of the sites map, so a change from the popup and one from the options page cannot drop each other (FRU-43). */
   const returnAccess = createBrowserAccessReturn(sessions);
   // FRU-115: a rule that is switched off, removed or moved to another worker gives its access back.
@@ -173,6 +194,20 @@ export default defineBackground(() => {
     }
 
     const parsed = parseBridgeMessage(message);
+    // FRU-44: the picture of a note, of the tab the content script runs in, and of no other tab.
+    if (parsed?.kind === 'capture-request') {
+      const windowId = sender.tab?.windowId;
+      if (windowId === undefined || sender.tab?.active !== true) {
+        sendResponse({});
+
+        return false;
+      }
+      void capture(parsed.area, senderOrigin(sender), windowId).then((picture) =>
+        sendResponse(picture === undefined ? {} : { picture }),
+      );
+
+      return true;
+    }
     if (parsed?.kind !== 'relay-request') return false;
 
     void relay(parsed.request, senderOrigin(sender))
@@ -284,4 +319,18 @@ async function send(request: RelayRequest): Promise<RelayResponse> {
   });
 
   return { ok: response.ok, status: response.status, body: await response.text() };
+}
+
+/** The area of the element, cut out of the capture of the tab, as a PNG (FRU-44). */
+async function cropPicture(picture: Blob, area: CaptureArea): Promise<Blob> {
+  const bitmap = await createImageBitmap(picture);
+  const cut = pixelsOf(area, bitmap);
+  if (cut === undefined) throw new Error('the element is not on the screen');
+  const canvas = new OffscreenCanvas(cut.width, cut.height);
+  const context = canvas.getContext('2d');
+  if (context === null) throw new Error('no 2d context');
+  context.drawImage(bitmap, cut.left, cut.top, cut.width, cut.height, 0, 0, cut.width, cut.height);
+  bitmap.close();
+
+  return canvas.convertToBlob({ type: 'image/png' });
 }

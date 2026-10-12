@@ -57,6 +57,26 @@ describe('the drafts of a tab (FRU-124)', () => {
     assert.equal(storage.getItem('k'), null, 'an empty list stays in the storage');
   });
 
+  // FRU-44: the picture of a note is taken when the note is written, and a note kept for later is
+  // sent as the seed it was. The address of its picture must come out of the storage, and reach the
+  // body that is sent.
+  it('keeps the address of the picture of a note through a reload, and sends it', () => {
+    const storage = memoryStorage();
+    const screenshot = {
+      url: 'https://worker.test/screenshot/shot_0123456789abcdef0123456789abcdef',
+      width: 200,
+      height: 80,
+    };
+    createDraftStore({ storage, key: 'k' }).add({
+      seed: seedFixture({ id: 'sd_a', note: 'With a picture', screenshot }),
+    });
+
+    const [kept] = createDraftStore({ storage, key: 'k' }).list();
+
+    assert.deepEqual(kept?.seed.screenshot, screenshot);
+    assert.deepEqual((JSON.parse(batchBody([kept as Draft])) as { screenshot?: unknown }[])[0]?.screenshot, screenshot);
+  });
+
   it('keeps one draft for one seed, and tells its listeners', () => {
     const store = createDraftStore({ storage: null, key: 'k' });
     let told = 0;

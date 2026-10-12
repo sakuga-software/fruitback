@@ -23,6 +23,7 @@ async function stubWorker(page: Page): Promise<string[]> {
     const { pathname } = new URL(request.url());
     const json = (body: unknown, status = 200) => route.fulfill({ status, json: body });
     if (pathname === '/console/me') return json(me);
+    if (pathname === '/console/workspaces/w1/domains') return json({ domains: [] });
     if (pathname === '/console/workspaces/w1/sites') {
       if (request.method() === 'GET') return json({ sites: [] });
       const { url } = request.postDataJSON() as { url: string };
