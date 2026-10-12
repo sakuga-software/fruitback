@@ -490,6 +490,11 @@ any store` asks it of every spec rather than of Linear.
   list is not in `ConfigStore`, which persists to `localStorage`: a stored copy would outlive a change
   of store. A stage the reporter hid stays hidden in the config, so a worker that reports it again
   shows the reporter's choice.
+- **The stages are the ones of the tracker that answers for the site** (FRU-201). A site that sends
+  to a connector of its workspace is read there, so `createRoutedStore` answers `stagesFor(client)`
+  from the store of that connector, and the store of the worker only for a site with no destination.
+  A worker on GitHub (three stages) whose site sends to Linear (five) offered three until then. A
+  site read in several places gets every stage one of them reports, in the order of `SEED_STAGES`.
 - **A GitHub App, never a personal token.** A personal token does not expire and reaches every
   repository of its owner. The JWT is RS256 through `node:crypto`, `iat` sixty seconds back and `exp`
   nine minutes ahead. It buys an installation token narrowed with `repositories` to one repository,

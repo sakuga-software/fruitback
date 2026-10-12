@@ -265,6 +265,49 @@ describe('two workspaces on one worker, each with its own tracker (FRU-102)', ()
   });
 });
 
+describe('the stages a read reports, for a site that sends to the tracker of its workspace (FRU-188)', () => {
+  it('are the stages of that tracker, not the ones of the store of the worker', async () => {
+    const env = envWith();
+    linearOf({ lin_api_the_key_of_acme: 'acme' });
+    const acme = await tenant(env, 'Acme', 'https://staging.acme.dev', 'lin_api_the_key_of_acme');
+    const plain = await acme.accounts.addSite(acme.workspace.id, {
+      origin: 'https://plain.acme.dev',
+      visibility: 'everyone',
+    });
+    // The store of the worker reports three stages, as GitHub does (`GITHUB_STAGES`).
+    const own: SeedStore = {
+      name: 'three-stages',
+      stages: ['green', 'ripe', 'composted'],
+      scope: () => '',
+      create: async () => ({ id: 'x', identifier: 'X-1' }),
+      findForPage: async () => [],
+    };
+    const stagesOf = async (origin: string, site: string) => {
+      const answer = await handleRequest(
+        new Request(`https://api.fruitback.test/feedback?url=${encodeURIComponent(`${origin}/`)}&client=${site}`, {
+          headers: { Origin: origin },
+        }),
+        env,
+        { clientIp: '203.0.113.250', kv: createMemoryKv(), store: own },
+      );
+      assert.equal(answer.status, 200, await answer.clone().text());
+
+      return ((await answer.json()) as { stages: string[] }).stages;
+    };
+
+    // Linear answers for this site: its five stages.
+    assert.deepEqual(await stagesOf('https://staging.acme.dev', acme.site.id), [
+      'seeded',
+      'green',
+      'ripening',
+      'ripe',
+      'composted',
+    ]);
+    // A site with no destination is read in the store of the worker: its three.
+    assert.deepEqual(await stagesOf('https://plain.acme.dev', plain.id), ['green', 'ripe', 'composted']);
+  });
+});
+
 describe('the store of a connector, built for the request that asks for it (FRU-102)', () => {
   const own = { name: 'own' } as unknown as SeedStore;
   const client = { teamId: 'team_design' } as ClientConfig;
