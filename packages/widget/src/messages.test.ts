@@ -15,7 +15,7 @@ import { createCaptureHost } from './host.ts';
 import { createComposer } from './composer.ts';
 import { createOfferedDestinations } from './destinations.ts';
 import { createConfigPanel } from './panel.ts';
-import { createSidebar } from './sidebar.ts';
+import { type ReadState, createSidebar } from './sidebar.ts';
 import { feedbackAsText, placementOf } from './export.ts';
 import { createConfigStore } from './config.ts';
 import { createOverlay } from './overlay.ts';
@@ -329,6 +329,7 @@ describe('every word the widget shows', () => {
     // The list of every note: with the three notes, then with none.
     const listed = {
       entries: overlay.resolutions().map((each) => ({ issue: each.issue, placement: placementOf(each) })),
+      state: 'read' as ReadState,
     };
     const sidebar = createSidebar({
       document: page.document,
@@ -336,6 +337,7 @@ describe('every word the widget shows', () => {
       translator,
       entries: () => listed.entries,
       onSelect: () => {},
+      readState: () => listed.state,
     });
     cleanup.push(() => sidebar.destroy());
     sidebar.open();
@@ -343,6 +345,12 @@ describe('every word the widget shows', () => {
     listed.entries = [];
     sidebar.refresh();
     snapshots.push(...shown(host.root));
+    // Before a read answered, then after one failed (FRU-153).
+    for (const state of ['pending', 'failed'] as const) {
+      listed.state = state;
+      sidebar.refresh();
+      snapshots.push(...shown(host.root));
+    }
     sidebar.close();
     const badges = [...host.root.querySelectorAll('.fruitback-pin-badge')] as HTMLElement[];
     for (const badge of badges) {

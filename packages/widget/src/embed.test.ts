@@ -963,3 +963,130 @@ describe('the language a mount speaks (FRU-37)', () => {
     }
   });
 });
+
+/**
+ * The list when no read answered (FRU-153).
+ *
+ * A worker that does not answer the first read leaves no pin, and the list used to say « No note on
+ * this page yet ». A reviewer who comes back during an outage then believes the notes are gone.
+ */
+describe('the list after a failed read (FRU-153)', () => {
+  afterEach(() => mock.restoreAll());
+
+  function mountWith(answers: TransportResponse[]) {
+    const page = mountPage('<main><button id="cta">Commander</button></main>');
+    mock.method(globalThis, 'fetch', () => {
+      throw new Error('this test goes through the transport');
+    });
+    const widget = init({
+      document: page.document,
+      endpoint: 'https://worker.test',
+      clientId: 'acme',
+      locale: 'en',
+      transport: async () => answers.shift() ?? { ok: false, status: 503, body: '' },
+    });
+    const shadow = page.document.querySelector('[data-fruitback-host]')?.shadowRoot as ShadowRoot;
+    const sidebar = shadow.querySelector('[data-fruitback-sidebar]') as HTMLElement;
+    const visible = (selector: string) => {
+      const element = sidebar.querySelector<HTMLElement>(selector);
+
+      return element !== null && !element.hidden;
+    };
+    const text = (selector: string) => sidebar.querySelector(selector)?.textContent ?? '';
+    // Opened once the read settled, as a reviewer who opens the list after the page loaded.
+    const open = () => (shadow.querySelector('[data-fruitback-host-list]') as HTMLElement).click();
+
+    return { widget, shadow, sidebar, visible, text, open };
+  }
+
+  const empty: TransportResponse = { ok: true, status: 200, body: JSON.stringify({ issues: [] }) };
+  const refused: TransportResponse = { ok: false, status: 503, body: '{"error":"store-unavailable"}' };
+
+  it('says the notes could not be read, and neither « 0 notes » nor that there is none', async () => {
+    const { widget, visible, text, shadow, open } = mountWith([refused]);
+    await widget.refresh();
+    open();
+
+    assert.equal(visible('.fruitback-sidebar-empty'), false);
+    assert.equal(text('.fruitback-sidebar-count'), '');
+    assert.equal(visible('.fruitback-sidebar-failed'), true);
+    assert.match(text('[role="status"]'), /could not be read/);
+    assert.equal(shadow.activeElement?.textContent, 'Try again');
+
+    widget.destroy();
+  });
+
+  it('says the same when the worker cannot be reached at all', async () => {
+    const page = mountPage('<main></main>');
+    const widget = init({
+      document: page.document,
+      endpoint: 'https://worker.test',
+      clientId: 'acme',
+      locale: 'en',
+      transport: async () => {
+        throw new TypeError('Failed to fetch');
+      },
+    });
+    await widget.refresh();
+    const shadow = page.document.querySelector('[data-fruitback-host]')?.shadowRoot as ShadowRoot;
+    (shadow.querySelector('[data-fruitback-host-list]') as HTMLElement).click();
+
+    assert.equal((shadow.querySelector('.fruitback-sidebar-failed') as HTMLElement).hidden, false);
+    assert.equal((shadow.querySelector('.fruitback-sidebar-empty') as HTMLElement).hidden, true);
+
+    widget.destroy();
+  });
+
+  it('shows the empty state when the worker answers an empty list: the control', async () => {
+    const { widget, visible, text, open } = mountWith([empty]);
+    await widget.refresh();
+    open();
+
+    assert.equal(visible('.fruitback-sidebar-failed'), false);
+    assert.equal(visible('.fruitback-sidebar-empty'), true);
+    assert.equal(text('.fruitback-sidebar-empty'), 'No note on this page yet.');
+    assert.equal(text('.fruitback-sidebar-count'), '0 notes');
+
+    widget.destroy();
+  });
+
+  it('reads again on « Try again », and a good answer replaces the message', async () => {
+    // A read that a newer one replaced never reaches the transport: one answer for each read that does.
+    const answers = [refused];
+    const { widget, visible, text, sidebar, open } = mountWith(answers);
+    await widget.refresh();
+    open();
+    assert.equal(visible('.fruitback-sidebar-failed'), true);
+
+    answers.push(empty);
+    let settled: () => void = () => {};
+    const done = new Promise<void>((resolve) => (settled = resolve));
+    const observer = new (sidebar.ownerDocument.defaultView as unknown as typeof globalThis).MutationObserver(() => {
+      if (text('.fruitback-sidebar-empty') === 'No note on this page yet.') settled();
+    });
+    observer.observe(sidebar, { subtree: true, childList: true, characterData: true });
+    (sidebar.querySelector('.fruitback-sidebar-retry') as HTMLElement).click();
+    // The button stays, busy, while the read runs: focus does not move.
+    assert.equal(visible('.fruitback-sidebar-failed'), true);
+    assert.equal(text('[role="status"]'), 'Reading the notes of this page…');
+    await done;
+    observer.disconnect();
+
+    assert.equal(visible('.fruitback-sidebar-failed'), false);
+    assert.equal(text('.fruitback-sidebar-empty'), 'No note on this page yet.');
+
+    widget.destroy();
+  });
+
+  it('keeps what a good read said when a later read fails', async () => {
+    const { widget, visible, text, open } = mountWith([empty, refused]);
+    await widget.refresh();
+    await widget.refresh();
+    open();
+
+    assert.equal(visible('.fruitback-sidebar-failed'), false);
+    assert.equal(text('.fruitback-sidebar-empty'), 'No note on this page yet.');
+
+    widget.destroy();
+  });
+});

@@ -5,7 +5,7 @@ import type { FeedbackEntry } from './export.ts';
 import { mountPage, setDocumentSize, setRect } from './dom.fixture.ts';
 import { deepActiveElement } from './focus.ts';
 import { createTranslator } from './messages.ts';
-import { type Sidebar, createSidebar } from './sidebar.ts';
+import { type ReadState, type Sidebar, createSidebar } from './sidebar.ts';
 import { createCaptureHost } from './host.ts';
 import { createOverlay } from './overlay.ts';
 
@@ -257,5 +257,96 @@ describe('the way into the list (FRU-129)', () => {
     assert.equal(overlay.select('sd_one'), true);
     assert.equal(overlay.threadOpen(), true);
     assert.match(host.root.querySelector('[role="dialog"]')?.textContent ?? '', /On the button/);
+  });
+});
+
+describe('the list before a read answered (FRU-153)', () => {
+  function mountIn(state: { read: ReadState }, entries: FeedbackEntry[] = []) {
+    const page = mountPage('<main><div id="widget"></div></main>');
+    const retries: number[] = [];
+    const sidebar = createSidebar({
+      document: page.document,
+      host: page.query('#widget'),
+      entries: () => entries,
+      onSelect: () => {},
+      readState: () => state.read,
+      onRetry: () => retries.push(1),
+      translator: createTranslator({ locale: 'fr' }),
+    });
+    cleanup.push(() => sidebar.destroy());
+    const root = page.query('[data-fruitback-sidebar]') as HTMLElement;
+    const shown = (selector: string) => (root.querySelector(selector) as HTMLElement).hidden === false;
+    const text = (selector: string) => root.querySelector(selector)?.textContent ?? '';
+
+    return { page, sidebar, root, retries, shown, text };
+  }
+
+  it('says it is reading, with no count, while the first read is in flight', () => {
+    const { sidebar, shown, text } = mountIn({ read: 'pending' });
+    sidebar.open();
+
+    assert.equal(text('.fruitback-sidebar-count'), '');
+    assert.equal(text('.fruitback-sidebar-empty'), 'Lecture des notes de cette page…');
+    assert.equal(shown('.fruitback-sidebar-failed'), false);
+  });
+
+  it('says the read failed, offers to read again, and gives that button focus', () => {
+    const state = { read: 'failed' as ReadState };
+    const { page, sidebar, retries, shown, text, root } = mountIn(state);
+    sidebar.open();
+
+    assert.equal(shown('.fruitback-sidebar-empty'), false);
+    assert.equal(text('.fruitback-sidebar-count'), '');
+    assert.match(text('[role="status"]'), /n’ont pas pu être lues/);
+    const retry = root.querySelector('.fruitback-sidebar-retry') as HTMLElement;
+    assert.equal(retry.textContent, 'Réessayer');
+    assert.equal(deepActiveElement(page.document), retry);
+    // The button is described by the message, so a reader hears why it is there.
+    assert.equal(
+      root.querySelector(`#${retry.getAttribute('aria-describedby')}`)?.textContent,
+      text('[role="status"]'),
+    );
+
+    retry.click();
+    assert.deepEqual(retries, [1]);
+
+    // The next draw after a good read hides the message, and focus does not stay on a hidden button.
+    state.read = 'read';
+    sidebar.refresh();
+    assert.equal(shown('.fruitback-sidebar-failed'), false);
+    assert.equal(text('.fruitback-sidebar-empty'), 'Aucune note sur cette page pour le moment.');
+    assert.equal(deepActiveElement(page.document), root.querySelector('.fruitback-sidebar-close'));
+  });
+
+  it('keeps focus on « Réessayer » while the read runs, and after it fails again', () => {
+    const state = { read: 'failed' as ReadState };
+    const { page, sidebar, retries, shown, text, root } = mountIn(state);
+    sidebar.open();
+    const retry = root.querySelector('.fruitback-sidebar-retry') as HTMLElement;
+
+    retry.click();
+    state.read = 'pending';
+    sidebar.refresh();
+    assert.equal(shown('.fruitback-sidebar-failed'), true);
+    assert.equal(retry.getAttribute('aria-disabled'), 'true');
+    assert.equal(text('[role="status"]'), 'Lecture des notes de cette page…');
+    assert.equal(deepActiveElement(page.document), retry);
+    // Busy: a second press asks for nothing more.
+    retry.click();
+    assert.deepEqual(retries, [1]);
+
+    state.read = 'failed';
+    sidebar.refresh();
+    assert.equal(retry.getAttribute('aria-disabled'), 'false');
+    assert.match(text('[role="status"]'), /n’ont pas pu être lues/);
+    assert.equal(deepActiveElement(page.document), retry);
+  });
+
+  it('shows the notes it holds while a read is in flight, rather than a guess', () => {
+    const { sidebar, shown, text } = mountIn({ read: 'pending' }, [{ issue: note('a', 'Held'), placement: 'found' }]);
+    sidebar.open();
+
+    assert.equal(shown('.fruitback-sidebar-list'), true);
+    assert.equal(text('.fruitback-sidebar-count'), '1 note');
   });
 });
