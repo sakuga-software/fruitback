@@ -222,6 +222,40 @@ open composer and its note` fails without the check, 3 runs out of 3.
   can drive, which is why that path is unit-tested and the browser run uses a build with the scripts
   declared statically.
 
+## The picture of a note, taken by the browser (FRU-44)
+
+### The rules, in short
+
+- **The widget asks, and `packages/widget` does not change.** The page world gives `init` a
+  `captureScreenshot`, which posts a `capture-request` with the area of the element on the bridge.
+  The background takes the picture of the tab (`tabs.captureVisibleTab`), cuts the area out
+  (`createImageBitmap`, `OffscreenCanvas`), and sends the PNG to `POST /screenshot` of the worker of
+  the stored entry, for its client, with the session of that worker. `src/capture.ts` holds every
+  case where it gives up.
+- **No new permission: `activeTab`, already declared.** The browser grants it when the reviewer
+  opens the popup on the page, until the page navigates. Without it the capture is refused.
+- **A capture that fails costs the picture, never the note.** No `activeTab`, no session, an http
+  worker, a site that embeds its own widget, a worker with no database, ten seconds without an
+  answer: the note goes without a picture. test:`private mode: a picture the browser cannot take
+costs the picture, never the note`.
+- **The setting is off by default**, in the settings of the widget, as on any host that offers it.
+
+### The reasons, and what is not done
+
+The decision of 2026-10-06 said « SQLite first ». A worker always has PostgreSQL since 2026-10-11,
+so the pictures are a table of its database (`screenshots`), and a worker with none keeps no picture.
+It said « after the publication on the stores » too: the orchestrator of the agents asked for it
+now, on Mathieu's delegation, behind the setting that is off.
+
+- **Measured on Chromium 145**: `captureVisibleTab` is refused with the host of the origin, with
+  `*://*/*`, and with `activeTab` declared but not granted; it works with `<all_urls>`. The success
+  path in a browser needs the gesture on the extension, which an automated browser cannot make: it
+  is not in the E2E suite, and was not tried by hand.
+- **Only a member reads a picture**, so a link in a tracker answers `401` to a browser that opens
+  it: nothing shows the picture to a person yet. A page of the console that does is the next step.
+- **The picture shows what the screen showed**, the composer of the widget included when it covers
+  the element.
+
 ## A problem, and the one thing to do about it (FRU-90)
 
 ### The rules, in short

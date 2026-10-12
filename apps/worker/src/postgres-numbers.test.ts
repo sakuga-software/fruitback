@@ -72,6 +72,12 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
   await migrate(database, migrationsThrough(BEFORE_THE_MOVE));
   await withRows(database);
   await migrate(database);
+  // A table that came after the move (FRU-44), and holds no row of before.
+  await rowsOf(
+    database,
+    `INSERT INTO screenshots (id, workspace_id, account_id, content, width, height, created_at)
+       VALUES ('shot_1', 'ws_acme', 'acc_alice', '\\x89504e47'::bytea, 1, 1, 1)`,
+  );
 
   return database;
 }
@@ -81,7 +87,7 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the sixteen BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the seventeen BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
     'connectors.attention_at',
     'connectors.created_at',
@@ -94,6 +100,7 @@ it('knows the sixteen BIGINT columns of the worker, and that better-auth has non
     'pairings.created_at',
     'pairings.expires_at',
     'pairings.redeemed_at',
+    'screenshots.created_at',
     'sessions.created_at',
     'sessions.expires_at',
     'sessions.revoked_at',

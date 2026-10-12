@@ -919,6 +919,36 @@ a rule in `ORGANIZATION_PATHS` (`organization-paths.ts`):
   reads the name, then calls it in the process. Its route stays closed to a request: it takes a
   slug, a logo and metadata that nothing reads.
 
+### The picture of a note, taken by the extension (FRU-44)
+
+The extension can attach a picture of the element to a note: `tabs.captureVisibleTab`, cut to the
+element in the background, sent to `POST /screenshot` of the worker of the site's entry. The widget
+writes the address it gets back in the seed. The setting is off until the reviewer turns it on.
+
+- **No new permission.** The capture needs `activeTab`, which the manifest already declares and the
+  browser grants when the reviewer opens the popup on the page, until the page navigates. Without
+  it the browser refuses the capture, and the note goes without a picture.
+- **Only a session of a member sends a picture, and only a member reads it.** `POST /screenshot`
+  takes the session token of the extension, a `client` (the site of the note), and keeps the
+  picture for the workspace of that site when the token is a session of that workspace and its
+  person is a member of it now. `GET /screenshot/<id>` answers the same members, and `404` to
+  anybody else with a token, as for a picture that does not exist; `401` with no token. The address
+  is no secret: 128 random bits, but the route asks who reads. **A picture is never readable like
+  the pins of a site at `read: 'public'`**: what a public site may show is still open (FRU-84).
+- **The guards of the write path.** The rate limit, the CORS of the sites and of the extension,
+  `413` over 1 MB (`MAX_SCREENSHOT_BYTES`), `400` for bytes that do not start like a PNG, or declare
+  a side over 8,192 pixels. A picture is answered with `Content-Type: image/png`, `nosniff`, a
+  `Content-Security-Policy` of `default-src 'none'` and `Cache-Control: private, no-store`.
+- **What the page decides is the area, and nothing else.** The capture request travels on the page
+  bridge, which the page can forge: it buys a picture of its own tab, sent to the worker of its own
+  entry, with a session it never sees, and only when `activeTab` was granted. The background refuses
+  a request from a tab that is not the active one, and the endpoint, the client and the token come
+  from the stored entry and the session, never from the message.
+- **A worker with no database keeps no picture**: both routes answer `404`.
+
+What the picture shows is whatever the element showed on the screen, the open composer of the
+widget included when it covers the element.
+
 ### Personal data
 
 The widget can send, from a third party's page: a hand-written note, a name, an address, the user

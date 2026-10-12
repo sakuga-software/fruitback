@@ -15,7 +15,7 @@ import { type AccountStore, type Role, can } from './accounts.ts';
 import { SESSION_SITES_PATH, handleSessionSites } from './session-sites.ts';
 import { type Auth, authFor } from './auth.ts';
 import { createWorkspaceWithPlugin, handleOrganizationRoutes } from './auth-organization.ts';
-import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
+import { MAX_BODY_BYTES, readBoundedBytes, readBoundedText } from './bounded-body.ts';
 import { AuthUnavailable, handleAuthRoutes, isAuthRoute, sessionOfCookie } from './auth-routes.ts';
 import { consoleCors, handleConsoleSession, isConsoleRoute } from './console-routes.ts';
 import { handleConsoleApi } from './console-api.ts';
@@ -36,7 +36,15 @@ import { PAIR_PATH, pairPage } from './pair-page.ts';
 import { chargeRateLimit, checkRateLimit, maxBatch } from './rate-limit.ts';
 import { cached, invalidate } from './cache.ts';
 import { type Kv, KvError, processKv } from './kv.ts';
-import { postgresAccountStore, postgresSessionStore } from './postgres-stores.ts';
+import { postgresAccountStore, postgresScreenshotStore, postgresSessionStore } from './postgres-stores.ts';
+import {
+  MAX_SCREENSHOT_BYTES,
+  SCREENSHOT_PATH,
+  type ScreenshotStore,
+  newScreenshotId,
+  pngSize,
+  screenshotIdOf,
+} from './screenshots.ts';
 import { withoutAddress } from './postgres.ts';
 import {
   type SessionIdentity,
@@ -226,6 +234,8 @@ export type RequestContext = {
    * the process (`authFor`), built when the server started. A suite hands over one on PGlite.
    */
   auth?: Auth | Promise<Auth>;
+  /** Where the pictures of the notes are kept (FRU-44). A suite hands over one in memory. */
+  screenshots?: ScreenshotStore;
   /**
    * Where the rate limiter and the read cache keep their state (FRU-49). When it is absent, the
    * handler uses `processKv`, which gives the one instance of this process and never a new empty one.
@@ -537,6 +547,15 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
     }
   }
 
+  if (pathname === SCREENSHOT_PATH || pathname.startsWith(`${SCREENSHOT_PATH}/`)) {
+    try {
+      return await handleScreenshot(request, pathname, served, context, cors.headers);
+    } catch (error) {
+      if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, cors.headers);
+      throw error;
+    }
+  }
+
   if (pathname !== '/feedback') {
     return json(404, { error: 'not-found' }, cors.headers);
   }
@@ -646,6 +665,105 @@ async function handleSession(
   }
 
   return json(404, { error: 'not-found' }, headers);
+}
+
+/** Where this worker keeps the pictures of the notes: its database, or nowhere (FRU-44). */
+export function screenshotStoreFor(config: WorkerConfig): ScreenshotStore | undefined {
+  return config.databaseUrl === undefined ? undefined : postgresScreenshotStore(config.databaseUrl);
+}
+
+/**
+ * The account of a session of the extension, when it is a session of `workspace` and that account is
+ * still a member of it (FRU-44). `undefined` for anything else: no token, a token of a site, a
+ * session of another workspace, a person who left.
+ *
+ * Verified by `verifyForClient`, the one place that checks the workspace of a token, with a policy
+ * that holds the worker key and nothing of a site: no site key may stand for a member.
+ */
+async function memberOf(request: Request, config: Served, workspace: string): Promise<string | undefined> {
+  if (config.identitySecret === undefined || config.roleIn === undefined) return undefined;
+  const token = readBearerToken(request.headers.get('Authorization'));
+  if (token === undefined) return undefined;
+  const verified = await verifyForClient(token, {
+    showComments: false,
+    identitySecret: undefined,
+    read: 'authenticated',
+    locale: config.teamLocale,
+    sessions: { secret: config.identitySecret, workspace },
+  });
+  if (verified?.ok !== true || verified.session !== true || verified.reporter.id === undefined) return undefined;
+
+  return (await config.roleIn(workspace, verified.reporter.id)) === undefined ? undefined : verified.reporter.id;
+}
+
+/**
+ * The pictures that the extension takes with a note (FRU-44): `POST /screenshot` keeps one,
+ * `GET /screenshot/<id>` answers it.
+ *
+ * **Both answer a member of a workspace, and nobody else.** A picture shows a page of a staging
+ * site, so it is read like the tracker of a workspace and never like the pins of a public site
+ * (FRU-84 is still open on what a public site may show). The member is the session of the extension:
+ * its token, signed with the worker key, names the account and the workspace, and the role is read
+ * at each request. A picture is sent for a client (`?client=`, the site of the note) and belongs to
+ * the workspace of that site. To anybody who is not one of its members, with a token, a picture
+ * answers `404`, as one that does not exist.
+ *
+ * The rest is the guard of the write path: the rate limit above, the CORS of the sites and of the
+ * extension, `413` over `MAX_SCREENSHOT_BYTES`, `400` for bytes that are not a PNG. A worker with no
+ * database keeps no picture, and answers `404` on both.
+ */
+async function handleScreenshot(
+  request: Request,
+  pathname: string,
+  config: Served,
+  context: RequestContext,
+  headers: Record<string, string>,
+): Promise<Response> {
+  const store = context.screenshots ?? screenshotStoreFor(config);
+  if (store === undefined) return json(404, { error: 'not-found' }, headers);
+
+  if (pathname === SCREENSHOT_PATH) {
+    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+    // The picture is of the workspace of the site whose note it goes with: the client of the call.
+    const route = routeFor(request, config, normalizeClientId(new URL(request.url).searchParams.get('client')));
+    if (!route.ok) return routingFailure(route, headers);
+    const workspace = route.policy.sessions?.workspace;
+    const account = workspace === undefined ? undefined : await memberOf(request, config, workspace);
+    if (workspace === undefined || account === undefined) return json(401, { error: 'identity-required' }, headers);
+
+    const body = await readBoundedBytes(request, MAX_SCREENSHOT_BYTES);
+    if (body === null) return json(413, { error: 'payload-too-large', maxBytes: MAX_SCREENSHOT_BYTES }, headers);
+    const size = pngSize(body);
+    if (size === undefined) return json(400, { error: 'not-a-png' }, headers);
+
+    const id = newScreenshotId();
+    await store.put({ id, workspace, account, png: body, ...size, createdAt: Date.now() });
+    const base = config.publicUrl ?? new URL(request.url).origin;
+
+    return json(201, { url: `${base}${SCREENSHOT_PATH}/${id}`, ...size }, headers);
+  }
+
+  const id = screenshotIdOf(pathname);
+  if (id === undefined) return json(404, { error: 'not-found' }, headers);
+  if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
+  if (readBearerToken(request.headers.get('Authorization')) === undefined)
+    return json(401, { error: 'identity-required' }, headers);
+  const found = await store.get(id);
+  // A picture of another workspace answers as one that does not exist.
+  if (found === undefined || (await memberOf(request, config, found.workspace)) === undefined)
+    return json(404, { error: 'not-found' }, headers);
+
+  return new Response(found.png, {
+    status: 200,
+    headers: {
+      ...headers,
+      'Content-Type': 'image/png',
+      // Read by a member with a token: no shared cache keeps it, and no browser runs it as a page.
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'",
+    },
+  });
 }
 
 /**

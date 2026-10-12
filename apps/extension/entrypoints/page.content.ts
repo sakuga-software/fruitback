@@ -1,5 +1,5 @@
 import { init } from '@fruitback/widget';
-import { CHANNEL, type BridgeMessage, parseBridgeMessage } from '../src/protocol.ts';
+import { CHANNEL, type BridgeMessage, type CaptureResponseMessage, parseBridgeMessage } from '../src/protocol.ts';
 import { createRelayTransport, randomId } from '../src/relay-transport.ts';
 import {
   EXTENSION_API_VERSION,
@@ -29,6 +29,9 @@ import {
  * The cost is that there is no `chrome.*` in here at all — hence the bridge, and hence the relay:
  * the transport this file hands the page posts a message, and the call is made where the token is.
  */
+/** How long the widget waits for a picture before it sends the note without one. */
+const CAPTURE_TIMEOUT_MS = 10_000;
+
 export default defineContentScript({
   // Registered by `background.ts` for the origins somebody turned on, never declared. See
   // wxt.config.ts: an install-time `<all_urls>` is a permission a review tool should not ask for.
@@ -43,6 +46,41 @@ export default defineContentScript({
     window[PAGE_SCRIPT_FLAG] = true;
 
     let widget: ReturnType<typeof init> | undefined;
+    /** The pictures asked for and not answered yet, by the id of the request (FRU-44). */
+    const pictures = new Map<string, (picture: CaptureResponseMessage['picture']) => void>();
+
+    /**
+     * The picture of an element, taken by the background (FRU-44): see `src/capture.ts`. Nothing
+     * comes back in ten seconds, or the background could not take it: no picture, and the note goes.
+     */
+    const captureScreenshot = (element: Element): Promise<CaptureResponseMessage['picture']> =>
+      new Promise((resolve) => {
+        const id = randomId(window);
+        const box = element.getBoundingClientRect();
+        const timer = setTimeout(() => {
+          pictures.delete(id);
+          resolve(undefined);
+        }, CAPTURE_TIMEOUT_MS);
+        pictures.set(id, (picture) => {
+          clearTimeout(timer);
+          resolve(picture);
+        });
+        window.postMessage(
+          {
+            channel: CHANNEL,
+            kind: 'capture-request',
+            id,
+            area: {
+              left: box.left,
+              top: box.top,
+              width: box.width,
+              height: box.height,
+              scale: window.devicePixelRatio,
+            },
+          },
+          '*',
+        );
+      });
     /**
      * The mount that built `widget`, as it was posted (FRU-186).
      *
@@ -107,10 +145,17 @@ export default defineContentScript({
       // Our own handshake and our own relay requests, which `postMessage` delivers back to this
       // window like any other. Ignored here rather than filtered at the source: the isolated world
       // answers both, and a listener that fell through would try to read a mount out of one.
-      if (message.kind === 'ready' || message.kind === 'relay-request') return;
+      if (message.kind === 'ready' || message.kind === 'relay-request' || message.kind === 'capture-request') return;
 
       if (message.kind === 'relay-response') {
         for (const listener of relayListeners) listener(message);
+
+        return;
+      }
+
+      if (message.kind === 'capture-response') {
+        pictures.get(message.id)?.(message.picture);
+        pictures.delete(message.id);
 
         return;
       }
@@ -161,6 +206,8 @@ export default defineContentScript({
         // FRU-101: a site of a workspace, read and written through the reviewer's session. The
         // background relays only for a site its own storage says is in team mode.
         ...(message.relay === true ? { transport: api.transport } : {}),
+        // FRU-44: offered here, and off until the reviewer turns it on in the settings of the widget.
+        captureScreenshot,
       });
       mounted = signature;
     });

@@ -1105,8 +1105,8 @@ PostgreSQL. Porting them to Drizzle first would be work on code that leaves.
   Remove its SQL file, its snapshot and its entry, then run `db:generate`. Do not merge the journal
   by hand: see the first defect below.
 - **Drizzle is named by the files of the database only**: `postgres-schema.ts`, `auth-schema.ts`,
-  `postgres-migrate.ts`, `accounts-postgres.ts` and `session-postgres.ts`, and `postgres.ts` as
-  types. No file that every worker loads imports one of them: `app.ts` takes a store, and `auth.ts`
+  `postgres-migrate.ts`, `accounts-postgres.ts`, `session-postgres.ts` and `screenshots-postgres.ts`,
+  and `postgres.ts` as types. No file that every worker loads imports one of them: `app.ts` takes a store, and `auth.ts`
   takes `migrated`, from `postgres-stores.ts`, which loads them at their first call. A lint rule
   holds both, and test:`loads no file of Drizzle and no file of the driver for a worker without the
 variable` holds the rest.
@@ -1136,7 +1136,7 @@ variable` holds the rest.
   database give no search path, and no schema has the name of the role.
 - **A store reads a `BIGINT` through the schema, never with a raw statement.** Through the schema it
   is a number. In the answer of a raw statement it is a string, and `account-rows.ts` reads a string
-  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the sixteen columns.
+  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the seventeen columns.
 - **A transaction is the one of `postgres.ts`, never `db.transaction` of Drizzle on the pool.** A
   store takes `database.transaction`, which gives it Drizzle on one connection.
 - **The words of an error of Drizzle reach no log.** They quote the statement and its values: an
@@ -1241,7 +1241,7 @@ exact integer`, test:`is null when the column holds no instant, and never 0`. Th
 store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
 2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the sixteen BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the seventeen BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).

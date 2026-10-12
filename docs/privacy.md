@@ -131,6 +131,12 @@ can read them, with or without the widget.
   to. The state of a sign-in with a provider is in a cookie of the browser that started it, not in
   the database.
 
+- **The pictures of the notes, in the PostgreSQL database** (FRU-44), when a reviewer turned on
+  « Attach a picture of the element » in a widget that the extension mounts. A PNG of the element,
+  as the screen showed it, of 1 MB at most, with the workspace it belongs to, the account that sent
+  it and its date. Only a member of that workspace reads it. Deleting the workspace deletes its
+  pictures. The seed in the tracker holds the address of the picture, not the picture.
+
 - **The notes that wait to be sent to a connected address, on disk** (FRU-122), in the accounts file.
   A note goes from there when it arrives, and 30 days after its last attempt when it never does.
 
