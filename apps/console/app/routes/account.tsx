@@ -46,9 +46,13 @@ export default function Account() {
   }, []);
   const [unsent, setUnsent] = useState(false);
 
+  const [stillIn, setStillIn] = useState(false);
+
   async function leave() {
-    await signOut();
-    navigate('/setup', { replace: true });
+    setStillIn(false);
+    if (await signOut()) return navigate('/setup', { replace: true });
+    // The worker did not say that the session ended: it can still be good (FRU-204).
+    setStillIn(true);
   }
 
   const [undeleted, setUndeleted] = useState<string | undefined>();
@@ -122,6 +126,11 @@ export default function Account() {
               {t('Sign out')}
             </Button>
           </div>
+          {stillIn ? (
+            <div className="mt-3">
+              <Problem>{t('You are still signed in: Fruitback did not confirm the sign-out. Try again.')}</Problem>
+            </div>
+          ) : null}
         </Card>
       </div>
       {workspace.role === 'owner' ? (

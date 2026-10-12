@@ -41,6 +41,7 @@ export const FRENCH: Catalog = {
   'composer.failed': 'pas passé — le texte est gardé, réessayez',
   'composer.failedWait': 'Trop de notes en ce moment. Le texte est gardé : renvoyez-le dans une minute.',
   'composer.failedRefused': 'Ce site n’accepte pas votre note d’ici. Le texte est gardé : prévenez l’équipe du site.',
+  'composer.failedSignedOut': 'Votre session a expiré. Le texte est gardé : reconnectez-vous, puis renvoyez-le.',
   'composer.failedTooLarge':
     'Cette note est trop lourde. Le texte est gardé : raccourcissez-la, ou désactivez l’image dans les réglages.',
   'composer.destination': 'Envoyer vers : {destination}',

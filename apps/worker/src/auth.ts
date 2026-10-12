@@ -62,6 +62,9 @@ export const SERVED_PATHS: Readonly<Record<string, string>> = {
   '/error': 'better-auth sends a person here when a sign-in fails before it knows the console',
 };
 
+/** How long an invitation waits (FRU-104). `auth-organization.ts` says the same number in its message. */
+export const INVITATION_SECONDS = 7 * 24 * 60 * 60;
+
 /** How long a link of the e-mail lives: as the link of before (`EMAIL_LINK_TTL_SECONDS`, FRU-98). */
 export const MAGIC_LINK_TTL_SECONDS = 15 * 60;
 
@@ -317,12 +320,22 @@ export async function authOptions(
     // trackers first and ends the sessions of its extensions. The route of the plugin does neither,
     // and a call to it in the process is refused too.
     disableOrganizationDeletion: true,
+    // The invitations (FRU-104). Written, though three are the defaults of 1.7.7: an invitation is
+    // read, accepted and declined by a session whose address is verified, a second invitation of one
+    // address is refused while the first waits, and a workspace has a hundred waiting at most.
+    invitationExpiresIn: INVITATION_SECONDS,
+    invitationLimit: 100,
+    cancelPendingInvitationsOnReInvite: false,
+    requireEmailVerificationOnInvitation: true,
     organizationHooks: {
       // Every way the plugin writes a role: a member it adds (the owner of a new workspace is one),
       // a role it changes, an invitation it keeps.
       beforeAddMember: async ({ member }) => refuseOtherRoles(member.role),
       beforeUpdateMemberRole: async ({ newRole }) => refuseOtherRoles(newRole),
       beforeCreateInvitation: async ({ invitation }) => refuseOtherRoles(invitation.role),
+      // Accepting writes the role of the invitation on a member, and runs no `beforeAddMember`
+      // (read in `routes/crud-invites.mjs` of 1.7.7): a row that holds another role is refused here.
+      beforeAcceptInvitation: async ({ invitation }) => refuseOtherRoles(invitation.role),
       // `/organization/leave` runs no hook (read in `routes/crud-members.mjs` of 1.7.7): the route of
       // the worker ends the sessions of somebody who leaves, in `auth-organization.ts`.
       afterRemoveMember: async ({ member }) =>

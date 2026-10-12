@@ -1,5 +1,5 @@
 /**
- * Sending one e-mail (FRU-98): the sign-in link, and later the invitations.
+ * Sending one e-mail (FRU-98): the sign-in link, and the invitation to a workspace (FRU-104).
  *
  * A seam like `SeedStore`. The worker names what it sends, and an implementation knows how. The one
  * implementation is Scaleway Transactional Email, over its HTTP API: one `fetch`, no SMTP client to
@@ -96,6 +96,62 @@ export function signInMessage(to: string, link: string, minutes: number, locale 
 </body></html>`;
 
   return { to, subject: words.subject, text, html };
+}
+
+/** The languages of an invitation. Any other tag falls back to English. */
+const INVITATION_WORDS = {
+  en: {
+    subject: (workspace: string) => `You are invited to ${workspace} on Fruitback`,
+    lead: (inviter: string, workspace: string, role: string) =>
+      `${inviter} invites you to the workspace « ${workspace} » on Fruitback, as ${role === 'admin' ? 'an admin' : 'a member'}.`,
+    how: (address: string) => `Sign in with ${address}, and you will see the invitation:`,
+    button: 'See the invitation',
+    lasts: (days: number) => `It waits for ${days} days.`,
+    ignore:
+      'This link opens nothing by itself: to join, you sign in with this address. If you expected no invitation, ignore this message.',
+  },
+  fr: {
+    subject: (workspace: string) => `Vous êtes invité dans ${workspace} sur Fruitback`,
+    lead: (inviter: string, workspace: string, role: string) =>
+      `${inviter} vous invite dans l'espace de travail « ${workspace} » sur Fruitback, comme ${role === 'admin' ? 'administrateur' : 'membre'}.`,
+    how: (address: string) => `Connectez-vous avec ${address}, et vous verrez l'invitation :`,
+    button: "Voir l'invitation",
+    lasts: (days: number) => `Elle attend ${days} jours.`,
+    ignore:
+      "Ce lien n'ouvre rien à lui seul : pour rejoindre l'espace, vous vous connectez avec cette adresse. Si vous n'attendiez pas d'invitation, ignorez ce message.",
+  },
+} as const;
+
+/**
+ * An invitation to a workspace (FRU-104).
+ *
+ * **The link is the address of the console, and holds no id and no token.** Whoever reads this
+ * message, or a copy of it, opens nothing with it: the invitation is shown to a session of the
+ * address it was sent to, and to nobody else.
+ *
+ * The name of the workspace and of the inviter are written by people. They are escaped in the HTML,
+ * and they are one line each: the caller reads them from the accounts, which keep them so.
+ */
+export function invitationMessage(
+  to: string,
+  invitation: { inviter: string; workspace: string; role: string; link: string; days: number },
+  locale = 'en',
+): MailMessage {
+  const words = locale.toLowerCase().startsWith('fr') ? INVITATION_WORDS.fr : INVITATION_WORDS.en;
+  const lead = words.lead(invitation.inviter, invitation.workspace, invitation.role);
+  const text = [lead, '', words.how(to), '', invitation.link, '', words.lasts(invitation.days), words.ignore].join(
+    '\n',
+  );
+  const href = escapeHtml(invitation.link);
+  const html = `<!doctype html><html><body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#1c1917;background:#faf9f5;padding:32px">
+<p style="font-size:16px;font-weight:600">${escapeHtml(lead)}</p>
+<p>${escapeHtml(words.how(to))}</p>
+<p><a href="${href}" style="display:inline-block;background:#dd2c27;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none;font-weight:600">${escapeHtml(words.button)}</a></p>
+<p style="color:#78716c;font-size:13px">${escapeHtml(words.lasts(invitation.days))} ${escapeHtml(words.ignore)}</p>
+<p style="color:#a8a29e;font-size:12px;word-break:break-all">${href}</p>
+</body></html>`;
+
+  return { to, subject: words.subject(invitation.workspace), text, html };
 }
 
 function escapeHtml(value: string): string {

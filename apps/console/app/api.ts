@@ -97,6 +97,8 @@ export type Answer<T> = { ok: true; data: T } | { ok: false; status: number; err
  * `undefined` until it said: the path of before is the one taken then.
  */
 let path: 'cookie' | 'token' | undefined;
+/** Whether the worker sends mail with better-auth: `email` in its `betterAuth`. */
+let mails = false;
 
 /** The path of the worker, asked once: the answer of `/auth/providers` says it. */
 async function pathOfWorker(): Promise<'cookie' | 'token' | undefined> {
@@ -207,6 +209,7 @@ export async function signInProviders(): Promise<Providers | undefined> {
   const said: Announced = typeof asked.data === 'object' && asked.data !== null ? asked.data : {};
   const served = said.betterAuth;
   path = typeof served === 'object' && served !== null ? 'cookie' : 'token';
+  mails = path === 'cookie' && (served as { email?: unknown }).email === true;
   const providers = path === 'cookie' ? (served as Partial<Providers>) : said;
 
   return { github: providers.github === true, google: providers.google === true };
@@ -245,14 +248,82 @@ export async function redeemLink(code: string): Promise<Answer<{ account: Accoun
   return result;
 }
 
-/** Ends the session on the worker: the cookie is refused at the next call, in every tab. */
-export async function signOut(): Promise<void> {
-  if ((await pathOfWorker()) === 'cookie') {
-    await send('POST', '/console/auth/sign-out', {});
+/**
+ * Ends the session on the worker: the cookie is refused at the next call, in every tab.
+ *
+ * `false` when the worker did not say that every session ended (FRU-204). The screen then says so
+ * and stays: somebody who reads « signed out » leaves the browser to the next person.
+ *
+ * With better-auth, the session of before is ended too. A browser that signed in before the worker
+ * served better-auth still holds its refresh cookie, good for 30 days, and the worker still takes
+ * it. Both calls are made, whatever the first one answers. FRU-150 removes the second one with the
+ * path of before.
+ */
+export async function signOut(): Promise<boolean> {
+  if ((await pathOfWorker()) !== 'cookie') return before.logOut();
+  const [ended, endedBefore] = await Promise.all([send('POST', '/console/auth/sign-out', {}), before.logOut()]);
 
-    return;
-  }
-  await before.logOut();
+  return ended?.ok === true && endedBefore;
+}
+
+/**
+ * Whether the worker serves better-auth, and so the members and the invitations (FRU-104): the routes
+ * of its organization plugin. A worker of before has neither.
+ */
+export async function servesBetterAuth(): Promise<boolean> {
+  return (await pathOfWorker()) === 'cookie';
+}
+
+/**
+ * Whether the worker sends the message of an invitation (FRU-104). Without a mailer it keeps the
+ * invitation all the same, and the person who invites sends `invitationLink()` by hand.
+ */
+export async function sendsMail(): Promise<boolean> {
+  await pathOfWorker();
+
+  return mails;
+}
+
+/**
+ * The link of every invitation: the page of the console that lists the invitations of whoever signed
+ * in. It names no invitation and opens nothing by itself, so it can be sent by hand, in a chat.
+ */
+export function invitationLink(origin: string = window.location.origin): string {
+  return `${origin}/invitations`;
+}
+
+/** Where the routes of the organization plugin are, on the worker (FRU-149). */
+export const ORGANIZATION = '/console/auth/organization';
+
+/** A member of a workspace, as the worker lists them (FRU-149). */
+export type Member = {
+  id: string;
+  userId: string;
+  role: Role;
+  createdAt: string;
+  user: { id: string; email: string; name: string };
+};
+
+/** An invitation that waits (FRU-104). `organizationName` is there for the person it is for. */
+export type Invitation = {
+  id: string;
+  email: string;
+  role: Role;
+  organizationId: string;
+  organizationName?: string;
+  status: 'pending' | 'accepted' | 'rejected' | 'canceled';
+  expiresAt: string;
+  createdAt?: string;
+};
+
+/**
+ * The invitations that wait for the person who is signed in: the ones sent to the address they proved.
+ * None on a worker of before, which has no invitation.
+ */
+export async function myInvitations(): Promise<Answer<Invitation[]>> {
+  if (!(await servesBetterAuth())) return { ok: true, data: [] };
+
+  return call<Invitation[]>('GET', `${ORGANIZATION}/list-user-invitations`, undefined, { quiet: true });
 }
 
 /** The worker's pairing page with a code after the `#`: the extension reads it from there (FRU-92). */

@@ -898,6 +898,13 @@ async function getFeedback(
         ? found.flat()
         : found.flat().filter((issue) => !seen.has(issue.seed.id) && seen.add(issue.seed.id));
 
+    // The stages of the trackers that answered, in the order of `SEED_STAGES` (FRU-188). A site read in
+    // several places can show a pin of each of them.
+    const reported = await Promise.all(
+      targets.map(async (target) => (await store.stagesFor?.(target)) ?? store.stages ?? SEED_STAGES),
+    );
+    const stages = SEED_STAGES.filter((stage) => reported.some((each) => each.includes(stage)));
+
     // WARNING: asked at each request, and never in the cached answer. The entry of the cache is
     // shared by everybody who may read the page, and the places are for a member only.
     const offered =
@@ -916,7 +923,7 @@ async function getFeedback(
       {
         url,
         issues,
-        stages: store.stages ?? SEED_STAGES,
+        stages,
         ...offered,
         // Asked at each request like the places, and absent for a reader the worker cannot name.
         ...((await signsNotes(request, route.policy)) ? { identified: true } : {}),

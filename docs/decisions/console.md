@@ -51,6 +51,13 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the code of the worker, « Fruitback did not answer. Try again. » for no answer and a `5xx`, and a
   sentence of the screen that blames no field for the rest. No failure clears a field. A copy goes
   through `copyText`, and a copy the browser refuses says so: the text stays on screen to select.
+- **The members and the invitations come from the worker's routes of the organization plugin**
+  (FRU-104): `members.tsx` lists the members to whoever may read them, and the invitations that
+  wait to an owner or an admin, with « Resend » and « Cancel ». A guest sees their own row only, as
+  the worker answers them nothing more. **The front door looks for an invitation first**
+  (`home.tsx`): somebody who signed in from the message of an invitation lands on `/invitations`,
+  not on the setup that makes a workspace of their own. A worker of before has no member list: the
+  screen draws the row of the person and says that invitations come later.
 - **The address of a site is read by `site-address.ts`, on every screen that asks for one**
   (FRU-167). A host with no scheme is `https://`, as in the extension. The field is not `type="url"`:
   the browser stopped the form with its own bubble, in its own language, and the sentence of the
@@ -100,6 +107,17 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the sign-in itself: it has nothing typed to keep.
 - **« Sign out » ends the session on the worker** (`/console/auth/sign-out`): the cookie is refused
   at the next call, in every tab and for whoever copied it.
+- **« Sign out » ends the session of before too** (`/console/session/logout`, FRU-204). A browser
+  that signed in before the worker served better-auth still holds the refresh cookie of before, good
+  for 30 days, and the worker takes it while it serves the path of before. Both calls are made,
+  whatever the first one answers. A `404` on the second one is a worker with no path of before: it
+  reads no refresh cookie, and that is an end. FRU-150 removes this call.
+- **« Sign out » says when it failed.** `signOut` answers `false` unless the worker said that both
+  sessions ended, and « My account » then stays, with « You are still signed in ». A screen that
+  says « signed out » over a session that is still good leaves the browser open to the next person.
+  better-auth 1.7.7 answers `200` to a sign-out with no session, with one that already ended, and
+  with a cookie that is not one (measured, and held by a test of the worker): somebody who signs
+  out in a second tab is not held on that sentence.
 
 ### The reasons, and the measurements
 

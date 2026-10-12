@@ -210,9 +210,15 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   with a choice reads again, so the composer shows the list of now and says which place is gone.
 - **A failed send says what to do next, by its cause** (FRU-156). `plant` answers `true` or a
   `SendFailure` (`failureOf`): `retry` for no answer and a `5xx`, `wait` for a `429`, `refused` for a
-  `401` and a `403`, `too-large` for a `413`. A `403` that names a place gone
+  `403`, `signed-out` for a `401` (FRU-193), `too-large` for a `413`. A `403` that names a place gone
   (`destination-not-allowed`) is a `retry`: the read after it makes the list right. The text is kept
   in every case, and the sentence takes its own line above the buttons, in the live region.
+- **A `401` has its own sentence** (FRU-193): « Your session has ended. Your text is kept: sign in
+  again, then send it. » It shared the sentence of the `403`, which sends the reporter to the team of
+  the site, and that team can do nothing about a session of the extension that ended or a token of the
+  host out of date. It does not say « try again » alone: the token is asked for again at each send,
+  and a host that mints a bad one mints it again. The widget does not know which of the two it is, so
+  the sentence names no extension and no button.
 
 ### The reasons, and the history
 
