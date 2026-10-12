@@ -180,6 +180,37 @@ describe('the proofs, asked again', () => {
     assert.equal((await byId(never.id))?.lostAt, undefined);
   });
 
+  it('says once that a proof lapsed, when the DNS did not answer for the whole grace', async () => {
+    const accounts = store();
+    const alice = await accounts.signIn({ provider: 'email', subject: 'a@acme.dev', email: 'a@acme.dev' });
+    const workspace = await accounts.createWorkspace('Acme', alice.id);
+    const acme = await accounts.addDomain(workspace.id, 'acme.dev', 0);
+    await accounts.noteDomainCheck(acme.id, 'found', 1_000);
+    const warned = mock.method(console, 'warn', () => {});
+    const state = async (now: number) => proofState((await accounts.domains(workspace.id))[0] ?? {}, now);
+
+    // Silent passes inside the grace: proven, and nothing said.
+    for (let pass = 1; pass * (RECHECK_MS + 1) <= PROOF_GRACE_MS; pass += 1) {
+      await recheckDomains(accounts, silent, 1_000 + pass * (RECHECK_MS + 1));
+    }
+    assert.equal(await state(1_000 + PROOF_GRACE_MS), 'proven');
+    assert.equal(warned.mock.callCount(), 0);
+
+    // The pass that crosses the line says it, and the ones after it do not say it again.
+    const after = 1_000 + PROOF_GRACE_MS + RECHECK_MS;
+    await recheckDomains(accounts, silent, after);
+    assert.equal(await state(after), 'lost');
+    assert.equal(warned.mock.callCount(), 1);
+    assert.match(
+      String(warned.mock.calls[0]?.arguments[0]),
+      /the DNS did not confirm the domain acme\.dev .* for 72 hours/,
+    );
+    await recheckDomains(accounts, silent, after + RECHECK_MS + 1);
+    assert.equal(warned.mock.callCount(), 1);
+    // No moment of loss is invented: the DNS never answered without the record.
+    assert.equal((await accounts.domains(workspace.id))[0]?.lostAt, undefined);
+  });
+
   it('changes nothing when the DNS does not answer', async () => {
     const accounts = store();
     const alice = await accounts.signIn({ provider: 'email', subject: 'a@acme.dev', email: 'a@acme.dev' });

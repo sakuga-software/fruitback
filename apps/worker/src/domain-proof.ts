@@ -182,6 +182,15 @@ export async function recheckDomains(
         `[fruitback] the domain ${domain.domain} of the workspace ${domain.workspaceId} lost its proof: its previews are not covered any more`,
       );
     }
+    // A proof that nothing confirmed for `PROOF_GRACE_MS` is lost too, with no answer to date it by.
+    // Said at the pass that crosses the line, and at no other: the check before this one was inside it.
+    const lapsed = (at: number | undefined) =>
+      domain.verifiedAt !== undefined && at !== undefined && at - domain.verifiedAt > PROOF_GRACE_MS;
+    if (answer === 'unknown' && domain.lostAt === undefined && lapsed(now) && !lapsed(domain.checkedAt)) {
+      console.warn(
+        `[fruitback] the DNS did not confirm the domain ${domain.domain} of the workspace ${domain.workspaceId} for ${PROOF_GRACE_MS / 3_600_000} hours: its previews are not covered any more`,
+      );
+    }
   }
 }
 

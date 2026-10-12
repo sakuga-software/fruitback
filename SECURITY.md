@@ -786,7 +786,9 @@ site only while the workspace of that site proves the domain.
 - **The proof is asked again** every six hours (`RECHECK_MS`). An answer of the DNS without the record
   ends it at once: `GET /session/sites` stops listing the previews of the site, the console shows the
   domain as lost with the moment, and the log says it once. A DNS that does not answer changes
-  nothing, **for 72 hours at most** (`PROOF_GRACE_MS`): after that a proof nobody confirmed is lost.
+  nothing, **for 72 hours at most** (`PROOF_GRACE_MS`): after that a proof nobody confirmed is lost
+  in the same way, the console says that the DNS did not confirm it, with no moment, and the log says
+  it once, at the pass that finds it.
   **Limit:** between two checks, a record that was removed still proves the domain, six hours at most.
 - **The worker asks the DNS of its host**, with no DNSSEC check of its own. Who can answer the
   resolver of the worker in place of the zone can prove any domain. Tests never ask a real DNS: the
