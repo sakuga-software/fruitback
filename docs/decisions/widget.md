@@ -67,7 +67,12 @@ restyle, how a pin says how sure it is, and who carries the calls to the worker.
   - `style, script { display: none }` — `all: initial` undoes the browser's own rule and renders the
     stylesheet as visible text on the client's page.
   - `display` is restored at the reset in `host.ts` — every block element is otherwise inline, and
-    vertical margins on it silently do nothing.
+    vertical margins on it silently do nothing. **A new block element goes into that rule.** `ul` and
+    `ol` were missing until FRU-154: the replies of a thread were inline, so their `max-height`, their
+    scroll and their indent did nothing. `e2e/thread.spec.ts` reads the computed `display`.
+  - **A list that scrolls takes focus and has a name** (FRU-154): the replies have `tabindex="0"` and
+    `thread.replies`, or axe reports `scrollable-region-focusable` and a keyboard cannot read the end.
+    The note and each reply have `overflow-wrap: anywhere`, because an address has no space.
   - the reset is `*:not(svg, svg *)`. Since SVG2 a path's geometry is a CSS property, so a bare star
     computes `d: none` and every icon renders as an empty box, with nothing in the console and
     nothing a unit test can see.
@@ -203,6 +208,11 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   place** (`destinationToSend`). The body stays the seed. `apps/extension/src/relay.test.ts` reads
   the paths of `embed.ts` up to the `?`: write the two addresses as two whole templates. A refusal
   with a choice reads again, so the composer shows the list of now and says which place is gone.
+- **A failed send says what to do next, by its cause** (FRU-156). `plant` answers `true` or a
+  `SendFailure` (`failureOf`): `retry` for no answer and a `5xx`, `wait` for a `429`, `refused` for a
+  `401` and a `403`, `too-large` for a `413`. A `403` that names a place gone
+  (`destination-not-allowed`) is a `retry`: the read after it makes the list right. The text is kept
+  in every case, and the sentence takes its own line above the buttons, in the live region.
 
 ### The reasons, and the history
 

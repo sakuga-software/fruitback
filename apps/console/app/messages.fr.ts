@@ -263,6 +263,20 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Fruitback n’a pas répondu. Les sources et leurs sites n’ont pas pu être lus.',
   Close: 'Fermer',
   Remove: 'Retirer',
+  'Only an owner or an admin of the workspace adds a site.':
+    'Seul un propriétaire ou un administrateur du workspace ajoute un site.',
+  'The site was not added. Try again.': 'Le site n’a pas été ajouté. Réessayez.',
+  'The workspace was not created. Try again.': 'Le workspace n’a pas été créé. Réessayez.',
+  'Only an owner or an admin of the workspace removes a site.':
+    'Seul un propriétaire ou un administrateur du workspace retire un site.',
+  'This site is still here. Try again.': 'Ce site est toujours là. Réessayez.',
+  'This browser was not connected. Try again.': 'Ce navigateur n’a pas été connecté. Réessayez.',
+  'The browser refused the copy. Select the script above and copy it by hand.':
+    'Le navigateur a refusé la copie. Sélectionnez le script ci-dessus et copiez-le à la main.',
+  'The browser refused the copy. Select the secret above and copy it by hand.':
+    'Le navigateur a refusé la copie. Sélectionnez le secret ci-dessus et copiez-le à la main.',
+  'Only the owner of the workspace deletes it.': 'Seul le propriétaire du workspace le supprime.',
+  'The workspace was not deleted. Try again.': 'Le workspace n’a pas été supprimé. Réessayez.',
   'Remove {site}': 'Retirer {site}',
   'The widget stops on {site}, and the script pasted there no longer works: adding the site again gives it a new script. The notes already in a tracker stay there.':
     'Le widget s’arrête sur {site}, et le script collé là ne marche plus : ajouter le site à nouveau lui donne un nouveau script. Les notes déjà dans un tracker y restent.',
@@ -270,4 +284,18 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Its sites keep their notes in the workspace again. The issues already in Linear stay there.':
     'Ses sites gardent de nouveau leurs notes dans le workspace. Les issues déjà dans Linear y restent.',
   'Cloud workspace · beta': 'Workspace Cloud · bêta',
+
+  New: 'Nouveau',
+  'To do': 'À faire',
+  'In progress': 'En cours',
+  Done: 'Terminé',
+  Closed: 'Fermé',
+  'This setting did not change. Try again.': 'Ce réglage n’a pas changé. Réessayez.',
+  'Status of the pins': 'État des pins',
+  'Which Linear state gives which colour on the page.': 'Quel état de Linear donne quelle couleur sur la page.',
+  'The states appear here once a site sends its notes to a team.':
+    'Les états apparaissent ici dès qu’un site envoie ses notes à une équipe.',
+  'Show Linear comments as replies': 'Montrer les commentaires de Linear comme réponses',
+  'Fruitback could not read the states of Linear. The colours you set are not lost.':
+    'Fruitback n’a pas pu lire les états de Linear. Les couleurs que vous avez réglées ne sont pas perdues.',
 };

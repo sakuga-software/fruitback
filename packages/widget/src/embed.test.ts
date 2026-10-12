@@ -1,7 +1,7 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseSeed } from '@fruitback/shared';
-import { init, plant } from './embed.ts';
+import { failureOf, init, plant } from './embed.ts';
 import { capturePlace } from './capture.ts';
 import type { TransportRequest, TransportResponse } from './transport.ts';
 import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
@@ -880,7 +880,7 @@ describe('who carries the calls', () => {
       },
     });
 
-    assert.equal(planted, false);
+    assert.equal(planted, 'retry');
   });
 
   it('reports a refused write as a failure, so the composer keeps the note', async () => {
@@ -903,7 +903,7 @@ describe('who carries the calls', () => {
       },
     });
 
-    assert.equal(planted, false);
+    assert.equal(planted, 'retry');
   });
 
   /**
@@ -1142,5 +1142,37 @@ describe('the list after a failed read (FRU-153)', () => {
     assert.equal(text('.fruitback-sidebar-empty'), 'No note on this page yet.');
 
     widget.destroy();
+  });
+});
+
+/**
+ * What a refused write says to the reporter (FRU-156). One sentence for six causes told the reporter
+ * to try again where trying again could never work.
+ */
+describe('why a send failed', () => {
+  const answer = (status: number, error?: string) => ({
+    status,
+    body: error === undefined ? '' : JSON.stringify({ error }),
+  });
+
+  it('says to try again when the worker failed or could not keep the note', () => {
+    assert.equal(failureOf(answer(503, 'store-unavailable')), 'retry');
+    assert.equal(failureOf(answer(502)), 'retry');
+    assert.equal(failureOf(answer(500, 'internal')), 'retry');
+  });
+
+  it('says to wait on a 429', () => {
+    assert.equal(failureOf(answer(429, 'rate-limited')), 'wait');
+  });
+
+  it('says a second try will not work on a 401 or a 403, and on a note too large', () => {
+    assert.equal(failureOf(answer(401, 'unauthenticated')), 'refused');
+    assert.equal(failureOf(answer(403, 'origin-not-allowed')), 'refused');
+    assert.equal(failureOf(answer(403)), 'refused');
+    assert.equal(failureOf(answer(413, 'too-large')), 'too-large');
+  });
+
+  it('leaves a place that is gone to a second try, which the read after it makes right (FRU-123)', () => {
+    assert.equal(failureOf(answer(403, 'destination-not-allowed')), 'retry');
   });
 });

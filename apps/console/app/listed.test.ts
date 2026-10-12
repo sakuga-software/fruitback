@@ -1,7 +1,8 @@
+import { readFileSync, readdirSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { UNREACHABLE } from './api.ts';
-import { known, listedOf } from './listed.ts';
+import { edited, known, listedOf } from './listed.ts';
 
 describe('a list read from the worker (FRU-162)', () => {
   const sites = (data: { sites: string[] }) => data.sites;
@@ -21,5 +22,34 @@ describe('a list read from the worker (FRU-162)', () => {
     assert.equal(known('loading'), undefined);
     assert.equal(known('failed'), undefined);
     assert.deepEqual(known([]), []);
+  });
+
+  it('stays not read when a row is removed from it or added to it', () => {
+    const remove = (items: readonly string[]) => items.filter((item) => item !== 'a');
+
+    assert.equal(edited('failed', remove), 'failed');
+    assert.equal(edited('loading', remove), 'loading');
+    assert.deepEqual(edited(['a', 'b'], remove), ['b']);
+  });
+});
+
+describe('a screen that reads a list (FRU-162)', () => {
+  /** A refused answer that becomes an empty list in the state of a screen: `if (!answer.ok) return setX([])`. */
+  const EMPTY_FOR_A_FAILURE = /!\w+\.ok\)[^;\n]*set\w+\(\[\]\)/;
+  const routes = new URL('./routes/', import.meta.url);
+
+  it('never keeps an empty list for an answer that failed', () => {
+    const found = readdirSync(routes).filter((name) =>
+      EMPTY_FOR_A_FAILURE.test(readFileSync(new URL(name, routes), 'utf8')),
+    );
+
+    assert.deepEqual(found, []);
+  });
+
+  it('finds the line it looks for: the control', () => {
+    // The line of the panel of a connector before it was a `Listed`: a failed read of the states read
+    // as « no site sends here yet ».
+    assert.match('      if (!answer.ok) return setStates([]);', EMPTY_FOR_A_FAILURE);
+    assert.doesNotMatch('      setStates(listedOf(answer, (data) => data.states));', EMPTY_FOR_A_FAILURE);
   });
 });

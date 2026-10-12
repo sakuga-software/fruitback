@@ -37,11 +37,23 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   source go through `Confirm` (`confirm.tsx`), which says what the gesture costs, gives focus to
   « Keep it », and acts only on a second button that names the site or the source. « Keep it » and
   Escape give the row back, with focus on its first button.
+  **A refused call says its own cause** (FRU-164): `problemOf` (`problems.ts`) gives the sentence of
+  the code of the worker, « Fruitback did not answer. Try again. » for no answer and a `5xx`, and a
+  sentence of the screen that blames no field for the rest. No failure clears a field. A copy goes
+  through `copyText`, and a copy the browser refuses says so: the text stays on screen to select.
+- **The address of a site is read by `site-address.ts`, on every screen that asks for one**
+  (FRU-167). A host with no scheme is `https://`, as in the extension. The field is not `type="url"`:
+  the browser stopped the form with its own bubble, in its own language, and the sentence of the
+  console never showed. The worker still decides what a site is.
 - **The console draws its controls with HeroUI v3, through its own kit** (FRU-125). `ui.tsx` is the
   one file that imports `@heroui/react`: `Button`, `Field`, `Choice` (a select), `Pick` (radios),
   `Chip` and `Problem`. A screen uses the kit, and `messages.test.ts` fails on a native control in a
   screen. **HeroUI takes the theme**: `app.css` gives its variables the tokens of `design/README.md`,
   and HeroUI names `--color-accent`, `--color-muted` and `--color-surface` from them, so those three
-  are no longer in our `@theme`. **A button takes no `title`**: a tooltip does not open on a disabled
+  are no longer in our `@theme`. **A state that HeroUI derives is measured, and given in `app.css` when
+  it fails** (FRU-163): it lightens a hovered button, and white on that red was 3.9:1, so
+  `--accent-hover` is the strong accent (6.47:1). It draws an alert as a white card with muted text, so
+  `.alert--danger` puts the danger of the theme on the text and the border (5.84:1 on its tint).
+  `e2e/console-kit.spec.ts` measures both. **A button takes no `title`**: a tooltip does not open on a disabled
   control, so the reason is written beside it. The overlays of React Aria position with inline
   styles, which the console's CSP allows (`style-src 'unsafe-inline'`); its scripts stay hashed.

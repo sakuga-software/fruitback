@@ -57,6 +57,12 @@ export const ENGLISH = {
   'composer.sending': 'sending…',
   'composer.sent': 'sent',
   'composer.failed': 'did not go through — your text is kept, try again',
+  // Why a send failed, when trying again at once will not help (FRU-156).
+  'composer.failedWait': 'Too many notes just now. Your text is kept: send it again in a minute.',
+  'composer.failedRefused':
+    'This site does not accept your note from here. Your text is kept: tell the team of the site.',
+  'composer.failedTooLarge':
+    'This note is too large. Your text is kept: shorten it, or turn the picture off in the settings.',
   // The line that says where the note goes (FRU-123). A member of the team reads it, nobody else.
   // `{destination}` is the name the worker gives a place, or `composer.destinationUnnamed`.
   'composer.destination': 'Send to: {destination}',
@@ -72,6 +78,7 @@ export const ENGLISH = {
   'thread.dialog': 'Feedback {identifier}',
   'thread.noNote': 'No note.',
   'thread.noReplies': 'No reply yet.',
+  'thread.replies': 'Replies',
   'thread.team': 'Team',
   'thread.anonymous': 'Anonymous',
   'thread.orphan': 'Element not found — approximate position.',

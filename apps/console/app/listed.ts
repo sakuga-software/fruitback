@@ -18,3 +18,11 @@ export function listedOf<D, T>(answer: Answer<D>, pick: (data: D) => readonly T[
 export function known<T>(list: Listed<T>): readonly T[] | undefined {
   return typeof list === 'string' ? undefined : list;
 }
+
+/**
+ * A list changed by a gesture of this screen, an added or a removed row. A list that was not read
+ * stays what it is: a row taken off nothing would read as « No site yet ».
+ */
+export function edited<T>(list: Listed<T>, edit: (items: readonly T[]) => readonly T[]): Listed<T> {
+  return typeof list === 'string' ? list : edit(list);
+}

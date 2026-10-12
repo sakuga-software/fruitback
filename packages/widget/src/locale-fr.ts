@@ -39,6 +39,10 @@ export const FRENCH: Catalog = {
   'composer.sending': 'envoi…',
   'composer.sent': 'envoyé',
   'composer.failed': 'pas passé — le texte est gardé, réessayez',
+  'composer.failedWait': 'Trop de notes en ce moment. Le texte est gardé : renvoyez-le dans une minute.',
+  'composer.failedRefused': 'Ce site n’accepte pas votre note d’ici. Le texte est gardé : prévenez l’équipe du site.',
+  'composer.failedTooLarge':
+    'Cette note est trop lourde. Le texte est gardé : raccourcissez-la, ou désactivez l’image dans les réglages.',
   'composer.destination': 'Envoyer vers : {destination}',
   'composer.destinations': 'Destination de cette note',
   'composer.destinationUnnamed': 'Destination {position}',
@@ -52,6 +56,7 @@ export const FRENCH: Catalog = {
   'thread.dialog': 'Feedback {identifier}',
   'thread.noNote': 'Aucune note.',
   'thread.noReplies': 'Pas encore de réponse.',
+  'thread.replies': 'Réponses',
   'thread.team': 'Équipe',
   'thread.anonymous': 'Anonyme',
   'thread.orphan': 'Élément introuvable — position approximative.',

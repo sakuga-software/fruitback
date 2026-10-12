@@ -11,9 +11,17 @@ import { FRENCH } from './messages.fr.ts';
  * and every piece of text a screen shows with neither.
  */
 const APP = new URL('./', import.meta.url);
-const screens = [...readdirSync(new URL('routes/', APP)).map((name) => `routes/${name}`), 'root.tsx', 'ui.tsx'].filter(
-  (name) => name.endsWith('.tsx'),
-);
+// `confirm.tsx` is a part of two screens, and `problems.ts` holds the sentences of their failures
+// (FRU-164): a sentence marked there is shown by a screen, so the guard reads them too.
+const screens = [
+  ...readdirSync(new URL('routes/', APP))
+    .map((name) => `routes/${name}`)
+    .filter((name) => name.endsWith('.tsx')),
+  'root.tsx',
+  'ui.tsx',
+  'confirm.tsx',
+  'problems.ts',
+];
 const sources = new Map(screens.map((name) => [name, readFileSync(new URL(name, APP), 'utf8')]));
 
 /** The first argument of each `t(` and `msg(`, when it is a literal. */

@@ -49,11 +49,34 @@ h1 {
 
 .row {
   display: flex;
+  /* The buttons go under the words when the row has no room for both: French is a third longer, and
+     the popup starts at 280px (FRU-169). */
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px 12px;
   padding-top: 10px;
   border-top: 1px solid var(--line);
+}
+
+/* The words give way, not the button beside them: a name can be an address of 40 characters. */
+.row > .state {
+  flex: 1 1 7rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Two buttons that touch read as one control, and one of them turns the site off. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* A button of the popup itself, under what the screen says: the same space above it. */
+#app > button,
+#app > .actions {
+  margin-top: 8px;
 }
 
 label {
@@ -82,7 +105,14 @@ button {
   color: var(--on-accent);
   font: inherit;
   font-weight: 600;
+  /* A button stays on one line. */
+  white-space: nowrap;
   cursor: pointer;
+}
+
+button.long {
+  white-space: normal;
+  text-align: start;
 }
 
 .state {
