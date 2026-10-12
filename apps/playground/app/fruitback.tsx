@@ -245,12 +245,19 @@ function createRefresher(overlay: Overlay, setStatus: (message: string) => void)
   };
 }
 
-/** Dev-only chrome. Marked `data-fruitback-dev` so pointing at it never captures it. */
+/**
+ * Dev-only chrome. Marked `data-fruitback-dev` so pointing at it never captures it.
+ *
+ * From `sm` it floats in the corner, and leaves 18rem to the dock of the widget. Under `sm` that left
+ * it 102 px at 390 px wide: a column over a third of the page, with its buttons out of it (FRU-171).
+ * So on a phone it is a block at the end of the page, which covers nothing. Its margin under it keeps
+ * it above the dock when the page is scrolled to its end.
+ */
 function DevToolbar({ status, planted, onReload }: { status: string; planted: string; onReload: () => void }) {
   return (
     <div
       data-fruitback-dev="toolbar"
-      className="fixed bottom-4 left-4 z-[2147483001] flex max-w-[calc(100vw-18rem)] flex-wrap items-center gap-2 rounded-xl bg-stone-900 px-4 py-3 text-sm text-stone-50 shadow-lg"
+      className="z-[2147483001] flex flex-wrap items-center gap-2 rounded-xl bg-stone-900 px-4 py-3 text-sm text-stone-50 shadow-lg max-sm:mx-2 max-sm:mt-6 max-sm:mb-20 sm:fixed sm:bottom-4 sm:left-4 sm:max-w-[calc(100vw-18rem)]"
     >
       <strong>
         Fruitback <span className="rounded bg-red-600 px-1.5 py-0.5 font-semibold">playground</span>
