@@ -572,31 +572,6 @@ export function createSqliteAccountStore(path: string): AccountStore {
       connect(path).prepare('DELETE FROM workspaces WHERE id = ?').run(workspace);
     },
 
-    async createEmailLink({ codeHash, email, expiresAt }) {
-      const database = connect(path);
-      const now = Date.now();
-      // Old links go when a new one is made, so the table holds what can still be spent.
-      database.prepare('DELETE FROM email_links WHERE expires_at <= ? OR spent_at IS NOT NULL').run(now);
-      database
-        .prepare('INSERT INTO email_links (code_hash, email, created_at, expires_at) VALUES (?, ?, ?, ?)')
-        .run(codeHash, email, now, expiresAt);
-    },
-
-    async spendEmailLink(codeHash, now) {
-      const database = connect(path);
-      // One statement decides who spent it: two tabs that open the same link get one sign-in.
-      const spent = database
-        .prepare('UPDATE email_links SET spent_at = ? WHERE code_hash = ? AND spent_at IS NULL AND expires_at > ?')
-        .run(now, codeHash, now);
-      if (spent.changes !== 1) return undefined;
-
-      const row = database.prepare('SELECT email FROM email_links WHERE code_hash = ?').get(codeHash) as
-        | { email: unknown }
-        | undefined;
-
-      return typeof row?.email === 'string' ? row.email : undefined;
-    },
-
     async clientMap() {
       const database = connect(path);
       const rows = database.prepare(`SELECT ${SITE_COLUMNS} FROM sites`).all() as Record<string, unknown>[];

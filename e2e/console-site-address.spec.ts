@@ -22,7 +22,6 @@ async function stubWorker(page: Page): Promise<string[]> {
     const request = route.request();
     const { pathname } = new URL(request.url());
     const json = (body: unknown, status = 200) => route.fulfill({ status, json: body });
-    if (pathname === '/console/session/refresh') return json({ accessToken: 'token' });
     if (pathname === '/console/me') return json(me);
     if (pathname === '/console/workspaces/w1/sites') {
       if (request.method() === 'GET') return json({ sites: [] });

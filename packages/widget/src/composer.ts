@@ -20,7 +20,7 @@ import { type MessageKey, type Translator, createTranslator, languageOf } from '
 /** Long enough to read the confirmation, short enough not to be in the way. */
 const SENT_MS = 1_100;
 
-export type ComposerState = 'idle' | 'sending' | 'sent' | 'failed';
+export type ComposerState = 'idle' | 'sending' | 'sent' | 'kept' | 'failed';
 
 /**
  * Why a send failed, so the composer says what to do next (FRU-156). The text is kept in every case.
@@ -74,6 +74,14 @@ export type ComposerOptions = {
    * the note goes.
    */
   destinations?: DestinationChoice;
+  /**
+   * Keep the note for later rather than send it (FRU-124). A second action beside « Send », shown
+   * at each open while `offered()` says so. « Send » keeps its meaning. Left out: no such action.
+   */
+  keep?: {
+    offered(): boolean;
+    onKeep: (note: string, reporter?: SeedReporter, destination?: string) => Promise<true | SendFailure>;
+  };
   /** The widget's words (FRU-37). Left out: English, with dates in this document's language. */
   translator?: Translator;
 };
@@ -139,6 +147,7 @@ export function createComposer(options: ComposerOptions): Composer {
   // parsed into the HTML namespace and renders nothing (FRU-36).
   send.append(createIcon(document, 'drop'), t.text('composer.send'));
   const cancel = root.querySelector('[data-fruitback-cancel]') as HTMLButtonElement;
+  const keep = root.querySelector('[data-fruitback-keep]') as HTMLButtonElement;
   const status = root.querySelector('[data-fruitback-status]') as HTMLElement;
   const identify = root.querySelector('[data-fruitback-identify]') as HTMLButtonElement;
   const who = root.querySelector('[data-fruitback-who]') as HTMLElement;
@@ -164,6 +173,7 @@ export function createComposer(options: ComposerOptions): Composer {
   rememberLabel.hidden = memory === undefined;
   askForNameOrNot();
   cancel.textContent = t.text('composer.cancel');
+  keep.textContent = t.text('composer.keep');
   placeList.setAttribute('aria-label', t.text('composer.destinations'));
 
   /** The places as the line was last drawn from them, and the id of the one it shows. */
@@ -184,12 +194,14 @@ export function createComposer(options: ComposerOptions): Composer {
     root.dataset.fruitbackState = next;
     // Disabled while in flight: a second click would plant the same note twice, and the worker has
     // no way to tell the difference.
-    send.disabled = next === 'sending' || next === 'sent';
+    send.disabled = next === 'sending' || next === 'sent' || next === 'kept';
+    keep.disabled = send.disabled;
     field.readOnly = next === 'sending';
     status.textContent = next === 'idle' ? '' : t.text(next === 'failed' ? FAILURES[failure] : STATUS[next]);
   }
 
-  async function submit(): Promise<void> {
+  /** Send the note, or keep it for later: the same states, and the text kept on any failure. */
+  async function submit(action: 'send' | 'keep' = 'send'): Promise<void> {
     if (state === 'sending') return;
 
     const mine = session;
@@ -198,7 +210,10 @@ export function createComposer(options: ComposerOptions): Composer {
     if (asksForName && remember.checked) memory?.set(typedName());
     let failure: SendFailure | undefined;
     try {
-      const result = await options.onSubmit(field.value, reporterFromFields(), selected);
+      const result =
+        action === 'keep' && options.keep !== undefined
+          ? await options.keep.onKeep(field.value, reporterFromFields(), selected)
+          : await options.onSubmit(field.value, reporterFromFields(), selected);
       if (result === false) failure = 'retry';
       else if (typeof result === 'string') failure = result;
     } catch {
@@ -217,7 +232,7 @@ export function createComposer(options: ComposerOptions): Composer {
 
     if (mine !== session) return;
 
-    setState('sent');
+    setState(action === 'keep' ? 'kept' : 'sent');
     closing = view?.setTimeout(close, SENT_MS) ?? 0;
   }
 
@@ -240,6 +255,7 @@ export function createComposer(options: ComposerOptions): Composer {
     session += 1;
     field.value = '';
     askForNameOrNot();
+    keep.hidden = options.keep?.offered() !== true;
     showRememberedName();
     // Folded at each open, on the place chosen last. The line says where, and that is enough for
     // the many notes that go where the one before went.
@@ -422,6 +438,7 @@ export function createComposer(options: ComposerOptions): Composer {
   const stopFollowingPlaces = choice?.subscribe(drawDestinations);
 
   send.addEventListener('click', () => void submit());
+  keep.addEventListener('click', () => void submit('keep'));
   cancel.addEventListener('click', close);
   field.addEventListener('keydown', (event) => {
     const key = event as KeyboardEvent;
@@ -455,7 +472,13 @@ const GAP = 10;
 const STATUS = {
   sending: 'composer.sending',
   sent: 'composer.sent',
+  kept: 'composer.kept',
 } as const satisfies Record<Exclude<ComposerState, 'idle' | 'failed'>, MessageKey>;
+
+/** The sentence of a failed send, for another part of the widget that sends: the list of drafts (FRU-124). */
+export function failureText(t: Translator, failure: SendFailure): string {
+  return t.text(FAILURES[failure]);
+}
 
 /** What a failed send says, by its cause (FRU-156). */
 const FAILURES = {
@@ -481,6 +504,7 @@ const TEMPLATE = `
   <div data-fruitback-destination-gone class="fruitback-composer-notice" role="status" aria-live="polite"></div>
   <div class="fruitback-composer-foot">
     <span data-fruitback-status class="fruitback-composer-status" role="status" aria-live="polite"></span>
+    <button type="button" data-fruitback-keep class="fruitback-composer-ghost fruitback-composer-keep" hidden></button>
     <button type="button" data-fruitback-cancel class="fruitback-composer-ghost"></button>
     <button type="button" data-fruitback-send class="fruitback-composer-send"></button>
   </div>
@@ -616,14 +640,23 @@ const STYLES = `
   color: var(--fruitback-color-on-accent);
 }
 .fruitback-composer-send[disabled] { opacity: 0.55; cursor: default; }
-.fruitback-composer[data-fruitback-state="sent"] .fruitback-composer-status {
+.fruitback-composer-keep[hidden] { display: none; }
+/* Kept for later is a second action: the colour of the text, not the accent of Send (FRU-124). */
+.fruitback-composer-keep { color: var(--fruitback-color-text); box-shadow: inset 0 0 0 1px var(--fruitback-color-border-strong); }
+.fruitback-composer-keep[disabled] { opacity: 0.55; cursor: default; }
+.fruitback-composer[data-fruitback-state="sent"] .fruitback-composer-status,
+.fruitback-composer[data-fruitback-state="kept"] .fruitback-composer-status {
   color: var(--fruitback-color-success);
   font-weight: 600;
 }
 .fruitback-composer[data-fruitback-state="failed"] .fruitback-composer-status { color: var(--fruitback-color-accent); }
 /* A failure says what to do in a sentence: it takes the whole line above the buttons (FRU-156). */
 .fruitback-composer[data-fruitback-state="failed"] .fruitback-composer-status { flex-basis: 100%; }
-.fruitback-composer[data-fruitback-state="failed"] .fruitback-composer-ghost { margin-inline-start: auto; }
+/* The first button of the row is pushed to the end: Keep for later when it is there, Cancel otherwise. */
+.fruitback-composer[data-fruitback-state="failed"] .fruitback-composer-keep:not([hidden]),
+.fruitback-composer[data-fruitback-state="failed"] .fruitback-composer-keep[hidden] + .fruitback-composer-ghost {
+  margin-inline-start: auto;
+}
 
 @keyframes fruitback-composer-in {
   from { opacity: 0; transform: translateY(-6px) scale(0.96); }

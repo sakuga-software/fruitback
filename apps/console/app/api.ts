@@ -1,20 +1,14 @@
 /**
  * The console's one way to the worker (FRU-99).
  *
- * **The console holds no token** (FRU-148). A worker that serves better-auth keeps the session of the
- * console in a cookie that no script reads (`HttpOnly`, `SameSite=Strict`, `Path=/console`), and every
- * call sends it (`credentials: 'include'`, in `transport.ts`). There is nothing to refresh: the worker
- * reads the session in its database at each call.
- *
- * The worker says in `GET /auth/providers` which path it serves. A worker that answers with no
- * `betterAuth` is a worker of before, and the console signs in as before (`session-of-before.ts`):
- * the console and the worker are not deployed at the same instant. **A worker that refuses that
- * question, or does not answer it, said nothing** (FRU-205): no call leaves, on either path, and the
- * caller gets that refusal.
+ * **The console holds no token** (FRU-148). The worker keeps the session of the console in a cookie
+ * that no script reads (`HttpOnly`, `SameSite=Strict`, `Path=/console`), and every call sends it
+ * (`credentials: 'include'`, in `transport.ts`). There is nothing to refresh: the worker reads the
+ * session in its database at each call. The sign-in of before, with its token in memory, went with
+ * FRU-150.
  */
 
 import { locale } from './i18n.ts';
-import * as before from './session-of-before.ts';
 import { API, UNREACHABLE, reach } from './transport.ts';
 
 export { API, UNREACHABLE, onReachability } from './transport.ts';
@@ -94,38 +88,14 @@ export type Me = { account: Account; workspaces: Workspace[] };
 
 export type Answer<T> = { ok: true; data: T } | { ok: false; status: number; error: string };
 
-type Way = 'cookie' | 'token';
-type Refusal = Extract<Answer<never>, { ok: false }>;
-
-/**
- * Which way of signing in the worker serves: `cookie` (better-auth, FRU-147) or `token` (before).
- * `undefined` until the worker said.
- */
-let path: Way | undefined;
-/** Whether the worker sends mail with better-auth: `email` in its `betterAuth`. */
-let mails = false;
-
-/**
- * The path of the worker, asked until it says: the answer of `/auth/providers` says it. When the
- * worker did not say, this is its refusal, and the caller answers it.
- *
- * WARNING: a refusal is not a worker of before (FRU-205). Taking the path of before on a `429` or a
- * `5xx` spent the refresh cookie of before against a worker that serves better-auth, and put an
- * access token in this tab.
- */
-async function pathOfWorker(): Promise<Way | Refusal> {
-  if (path !== undefined) return path;
-  const asked = await askProviders();
-
-  return asked.ok ? asked.data.way : asked;
-}
+/** Whether the worker sends mail: `email` in what it says of better-auth. `undefined`: not asked yet. */
+let mails: boolean | undefined;
 
 function send(method: string, to: string, body?: unknown): Promise<Response | undefined> {
   const headers: Record<string, string> = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  // With the cookie of better-auth there is no header to add: the browser sends the cookie.
-  if (path === 'token') Object.assign(headers, before.authorization());
 
+  // No header names the person: the browser sends the cookie.
   return reach(to, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 }
 
@@ -237,8 +207,7 @@ export function callUntilAnswered<T>(method: string, path: string, onAnswer: (an
 }
 
 /**
- * A call of the console. With better-auth, the cookie goes with it and nothing is refreshed. With the
- * path of before, the access token, refreshed once when the worker says it expired.
+ * A call of the console: the cookie goes with it, and nothing is refreshed.
  *
  * A `401` tells `onSignedOut`, unless `quiet`: the screen keeps what the person typed.
  */
@@ -251,11 +220,7 @@ export async function call<T>(
   // A change waits for the question of a tab that came back, and a tab that stopped sends nothing.
   if (method !== 'GET' && checking !== undefined) await checking;
   if (left !== undefined) return LEFT;
-  const way = await pathOfWorker();
-  if (typeof way !== 'string') return way;
-  if (way === 'token' && !before.holdsToken()) await before.refresh();
-  let response = await send(method, to, body);
-  if (way === 'token' && response?.status === 401 && (await before.refresh())) response = await send(method, to, body);
+  const response = await send(method, to, body);
   if (response?.status === 401 && options.quiet !== true) {
     endSeen = true;
     for (const listener of signedOutListeners) listener();
@@ -283,145 +248,72 @@ export function saveLanguage(tag: string): Promise<boolean> {
   return call('POST', '/console/me/locale', { locale: tag }).then((answer) => answer.ok);
 }
 
-/** Which providers the worker signs people in with (FRU-135), on the path it serves. */
+/** Which providers the worker signs people in with (FRU-135), through better-auth. */
 export type Providers = { github: boolean; google: boolean };
 
-type Announced = Partial<Providers> & { betterAuth?: Partial<Providers> & { email?: boolean } };
+type Announced = { betterAuth?: Partial<Providers> & { email?: boolean } };
 
 /**
  * `undefined` when the worker did not say: no answer, or a refusal. That is not "none": a screen
  * must not tell a person that a provider is not set up when nobody said so.
  *
- * It also learns the path of the worker (FRU-148): `betterAuth` in the answer is better-auth, and
- * its own providers; no `betterAuth` is the path of before, and its two booleans.
+ * A worker that says no `betterAuth` signs nobody in to the console: no provider, and no mail.
  */
 export async function signInProviders(): Promise<Providers | undefined> {
-  const asked = await askProviders();
-
-  return asked.ok ? asked.data.providers : undefined;
-}
-
-/** What the worker said: its path, and the providers of that path. */
-type Said = { way: Way; providers: Providers };
-
-let asking: Promise<Answer<Said>> | undefined;
-
-/**
- * Asks the worker, once for every caller that waits at the same moment: a screen that opens makes
- * several calls, and each one asked for itself.
- */
-function askProviders(): Promise<Answer<Said>> {
-  asking ??= learnPath().finally(() => {
-    asking = undefined;
-  });
-
-  return asking;
-}
-
-async function learnPath(): Promise<Answer<Said>> {
   const asked = await answer<Announced>(await reach('/auth/providers', { method: 'GET' }));
-  if (!asked.ok) return asked;
-  // An answer with no body says nothing of better-auth: the path of before.
+  if (!asked.ok) return undefined;
   const said: Announced = typeof asked.data === 'object' && asked.data !== null ? asked.data : {};
-  const served = said.betterAuth;
-  path = typeof served === 'object' && served !== null ? 'cookie' : 'token';
-  mails = path === 'cookie' && (served as { email?: unknown }).email === true;
-  const providers = path === 'cookie' ? (served as Partial<Providers>) : said;
+  const served = typeof said.betterAuth === 'object' && said.betterAuth !== null ? said.betterAuth : {};
+  mails = served.email === true;
 
-  return {
-    ok: true,
-    data: { way: path, providers: { github: providers.github === true, google: providers.google === true } },
-  };
+  return { github: served.github === true, google: served.google === true };
 }
 
 /**
- * Where a sign-in with a provider starts: a navigation of the whole page to the worker. With
- * better-auth, `/console/auth/start/<provider>` sets the cookie of the state in the first party: a
- * `fetch` of `/sign-in/social` would set it on the answer of a call, which WebKit did not keep
- * (measured in FRU-147).
+ * Where a sign-in with a provider starts: a navigation of the whole page to the worker, which sets
+ * the cookie of the state in the first party. A `fetch` of `/sign-in/social` would set it on the
+ * answer of a call, which WebKit did not keep (measured in FRU-147).
  */
 export function providerStart(provider: keyof Providers): string {
-  return path === 'cookie' ? `${API}/console/auth/start/${provider}` : `${API}/auth/${provider}`;
+  return `${API}/console/auth/start/${provider}`;
 }
 
 export async function requestLink(email: string, tag: string): Promise<Answer<{ sent: true }>> {
+  // A tab that stopped signs nobody in, and signs nobody out: it is loaded again first (FRU-210).
   if (left !== undefined) return LEFT;
-  const way = await pathOfWorker();
-  if (typeof way !== 'string') return way;
 
-  return answer(await send('POST', way === 'cookie' ? '/console/auth/email' : '/auth/email', { email, locale: tag }));
+  return answer(await send('POST', '/console/auth/email', { email, locale: tag }));
 }
 
 /**
- * Spends the token of a link, read after the `#` of the address. With better-auth the worker answers
- * the account and sets the cookie; the console keeps nothing.
+ * Spends the token of a link, read after the `#` of the address. The worker answers the account and
+ * sets the cookie; the console keeps nothing.
  */
 export async function redeemLink(code: string): Promise<Answer<{ account: Account }>> {
-  // A tab that stopped signs nobody in, and signs nobody out: it is loaded again first (FRU-210).
   if (left !== undefined) return LEFT;
-  const way = await pathOfWorker();
-  // The link is not spent: no route was asked.
-  if (typeof way !== 'string') return way;
-  if (way === 'cookie') {
-    const redeemed = await answer<{ account: Account }>(
-      await send('POST', '/console/auth/email/redeem', { token: code, locale: locale() }),
-    );
-    if (redeemed.ok) signedInHere(redeemed.data);
-
-    return redeemed;
-  }
-  const result = await answer<{ accessToken: string; account: Account }>(
-    await send('POST', '/auth/email/redeem', { code, locale: locale() }),
+  const redeemed = await answer<{ account: Account }>(
+    await send('POST', '/console/auth/email/redeem', { token: code, locale: locale() }),
   );
-  if (result.ok) {
-    before.holdAccess(result.data.accessToken);
-    signedInHere(result.data);
-  }
+  // A sign-in made in this tab: the tab is of that account from now on (FRU-210).
+  if (redeemed.ok) tabAccount = typeof redeemed.data?.account?.id === 'string' ? redeemed.data.account.id : undefined;
 
-  return result;
-}
-
-/** A sign-in made in this tab: the tab is of that account from now on (FRU-210). */
-function signedInHere(signed: { account?: { id?: unknown } }): void {
-  tabAccount = typeof signed.account?.id === 'string' ? signed.account.id : undefined;
+  return redeemed;
 }
 
 /**
  * Ends the session on the worker: the cookie is refused at the next call, in every tab.
  *
- * `false` when the worker did not say that every session ended (FRU-204). The screen then says so
+ * `false` when the worker did not say that the session ended (FRU-204). The screen then says so
  * and stays: somebody who reads « signed out » leaves the browser to the next person.
- *
- * With better-auth, the session of before is ended too. A browser that signed in before the worker
- * served better-auth still holds its refresh cookie, good for 30 days, and the worker still takes
- * it. Both calls are made, whatever the first one answers. FRU-150 removes the second one with the
- * path of before.
  */
 export async function signOut(): Promise<boolean> {
-  // The session of the browser is of another account now: this tab does not end it.
+  // The session of the browser is of another account now: this tab does not end it (FRU-210).
   if (left !== undefined) return false;
-  const way = await pathOfWorker();
-  // The worker did not say which sessions it keeps: nothing confirmed that one ended.
-  if (typeof way !== 'string') return false;
-  let out: boolean;
-  if (way === 'token') {
-    out = await before.logOut();
-  } else {
-    const [ended, endedBefore] = await Promise.all([send('POST', '/console/auth/sign-out', {}), before.logOut()]);
-    out = ended?.ok === true && endedBefore;
-  }
-  // Signed out here: the tab is of nobody, and the next sign-in in it says whose it is (FRU-210).
+  const out = (await send('POST', '/console/auth/sign-out', {}))?.ok === true;
+  // Signed out here: the tab is of nobody, and the next sign-in in it says whose it is.
   if (out) tabAccount = undefined;
 
   return out;
-}
-
-/**
- * Whether the worker serves better-auth, and so the members and the invitations (FRU-104): the routes
- * of its organization plugin. A worker of before has neither.
- */
-export async function servesBetterAuth(): Promise<boolean> {
-  return (await pathOfWorker()) === 'cookie';
 }
 
 /**
@@ -429,9 +321,9 @@ export async function servesBetterAuth(): Promise<boolean> {
  * invitation all the same, and the person who invites sends `invitationLink()` by hand.
  */
 export async function sendsMail(): Promise<boolean> {
-  await pathOfWorker();
+  if (mails === undefined) await signInProviders();
 
-  return mails;
+  return mails === true;
 }
 
 /**
@@ -470,11 +362,8 @@ export type Invitation = {
 
 /**
  * The invitations that wait for the person who is signed in: the ones sent to the address they proved.
- * None on a worker of before, which has no invitation.
  */
 export async function myInvitations(): Promise<Answer<Invitation[]>> {
-  if (!(await servesBetterAuth())) return { ok: true, data: [] };
-
   return call<Invitation[]>('GET', `${ORGANIZATION}/list-user-invitations`, undefined, { quiet: true });
 }
 

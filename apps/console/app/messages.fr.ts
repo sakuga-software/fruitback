@@ -170,8 +170,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Members: 'Membres',
   'Who can see and leave feedback, and who can change the workspace.':
     'Qui peut voir et laisser des retours, et qui peut modifier le workspace.',
-  'Invitations come after the beta. Until then, each person signs in and makes their own workspace.':
-    'Les invitations arrivent après la bêta. D’ici là, chacun se connecte et crée son propre workspace.',
   Invite: 'Inviter',
   'Role of the person to invite': 'Rôle de la personne à inviter',
   'The person signs in with that address, and joins. Guests, who see one site only, come later.':

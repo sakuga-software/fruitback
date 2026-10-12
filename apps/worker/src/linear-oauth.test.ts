@@ -1,52 +1,51 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
-import { closeAccountConnections, createSqliteAccountStore } from './accounts-sqlite.ts';
-import { handleRequest } from './app.ts';
+import {
+  WORKER as API,
+  CONSOLE,
+  type World as Env,
+  callOn,
+  memberOf,
+  signInTo,
+  worlds,
+} from './console-world.fixture.ts';
 import { type WorkerEnv, readConfig } from './env.ts';
-import { signIdentityToken } from './identity.ts';
-import { createMemoryKv } from './kv.ts';
 import { REFRESH_MARGIN_MS, readCredential } from './linear-oauth.ts';
+import { rowsOf } from './postgres.fixture.ts';
 import { open } from './secrets.ts';
-import { closeSessionConnections } from './session-sqlite.ts';
 
-const SECRET = 'a-worker-secret-of-exactly-enough';
 const SECRETS_KEY = 'another-secret-that-opens-the-connectors';
-const CONSOLE = 'https://app.fruitback.test';
-const API = 'https://api.fruitback.test';
 const SITE = 'https://staging.acme.dev';
 const directories: string[] = [];
 
 afterEach(() => {
   mock.restoreAll();
   mock.timers.reset();
-  closeAccountConnections();
-  closeSessionConnections();
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
 });
 
-function envWith(overrides: Partial<WorkerEnv> = {}): WorkerEnv {
+const worldWith = worlds();
+
+/** A worker with accounts and the application of Linear, that keeps its notes in a file of its own. */
+function envWith(overrides: Partial<WorkerEnv> = {}): Promise<Env> {
   const directory = mkdtempSync(join(tmpdir(), 'fruitback-linear-oauth-'));
   directories.push(directory);
 
-  return {
-    FRUITBACK_STORE: 'sqlite',
-    FRUITBACK_SQLITE_PATH: join(directory, 'fb.db'),
-    ALLOWED_ORIGINS: CONSOLE,
-    FRUITBACK_IDENTITY_SECRET: SECRET,
-    FRUITBACK_SECRETS_KEY: SECRETS_KEY,
-    FRUITBACK_SESSION_PATH: join(directory, 'sessions.db'),
-    FRUITBACK_ACCOUNTS_PATH: join(directory, 'accounts.db'),
-    FRUITBACK_CONSOLE_URL: CONSOLE,
-    FRUITBACK_PUBLIC_URL: API,
-    FRUITBACK_LINEAR_OAUTH: 'linear-client:the-linear-client-secret',
-    ...overrides,
-    // The path of the SQLite store is that store's own variable, so `WorkerEnv` does not name it.
-  } as WorkerEnv;
+  return worldWith({
+    env: {
+      FRUITBACK_STORE: 'sqlite',
+      FRUITBACK_SQLITE_PATH: join(directory, 'fb.db'),
+      FRUITBACK_SECRETS_KEY: SECRETS_KEY,
+      FRUITBACK_LINEAR_OAUTH: 'linear-client:the-linear-client-secret',
+      ...overrides,
+      // The path of the SQLite store is that store's own variable, so `WorkerEnv` does not name it.
+    } as WorkerEnv,
+  });
 }
 
 /**
@@ -153,48 +152,24 @@ function fakeLinear() {
   return state;
 }
 
-let ip = 0;
+/** `cookie` is the cookie of the flow at Linear. The cookie of a person of the console is `token`. */
 function call(
-  env: WorkerEnv,
+  env: Env,
   method: string,
   path: string,
-  options: {
-    token?: string;
-    body?: unknown;
-    origin?: string;
-    cookie?: string;
-    kv?: ReturnType<typeof createMemoryKv>;
-  } = {},
+  options: { token?: string; body?: unknown; origin?: string; cookie?: string } = {},
 ): Promise<Response> {
-  ip += 1;
+  const { cookie, ...rest } = options;
 
-  return handleRequest(
-    new Request(`${API}${path}`, {
-      method,
-      headers: {
-        ...(options.origin === null ? {} : { Origin: options.origin ?? CONSOLE }),
-        ...(options.token === undefined ? {} : { Authorization: `Bearer ${options.token}` }),
-        ...(options.cookie === undefined ? {} : { Cookie: options.cookie }),
-        ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
-      },
-      ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
-    }),
-    env,
-    { clientIp: `203.0.113.${ip % 250}`, kv: options.kv ?? KV },
-  );
+  return callOn(env, method, path, { ...rest, ...(cookie === undefined ? {} : { headers: { Cookie: cookie } }) });
 }
 
-/** One Kv for a test: the ticket and the state live there between two requests. */
-let KV = createMemoryKv();
-
-async function acme(env: WorkerEnv, name = 'Acme') {
-  KV = createMemoryKv();
-  const accounts = createSqliteAccountStore(env.FRUITBACK_ACCOUNTS_PATH as string);
-  const exp = Math.floor(Date.now() / 1000) + 600;
+async function acme(env: Env, name = 'Acme') {
+  const { accounts } = env;
   const person = async (email: string) => {
-    const account = await accounts.signIn({ provider: 'email', subject: email, email });
+    const { id, token } = await signInTo(env, email);
 
-    return { account, token: await signIdentityToken({ sub: account.id, exp }, SECRET) };
+    return { account: { id }, token };
   };
   const owner = await person(`owner@${name.toLowerCase()}.dev`);
   const workspace = await accounts.createWorkspace(name, owner.account.id);
@@ -207,7 +182,7 @@ async function acme(env: WorkerEnv, name = 'Acme') {
 type World = Awaited<ReturnType<typeof acme>>;
 
 /** The console asks where to go, and the browser goes there: the address at Linear, and the cookie it left with. */
-async function leave(env: WorkerEnv, world: World, token = world.owner.token) {
+async function leave(env: Env, world: World, token = world.owner.token) {
   const asked = await call(env, 'POST', `${world.base}/connectors/linear/oauth`, { token });
   assert.equal(asked.status, 201, await asked.clone().text());
   const { url } = (await asked.json()) as { url: string };
@@ -220,17 +195,13 @@ async function leave(env: WorkerEnv, world: World, token = world.owner.token) {
 }
 
 /** The person says yes at Linear, and Linear sends the browser back with a code. */
-async function comeBack(
-  env: WorkerEnv,
-  linear: ReturnType<typeof fakeLinear>,
-  left: Awaited<ReturnType<typeof leave>>,
-) {
+async function comeBack(env: Env, linear: ReturnType<typeof fakeLinear>, left: Awaited<ReturnType<typeof leave>>) {
   linear.codes.set('code-1', left.at.searchParams.get('code_challenge') as string);
 
   return call(env, 'GET', `/auth/linear/callback?code=code-1&state=${left.state}`, { cookie: left.cookie });
 }
 
-async function connected(env: WorkerEnv, linear: ReturnType<typeof fakeLinear>, world: World): Promise<string> {
+async function connected(env: Env, linear: ReturnType<typeof fakeLinear>, world: World): Promise<string> {
   const back = await comeBack(env, linear, await leave(env, world));
   assert.equal(back.headers.get('Location'), `${CONSOLE}/w/${world.workspace.id}/connectors?linear=connected`);
   const [connector] = await world.accounts.connectors(world.workspace.id);
@@ -252,7 +223,7 @@ function note(site: string) {
 
 describe('a workspace connects Linear with OAuth (FRU-134)', () => {
   it('sends the browser to Linear with the application as the actor, a state and a challenge', async () => {
-    const env = envWith();
+    const env = await envWith();
     fakeLinear();
     const left = await leave(env, await acme(env));
 
@@ -273,7 +244,7 @@ describe('a workspace connects Linear with OAuth (FRU-134)', () => {
   });
 
   it('keeps the token sealed, names the connector after the workspace of Linear, and goes back to the console', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = fakeLinear();
     const world = await acme(env);
     const back = await comeBack(env, linear, await leave(env, world));
@@ -298,20 +269,21 @@ describe('a workspace connects Linear with OAuth (FRU-134)', () => {
       },
     );
 
-    closeAccountConnections();
-    const directory = dirname(env.FRUITBACK_ACCOUNTS_PATH as string);
-    const bytes = Buffer.concat(
-      readdirSync(directory)
-        .filter((name) => name.startsWith('accounts.db'))
-        .map((name) => readFileSync(join(directory, name))),
-    ).toString('latin1');
+    // Every row of every table of the database, as text.
+    const tables = await rowsOf(env.database, `SELECT tablename FROM pg_tables WHERE schemaname = 'public'`);
+    let bytes = '';
+    for (const { tablename } of tables) {
+      const rows = await rowsOf(env.database, `SELECT t::text AS row FROM "${String(tablename)}" AS t`);
+      bytes += rows.map((each) => String(each.row)).join('\n');
+    }
+    assert.ok(bytes.includes(connector?.id as string), 'the control: the row of the connector was read');
     assert.equal(bytes.includes('access-1') || bytes.includes('refresh-1'), false);
     const listed = await call(env, 'GET', `${world.base}/connectors`, { token: world.owner.token });
     assert.equal((await listed.text()).includes('access-1'), false);
   });
 
   it('writes the notes of a site with the token, as a bearer', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = fakeLinear();
     const world = await acme(env);
     await connected(env, linear, world);
@@ -324,13 +296,14 @@ describe('a workspace connects Linear with OAuth (FRU-134)', () => {
   });
 
   it('says whether the worker has the application, and offers nothing without it', async () => {
-    const env = envWith();
+    const env = await envWith();
     fakeLinear();
     const world = await acme(env);
     const listed = await call(env, 'GET', `${world.base}/connectors`, { token: world.owner.token });
     assert.equal(((await listed.json()) as { linearOAuth: boolean }).linearOAuth, true);
 
-    const without = envWith({ FRUITBACK_LINEAR_OAUTH: undefined });
+    // The second worker of the case takes the place of the first: PGlite holds one database.
+    const without = await envWith({ FRUITBACK_LINEAR_OAUTH: undefined });
     const bare = await acme(without);
     const none = await call(without, 'GET', `${bare.base}/connectors`, { token: bare.owner.token });
     assert.equal(((await none.json()) as { linearOAuth: boolean }).linearOAuth, false);
@@ -344,7 +317,7 @@ describe('a workspace connects Linear with OAuth (FRU-134)', () => {
 
 describe('the Linear of one person, and the workspace of another (FRU-134)', () => {
   it('refuses a callback from a browser that did not start the flow', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = fakeLinear();
     const world = await acme(env);
     const left = await leave(env, world);
@@ -364,7 +337,7 @@ describe('the Linear of one person, and the workspace of another (FRU-134)', () 
   });
 
   it('spends a ticket and a state once', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = fakeLinear();
     const world = await acme(env);
     const left = await leave(env, world);
@@ -381,43 +354,35 @@ describe('the Linear of one person, and the workspace of another (FRU-134)', () 
   });
 
   it('gives a ticket to an owner or an admin only, and asks the role again on the way back', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = fakeLinear();
     const world = await acme(env);
     const member = await world.person('member@acme.dev');
-    const { DatabaseSync } = await import('node:sqlite');
-    const role = (value: string, account: string): void => {
-      closeAccountConnections();
-      const database = new DatabaseSync(env.FRUITBACK_ACCOUNTS_PATH as string);
-      database
-        .prepare('DELETE FROM members WHERE workspace_id = ? AND account_id = ?')
-        .run(world.workspace.id, account);
-      database
-        .prepare('INSERT INTO members (workspace_id, account_id, role, created_at) VALUES (?, ?, ?, 1)')
-        .run(world.workspace.id, account, value);
-      database.close();
+    const role = async (value: string, account: string): Promise<void> => {
+      await rowsOf(
+        env.database,
+        `DELETE FROM member WHERE "organizationId" = '${world.workspace.id}' AND "userId" = '${account}'`,
+      );
+      await memberOf(env, world.workspace.id, account, value);
     };
-    role('member', member.account.id);
+    await role('member', member.account.id);
     assert.equal(
       (await call(env, 'POST', `${world.base}/connectors/linear/oauth`, { token: member.token })).status,
       403,
     );
 
     // An admin starts, and is a member again before Linear sends them back.
-    role('admin', member.account.id);
+    await role('admin', member.account.id);
     const left = await leave(env, world, member.token);
-    role('member', member.account.id);
+    await role('member', member.account.id);
     const back = await comeBack(env, linear, left);
 
     assert.match(back.headers.get('Location') ?? '', /linear=forbidden$/);
-    assert.deepEqual(
-      await createSqliteAccountStore(env.FRUITBACK_ACCOUNTS_PATH as string).connectors(world.workspace.id),
-      [],
-    );
+    assert.deepEqual(await env.accounts.connectors(world.workspace.id), []);
   });
 
   it('goes back with a word, and keeps nothing, when the person says no or the code is wrong', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = fakeLinear();
     const world = await acme(env);
 
@@ -440,7 +405,7 @@ describe('the Linear of one person, and the workspace of another (FRU-134)', () 
 describe('a token of Linear that ends (FRU-134)', () => {
   /** A connected workspace, with the clock moved to where the token is near its end. */
   async function nearTheEnd() {
-    const env = envWith();
+    const env = await envWith();
     const linear = fakeLinear();
     const world = await acme(env);
     const connector = await connected(env, linear, world);
@@ -531,18 +496,14 @@ describe('a token of Linear that ends (FRU-134)', () => {
       );
       mock.timers.reset();
       mock.restoreAll();
-      closeAccountConnections();
     }
   });
 
   it('is refreshed for the list of teams too', async () => {
     const { env, linear, world, connector } = await nearTheEnd();
 
-    // The clock moved a day: the access token of the console ended, and the person holds a new one.
-    const token = await signIdentityToken(
-      { sub: world.owner.account.id, exp: Math.floor(Date.now() / 1000) + 600 },
-      SECRET,
-    );
+    // The clock moved a day: the session of the console lasts longer, and its cookie is still good.
+    const { token } = world.owner;
     const teams = await call(env, 'GET', `${world.base}/connectors/${connector}/teams`, { token });
 
     assert.equal(teams.status, 200, await teams.clone().text());
@@ -552,7 +513,7 @@ describe('a token of Linear that ends (FRU-134)', () => {
 
 describe('disconnecting Linear (FRU-134)', () => {
   it('revokes the token at Linear, and removes the connector whatever Linear answers', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = fakeLinear();
     const world = await acme(env);
     const connector = await connected(env, linear, world);
@@ -565,7 +526,7 @@ describe('disconnecting Linear (FRU-134)', () => {
   });
 
   it('asks Linear nothing for a connector made with a key', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = fakeLinear();
     const world = await acme(env);
     const { seal } = await import('./secrets.ts');
@@ -594,10 +555,11 @@ describe('what a Linear connector keeps (FRU-134)', () => {
     assert.equal(readCredential('{not json').via, 'key');
   });
 
-  it('needs the public address, the accounts and the key that seals, and a client id with its secret', () => {
-    assert.equal(readConfig(envWith()).ok, true);
-    assert.equal(readConfig(envWith({ FRUITBACK_LINEAR_OAUTH: 'nocolon' })).ok, false);
-    assert.equal(readConfig(envWith({ FRUITBACK_PUBLIC_URL: undefined })).ok, false);
-    assert.equal(readConfig(envWith({ FRUITBACK_SECRETS_KEY: undefined })).ok, false);
+  it('needs the public address, the accounts and the key that seals, and a client id with its secret', async () => {
+    const { env } = await envWith();
+    assert.equal(readConfig(env).ok, true);
+    assert.equal(readConfig({ ...env, FRUITBACK_LINEAR_OAUTH: 'nocolon' }).ok, false);
+    assert.equal(readConfig({ ...env, FRUITBACK_PUBLIC_URL: undefined }).ok, false);
+    assert.equal(readConfig({ ...env, FRUITBACK_SECRETS_KEY: undefined }).ok, false);
   });
 });
