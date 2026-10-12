@@ -1,6 +1,7 @@
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react';
 import { type Site, type Visibility, call } from '../api';
 import { Confirm } from '../confirm';
+import { Domains } from '../domains';
 import { SITE_NOT_ADDED, SITE_PROBLEMS, problemOf } from '../problems';
 import { type Listed, edited, listedOf } from '../listed';
 import { Button, Card, Chip, Choice, Field, Problem } from '../ui';
@@ -116,6 +117,9 @@ export default function Sites() {
           install={(site) => <InstallOptions workspace={workspace} site={site} />}
         />
       </Card>
+
+      {/* Proving a domain is an admin's gesture, like adding a site (FRU-103). */}
+      {manages ? <Domains workspace={workspace} sites={sites} /> : null}
     </>
   );
 }
