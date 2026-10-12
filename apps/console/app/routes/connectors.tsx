@@ -766,6 +766,8 @@ function Settings({ base, connector }: { base: string; connector: Connector & { 
       const set = await call('POST', `${base}/connectors/${connector.id}/settings`, next);
       if (set.ok) {
         kept.current = next;
+        // The setting that failed before is kept now: its sentence goes.
+        setProblem(undefined);
 
         return;
       }
