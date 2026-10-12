@@ -61,6 +61,8 @@ export const ENGLISH = {
   'composer.failedWait': 'Too many notes just now. Your text is kept: send it again in a minute.',
   'composer.failedRefused':
     'This site does not accept your note from here. Your text is kept: tell the team of the site.',
+  // A `401`: the session of the extension ended, or the token of the site is out of date (FRU-193).
+  'composer.failedSignedOut': 'Your session has ended. Your text is kept: sign in again, then send it.',
   'composer.failedTooLarge':
     'This note is too large. Your text is kept: shorten it, or turn the picture off in the settings.',
   // The line that says where the note goes (FRU-123). A member of the team reads it, nobody else.

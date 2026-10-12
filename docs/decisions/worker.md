@@ -490,6 +490,11 @@ any store` asks it of every spec rather than of Linear.
   list is not in `ConfigStore`, which persists to `localStorage`: a stored copy would outlive a change
   of store. A stage the reporter hid stays hidden in the config, so a worker that reports it again
   shows the reporter's choice.
+- **The stages are the ones of the tracker that answers for the site** (FRU-201). A site that sends
+  to a connector of its workspace is read there, so `createRoutedStore` answers `stagesFor(client)`
+  from the store of that connector, and the store of the worker only for a site with no destination.
+  A worker on GitHub (three stages) whose site sends to Linear (five) offered three until then. A
+  site read in several places gets every stage one of them reports, in the order of `SEED_STAGES`.
 - **A GitHub App, never a personal token.** A personal token does not expire and reaches every
   repository of its owner. The JWT is RS256 through `node:crypto`, `iat` sixty seconds back and `exp`
   nine minutes ahead. It buys an installation token narrowed with `repositories` to one repository,
@@ -1649,7 +1654,7 @@ Read on better-auth 1.7.7, in `plugins/organization/routes/crud-members.mjs`, `c
 
 - **What the plugin registers**: 22 routes with a path, and `addMember` with none (a call in the
   process only). With teams and « dynamic access control » off, it registers no route of a team or
-  of a role. 4 have a rule, 18 are closed. `organization-paths.ts` says why for each family.
+  of a role. 4 had a rule in FRU-149, 10 since FRU-104, and 12 are closed. `organization-paths.ts` says why for each family.
 - **`list-members`, `get-full-organization` and `list-invitations` answer `200` to a guest** on
   better-auth alone: the plugin checks that the caller is a member, and no permission. The control
   of test:`does not let a guest read the members or the invitations, on the API` builds an instance
@@ -1684,7 +1689,7 @@ Read on better-auth 1.7.7, in `plugins/organization/routes/crud-members.mjs`, `c
 - **An invitation with a role that is not one of the four is refused by the plugin itself**
   (`ROLE_NOT_FOUND`), and one with two roles by the hook: test:`keeps an invitation to one role
 too, for the day its route opens`. The route that accepts an invitation runs no `beforeAddMember`
-  (read): FRU-104 measures what it writes before it opens it.
+  (read): FRU-104 adds `beforeAcceptInvitation`, which refuses the same.
 - **`endSessionsOf` on PostgreSQL, measured on two connections.** A refresh holds the head of its
   chain, writes its successor, and commits. One `UPDATE` that started meanwhile waits for the head,
   then ends the rows it could see when it started: not the successor. With every row of the person
@@ -1695,10 +1700,69 @@ too, for the day its route opens`. The route that accepts an invitation runs no 
 - **No index names a person in `sessions`**, so `endSessionsOf` reads the table. It runs when a
   member is removed, never on a request of the widget.
 
-**Not done here**: the invitations and the screen of the members (FRU-104), a rename of a
+**Not done here**: a rename of a
 workspace (no screen asks for it; `organization: update` stays in the roles), and a membership check
 on `GET /feedback`, which would read the accounts on every pin: an access token that was minted
 before the removal lives its eleven minutes, and `SECURITY.md` says so.
+
+## The invitations (FRU-104)
+
+An owner or an admin invites an address into a workspace; the person signs in with that address and
+joins. Six routes of the organization plugin more, under the rules of the section above.
+
+### The rules, in short
+
+- **The message holds no id and no token.** Its link is `<console>/invitations`, the page that
+  lists the invitations of whoever signed in (`list-user-invitations`). Do not put the id of an
+  invitation in a link: better-auth gives it to the session of the address only, but a link with an
+  id is a link to log, forward and guess at, for nothing.
+- **A route of the person is `scope: 'person'`** in `ORGANIZATION_PATHS`: it names no workspace,
+  asks no role, and takes only `invitationId`. better-auth reads the address of the session. Never
+  give one a field that names an address or a workspace (`email` of `list-user-invitations` is
+  refused: better-auth takes it from a call in the process only, and the worker would hand it over).
+- **A route that acts on an invitation of a workspace is `ofTheWorkspace: 'invitation'`**: the
+  worker reads the workspace of the invitation before better-auth does, and answers `404` when it is
+  not the one whose role it read. `cancel-invitation` needs it; a later route on an invitation does too.
+- **The worker sends the message, not the plugin** (`sendInvitationEmail` is not set). The route
+  reads the window of the address (`fruitback:invitation:<address>`, 3 in 15 minutes, the numbers
+  of the sign-in link), asks the plugin, and counts and sends only for an answer that names an
+  invitation: a call that the plugin refuses spends nothing of the window of somebody else. A message that does not leave answers `502`, and the
+  invitation waits, to send again with `resend: true`. **A worker with no mailer still invites**
+  (decided on FRU-107): the invitation is kept, nothing is sent and nothing is counted, and the
+  console shows the link to send by hand. The link is the same `<console>/invitations`, so a link
+  sent in a chat is worth exactly the message: nothing without a session of the address.
+- **The roles an invitation gives are `INVITED_ROLES`**: `admin` and `member`. `guest` waits for
+  a site that can be shared with one person; `owner` is given by a change of role, by an owner.
+- **The language of the message** is the one of the account of the address when it has one, else
+  the one of the person who invites.
+- **The console** (`invitations.tsx`, `members.tsx`, `home.tsx`): the front door sends somebody who
+  has an invitation waiting to `/invitations` before the setup, so the person invited does not make a
+  workspace of their own first. `e2e/console-invitation.spec.ts` goes from the message to a note.
+
+### The reasons, and the measurements
+
+Read in `routes/crud-invites.mjs` of 1.7.7; measured in `auth-organization.test.ts`.
+
+- **Accepting runs `beforeAcceptInvitation` and no `beforeAddMember`**, and writes the role of the
+  row. So the hook refuses a row with two roles: test:`refuses an invitation whose row holds two
+roles, when it is accepted`.
+- **With the ids of the worker (`generateId`), the plugin asks a verified address** to read, accept
+  or decline by id. It is written (`requireEmailVerificationOnInvitation: true`): a later default
+  changes nothing.
+- **`cancel-invitation` finds the workspace from the invitation**, and checks the role of the caller
+  there. Without `ofTheWorkspace`, an admin of a workspace would have passed the check of the worker
+  in their workspace, and better-auth's check in the other one only if they were an admin there too:
+  safe by better-auth alone, but the worker's own check would have read the wrong workspace.
+- **A second invitation of an address that waits** is refused (`USER_IS_ALREADY_INVITED…`), unless
+  `resend`, which moves its end to 7 days from now and sends the message again.
+- **What the plugin answers on a resend is the invitation as it was**, with the new end.
+- **An invitation past its end** is refused at acceptance (`INVITATION_NOT_FOUND`), and leaves the
+  list of the person.
+
+**Not done here**, from the ticket: a guest limited to one site (a table of ours, the next slice),
+« Last seen » in the table (nothing records an activity), « My account » (sessions, API keys), the
+export of a workspace. The ticket said « the invitation is a pairing code »: with the plugin it is a
+row that a session of the address accepts, and the pairing code stays what connects an extension.
 
 ## The markdown codec, and the file that outlived its name
 

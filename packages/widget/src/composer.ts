@@ -27,11 +27,13 @@ export type ComposerState = 'idle' | 'sending' | 'sent' | 'failed';
  *
  * - `retry`: no answer, or the worker failed. A second try can work.
  * - `wait`: too many notes at once (`429`). A try in a minute can work.
- * - `refused`: the worker does not accept this note from here (`401`, `403`). Trying again will not
- *   work; the team of the site can change it.
+ * - `refused`: the worker does not accept this note from here (`403`). Trying again will not work;
+ *   the team of the site can change it.
+ * - `signed-out`: the worker wants an identity it did not get (`401`): a session that ended, a token
+ *   out of date (FRU-193). The team of the site can do nothing; the reporter signs in again.
  * - `too-large`: the note is too heavy (`413`). It goes once it is shorter, or without its picture.
  */
-export type SendFailure = 'retry' | 'wait' | 'refused' | 'too-large';
+export type SendFailure = 'retry' | 'wait' | 'refused' | 'signed-out' | 'too-large';
 
 export type ComposerOptions = {
   document?: Document;
@@ -460,6 +462,7 @@ const FAILURES = {
   retry: 'composer.failed',
   wait: 'composer.failedWait',
   refused: 'composer.failedRefused',
+  'signed-out': 'composer.failedSignedOut',
   'too-large': 'composer.failedTooLarge',
 } as const satisfies Record<SendFailure, MessageKey>;
 

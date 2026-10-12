@@ -18,8 +18,8 @@ import { roleOf } from './account-rows.ts';
  * - `update`, `check-slug`: no screen renames a workspace, and a workspace has no slug.
  * - `get-full-organization`: it answers the members **and the invitations** in one body, to any
  *   member, a guest included (measured). An id of an invitation is worth its link.
- * - `list-invitations`, `get-invitation`, `invite-member`, `accept-invitation`, `reject-invitation`,
- *   `cancel-invitation`, `list-user-invitations`: the invitations are FRU-104.
+ * - `get-invitation`: it reads one invitation by its id. The console lists the invitations of the
+ *   person who is signed in (`list-user-invitations`), so no id travels in a link.
  * - `list`, `get-organization`, `get-active-member`, `get-active-member-role`, `has-permission`:
  *   `GET /console/me` already answers the workspaces of a person and their role in each.
  * - `set-active`: no call of the worker reads an « active » workspace. Each open route names its
@@ -28,7 +28,7 @@ import { roleOf } from './account-rows.ts';
  */
 
 /** A value of a request, read: the value to hand over, or `undefined` for one that is refused. */
-type Reader = (value: unknown) => string | number | undefined;
+type Reader = (value: unknown) => string | number | boolean | undefined;
 
 const ID = /^[A-Za-z0-9_-]{1,80}$/;
 const id: Reader = (value) => (typeof value === 'string' && ID.test(value) ? value : undefined);
@@ -42,8 +42,28 @@ const count =
     return typeof read === 'number' && Number.isInteger(read) && read >= min && read <= max ? read : undefined;
   };
 
+/**
+ * The roles somebody can be invited with (FRU-104). Not `owner`: a workspace gets a second owner by a
+ * change of role, from its owner. Not `guest` yet: a guest reads every site of the workspace until a
+ * site can be shared with one person, and `SECURITY.md` says that the console creates none before.
+ */
+export const INVITED_ROLES = ['admin', 'member'] as const;
+
 export type OrganizationRule = {
   method: 'GET' | 'POST';
+  /**
+   * `workspace` (when absent): the call names a workspace in `organizationId`, and the caller has a
+   * role in it. `person`: the call is about the person of the cookie only, in no workspace: the
+   * invitations they received. better-auth reads the address of the session, and nothing of the call
+   * names another person.
+   */
+  scope?: 'person';
+  /**
+   * The call names an invitation in `invitationId`, and the worker reads that it is one of the
+   * workspace the call names: better-auth finds the workspace from the invitation, so without this
+   * the role would be read in one workspace and the invitation cancelled in another.
+   */
+  ofTheWorkspace?: 'invitation';
   /**
    * The action of `RIGHTS` the caller must have in the workspace, asked of `can` before better-auth
    * reads the request. Absent: any member, whatever their role.
@@ -55,7 +75,7 @@ export type OrganizationRule = {
    * workspace than the one the worker checked the role in, and `filterField` reads any column.
    */
   fields: Readonly<Record<string, Reader>>;
-  /** The fields a call must have. `organizationId` is one of them on every route. */
+  /** The fields a call must have. `organizationId` is one of them on every route of a workspace. */
   required: readonly string[];
   why: string;
 };
@@ -94,6 +114,55 @@ export const ORGANIZATION_PATHS: Readonly<Record<string, OrganizationRule>> = {
     required: ['organizationId'],
     why: 'a person leaves a workspace, whatever their role, unless they are its last owner',
   },
+  '/organization/invite-member': {
+    method: 'POST',
+    needs: 'manage-members',
+    fields: {
+      organizationId: id,
+      email: (value) => (typeof value === 'string' ? normalizeEmail(value) : undefined),
+      role: (value) => ((INVITED_ROLES as readonly unknown[]).includes(value) ? (value as string) : undefined),
+      // Only `true`: an invitation that exists is sent again, and lasts from now.
+      resend: (value) => (value === true ? true : undefined),
+    },
+    required: ['organizationId', 'email', 'role'],
+    why: 'an owner or an admin invites an address as an admin or a member. The worker sends a message when it has a mailer; the console also gives a link to send by hand, and neither link opens anything',
+  },
+  '/organization/list-invitations': {
+    method: 'GET',
+    needs: 'manage-members',
+    fields: { organizationId: id },
+    required: ['organizationId'],
+    why: 'whoever invites sees what waits, to send it again or to cancel it. The plugin answers it to any member, a guest included: the worker asks `can`',
+  },
+  '/organization/cancel-invitation': {
+    method: 'POST',
+    needs: 'manage-members',
+    ofTheWorkspace: 'invitation',
+    fields: { organizationId: id, invitationId: id },
+    required: ['organizationId', 'invitationId'],
+    why: 'an owner or an admin cancels an invitation of their workspace',
+  },
+  '/organization/list-user-invitations': {
+    method: 'GET',
+    scope: 'person',
+    fields: {},
+    required: [],
+    why: 'somebody who signed in reads the invitations sent to the address they proved',
+  },
+  '/organization/accept-invitation': {
+    method: 'POST',
+    scope: 'person',
+    fields: { invitationId: id },
+    required: ['invitationId'],
+    why: 'the person an invitation names joins the workspace. better-auth takes it from a session of that address only',
+  },
+  '/organization/reject-invitation': {
+    method: 'POST',
+    scope: 'person',
+    fields: { invitationId: id },
+    required: ['invitationId'],
+    why: 'the person an invitation names declines it',
+  },
 };
 
 /**
@@ -103,8 +172,8 @@ export const ORGANIZATION_PATHS: Readonly<Record<string, OrganizationRule>> = {
 export function readOrganizationInput(
   rule: OrganizationRule,
   sent: Readonly<Record<string, unknown>>,
-): { ok: true; input: Record<string, string | number> } | { ok: false; field: string } {
-  const input: Record<string, string | number> = {};
+): { ok: true; input: Record<string, string | number | boolean> } | { ok: false; field: string } {
+  const input: Record<string, string | number | boolean> = {};
 
   for (const [name, value] of Object.entries(sent)) {
     const reader = Object.hasOwn(rule.fields, name) ? rule.fields[name] : undefined;
@@ -113,6 +182,9 @@ export function readOrganizationInput(
     input[name] = read;
   }
   for (const name of rule.required) if (!Object.hasOwn(input, name)) return { ok: false, field: name };
+  // A rule of a workspace that forgot to require its workspace would check a role in none.
+  if (rule.scope !== 'person' && typeof input.organizationId !== 'string')
+    return { ok: false, field: 'organizationId' };
 
   return { ok: true, input };
 }

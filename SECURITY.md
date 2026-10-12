@@ -517,7 +517,7 @@ The rules of a session are the same, and they hold between two connections: one 
 session, and one token has one live successor.
 
 Since FRU-144 it also has the seven tables of better-auth. Four hold the accounts, as said above; the
-other three (`session`, `verification`, `invitation`) are empty: no code writes them yet. See [better-auth, what it keeps and what it refuses](#better-auth-what-it-keeps-and-what-it-refuses-fru-144).
+other three hold the sessions of the console and the links (FRU-147), and the invitations (FRU-104). See [better-auth, what it keeps and what it refuses](#better-auth-what-it-keeps-and-what-it-refuses-fru-144).
 
 Three things change with a database on a network, and each has its condition:
 
@@ -863,21 +863,58 @@ what they may do, so a member removed a minute ago is refused at once. `can(role
 `accounts.ts` is the one table. A workspace somebody is not a member of answers `404`, like one that
 does not exist. Adding a site keeps the origin of the pasted address and nothing else.
 
+**The access token of an extension opens none of these routes** (FRU-202). It is signed with the
+same worker key as the token of a console session, and only the `ws` claim tells them apart: a
+token with a `ws` is refused with `401`, in its own workspace too. Until then, the 10-minute token
+of an extension paired for one workspace read and changed every workspace of the person, with the
+role of the person, and could mint a pairing code, so a new 30-day session, in any of them.
+test:`refuses POST connect to the token of an extension, in another workspace and in its own`, and
+one test for each other route.
+
 `POST /console/workspaces/<id>/connect` mints a pairing code for the person, in that workspace
 (FRU-100). The console puts it after the `#` of the worker's pairing page, and the extension spends it
 as it spends a code an operator minted. **A guest's session reaches every site of its workspace
 today**: sharing one site with one guest is FRU-104, and until it lands the console creates no guest.
 
-**The members of a workspace (FRU-149).** With better-auth on, four routes of its organization
-plugin are served under `/console/auth/organization/`, with the cookie of the console. Each one has
-a rule in `ORGANIZATION_PATHS` (`organization-paths.ts`):
+**The members of a workspace (FRU-149) and the invitations (FRU-104).** With better-auth on, ten
+routes of its organization plugin are served under `/console/auth/organization/`, with the cookie of
+the console. Each one has a rule in `ORGANIZATION_PATHS` (`organization-paths.ts`):
 
-| Route                | Who                                          | What it does                |
-| -------------------- | -------------------------------------------- | --------------------------- |
-| `list-members`       | owner, admin, member                         | names, addresses and roles  |
-| `update-member-role` | owner, admin                                 | one role, one of the four   |
-| `remove-member`      | owner, admin                                 | the member, and their codes |
-| `leave`              | anybody of the workspace, but its last owner | themselves                  |
+| Route                   | Who                                          | What it does                               |
+| ----------------------- | -------------------------------------------- | ------------------------------------------ |
+| `list-members`          | owner, admin, member                         | names, addresses and roles                 |
+| `update-member-role`    | owner, admin                                 | one role, one of the four                  |
+| `remove-member`         | owner, admin                                 | the member, and their codes                |
+| `leave`                 | anybody of the workspace, but its last owner | themselves                                 |
+| `invite-member`         | owner, admin                                 | an address, as an admin or a member        |
+| `list-invitations`      | owner, admin                                 | the invitations that wait                  |
+| `cancel-invitation`     | owner, admin                                 | an invitation of that workspace            |
+| `list-user-invitations` | the person of the session                    | the invitations to the address they proved |
+| `accept-invitation`     | the person an invitation names               | joins, with the role of the invitation     |
+| `reject-invitation`     | the person an invitation names               | declines                                   |
+
+- **An invitation goes to an address, and only a session of that address takes it.** The message
+  holds a link to the console and **no id and no token**: whoever reads it, or a copy of it, opens
+  nothing. The person signs in with the address (a link proves it, and a provider that did not verify
+  it creates no account), and the console lists the invitations of that address. better-auth refuses
+  to read, accept or decline an invitation for any other session, and for an address that is not
+  verified (`requireEmailVerificationOnInvitation`, written).
+  test:`gives an invitation to the address it names, and to no other session`.
+- **An invitation gives `admin` or `member`, never `owner` and not yet `guest`**: a guest still
+  reaches every site, so the console creates none (above). The role of an accepted invitation is
+  refused again when its row holds two roles: test:`refuses an invitation whose row holds two roles,
+when it is accepted`. An invitation waits 7 days; one address gets one invitation of a workspace at a
+  time, sent again on request; and **3 messages to one address in 15 minutes**, from every workspace
+  together, as the sign-in link: an admin cannot fill a mailbox with the name of Fruitback. A worker
+  with no mailer sends nothing and keeps the invitation: the console shows the same link, to send by
+  hand (FRU-107), and it opens nothing more than the message does.
+  test:`sends an invitation again when asked to, and no more than three messages to one address in the window`.
+- **A cancel names the workspace, and the invitation must be of it.** better-auth reads the
+  workspace of an invitation from the invitation; the worker reads the role in the workspace of the
+  call, so it checks first that the two are one:
+  test:`cancels an invitation of the workspace the call names, and of no other`.
+- **What a copy of the database shows**: each invitation, its address, its role, its state and the
+  id of who sent it. The id of an invitation travels in no link.
 
 - **better-auth is the second reader of a call, never the first.** Before it reads a request the
   worker has checked the cookie, the `Origin` of a call that changes something, the fields of the
@@ -890,9 +927,9 @@ a rule in `ORGANIZATION_PATHS` (`organization-paths.ts`):
   member, the other guests among them. The plugin asks no permission to list the members, and
   answers them and the invitations to a guest (measured, and kept measured by the control of
   test:`does not let a guest read the members or the invitations, on the API`). So `list-members`
-  asks `can(role, 'read-members')`, which a guest does not have, and the routes that answer an
-  invitation are closed to every role: the id of an invitation is worth its link, and the
-  invitations are FRU-104. A guest reads the name of the workspace, their own role, and its sites
+  asks `can(role, 'read-members')`, which a guest does not have; `list-invitations` asks
+  `manage-members`; `get-full-organization` and `get-invitation` stay closed to every role. A guest
+  reads the invitations sent to their own address, and no other. A guest reads the name of the workspace, their own role, and its sites
   without their destinations, as before.
 - **Every other route of the plugin answers `404`, twice.** The worker answers it for a path that
   has no rule, and better-auth is built with that path closed to a request: the list of the closed
