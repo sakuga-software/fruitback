@@ -51,6 +51,13 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the code of the worker, « Fruitback did not answer. Try again. » for no answer and a `5xx`, and a
   sentence of the screen that blames no field for the rest. No failure clears a field. A copy goes
   through `copyText`, and a copy the browser refuses says so: the text stays on screen to select.
+- **The members and the invitations come from the worker's routes of the organization plugin**
+  (FRU-104): `members.tsx` lists the members to whoever may read them, and the invitations that
+  wait to an owner or an admin, with « Resend » and « Cancel ». A guest sees their own row only, as
+  the worker answers them nothing more. **The front door looks for an invitation first**
+  (`home.tsx`): somebody who signed in from the message of an invitation lands on `/invitations`,
+  not on the setup that makes a workspace of their own. A worker of before has no member list: the
+  screen draws the row of the person and says that invitations come later.
 - **The address of a site is read by `site-address.ts`, on every screen that asks for one**
   (FRU-167). A host with no scheme is `https://`, as in the extension. The field is not `type="url"`:
   the browser stopped the form with its own bubble, in its own language, and the sentence of the
