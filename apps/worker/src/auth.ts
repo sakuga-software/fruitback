@@ -84,6 +84,10 @@ export const CLIENT_IP_HEADER = 'x-fruitback-client-ip';
  * worker cannot pass the mailer as an argument. The route of the worker leaves a delivery here under a
  * ticket, and names the ticket in the `metadata` of the call. No request reaches that path: a call
  * without a ticket sends nothing, and throws.
+ *
+ * better-auth awaits `sendMagicLink` before it answers (read in `plugins/magic-link/index.mjs` of
+ * 1.7.7), so the ticket is there for the whole delivery, and an error of the mailer reaches the
+ * route: test:`answers 202 once the link is sent, and 502 when the mail provider refuses it`.
  */
 const deliveries = new Map<string, (token: string) => Promise<void>>();
 

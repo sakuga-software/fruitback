@@ -15,7 +15,7 @@ import {
 } from './auth.fixture.ts';
 import type { WorkerEnv } from './env.ts';
 import { type Kv, createMemoryKv } from './kv.ts';
-import type { MailMessage, Mailer } from './mail.ts';
+import { MailError, type MailMessage, type Mailer } from './mail.ts';
 import type { PgDatabase } from './postgres.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
@@ -350,6 +350,29 @@ for (const { label, open, skip } of DATABASES) {
         /sign-in link/,
         'the language of the account is not the one of the browser',
       );
+    });
+
+    // better-auth awaits `sendMagicLink` (read in plugins/magic-link of 1.7.7): the route answers once
+    // the mail is sent, and says so when it is not.
+    it('answers 202 once the link is sent, and 502 when the mail provider refuses it', async () => {
+      const worker = await workerOn(open);
+      const said = mock.method(console, 'error', () => {});
+      const refused = mock.method(worker.mail, 'send', async () => {
+        throw new MailError('The mail provider refused the message: 503');
+      });
+      try {
+        const answer = await worker.call('/console/auth/email', { body: { email: 'alice@acme.dev' } });
+
+        assert.equal(answer.status, 502);
+        assert.deepEqual(await answer.json(), { error: 'mail-unavailable' });
+      } finally {
+        refused.mock.restore();
+        said.mock.restore();
+      }
+      // The control: the same call, with a provider that accepts, answers after the mail is in the box.
+      const sent = await worker.call('/console/auth/email', { body: { email: 'alice@acme.dev' } });
+      assert.equal(sent.status, 202);
+      assert.equal(worker.mail.sent.length, 1);
     });
 
     it('closes the routes of better-auth that put a token in an address', async () => {
