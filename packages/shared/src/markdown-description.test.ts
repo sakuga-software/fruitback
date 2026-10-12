@@ -4,6 +4,7 @@ import {
   SEED_BLOCK_CAPTION,
   TEAM_WORDS,
   buildIssueDescription,
+  buildIssueMetadata,
   buildIssueTitle,
   pageQueryTerm,
   parseSeedFromDescription,
@@ -159,6 +160,77 @@ describe('buildIssueTitle', () => {
     const seed = minimalSeedFixture();
 
     assert.equal(buildIssueTitle(seed), 'Feedback on <h1> — /');
+  });
+});
+
+describe('the bounds of a cut title', () => {
+  it('keeps a title of exactly the limit whole, and cuts one character more', () => {
+    const seed = seedFixture({ note: 'abcdefghij' });
+
+    assert.equal(buildIssueTitle(seed, { maxLength: 10 }), 'abcdefghij');
+    assert.equal(buildIssueTitle(seedFixture({ note: 'abcdefghijk' }), { maxLength: 10 }), 'abcdefghi…');
+  });
+
+  it('breaks on the last space only when it lies past 60 % of the limit', () => {
+    // With a limit of 10, the space must sit after index 6. At index 6, breaking there would eat
+    // too much of the title, so the cut is hard.
+    assert.equal(buildIssueTitle(seedFixture({ note: 'abcdefg hijklmnop' }), { maxLength: 10 }), 'abcdefg…');
+    assert.equal(buildIssueTitle(seedFixture({ note: 'abcdef ghijklmnop' }), { maxLength: 10 }), 'abcdef gh…');
+  });
+
+  it('cuts at 80 characters by default', () => {
+    const title = buildIssueTitle(seedFixture({ note: 'x'.repeat(200) }));
+
+    assert.equal(title, `${'x'.repeat(79)}…`);
+  });
+});
+
+describe('the lines of a description that a member reads', () => {
+  it('names the client by its name, by its id when it has no name, and not at all when there is none', () => {
+    assert.ok(buildIssueMetadata(seedFixture()).includes('**Client** · Acme'));
+    assert.ok(buildIssueMetadata(seedFixture({ client: { id: 'acme' } })).includes('**Client** · acme'));
+    assert.equal(
+      buildIssueMetadata(minimalSeedFixture()).some((line) => line.startsWith('**Client**')),
+      false,
+    );
+  });
+
+  it('writes the component and the file, each without the other', () => {
+    const componentLine = (source: Parameters<typeof seedFixture>[0]['source']) =>
+      buildIssueMetadata(seedFixture({ source })).find((line) => line.startsWith('**Component**'));
+
+    assert.equal(
+      componentLine({ component: 'CheckoutCta', file: 'src/checkout-cta.tsx', line: 42 }),
+      '**Component** · `CheckoutCta` — `src/checkout-cta.tsx:42`',
+    );
+    assert.equal(componentLine({ component: 'CheckoutCta' }), '**Component** · `CheckoutCta`');
+    assert.equal(componentLine({ file: 'src/checkout-cta.tsx' }), '**Component** · `src/checkout-cta.tsx`');
+    assert.equal(
+      componentLine({ file: 'src/checkout-cta.tsx', line: 42 }),
+      '**Component** · `src/checkout-cta.tsx:42`',
+    );
+    assert.equal(componentLine({ line: 42, column: 7 }), undefined);
+    assert.equal(componentLine(undefined), undefined);
+  });
+
+  it('writes the pixel ratio only when it is neither absent nor 1', () => {
+    const viewportLine = (dpr: number | undefined) =>
+      buildIssueMetadata(
+        seedFixture({ viewport: { width: 1440, height: 900, ...(dpr === undefined ? {} : { dpr }) } }),
+      ).find((line) => line.startsWith('**Viewport**'));
+
+    assert.equal(viewportLine(2), '**Viewport** · 1440×900 @2×');
+    assert.equal(viewportLine(1), '**Viewport** · 1440×900');
+    assert.equal(viewportLine(undefined), '**Viewport** · 1440×900');
+  });
+
+  it('says Anonymous for a reporter whose fields are all empty', () => {
+    for (const reporter of [{}, { id: '' }, { name: '', email: '' }]) {
+      assert.ok(
+        buildIssueMetadata(seedFixture({ reporter })).includes('**Reported by** · Anonymous'),
+        JSON.stringify(reporter),
+      );
+    }
   });
 });
 
