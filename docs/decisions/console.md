@@ -17,9 +17,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   loses what somebody typed and runs its effects twice. **`HydrateFallback` holds no word**: it is rendered when the console
   is built, and a word in another language is a hydration error in the browser.
 - `apps/console` (`@fruitback/console`) — the console of the Cloud (FRU-99): React Router in SPA mode,
-  Tailwind on the tokens of `design/`, served as static files by nginx. It holds no secret: the access
-  token lives in the page's memory, the refresh token is the worker's `HttpOnly` cookie. **One refresh
-  in flight** (`refresh()` in `api.ts`): two calls spending one cookie race, like the extension's.
+  Tailwind on the tokens of `design/`, served as static files by nginx. **It holds no secret, and no
+  token at all** (FRU-148): the session is a cookie of the worker that no script reads, and
+  `transport.ts` sends it with every call (`credentials: 'include'`). There is nothing to refresh.
+  See _The session of the console_ below for the worker of before, the `401` and the providers.
   The image hashes the inline scripts of `index.html` into its policy (`csp.mjs`), never
   `'unsafe-inline'`, and serves the widget's script at `/fruitback.iife.js` until it has a CDN.
 - `design/` — the reference mockups of the Cloud and the simplified extension (a Claude Design
@@ -42,6 +43,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   before the first list is kept would start from the list of before and take the first change away,
   so the controls of the list are disabled while it is written. `e2e/console-destinations.spec.ts`
   holds a write open and tries the second gesture, on the panel of a Linear and of an address.
+  **The panel of a source opens where it is seen** (FRU-161): from 1280 px in its column beside the
+  list, as on the board; under 1280 px right under its row, which names it in `aria-controls`, and
+  the page scrolls as far as the panel needs. `e2e/console-source-panel.spec.ts` measures it at 390,
+  768 and 1440 px.
   **A refused call says its own cause** (FRU-164): `problemOf` (`problems.ts`) gives the sentence of
   the code of the worker, « Fruitback did not answer. Try again. » for no answer and a `5xx`, and a
   sentence of the screen that blames no field for the rest. No failure clears a field. A copy goes
@@ -62,3 +67,52 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   `e2e/console-kit.spec.ts` measures both. **A button takes no `title`**: a tooltip does not open on a disabled
   control, so the reason is written beside it. The overlays of React Aria position with inline
   styles, which the console's CSP allows (`style-src 'unsafe-inline'`); its scripts stay hashed.
+
+## The session of the console (FRU-148)
+
+### The rules, in short
+
+- **The console holds no token.** Against a worker that serves better-auth (FRU-147), a call is a
+  `fetch` with the cookie of the worker and no `Authorization`. The cookie is `HttpOnly`,
+  `SameSite=Strict`, `Path=/console`: `document.cookie` does not show it, and nothing is in
+  `localStorage` or `sessionStorage`. `e2e/console-cookie-session.spec.ts` reads all three, after it
+  checked that the browser does hold the cookie.
+- **No client of better-auth.** The console calls the routes of the worker with `fetch`
+  (`/console/auth/email`, `/console/auth/email/redeem`, `/console/auth/sign-out`). The bundle and the
+  policy of the image do not change: `csp.mjs`, hashed scripts, no `'unsafe-inline'` for a script.
+- **The worker says which path it serves, in `GET /auth/providers`.** With `betterAuth` in the
+  answer, the console takes the cookie, and the providers of `betterAuth`. Without it, and until the
+  worker answered, it signs in as before: `session-of-before.ts` holds the access token and the one
+  refresh in flight of FRU-99. The console and the worker are not deployed at the same instant.
+  **FRU-150 removes `session-of-before.ts`**, and with it every token of the console.
+- **A sign-in with a provider is a navigation of the whole page**, to
+  `<worker>/console/auth/start/<provider>` (`providerStart`). Never a `fetch` of `/sign-in/social`:
+  the cookie of the state would be set on the answer of a call, and WebKit did not send it back when
+  the console and the worker are not one site (measured in FRU-147: `state_mismatch`).
+- **The token of a link is read after the `#`, sent in the body of a `POST`, and taken out of the
+  address bar** (`sign-in.tsx`), as before. It is in no address that the worker receives.
+- **A code that a sign-in sends back has a sentence** (`PROVIDER_PROBLEMS` in `setup.tsx`), in French
+  too. better-auth names no provider in its code, so the sentences name none. A code this build does
+  not know says that the sign-in did not finish: no code shows as a blank screen.
+- **A `401` keeps what the person typed.** `call` tells `onSignedOut`, and the root says so above
+  the screen, which stays mounted: « Sign in » opens the sign-in in another tab, « Continue » asks
+  the worker again. A screen that draws nothing without `/console/me` asks with `quiet` and goes to
+  the sign-in itself: it has nothing typed to keep.
+- **« Sign out » ends the session on the worker** (`/console/auth/sign-out`): the cookie is refused
+  at the next call, in every tab and for whoever copied it.
+
+### The reasons, and the measurements
+
+- **Why the path of before stays in the console, where the ticket says the token goes.** The ticket
+  asks both that the token disappears and that this console works against a worker of before. The
+  second one decides: a console that is deployed before its worker would sign nobody in. So the
+  token of before is in one file that nothing calls once the worker says `betterAuth`, and
+  `api.test.ts` holds that no call has an `Authorization` then.
+- **An answer of `/auth/providers` with no body is a worker of before.** A stub of a spec answers
+  `204` there. Read as better-auth, or read without a check, it broke every console spec (measured).
+- **The spec starts its worker as a process** (`apps/worker/src/cloud-worker.fixture.ts`): Playwright
+  compiles a spec as CommonJS and cannot import the worker, which is ES modules. The spec hands the
+  process each request that the console sends to the address of the worker, and reads the mail from
+  it: the link is read where the worker was asked to send it.
+- **Measured in three engines, on `*.fruitback.localhost` over HTTPS** (2026-10-12, Playwright
+  1.58.2): the pull request of FRU-148 has the table. Not measured: Safari itself.

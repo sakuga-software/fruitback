@@ -1247,6 +1247,61 @@ describe('who may read a pin (FRU-40)', () => {
     assert.deepEqual(stub.calls, [], 'an unauthorised read reached Linear');
   });
 
+  it('tells a reader it would sign that it is identified, and tells nobody who (FRU-112)', async () => {
+    // The composer of the widget asks for no name then. One bit: the page reads this answer in team
+    // mode, and the name of the session is not in it.
+    const token = await signIdentityToken(
+      { sub: 'acct_only_in_the_token', name: 'Zoé Seulement-Du-Jeton', email: 'zoe@token.test', exp: inAnHour() },
+      SECRET,
+    );
+
+    const response = await get(planted(), { env: closed, headers: { Authorization: `Bearer ${token}` } });
+
+    const text = await response.text();
+    assert.equal((JSON.parse(text) as { identified?: unknown }).identified, true);
+    for (const claim of ['acct_only_in_the_token', 'Seulement-Du-Jeton', 'zoe@token.test']) {
+      assert.ok(!text.includes(claim), `the read answered ${claim}, which only the token held`);
+    }
+  });
+
+  it('says nothing of identity to a reader it would not sign, a warm cache included', async () => {
+    // Reads are public here, so a token is not needed, and a bad one is not refused. The field is
+    // asked at each request: the entry of the cache is shared, and it must not carry the last answer.
+    const open: WorkerEnv = { ...env, FRUITBACK_IDENTITY_SECRET: SECRET };
+    const path = planted();
+    const good = await signIdentityToken({ sub: 'user_42', exp: inAnHour() }, SECRET);
+    const forged = await signIdentityToken({ sub: 'user_42', exp: inAnHour() }, 'a-different-secret-of-good-length');
+    const expired = await signIdentityToken({ sub: 'user_42', exp: Math.floor(Date.now() / 1000) - 60 }, SECRET);
+    const identifiedFor = async (headers?: Record<string, string>) => {
+      const response = await get(path, { env: open, ...(headers === undefined ? {} : { headers }) });
+      assert.equal(response.status, 200);
+
+      return 'identified' in ((await response.json()) as object);
+    };
+
+    assert.equal(await identifiedFor({ Authorization: `Bearer ${good}` }), true, 'the control: a good token');
+    assert.equal(await identifiedFor(), false);
+    assert.equal(await identifiedFor({ Authorization: `Bearer ${forged}` }), false);
+    assert.equal(await identifiedFor({ Authorization: `Bearer ${expired}` }), false);
+    // A public read never verified a token before FRU-112, so anything could sit in the header.
+    // None of it may turn a read that answered into a failure.
+    for (const junk of [
+      '',
+      'x',
+      '..',
+      'a.b.c',
+      '%%%.%%%.%%%',
+      `${good}x`,
+      `${good.split('.').slice(0, 2).join('.')}.`,
+      'é'.repeat(4_000),
+    ]) {
+      assert.equal(await identifiedFor({ Authorization: `Bearer ${junk}` }), false, `Bearer ${junk.slice(0, 20)}`);
+    }
+    // No identity secret at all: the same good token names nobody.
+    const response = await get(path, { headers: { Authorization: `Bearer ${good}` } });
+    assert.equal('identified' in ((await response.json()) as object), false);
+  });
+
   it('lets one client keep its reads open while another closes them', async () => {
     const seed = seedFixture({ client: { id: 'acme' } });
     installLinearStub({ storedIssues: [storedIssueFromSeed(seed)] });

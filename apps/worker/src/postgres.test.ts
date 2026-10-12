@@ -8,6 +8,7 @@ import { after, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { DrizzleQueryError, eq, sql } from 'drizzle-orm';
+import pg from 'pg';
 import { mutatedModule } from './conformance.fixture.ts';
 import {
   type Database,
@@ -622,6 +623,47 @@ describe('a statement that fails, which Drizzle quotes with its values (FRU-180)
  * `FRUITBACK_TEST_POSTGRES=required` a missing address fails here, and the skips above cannot pass
  * for a run on a real PostgreSQL.
  */
+/**
+ * The database of a case is dropped when its connections have ended, not while they end (FRU-196).
+ *
+ * A pool of `pg` with no listener, as `postgres-numbers.test.ts` makes one: an error on one of its
+ * connections is an unhandled error of the process, and `node:test` gives it to the test that runs.
+ * Here the pool has a listener that counts. Eight connections, so that one at least is still on the
+ * server when `end()` answers.
+ */
+describe('the database of a case, when it is dropped (FRU-196)', { skip: NO_REAL_POSTGRES }, () => {
+  /** How many connections of a pool that has ended read an error, when its database is dropped. */
+  async function errorsOfAnEndedPool(how: 'drop' | 'dropAtOnce'): Promise<number> {
+    const own = await ownDatabase();
+    const pool = new pg.Pool({ connectionString: own.url, max: 8 });
+    let errors = 0;
+    pool.on('error', () => (errors += 1));
+    await Promise.all(Array.from({ length: 8 }, () => pool.query('SELECT pg_sleep(0.01)')));
+
+    await pool.end();
+    await own[how]();
+    // The error of a connection that the server ended comes on its socket, after the answer of the DROP.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    return errors;
+  }
+
+  it('ends no connection of a pool that has just ended', async () => {
+    for (let round = 0; round < 10; round += 1) {
+      assert.equal(await errorsOfAnEndedPool('drop'), 0, `round ${round}`);
+    }
+  });
+
+  // The control: with no wait, the DROP meets a connection that is still there. Measured on 17.11:
+  // at the first round, every time. Ten rounds at most, so that one slow server does not fail it.
+  it('ended one when it did not wait, which is what failed a test in CI', async () => {
+    let errors = 0;
+    for (let round = 0; round < 10 && errors === 0; round += 1) errors += await errorsOfAnEndedPool('dropAtOnce');
+
+    assert.ok(errors > 0, 'ten databases were dropped at once, and no connection of an ended pool read an error');
+  });
+});
+
 describe('the PostgreSQL of the tests', () => {
   it('has a real server when the run requires one', () => {
     if (process.env.FRUITBACK_TEST_POSTGRES !== 'required') return;

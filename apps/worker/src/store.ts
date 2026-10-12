@@ -37,6 +37,21 @@ export type CreatedIssue = { id: string; identifier: string; url?: string };
 /** What became of one seed of a batch: its issue, or a store that did not keep it. */
 export type BatchAnswer = { issue: CreatedIssue } | { error: 'store-unavailable' };
 
+/**
+ * What a store may remember of a batch from one attempt to the next (FRU-195). The worker holds it,
+ * for the seeds of the batch and the minutes a seed is remembered; a store with no parent ignores it.
+ *
+ * Nothing here may throw: a memory that does not answer only costs the reuse of a parent.
+ */
+export type BatchMemory = {
+  /** The parent an earlier attempt wrote for one of these seeds. */
+  parent(): Promise<string | undefined>;
+  /** Remembers the parent of these seeds. */
+  keepParent(id: string): Promise<void>;
+  /** Forgets it: the next attempt writes a new one. */
+  forgetParent(): Promise<void>;
+};
+
 /** The read the worker asks for: every seed on one page, for one client. */
 export type SeedIssueQuery = { url: string; clientId: string | undefined };
 
@@ -65,9 +80,14 @@ export type SeedStore = {
    * seed is still its own issue, with its own state. One answer for each seed, in order.
    *
    * It throws `StoreError` only when nothing was written. A store without it gets one `create` for
-   * each seed: `createAll` in `batch.ts`.
+   * each seed: `createAll` in `batch.ts`. `memory` is absent when the caller keeps none.
    */
-  createBatch?(seeds: readonly Seed[], client: ClientConfig | undefined, policy: ClientPolicy): Promise<BatchAnswer[]>;
+  createBatch?(
+    seeds: readonly Seed[],
+    client: ClientConfig | undefined,
+    policy: ClientPolicy,
+    memory?: BatchMemory,
+  ): Promise<BatchAnswer[]>;
   findForPage(query: SeedIssueQuery, client: ClientConfig | undefined, policy: ClientPolicy): Promise<SeedIssue[]>;
   /**
    * Delete the seeds that `which` selects, and the replies to them (FRU-85, FRU-111).

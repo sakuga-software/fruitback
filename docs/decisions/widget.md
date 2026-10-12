@@ -196,7 +196,7 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   `onSubmit`: the composer does not know where the name is kept, and `embed.ts` gives it the config
   store. The name is written before the send, so a failed send costs neither the name nor the
   choice. Unticking the box erases at once. With `identityToken`, the composer asks for no name: the
-  worker would replace a typed one.
+  worker would replace a typed one. In team mode the worker says so on a read (`identified`, FRU-112).
 - **A line says where the note goes, only to a reader the worker offers two places or more**
   (FRU-123). The worker names the places in `destinations` on a read, to a member of the workspace
   and to nobody else, so every other composer is the one of FRU-89. `offeredDestinations` reads the
@@ -237,7 +237,7 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   element added to the widget does not meet the surprise again.
 - `prefers-reduced-motion` turns the animations **off**, both here and on the pin. A widget that
   overlays someone else's site is the last thing that should ignore that setting.
-- The pin is a drop: three round corners and one sharp, rotated to point at its element, with a
+- The pin is a drop: three round corners and one sharp, rotated to point at the corner of its element, with a
   squash-and-stretch entrance. The note moved to the badge's `aria-label` — that is what keeps it
   reachable by a screen reader, and by a test looking for it by role.
 - **One field to say who you are, and a box to be remembered (FRU-91).** The disclosure opened two
@@ -255,10 +255,31 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   - **A stored name is read like the rest of the config**: a string, trimmed, at most 120
     characters, or nothing. The key stays absent rather than empty.
   - **With `identityToken`, the composer asks for no name.** The worker replaces a typed name by the
-    identity of the token, so the field would promise a signature that is not used. **Team mode is
-    not covered**: there the session names the reviewer, and the widget cannot know it — it is given
-    a transport and nothing about who is behind it. The field stays, and the worker still signs the
-    note with the session's name.
+    identity of the token, so the field would promise a signature that is not used.
+  - **In team mode the worker tells the widget, on a read (FRU-112).** There the session names the
+    reviewer, and the widget is given a transport and nothing about who is behind it: the field
+    stayed, and what was typed in it was dropped with no word. `GET /feedback` now answers
+    `identified: true` to a reader whose token it verified, and `embed.ts` keeps the word of the last
+    read that answered, like the places of FRU-123: an answer without the field takes it back, a
+    failed read changes nothing. Of the three ways the ticket listed, this is the one with no new
+    option of `init` and no new field on the API the extension announces.
+    - **One bit, and not « Signing as Alex ».** The page reads that answer. A name there would give
+      the page the name of a reviewer who has written nothing yet, and the notes do not show that.
+      Showing who signs is an open question in the ticket.
+    - **`ComposerOptions.identified` takes a function, asked at each open and by
+      `identityChanged()`.** A closed composer takes the new answer at once. An open one keeps the
+      answer it opened with: a field must not leave under somebody who types in it. A name typed
+      before is kept, hidden, and not sent.
+    - **Before the first read answers, the composer asks.** A reviewer who opens it in that moment,
+      or whose first read failed, can still type a name that the worker replaces. The field hidden
+      by default would take it from every anonymous reporter for the time of a read.
+    - **The page is not told of a pairing**, so a reviewer who pairs and writes at once, on a page
+      that was open before, is still asked for the first note: the send makes a read, and the field
+      is gone for the next one. A reload, or a return to the tab after 15 seconds, makes that read
+      too. Measured in `e2e/extension.spec.ts`, where the first version of the assertion failed for
+      this reason. Telling the page is a change of the extension, and a question in the ticket.
+    - `e2e/extension.spec.ts` holds it in a browser: the field is there before the pairing, which is
+      the control, and gone after.
 - **A member chooses where a note goes, on a line at the foot of the composer (FRU-123).** The
   worker half is `apps/worker` (`Site.destinations`, `seesTracker`); this is what the widget does
   with its answer.
@@ -843,7 +864,7 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 - **Pins let clicks through**; only the badge is clickable. A widget that swallows the client's own
   buttons is one they turn off.
 - **Several notes on one spot fan their badges out** (FRU-155), one step of 30 px (a 26 px drop and
-  a 4 px gap) to the right for each note before it, in render order. Before, the badges lay on one
+  a 4 px gap) to the left for each note before it, in render order (to the right until FRU-158). Before, the badges lay on one
   point: one drop showed, and only the last one took the click. Each note keeps its own drop, its own
   stage colour and its own thread, so a reviewer counts the drops and opens each one; no count badge,
   no shared thread. The key is the pin's top-left corner, rounded to the pixel, and not the element:
@@ -851,6 +872,24 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   fan stays physical, like the pin, in both reading directions. `e2e/pin-stack.spec.ts` plants three
   notes on one button and reaches each badge with the pointer. Open question in the ticket: a count
   on one pin, if a spot ever carries more notes than its element is wide.
+- **A pin does not cover what it annotates** (FRU-158).
+  - **The badge sits outside the top-left corner of its element**, up and to the left, its sharp
+    corner on the corner of the frame and not one pixel over the element: the drop is turned by
+    -90deg instead of -45deg, so it points down and in. Above the element is where its label, its
+    title or its price is written, and the badge hid the first digit of « 19 € ». Left of an element
+    is usually a margin or the padding of its container.
+  - **Not enough room on the left** (less than 26 px from the edge of the document, plus 30 px per
+    other note on the spot): the badges go back above the element, going right, with the class
+    `fruitback-pin-tight`. A badge off the page cannot be clicked at all, and that is worse than one
+    over a word.
+  - **The frame is drawn always and tinted only while its badge is pointed at or focused, or its
+    thread is open**, through `:has()`. A tint left on greyed every annotated element, and a page
+    with many notes became hard to read. A browser with no `:has()` shows the tint for an open thread
+    only.
+  - `e2e/pin-placement.spec.ts` plants a note on each « Ajouter » and one on a price, and checks that
+    no badge overlaps the glyphs of a card title or price (measured on a `Range`, not on the box).
+  - Open questions in the ticket: a key or a dock button to see the bare page for a moment; the
+    nearest free margin rather than a fixed corner.
 - `createOverlay({ host })` takes where to render. It defaults to `<body>`; FRU-3's Shadow root
   passes itself there, which is what finally isolates these styles.
 - Tests run against **happy-dom** (`dom.fixture.ts`), a devDependency of this package only —

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router';
-import { onReachability } from './api';
+import { call, onReachability, onSignedOut } from './api';
 import './app.css';
 import { t } from './i18n';
 import { useLocale } from './use-locale';
@@ -45,6 +45,7 @@ export default function Root() {
   return (
     <>
       <Unreachable />
+      <SignedOut />
       <Outlet />
     </>
   );
@@ -69,6 +70,52 @@ function Unreachable() {
         onClick={() => window.location.reload()}
       >
         {t('Try again')}
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * Says so when a call was refused because the session ended (FRU-148), above the screen, which stays
+ * as it is: a field keeps what the person typed (`CLAUDE.md`: no error path clears a field). The
+ * sign-in opens in another tab; « Continue » asks the worker again and goes back to work.
+ */
+function SignedOut() {
+  useLocale();
+  const [ended, setEnded] = useState(false);
+  const [still, setStill] = useState(false);
+  useEffect(() => onSignedOut(() => setEnded(true)), []);
+  if (!ended) return null;
+
+  async function resume() {
+    const me = await call('GET', '/console/me', undefined, { quiet: true });
+    // No answer is not « still signed out »: the banner of the worker that does not answer says it.
+    if (!me.ok && me.status === 0) return;
+    setStill(!me.ok);
+    if (me.ok) setEnded(false);
+  }
+
+  return (
+    <div role="alert" className="flex flex-wrap items-center justify-center gap-3 bg-ink px-4 py-2 text-sm text-white">
+      <span>
+        {still
+          ? t('You are still signed out. Sign in in the other tab, then continue.')
+          : t('Your session ended. Sign in again in another tab: what you wrote here stays.')}
+      </span>
+      <a
+        href="/setup"
+        target="_blank"
+        rel="noopener"
+        className="rounded-full border border-white px-3 py-1 font-semibold hover:bg-white/10"
+      >
+        {t('Sign in')}
+      </a>
+      <Button
+        tone="outline"
+        className="border-white bg-transparent text-white hover:bg-white/10"
+        onClick={() => void resume()}
+      >
+        {t('Continue')}
       </Button>
     </div>
   );

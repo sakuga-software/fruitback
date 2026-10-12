@@ -13,6 +13,10 @@ import {
 } from './clients.ts';
 import { type AccountStore, type Role, can } from './accounts.ts';
 import { SESSION_SITES_PATH, handleSessionSites } from './session-sites.ts';
+import { type Auth, authFor } from './auth.ts';
+import { createWorkspaceWithPlugin, handleOrganizationRoutes } from './auth-organization.ts';
+import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
+import { AuthUnavailable, handleAuthRoutes, isAuthRoute, sessionOfCookie } from './auth-routes.ts';
 import { consoleCors, handleConsoleSession, isConsoleRoute } from './console-routes.ts';
 import { handleConsoleApi } from './console-api.ts';
 import { handleGitHub } from './github-oauth.ts';
@@ -24,7 +28,7 @@ import { DELIVERY_HEADER, LOOP_STATUS, type Send, deliverDue } from './rest-conn
 import { type Mailer, createTemMailer } from './mail.ts';
 import { createSqliteAccountStore } from './accounts-sqlite.ts';
 import { type WorkerConfig, type WorkerEnv, hasAccounts, hasSessions, readAllowedOrigins, readConfig } from './env.ts';
-import { type BatchAnswer, type CreatedIssue, type SeedStore, StoreError } from './store.ts';
+import { type BatchAnswer, type BatchMemory, type CreatedIssue, type SeedStore, StoreError } from './store.ts';
 import { createAll } from './batch.ts';
 import { watchedStore } from './connector-health.ts';
 import { type CorsDecision, diagnosticCorsHeaders, openCors, resolveCors } from './cors.ts';
@@ -33,7 +37,9 @@ import { chargeRateLimit, checkRateLimit, maxBatch } from './rate-limit.ts';
 import { cached, invalidate } from './cache.ts';
 import { type Kv, KvError, processKv } from './kv.ts';
 import { postgresAccountStore, postgresSessionStore } from './postgres-stores.ts';
+import { withoutAddress } from './postgres.ts';
 import {
+  type SessionIdentity,
   type SessionStore,
   createPairing as openPairing,
   redeemPairing,
@@ -51,9 +57,6 @@ import { createSqliteSessionStore } from './session-sqlite.ts';
  * `server.ts` adapts `node:http` onto it. That keeps every behaviour testable without opening a
  * socket, and keeps the door open if this ever moves to another runtime.
  */
-
-/** A seed with a long note and a DOM path is a few KB. 64 is generous; unbounded is an invitation. */
-const MAX_BODY_BYTES = 64 * 1_024;
 
 /**
  * Which store this process writes to (FRU-29, FRU-33).
@@ -163,6 +166,22 @@ async function seesTracker(request: Request, config: Served, policy: ClientPolic
 }
 
 /**
+ * Whether the worker would sign a note of this caller with an identity it verified (FRU-112).
+ *
+ * The widget asks for no name then: a typed one would be replaced. It is the answer `attributionFor`
+ * gives to the same token, so a site token counts like a session.
+ *
+ * WARNING: one bit, and never who. In team mode the page reads this answer, and it must learn
+ * nothing of the session that the notes do not show already.
+ */
+async function signsNotes(request: Request, policy: ClientPolicy): Promise<boolean> {
+  const token = readBearerToken(request.headers.get('Authorization'));
+  if (token === undefined) return false;
+
+  return (await verifyForClient(token, policy))?.ok === true;
+}
+
+/**
  * One pass over the notes that wait to be sent to the address a workspace connected (FRU-122).
  *
  * The server calls it on a timer. It is here and not in `server.ts` so a test reaches it with no
@@ -202,6 +221,11 @@ export type RequestContext = {
   mailer?: Mailer;
   /** What reaches GitHub on a sign-in (FRU-97). A suite hands over a double of GitHub. */
   fetcher?: typeof fetch;
+  /**
+   * better-auth, for a worker that has it on (FRU-147). Absent, the handler takes the one instance of
+   * the process (`authFor`), built when the server started. A suite hands over one on PGlite.
+   */
+  auth?: Auth | Promise<Auth>;
   /**
    * Where the rate limiter and the read cache keep their state (FRU-49). When it is absent, the
    * handler uses `processKv`, which gives the one instance of this process and never a new empty one.
@@ -331,18 +355,70 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
     const sessions = context.sessionStore ?? sessionStoreFor(served);
     if (sessions === undefined || served.identitySecret === undefined)
       return json(404, { error: 'not-found' }, cors.headers);
+    // better-auth, when it is on (FRU-147): the instance of the process, built at boot.
+    const auth = context.auth ?? authFor(served);
+    const mailer = context.mailer ?? mailerFor(served);
 
     try {
       // Which providers this worker signs people in with (FRU-135). The console asks before it draws
-      // a button: a button for a provider the worker does not have leads to a `404`.
+      // a button: a button for a provider the worker does not have leads to a `404`. `betterAuth`
+      // says which ways the routes of better-auth offer (FRU-147), so a console of after takes them,
+      // and a console of before reads the two booleans it always read.
       if (pathname === SIGN_IN_PROVIDERS && request.method === 'GET') {
         const ready = served.publicUrl !== undefined && served.consoleUrl !== undefined;
 
         return json(
           200,
-          { github: ready && served.github !== undefined, google: ready && served.google !== undefined },
+          {
+            github: ready && served.github !== undefined,
+            google: ready && served.google !== undefined,
+            // Absent when better-auth is off: the answer of before, to the letter.
+            ...(auth === undefined
+              ? {}
+              : {
+                  betterAuth: {
+                    email: mailer !== undefined,
+                    github: served.authGithub !== undefined,
+                    google: served.google !== undefined,
+                  },
+                }),
+          },
           cors.headers,
         );
+      }
+
+      // The routes of better-auth, and the worker's own beside them (FRU-147). A worker that has it
+      // off answers `404` there, as before.
+      if (isAuthRoute(pathname)) {
+        if (auth === undefined || served.consoleUrl === undefined)
+          return json(404, { error: 'not-found' }, cors.headers);
+        try {
+          const routes = {
+            auth,
+            accounts,
+            mailer,
+            kv,
+            consoleUrl: served.consoleUrl,
+            clientIp: context.clientIp,
+            trackIp: served.authTrackIp,
+          };
+          // The routes of the organization plugin first, each under its rule (FRU-149). A path of the
+          // plugin that has none answers `404` there, and never reaches the list below.
+          const answer =
+            (await handleOrganizationRoutes(request, pathname, { ...routes, sessions }, cors.headers)) ??
+            (await handleAuthRoutes(request, pathname, routes, cors.headers));
+          if (answer !== undefined) return answer;
+        } catch (error) {
+          if (error instanceof StoreError) throw error;
+          // better-auth rejects, and does not answer, on a schema that is not the one it expects, or
+          // a database that does not answer (FRU-144). Said in the log, with no address and no token.
+          const said = error instanceof Error ? error.message : String(error);
+          console.error(
+            `[fruitback] better-auth did not answer: ${served.databaseUrl === undefined ? said : withoutAddress(said, served.databaseUrl)}`,
+          );
+
+          return json(502, { error: 'auth-unavailable' }, cors.headers);
+        }
       }
 
       // Top-level navigations to and from a provider, not calls of the console (FRU-97, FRU-135).
@@ -389,7 +465,7 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
           request,
           pathname,
           served,
-          { accounts, sessions, mailer: context.mailer ?? mailerFor(served), kv, secret: served.identitySecret },
+          { accounts, sessions, mailer, kv, secret: served.identitySecret },
           cors.headers,
         )) ??
         (await handleConsoleApi(
@@ -403,6 +479,16 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
             kv,
             ...(served.linearOAuth === undefined ? {} : { linearOAuth: served.linearOAuth }),
             ...(served.publicUrl === undefined ? {} : { publicUrl: served.publicUrl }),
+            // The cookie of better-auth, beside the token of before (FRU-147).
+            ...(auth === undefined || served.consoleUrl === undefined
+              ? {}
+              : {
+                  cookieSession: async (each: Request) => (await sessionOfCookie(auth, each))?.userId,
+                  consoleUrl: served.consoleUrl,
+                  // A workspace is made by the organization plugin for somebody of the cookie (FRU-149).
+                  createWorkspace: async (each: Request, name: string) =>
+                    createWorkspaceWithPlugin(await auth, each.headers, name),
+                }),
           },
           cors.headers,
         ));
@@ -410,6 +496,15 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
       return answer ?? json(404, { error: 'not-found' }, cors.headers);
     } catch (error) {
       if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, cors.headers);
+      // The cookie of a call of the console is read by better-auth (FRU-147): the same answer as on
+      // its own routes when it does not answer.
+      if (error instanceof AuthUnavailable) {
+        console.error(
+          `[fruitback] better-auth did not answer: ${served.databaseUrl === undefined ? error.message : withoutAddress(error.message, served.databaseUrl)}`,
+        );
+
+        return json(502, { error: 'auth-unavailable' }, cors.headers);
+      }
       throw error;
     }
   }
@@ -474,7 +569,7 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
 async function handleSession(
   request: Request,
   pathname: string,
-  config: WorkerConfig,
+  config: Served,
   context: RequestContext,
   headers: Record<string, string>,
 ): Promise<Response> {
@@ -501,6 +596,12 @@ async function handleSession(
     // One answer for a code that never existed and one already spent: telling them apart is how a
     // caller works out which codes exist. `session.ts` returns the same reason for both.
     if (!redeemed.ok) return json(401, { error: redeemed.reason }, headers);
+    // A code minted for somebody who left the workspace since: the same answer, and no session stays.
+    if (!(await stillOfTheWorkspace(config, redeemed.session.identity))) {
+      await revokeSession(store, redeemed.session.refreshToken);
+
+      return json(401, { error: 'code-spent-or-expired' }, headers);
+    }
 
     return json(200, redeemed.session, headers);
   }
@@ -510,6 +611,13 @@ async function handleSession(
 
   if (pathname === '/session/refresh') {
     const refreshed = await refreshSession(store, refreshToken, config.identitySecret);
+    // The session of somebody who is no longer of the workspace ends here (FRU-149), whatever
+    // removed them. The answer is the one of a session that ended: it says nothing of the workspace.
+    if (refreshed.ok && !(await stillOfTheWorkspace(config, refreshed.identity))) {
+      await revokeSession(store, refreshed.refreshToken);
+
+      return json(401, { error: 'session-revoked-or-expired' }, headers);
+    }
 
     return refreshed.ok
       ? json(
@@ -538,6 +646,24 @@ async function handleSession(
   }
 
   return json(404, { error: 'not-found' }, headers);
+}
+
+/**
+ * Whether the person of a session is still a member of the workspace it names (FRU-149).
+ *
+ * `verifyForClient` compares the workspace of an access token, and never a role: until a person
+ * could be removed, a session of a workspace was a member of it. Now the refresh is where a session
+ * that outlived its membership ends, ten minutes at most after the access token it last minted.
+ * Removing a member also ends their sessions at once (`endSessionsOf`); this is the second lock, for
+ * a removal that did not go through that call, and for a row somebody deleted by hand.
+ *
+ * `true` on a worker with no accounts, and for a session that names no workspace: nobody is a member
+ * of anything there, and the operator named the person with the pairing.
+ */
+async function stillOfTheWorkspace(config: Served, identity: SessionIdentity): Promise<boolean> {
+  if (config.roleIn === undefined || identity.workspace === undefined) return true;
+
+  return (await config.roleIn(identity.workspace, identity.subject)) !== undefined;
 }
 
 /** Mints a pairing code. Not reachable over HTTP — see `handleSession` and `main.ts`. */
@@ -771,7 +897,15 @@ async function getFeedback(
     return json(
       200,
       // `stages` does not depend on the page, so it is not in the cached answer.
-      { url, issues, stages: store.stages ?? SEED_STAGES, ...offered, ...batchOffer(config) },
+      {
+        url,
+        issues,
+        stages: store.stages ?? SEED_STAGES,
+        ...offered,
+        // Asked at each request like the places, and absent for a reader the worker cannot name.
+        ...((await signsNotes(request, route.policy)) ? { identified: true } : {}),
+        ...batchOffer(config),
+      },
       // No browser cache, deliberately. The read cache above is what protects the Linear
       // quota; letting the browser hold a copy too only buys one saved request per page load, and
       // costs the widget the pin it planted a second ago — it re-reads and gets served its own
@@ -959,6 +1093,53 @@ async function release(kv: Kv, clientId: string | undefined, seedId: string): Pr
   await kv.set(sendingKey(clientId, seedId), '0', SENDING_TTL_MS).catch(() => undefined);
 }
 
+function parentKey(clientId: string | undefined, scope: string, seedId: string): string {
+  return `fruitback:batch-parent:${JSON.stringify([clientId ?? null, scope, seedId])}`;
+}
+
+/**
+ * The parent of a batch, from one attempt to the next (FRU-195), in the `Kv`: one entry for each seed,
+ * for as long as a seed is remembered. An attempt that sends again only some of the notes still
+ * finds the parent. The place is in the key: a parent of one team is not used for another.
+ *
+ * WARNING: nothing throws from here. A `Kv` that does not answer costs a second parent, not a note.
+ */
+function batchMemory(
+  kv: Kv,
+  store: SeedStore,
+  clientId: string | undefined,
+  target: ClientConfig | undefined,
+  seeds: readonly Seed[],
+): BatchMemory {
+  const keys = (): string[] => {
+    const scope = store.scope(target);
+
+    return seeds.map((seed) => parentKey(clientId, scope, seed.id));
+  };
+  const write = async (value: string): Promise<void> => {
+    try {
+      await Promise.all(keys().map((key) => kv.set(key, value, SENT_TTL_MS)));
+    } catch {
+      // Not remembered: the next attempt writes a parent, as before FRU-195.
+    }
+  };
+
+  return {
+    async parent() {
+      try {
+        const found = await Promise.all(keys().map((key) => kv.get(key)));
+
+        // An entry that was forgotten is empty: the `Kv` has no delete.
+        return found.find((id) => id !== undefined && id !== '');
+      } catch {
+        return undefined;
+      }
+    },
+    keepParent: (id) => write(id),
+    forgetParent: () => write(''),
+  };
+}
+
 /**
  * Several notes in one request (FRU-124): `POST /feedback` with an array of seeds.
  *
@@ -1047,7 +1228,9 @@ async function postBatch(
 
   let planted: BatchAnswer[] = [];
   try {
-    if (fresh.length > 0) planted = await createAll(store, fresh, target, route.policy);
+    if (fresh.length > 0) {
+      planted = await createAll(store, fresh, target, route.policy, batchMemory(kv, store, clientId, target, fresh));
+    }
   } catch (error) {
     if (!(error instanceof StoreError)) {
       // An error nobody expected answers `500`. The seeds are given back first: the next attempt
@@ -1092,51 +1275,6 @@ async function postBatch(
   if (kept.length === 0) return json(502, { error: 'store-unavailable', results }, corsHeaders);
 
   return json(kept.length === results.length ? 201 : 207, { results }, corsHeaders);
-}
-
-/**
- * Read the body, refusing anything over the cap.
- *
- * Streamed rather than `request.text()`: a client that omits or forges `Content-Length` would
- * otherwise get the whole payload buffered in memory before being told it was too large, which
- * defeats the point of having a cap.
- */
-async function readBoundedText(request: Request): Promise<string | null> {
-  const declared = Number(request.headers.get('Content-Length') ?? '');
-  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) return null;
-  if (request.body === null) return '';
-
-  const reader = request.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    size += value.byteLength;
-    if (size > MAX_BODY_BYTES) {
-      // Stop pulling instead of draining the rest of the upload.
-      await reader.cancel();
-      return null;
-    }
-
-    chunks.push(value);
-  }
-
-  return new TextDecoder().decode(concat(chunks, size));
-}
-
-function concat(chunks: Uint8Array[], size: number): Uint8Array {
-  const body = new Uint8Array(size);
-  let offset = 0;
-
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-
-  return body;
 }
 
 function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {

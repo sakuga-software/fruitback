@@ -86,11 +86,17 @@ export function postgresAccountStore(url: string): AccountStore {
 }
 
 export function postgresSessionStore(url: string): SessionStore {
-  return later(async () => (await import('./session-postgres.ts')).createPostgresSessionStore(databaseFor(url)), {
+  return sessionStoreOn(databaseFor(url));
+}
+
+/** The sessions of this database. `auth.ts` ends the sessions of a member who is removed (FRU-149). */
+export function sessionStoreOn(database: Database): SessionStore {
+  return later(async () => (await import('./session-postgres.ts')).createPostgresSessionStore(database), {
     createPairing: true,
     redeemPairing: true,
     rotateSession: true,
     revokeSession: true,
+    endSessionsOf: true,
     purge: true,
   });
 }

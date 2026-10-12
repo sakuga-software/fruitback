@@ -118,6 +118,20 @@ export type WorkerEnv = {
    */
   FRUITBACK_AUTH_SECRET?: string;
   /**
+   * The GitHub OAuth App that better-auth signs people in with (FRU-147): `<client id>:<client secret>`.
+   * A second App beside `FRUITBACK_GITHUB_OAUTH`, because an OAuth App of GitHub has one callback, and
+   * the two ways to sign in live together until FRU-150. Its callback is
+   * `<FRUITBACK_PUBLIC_URL>/console/auth/callback/github`. Google needs no second client: one client
+   * takes several callbacks.
+   */
+  FRUITBACK_AUTH_GITHUB_OAUTH?: string;
+  /**
+   * `1`: better-auth keeps the address and the user agent of each session of the console, and counts
+   * its own limit by address (FRU-147, decision of 2026-10-11). Absent, it keeps neither, and the
+   * limit of the worker is the only one.
+   */
+  FRUITBACK_AUTH_TRACK_IP?: string;
+  /**
    * The language of the prose in an issue description (FRU-39). A BCP-47 tag; English by default.
    *
    * **The team that triages reads it, never the reporter**, so it is configured here and never taken
@@ -211,6 +225,10 @@ const configSchema = z.object({
   secretsKey: z.string().min(32).optional(),
   /** What better-auth signs its cookies with, or absent: better-auth is then off (FRU-144). */
   authSecret: z.string().min(32).optional(),
+  /** The second GitHub OAuth App, the one of better-auth, or absent (FRU-147). */
+  authGithub: z.custom<GitHubOAuth | undefined>().optional(),
+  /** Whether better-auth keeps the address and the user agent of a session, and limits by address (FRU-147). */
+  authTrackIp: z.boolean(),
   /**
    * The language an issue description is written in (FRU-39), for the team that triages.
    *
@@ -240,6 +258,8 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     identitySecret: env.FRUITBACK_IDENTITY_SECRET || undefined,
     secretsKey: env.FRUITBACK_SECRETS_KEY || undefined,
     authSecret: env.FRUITBACK_AUTH_SECRET || undefined,
+    authGithub: env.FRUITBACK_AUTH_GITHUB_OAUTH ? parseGitHubOAuth(env.FRUITBACK_AUTH_GITHUB_OAUTH) : undefined,
+    authTrackIp: env.FRUITBACK_AUTH_TRACK_IP === '1',
     showComments: env.FRUITBACK_HIDE_COMMENTS !== '1',
     read: readAccess(env.FRUITBACK_READ),
     // A client's own `origins` are sites that must be able to reach this worker, so they join the
@@ -456,6 +476,41 @@ export function readConfig(env: WorkerEnv): ConfigResult {
         ok: false,
         missing: [
           `${ambient.join(', ')} (better-auth reads it from the environment over the configuration of the worker: remove it)`,
+        ],
+      };
+    }
+  }
+
+  // FRU-147. A switch reads `1` or nothing: a `true` or a `yes` that is read as off keeps no address,
+  // and the operator believes it does.
+  if (env.FRUITBACK_AUTH_TRACK_IP !== undefined && !['', '1'].includes(env.FRUITBACK_AUTH_TRACK_IP)) {
+    return { ok: false, missing: ['FRUITBACK_AUTH_TRACK_IP (1, or unset)'] };
+  }
+  if (env.FRUITBACK_AUTH_TRACK_IP === '1' && authSecret === undefined) {
+    return {
+      ok: false,
+      missing: ['FRUITBACK_AUTH_SECRET (FRUITBACK_AUTH_TRACK_IP is set, and only better-auth keeps an address)'],
+    };
+  }
+  if (env.FRUITBACK_AUTH_GITHUB_OAUTH) {
+    if (result.data.authGithub === undefined) {
+      return {
+        ok: false,
+        missing: ['FRUITBACK_AUTH_GITHUB_OAUTH (<client id>:<client secret> of a GitHub OAuth App)'],
+      };
+    }
+    if (authSecret === undefined) {
+      return {
+        ok: false,
+        missing: ['FRUITBACK_AUTH_SECRET (FRUITBACK_AUTH_GITHUB_OAUTH is the GitHub App of better-auth)'],
+      };
+    }
+    // One App, one callback: the App of before sends the person to `/auth/github/callback`.
+    if (result.data.github !== undefined && result.data.github.clientId === result.data.authGithub.clientId) {
+      return {
+        ok: false,
+        missing: [
+          'FRUITBACK_AUTH_GITHUB_OAUTH (it must be another GitHub OAuth App than FRUITBACK_GITHUB_OAUTH: an App has one callback)',
         ],
       };
     }

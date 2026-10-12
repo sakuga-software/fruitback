@@ -13,7 +13,14 @@ import {
 } from '@fruitback/shared';
 import { z } from 'zod';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
-import { type BatchAnswer, type CreatedIssue, type SeedIssueQuery, type SeedStore, StoreError } from './store.ts';
+import {
+  type BatchAnswer,
+  type BatchMemory,
+  type CreatedIssue,
+  type SeedIssueQuery,
+  type SeedStore,
+  StoreError,
+} from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
 
 const LINEAR_GRAPHQL_ENDPOINT = 'https://api.linear.app/graphql';
@@ -238,17 +245,13 @@ export function batchParent(seeds: readonly Seed[], locale?: string): { title: s
   return { title: words.title(seeds.length, hosts.join(', ')), description: [words.lead, '', ...list].join('\n') };
 }
 
-/**
- * A batch in Linear (FRU-124): one parent issue, then one sub-issue for each seed, in order. A
- * parent that Linear refuses throws, and nothing is written. A sub-issue that it refuses is answered
- * as such, and the next ones are still sent: each one is a note somebody wrote.
- */
-export async function createSeedBatch(
+/** Writes the parent of a batch, and answers its id. A parent that Linear refuses throws. */
+async function createBatchParent(
   config: LinearConfig,
   routing: LinearRouting,
   seeds: readonly Seed[],
   locale?: string,
-): Promise<BatchAnswer[]> {
+): Promise<string> {
   const parent = batchParent(seeds, locale);
   const labelIds = await resolveLabelIds(config, routing, buildIssueLabels(seeds[0] as Seed));
   const created = await graphql<CreateIssueResult>(config, CREATE_ISSUE_MUTATION, {
@@ -257,7 +260,34 @@ export async function createSeedBatch(
   if (!created.issueCreate.success || created.issueCreate.issue === null) {
     throw new StoreError('Linear refused to create the issue of the batch');
   }
-  const parentId = created.issueCreate.issue.id;
+
+  return created.issueCreate.issue.id;
+}
+
+/**
+ * A batch in Linear (FRU-124): one parent issue, then one sub-issue for each seed, in order. A
+ * parent that Linear refuses throws, and nothing is written. A sub-issue that it refuses is answered
+ * as such, and the next ones are still sent: each one is a note somebody wrote.
+ *
+ * **A parent whose sub-issues were all refused is kept, and used again** (FRU-195). The worker never
+ * archives or changes an issue in the workspace of a team: it remembers the parent, and the next
+ * attempt for the same notes writes its sub-issues under it and writes no second parent. A parent
+ * that was used again and still kept no note is forgotten: it may be one the team deleted, and a
+ * worker that held on to it would refuse the notes for as long as it remembered.
+ */
+export async function createSeedBatch(
+  config: LinearConfig,
+  routing: LinearRouting,
+  seeds: readonly Seed[],
+  locale?: string,
+  memory?: BatchMemory,
+): Promise<BatchAnswer[]> {
+  const remembered = await memory?.parent();
+  const parentId = remembered ?? (await createBatchParent(config, routing, seeds, locale));
+  // Remembered before the sub-issues are sent: a request that dies in the loop below leaves a parent,
+  // and the next attempt must find it. A parent that is used again is remembered for the seeds of
+  // this attempt too, which may not be the ones of the first.
+  await memory?.keepParent(parentId);
 
   const answers: BatchAnswer[] = [];
   for (const seed of seeds) {
@@ -271,6 +301,7 @@ export async function createSeedBatch(
       answers.push({ error: 'store-unavailable' });
     }
   }
+  if (remembered !== undefined && answers.every((answer) => 'error' in answer)) await memory?.forgetParent();
 
   return answers;
 }
@@ -640,8 +671,8 @@ export function createLinearStore(config: LinearConfig, stages: StageExceptions 
     // used to reach for `routing.teamId` itself, which meant the read cache knew how Linear routes.
     scope: (client) => linearRoutingFor(config, client).teamId,
     create: (seed, client, policy) => createSeedIssue(config, linearRoutingFor(config, client), seed, policy.locale),
-    createBatch: (seeds, client, policy) =>
-      createSeedBatch(config, linearRoutingFor(config, client), seeds, policy.locale),
+    createBatch: (seeds, client, policy, memory) =>
+      createSeedBatch(config, linearRoutingFor(config, client), seeds, policy.locale, memory),
     findForPage: (query, client, policy) =>
       fetchSeedIssues(config, linearRoutingFor(config, client), query, policy, stages),
   };

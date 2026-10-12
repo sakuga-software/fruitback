@@ -41,9 +41,17 @@ afterEach(() => {
 
 describe('the rights of each role (FRU-96)', () => {
   const expected: Record<Role, readonly Action[]> = {
-    owner: ['read-feedback', 'see-tracker', 'manage-sites', 'manage-members', 'manage-workspace', 'delete-workspace'],
-    admin: ['read-feedback', 'see-tracker', 'manage-sites', 'manage-members', 'manage-workspace'],
-    member: ['read-feedback', 'see-tracker'],
+    owner: [
+      'read-feedback',
+      'see-tracker',
+      'read-members',
+      'manage-sites',
+      'manage-members',
+      'manage-workspace',
+      'delete-workspace',
+    ],
+    admin: ['read-feedback', 'see-tracker', 'read-members', 'manage-sites', 'manage-members', 'manage-workspace'],
+    member: ['read-feedback', 'see-tracker', 'read-members'],
     guest: ['read-feedback'],
   };
 
