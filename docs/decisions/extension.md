@@ -900,9 +900,11 @@ one, and names the one it refused`.
 - **One team wildcard serves: the previews a worker lists** (FRU-103). `lendsSession(pattern, site,
 proven)` answers no only when the worker of the rule listed that very wildcard for the site the
   rule mounts, in an answer of `GET /session/sites` that is less than two hours old
-  (`proven-previews.ts`). **The grant is not in the rule.** It is in `storage.local` under
-  `provenPreviews`, written only by `cloud.ts` from an answer of the worker: the popup when it
-  offers the click, the background every thirty minutes and when it starts. A caller that passes no
+  (`proven-previews.ts`). **The grant is not in the rule.** It is in `storage.local`, one key for each
+  worker (`provenPreviews:<endpoint>`), written only by `cloud.ts` from an answer of that worker: the
+  popup when it offers the click, the background every thirty minutes and when it starts. One key
+  for each worker, because both write: two writers of one map would each read it and write it back,
+  and the later one would put back a list the other had just emptied. A caller that passes no
   `proven` keeps FRU-75 whole, and `complaint` passes none, so the form and the import refuse the
   rule: a rules file cannot grant. The background registers the scripts from the same list, and
   syncs when the list changes, so a proof that is lost takes the scripts off. `accessInUse` keeps

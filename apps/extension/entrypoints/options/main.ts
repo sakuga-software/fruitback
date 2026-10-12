@@ -15,7 +15,7 @@ import {
   writeSite,
   writeSites,
 } from '../../src/sites.ts';
-import { type FreshPreviews, PREVIEWS_KEY } from '../../src/proven-previews.ts';
+import { type FreshPreviews, touchesPreviews } from '../../src/proven-previews.ts';
 import { showProblem } from '../../src/problem-view.ts';
 import { IMPORT_PROBLEM } from '../../src/remedy.ts';
 import { language, setLanguage, t } from '../../src/i18n.ts';
@@ -76,7 +76,7 @@ if (app !== null) {
 void renderList();
 // Only the list is drawn again, so a change from the popup does not clear what somebody is typing.
 browser.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && (changes.sites !== undefined || changes[PREVIEWS_KEY] !== undefined)) void renderList();
+  if (area === 'local' && (changes.sites !== undefined || touchesPreviews(Object.keys(changes)))) void renderList();
 });
 browser.permissions.onAdded.addListener(() => void renderList());
 browser.permissions.onRemoved.addListener(() => void renderList());

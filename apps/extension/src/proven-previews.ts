@@ -23,8 +23,26 @@ export const PREVIEWS_FRESH_MS = 2 * 60 * 60_000;
 /** How often the background asks each worker again. */
 export const PREVIEWS_REFRESH_MS = 30 * 60_000;
 
-/** The key in `storage.local`. Not `sites`: nothing a person imports or edits reaches it. */
+/**
+ * What the keys in `storage.local` start with: one key for each worker, `provenPreviews:<endpoint>`.
+ * Not `sites`: nothing a person imports or edits reaches it.
+ *
+ * One key for each worker, and not one map: the popup and the background both write what a worker
+ * just listed, and two writers of one map would each read it, change their worker, and write it
+ * back, so the later one would put back what the other had just taken out. A write of one key reads
+ * nothing.
+ */
 export const PREVIEWS_KEY = 'provenPreviews';
+
+/** The key of what one worker listed. */
+export function previewsKey(endpoint: string): string {
+  return `${PREVIEWS_KEY}:${endpoint}`;
+}
+
+/** Whether a change of storage touches what a worker listed. */
+export function touchesPreviews(keys: readonly string[]): boolean {
+  return keys.some((key) => key.startsWith(`${PREVIEWS_KEY}:`));
+}
 
 /** What one worker listed: each wildcard, and the site whose previews it is. */
 export type ListedPreviews = { at: number; previews: Record<string, string> };
@@ -45,12 +63,13 @@ export function readPreviewPattern(value: unknown): string | undefined {
   return parseSitePattern(value) === value && isWildcardPattern(value) ? value : undefined;
 }
 
-/** What storage holds, parsed entry by entry: a bad entry grants nothing. */
-export function parseProven(raw: unknown): ProvenPreviews {
-  if (typeof raw !== 'object' || raw === null) return {};
+/** What storage holds, key by key and entry by entry: a bad entry grants nothing. */
+export function parseProven(stored: unknown): ProvenPreviews {
+  if (typeof stored !== 'object' || stored === null) return {};
   const proven: ProvenPreviews = {};
-  for (const [endpoint, value] of Object.entries(raw)) {
-    if (typeof value !== 'object' || value === null) continue;
+  for (const [key, value] of Object.entries(stored)) {
+    if (!key.startsWith(`${PREVIEWS_KEY}:`) || typeof value !== 'object' || value === null) continue;
+    const endpoint = key.slice(PREVIEWS_KEY.length + 1);
     const { at, previews } = value as { at?: unknown; previews?: unknown };
     if (typeof at !== 'number' || !Number.isFinite(at) || typeof previews !== 'object' || previews === null) continue;
     const kept: Record<string, string> = {};

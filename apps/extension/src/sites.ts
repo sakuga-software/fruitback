@@ -1,11 +1,5 @@
 import { browser } from 'wxt/browser';
-import {
-  type FreshPreviews,
-  type ListedPreviews,
-  PREVIEWS_KEY,
-  freshPreviews,
-  parseProven,
-} from './proven-previews.ts';
+import { type FreshPreviews, type ListedPreviews, freshPreviews, parseProven, previewsKey } from './proven-previews.ts';
 import { type ResolvedSite, resolveSite } from './site-patterns.ts';
 
 /**
@@ -66,9 +60,8 @@ export async function findSite(origin: string): Promise<ResolvedSite | undefined
 
 /** The previews the workers proved and that still grant now (FRU-103): see `proven-previews.ts`. */
 export async function readFreshPreviews(now: number = Date.now()): Promise<FreshPreviews> {
-  const stored = await browser.storage.local.get(PREVIEWS_KEY);
-
-  return freshPreviews(parseProven((stored as Record<string, unknown>)[PREVIEWS_KEY]), now);
+  // Every key: the workers are not known before the read, and `parseProven` keeps its own keys only.
+  return freshPreviews(parseProven(await browser.storage.local.get(null)), now);
 }
 
 /**
@@ -79,11 +72,9 @@ export async function readFreshPreviews(now: number = Date.now()): Promise<Fresh
  * Nothing a page, a rules file or a form says reaches it.
  */
 export async function rememberPreviews(endpoint: string, listed: ListedPreviews | undefined): Promise<void> {
-  const stored = await browser.storage.local.get(PREVIEWS_KEY);
-  const proven = parseProven((stored as Record<string, unknown>)[PREVIEWS_KEY]);
-  if (listed === undefined) delete proven[endpoint];
-  else proven[endpoint] = listed;
-  await browser.storage.local.set({ [PREVIEWS_KEY]: proven });
+  // One key for each worker, written whole and read by no writer: see `PREVIEWS_KEY`.
+  if (listed === undefined) await browser.storage.local.remove(previewsKey(endpoint));
+  else await browser.storage.local.set({ [previewsKey(endpoint)]: listed });
 }
 
 export async function readAll(): Promise<Record<string, SiteConfig>> {

@@ -1,7 +1,7 @@
 import { browser } from 'wxt/browser';
 import { readAll, readFreshPreviews, readSite, rememberPreviews, replaceAll } from '../src/sites.ts';
 import { refreshPreviews } from '../src/cloud.ts';
-import { PREVIEWS_KEY, PREVIEWS_REFRESH_MS } from '../src/proven-previews.ts';
+import { PREVIEWS_REFRESH_MS, touchesPreviews } from '../src/proven-previews.ts';
 import { accessOf, patternsOf } from '../src/access-return.ts';
 import { createBrowserAccessReturn } from '../src/access-return-browser.ts';
 import { createBrowserPending } from '../src/pending-site-browser.ts';
@@ -235,7 +235,7 @@ export default defineBackground(() => {
   browser.runtime.onStartup.addListener(() => void sync());
   browser.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
-    if (changes.sites !== undefined || changes[PREVIEWS_KEY] !== undefined) void sync();
+    if (changes.sites !== undefined || touchesPreviews(Object.keys(changes))) void sync();
     // A pairing or a logout from the popup, this run's own writes — the worker rotates on every
     // refresh (FRU-61), so every refresh stores a new token — and the upgrade in `upgradeAreas`,
     // which writes every endpoint at once. Each re-entry settles at once: the next run finds the

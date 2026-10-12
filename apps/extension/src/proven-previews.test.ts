@@ -11,7 +11,9 @@ import {
   freshPreviews,
   listedPreviews,
   parseProven,
+  previewsKey,
   readPreviewPattern,
+  touchesPreviews,
 } from './proven-previews.ts';
 import { complaint } from './site-form.ts';
 import { lendsSession, resolveSite } from './site-patterns.ts';
@@ -126,20 +128,30 @@ describe('what storage holds of the previews', () => {
     }
   });
 
-  it('parses entry by entry: what is not a list grants nothing', () => {
+  it('parses key by key and entry by entry: what is not a list grants nothing', () => {
     assert.deepEqual(parseProven(undefined), {});
     assert.deepEqual(parseProven('x'), {});
     assert.deepEqual(
       parseProven({
-        [WORKER]: {
+        [previewsKey(WORKER)]: {
           at: NOW,
           previews: { [PREVIEWS]: 'site_1', 'https://*.vercel.app/': 'x', 'http://*.a.dev': 'y', 'https://*.b.dev': 3 },
         },
-        'https://no-date.test': { previews: { [PREVIEWS]: 'site_1' } },
-        'https://no-list.test': { at: NOW },
+        [previewsKey('https://no-date.test')]: { previews: { [PREVIEWS]: 'site_1' } },
+        [previewsKey('https://no-list.test')]: { at: NOW },
+        // The other keys of the extension are not lists, whatever they hold.
+        sites: { [PREVIEWS]: { at: NOW, previews: { [PREVIEWS]: 'site_1' } } },
+        provenPreviews: { [WORKER]: { at: NOW, previews: { 'https://*.vercel.app': 'site_1' } } },
       }),
       { [WORKER]: { at: NOW, previews: { [PREVIEWS]: 'site_1' } } },
     );
+  });
+
+  it('keeps what each worker listed under a key of its own, so two writers cannot undo each other', () => {
+    assert.equal(previewsKey(WORKER), `provenPreviews:${WORKER}`);
+    assert.notEqual(previewsKey(WORKER), previewsKey('https://other.test'));
+    assert.ok(touchesPreviews([previewsKey(WORKER)]));
+    assert.equal(touchesPreviews(['sites', 'provenPreviews', 'session:https://api.fruitback.test']), false);
   });
 
   it('keeps one site for a wildcard: the first the worker lists', () => {
