@@ -2143,6 +2143,13 @@ client map were refused together at boot.
   label that the worker writes from the tracker. The choice is `POST /feedback?destination=<id>`:
   the body stays the seed, and the relay carries a query. **`verifyForClient` says `session` only for
   a token that the worker key verified**: a site can write a workspace in its own tokens.
+- **`GET /feedback` answers `identified: true` to a reader whose token it verified** (FRU-112), so
+  the composer of the widget asks for no name that `attributionFor` would replace. `signsNotes` asks
+  `verifyForClient`, like the write path, so a token of the site counts like a session. Asked at each
+  request and **never in the cached answer**, like the places. On a public read a token that does
+  not verify is not refused, as before: the read answers, without the field. **One bit**: the name,
+  the address and the account id of the token are not in the answer, because the page reads it in
+  team mode.
 
 ## Several client sites
 

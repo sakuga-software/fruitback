@@ -402,6 +402,17 @@ reviewer they are unpaired while the mode delivered none of what it promises.
 and the two are indistinguishable from the main world. What a page gains is a call it could already
 make, against a worker its reviewer chose, with a credential it never sees.
 
+**A relayed read tells the page one thing about the session: that there is one** (FRU-112). In team
+mode the page reads what the worker answers, and `GET /feedback` answers `identified: true` to a
+reader whose token it verified, so the composer asks for no name that the worker would replace. It is
+one bit, present only when the read carried a valid token, and never in the cached answer. A page
+could already tell: under `read: 'authenticated'` the notes come back only to such a reader. Under
+`read: 'public'` it is new to the page that its reviewer is paired with this worker. **The answer
+does not say who**: no name, no address, no account id. The page learns the name of a reviewer when
+that reviewer signs a note with it, and not before. test:`tells a reader it would sign that it is
+identified, and tells nobody who (FRU-112)` holds the worker's half, and
+test:`names nothing of who the session is in code the page can read` holds the extension's.
+
 **`FRUITBACK_SESSION_PATH` is a credentials file.** Give it the same care as a key: a copy of it is
 not a set of working logins, but it is a list of who holds a session and until when. Back it up with
 `sqlite3 … ".backup"` rather than `cp`, which loses the write-ahead log. With

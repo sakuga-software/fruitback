@@ -243,7 +243,9 @@ export function init(options: FruitbackOptions): Fruitback {
 
   const stages = createOfferedStages();
   const destinations = createOfferedDestinations();
-  const reader = createReader(overlay, stages, destinations, view, options);
+  // The worker's word at the last read that answered (FRU-112): it would sign a note of this reader.
+  const readerIdentity = { identified: false };
+  const reader = createReader(overlay, stages, destinations, readerIdentity, view, options);
   let lastReadAt = Number.NEGATIVE_INFINITY;
   // Per page (FRU-153): a navigation starts again at `pending`. A failed read after a good one
   // leaves the state and the pins alone, like it always did.
@@ -252,8 +254,10 @@ export function init(options: FruitbackOptions): Fruitback {
     lastReadAt = Date.now();
 
     return reader().then((outcome) => {
-      if (outcome === 'read') readState = 'read';
-      else if (outcome === 'failed' && readState !== 'read') readState = 'failed';
+      if (outcome === 'read') {
+        readState = 'read';
+        composer.identityChanged();
+      } else if (outcome === 'failed' && readState !== 'read') readState = 'failed';
       sidebar.refresh();
     });
   };
@@ -267,8 +271,9 @@ export function init(options: FruitbackOptions): Fruitback {
       get: () => config.get().reporterName,
       set: (name) => config.set({ reporterName: name }),
     },
-    // A host that mints identity tokens names the reporter itself.
-    identified: options.identityToken !== undefined,
+    // A host that mints identity tokens names the reporter itself. In team mode the session of the
+    // extension does, and only the worker can say so: the widget holds a transport and no token.
+    identified: () => options.identityToken !== undefined || readerIdentity.identified,
     // The places are the worker's word at the last read, and the choice is a preference of this
     // browser on this site, kept with the others (FRU-123).
     destinations: {
@@ -379,6 +384,7 @@ function createReader(
   overlay: Overlay,
   stages: OfferedStages,
   destinations: OfferedDestinations,
+  identity: { identified: boolean },
   view: Window & typeof globalThis,
   options: FruitbackOptions,
 ): () => Promise<ReadOutcome> {
@@ -407,13 +413,21 @@ function createReader(
       if (mine !== generation) return 'stale';
       if (!response.ok) return 'failed';
 
-      const body = JSON.parse(response.body) as { issues: SeedIssue[]; stages?: unknown; destinations?: unknown };
+      const body = JSON.parse(response.body) as {
+        issues: SeedIssue[];
+        stages?: unknown;
+        destinations?: unknown;
+        identified?: unknown;
+      };
       if (mine !== generation) return 'stale';
 
       stages.set(offeredStages(body.stages));
       // Set from every answer, an answer without the field included: that is how a reader who left
       // the team stops seeing the names of its tracker.
       destinations.set(offeredDestinations(body.destinations));
+      // Like the places: an answer without the field takes it back, so a reviewer whose session
+      // ended is asked for a name again. A failed read changes nothing.
+      identity.identified = body.identified === true;
       overlay.render(body.issues);
 
       return 'read';
