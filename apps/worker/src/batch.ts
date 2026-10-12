@@ -36,7 +36,10 @@ async function oneByOne(
     try {
       answers.push({ issue: await store.create(seed, client, policy) });
     } catch (error) {
-      if (!(error instanceof StoreError)) throw error;
+      // WARNING: nothing is thrown from here. The notes before this one are kept: an error that left
+      // this loop would answer `500`, lose their answers, and the next attempt would plant them a
+      // second time. An error that is not the store's is said in the log.
+      if (!(error instanceof StoreError)) console.error('[fruitback] a note of a batch failed', error);
       answers.push({ error: 'store-unavailable' });
     }
   }

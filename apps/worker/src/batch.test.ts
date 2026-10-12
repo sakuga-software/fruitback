@@ -246,23 +246,48 @@ describe('a batch of notes (FRU-124)', () => {
     assert.equal((await send(seeds(2), { kv, store })).status, 201);
   });
 
-  it('gives the notes back when the store throws an error nobody expected', async () => {
+  it('keeps the answers of the notes before one that throws an error nobody expected', async () => {
     let broken = true;
+    let created = 0;
     const store: SeedStore = {
       name: 'broken',
       scope: () => '',
       findForPage: async () => [],
       async create(seed) {
-        if (broken) throw new TypeError('a defect');
+        if (broken && seed.id === 'sd_batch_1') throw new TypeError('a defect');
+        created += 1;
 
-        return { id: seed.id, identifier: 'FB-1' };
+        return { id: seed.id, identifier: `FB-${seed.id.slice(-1)}` };
       },
     };
     const kv = createMemoryKv();
+    mock.method(console, 'error', () => undefined);
 
-    await assert.rejects(send(seeds(2), { kv, store }), TypeError);
+    // Not `500`: the first note is kept, and its answer must reach the widget and the `Kv`.
+    const partial = await send(seeds(2), { kv, store });
+    assert.equal(partial.status, 207);
     broken = false;
     assert.equal((await send(seeds(2), { kv, store })).status, 201);
+    assert.equal(created, 2, 'the note that was kept was planted a second time');
+  });
+
+  it('gives the notes back when the whole batch throws an error nobody expected', async () => {
+    const kv = createMemoryKv();
+    const thrower: SeedStore = {
+      name: 'thrower',
+      scope: () => '',
+      findForPage: async () => [],
+      create: async () => ({ id: 'x', identifier: 'FB-1' }),
+      createBatch: async () => {
+        throw new TypeError('a defect');
+      },
+    };
+    const working: SeedStore = { ...thrower, createBatch: undefined as never };
+    delete (working as { createBatch?: unknown }).createBatch;
+
+    await assert.rejects(send(seeds(2), { kv, store: thrower }), TypeError);
+    // The seeds are not held: the next attempt plants them at once.
+    assert.equal((await send(seeds(2), { kv, store: working })).status, 201);
   });
 
   it('answers 502 when the store kept no note, as for one note', async () => {
