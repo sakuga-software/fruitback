@@ -158,6 +158,50 @@ describe('createOverlay', () => {
     assert.equal(page.view.getComputedStyle(badge).pointerEvents, 'auto');
   });
 
+  it('fans out the badges of several notes on one element, and leaves a lone note where it was (FRU-155)', () => {
+    // The badges sat on one point: one drop showed, and only the last one took the click.
+    const page = mountPage(`${PAGE}<p id="aside">À côté</p>`, { width: 1_000, height: 1_000 });
+    setDocumentSize(page.document, 1_000, 1_000);
+    setRect(page.query('button'), { left: 100, top: 200, width: 200, height: 40 });
+    setRect(page.query('#aside'), { left: 400, top: 200, width: 100, height: 20 });
+    overlay = createOverlay({ document: page.document });
+
+    const onCta = (n: number) =>
+      seedIssueFixture({
+        id: `issue_${n}`,
+        identifier: `SKG-${n}`,
+        seed: { ...issueOnCta().seed, id: `sd_cta_${n}`, note: `Note ${n}` },
+      });
+    const aside = seedIssueFixture({
+      id: 'issue_aside',
+      seed: seedFixture({
+        id: 'sd_aside',
+        anchor: { selector: '#aside', tag: 'p', text: 'À côté', bounds: { xPct: 40, yPct: 20, wPct: 10, hPct: 2 } },
+      }),
+    });
+    overlay.render([onCta(1), aside, onCta(2), onCta(3)]);
+
+    const slots = [...page.document.querySelectorAll<HTMLElement>('[data-fruitback-pin]')].map((pin) => [
+      pin.dataset.fruitbackPin,
+      pin.style.getPropertyValue('--fruitback-pin-slot'),
+    ]);
+    assert.deepEqual(slots, [
+      ['sd_cta_1', '0'],
+      ['sd_aside', '0'],
+      ['sd_cta_2', '1'],
+      ['sd_cta_3', '2'],
+    ]);
+    // The stylesheet is what turns the slot into a distance.
+    assert.match(
+      page.document.querySelector('style')?.textContent ?? '',
+      /left: calc\(-6px \+ var\(--fruitback-pin-slot, 0\) \* 30px\)/,
+    );
+
+    // Each badge still opens its own note.
+    (page.document.querySelector('[data-fruitback-pin="sd_cta_2"] .fruitback-pin-badge') as HTMLElement).click();
+    assert.equal(page.document.querySelector('.fruitback-thread-note')?.textContent, 'Note 2');
+  });
+
   it('falls back to the stage when the store reports no state name (FRU-24)', () => {
     // The Linear connector reports `node.state?.name ?? ''`, so an issue with no state gives an empty
     // string. That used to leave a lone glyph in the header; with the glyph gone it would leave an

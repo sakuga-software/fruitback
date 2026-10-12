@@ -842,6 +842,15 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   else would have.
 - **Pins let clicks through**; only the badge is clickable. A widget that swallows the client's own
   buttons is one they turn off.
+- **Several notes on one spot fan their badges out** (FRU-155), one step of 30 px (a 26 px drop and
+  a 4 px gap) to the right for each note before it, in render order. Before, the badges lay on one
+  point: one drop showed, and only the last one took the click. Each note keeps its own drop, its own
+  stage colour and its own thread, so a reviewer counts the drops and opens each one; no count badge,
+  no shared thread. The key is the pin's top-left corner, rounded to the pixel, and not the element:
+  two elements of the same box (a wrapper and its only child) hide each other just the same. The
+  fan stays physical, like the pin, in both reading directions. `e2e/pin-stack.spec.ts` plants three
+  notes on one button and reaches each badge with the pointer. Open question in the ticket: a count
+  on one pin, if a spot ever carries more notes than its element is wide.
 - `createOverlay({ host })` takes where to render. It defaults to `<body>`; FRU-3's Shadow root
   passes itself there, which is what finally isolates these styles.
 - Tests run against **happy-dom** (`dom.fixture.ts`), a devDependency of this package only —
