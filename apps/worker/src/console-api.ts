@@ -282,6 +282,12 @@ async function callerOf(
     if (subject === undefined) {
       return { ok: false, status: 401, body: { error: 'identity-required', reason: 'invalid-claims' } };
     }
+    // FRU-202: only the session of an extension carries `ws`, and the extension calls no route here.
+    // Its token is good for the notes of its own workspace. Without this check it opened every
+    // workspace of the person here, with the role of the person.
+    if (verified.workspace !== undefined) {
+      return { ok: false, status: 401, body: { error: 'identity-required', reason: 'not-a-console-session' } };
+    }
 
     return { ok: true, subject, by: 'token' };
   }
