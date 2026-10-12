@@ -31,6 +31,48 @@ describe('readClientMap', () => {
     assert.deepEqual(result.clients?.acme?.origins, ['https://acme.test']);
   });
 
+  /**
+   * Three fields that no test gave a real value before FRU-190. A mutation run counted their
+   * mutants killed only when it ran out of time: nothing asserted them.
+   */
+  it('reads a repository whose name starts with a dot: only « . » and « .. » are refused', () => {
+    // `acme/.github` is a repository that every organisation of GitHub can have.
+    for (const repository of ['acme/.github', 'acme/..config', 'acme/.a', 'acme/a.b', 'acme/a..']) {
+      const result = readClientMap(JSON.stringify({ acme: { repository } }));
+
+      assert.ok(result.ok, `${repository} should be read`);
+      assert.equal(result.clients?.acme?.repository, repository);
+    }
+    for (const repository of ['acme/.', 'acme/..']) {
+      assert.equal(
+        readClientMap(JSON.stringify({ acme: { repository } })).ok,
+        false,
+        `${repository} should be refused`,
+      );
+    }
+  });
+
+  it('reads the connector of a client, of any length but zero', () => {
+    const result = readClientMap(JSON.stringify({ acme: { connector: 'con_0123456789abcdef' } }));
+
+    assert.ok(result.ok);
+    assert.equal(result.clients?.acme?.connector, 'con_0123456789abcdef');
+    assert.equal(readClientMap(JSON.stringify({ acme: { connector: 'c' } })).ok, true);
+    assert.equal(readClientMap(JSON.stringify({ acme: { connector: '' } })).ok, false);
+  });
+
+  it('reads who may read a client: « public » or « authenticated », and no other word', () => {
+    for (const read of ['public', 'authenticated']) {
+      const result = readClientMap(JSON.stringify({ acme: { read } }));
+
+      assert.ok(result.ok, `${read} should be read`);
+      assert.equal(result.clients?.acme?.read, read);
+    }
+    for (const read of ['', 'private', 'Public']) {
+      assert.equal(readClientMap(JSON.stringify({ acme: { read } })).ok, false, `« ${read} » should be refused`);
+    }
+  });
+
   it('refuses a malformed map rather than falling back to one team', () => {
     // The fallback in a multi-tenant deployment is the leak: a typo here would silently pool every
     // client's feedback into the default team.
