@@ -42,6 +42,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   before the first list is kept would start from the list of before and take the first change away,
   so the controls of the list are disabled while it is written. `e2e/console-destinations.spec.ts`
   holds a write open and tries the second gesture, on the panel of a Linear and of an address.
+  **The panel of a source opens where it is seen** (FRU-161): from 1280 px in its column beside the
+  list, as on the board; under 1280 px right under its row, which names it in `aria-controls`, and
+  the page scrolls as far as the panel needs. `e2e/console-source-panel.spec.ts` measures it at 390,
+  768 and 1440 px.
   **A refused call says its own cause** (FRU-164): `problemOf` (`problems.ts`) gives the sentence of
   the code of the worker, « Fruitback did not answer. Try again. » for no answer and a `5xx`, and a
   sentence of the screen that blames no field for the rest. No failure clears a field. A copy goes
