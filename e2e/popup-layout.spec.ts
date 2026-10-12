@@ -1,5 +1,7 @@
+import AxeBuilder from '@axe-core/playwright';
 import { type Page, expect } from '@playwright/test';
-import { PLAYGROUND_ORIGIN, mintPairing, openBareSite, openPopup, test } from './extension.ts';
+import { PLAYGROUND_ORIGIN, addRule, mintPairing, openBareSite, openPopup, test } from './extension.ts';
+import { WORKER_ORIGIN } from './pin.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 /**
@@ -127,3 +129,45 @@ for (const language of ['en', 'fr'] as const) {
     await expectLaidOut(offered, 'site turned on', 4);
   });
 }
+
+/**
+ * axe-core on the popup and on the options page, in the light scheme and in the dark scheme
+ * (FRU-170). Before it no spec ran axe on a page of the extension: `design-tokens.test.ts` measures
+ * the tokens, and this measures what a browser paints with them.
+ */
+test('axe finds nothing on the popup and on the options page, in both schemes', async ({ extension }) => {
+  const clean = async (surface: Page, name: string): Promise<void> => {
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await surface.emulateMedia({ colorScheme });
+      const { violations, passes } = await new AxeBuilder({ page: surface }).analyze();
+
+      // A control: axe did measure a contrast on this page, so an empty list is a result.
+      expect(
+        passes.map((rule) => rule.id),
+        `${name}, ${colorScheme}`,
+      ).toContain('color-contrast');
+      expect(
+        violations.map((violation) => `${violation.id}: ${violation.nodes.map((node) => node.target).join(', ')}`),
+        `${name}, ${colorScheme}`,
+      ).toEqual([]);
+    }
+  };
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'popup-axe');
+
+  const empty = await openPopup(extension, page);
+  await expect(empty.getByRole('button', { name: 'Turn on for this site' })).toBeVisible();
+  await clean(empty, 'the popup with no rule');
+  // One popup at a time: `openPopup` finds the popup by its address.
+  await empty.close();
+
+  await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
+  const on = await openPopup(extension, page);
+  await expect(on.getByRole('button', { name: 'Turn off here' })).toBeVisible();
+  await clean(on, 'the popup with the site on');
+
+  const options = await extension.context.newPage();
+  await options.goto(`chrome-extension://${extension.id}/options.html`);
+  await expect(options.getByRole('button', { name: 'Add rule' })).toBeVisible();
+  await clean(options, 'the options page');
+});

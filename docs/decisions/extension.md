@@ -222,6 +222,37 @@ open composer and its note` fails without the check, 3 runs out of 3.
   can drive, which is why that path is unit-tested and the browser run uses a build with the scripts
   declared statically.
 
+## The look of the popup and of the options page (FRU-170)
+
+### The rules, in short
+
+- **The two pages wear the tokens of the design**, which are the tokens of the widget
+  (`design/README.md`, `packages/widget/src/theme.ts`): the accent `#dd2c27`, and in the dark scheme
+  the pair of the widget, a lighter red (`#ec6a65`) under dark text.
+- **`entrypoints/popup/style.css` holds the tokens, and the options page loads it first.** A
+  stylesheet of an extension page cannot import the widget, so the values are copied.
+  `src/design-tokens.test.ts` compares each one with the widget in both schemes, and measures each
+  pair that the pages paint: 4.5:1 for text, 3:1 for the edge of a field.
+- **No rule of either stylesheet writes a colour**: it names a token. The one exception is the red
+  of the mark. test:`writes no colour outside the tokens, but the red of the mark`.
+- **An action is a pill**, as on the boards (test:`draws an action as a pill`). A label that may take several lines (`button.long`)
+  takes the corner of a field: a pill of two lines is a lozenge.
+- **The pin of the widget is beside the name**, in the red of the mark in both schemes, as the
+  console draws it (`Mark` of `apps/console/app/ui.tsx`). It is a drawing of the stylesheet, not an
+  element: a screen reader reads the name alone.
+
+### The reasons, and who decided
+
+The extension had a palette of its own: an orange accent (`#c2410c`, `#fb923c` in the dark scheme)
+and rectangles of 6 px. Beside the console and the widget it read as another product, and the popup
+is the picture of the store listings. The review of 2026-10-11 (FRU-151) asked the designer three
+things. `design/README.md` already answers the first two: a screen with no board takes the language
+of the boards, on the tokens of the widget. The third was open: **the options page follows the
+popup** (one stylesheet, a white surface), and not the console (`#faf9f5` page, cards of 14 px). The
+three were settled on 2026-10-12 by the orchestrator of the agents, to whom Mathieu handed the
+current decisions, with the simplest answer that fits what exists. The layout of the options page
+did not change: the fields of 760 px and the file input of the browser are as they were.
+
 ## A problem, and the one thing to do about it (FRU-90)
 
 ### The rules, in short
