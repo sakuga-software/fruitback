@@ -95,6 +95,9 @@ client id is still a claim. What the worker checks differs by mode:
   and it would let the sites of other people spend the reviewer's session. The form and the import
   refuse such a rule, and for one already stored the bridge does not announce and the relay answers
   `site-not-configured`. A wildcard stays valid in private mode, which carries no credential.
+  **One exception** (FRU-103): a wildcard that the worker of the session lists as the previews of a
+  site, because its workspace proved the domain. See
+  [A domain a workspace proves it owns](#a-domain-a-workspace-proves-it-owns-to-cover-its-previews-fru-103).
   A rules file holds no session and no host
   permission, so an imported rule runs nowhere until the reviewer grants its pattern in their browser.
 
@@ -804,9 +807,26 @@ site only while the workspace of that site proves the domain.
 - **The worker asks the DNS of its host**, with no DNSSEC check of its own. Who can answer the
   resolver of the worker in place of the zone can prove any domain. Tests never ask a real DNS: the
   resolver is a seam, and every case hands over a double.
-- **What this does not open yet:** the worker lists the previews of a site in `GET /session/sites`
-  (`previews`), and nothing else reads them. The extension still refuses every wildcard in team mode
-  (`lendsSession`). Letting it take one that the worker lists is a separate change.
+- **What a proven domain opens, exactly.** In the browser of a reviewer who is paired with the worker
+  and who pressed « Turn on Fruitback here » on a page under the domain, **every page of
+  `https://*.<domain>`, and of `https://<domain>` itself, on the default port**, gets the widget
+  and a relay that calls that worker with the session of the reviewer. A script of such a page can
+  forge relayed calls (see
+  [The extension's page bridge can be forged by the page](#the-extensions-page-bridge-can-be-forged-by-the-page)),
+  so it reads and writes what that session reads and writes: the notes of **every site of the
+  workspace**, not only the one the previews belong to, signed with the name of the reviewer. That
+  is what the proof is for: whoever serves a page under the domain holds its zone, or was given a
+  name in it by who does. **A workspace that proves a domain vouches for every host under it.**
+- **The extension grants a team wildcard only from the answer of the worker of the session**
+  (`proven-previews.ts`): the very wildcard, for the very site, of the very worker of the rule,
+  `https` only. It is kept beside the rules, never in one. A rule that a person types or imports is
+  refused as before, so a rules file cannot carry the grant. **The answer ages**: older than two
+  hours it grants nothing, and the background asks again every thirty minutes. So a proof that is
+  lost stops in the browser thirty minutes after the worker saw it, at most; with the six hours
+  between two checks of the DNS, a record that was removed can lend a session for six and a half
+  hours at most. A worker that cannot be reached stops granting after two hours.
+- **Not covered:** a page in clear (`http`), another port, and a team rule that names no site (a
+  site that embeds its own widget): those stay refused.
 
 ### Linear, connected with OAuth (FRU-134)
 

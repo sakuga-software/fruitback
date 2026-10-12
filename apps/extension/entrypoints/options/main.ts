@@ -1,12 +1,21 @@
 import { browser } from 'wxt/browser';
 import { matchPatternFor } from '../../src/registration.ts';
 import { NO_ACCESS_PROBLEM, STORE_PROBLEM, activateStored, createEditor, latestOnly } from '../../src/site-editor.ts';
-import { STALE_TEAM_WILDCARD } from '../../src/site-form.ts';
+import { PREVIEWS_NOT_PROVEN, STALE_TEAM_WILDCARD } from '../../src/site-form.ts';
 import { lendsSession, parseSitePattern } from '../../src/site-patterns.ts';
 import { injectIntoOpenTabs } from '../../src/tab-injection.ts';
 import { browserTabScripting as scripting } from '../../src/tab-scripting-browser.ts';
 import { exportSites, importSites } from '../../src/site-transfer.ts';
-import { type SiteConfig, type SiteMode, readAll, removeSite, writeSite, writeSites } from '../../src/sites.ts';
+import {
+  type SiteConfig,
+  type SiteMode,
+  readAll,
+  readFreshPreviews,
+  removeSite,
+  writeSite,
+  writeSites,
+} from '../../src/sites.ts';
+import { type FreshPreviews, PREVIEWS_KEY } from '../../src/proven-previews.ts';
 import { showProblem } from '../../src/problem-view.ts';
 import { IMPORT_PROBLEM } from '../../src/remedy.ts';
 import { language, setLanguage, t } from '../../src/i18n.ts';
@@ -67,14 +76,14 @@ if (app !== null) {
 void renderList();
 // Only the list is drawn again, so a change from the popup does not clear what somebody is typing.
 browser.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes.sites !== undefined) void renderList();
+  if (area === 'local' && (changes.sites !== undefined || changes[PREVIEWS_KEY] !== undefined)) void renderList();
 });
 browser.permissions.onAdded.addListener(() => void renderList());
 browser.permissions.onRemoved.addListener(() => void renderList());
 
 async function renderList(): Promise<void> {
   const isLatest = beginRender();
-  const sites = await readAll();
+  const [sites, proven] = await Promise.all([readAll(), readFreshPreviews()]);
   const patterns = Object.keys(sites)
     .filter((pattern) => parseSitePattern(pattern) === pattern)
     .sort();
@@ -83,7 +92,7 @@ async function renderList(): Promise<void> {
   rows.className = 'rules';
   for (const pattern of patterns) {
     const site = sites[pattern];
-    if (site !== undefined) rows.append(await row(pattern, site));
+    if (site !== undefined) rows.append(await row(pattern, site, proven));
   }
 
   if (!isLatest()) return;
@@ -96,14 +105,16 @@ async function renderList(): Promise<void> {
   );
 }
 
-async function row(pattern: string, site: SiteConfig): Promise<HTMLElement> {
+async function row(pattern: string, site: SiteConfig, proven: FreshPreviews): Promise<HTMLElement> {
   // A permission does not travel with an imported rule, and it can be revoked in the browser's own
   // settings. The background registers nothing without it, so the row says so.
   const granted = await browser.permissions.contains({ origins: [matchPatternFor(pattern)] });
   const client = site.mode === 'team' ? t("team mode · the site's own widget") : site.clientId;
 
-  // A rule stored before FRU-75. It runs nowhere now, so the row offers only to remove it.
-  const refused = lendsSession(pattern, site);
+  // A rule stored before FRU-75, or the previews of a site whose worker does not list them now
+  // (FRU-103). It runs nowhere, so the row offers only to remove it, and says which of the two it is.
+  const refused = lendsSession(pattern, site, proven);
+  const previews = site.mode === 'team' && site.mount !== undefined;
 
   const buttons = document.createElement('span');
   buttons.className = 'buttons';
@@ -123,7 +134,9 @@ async function row(pattern: string, site: SiteConfig): Promise<HTMLElement> {
     element('span', pattern, 'pattern'),
     buttons,
     element('span', `${site.enabled && !refused ? t('On') : t('Off')} · ${client} · ${site.endpoint}`, 'state'),
-    refused ? element('span', t(STALE_TEAM_WILDCARD), 'problem') : access(granted, site.enabled),
+    refused
+      ? element('span', t(previews ? PREVIEWS_NOT_PROVEN : STALE_TEAM_WILDCARD), 'problem')
+      : access(granted, site.enabled),
   );
 
   return item;

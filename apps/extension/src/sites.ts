@@ -1,4 +1,11 @@
 import { browser } from 'wxt/browser';
+import {
+  type FreshPreviews,
+  type ListedPreviews,
+  PREVIEWS_KEY,
+  freshPreviews,
+  parseProven,
+} from './proven-previews.ts';
 import { type ResolvedSite, resolveSite } from './site-patterns.ts';
 
 /**
@@ -52,7 +59,31 @@ export async function readSite(origin: string): Promise<SiteConfig | undefined> 
 
 /** The same entry, with the pattern it is stored under. The popup names that pattern. */
 export async function findSite(origin: string): Promise<ResolvedSite | undefined> {
-  return resolveSite(await readAll(), origin);
+  const [sites, proven] = await Promise.all([readAll(), readFreshPreviews()]);
+
+  return resolveSite(sites, origin, proven);
+}
+
+/** The previews the workers proved and that still grant now (FRU-103): see `proven-previews.ts`. */
+export async function readFreshPreviews(now: number = Date.now()): Promise<FreshPreviews> {
+  const stored = await browser.storage.local.get(PREVIEWS_KEY);
+
+  return freshPreviews(parseProven((stored as Record<string, unknown>)[PREVIEWS_KEY]), now);
+}
+
+/**
+ * Keeps what a worker just listed, in place of what it listed before. `undefined` forgets the
+ * worker: its session is gone, or it keeps no accounts.
+ *
+ * WARNING: only a caller that holds an answer of `GET /session/sites` of this worker calls this.
+ * Nothing a page, a rules file or a form says reaches it.
+ */
+export async function rememberPreviews(endpoint: string, listed: ListedPreviews | undefined): Promise<void> {
+  const stored = await browser.storage.local.get(PREVIEWS_KEY);
+  const proven = parseProven((stored as Record<string, unknown>)[PREVIEWS_KEY]);
+  if (listed === undefined) delete proven[endpoint];
+  else proven[endpoint] = listed;
+  await browser.storage.local.set({ [PREVIEWS_KEY]: proven });
 }
 
 export async function readAll(): Promise<Record<string, SiteConfig>> {

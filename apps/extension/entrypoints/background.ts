@@ -1,5 +1,7 @@
 import { browser } from 'wxt/browser';
-import { readAll, readSite, replaceAll } from '../src/sites.ts';
+import { readAll, readFreshPreviews, readSite, rememberPreviews, replaceAll } from '../src/sites.ts';
+import { refreshPreviews } from '../src/cloud.ts';
+import { PREVIEWS_KEY, PREVIEWS_REFRESH_MS } from '../src/proven-previews.ts';
 import { accessOf, patternsOf } from '../src/access-return.ts';
 import { createBrowserAccessReturn } from '../src/access-return-browser.ts';
 import { createBrowserPending } from '../src/pending-site-browser.ts';
@@ -21,6 +23,9 @@ import { type CaptureArea, createCapture, pixelsOf } from '../src/capture.ts';
 
 /** Named once: the alarm is created, cleared and answered in three different places. */
 const SESSION_ALARM = 'fruitback-session-refresh';
+
+/** The alarm that asks the workers again which previews they proved (FRU-103). */
+const PREVIEWS_ALARM = 'fruitback-previews-refresh';
 
 /**
  * How soon the earliest alarm may be.
@@ -51,11 +56,14 @@ export default defineBackground(() => {
   // left a failing `readAll` or a throwing `permissions.contains` perfectly silent. Raised in review.
   const sync = serialize(async (): Promise<void> => {
     try {
-      const sites = await readAll();
+      // FRU-103: a team wildcard is registered only while its worker lists it, so a proof that is lost
+      // takes the scripts off the previews at the next sync.
+      const [sites, proven] = await Promise.all([readAll(), readFreshPreviews()]);
       // A key that is not a pattern covers nothing in `resolveSite`, so it registers nothing here.
       const wanted = Object.entries(sites)
         .filter(
-          ([pattern, site]) => site.enabled && parseSitePattern(pattern) === pattern && !lendsSession(pattern, site),
+          ([pattern, site]) =>
+            site.enabled && parseSitePattern(pattern) === pattern && !lendsSession(pattern, site, proven),
         )
         .map(([pattern]) => pattern);
 
@@ -106,6 +114,25 @@ export default defineBackground(() => {
     } catch (error) {
       console.error('[fruitback] could not refresh the extension session', error);
     }
+  });
+
+  /**
+   * Asks each paired worker again which previews its workspace proved (FRU-103), then registers what
+   * that leaves. On a period, and when the browser starts: an answer grants for `PREVIEWS_FRESH_MS`
+   * only, so a worker that is not asked stops granting. Guarded like the two above.
+   */
+  const refreshProven = serialize(async (): Promise<void> => {
+    try {
+      await refreshPreviews({
+        endpoints: async () => Object.keys(await sessions.list()),
+        ensureAccess: (endpoint) => sessions.ensureAccess(endpoint),
+        remember: rememberPreviews,
+      });
+    } catch (error) {
+      console.error('[fruitback] could not ask the workers for the previews they proved', error);
+    }
+    // Also when nothing was written: an answer that aged out since the last sync must stop its rule.
+    await sync();
   });
 
   /**
@@ -208,7 +235,7 @@ export default defineBackground(() => {
   browser.runtime.onStartup.addListener(() => void sync());
   browser.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
-    if (changes.sites !== undefined) void sync();
+    if (changes.sites !== undefined || changes[PREVIEWS_KEY] !== undefined) void sync();
     // A pairing or a logout from the popup, this run's own writes — the worker rotates on every
     // refresh (FRU-61), so every refresh stores a new token — and the upgrade in `upgradeAreas`,
     // which writes every endpoint at once. Each re-entry settles at once: the next run finds the
@@ -226,9 +253,15 @@ export default defineBackground(() => {
   });
   browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === SESSION_ALARM) void refreshSessions();
+    if (alarm.name === PREVIEWS_ALARM) void refreshProven();
   });
+  // Created at each start of the service worker: `create` replaces the alarm of the same name.
+  void browser.alarms
+    .create(PREVIEWS_ALARM, { periodInMinutes: PREVIEWS_REFRESH_MS / 60_000 })
+    .catch((error: unknown) => console.error('[fruitback] could not set the alarm of the previews', error));
 
   void sync();
+  void refreshProven();
   // `chrome.storage.session` is empty after the browser restarts, so this is also what mints the
   // first access token of the day rather than waiting for something to ask for one.
   void refreshSessions();

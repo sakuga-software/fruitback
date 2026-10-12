@@ -49,6 +49,7 @@ describe('the sites of the workspace (FRU-101)', () => {
       endpoint: 'https://api.fruitback.test',
       workspace: { id: 'ws_1', name: 'Acme' },
       site: { id: 'site_1', origin: 'https://staging.acme.dev', visibility: 'members' },
+      pattern: 'https://staging.acme.dev',
     });
     assert.deepEqual(asked, ['https://api.fruitback.test/session/sites']);
   });
@@ -106,6 +107,7 @@ describe('a site of the workspace, once on (FRU-101)', () => {
     endpoint: 'https://api.fruitback.test',
     workspace: { id: 'ws_1', name: 'Acme' },
     site: { id: 'site_1', origin: 'https://staging.acme.dev', visibility: 'members' as const },
+    pattern: 'https://staging.acme.dev',
   };
 
   it('is a team entry the extension mounts, and it survives a read from storage', () => {
