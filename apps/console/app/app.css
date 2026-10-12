@@ -20,6 +20,9 @@
   --default-foreground: #1c1917;
   --accent: #dd2c27;
   --accent-foreground: #ffffff;
+  /* HeroUI lightens a hovered or pressed button by default: white on that red was 3.9:1 (FRU-163).
+     The strong accent of the boards is darker, and white on it is 6.47:1. */
+  --accent-hover: #b91c1c;
   --danger: #b91c1c;
   --danger-foreground: #ffffff;
   --success: #56802e;
@@ -63,4 +66,21 @@ body {
 :focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
+}
+
+/*
+  The alert of a problem (`Problem` in ui.tsx, FRU-163). HeroUI draws every alert as a white card
+  with muted text, and tells its status with an icon and a title that the kit does not use. So the
+  danger of the theme is on the text and on the border, and the card is tinted with it. The text on
+  that tint is 5.84:1.
+*/
+.alert--danger {
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--surface));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--danger) 6%, var(--surface));
+  box-shadow: none;
+}
+
+.alert--danger .alert__description {
+  color: var(--danger);
 }
