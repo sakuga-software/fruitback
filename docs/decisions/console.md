@@ -37,6 +37,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   source go through `Confirm` (`confirm.tsx`), which says what the gesture costs, gives focus to
   « Keep it », and acts only on a second button that names the site or the source. « Keep it » and
   Escape give the row back, with focus on its first button.
+  **The panel of a source opens where it is seen** (FRU-161): from 1280 px in its column beside the
+  list, as on the board; under 1280 px right under its row, which names it in `aria-controls`, and
+  the page scrolls as far as the panel needs. `e2e/console-source-panel.spec.ts` measures it at 390,
+  768 and 1440 px.
   **A refused call says its own cause** (FRU-164): `problemOf` (`problems.ts`) gives the sentence of
   the code of the worker, « Fruitback did not answer. Try again. » for no answer and a `5xx`, and a
   sentence of the screen that blames no field for the rest. No failure clears a field. A copy goes

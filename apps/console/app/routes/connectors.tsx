@@ -1,4 +1,13 @@
-import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  type FormEvent,
+  Fragment,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { useSearchParams } from 'react-router';
 import {
   type Connector,
@@ -110,6 +119,7 @@ export default function Connectors() {
   const [unread, setUnread] = useState(false);
   const [selected, setSelected] = useState<string | undefined>();
   const [adding, setAdding] = useState<Connector['kind'] | undefined>();
+  const wide = useWide();
 
   const load = useCallback(async () => {
     const [listed, placed] = await Promise.all([
@@ -159,6 +169,23 @@ export default function Connectors() {
   const countOf = (keep: (site: Site) => boolean): string =>
     placed === undefined ? '' : ` · ${siteCount(placed.filter(keep).length)}`;
 
+  const panel =
+    open === undefined ? null : (
+      <Opened key={open.id} wide={wide}>
+        <Panel
+          base={base}
+          connector={open}
+          sites={sites}
+          manages={manages}
+          onChanged={reload}
+          onRemoved={() => {
+            setSelected(undefined);
+            void load();
+          }}
+        />
+      </Opened>
+    );
+
   return (
     <>
       <PageHead
@@ -193,25 +220,29 @@ export default function Connectors() {
               </div>
             </Card>
             {(connectors ?? []).map((connector) => (
-              <button
-                key={connector.id}
-                type="button"
-                aria-pressed={connector.id === selected}
-                onClick={() => setSelected(connector.id === selected ? undefined : connector.id)}
-                className={`flex w-full items-center gap-3 rounded-[14px] border bg-surface px-4 py-3.5 text-left ${
-                  connector.id === selected ? 'border-ink' : 'border-line hover:border-ink/40'
-                }`}
-              >
-                <SourceMark>{KINDS[connector.kind].mark}</SourceMark>
-                <span className="flex-1">
-                  <span className="block text-[15px] font-semibold">{t(KINDS[connector.kind].name)}</span>
-                  <span className="block text-xs text-muted">
-                    {sourceLine(connector)}
-                    {countOf((site) => placesOf(site).some((place) => place.connector === connector.id))}
+              <Fragment key={connector.id}>
+                <button
+                  type="button"
+                  aria-pressed={connector.id === selected}
+                  aria-controls={connector.id === selected ? PANEL : undefined}
+                  onClick={() => setSelected(connector.id === selected ? undefined : connector.id)}
+                  className={`flex w-full items-center gap-3 rounded-[14px] border bg-surface px-4 py-3.5 text-left ${
+                    connector.id === selected ? 'border-ink' : 'border-line hover:border-ink/40'
+                  }`}
+                >
+                  <SourceMark>{KINDS[connector.kind].mark}</SourceMark>
+                  <span className="flex-1">
+                    <span className="block text-[15px] font-semibold">{t(KINDS[connector.kind].name)}</span>
+                    <span className="block text-xs text-muted">
+                      {sourceLine(connector)}
+                      {countOf((site) => placesOf(site).some((place) => place.connector === connector.id))}
+                    </span>
                   </span>
-                </span>
-                <Working connected={connector.kind === 'rest'} attention={connector.attention !== undefined} />
-              </button>
+                  <Working connected={connector.kind === 'rest'} attention={connector.attention !== undefined} />
+                </button>
+                {/* Under 1280 px there is no column beside the list: the panel opens under its row. */}
+                {!wide && connector.id === selected ? panel : null}
+              </Fragment>
             ))}
           </div>
 
@@ -307,22 +338,49 @@ export default function Connectors() {
           </div>
         </div>
 
-        {open === undefined ? null : (
-          <Panel
-            key={open.id}
-            base={base}
-            connector={open}
-            sites={sites}
-            manages={manages}
-            onChanged={reload}
-            onRemoved={() => {
-              setSelected(undefined);
-              void load();
-            }}
-          />
-        )}
+        {wide ? panel : null}
       </div>
     </>
+  );
+}
+
+/** The id of the open panel, which its row names in `aria-controls`. */
+const PANEL = 'source-panel';
+/** The width of `xl:` in Tailwind, from which the panel has its column beside the list (the board). */
+const WIDE = '(min-width: 80rem)';
+
+/** Whether the screen is wide enough for the column of the panel. The console is built wide. */
+function useWide(): boolean {
+  return useSyncExternalStore(
+    (listener) => {
+      const query = window.matchMedia(WIDE);
+      query.addEventListener('change', listener);
+
+      return () => query.removeEventListener('change', listener);
+    },
+    () => window.matchMedia(WIDE).matches,
+    () => true,
+  );
+}
+
+/**
+ * The open panel (FRU-161). Under 1280 px it opens under its row, and the page scrolls as little as
+ * shows it, or its top when it is taller than the screen. A row at the bottom of the screen would
+ * otherwise open a panel nobody sees, and a second touch would close it. A change of width across
+ * 1280 px moves the panel, so it is mounted again: it holds no field that somebody types in.
+ */
+function Opened({ wide, children }: { wide: boolean; children: ReactNode }) {
+  const held = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (wide) return;
+    held.current?.scrollIntoView({ block: 'nearest' });
+  }, [wide]);
+
+  return (
+    <div id={PANEL} ref={held} className="self-start scroll-mt-4">
+      {children}
+    </div>
   );
 }
 
