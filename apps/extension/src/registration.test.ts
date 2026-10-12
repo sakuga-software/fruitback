@@ -6,6 +6,7 @@ import {
   type RegisteredScript,
   type ScriptRegistrar,
   matchPatternFor,
+  scriptIdsFor,
   serialize,
   syncRegistration,
 } from './registration.ts';
@@ -40,43 +41,79 @@ function registrar(initial: string[] = []): ScriptRegistrar & { calls: string[];
 
 describe('syncRegistration', () => {
   let scripting: ReturnType<typeof registrar>;
+  const acme = scriptIdsFor('https://acme.dev');
+  const other = scriptIdsFor('https://other.dev');
 
   beforeEach(() => {
     scripting = registrar();
   });
 
-  it('registers both scripts the first time', async () => {
+  it('registers both scripts of an origin the first time', async () => {
     await syncRegistration(scripting, ['https://acme.dev']);
 
-    assert.deepEqual(scripting.calls, [`register:${BRIDGE_SCRIPT_ID},${PAGE_SCRIPT_ID}`]);
-    assert.deepEqual([...scripting.ids].sort(), [BRIDGE_SCRIPT_ID, PAGE_SCRIPT_ID].sort());
+    assert.deepEqual(scripting.calls, [`register:${acme.bridge},${acme.page}`]);
+    assert.deepEqual([...scripting.ids].sort(), [acme.bridge, acme.page].sort());
   });
 
-  it('updates rather than re-registers when they are already there', async () => {
+  it('registers a new origin in a call of its own, and leaves the others as they are', async () => {
     await syncRegistration(scripting, ['https://acme.dev']);
     scripting.calls.length = 0;
 
     await syncRegistration(scripting, ['https://acme.dev', 'https://other.dev']);
 
-    assert.deepEqual(scripting.calls, [`update:${BRIDGE_SCRIPT_ID},${PAGE_SCRIPT_ID}`]);
+    assert.deepEqual(scripting.calls, [`register:${other.bridge},${other.page}`]);
   });
 
   /**
-   * The one that matters. `updateContentScripts` refuses an empty `matches`, so an implementation
-   * that updated here would throw and leave the previous origins registered — the extension would go
-   * on running on a site somebody had just switched off.
+   * FRU-74. Chromium refuses a whole call when one pattern is invalid (measured on 145), so with one
+   * call for every origin a single refusal stopped the extension on every site.
    */
-  it('unregisters when the last site is switched off, rather than updating with nothing', async () => {
+  it('registers every other origin when the browser refuses one, and names the one it refused', async () => {
+    const refusing = {
+      ...scripting,
+      registerContentScripts: async (scripts: RegisteredScript[]) => {
+        if (scripts.some((script) => script.matches.includes('https://*.bad.dev/*'))) {
+          throw new Error("Script with ID 'x' has invalid value for matches[0]: Invalid port.");
+        }
+        await scripting.registerContentScripts(scripts);
+      },
+    };
+    const warned: unknown[] = [];
+    const warn = console.warn;
+    console.warn = (...values: unknown[]) => void warned.push(values);
+    try {
+      const refused = await syncRegistration(refusing, ['https://acme.dev', 'https://*.bad.dev', 'https://other.dev']);
+
+      assert.deepEqual(refused, ['https://*.bad.dev']);
+    } finally {
+      console.warn = warn;
+    }
+    assert.deepEqual([...scripting.ids].sort(), [acme.bridge, acme.page, other.bridge, other.page].sort());
+    assert.equal(warned.length, 1);
+  });
+
+  it('unregisters the scripts of an origin that is switched off, and only those', async () => {
+    await syncRegistration(scripting, ['https://acme.dev', 'https://other.dev']);
+    scripting.calls.length = 0;
+
+    await syncRegistration(scripting, ['https://other.dev']);
+
+    assert.deepEqual(scripting.calls, [`unregister:${acme.bridge},${acme.page}`]);
+    assert.deepEqual([...scripting.ids].sort(), [other.bridge, other.page].sort());
+  });
+
+  it('unregisters everything when the last site is switched off', async () => {
     await syncRegistration(scripting, ['https://acme.dev']);
     scripting.calls.length = 0;
 
     await syncRegistration(scripting, []);
 
-    assert.deepEqual(scripting.calls, [`unregister:${BRIDGE_SCRIPT_ID},${PAGE_SCRIPT_ID}`]);
+    assert.deepEqual(scripting.calls, [`unregister:${acme.bridge},${acme.page}`]);
     assert.deepEqual([...scripting.ids], []);
   });
 
   it('does nothing at all when there is nothing registered and nothing to register', async () => {
+    await syncRegistration(scripting, []);
     await syncRegistration(scripting, []);
 
     assert.deepEqual(scripting.calls, []);
@@ -89,17 +126,29 @@ describe('syncRegistration', () => {
     ]);
 
     assert.partialDeepStrictEqual(scripts, [
-      { id: BRIDGE_SCRIPT_ID, world: 'ISOLATED', matches: ['https://acme.dev/*'] },
-      { id: PAGE_SCRIPT_ID, world: 'MAIN', matches: ['https://acme.dev/*'] },
+      { id: acme.bridge, world: 'ISOLATED', matches: ['https://acme.dev/*'] },
+      { id: acme.page, world: 'MAIN', matches: ['https://acme.dev/*'] },
     ]);
   });
 
-  it('recovers when only one of the two survived', async () => {
-    const partial = registrar([BRIDGE_SCRIPT_ID]);
+  it('recovers when only one of the two of an origin survived', async () => {
+    const partial = registrar([acme.bridge]);
 
     await syncRegistration(partial, ['https://acme.dev']);
 
-    assert.deepEqual(partial.calls, [`update:${BRIDGE_SCRIPT_ID}`, `register:${PAGE_SCRIPT_ID}`]);
+    assert.deepEqual(partial.calls, [`register:${acme.page}`]);
+  });
+
+  it('takes the place of the one pair of before, and leaves the scripts of others alone', async () => {
+    const before = registrar([BRIDGE_SCRIPT_ID, PAGE_SCRIPT_ID, 'somebody-else']);
+
+    await syncRegistration(before, ['https://acme.dev']);
+
+    assert.deepEqual(before.calls, [
+      `unregister:${BRIDGE_SCRIPT_ID},${PAGE_SCRIPT_ID}`,
+      `register:${acme.bridge},${acme.page}`,
+    ]);
+    assert.equal(before.ids.has('somebody-else'), true);
   });
 });
 
