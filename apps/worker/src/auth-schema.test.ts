@@ -93,10 +93,18 @@ async function shapeOf(database: PgDatabase, only?: readonly string[]) {
   };
 }
 
-/** The one thing the schema of the worker has that the DDL of better-auth does not. */
-const ADDED = 'member member_organizationId_userId_key: UNIQUE ("organizationId", "userId")';
-const ADDED_INDEX =
-  'member_organizationId_userId_key: CREATE UNIQUE INDEX "member_organizationId_userId_key" ON member USING btree ("organizationId", "userId")';
+/**
+ * The two things the schema of the worker has that the DDL of better-auth does not: one person is a
+ * member of a workspace once, and one identity at a provider is one row (FRU-146).
+ */
+const ADDED = [
+  'account account_providerId_accountId_key: UNIQUE ("providerId", "accountId")',
+  'member member_organizationId_userId_key: UNIQUE ("organizationId", "userId")',
+];
+const ADDED_INDEXES = [
+  'account_providerId_accountId_key: CREATE UNIQUE INDEX "account_providerId_accountId_key" ON account USING btree ("providerId", "accountId")',
+  'member_organizationId_userId_key: CREATE UNIQUE INDEX "member_organizationId_userId_key" ON member USING btree ("organizationId", "userId")',
+];
 
 /**
  * How the tables of a database made as `made` says differ from the ones better-auth makes on an empty
@@ -199,8 +207,11 @@ for (const { label, open, skip } of DATABASES) {
         assert.deepEqual(found.add, ['session.activeTeamId', 'invitation.teamId']);
       });
 
-      it('makes the tables that the migration of better-auth itself makes, and one constraint more', async () => {
-        assert.deepEqual(await drift(open, MIGRATED), [`+ constraint ${ADDED}`, `+ index ${ADDED_INDEX}`]);
+      it('makes the tables that the migration of better-auth itself makes, and two constraints more', async () => {
+        assert.deepEqual(await drift(open, MIGRATED), [
+          ...ADDED.map((constraint) => `+ constraint ${constraint}`),
+          ...ADDED_INDEXES.map((index) => `+ index ${index}`),
+        ]);
       });
 
       // The controls of the test above. better-auth reports none of these three (measured): it reads
@@ -220,11 +231,13 @@ for (const { label, open, skip } of DATABASES) {
           'better-auth now reports one of these: say so in worker.md',
         );
         assert.deepEqual(await drift(open, lost), [
+          `+ constraint ${ADDED[0]}`,
           '+ constraint invitation invitation_inviterId_fkey: FOREIGN KEY ("inviterId") REFERENCES "user"(id)',
           '- constraint invitation invitation_inviterId_fkey: FOREIGN KEY ("inviterId") REFERENCES "user"(id) ON DELETE CASCADE',
-          `+ constraint ${ADDED}`,
+          `+ constraint ${ADDED[1]}`,
           '- constraint session session_token_key: UNIQUE (token)',
-          `+ index ${ADDED_INDEX}`,
+          `+ index ${ADDED_INDEXES[0]}`,
+          `+ index ${ADDED_INDEXES[1]}`,
           '- index member_userId_idx: CREATE INDEX "member_userId_idx" ON member USING btree ("userId")',
           '- index session_token_key: CREATE UNIQUE INDEX session_token_key ON session USING btree (token)',
         ]);
@@ -276,6 +289,50 @@ for (const { label, open, skip } of DATABASES) {
         );
 
         assert.equal((second as { code?: string } | undefined)?.code, '23505', 'one person has two rows, so two roles');
+      });
+
+      it('refuses a second row for one identity at a provider', async () => {
+        const database = await opening(open);
+        await optionsOn(database);
+        for (const [id, email] of [
+          ['acc_1', 'alice@acme.dev'],
+          ['acc_2', 'bob@acme.dev'],
+        ]) {
+          await rowsOf(
+            database,
+            sql`INSERT INTO "user" ("id", "name", "email", "emailVerified") VALUES (${id}, '', ${email}, true)`,
+          );
+        }
+        const identity = (id: string, person: string) =>
+          rowsOf(
+            database,
+            sql`INSERT INTO "account" ("id", "accountId", "providerId", "userId", "updatedAt")
+                VALUES (${id}, ${'1'}, ${'github'}, ${person}, now())`,
+          );
+        await identity('lgn_1', 'acc_1');
+
+        const second = await identity('lgn_2', 'acc_2').then(
+          () => undefined,
+          (error: unknown) => error,
+        );
+
+        assert.equal((second as { code?: string } | undefined)?.code, '23505', 'one identity signs two people in');
+      });
+
+      it('keeps the language of a person in a column that better-auth knows, and no sign-up can give', async () => {
+        const database = await opening(open);
+        const { options } = await optionsOn(database);
+
+        assert.deepEqual(options.user?.additionalFields, {
+          locale: { type: 'string', required: false, input: false },
+        });
+      });
+
+      // The control: the column is one that better-auth asks for, so a migration that lost it is reported.
+      it('reports the column of the language when the migration lost it', async () => {
+        const lost = plantedAfterTheMigrations('ALTER TABLE "user" DROP COLUMN "locale"');
+
+        assert.deepEqual(await plan(await opening(open), lost), { ...NOTHING, add: ['user.locale'] });
       });
 
       it('gives every table of better-auth an id of the worker, and keeps acc_ and ws_', async () => {

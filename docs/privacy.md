@@ -118,8 +118,10 @@ can read them, with or without the widget.
   of each site it reviews. No password, and no token of a provider that signs a person in. Deleting a workspace removes its
   members and its sites; the notes already in a tracker stay there.
 
-- **The tables of better-auth, in the same PostgreSQL database** (FRU-144). They are empty until the
-  console signs in with it. Once written, they hold: for each person, the address, whether it is
+- **The tables of better-auth, in the same PostgreSQL database** (FRU-144). Since FRU-146 the
+  accounts above are in four of them (`user`, `account`, `organization`, `member`): the same things,
+  in other tables, and every address there counts as proven. The other three are empty until the
+  console signs in with better-auth. Once written, the seven hold: for each person, the address, whether it is
   proven, the name, and an image address if a provider gives one; for each sign-in by a provider,
   which provider and the id it gives the person, **never its tokens** (FRU-181); for each session of
   the console, the SHA-256 of its token, never the token, its dates and the user agent of the

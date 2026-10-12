@@ -1,25 +1,21 @@
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { getTableColumns, getTableName, sql } from 'drizzle-orm';
-import type { PgTable } from 'drizzle-orm/pg-core';
+import { type PgTable, bigint, foreignKey, index, pgTable, primaryKey, text } from 'drizzle-orm/pg-core';
 import { ACCOUNTS_FILE_VERSION } from './accounts-sqlite.ts';
 import type { Database, Db } from './postgres.ts';
-import { migrated } from './postgres-migrate.ts';
+import { migrate, migrationsFolder } from './postgres-migrate.ts';
 import {
-  accounts,
   connectors,
   deliveries,
   email_links,
-  logins,
-  members,
   pairings,
   sessions,
   site_destinations,
   sites,
-  workspaces,
 } from './postgres-schema.ts';
 import { SESSIONS_FILE_VERSION } from './session-sqlite.ts';
 
@@ -32,9 +28,13 @@ import { SESSIONS_FILE_VERSION } from './session-sqlite.ts';
  * - **The two files are never opened.** Each file is copied with its `-wal` into a folder of its own,
  *   and the copy is read. SQLite applies the journal to the copy, and writes nothing beside the
  *   files, not even the `-shm` of a reader. The files are the way back.
- * - **The target is the schema of Drizzle**, applied by `migrated` before the copy. The columns of
- *   each table are compared on both sides before a row is written: a column on one side only is
- *   refused, where a copy would lose it.
+ * - **The target is the schema of Drizzle as it was at `COPY_SCHEMA`**, the last migration whose
+ *   tables are the ones of the two files (FRU-146). The copy applies the migrations up to that one,
+ *   and no further. The worker applies the ones after it when it starts, as on any database: they
+ *   move the people and the workspaces into the tables of better-auth. One statement moves a row,
+ *   whether the copy or a worker of before wrote it.
+ * - The columns of each table are compared on both sides before a row is written: a column on one
+ *   side only is refused, where a copy would lose it.
  * - **One transaction, and a lock.** An interruption leaves nothing. A target that already holds
  *   exactly these rows is a run that went to its end: nothing is written again. Any other target with
  *   a row is refused.
@@ -43,6 +43,74 @@ import { SESSIONS_FILE_VERSION } from './session-sqlite.ts';
  *
  * The sign-in links are not copied: they live 15 minutes.
  */
+
+/**
+ * The last migration whose tables are the ones of the two files. The copy stops the database there.
+ */
+export const COPY_SCHEMA = '0001_connector_settings';
+
+/**
+ * The four tables that `0002_accounts_in_better_auth` moves and drops, as `COPY_SCHEMA` has them: they
+ * are in `postgres-schema.ts` no more. The other tables of the copy are the ones of that file.
+ *
+ * WARNING: a later migration that changes a table of the copy makes the schema of that file differ
+ * from `COPY_SCHEMA`, and `postgres-copy.test.ts` then fails. Write that table here as it was.
+ */
+const instant = (name: string) => bigint(name, { mode: 'number' });
+
+const accounts = pgTable('accounts', {
+  id: text('id').primaryKey(),
+  email: text('email').notNull().unique('accounts_email_key'),
+  name: text('name'),
+  locale: text('locale'),
+  created_at: instant('created_at').notNull(),
+});
+
+const logins = pgTable(
+  'logins',
+  {
+    provider: text('provider').notNull(),
+    subject: text('subject').notNull(),
+    account_id: text('account_id').notNull(),
+    created_at: instant('created_at').notNull(),
+  },
+  (table) => [
+    primaryKey({ name: 'logins_pkey', columns: [table.provider, table.subject] }),
+    foreignKey({ name: 'logins_account_id_fkey', columns: [table.account_id], foreignColumns: [accounts.id] }).onDelete(
+      'cascade',
+    ),
+  ],
+);
+
+const workspaces = pgTable('workspaces', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  created_at: instant('created_at').notNull(),
+});
+
+const members = pgTable(
+  'members',
+  {
+    workspace_id: text('workspace_id').notNull(),
+    account_id: text('account_id').notNull(),
+    role: text('role').notNull(),
+    created_at: instant('created_at').notNull(),
+  },
+  (table) => [
+    primaryKey({ name: 'members_pkey', columns: [table.workspace_id, table.account_id] }),
+    foreignKey({
+      name: 'members_workspace_id_fkey',
+      columns: [table.workspace_id],
+      foreignColumns: [workspaces.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'members_account_id_fkey',
+      columns: [table.account_id],
+      foreignColumns: [accounts.id],
+    }).onDelete('cascade'),
+    index('members_by_account').on(table.account_id),
+  ],
+);
 
 /** A table to copy, and the file that holds it. The order is the one of the foreign keys. */
 const COPIED: readonly { file: 'accounts' | 'sessions'; table: PgTable }[] = [
@@ -58,8 +126,15 @@ const COPIED: readonly { file: 'accounts' | 'sessions'; table: PgTable }[] = [
   { file: 'sessions', table: sessions },
 ];
 
-/** Every table of the worker. A target with a row in any of them is not empty. */
+/** Every table of the worker at `COPY_SCHEMA`. A target with a row in any of them is not empty. */
 const EVERY_TABLE: readonly PgTable[] = [...COPIED.map((copied) => copied.table), email_links];
+
+/**
+ * Where the migrations after `COPY_SCHEMA` put the people and the workspaces: four tables of
+ * better-auth, which are empty until then. A row in one of them is a row that the files do not have.
+ * They are counted by their name: the schema of `auth-schema.ts` has columns that they do not have yet.
+ */
+const FILLED_LATER = ['user', 'account', 'organization', 'member'] as const;
 
 /** Any number that no other advisory lock of the database uses. The migrations take another one. */
 const COPY_LOCK = 1_450_145;
@@ -148,6 +223,32 @@ function readFile(copy: string, file: 'accounts' | 'sessions', version: number):
   }
 }
 
+/**
+ * A folder with the migrations of the worker up to `COPY_SCHEMA`, in `into`: what `migrate` reads.
+ */
+function migrationsOfTheCopy(into: string): string {
+  const all = migrationsFolder();
+  const journal = JSON.parse(readFileSync(join(all, 'meta', '_journal.json'), 'utf8')) as {
+    entries: { tag: string }[];
+  };
+  const last = journal.entries.findIndex((entry) => entry.tag === COPY_SCHEMA);
+  if (last === -1) throw new Error(`The migrations of the worker have no « ${COPY_SCHEMA} »`);
+
+  const entries = journal.entries.slice(0, last + 1);
+  mkdirSync(join(into, 'meta'), { recursive: true });
+  for (const { tag } of entries) copyFileSync(join(all, `${tag}.sql`), join(into, `${tag}.sql`));
+  writeFileSync(join(into, 'meta', '_journal.json'), JSON.stringify({ ...journal, entries }));
+
+  return into;
+}
+
+/** Whether the database still has the tables of `COPY_SCHEMA`: no worker moved their rows yet. */
+async function hasTheTablesOfTheCopy(db: Db): Promise<boolean> {
+  const answer = await db.execute(sql`SELECT to_regclass('public.accounts') AS accounts`);
+
+  return (answer as unknown as { rows: Row[] }).rows[0]?.accounts !== null;
+}
+
 /** The rows of `table` in the target, read through the schema: a `BIGINT` is a number there. */
 async function targetRows(db: Db, table: PgTable): Promise<Row[]> {
   return (await db.select().from(table)) as Row[];
@@ -164,14 +265,14 @@ async function insertAll(db: Db, table: PgTable, rows: readonly Row[]): Promise<
 async function compare(
   db: Db,
   source: Map<PgTable, Row[]>,
-): Promise<{ same: boolean; lines: string[]; empty: boolean; targetCounts: Map<PgTable, number> }> {
+): Promise<{ same: boolean; lines: string[]; empty: boolean; targetCounts: Map<string, number> }> {
   const lines: string[] = [];
   let same = true;
-  const targetCounts = new Map<PgTable, number>();
+  const targetCounts = new Map<string, number>();
   for (const table of EVERY_TABLE) {
     const columns = columnsOf(table);
     const there = tallyOf(await targetRows(db, table), columns);
-    targetCounts.set(table, there.count);
+    targetCounts.set(getTableName(table), there.count);
     const rows = source.get(table);
     if (rows === undefined) {
       // A table that is not copied: a row in it is a row that the files do not have.
@@ -186,6 +287,12 @@ async function compare(
       `  ${getTableName(table).padEnd(18)} ${String(here.count).padStart(7)} ${String(there.count).padStart(7)}  ` +
         `${equal ? 'same' : 'DIFFERENT'}  ${there.digest.slice(0, 16)}`,
     );
+  }
+  for (const name of FILLED_LATER) {
+    const answer = await db.execute(sql`SELECT count(*) AS count FROM ${sql.identifier(name)}`);
+    const count = Number((answer as unknown as { rows: Row[] }).rows[0]?.count);
+    targetCounts.set(name, count);
+    same &&= count === 0;
   }
   const empty = [...targetCounts.values()].every((count) => count === 0);
 
@@ -207,13 +314,21 @@ export async function copySqliteFiles(input: CopyInput): Promise<CopyOutcome> {
       for (const [table, rows] of readFile(copy, file, version)) source.set(table, rows);
     }
 
-    await migrated(input.database);
+    // Not `migrated`: the tables of the files are the ones of `COPY_SCHEMA`. A database that holds
+    // later migrations is left as it is, and refused below.
+    await migrate(input.database, migrationsOfTheCopy(join(folder, 'migrations')));
 
     return await input.database.alone(async (db) => {
       await db.execute(sql`BEGIN`);
       try {
         // Inside the transaction: two copies at the same moment wait for each other.
         await db.execute(sql`SELECT pg_advisory_xact_lock(${COPY_LOCK})`);
+        if (!(await hasTheTablesOfTheCopy(db))) {
+          throw new Refused(
+            'a worker already started on this database, and moved the accounts into the tables of better-auth: ' +
+              'the copy goes into an empty database only',
+          );
+        }
         const before = await compare(db, source);
 
         if (!before.empty) {
@@ -223,7 +338,7 @@ export async function copySqliteFiles(input: CopyInput): Promise<CopyOutcome> {
 
             return { ok: true, lines };
           }
-          const held = EVERY_TABLE.filter((table) => (before.targetCounts.get(table) ?? 0) > 0).map(getTableName);
+          const held = [...before.targetCounts].filter(([, count]) => count !== 0).map(([name]) => name);
           throw new Refused(
             `PostgreSQL is not empty, and does not hold these rows: rows in ${held.join(', ')}. ` +
               'The copy goes into an empty database only',
@@ -241,7 +356,9 @@ export async function copySqliteFiles(input: CopyInput): Promise<CopyOutcome> {
           lines.push('dry run: the counts are equal, and nothing was kept.');
         } else {
           await db.execute(sql`COMMIT`);
-          lines.push('copied: the counts are equal.');
+          lines.push(
+            'copied: the counts are equal. The worker moves the accounts into the tables of better-auth when it starts.',
+          );
         }
 
         return { ok: true, lines };

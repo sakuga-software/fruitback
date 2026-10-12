@@ -14,9 +14,10 @@ import {
   TEST_DATABASE_URL,
   createPgliteDatabase,
   createRealDatabase,
+  migrationsThrough,
   rowsOf,
 } from './postgres.fixture.ts';
-import { THEN, withRows } from './postgres-home-made.fixture.ts';
+import { BEFORE_THE_MOVE, THEN, withRows } from './postgres-home-made.fixture.ts';
 import { migrate } from './postgres-migrate.ts';
 import * as schema from './postgres-schema.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
@@ -61,12 +62,16 @@ afterEach(async () => {
   for (const database of opened.splice(0)) await database.close();
 });
 
-/** A database with the schema of the worker, and a row or more in each of its tables. */
+/**
+ * A database with the schema of the worker, and a row or more in each of its tables: the rows of a
+ * worker of before the accounts moved (FRU-146), then the migrations after it.
+ */
 async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<PgDatabase> {
   const database = await open();
   opened.push(database);
-  await migrate(database);
+  await migrate(database, migrationsThrough(BEFORE_THE_MOVE));
   await withRows(database);
+  await migrate(database);
 
   return database;
 }
@@ -76,9 +81,8 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the twenty BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the sixteen BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
-    'accounts.created_at',
     'connectors.attention_at',
     'connectors.created_at',
     'deliveries.created_at',
@@ -87,8 +91,6 @@ it('knows the twenty BIGINT columns of the worker, and that better-auth has none
     'email_links.created_at',
     'email_links.expires_at',
     'email_links.spent_at',
-    'logins.created_at',
-    'members.created_at',
     'pairings.created_at',
     'pairings.expires_at',
     'pairings.redeemed_at',
@@ -97,7 +99,6 @@ it('knows the twenty BIGINT columns of the worker, and that better-auth has none
     'sessions.revoked_at',
     'sessions.rotated_at',
     'sites.created_at',
-    'workspaces.created_at',
   ]);
   // better-auth reads its tables on the same pool, with no parser of ours: it has no BIGINT to read.
   assert.deepEqual(bigintsOf(authSchema), []);

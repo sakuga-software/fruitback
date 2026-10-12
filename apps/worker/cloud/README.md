@@ -123,7 +123,7 @@ PG=$(docker ps -q --filter label=com.docker.swarm.service.name=fruitback-cloud-p
   docker exec "$PG" pg_restore -f /dev/null /tmp/fruitback.pgdump &&
   docker exec "$PG" createdb -U fruitback fruitback_restored &&
   docker exec "$PG" pg_restore -U fruitback -d fruitback_restored --no-owner --exit-on-error /tmp/fruitback.pgdump &&
-  test "$(docker exec "$PG" psql -U fruitback -d fruitback_restored -Atc 'SELECT count(*) FROM accounts')" -gt 0 &&
+  test "$(docker exec "$PG" psql -U fruitback -d fruitback_restored -Atc 'SELECT count(*) FROM "user"')" -gt 0 &&
   docker exec "$PG" psql -U fruitback -d postgres -q \
     -c 'ALTER DATABASE fruitback RENAME TO fruitback_before' \
     -c 'ALTER DATABASE fruitback_restored RENAME TO fruitback' &&
@@ -131,7 +131,8 @@ PG=$(docker ps -q --filter label=com.docker.swarm.service.name=fruitback-cloud-p
 ```
 
 Each step is chained with `&&`, and two checks come before the names are exchanged: the dump is read
-to its end, and the restored database has accounts. A failure leaves the worker stopped and the
+to its end, and the restored database has accounts (a row in `"user"`, where they are since FRU-146;
+on a dump of before it, count `accounts`). A failure leaves the worker stopped and the
 database in service whole: that is the state to investigate from. `ALTER DATABASE … RENAME` refuses
 a database that a session holds; the worker is stopped, so only a `psql` left open would hold it.
 Then check `https://api.fruitback.com/health`, and sign in.
@@ -194,19 +195,27 @@ node server.mjs migrate-to-postgres --accounts <file> --sessions <file> [--dry-r
 
 - It reads a copy of each file, made with its `-wal`, in a folder of its own. **It never writes the
   two files**: they are the way back. It reads them on a volume mounted read-only.
-- It applies the migrations of Drizzle to the database, then copies, in one transaction: the
+- It applies the migrations of Drizzle to the database **up to `0001_connector_settings`**, the
+  last one whose tables are the ones of the two files, then copies, in one transaction: the
   accounts, their sign-in methods, the workspaces and their members, the sites and their
   destinations, the sealed keys of the connectors, the deliveries that wait, the pairing codes and
   the sessions. The sign-in links are not copied: they live 15 minutes.
+- **The worker applies the later migrations when it starts** (step 6). With an image that has
+  FRU-146, that is where the accounts and the workspaces move into the tables of better-auth:
+  see « Before the deployment of FRU-146 » below.
 - It ends with one line for each table: the rows of the file, the rows of PostgreSQL, and whether
   their digests are the same. A difference rolls everything back, and the command exits 1.
   `--dry-run` does everything and rolls back.
 - It refuses a database with a row in any table, and a file that a worker of another version wrote.
   Run again on a database that holds exactly these rows, it writes nothing and exits 0. An
-  interruption leaves nothing: run it again.
+  interruption leaves nothing: run it again. **Once a worker of an image that has FRU-146 started on
+  the database, it refuses**: the tables it compares are gone.
 
 **Before you start.** The digest of the image that has this command, called `D_new` below, has
-FRU-180 and FRU-145, and not FRU-146 nor FRU-184. Steps 1 to 3 of « What to do on the host » above
+FRU-180 and FRU-145, and not FRU-184. It may have FRU-146: the copy is the same, and step 6 then
+moves the accounts (`postgres-copy.test.ts` holds the copy followed by that migration; this runbook
+was not run again with such an image). The simpler switch is an image without it, so that one thing
+changes at a time. Steps 1 to 3 of « What to do on the host » above
 are done, and the window is chosen. With an automatic deployment on, nothing is merged during the
 window.
 
@@ -251,7 +260,8 @@ WORKER=fruitback-cloud-worker-a9zdeo
 5. **The copy.** The same command, without `--dry-run`. Check:
    - the command exits 0, each line says `same`, and the last one says `copied`;
    - `docker exec "$PG" psql -U fruitback -d fruitback -Atc 'SELECT count(*) FROM __drizzle_migrations'`
-     gives the number of entries of `apps/worker/drizzle/meta/_journal.json` at the commit of `D_new`;
+     gives `2`: the copy stops at `0001_connector_settings`. After step 6 it gives the number of
+     entries of `apps/worker/drizzle/meta/_journal.json` at the commit of `D_new`;
    - the digests of step 3, computed again, are the same.
 
    Then `unset FRUITBACK_DATABASE_URL`. Way back: drop the database and make it again, then go back to
@@ -287,8 +297,9 @@ that refreshed its session since step 6 must pair again**: the refresh rotates i
 token is in PostgreSQL only. A session that did
 not refresh since is still good.
 
-**The point of no return** is at the latest the deployment of FRU-146, which moves the accounts into
-the tables of better-auth. After it there is no way back to the two files. Then:
+**The point of no return** is at the latest the first start of a worker that has FRU-146 on the
+database: it moves the accounts into the tables of better-auth. After it there is no way back to the
+two files. Then:
 
 1. A pull request makes `snapshot.sh` copy `fb.db` alone, and rewrites « Restore » above, which
    requires the two files.
@@ -324,6 +335,55 @@ another version, and a folder that it cannot write.
 label of the Swarm service, the network of Dokploy, a sign-in to the console and a note from an
 extension (steps 7.3 and 7.4 were checked by a refresh of the session only), the files of the Cloud
 and the time the copy takes on them. The copy holds every row of the two files in memory, and a file of hundreds of megabytes was not tried.
+
+## Before the deployment of FRU-146: a dump, and the way back
+
+For the operator. **No agent ran any of it on the host.** FRU-146 changes no behaviour, and it
+changes where the accounts are: the first call of the worker to the database applies
+`0002_accounts_in_better_auth`, which copies `accounts`, `logins`, `workspaces` and `members` into
+`user`, `account`, `organization` and `member`, and drops the four. Nobody signs in again and no
+extension pairs again: the ids are the same, and the tables of the sessions are not touched.
+
+**An image of before does not read the database after that**: it reads `accounts`, which is gone,
+and every read answers `502`. So the way back is a dump, taken before.
+
+1. **Stop the worker**, so that the dump holds everything: `docker service scale "$WORKER"=0`.
+2. **Take the dump in the container of the database, and copy it apart.** `snapshot-pg.sh` writes in
+   the container of the worker, which is stopped.
+   `docker exec "$PG" pg_dump -U fruitback -Fc -f /tmp/before-fru-146.pgdump fruitback`, read it to
+   its end (`docker exec "$PG" pg_restore -f /dev/null /tmp/before-fru-146.pgdump`), then
+   `docker cp "$PG:/tmp/before-fru-146.pgdump" <folder>/before-fru-146-<date>.pgdump`.
+3. **Count, before**: `docker exec "$PG" psql -U fruitback -d fruitback -Atc 'SELECT (SELECT count(*) FROM accounts), (SELECT count(*) FROM logins), (SELECT count(*) FROM workspaces), (SELECT count(*) FROM members)'`.
+4. **Deploy the image that has FRU-146.** The first request that reads the accounts applies the
+   migration: a sign-in to the console, or a read of the widget.
+5. **Check, in this order.**
+   1. `/health` answers `200`, and a read of the widget answers `unknown-client` for a client that
+      does not exist, and not `502`. A `502` here is a migration that failed: the log says which
+      statement, the database is as it was before step 4, and the image of before reads it. Go back
+      to that image, and read the log before anything else.
+   2. `docker exec "$PG" psql -U fruitback -d fruitback -Atc 'SELECT (SELECT count(*) FROM "user"), (SELECT count(*) FROM "account"), (SELECT count(*) FROM "organization"), (SELECT count(*) FROM "member")'`
+      gives the four numbers of step 3, and `SELECT to_regclass('public.accounts')` gives nothing.
+   3. A sign-in to the console shows the same workspaces and the same sites.
+   4. An extension that was paired before sends a note, without pairing again.
+6. **A dump with the data as it is now**: `sh snapshot-pg.sh`, and a copy apart.
+
+**The way back**, when the worker of this image fails after the migration ran: stop the worker,
+restore the dump of step 2 with « Restore the database » above (the check there counts `accounts`
+for a dump of before FRU-146), and deploy the image of before. **What it costs:** everything
+written since step 1 is lost, and an extension that refreshed its session since must pair again.
+
+**What the migration refuses.** A row in `user`, `account`, `organization` or `member` that has the
+address or the id of an account stops it: nothing wrote those tables before FRU-146, so the worker
+joins no row it did not make. A view or a foreign key that somebody added on one of the four tables
+of before stops it too. In both cases the database is as it was, and the worker answers `502`.
+
+**Tried on 2026-10-12, on PGlite and on PostgreSQL 17, and never on the host**, by
+`accounts-move.test.ts`: a database of the image of before with accounts, sign-in methods,
+workspaces, members of each role, sites, connectors, deliveries and a session of an extension; the
+migrations of this image; then each person, each role and each site read again, and the session
+refreshed. `postgres-copy.test.ts` runs the copy of switch 1 and then the same migrations.
+**Not tried:** the commands of this list on the host, a database of real size, and the time the
+migration takes on it.
 
 ## The two OAuth applications
 

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { after } from 'node:test';
 import { PGlite, types } from '@electric-sql/pglite';
 import { type SQL, sql } from 'drizzle-orm';
@@ -69,6 +71,42 @@ export function journalDates(): number[] {
   };
 
   return journal.entries.map((entry) => entry.when);
+}
+
+/** The names of the migrations of the worker, in the order of its journal. */
+export function journalTags(): string[] {
+  const journal = JSON.parse(readFileSync(`${migrationsFolder()}meta/_journal.json`, 'utf8')) as {
+    entries: { tag: string }[];
+  };
+
+  return journal.entries.map((entry) => entry.tag);
+}
+
+const folders: string[] = [];
+after(() => {
+  for (const folder of folders.splice(0)) rmSync(folder, { recursive: true, force: true });
+});
+
+/**
+ * A folder with the migrations of the worker up to `tag`, and none after it: what an image of
+ * before had. `migrate(database, folder)` makes the database of that image, and `migrate(database)`
+ * then applies the rest, as the worker of this build does when it starts on it.
+ */
+export function migrationsThrough(tag: string): string {
+  const folder = mkdtempSync(join(tmpdir(), 'fruitback-migrations-'));
+  folders.push(folder);
+  cpSync(migrationsFolder(), folder, { recursive: true });
+  const journalFile = join(folder, 'meta', '_journal.json');
+  const journal = JSON.parse(readFileSync(journalFile, 'utf8')) as { entries: { tag: string }[] };
+  const last = journal.entries.findIndex((entry) => entry.tag === tag);
+  assert.ok(last >= 0, `the worker has no migration « ${tag} »`);
+  const kept = journal.entries.slice(0, last + 1);
+  writeFileSync(journalFile, JSON.stringify({ ...journal, entries: kept }));
+  for (const file of readdirSync(folder)) {
+    if (file.endsWith('.sql') && !kept.some((entry) => `${entry.tag}.sql` === file)) rmSync(join(folder, file));
+  }
+
+  return folder;
 }
 
 /** The PGlite of this process. It takes a second to start, so the cases share it. */

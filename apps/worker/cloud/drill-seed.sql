@@ -3,20 +3,28 @@
 -- The drill fails on a table with no row: a migration that adds a table adds its rows here.
 -- Nothing here is a secret: no digest is the digest of a code, and no key opens anything.
 
-INSERT INTO accounts (id, email, name, locale, created_at) VALUES
-  ('acc_drill1', 'alice@acme.dev', 'Alice Martin', 'fr', 1),
-  ('acc_drill2', 'bob@acme.dev', NULL, NULL, 2);
+-- The tables of better-auth (FRU-144). The people, their ways to sign in, the workspaces and their
+-- members are rows of these tables since FRU-146, written by the store of the accounts: an id of the
+-- worker, a verified address, the id of a workspace for its slug, and the columns of the tokens of a
+-- provider empty. The other three are written by better-auth only, and no route serves it yet, so
+-- the drill writes them: an empty table proves nothing. As the worker writes them (FRU-181): a digest
+-- in the place of the token of a session and of a link.
 
-INSERT INTO logins (provider, subject, account_id, created_at) VALUES
-  ('email', 'alice@acme.dev', 'acc_drill1', 1),
-  ('github', '4242', 'acc_drill1', 2),
-  ('email', 'bob@acme.dev', 'acc_drill2', 3);
+INSERT INTO "user" ("id", "name", "email", "emailVerified", "image", "createdAt", "updatedAt", "locale") VALUES
+  ('acc_drill1', 'Alice Martin', 'alice@acme.dev', true, NULL, '2026-10-11 10:00:00+00', '2026-10-11 10:00:00+00', 'fr'),
+  ('acc_drill2', '', 'bob@acme.dev', true, NULL, '2026-10-11 10:01:00+00', '2026-10-11 10:01:00+00', NULL);
 
-INSERT INTO workspaces (id, name, created_at) VALUES ('ws_drill1', 'Acme', 1);
+INSERT INTO "account" ("id", "accountId", "providerId", "userId", "accessToken", "refreshToken", "idToken", "accessTokenExpiresAt", "refreshTokenExpiresAt", "scope", "password", "createdAt", "updatedAt") VALUES
+  ('lgn_drill1', 'alice@acme.dev', 'email', 'acc_drill1', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-10-11 10:00:00+00', '2026-10-11 10:00:00+00'),
+  ('lgn_drill2', '4242', 'github', 'acc_drill1', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-10-11 10:02:00+00', '2026-10-11 10:02:00+00'),
+  ('lgn_drill3', 'bob@acme.dev', 'email', 'acc_drill2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-10-11 10:01:00+00', '2026-10-11 10:01:00+00');
 
-INSERT INTO members (workspace_id, account_id, role, created_at) VALUES
-  ('ws_drill1', 'acc_drill1', 'owner', 1),
-  ('ws_drill1', 'acc_drill2', 'guest', 2);
+INSERT INTO "organization" ("id", "name", "slug", "logo", "createdAt", "metadata") VALUES
+  ('ws_drill1', 'Acme', 'ws_drill1', NULL, '2026-10-11 10:00:00+00', NULL);
+
+INSERT INTO "member" ("id", "organizationId", "userId", "role", "createdAt") VALUES
+  ('mem_drill1', 'ws_drill1', 'acc_drill1', 'owner', '2026-10-11 10:00:00+00'),
+  ('mem_drill2', 'ws_drill1', 'acc_drill2', 'guest', '2026-10-11 10:01:00+00');
 
 INSERT INTO connectors (id, workspace_id, kind, label, sealed, created_at) VALUES
   ('con_drill1', 'ws_drill1', 'rest', 'Hook', 'drill-not-a-sealed-key', 1);
@@ -49,31 +57,11 @@ INSERT INTO sessions (token_hash, subject, workspace, created_at, expires_at, pr
   ('drill-not-a-digest-4', 'bob', NULL, 1, 2, NULL, NULL),
   ('drill-not-a-digest-5', 'bob', NULL, 1, 2, NULL, NULL);
 
--- The tables of better-auth (FRU-144). No route of the worker writes them yet, so the drill does:
--- an empty table proves nothing. As the worker writes them (FRU-181): a digest in the place of the
--- token of a session and of a link, and the columns of the tokens of a provider empty.
-
-INSERT INTO "user" ("id", "name", "email", "emailVerified", "image", "createdAt", "updatedAt") VALUES
-  ('usr_drill1', 'Alice Martin', 'alice@acme.dev', true, NULL, '2026-10-11 10:00:00+00', '2026-10-11 10:00:00+00'),
-  ('usr_drill2', 'Bob', 'bob@acme.dev', false, NULL, '2026-10-11 10:01:00+00', '2026-10-11 10:01:00+00');
-
 INSERT INTO "session" ("id", "expiresAt", "token", "createdAt", "updatedAt", "ipAddress", "userAgent", "userId", "activeOrganizationId") VALUES
-  ('ses_drill1', '2026-10-18 10:00:00+00', 'drill-not-a-digest', '2026-10-11 10:00:00+00', '2026-10-11 10:00:00+00', NULL, NULL, 'usr_drill1', 'org_drill1');
-
-INSERT INTO "account" ("id", "accountId", "providerId", "userId", "accessToken", "refreshToken", "idToken", "accessTokenExpiresAt", "refreshTokenExpiresAt", "scope", "password", "createdAt", "updatedAt") VALUES
-  ('acn_drill1', '4242', 'github', 'usr_drill1', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-10-11 10:00:00+00', '2026-10-11 10:00:00+00'),
-  ('acn_drill2', '108', 'google', 'usr_drill1', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-10-11 10:02:00+00', '2026-10-11 10:02:00+00'),
-  ('acn_drill3', '4343', 'github', 'usr_drill2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-10-11 10:01:00+00', '2026-10-11 10:01:00+00');
+  ('ses_drill1', '2026-10-18 10:00:00+00', 'drill-not-a-digest', '2026-10-11 10:00:00+00', '2026-10-11 10:00:00+00', NULL, NULL, 'acc_drill1', 'ws_drill1');
 
 INSERT INTO "verification" ("id", "identifier", "value", "expiresAt", "createdAt", "updatedAt") VALUES
   ('ver_drill1', 'drill-not-a-digest', 'alice@acme.dev', '2026-10-11 10:15:00+00', '2026-10-11 10:00:00+00', '2026-10-11 10:00:00+00');
 
-INSERT INTO "organization" ("id", "name", "slug", "logo", "createdAt", "metadata") VALUES
-  ('org_drill1', 'Acme', 'acme', NULL, '2026-10-11 10:00:00+00', NULL);
-
-INSERT INTO "member" ("id", "organizationId", "userId", "role", "createdAt") VALUES
-  ('mbr_drill1', 'org_drill1', 'usr_drill1', 'owner', '2026-10-11 10:00:00+00'),
-  ('mbr_drill2', 'org_drill1', 'usr_drill2', 'guest', '2026-10-11 10:01:00+00');
-
 INSERT INTO "invitation" ("id", "organizationId", "email", "role", "status", "expiresAt", "createdAt", "inviterId") VALUES
-  ('inv_drill1', 'org_drill1', 'carol@acme.dev', 'member', 'pending', '2026-10-18 10:00:00+00', '2026-10-11 10:00:00+00', 'usr_drill1');
+  ('inv_drill1', 'ws_drill1', 'carol@acme.dev', 'member', 'pending', '2026-10-18 10:00:00+00', '2026-10-11 10:00:00+00', 'acc_drill1');

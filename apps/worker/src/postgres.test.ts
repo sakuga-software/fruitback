@@ -28,7 +28,7 @@ import {
 } from './postgres.fixture.ts';
 import { madeByTheHomeMadeTool } from './postgres-home-made.fixture.ts';
 import { APPLIED, migrate, migrated, migrationsFolder } from './postgres-migrate.ts';
-import { accounts } from './postgres-schema.ts';
+import { pairings } from './postgres-schema.ts';
 import { StoreError } from './store.ts';
 
 const run = promisify(execFile);
@@ -213,7 +213,7 @@ describe('the migrations of the PostgreSQL database (FRU-180)', () => {
     await withPglite(async (database) => {
       await Promise.all([migrated(database), migrated(database)]);
 
-      assert.equal(await has(database, 'public.accounts'), true);
+      assert.equal(await has(database, 'public.sites'), true);
       assert.equal((await applied(database)).length > 0, true);
     });
   });
@@ -602,10 +602,12 @@ describe('a statement that fails, which Drizzle quotes with its values (FRU-180)
     try {
       await migrated(database);
       const instant = 1_760_000_000_000;
-      await database.run((db) => db.insert(accounts).values({ id: 'acc_1', email: 'a@acme.dev', created_at: instant }));
+      await database.run((db) =>
+        db.insert(pairings).values({ code_hash: 'digest', subject: 'acc_1', created_at: instant, expires_at: instant }),
+      );
 
       const rows = await database.run((db) =>
-        db.select({ created_at: accounts.created_at }).from(accounts).where(eq(accounts.id, 'acc_1')),
+        db.select({ created_at: pairings.created_at }).from(pairings).where(eq(pairings.code_hash, 'digest')),
       );
 
       assert.deepEqual(rows, [{ created_at: instant }]);

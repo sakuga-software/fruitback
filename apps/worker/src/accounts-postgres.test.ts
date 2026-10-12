@@ -243,18 +243,27 @@ describe('two sign-ins of one new address, on two connections (FRU-141)', () => 
   // account that is not there yet is inserted. One call after the other, it is correct.
   const WITHOUT_CONFLICT = {
     from: [
-      '.insert(accounts)',
-      "            .values({ id: newId('acc'), email: address, name: given, locale: locale ?? null, created_at: now })",
-      '            .onConflictDoNothing({ target: accounts.email })',
+      '.insert(user)',
+      '            .values({',
+      "              id: newId('acc'),",
+      '              email: address,',
+      '              name: given,',
+      '              emailVerified: true,',
+      '              locale: locale ?? null,',
+      '              createdAt: now,',
+      '              updatedAt: now,',
+      '            })',
+      '            .onConflictDoNothing({ target: user.email })',
     ].join('\n'),
     to: [
-      '.execute(sql`INSERT INTO accounts (id, email, name, locale, created_at)',
-      "  SELECT ${newId('acc')}::text, ${address}::text, ${given}::text, ${locale ?? null}::text, ${now}::bigint",
-      '  WHERE NOT EXISTS (SELECT 1 FROM accounts WHERE email = ${address}::text)`)',
+      '.execute(sql`INSERT INTO "user" (id, email, name, "emailVerified", locale, "createdAt", "updatedAt")',
+      "  SELECT ${newId('acc')}::text, ${address}::text, ${given}::text, true, ${locale ?? null}::text,",
+      '         ${now.toISOString()}::timestamptz, ${now.toISOString()}::timestamptz',
+      '  WHERE NOT EXISTS (SELECT 1 FROM "user" WHERE email = ${address}::text)`)',
     ].join('\n'),
   };
   // The first sign-in has read that the address is new, and has not written its account yet.
-  const HELD = { table: 'accounts' };
+  const HELD = { table: '"user"' };
 
   it('passes on PGlite with an insert that names no conflict', async () => {
     assert.equal(await outcomeOf(CASE, WITHOUT_CONFLICT, HELD, createPgliteDatabase), 'passed');

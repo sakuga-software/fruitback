@@ -866,8 +866,8 @@ plugin opens one with the token alone` keeps it measured, with and without the l
 other`.
 - **One tool migrates the database, and it is Drizzle** (FRU-180, section below). The tables of
   better-auth are written in `auth-schema.ts`, in Drizzle: the tables that better-auth compiles for
-  the options of `auth.ts`, and one constraint more, `UNIQUE ("organizationId", "userId")` on
-  `member`. `drizzle-kit generate` writes their migration with the tables of the worker. `auth
+  the options of `auth.ts`, and two constraints more: `UNIQUE ("organizationId", "userId")` on
+  `member`, and `UNIQUE ("providerId", "accountId")` on `account` (FRU-146). `drizzle-kit generate` writes their migration with the tables of the worker. `auth
 migrate` and `runMigrations()` never run on a database of the worker. **A plugin, a field or a
   version of better-auth that changes its schema is a change of `auth-schema.ts` and a migration
   that `drizzle-kit` generates**: the tests of the schema say what is missing.
@@ -933,7 +933,7 @@ schema that lost a column, and names the column` holds it. **The slice that moun
 - **What `getMigrations` reports, and what it does not** (measured). It reports a table and a column
   that are missing, and a required column that better-auth never fills. It writes in its log a
   column of another type and a required column that takes a null: the tests read that log. **It reports no index of one column, no foreign key and no unique constraint that an existing table lost.** So
-  test:`makes the tables that the migration of better-auth itself makes, and one constraint more`
+  test:`makes the tables that the migration of better-auth itself makes, and two constraints more`
   compares the catalogue of PostgreSQL after the migrations of the worker with the catalogue after
   better-auth's own migration, on a second empty database, and
   test:`finds an index, a cascade and a unique constraint that the migration lost` is its control.
@@ -1026,8 +1026,8 @@ nothing`.
   long a session lasts (7 days, renewed each day of use, by default), which ways to sign in, how two
   providers that prove one address are linked, and whether the `session` table keeps an address.
 - **The generated DDL has no unique constraint on `account ("providerId", "accountId")` either.**
-  The `logins` table of the worker has that pair as its primary key. It is not added here: nothing
-  writes the table yet, and the slice that moves the rows decides.
+  The `logins` table of the worker had that pair as its primary key. FRU-146 moved the rows there
+  and added the constraint: see _The accounts in the tables of better-auth_.
 
 ### The bundle, and what it costs a worker that has better-auth off
 
@@ -1074,7 +1074,10 @@ PostgreSQL. Porting them to Drizzle first would be work on code that leaves.
 - **`postgres-schema.ts` and `auth-schema.ts` are the source, and `drizzle/` is generated from
   them.** `drizzle.config.ts` names both. Change a table there, run
   `pnpm --filter @fruitback/worker db:generate`, and commit what it writes. Never write a migration
-  by hand, and never edit one that has shipped: add one.
+  by hand, and never edit one that has shipped: add one. **One case only adds statements to a
+  generated file, before its first merge: rows that must move before a table goes.** `drizzle-kit`
+  writes no copy of rows. `0002_accounts_in_better_auth` is that case, and its header says which
+  statements are not generated.
 - **A constraint has the name that PostgreSQL gives it**: `<table>_pkey`, `<table>_<column>_key`,
   `<table>_<column>_fkey`. So a constraint of one column is written in the third argument of
   `pgTable`, with its name, and never on its column, where Drizzle names it in its own way. A database
@@ -1111,7 +1114,7 @@ variable` holds the rest.
   database give no search path, and no schema has the name of the role.
 - **A store reads a `BIGINT` through the schema, never with a raw statement.** Through the schema it
   is a number. In the answer of a raw statement it is a string, and `account-rows.ts` reads a string
-  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the twenty columns.
+  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the sixteen columns.
 - **A transaction is the one of `postgres.ts`, never `db.transaction` of Drizzle on the pool.** A
   store takes `database.transaction`, which gives it Drizzle on one connection.
 - **The words of an error of Drizzle reach no log.** They quote the statement and its values: an
@@ -1192,7 +1195,7 @@ the lock` is its control: the same two processes, with the line of the lock remo
   That is why the `BIGINT` is a number by the schema.
   test:`answers a BIGINT of the schema as a number, on the driver that ships`.
 - **What the parser that is gone changes, measured on a server** (raised in review). For each of the
-  twenty `BIGINT` columns, a pool built as `postgres.ts` built it before answers a number for a raw
+  `BIGINT` columns (twenty then, sixteen since FRU-146), a pool built as `postgres.ts` built it before answers a number for a raw
   statement, the pool that ships answers a string for the same statement, and the schema answers
   the number: test:`answered a number for a raw statement, and now answers a string for it and a
 number through the schema`. No store sends a raw statement
@@ -1205,7 +1208,7 @@ exact integer`, test:`is null when the column holds no instant, and never 0`. Th
 store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
 2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the twenty BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the sixteen BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -1283,13 +1286,25 @@ are in `apps/worker/cloud/README.md`.
   `cli.ts` reaches it through `postgres-stores.ts`, at the call.
 - **The two files are never opened.** Each one is copied with its `-wal` into a folder of the
   system, and the copy is read. The files are the way back of the switch.
-- **The target is made by the migrations of Drizzle** (`migrated`), and the copy writes rows only.
-  The columns of each table are compared on both sides first, and a file of another version is
-  refused: a column on one side only would be lost in silence.
+- **The target is made by the migrations of Drizzle up to `COPY_SCHEMA`, and no further** (FRU-146).
+  That migration, `0001_connector_settings`, is the last one whose tables are the ones of the two
+  files. The copy writes rows only, and the worker applies the later migrations when it starts, as
+  on any database: they move the people and the workspaces into the tables of better-auth. So one
+  statement moves a row, whether the copy or a worker of before wrote it, and the copy runs from any
+  image, before or after FRU-146.
+- **The columns of each table are compared on both sides first**, and a file of another version is
+  refused: a column on one side only would be lost in silence. `accounts`, `logins`, `workspaces`
+  and `members` are written in `postgres-copy.ts`, as `COPY_SCHEMA` has them. **A later migration
+  that changes another table of the copy fails `postgres-copy.test.ts`: write that table in
+  `postgres-copy.ts` as it was.**
 - **One transaction, with an advisory lock in it** (`pg_advisory_xact_lock`, a number that the
   migrations do not use). An interruption leaves nothing.
 - **A database with a row in any of the eleven tables is refused**, unless it holds exactly the rows
   of the files: then the command writes nothing and ends with 0. That is a run that went to its end.
+  A row in `user`, `account`, `organization` or `member` is refused too: those tables are empty
+  until the worker starts. **Once a worker started on the database, the copy is refused**: the
+  tables of the files are gone. test:`refuses a database on which a worker started since the copy,
+and says why`.
 - **The end is a count and a digest of the rows of each table, file against database**, read again
   inside the transaction through the schema. A difference rolls back and ends with 1. `--dry-run`
   does everything and rolls back.
@@ -1328,6 +1343,112 @@ since`.
 - **The command runs as a process against a server** in
   test:`copies, ends with 0, and never prints the address of the database`: a dry run, the copy, a
   second run, and a file that does not exist, which `node:sqlite` would otherwise make.
+
+## The accounts in the tables of better-auth (FRU-146)
+
+A person, a way to sign in, a workspace and a membership are rows of `user`, `account`,
+`organization` and `member`: the tables of better-auth. **Nothing changes for a caller.** The sign-in
+code of before is still the one that runs, `AccountStore` is the same interface, and better-auth
+still serves no route. The rows are where better-auth will read them, so the slice that signs a
+person in with it (FRU-147) has no data to move.
+
+**Nothing changes on SQLite**: `accounts-sqlite.ts` keeps its four tables until FRU-184.
+
+### The rules, in short
+
+- **`accounts-postgres.ts` reads and writes the four tables itself**, with Drizzle, for `signIn`,
+  `account`, `setLocale`, `localeOf`, `createWorkspace`, `memberships`, `role` and
+  `deleteWorkspace`. better-auth does not run for these calls, so its layer (`auth-at-rest.ts`) is
+  not between this store and the table. **No statement of the store gives a value to a token column
+  of `account`, to its scope or to its password**: test:`writes each row as better-auth expects it,
+and no token of a provider`, test:`writes a new sign-in and a new workspace as it writes a moved one`.
+- **The ids do not change.** `acc_…` is the id of a `user` and `ws_…` the id of an `organization`.
+  They are in the access tokens, in `reporter.id` of the notes already written, and in the sessions
+  of the extensions. A row of `account` and of `member` gets an id it did not have: `lgn_` and
+  `mem_`, then 20 hexadecimal characters, as `authId` gives.
+- **What each column holds, for a row of before and for a new one:**
+
+  | Column                                    | Value                                                                                      |
+  | ----------------------------------------- | ------------------------------------------------------------------------------------------ |
+  | `user.name`                               | the name, or the empty text when the person has none                                       |
+  | `user."emailVerified"`                    | `true`: every way to sign in that reaches the store proves the address                     |
+  | `user.locale`                             | the language the person chose, or `NULL`                                                   |
+  | `user.image`                              | `NULL`                                                                                     |
+  | `account."providerId"`                    | `email`, `github` or `google`: the `provider` of before                                    |
+  | `account."accountId"`                     | the `subject` of before: the address for `email`, the id the provider gives for the others |
+  | `organization.slug`                       | the id of the workspace                                                                    |
+  | `member.role`                             | one of the four roles, in one word                                                         |
+  | an instant (`"createdAt"`, `"updatedAt"`) | a `timestamptz`, to the millisecond of the `BIGINT` of before                              |
+
+- **`user.name` takes no `NULL`, so « no name » is the empty text.** `accountOf` reads it as no
+  name, and a sign-in that brings a name fills it. A row of before that held `NULL` or the empty
+  text is the same row now.
+- **`organization.slug` is the id of the workspace.** better-auth requires a slug, unique. A
+  workspace has no slug that somebody reads, so it gets the one value that is already unique and
+  never changes. A slug that a person chooses is a feature, with its own rules.
+- **`locale` is an additional field of `user`**, in `authOptions` and in `auth-schema.ts`, with
+  `input: false`: a sign-up of better-auth cannot give it.
+- **`roleOf` stays strict.** `member.role` is text, and better-auth reads `guest,admin` as two
+  roles. For the worker a value that is not one of the four words is no role: the person reads
+  nothing. test:`reads a role that is not one of the four as no role, « guest,admin » too`.
+- **One identity at a provider is one row**: `UNIQUE ("providerId", "accountId")` on `account`,
+  which the DDL of better-auth does not have. It is what the primary key of `logins` said, and the
+  insert of a sign-in names it as its conflict. test:`refuses a second row for one identity at a
+provider`.
+- **A site and a connector are of an `organization`**, with `ON DELETE CASCADE`. Removing a
+  workspace is one `DELETE` of its `organization`: its members, its invitations, its sites and
+  their destinations, its connectors and their deliveries go with it.
+  test:`removes the sites, the connectors and the deliveries of a workspace with it, and of no other`.
+- **The copy of the SQLite files still writes the tables of before**, and the worker moves the rows
+  when it starts: see _The copy of the SQLite files into PostgreSQL_.
+
+### The migration, and what it refuses
+
+`0002_accounts_in_better_auth` adds `user.locale` and the constraint on `account`, copies the four
+tables, points the two foreign keys at `organization`, and drops the four tables. **It is one
+transaction with the other migrations of the run** (FRU-180): a failure leaves the database as it
+was, and the worker answers `502` until somebody acts.
+
+- **It is the one generated migration with statements added by hand**: the four `INSERT … SELECT`.
+  `drizzle-kit` writes no copy of rows. It also wrote the `DROP TABLE … CASCADE` first, then dropped
+  by name the two foreign keys that the `CASCADE` had just taken: as generated, the file fails. So
+  the statements are in another order, and the tables go last, with no `CASCADE`. A view or a key
+  that somebody added on one of them stops the migration, where `CASCADE` would remove it in
+  silence.
+- **It joins no row that it did not make.** Nothing wrote the four tables of better-auth before it:
+  no route serves better-auth. A person who is already in `user`, with the address or the id of an
+  account, is a row that nobody can explain, and the unique constraints refuse the copy: nothing
+  moves and nothing is dropped. test:`moves nothing and drops nothing when a person is already in
+the table of better-auth`.
+- **An instant keeps its millisecond**: `'epoch' + created_at * interval '1 millisecond'`, which is
+  exact, where `to_timestamp(created_at / 1000.0)` goes through a float. The memberships of a
+  person are read in the order they were made, as before:
+  test:`finds each membership and each role again, in the order they were made`.
+- **`gen_random_uuid()` gives the ids of the moved rows**, cut as `newId` cuts one. It is in
+  PostgreSQL since version 13, with no extension.
+- **The image of before does not read this database any more.** It finds more migrations than it
+  has, leaves them alone (FRU-180), and then reads `accounts`, which is gone: every read answers
+  `502`. The way back is a dump taken before the deployment, restored with the image of before:
+  `apps/worker/cloud/README.md` has the steps.
+
+### What the tests hold
+
+`accounts-move.test.ts` starts from a database of the image of before, with rows as its stores
+wrote them, and applies the migrations as a worker does when it starts, on PGlite and on a server.
+
+- Each person is found under the same id, by each way they signed in with:
+  test:`finds each person again, under the same id, by each way they signed in with`.
+- A session of the extension that was opened before reads its sites after, and refreshes:
+  test:`lets a session of the extension that was opened before read its sites, and refresh`. Its
+  control removes the membership: test:`refuses that session the moment its person is no member any
+more`.
+- better-auth has nothing to create on the database that was moved:
+  test:`leaves better-auth nothing to create and nothing to add on the database it moved`.
+- The two conformance suites pass on the store with no change to a case.
+
+**Not measured:** a database of real size. The migration holds the four tables for the time of four
+`INSERT … SELECT` and of two foreign keys that PostgreSQL validates, in a transaction that the first
+call of the worker waits for.
 
 ## The markdown codec, and the file that outlived its name
 

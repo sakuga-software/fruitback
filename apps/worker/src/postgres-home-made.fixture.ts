@@ -351,12 +351,18 @@ export async function contentOf(database: Database): Promise<Record<string, stri
   return content;
 }
 
+/** The last migration that has the tables `withRows` writes: the one before the accounts move (FRU-146). */
+export const BEFORE_THE_MOVE = '0001_connector_settings';
+
 /** One instant, in milliseconds, for every row that `withRows` writes. */
 export const THEN = Date.UTC(2026, 9, 11, 12, 0);
 
 /**
  * One row or more in each table of `TABLES`, as the stores of before wrote them: what a database of a
  * worker held when it ran the tool of before. The digests are fake, and say what they stand for.
+ *
+ * The tables are the ones of before FRU-146: `accounts`, `logins`, `workspaces` and `members` are
+ * there. On a database of this build, apply the migrations up to `BEFORE_THE_MOVE` first.
  */
 export async function withRows(database: Database): Promise<void> {
   const later = THEN + 24 * 60 * 60 * 1000;
@@ -372,13 +378,16 @@ export async function withRows(database: Database): Promise<void> {
     `INSERT INTO email_links (code_hash, email, created_at, expires_at) VALUES ('digest-of-an-email-code', 'alice@acme.dev', ${THEN}, ${later})`,
     `INSERT INTO pairings (code_hash, subject, name, email, workspace, created_at, expires_at) VALUES ('digest-of-a-pairing-code', 'acc_alice', 'Alice', 'alice@acme.dev', 'ws_acme', ${THEN}, ${later})`,
     `INSERT INTO sessions (token_hash, subject, name, email, workspace, created_at, expires_at) VALUES ('digest-of-a-refresh-token', 'acc_alice', 'Alice', 'alice@acme.dev', 'ws_acme', ${THEN}, ${later})`,
-    `INSERT INTO "user" ("id", "name", "email", "emailVerified") VALUES ('acc_alice', 'Alice', 'alice@acme.dev', true)`,
-    `INSERT INTO "session" ("id", "expiresAt", "token", "updatedAt", "userId") VALUES ('ses_1', now() + interval '1 day', 'a-token-of-better-auth', now(), 'acc_alice')`,
-    `INSERT INTO "account" ("id", "accountId", "providerId", "userId", "updatedAt") VALUES ('lgn_1', '42', 'github', 'acc_alice', now())`,
-    `INSERT INTO "verification" ("id", "identifier", "value", "expiresAt") VALUES ('ver_1', 'alice@acme.dev', 'a-value', now() + interval '1 hour')`,
-    `INSERT INTO "organization" ("id", "name", "slug", "createdAt") VALUES ('ws_acme', 'Acme', 'acme', now())`,
-    `INSERT INTO "member" ("id", "organizationId", "userId", "role", "createdAt") VALUES ('mem_1', 'ws_acme', 'acc_alice', 'owner', now())`,
-    `INSERT INTO "invitation" ("id", "organizationId", "email", "role", "status", "expiresAt", "inviterId") VALUES ('inv_1', 'ws_acme', 'bob@acme.dev', 'member', 'pending', now() + interval '7 days', 'acc_alice')`,
+    // The tables of better-auth: nothing wrote them before FRU-146, and a table with no row proves
+    // nothing. So these rows are of another person and another workspace than the ones above: the
+    // migration that moves the accounts there refuses a person who is in both.
+    `INSERT INTO "user" ("id", "name", "email", "emailVerified") VALUES ('acc_bob', 'Bob', 'bob@acme.dev', true)`,
+    `INSERT INTO "session" ("id", "expiresAt", "token", "updatedAt", "userId") VALUES ('ses_1', now() + interval '1 day', 'a-token-of-better-auth', now(), 'acc_bob')`,
+    `INSERT INTO "account" ("id", "accountId", "providerId", "userId", "updatedAt") VALUES ('lgn_1', '43', 'github', 'acc_bob', now())`,
+    `INSERT INTO "verification" ("id", "identifier", "value", "expiresAt") VALUES ('ver_1', 'bob@acme.dev', 'a-value', now() + interval '1 hour')`,
+    `INSERT INTO "organization" ("id", "name", "slug", "createdAt") VALUES ('ws_bobs', 'Bob and co', 'bobs', now())`,
+    `INSERT INTO "member" ("id", "organizationId", "userId", "role", "createdAt") VALUES ('mem_1', 'ws_bobs', 'acc_bob', 'owner', now())`,
+    `INSERT INTO "invitation" ("id", "organizationId", "email", "role", "status", "expiresAt", "inviterId") VALUES ('inv_1', 'ws_bobs', 'carol@acme.dev', 'member', 'pending', now() + interval '7 days', 'acc_bob')`,
   ];
   for (const statement of statements) await rowsOf(database, statement);
 }

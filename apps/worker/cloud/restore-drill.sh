@@ -97,7 +97,7 @@ test -s "$WORK/fruitback.pgdump" &&
   docker exec "$PG" pg_restore -f /dev/null /tmp/fruitback.pgdump &&
   docker exec "$PG" createdb -U fruitback fruitback_restored &&
   docker exec "$PG" pg_restore -U fruitback -d fruitback_restored --no-owner --exit-on-error /tmp/fruitback.pgdump &&
-  test "$(docker exec "$PG" psql -U fruitback -d fruitback_restored -Atc 'SELECT count(*) FROM accounts')" -gt 0 &&
+  test "$(docker exec "$PG" psql -U fruitback -d fruitback_restored -Atc 'SELECT count(*) FROM "user"')" -gt 0 &&
   docker exec "$PG" psql -U fruitback -d postgres -q \
     -c 'ALTER DATABASE fruitback RENAME TO fruitback_before' \
     -c 'ALTER DATABASE fruitback_restored RENAME TO fruitback' ||
