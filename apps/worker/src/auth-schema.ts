@@ -46,6 +46,8 @@ export const user = pgTable(
     updatedAt: instant('updatedAt')
       .default(sql`CURRENT_TIMESTAMP`)
       .notNull(),
+    // The language a person chose (FRU-146): an additional field of `user` in `authOptions`.
+    locale: text('locale'),
   },
   (table) => [unique('user_email_key').on(table.email)],
 );
@@ -71,9 +73,16 @@ export const session = pgTable(
 );
 
 /**
+ * A way a person signs in: the `logins` of before (FRU-146). `providerId` is `email`, `github` or
+ * `google`, and `accountId` is who the person is there: the address for `email`, the id of the
+ * provider for the others.
+ *
  * The token columns are where better-auth keeps the tokens of a provider that signs a person in.
- * Nothing writes this table yet. `SECURITY.md` says that the worker keeps no such token: the code that
- * writes a row here must leave them empty.
+ * `SECURITY.md` says that the worker keeps no such token: `accounts-postgres.ts` gives them no value,
+ * and the layer of `auth-at-rest.ts` empties them for better-auth.
+ *
+ * `account_providerId_accountId_key` is not in the DDL of better-auth. One identity at a provider is
+ * one person, as the primary key of `logins` said: with two rows, a sign-in finds either.
  */
 export const account = pgTable(
   'account',
@@ -94,6 +103,7 @@ export const account = pgTable(
   },
   (table) => [
     foreignKey({ name: 'account_userId_fkey', columns: [table.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+    unique('account_providerId_accountId_key').on(table.providerId, table.accountId),
     index('account_userId_idx').on(table.userId),
   ],
 );

@@ -12,8 +12,17 @@ import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { closeAccountConnections, createSqliteAccountStore } from './accounts-sqlite.ts';
 import { parseMigrateArgs } from './cli.ts';
 import { type Database, createPgDatabase } from './postgres.ts';
-import { copySqliteFiles } from './postgres-copy.ts';
-import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase, ownDatabase, rowsOf } from './postgres.fixture.ts';
+import { COPY_SCHEMA, copySqliteFiles } from './postgres-copy.ts';
+import {
+  NO_REAL_POSTGRES,
+  appliedDates,
+  createPgliteDatabase,
+  createRealDatabase,
+  journalDates,
+  journalTags,
+  ownDatabase,
+  rowsOf,
+} from './postgres.fixture.ts';
 import { open, seal } from './secrets.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
 import { closeSessionConnections, createSqliteSessionStore } from './session-sqlite.ts';
@@ -24,6 +33,11 @@ import { createPairing, redeemPairing, refreshSession } from './session.ts';
  *
  * The files are made by the stores of the worker, with their real migrations, and their connections
  * stay open while the copy runs: the rows are in the `-wal`, as on a worker that was just stopped.
+ *
+ * **The copy leaves the database at the migration `COPY_SCHEMA`** (FRU-146), where the tables are the
+ * ones of the files. A store of PostgreSQL applies the migrations after it at its first call, as a
+ * worker does when it starts: a case that plants a row beside the copy writes it with a statement,
+ * and not through a store, which would move the rows first.
  */
 
 const run = promisify(execFile);
@@ -181,10 +195,25 @@ for (const subject of SUBJECTS) {
       const accounts = createPostgresAccountStore(database);
       const sealed = await accounts.sealedKey(files.tracker);
       assert.equal(open(sealed?.sealed ?? '', SECRETS_KEY), API_KEY);
-      assert.deepEqual(
-        (await accounts.memberships(files.alice)).map((membership) => membership.role),
-        ['owner'],
-      );
+      assert.deepEqual(await accounts.memberships(files.alice), [
+        { workspace: { id: files.workspace, name: 'Acme' }, role: 'owner' },
+      ]);
+      // The first call of a store moved the people into the tables of better-auth (FRU-146): the same
+      // person, under the same id, by each way she signed in with.
+      assert.deepEqual(await accounts.account(files.alice), {
+        id: files.alice,
+        email: 'alice@acme.dev',
+        name: 'Alice',
+        locale: 'fr',
+      });
+      for (const [provider, subject] of [
+        ['github', '1'],
+        ['email', 'alice@acme.dev'],
+      ] as const) {
+        const again = await accounts.signIn({ provider, subject, email: 'alice@acme.dev' });
+        assert.equal(again.id, files.alice);
+      }
+      assert.deepEqual(await rowsOf(database, 'SELECT count(*)::int AS n FROM "account"'), [{ n: 3 }]);
       const [site] = await accounts.sites(files.workspace);
       assert.deepEqual(
         site?.destinations.map((destination) => destination.connector),
@@ -258,12 +287,11 @@ for (const subject of SUBJECTS) {
       const files = await filesOfAWorker();
       database = await subject.open();
       assert.equal((await copySqliteFiles({ ...files, database, dryRun: false })).ok, true);
-      // A worker served on PostgreSQL since the copy: the links are not copied, and this one is new.
-      await createPostgresAccountStore(database).createEmailLink({
-        codeHash: 'digest-2',
-        email: 'dave@acme.dev',
-        expiresAt: Date.now() + 60_000,
-      });
+      // The links are not copied, and this one is new.
+      await rowsOf(
+        database,
+        "INSERT INTO email_links (code_hash, email, created_at, expires_at) VALUES ('digest-2', 'dave@acme.dev', 1, 2)",
+      );
 
       const again = await copySqliteFiles({ ...files, database, dryRun: false });
 
@@ -275,13 +303,68 @@ for (const subject of SUBJECTS) {
     it('refuses a database that holds other rows, and writes nothing', async () => {
       const files = await filesOfAWorker();
       database = await subject.open();
-      await createPostgresAccountStore(database).signIn({ provider: 'email', subject: 'x@y.dev', email: 'x@y.dev' });
+      // The schema first: a dry run leaves the tables, and no row.
+      assert.equal((await copySqliteFiles({ ...files, database, dryRun: true })).ok, true);
+      await rowsOf(database, "INSERT INTO accounts (id, email, created_at) VALUES ('acc_x', 'x@y.dev', 1)");
+      await rowsOf(
+        database,
+        "INSERT INTO logins (provider, subject, account_id, created_at) VALUES ('email', 'x@y.dev', 'acc_x', 1)",
+      );
 
       const outcome = await copySqliteFiles({ ...files, database, dryRun: false });
 
       assert.equal(outcome.ok, false);
-      assert.match(outcome.lines.join('\n'), /PostgreSQL is not empty.*rows in accounts, logins/);
+      assert.match(outcome.lines.join('\n'), /PostgreSQL is not empty.*rows in accounts, logins\./);
       assert.deepEqual(await counts(database), { ...EMPTY, accounts: 1, logins: 1 });
+    });
+
+    it('refuses a database that holds a person in the tables of better-auth, where the copy writes nothing', async () => {
+      const files = await filesOfAWorker();
+      database = await subject.open();
+      assert.equal((await copySqliteFiles({ ...files, database, dryRun: true })).ok, true);
+      // The migration after the copy puts the people there: a row of before would meet them.
+      await rowsOf(
+        database,
+        `INSERT INTO "user" (id, name, email, "emailVerified") VALUES ('acc_x', '', 'alice@acme.dev', true)`,
+      );
+
+      const outcome = await copySqliteFiles({ ...files, database, dryRun: false });
+
+      assert.equal(outcome.ok, false);
+      assert.match(outcome.lines.join('\n'), /PostgreSQL is not empty.*rows in user\./);
+      assert.deepEqual(await counts(database), EMPTY);
+    });
+
+    it('stops the database at the migration whose tables are the ones of the files, and a worker applies the rest', async () => {
+      const files = await filesOfAWorker();
+      database = await subject.open();
+
+      assert.equal((await copySqliteFiles({ ...files, database, dryRun: false })).ok, true);
+
+      const journal = journalDates();
+      const last = journalTags().indexOf(COPY_SCHEMA);
+      assert.ok(last >= 0 && last < journal.length - 1, 'a migration comes after the one of the copy');
+      assert.deepEqual(await appliedDates(database), journal.slice(0, last + 1));
+
+      await createPostgresAccountStore(database).account(files.alice);
+      assert.deepEqual(await appliedDates(database), journal);
+    });
+
+    it('refuses a database on which a worker started since the copy, and says why', async () => {
+      const files = await filesOfAWorker();
+      database = await subject.open();
+      assert.equal((await copySqliteFiles({ ...files, database, dryRun: false })).ok, true);
+      // What a worker does at its first call: the migrations after the copy, which move the accounts.
+      await createPostgresAccountStore(database).account(files.alice);
+
+      for (const dryRun of [true, false]) {
+        const again = await copySqliteFiles({ ...files, database, dryRun });
+
+        assert.equal(again.ok, false, again.lines.join('\n'));
+        assert.match(again.lines.join('\n'), /refused: a worker already started on this database/);
+      }
+      assert.deepEqual(await rowsOf(database, 'SELECT count(*)::int AS n FROM "user"'), [{ n: 2 }]);
+      assert.deepEqual(await rowsOf(database, 'SELECT count(*)::int AS n FROM sessions'), [{ n: 1 }]);
     });
 
     it('leaves nothing when it stops in the middle, and gives the same result when it runs again', async () => {

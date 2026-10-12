@@ -461,10 +461,20 @@ file holds addresses, names and the id each provider gives a person, no password
 that signs a person in. Since FRU-121 it also holds the key of each connector, encrypted: see below. `FRUITBACK_CLIENTS` is refused beside it, so one map has one source.
 
 **With `FRUITBACK_DATABASE_URL` the same accounts are in a PostgreSQL database** (FRU-141), in place
-of that file, and the worker refuses to start with both. The database holds what the file holds, in
-tables of the same names: addresses, names, the id each provider gives a person,
+of that file, and the worker refuses to start with both. The database holds what the file holds:
+addresses, names, the id each provider gives a person,
 the roles, the sites, the digest of each sign-in link, the key of each connector encrypted with
 `FRUITBACK_SECRETS_KEY`, and the notes that wait for an address that receives them.
+
+**Since FRU-146 the people, their ways to sign in, the workspaces and their members are in four
+tables of better-auth**, `user`, `account`, `organization` and `member`, under the ids they had. The
+worker's own sign-in code writes them, and better-auth does not run for it. The `account` table has
+columns for the tokens of a provider and for a password: **the worker gives them no value**, for a
+row it moved and for a row it writes. test:`writes each row as better-auth expects it, and no token
+of a provider` reads those columns after the move, and test:`writes a new sign-in and a new
+workspace as it writes a moved one` names every column of a new row that holds a value. A role is
+one of four words: a value of `member.role` that is anything else, `guest,admin` included, gives no
+right (test:`reads a role that is not one of the four as no role, « guest,admin » too`).
 
 **Since FRU-142 that database holds the sessions too**, in place of `FRUITBACK_SESSION_PATH`, which
 the worker then refuses. It holds what the file held, in tables of the same names: for each pairing
@@ -474,8 +484,8 @@ test:`holds no code and no token in clear, in any row of any table` reads every 
 The rules of a session are the same, and they hold between two connections: one code opens one
 session, and one token has one live successor.
 
-Since FRU-144 it also has the seven tables of better-auth, and they are empty: no code writes them
-yet. See [better-auth, built and switched off](#better-auth-built-and-switched-off-fru-144).
+Since FRU-144 it also has the seven tables of better-auth. Four hold the accounts, as said above; the
+other three (`session`, `verification`, `invitation`) are empty: no code writes them yet. See [better-auth, built and switched off](#better-auth-built-and-switched-off-fru-144).
 
 Three things change with a database on a network, and each has its condition:
 
@@ -537,7 +547,9 @@ console session names no workspace, so it reads no site.
 The worker carries better-auth, the library that will sign a person in to the console. **Today it
 serves no route.** No path under `/console/auth/` answers anything but `404`, the console signs in as
 the section above says, and a worker without `FRUITBACK_AUTH_SECRET` loads nothing of the library.
-What exists is its configuration, seven empty tables in the database of the accounts, and one secret.
+What exists is its configuration, seven tables in the database of the accounts, and one secret. The
+worker's own sign-in code writes four of them since FRU-146; the three that only better-auth writes
+are empty.
 Nothing in this section protects anybody yet: it says what is closed before the first route opens.
 
 - **`FRUITBACK_AUTH_SECRET` signs the cookie of a console session.** It is a secret of the worker's

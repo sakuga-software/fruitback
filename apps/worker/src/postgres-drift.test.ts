@@ -99,15 +99,15 @@ describe('the schema of the database and its migrations (FRU-180)', () => {
     const snapshot = JSON.parse(readFileSync(path, 'utf8')) as {
       tables: Record<string, { columns: Record<string, unknown> }>;
     };
-    const columns = snapshot.tables['public.accounts']?.columns;
-    assert.ok(columns !== undefined && 'locale' in columns, 'the snapshot no longer holds accounts.locale');
-    delete columns.locale;
+    const columns = snapshot.tables['public.sites']?.columns;
+    assert.ok(columns !== undefined && 'team_id' in columns, 'the snapshot no longer holds sites.team_id');
+    delete columns.team_id;
     writeFileSync(path, JSON.stringify(snapshot));
 
     const written = await generatedFor(folder);
 
     assert.equal(written.length, 1, 'drizzle-kit generated nothing for a column that the snapshot does not have');
-    assert.match(written[0] ?? '', /ALTER TABLE "accounts" ADD COLUMN "locale" text/);
+    assert.match(written[0] ?? '', /ALTER TABLE "sites" ADD COLUMN "team_id" text/);
   });
 
   // The same control on a table of better-auth: the guard holds the whole schema, not the stores only.

@@ -1,4 +1,5 @@
 import { bigint, foreignKey, index, integer, pgTable, primaryKey, text, unique } from 'drizzle-orm/pg-core';
+import { organization } from './auth-schema.ts';
 
 /**
  * The schema of the whole PostgreSQL database of a worker (FRU-180): one description, in Drizzle.
@@ -6,7 +7,9 @@ import { bigint, foreignKey, index, integer, pgTable, primaryKey, text, unique }
  * **This file is the source, and `drizzle/` is generated from it.** Change a table here, then run
  * `pnpm --filter @fruitback/worker db:generate`, and commit the migration it writes. Never edit a
  * migration that has shipped, and never write one by hand: `postgres-drift.test.ts` fails when this
- * file and the last snapshot differ, and `postgres-journal.test.ts` holds the journal.
+ * file and the last snapshot differ, and `postgres-journal.test.ts` holds the journal. Rows that must
+ * move before a table goes are the one thing added to a generated file, before its first merge:
+ * `0002_accounts_in_better_auth` (FRU-146).
  *
  * **A property has the name of its column.** `account-rows.ts` and `session-rows.ts` parse a row of
  * either database, so a row of PostgreSQL must have the keys that a row of SQLite has.
@@ -15,8 +18,10 @@ import { bigint, foreignKey, index, integer, pgTable, primaryKey, text, unique }
  * and the same number goes in both. `mode: 'number'` answers it as a number.
  *
  * The tables are the ones of `accounts-sqlite.ts` after its seven migrations, and of
- * `session-sqlite.ts` after its three, with the same names. The tables of better-auth are in
- * `auth-schema.ts`, and `drizzle.config.ts` reads both files.
+ * `session-sqlite.ts` after its three, with the same names, **but four** (FRU-146): a person, a way
+ * to sign in, a workspace and a membership are rows of `user`, `account`, `organization` and
+ * `member`, the tables of better-auth in `auth-schema.ts`. `drizzle.config.ts` reads both files. A
+ * site and a connector are of an `organization`, and go with it.
  *
  * **Every constraint has the name that PostgreSQL gives it** (`<table>_pkey`, `<table>_<column>_key`,
  * `<table>_<column>_fkey`), and not the one that Drizzle would choose. The tool of before made these
@@ -26,60 +31,6 @@ import { bigint, foreignKey, index, integer, pgTable, primaryKey, text, unique }
  */
 
 const instant = (name: string) => bigint(name, { mode: 'number' });
-
-export const accounts = pgTable('accounts', {
-  id: text('id').primaryKey(),
-  email: text('email').notNull().unique('accounts_email_key'),
-  name: text('name'),
-  locale: text('locale'),
-  created_at: instant('created_at').notNull(),
-});
-
-export const logins = pgTable(
-  'logins',
-  {
-    provider: text('provider').notNull(),
-    subject: text('subject').notNull(),
-    account_id: text('account_id').notNull(),
-    created_at: instant('created_at').notNull(),
-  },
-  (table) => [
-    primaryKey({ name: 'logins_pkey', columns: [table.provider, table.subject] }),
-    foreignKey({ name: 'logins_account_id_fkey', columns: [table.account_id], foreignColumns: [accounts.id] }).onDelete(
-      'cascade',
-    ),
-  ],
-);
-
-export const workspaces = pgTable('workspaces', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  created_at: instant('created_at').notNull(),
-});
-
-export const members = pgTable(
-  'members',
-  {
-    workspace_id: text('workspace_id').notNull(),
-    account_id: text('account_id').notNull(),
-    role: text('role').notNull(),
-    created_at: instant('created_at').notNull(),
-  },
-  (table) => [
-    primaryKey({ name: 'members_pkey', columns: [table.workspace_id, table.account_id] }),
-    foreignKey({
-      name: 'members_workspace_id_fkey',
-      columns: [table.workspace_id],
-      foreignColumns: [workspaces.id],
-    }).onDelete('cascade'),
-    foreignKey({
-      name: 'members_account_id_fkey',
-      columns: [table.account_id],
-      foreignColumns: [accounts.id],
-    }).onDelete('cascade'),
-    index('members_by_account').on(table.account_id),
-  ],
-);
 
 /**
  * `sealed` is the key encrypted with `FRUITBACK_SECRETS_KEY`: a copy of the database is not a set of
@@ -103,7 +54,7 @@ export const connectors = pgTable(
     foreignKey({
       name: 'connectors_workspace_id_fkey',
       columns: [table.workspace_id],
-      foreignColumns: [workspaces.id],
+      foreignColumns: [organization.id],
     }).onDelete('cascade'),
     index('connectors_by_workspace').on(table.workspace_id),
   ],
@@ -130,7 +81,7 @@ export const sites = pgTable(
     foreignKey({
       name: 'sites_workspace_id_fkey',
       columns: [table.workspace_id],
-      foreignColumns: [workspaces.id],
+      foreignColumns: [organization.id],
     }).onDelete('cascade'),
     foreignKey({
       name: 'sites_connector_id_fkey',

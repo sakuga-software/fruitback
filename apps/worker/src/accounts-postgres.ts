@@ -14,25 +14,25 @@ import { type AccountStore, DEFAULT_CONNECTOR_SETTINGS, type Site, clientOf, nor
 import type { ClientMap } from './clients.ts';
 import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
-import {
-  accounts,
-  connectors,
-  deliveries,
-  email_links,
-  logins,
-  members,
-  site_destinations,
-  sites,
-  workspaces,
-} from './postgres-schema.ts';
+import { account, member, organization, user } from './auth-schema.ts';
+import { connectors, deliveries, email_links, site_destinations, sites } from './postgres-schema.ts';
 import { StoreError } from './store.ts';
 
 /**
- * The accounts in PostgreSQL (FRU-141): the same interface as `accounts-sqlite.ts`, the same names of
- * tables and columns, the same ids. `account-conformance.test.ts` holds both to the same cases.
+ * The accounts in PostgreSQL (FRU-141): the same interface as `accounts-sqlite.ts`, and the same ids.
+ * `account-conformance.test.ts` holds both to the same cases.
  *
- * The statements are written with Drizzle (FRU-180), on the tables of `postgres-schema.ts`. A row has
- * the keys of its columns, so `account-rows.ts` parses it as it parses a row of SQLite.
+ * The statements are written with Drizzle (FRU-180). A site, a connector and what goes with them are
+ * in the tables of `postgres-schema.ts`, with the names of the SQLite file: a row has the keys of its
+ * columns, so `account-rows.ts` parses it as it parses a row of SQLite.
+ *
+ * **A person, a way to sign in, a workspace and a membership are rows of better-auth** (FRU-146):
+ * `user`, `account`, `organization` and `member` of `auth-schema.ts`. This store reads and writes
+ * them itself, with the sign-in code of before: better-auth does not run for it, and its layer
+ * (`auth-at-rest.ts`) is not between this file and the table. So the rule of that layer is kept here
+ * by hand: **no statement of this file gives a value to a token column of `account`, or to its
+ * password.** What each column holds is in « The accounts in the tables of better-auth » of
+ * `docs/decisions/worker.md`.
  *
  * **What SQLite did without saying it, written on purpose here.** A SQLite store is one connection
  * that does one thing at a time, so a read followed by a write was safe there. Here two requests
@@ -69,7 +69,8 @@ const SITE_WITH_DESTINATION = {
   label: site_destinations.label,
 };
 
-const ACCOUNT = { id: accounts.id, email: accounts.email, name: accounts.name, locale: accounts.locale };
+/** A person as `accountOf` reads one: a row of `user`. */
+const ACCOUNT = { id: user.id, email: user.email, name: user.name, locale: user.locale };
 
 /** The sites of these rows in the order of the rows, each with its destinations in that order. */
 function sitesFrom(rows: readonly Record<string, unknown>[]): Site[] {
@@ -127,98 +128,117 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       const address = normalizeEmail(email);
       if (address === undefined) throw new StoreError('A sign-in needs a valid address');
 
-      const now = Date.now();
-      const given = name === undefined || name === '' ? null : name;
+      const now = new Date();
+      // `user.name` takes no null: a person with no name has the empty one, which `accountOf` reads as none.
+      const given = name ?? '';
 
       return transaction(async (tx) => {
         const known = await tx
-          .select({ id: logins.account_id })
-          .from(logins)
-          .where(and(eq(logins.provider, provider), eq(logins.subject, subject)));
+          .select({ id: account.userId })
+          .from(account)
+          .where(and(eq(account.providerId, provider), eq(account.accountId, subject)));
         let id = known[0]?.id;
 
         if (id === undefined) {
           // The same proven address from another provider is the same person: join, do not duplicate.
+          // Every way to sign in that reaches this store proves the address, so it is verified.
           await tx
-            .insert(accounts)
-            .values({ id: newId('acc'), email: address, name: given, locale: locale ?? null, created_at: now })
-            .onConflictDoNothing({ target: accounts.email });
-          id = (await tx.select({ id: accounts.id }).from(accounts).where(eq(accounts.email, address)))[0]?.id;
+            .insert(user)
+            .values({
+              id: newId('acc'),
+              email: address,
+              name: given,
+              emailVerified: true,
+              locale: locale ?? null,
+              createdAt: now,
+              updatedAt: now,
+            })
+            .onConflictDoNothing({ target: user.email });
+          id = (await tx.select({ id: user.id }).from(user).where(eq(user.email, address)))[0]?.id;
         }
         if (id === undefined) throw new StoreError('The account of a sign-in could not be read back');
 
         // Each one in its statement, with its condition: a value that somebody has is never written over.
-        if (given !== null) {
+        if (given !== '') {
           await tx
-            .update(accounts)
-            .set({ name: given })
-            .where(and(eq(accounts.id, id), or(isNull(accounts.name), eq(accounts.name, ''))));
+            .update(user)
+            .set({ name: given, updatedAt: now })
+            .where(and(eq(user.id, id), eq(user.name, '')));
         }
         // Only when nobody chose: a sign-in from a borrowed browser must not change the language.
         if (locale !== undefined) {
           await tx
-            .update(accounts)
-            .set({ locale })
-            .where(and(eq(accounts.id, id), or(isNull(accounts.locale), eq(accounts.locale, ''))));
+            .update(user)
+            .set({ locale, updatedAt: now })
+            .where(and(eq(user.id, id), or(isNull(user.locale), eq(user.locale, ''))));
         }
+        // No token of the provider, no scope and no password: the columns stay empty (SECURITY.md).
         await tx
-          .insert(logins)
-          .values({ provider, subject, account_id: id, created_at: now })
-          .onConflictDoNothing({ target: [logins.provider, logins.subject] });
+          .insert(account)
+          .values({
+            id: newId('lgn'),
+            providerId: provider,
+            accountId: subject,
+            userId: id,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .onConflictDoNothing({ target: [account.providerId, account.accountId] });
 
-        const account = accountOf((await tx.select(ACCOUNT).from(accounts).where(eq(accounts.id, id)))[0]);
-        if (account === undefined) throw new StoreError('The account of a sign-in could not be read back');
+        const found = accountOf((await tx.select(ACCOUNT).from(user).where(eq(user.id, id)))[0]);
+        if (found === undefined) throw new StoreError('The account of a sign-in could not be read back');
 
-        return account;
+        return found;
       });
     },
 
-    async setLocale(account, locale) {
+    async setLocale(person, locale) {
       await run((db) =>
         db
-          .update(accounts)
-          .set({ locale: locale ?? null })
-          .where(eq(accounts.id, account)),
+          .update(user)
+          .set({ locale: locale ?? null, updatedAt: new Date() })
+          .where(eq(user.id, person)),
       );
     },
 
     async localeOf(email) {
       const address = normalizeEmail(email);
       if (address === undefined) return undefined;
-      const rows = await run((db) =>
-        db.select({ locale: accounts.locale }).from(accounts).where(eq(accounts.email, address)),
-      );
+      const rows = await run((db) => db.select({ locale: user.locale }).from(user).where(eq(user.email, address)));
       const locale = rows[0]?.locale;
 
       return typeof locale === 'string' && locale !== '' ? locale : undefined;
     },
 
     async account(id) {
-      return accountOf((await run((db) => db.select(ACCOUNT).from(accounts).where(eq(accounts.id, id))))[0]);
+      return accountOf((await run((db) => db.select(ACCOUNT).from(user).where(eq(user.id, id))))[0]);
     },
 
     async createWorkspace(name, owner) {
       const workspace = { id: newId('ws'), name: name.trim() };
-      const now = Date.now();
+      const now = new Date();
 
       await transaction(async (tx) => {
-        await tx.insert(workspaces).values({ id: workspace.id, name: workspace.name, created_at: now });
+        // `organization.slug` is required and unique, and a workspace has no slug: it is its id.
         await tx
-          .insert(members)
-          .values({ workspace_id: workspace.id, account_id: owner, role: 'owner', created_at: now });
+          .insert(organization)
+          .values({ id: workspace.id, name: workspace.name, slug: workspace.id, createdAt: now });
+        await tx
+          .insert(member)
+          .values({ id: newId('mem'), organizationId: workspace.id, userId: owner, role: 'owner', createdAt: now });
       });
 
       return workspace;
     },
 
-    async memberships(account) {
+    async memberships(person) {
       const rows = await run((db) =>
         db
-          .select({ id: workspaces.id, name: workspaces.name, role: members.role })
-          .from(members)
-          .innerJoin(workspaces, eq(workspaces.id, members.workspace_id))
-          .where(eq(members.account_id, account))
-          .orderBy(members.created_at, workspaces.id),
+          .select({ id: organization.id, name: organization.name, role: member.role })
+          .from(member)
+          .innerJoin(organization, eq(organization.id, member.organizationId))
+          .where(eq(member.userId, person))
+          .orderBy(member.createdAt, organization.id),
       );
 
       return rows.flatMap((row) => {
@@ -229,14 +249,15 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       });
     },
 
-    async role(workspace, account) {
+    async role(workspace, person) {
       const rows = await run((db) =>
         db
-          .select({ role: members.role })
-          .from(members)
-          .where(and(eq(members.workspace_id, workspace), eq(members.account_id, account))),
+          .select({ role: member.role })
+          .from(member)
+          .where(and(eq(member.organizationId, workspace), eq(member.userId, person))),
       );
 
+      // Strict: « guest,admin », which better-auth reads as two roles, is no role of the worker.
       return roleOf(rows[0]?.role);
     },
 
@@ -570,9 +591,9 @@ export function createPostgresAccountStore(database: Database): AccountStore {
     },
 
     async deleteWorkspace(workspace) {
-      // The foreign keys take its members, its sites and their destinations, its connectors and their
-      // deliveries with it.
-      await run((db) => db.delete(workspaces).where(eq(workspaces.id, workspace)));
+      // The foreign keys take its members, its invitations, its sites and their destinations, its
+      // connectors and their deliveries with it.
+      await run((db) => db.delete(organization).where(eq(organization.id, workspace)));
     },
 
     async createEmailLink({ codeHash, email, expiresAt }) {

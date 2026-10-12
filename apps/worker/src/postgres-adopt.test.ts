@@ -78,7 +78,7 @@ function withOneMoreMigration(): string {
   const tag = `000${journal.entries.length}_one_more`;
   journal.entries.push({ idx: journal.entries.length, version: '7', when: last + 1, tag, breakpoints: true } as never);
   writeFileSync(journalFile, JSON.stringify(journal));
-  writeFileSync(join(folder, `${tag}.sql`), 'ALTER TABLE "accounts" ADD COLUMN "one_more" text;');
+  writeFileSync(join(folder, `${tag}.sql`), 'ALTER TABLE "sites" ADD COLUMN "one_more" text;');
 
   return folder;
 }
@@ -222,9 +222,7 @@ for (const { label, open, skip } of DATABASES) {
       await migrate(database, withOneMoreMigration());
 
       assert.equal((await drizzleJournal(database)).length, WHOLE_JOURNAL.length + 1);
-      assert.deepEqual(await rowsOf(database, 'SELECT id, one_more FROM accounts'), [
-        { id: 'acc_alice', one_more: null },
-      ]);
+      assert.deepEqual(await rowsOf(database, 'SELECT id, one_more FROM sites'), [{ id: 'site_acme', one_more: null }]);
     });
 
     // The control of the adoption: without it, Drizzle runs the baseline, and the first CREATE TABLE fails.
@@ -267,7 +265,7 @@ for (const { label, open, skip } of DATABASES) {
 
       await migrate(database);
 
-      assert.equal(await has(database, 'public.accounts'), true);
+      assert.equal(await has(database, 'public.sites'), true);
       assert.equal(await has(database, 'public.schema_migrations'), false);
       assert.deepEqual(await drizzleJournal(database), WHOLE_JOURNAL);
     });

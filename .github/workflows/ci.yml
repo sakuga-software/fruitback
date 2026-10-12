@@ -321,7 +321,8 @@ jobs:
           # FRU-180. The migrations are files beside the bundle, and Drizzle writes one row for each one
           # it applied: an image without its `drizzle` folder answers 502 above, and has no row here.
           test "$(docker exec accounts-db psql -U postgres -Atc 'SELECT count(*) FROM public.__drizzle_migrations')" = "$(jq '.entries | length' apps/worker/drizzle/meta/_journal.json)"
-          test "$(docker exec accounts-db psql -U postgres -Atc "SELECT to_regclass('public.accounts') IS NOT NULL")" = t
+          # FRU-146. The accounts are in the tables of better-auth, and the table of before is gone.
+          test "$(docker exec accounts-db psql -U postgres -Atc "SELECT to_regclass('public.user') IS NOT NULL AND to_regclass('public.accounts') IS NULL")" = t
           timeout 30 docker exec worker-db node server.mjs pair --subject ci
           test "$(docker exec accounts-db psql -U postgres -Atc 'SELECT count(*) FROM pairings')" = 1
           docker rm -f worker-db accounts-db

@@ -192,6 +192,9 @@ export async function authOptions(config: AuthConfig, pool: PgPool): Promise<Bet
     telemetry: { enabled: false },
     // No password: a person signs in with a link or a provider. The accounts hold none.
     emailAndPassword: { enabled: false },
+    // The language a person chose (FRU-146), which the worker writes mail in. `input: false`: a
+    // sign-up cannot give it, the routes of the worker set it.
+    user: { additionalFields: { locale: { type: 'string', required: false, input: false } } },
     // The limit of the worker is the only one. It counts above the dispatch, for every route, with
     // the address `resolveClientIp` read. better-auth reads `X-Forwarded-For` by itself: it takes a
     // lone value as the caller wrote it, and refuses a chain (measured). Two limits with two
