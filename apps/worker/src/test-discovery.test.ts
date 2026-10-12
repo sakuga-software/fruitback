@@ -119,6 +119,8 @@ function isNodeTest(script: string): boolean {
  * - `it.skip(…)`, and the same on `test`, `describe` and `suite`: `node:test` takes the reason in
  *   the options, `{ skip: 'the reason' }`. Playwright has that call alone, so a spec may write
  *   `test.skip(condition, 'the reason')`, on one line or on several as oxfmt wraps it.
+ *   `test.fixme` of Playwright is a skip under another name, and is read the same way. `test.fail`
+ *   is not one: the test runs.
  * - `skip: true`: a reason is a string.
  * - `.skip()` with no argument, as on the context of a test: `t.skip('the reason')`.
  *
@@ -128,11 +130,11 @@ function isNodeTest(script: string): boolean {
 function bareSkips(file: string, source: string, specs: string): string[] {
   // The arguments up to the reason hold no parenthesis, or pairs that hold none: a callback with a
   // body does not pass, so `test.skip('name', async () => { … })` is never read as a reason.
-  const withReason = /^test\.skip\((?:[^()]|\([^()]*\))*?,\s*(['"`])[^'"`\n]+\1,?\s*\)/;
+  const withReason = /^test\.(?:skip|fixme)\((?:[^()]|\([^()]*\))*?,\s*(['"`])[^'"`\n]+\1,?\s*\)/;
   const inSpecs = file.startsWith(`${specs}/`);
   const lineOf = (index: number) => source.slice(0, index).split('\n').length;
 
-  const calls = [...source.matchAll(/\b(?:it|test|describe|suite)\.skip\(/g)]
+  const calls = [...source.matchAll(/\b(?:it|test|describe|suite)\.(?:skip|fixme)\(/g)]
     .filter((call) => !(inSpecs && withReason.test(source.slice(call.index))))
     .map((call) => lineOf(call.index));
   const options = [...source.matchAll(/\bskip:\s*true\b|\.skip\(\s*\)/g)].map((option) => lineOf(option.index));
@@ -284,6 +286,14 @@ describe('a skip carries its reason (FRU-174)', () => {
       bareSkips('e2e/zz.spec.ts', "    test.skip(browserName === 'webkit', 'WebKit has no such API');", 'e2e'),
       [],
     );
+    assert.deepEqual(bareSkips('e2e/zz.spec.ts', "  test.fixme(isMobile, 'the panel does not fit yet');", 'e2e'), []);
+    assert.deepEqual(bareSkips('e2e/zz.spec.ts', "test.fixme('draws a pin', async ({ page }) => {", 'e2e'), [
+      'e2e/zz.spec.ts:1',
+    ]);
+    assert.deepEqual(bareSkips('e2e/zz.spec.ts', "test.describe.skip('the panel', () => {", 'e2e'), [
+      'e2e/zz.spec.ts:1',
+    ]);
+    assert.deepEqual(bareSkips('e2e/zz.spec.ts', '  test.skip(isMobile);', 'e2e'), ['e2e/zz.spec.ts:1']);
     // As oxfmt wraps a call that is longer than a line.
     const wrapped = [
       'test.beforeEach(async ({ browserName }) => {',
@@ -302,7 +312,7 @@ describe('a skip carries its reason (FRU-174)', () => {
       "  await page.goto('/pricing');",
       "  expect(await page.title(), 'the title');",
       '});',
-      'test.skip(',
+      'test.fixme(',
       "  'draws a second pin',",
       '  async ({ page }) => {',
       "    await expect(page.getByRole('button'), 'the button').toBeVisible();",
