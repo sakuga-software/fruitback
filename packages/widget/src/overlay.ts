@@ -34,6 +34,12 @@ const BADGE_MAX_LENGTH = 32;
 const THREAD_WIDTH = 300;
 const THREAD_GAP = 8;
 
+/**
+ * How far apart the badges of one spot sit (FRU-155). Kept next to the stylesheet, which reads it
+ * through `--fruitback-pin-slot`: a 26 px drop and a 4 px gap.
+ */
+const BADGE_STEP = 30;
+
 /** A framework commit arrives as several mutation bursts. Resolving on each one repeats the cascade. */
 const RESOLVE_DEBOUNCE_MS = 100;
 
@@ -163,6 +169,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
 
   function reposition(): void {
     for (const entry of placed) place(entry);
+    fan();
     if (thread !== null)
       positionThread(thread, placed.find((entry) => entry.pin.dataset.fruitbackOpen === '')?.pin, t.direction);
   }
@@ -191,6 +198,25 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   }
 
   /**
+   * Several notes on one spot fan their badges out along the top edge, in render order (FRU-155).
+   *
+   * Without it the badges lay exactly on top of each other: one drop showed, and only the last one
+   * took the click. A badge hangs from the top-left corner of its pin, so pins that share that
+   * corner share a badge position, whether they are on one element or on two of the same box. Each
+   * note keeps its own drop, its own stage colour and its own thread.
+   */
+  function fan(): void {
+    const taken = new Map<string, number>();
+
+    for (const entry of placed) {
+      const corner = `${Math.round(Number.parseFloat(entry.pin.style.left) || 0)},${Math.round(Number.parseFloat(entry.pin.style.top) || 0)}`;
+      const slot = taken.get(corner) ?? 0;
+      taken.set(corner, slot + 1);
+      entry.pin.style.setProperty('--fruitback-pin-slot', String(slot));
+    }
+  }
+
+  /**
    * Re-run the cascade for every pin on screen, in place.
    *
    * Not `render`: that rebuilds the DOM and closes the thread, and a page can mutate while someone
@@ -208,6 +234,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       place(entry);
     }
 
+    fan();
     observeAnchors();
     listOrphans();
 
@@ -307,6 +334,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
         return entry;
       });
 
+    fan();
     observeAnchors();
     listOrphans();
     // The pins, and the entries of a list that changed, are new nodes: focus on an old one would fall to the page.
@@ -781,7 +809,8 @@ const STYLES = `
 .fruitback-pin-badge {
   position: absolute;
   bottom: 100%;
-  left: -6px;
+  /* One step to the right for each note before this one on the same spot (FRU-155). */
+  left: calc(-6px + var(--fruitback-pin-slot, 0) * ${BADGE_STEP}px);
   margin-bottom: 6px;
   /* …except this, which is the one thing you can click. */
   pointer-events: auto;
