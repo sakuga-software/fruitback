@@ -109,8 +109,8 @@ can read them, with or without the widget.
   subject, name and e-mail the operator gave when minting the pairing code, its dates, and a SHA-256
   digest of the code or token, never the token itself. Expired rows are removed when a new code is
   redeemed.
-- **The accounts, on disk**, when `FRUITBACK_ACCOUNTS_PATH` is set (FRU-96), or in the PostgreSQL
-  database of `FRUITBACK_DATABASE_URL` in place of that file (FRU-141): the same things, in one or the other. For each person: the
+- **The accounts, in the PostgreSQL database** of `FRUITBACK_DATABASE_URL` (FRU-141, and nowhere
+  else since FRU-150). For each person: the
   address a provider or a link proved, the name the provider gave, and which provider signed them in
   with the id it gives them, and the language they read (the browser that opened their first sign-in
   link, or their own choice), which their e-mails are written in. For each workspace: the key of each
@@ -131,7 +131,7 @@ can read them, with or without the widget.
   to. The state of a sign-in with a provider is in a cookie of the browser that started it, not in
   the database.
 
-- **The notes that wait to be sent to a connected address, on disk** (FRU-122), in the accounts file.
+- **The notes that wait to be sent to a connected address** (FRU-122), in the database of the accounts.
   A note goes from there when it arrives, and 30 days after its last attempt when it never does.
 
 ### What stays in the reporter's browser
@@ -143,6 +143,10 @@ Since FRU-119 an account also holds the language its person reads, taken from th
   « Remember me on this site »**. For a member of a team who chose where a note goes, the identifier of that place: an opaque
   value, with no name of the tracker (FRU-123). No e-mail, no note. In private mode the extension writes `fruitback:config:extension` into **the site's**
   storage, so a site can see that a reviewer used the extension on it.
+- `sessionStorage`, under `fruitback:config:drafts` (or the `configKey` with `:drafts`): **the notes a
+  reporter chose to keep for later and has not sent yet** (FRU-124), each a whole seed, with the name
+  they typed if any. Only after a click on « Keep for later ». They go when they are sent, and with
+  the tab. Any script of the page can read them while they are there.
 - The extension keeps its rules and its session tokens in its own storage, which no page can read.
   It also keeps the language of the reviewer's account there. That language goes to a page where
   the extension mounts the widget, so the widget speaks it: a site a reviewer turned on can read

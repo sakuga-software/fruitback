@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { type TemSettings, parseTemCredentials } from './mail.ts';
-import { type GitHubOAuth, parseGitHubOAuth } from './github-oauth.ts';
-import { type GoogleOAuth, parseGoogleOAuth } from './google-oauth.ts';
+import { type OAuthClient, parseOAuthClient } from './oauth-client.ts';
 import { type LinearOAuth, parseLinearOAuth } from './linear-oauth.ts';
 import { type ClientMap, originsFromClients, readClientMap, unreadableClients, workspacesOf } from './clients.ts';
 import { readDatabaseUrl } from './postgres.ts';
@@ -70,15 +69,15 @@ export type WorkerEnv = {
    */
   FRUITBACK_SESSION_PATH?: string;
   /**
-   * SQLite file holding the accounts, the workspaces and their sites (FRU-96). Set, the worker reads
-   * its clients from that file, and the console writes them: `FRUITBACK_CLIENTS` is then refused.
-   * Absent, the worker serves the clients of its environment, as before.
+   * The SQLite file of the accounts, until FRU-150. **Refused at boot**: the accounts are in
+   * PostgreSQL, and `migrate-to-postgres` copies a file there. It is read only to say so.
    */
   FRUITBACK_ACCOUNTS_PATH?: string;
   /**
-   * The address of a PostgreSQL database that holds the accounts in place of that file (FRU-141),
-   * as `postgres://user:password@host:5432/database`. Refused beside `FRUITBACK_ACCOUNTS_PATH`: the
-   * accounts have one source. **It carries a password**, so no diagnostic quotes it.
+   * The address of the PostgreSQL database that holds the accounts, the workspaces and their sites
+   * (FRU-141), as `postgres://user:password@host:5432/database`. Set, the worker reads its clients
+   * from it, and the console writes them: `FRUITBACK_CLIENTS` is then refused. **It carries a
+   * password**, so no diagnostic quotes it.
    */
   FRUITBACK_DATABASE_URL?: string;
   /**
@@ -98,14 +97,20 @@ export type WorkerEnv = {
    * a person back to it, and behind a proxy the worker cannot tell it from the request.
    */
   FRUITBACK_PUBLIC_URL?: string;
-  /** Sign-in with GitHub: `<client id>:<client secret>` of an OAuth App (FRU-97). Absent, no button. */
+  /**
+   * The GitHub App of the sign-in of before, until FRU-150. **Refused at boot**: better-auth signs
+   * in with `FRUITBACK_AUTH_GITHUB_OAUTH`. It is read only to say so.
+   */
   FRUITBACK_GITHUB_OAUTH?: string;
-  /** The OAuth client Google signs people in with (FRU-135): `<client id>:<client secret>`. */
+  /**
+   * The OAuth client Google signs people in with, through better-auth (FRU-135, FRU-147):
+   * `<client id>:<client secret>`. Its callback is `<FRUITBACK_PUBLIC_URL>/console/auth/callback/google`.
+   */
   FRUITBACK_GOOGLE_OAUTH?: string;
   /** The Linear application a workspace connects its Linear with (FRU-134): `<client id>:<client secret>`. */
   FRUITBACK_LINEAR_OAUTH?: string;
   /**
-   * What encrypts the keys of the connectors in the accounts file (FRU-121). At least 32 characters,
+   * What encrypts the keys of the connectors in the database of the accounts (FRU-121). At least 32 characters,
    * and not the identity secret. Absent, a workspace connects no tracker. WARNING: losing it loses
    * every connector, and changing it does the same.
    */
@@ -119,10 +124,7 @@ export type WorkerEnv = {
   FRUITBACK_AUTH_SECRET?: string;
   /**
    * The GitHub OAuth App that better-auth signs people in with (FRU-147): `<client id>:<client secret>`.
-   * A second App beside `FRUITBACK_GITHUB_OAUTH`, because an OAuth App of GitHub has one callback, and
-   * the two ways to sign in live together until FRU-150. Its callback is
-   * `<FRUITBACK_PUBLIC_URL>/console/auth/callback/github`. Google needs no second client: one client
-   * takes several callbacks.
+   * Its callback is `<FRUITBACK_PUBLIC_URL>/console/auth/callback/github`.
    */
   FRUITBACK_AUTH_GITHUB_OAUTH?: string;
   /**
@@ -205,9 +207,7 @@ const configSchema = z.object({
    * `404`, exactly as they did before this feature existed.
    */
   sessionPath: z.string().min(1).optional(),
-  /** Where the accounts, workspaces and sites live (FRU-96). Absent: the clients come from the env. */
-  accountsPath: z.string().min(1).optional(),
-  /** The PostgreSQL database that holds the accounts in place of the file (FRU-141). */
+  /** The PostgreSQL database that holds the accounts (FRU-141). Absent: the clients come from the env. */
   databaseUrl: z.string().min(1).optional(),
   /** The console's address, with no slash at the end (FRU-98). */
   consoleUrl: z.string().min(1).optional(),
@@ -215,10 +215,8 @@ const configSchema = z.object({
   mail: z.custom<TemSettings | undefined>().optional(),
   /** The worker's public address, with no slash at the end (FRU-97). */
   publicUrl: z.string().min(1).optional(),
-  /** The OAuth App GitHub signs people in with, or absent (FRU-97). */
-  github: z.custom<GitHubOAuth | undefined>().optional(),
-  /** The OAuth client Google signs people in with, or absent (FRU-135). */
-  google: z.custom<GoogleOAuth | undefined>().optional(),
+  /** The OAuth client Google signs people in with, through better-auth, or absent (FRU-135). */
+  google: z.custom<OAuthClient | undefined>().optional(),
   /** The application a workspace connects its Linear with, or absent: a personal key then (FRU-134). */
   linearOAuth: z.custom<LinearOAuth | undefined>().optional(),
   /** What encrypts the connector keys at rest, or absent (FRU-121). */
@@ -226,7 +224,7 @@ const configSchema = z.object({
   /** What better-auth signs its cookies with, or absent: better-auth is then off (FRU-144). */
   authSecret: z.string().min(32).optional(),
   /** The second GitHub OAuth App, the one of better-auth, or absent (FRU-147). */
-  authGithub: z.custom<GitHubOAuth | undefined>().optional(),
+  authGithub: z.custom<OAuthClient | undefined>().optional(),
   /** Whether better-auth keeps the address and the user agent of a session, and limits by address (FRU-147). */
   authTrackIp: z.boolean(),
   /**
@@ -248,6 +246,14 @@ export type ConfigResult = { ok: true; config: WorkerConfig } | { ok: false; mis
  * Validate the environment up front, so a missing secret surfaces once — at boot and on `/health` —
  * instead of as an opaque Linear error on every request.
  */
+/** Why `FRUITBACK_ACCOUNTS_PATH` stops the worker (FRU-150): what to set, and where to read how. */
+export const ACCOUNTS_FILE_REFUSED =
+  'FRUITBACK_ACCOUNTS_PATH (the accounts are in PostgreSQL since FRU-150: set FRUITBACK_DATABASE_URL and FRUITBACK_AUTH_SECRET, and copy the file with `migrate-to-postgres`, as « Upgrading » of docs/self-hosting.md says)';
+
+/** Why `FRUITBACK_GITHUB_OAUTH` stops the worker (FRU-150). */
+export const GITHUB_APP_REFUSED =
+  'FRUITBACK_GITHUB_OAUTH (the sign-in of before is gone since FRU-150: better-auth signs in with FRUITBACK_AUTH_GITHUB_OAUTH; remove this variable, and its GitHub App)';
+
 export function readConfig(env: WorkerEnv): ConfigResult {
   const clients = readClientMap(env.FRUITBACK_CLIENTS);
   // The selected provider validates its own environment (FRU-33). The in-memory store needs none,
@@ -258,7 +264,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     identitySecret: env.FRUITBACK_IDENTITY_SECRET || undefined,
     secretsKey: env.FRUITBACK_SECRETS_KEY || undefined,
     authSecret: env.FRUITBACK_AUTH_SECRET || undefined,
-    authGithub: env.FRUITBACK_AUTH_GITHUB_OAUTH ? parseGitHubOAuth(env.FRUITBACK_AUTH_GITHUB_OAUTH) : undefined,
+    authGithub: env.FRUITBACK_AUTH_GITHUB_OAUTH ? parseOAuthClient(env.FRUITBACK_AUTH_GITHUB_OAUTH) : undefined,
     authTrackIp: env.FRUITBACK_AUTH_TRACK_IP === '1',
     showComments: env.FRUITBACK_HIDE_COMMENTS !== '1',
     read: readAccess(env.FRUITBACK_READ),
@@ -277,13 +283,11 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     // team — which is precisely the leak the map exists to prevent.
     clients: clients.ok ? clients.clients : Number.NaN,
     sessionPath: env.FRUITBACK_SESSION_PATH || undefined,
-    accountsPath: env.FRUITBACK_ACCOUNTS_PATH || undefined,
     databaseUrl: readDatabaseUrl(env.FRUITBACK_DATABASE_URL),
     consoleUrl: readConsoleUrl(env.FRUITBACK_CONSOLE_URL),
     mail: readMail(env),
     publicUrl: readConsoleUrl(env.FRUITBACK_PUBLIC_URL),
-    github: env.FRUITBACK_GITHUB_OAUTH ? parseGitHubOAuth(env.FRUITBACK_GITHUB_OAUTH) : undefined,
-    google: env.FRUITBACK_GOOGLE_OAUTH ? parseGoogleOAuth(env.FRUITBACK_GOOGLE_OAUTH) : undefined,
+    google: env.FRUITBACK_GOOGLE_OAUTH ? parseOAuthClient(env.FRUITBACK_GOOGLE_OAUTH) : undefined,
     linearOAuth: env.FRUITBACK_LINEAR_OAUTH ? parseLinearOAuth(env.FRUITBACK_LINEAR_OAUTH) : undefined,
     teamLocale: readTeamLocale(env.FRUITBACK_TEAM_LOCALE),
   };
@@ -310,12 +314,13 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   if (env.FRUITBACK_DATABASE_URL && result.data.databaseUrl === undefined) {
     return { ok: false, missing: ['FRUITBACK_DATABASE_URL (a postgres:// address with a host)'] };
   }
-  // One source for the accounts, as for the clients below (FRU-141).
-  if (result.data.databaseUrl !== undefined && result.data.accountsPath !== undefined) {
-    return {
-      ok: false,
-      missing: ['FRUITBACK_ACCOUNTS_PATH (FRUITBACK_DATABASE_URL is set, and the accounts are in that database)'],
-    };
+  // Two variables of before (FRU-150): refused, never ignored. A worker that ignored the file would
+  // start with no workspace at all, and an operator would read it as the accounts lost.
+  if (env.FRUITBACK_ACCOUNTS_PATH) {
+    return { ok: false, missing: [ACCOUNTS_FILE_REFUSED] };
+  }
+  if (env.FRUITBACK_GITHUB_OAUTH) {
+    return { ok: false, missing: [GITHUB_APP_REFUSED] };
   }
   // The sessions have one source too (FRU-142): with a database they are in it, and a file beside it
   // would be a second place that nothing reads.
@@ -327,8 +332,6 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   }
   const sessions = hasSessions(result.data);
   const accounts = hasAccounts(result.data);
-  /** The variable that turned the accounts on, for a diagnostic that names what the operator wrote. */
-  const source = result.data.databaseUrl === undefined ? 'FRUITBACK_ACCOUNTS_PATH' : 'FRUITBACK_DATABASE_URL';
 
   // Refused at boot rather than served as a permanent 401 (FRU-40). A client that requires a
   // verified reader and has no key to verify one with answers nobody, for ever, and the symptom — a
@@ -354,7 +357,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   if (result.data.secretsKey !== undefined && !accounts) {
     return {
       ok: false,
-      missing: ['FRUITBACK_ACCOUNTS_PATH (FRUITBACK_SECRETS_KEY encrypts the connectors of a workspace)'],
+      missing: ['FRUITBACK_DATABASE_URL (FRUITBACK_SECRETS_KEY encrypts the connectors of a workspace)'],
     };
   }
 
@@ -397,10 +400,10 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     };
   }
 
-  // A worker with accounts reads its clients from the file the console writes. Two sources for one
+  // A worker with accounts reads its clients from the database the console writes. Two sources for one
   // map would let a site exist in one and not in the other.
   if (accounts && result.data.clients !== undefined) {
-    return { ok: false, missing: [`FRUITBACK_CLIENTS (${source} is set, and the sites come from it)`] };
+    return { ok: false, missing: [`FRUITBACK_CLIENTS (FRUITBACK_DATABASE_URL is set, and the sites come from it)`] };
   }
 
   if (env.FRUITBACK_CONSOLE_URL && result.data.consoleUrl === undefined) {
@@ -411,7 +414,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   if (accounts && result.data.consoleUrl === undefined) {
     return {
       ok: false,
-      missing: [`FRUITBACK_CONSOLE_URL (${source} is set, and a sign-in opens the console)`],
+      missing: [`FRUITBACK_CONSOLE_URL (FRUITBACK_DATABASE_URL is set, and a sign-in opens the console)`],
     };
   }
 
@@ -505,15 +508,6 @@ export function readConfig(env: WorkerEnv): ConfigResult {
         missing: ['FRUITBACK_AUTH_SECRET (FRUITBACK_AUTH_GITHUB_OAUTH is the GitHub App of better-auth)'],
       };
     }
-    // One App, one callback: the App of before sends the person to `/auth/github/callback`.
-    if (result.data.github !== undefined && result.data.github.clientId === result.data.authGithub.clientId) {
-      return {
-        ok: false,
-        missing: [
-          'FRUITBACK_AUTH_GITHUB_OAUTH (it must be another GitHub OAuth App than FRUITBACK_GITHUB_OAUTH: an App has one callback)',
-        ],
-      };
-    }
   }
 
   // Linear sends the person back to the worker's own address, and the token it gives is kept sealed.
@@ -528,61 +522,35 @@ export function readConfig(env: WorkerEnv): ConfigResult {
       return {
         ok: false,
         missing: [
-          'FRUITBACK_PUBLIC_URL, FRUITBACK_ACCOUNTS_PATH and FRUITBACK_SECRETS_KEY (FRUITBACK_LINEAR_OAUTH connects the Linear of a workspace, and keeps its token sealed)',
+          'FRUITBACK_PUBLIC_URL, FRUITBACK_DATABASE_URL and FRUITBACK_SECRETS_KEY (FRUITBACK_LINEAR_OAUTH connects the Linear of a workspace, and keeps its token sealed)',
         ],
       };
     }
   }
 
-  // Google sends the person back to the worker's own address, and signs them into an account.
+  // Google sends the person back to the worker's own address, and better-auth signs them in.
   if (env.FRUITBACK_GOOGLE_OAUTH) {
     if (result.data.google === undefined) {
       return { ok: false, missing: ['FRUITBACK_GOOGLE_OAUTH (<client id>:<client secret> of a Google OAuth client)'] };
     }
-    if (result.data.publicUrl === undefined || !accounts) {
+    if (result.data.authSecret === undefined) {
       return {
         ok: false,
-        missing: [
-          'FRUITBACK_PUBLIC_URL and FRUITBACK_ACCOUNTS_PATH (FRUITBACK_GOOGLE_OAUTH signs a person into an account)',
-        ],
+        missing: ['FRUITBACK_AUTH_SECRET (FRUITBACK_GOOGLE_OAUTH signs a person in with better-auth)'],
       };
     }
-  }
-
-  // GitHub sends the person back to the worker's own address, and signs them into an account.
-  if (env.FRUITBACK_GITHUB_OAUTH) {
-    if (result.data.github === undefined) {
-      return { ok: false, missing: ['FRUITBACK_GITHUB_OAUTH (<client id>:<client secret> of a GitHub OAuth App)'] };
-    }
-    if (result.data.publicUrl === undefined || !accounts) {
-      return {
-        ok: false,
-        missing: [
-          'FRUITBACK_PUBLIC_URL and FRUITBACK_ACCOUNTS_PATH (FRUITBACK_GITHUB_OAUTH signs a person into an account)',
-        ],
-      };
-    }
-  }
-
-  // An account signs in to get a session, so accounts without sessions sign in to nothing. A database
-  // holds both, so this is the accounts file with no session file beside it.
-  if (accounts && !sessions) {
-    return {
-      ok: false,
-      missing: [`FRUITBACK_SESSION_PATH (${source} is set, and signing in opens a session)`],
-    };
   }
 
   return { ok: true, config: result.data };
 }
 
 /**
- * Whether this worker keeps accounts: in a SQLite file, or in PostgreSQL (FRU-141).
+ * Whether this worker keeps accounts: in PostgreSQL, since FRU-150 the one place (FRU-141).
  *
- * The one question for « are there accounts », so a route cannot ask it of one of the two sources.
+ * The one question for « are there accounts ».
  */
-export function hasAccounts(config: Pick<WorkerConfig, 'accountsPath' | 'databaseUrl'>): boolean {
-  return config.accountsPath !== undefined || config.databaseUrl !== undefined;
+export function hasAccounts(config: Pick<WorkerConfig, 'databaseUrl'>): boolean {
+  return config.databaseUrl !== undefined;
 }
 
 /**

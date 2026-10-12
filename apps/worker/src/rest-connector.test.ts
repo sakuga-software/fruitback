@@ -1,18 +1,18 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { type IncomingMessage, type Server, createServer, request as httpRequest } from 'node:http';
 import type { request as httpsRequest } from 'node:https';
 import { type AddressInfo, type Socket, createServer as createTcpServer } from 'node:net';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
-import { closeAccountConnections, createSqliteAccountStore } from './accounts-sqlite.ts';
 import { deliverPending, handleRequest } from './app.ts';
+import { CONSOLE, type World as Env, callOn as call, memberOf, signInTo, worlds } from './console-world.fixture.ts';
 import type { WorkerEnv } from './env.ts';
-import { signIdentityToken } from './identity.ts';
 import { createMemoryKv } from './kv.ts';
+import { rowsOf } from './postgres.fixture.ts';
 import {
   ABANDONED_KEPT_DAYS,
   DELIVERY_HEADER,
@@ -33,11 +33,8 @@ import {
 } from './rest-connector.ts';
 import { DELIVERY_TIMEOUT_MS, createSender } from './rest-send.ts';
 import { DELIVERY_PASS_MS } from './server.ts';
-import { closeSessionConnections } from './session-sqlite.ts';
 
-const SECRET = 'a-worker-secret-of-exactly-enough';
 const SECRETS_KEY = 'another-secret-that-opens-the-connectors';
-const CONSOLE = 'https://app.fruitback.test';
 const SITE = 'https://staging.acme.dev';
 const TARGET = 'https://hooks.acme.dev/fruitback?team=design';
 /** A moment after any day these tests run on: a delivery is due from the moment its note is written. */
@@ -46,64 +43,47 @@ const directories: string[] = [];
 const servers: Server[] = [];
 
 afterEach(async () => {
-  closeAccountConnections();
-  closeSessionConnections();
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
   await Promise.all(
     servers.splice(0).map((server) => new Promise((done) => (server.closeAllConnections(), server.close(done)))),
   );
 });
 
-function envWith(overrides: Partial<WorkerEnv> = {}): WorkerEnv {
+const worldWith = worlds();
+
+/** A worker with accounts, that keeps its notes in a file of its own and can seal a connector. */
+function envWith(overrides: Partial<WorkerEnv> = {}): Promise<Env> {
   const directory = mkdtempSync(join(tmpdir(), 'fruitback-rest-'));
   directories.push(directory);
 
-  return {
-    FRUITBACK_STORE: 'sqlite',
-    FRUITBACK_SQLITE_PATH: join(directory, 'fb.db'),
-    ALLOWED_ORIGINS: CONSOLE,
-    FRUITBACK_IDENTITY_SECRET: SECRET,
-    FRUITBACK_SECRETS_KEY: SECRETS_KEY,
-    FRUITBACK_SESSION_PATH: join(directory, 'sessions.db'),
-    FRUITBACK_ACCOUNTS_PATH: join(directory, 'accounts.db'),
-    FRUITBACK_CONSOLE_URL: CONSOLE,
-    ...overrides,
-    // The path of the SQLite store is that store's own variable, so `WorkerEnv` does not name it.
-  } as WorkerEnv;
+  return worldWith({
+    env: {
+      FRUITBACK_STORE: 'sqlite',
+      FRUITBACK_SQLITE_PATH: join(directory, 'fb.db'),
+      FRUITBACK_SECRETS_KEY: SECRETS_KEY,
+      ...overrides,
+      // The path of the SQLite store is that store's own variable, so `WorkerEnv` does not name it.
+    } as WorkerEnv,
+  });
 }
 
-let ip = 0;
-function call(
-  env: WorkerEnv,
-  method: string,
-  path: string,
-  options: { token?: string; body?: unknown; origin?: string } = {},
-): Promise<Response> {
-  ip += 1;
+/** One pass of the loop that sends, on the accounts of this worker: its database is on PGlite. */
+function deliverPendingOn(env: Env, send: Send, now?: () => number): Promise<void> {
+  return deliverPending(env.env, send, now, env.accounts);
+}
 
-  return handleRequest(
-    new Request(`https://api.fruitback.test${path}`, {
-      method,
-      headers: {
-        Origin: options.origin ?? CONSOLE,
-        ...(options.token === undefined ? {} : { Authorization: `Bearer ${options.token}` }),
-        ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
-      },
-      ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
-    }),
-    env,
-    { clientIp: `203.0.113.${ip % 250}`, kv: createMemoryKv() },
-  );
+/** A request with no cookie and no token, from an address and a Kv of its own. */
+function plain(env: Env, request: Request, clientIp = '203.0.113.9', kv = createMemoryKv()): Promise<Response> {
+  return handleRequest(request, env.env, { ...env.context, clientIp, kv });
 }
 
 /** A workspace with its owner and one site read by everyone. */
-async function acme(env: WorkerEnv, name = 'Acme', origin = SITE) {
-  const accounts = createSqliteAccountStore(env.FRUITBACK_ACCOUNTS_PATH as string);
-  const exp = Math.floor(Date.now() / 1000) + 600;
+async function acme(env: Env, name = 'Acme', origin = SITE) {
+  const { accounts } = env;
   const person = async (email: string) => {
-    const account = await accounts.signIn({ provider: 'email', subject: email, email });
+    const { id, token } = await signInTo(env, email);
 
-    return { account, token: await signIdentityToken({ sub: account.id, exp }, SECRET) };
+    return { account: { id }, token };
   };
   const owner = await person(`owner@${name.toLowerCase()}.dev`);
   const workspace = await accounts.createWorkspace(name, owner.account.id);
@@ -116,7 +96,7 @@ async function acme(env: WorkerEnv, name = 'Acme', origin = SITE) {
 type World = Awaited<ReturnType<typeof acme>>;
 
 /** Connects the address and sends the notes of the site there. Answers the connector and its secret. */
-async function receiving(env: WorkerEnv, world: World, body: Record<string, unknown> = {}) {
+async function receiving(env: Env, world: World, body: Record<string, unknown> = {}) {
   const added = await call(env, 'POST', `${world.base}/connectors`, {
     token: world.owner.token,
     body: { kind: 'rest', url: TARGET, ...body },
@@ -239,7 +219,7 @@ describe('the address a workspace gives (FRU-122)', () => {
 
 describe('a note of a site that sends to an address (FRU-122)', () => {
   it('is kept in the worker, read back from there, and sent signed with the secret of the connector', async () => {
-    const env = envWith();
+    const env = await envWith();
     const world = await acme(env);
     const connector = await receiving(env, world);
     assert.equal(connector.label, 'REST · hooks.acme.dev', 'the label holds the host, and no path or query');
@@ -259,7 +239,7 @@ describe('a note of a site that sends to an address (FRU-122)', () => {
     assert.equal(((await read.json()) as { issues: unknown[] }).issues.length, 1, 'the pin is drawn from the worker');
 
     const { got, send } = receiver();
-    await deliverPending(env, send, () => LATER_MS);
+    await deliverPendingOn(env, send, () => LATER_MS);
 
     assert.equal(got.length, 1);
     const [sent] = got as [(typeof got)[number]];
@@ -290,31 +270,28 @@ describe('a note of a site that sends to an address (FRU-122)', () => {
 
     // Arrived: nothing is left to send, and nothing of the note stays in the queue.
     assert.deepEqual(await world.accounts.deliveries(world.workspace.id, connector.id), []);
-    await deliverPending(env, send);
+    await deliverPendingOn(env, send);
     assert.equal(got.length, 1);
   });
 
   it('answers the widget when the note is kept, whatever the receiver does later', async () => {
-    const env = envWith();
+    const env = await envWith();
     const world = await acme(env);
     await receiving(env, world);
     const { send } = receiver(() => new Error('connect ECONNREFUSED'));
 
     const written = await call(env, 'POST', '/feedback', { origin: SITE, body: note(world.site.id) });
-    await deliverPending(env, send);
+    await deliverPendingOn(env, send);
 
     assert.equal(written.status, 201);
   });
 
   it('keeps the note when the queue refuses the row: the widget must not send it twice', async () => {
-    const env = envWith();
+    const env = await envWith();
     const world = await acme(env);
     await receiving(env, world);
     // The queue is gone under the worker: the note is still kept, and the request still succeeds.
-    const { DatabaseSync } = await import('node:sqlite');
-    const direct = new DatabaseSync(env.FRUITBACK_ACCOUNTS_PATH as string);
-    direct.exec('DROP TABLE deliveries');
-    direct.close();
+    await rowsOf(env.database, 'DROP TABLE deliveries');
     const errors: unknown[][] = [];
     const logged = console.error;
     console.error = (...line: unknown[]) => void errors.push(line);
@@ -329,14 +306,14 @@ describe('a note of a site that sends to an address (FRU-122)', () => {
   });
 
   it('keeps the secret a person gave, and does not answer it', async () => {
-    const env = envWith();
+    const env = await envWith();
     const world = await acme(env);
     const connector = await receiving(env, world, { secret: 'the-secret-acme-chose-itself' });
     assert.equal('secret' in connector, false);
 
     await call(env, 'POST', '/feedback', { origin: SITE, body: note(world.site.id) });
     const { got, send } = receiver();
-    await deliverPending(env, send, () => LATER_MS);
+    await deliverPendingOn(env, send, () => LATER_MS);
 
     assert.equal(
       got[0]?.headers[SIGNATURE_HEADER],
@@ -344,8 +321,8 @@ describe('a note of a site that sends to an address (FRU-122)', () => {
     );
   });
 
-  it('holds the address and the secret encrypted in the file, and in no answer', async () => {
-    const env = envWith();
+  it('holds the address and the secret encrypted in the database, and in no answer', async () => {
+    const env = await envWith();
     const world = await acme(env);
     const connector = await receiving(env, world);
 
@@ -354,13 +331,14 @@ describe('a note of a site that sends to an address (FRU-122)', () => {
     assert.equal(text.includes(connector.secret as string), false);
     assert.equal(text.includes('team=design'), false, 'the query of the address can hold a token');
 
-    closeAccountConnections();
-    const directory = dirname(env.FRUITBACK_ACCOUNTS_PATH as string);
-    const bytes = Buffer.concat(
-      readdirSync(directory)
-        .filter((name) => name.startsWith('accounts.db'))
-        .map((name) => readFileSync(join(directory, name))),
-    ).toString('latin1');
+    // Every row of every table of the database, as text.
+    const tables = await rowsOf(env.database, `SELECT tablename FROM pg_tables WHERE schemaname = 'public'`);
+    let bytes = '';
+    for (const { tablename } of tables) {
+      const rows = await rowsOf(env.database, `SELECT t::text AS row FROM "${String(tablename)}" AS t`);
+      bytes += rows.map((each) => String(each.row)).join('\n');
+    }
+    assert.ok(bytes.includes(connector.id), 'the control: the row of the connector was read');
     assert.equal(bytes.includes(connector.secret as string), false);
     assert.equal(bytes.includes('hooks.acme.dev/fruitback'), false);
   });
@@ -368,9 +346,9 @@ describe('a note of a site that sends to an address (FRU-122)', () => {
 
 describe('a delivery that does not arrive (FRU-122)', () => {
   /** A store with one connector and one delivery that is due at `0`. */
-  async function queued() {
-    const env = envWith();
-    const world = await acme(env);
+  async function queued(on?: Env, name?: string, origin?: string) {
+    const env = on ?? (await envWith());
+    const world = await acme(env, name, origin);
     const connector = await world.accounts.addConnector(world.workspace.id, {
       kind: 'rest',
       label: 'REST · hooks.acme.dev',
@@ -430,13 +408,14 @@ describe('a delivery that does not arrive (FRU-122)', () => {
   });
 
   it('counts a redirect and a refusal as not arrived: only a 2xx is an arrival', async () => {
+    // One database for a case: each status has a workspace of its own in it.
+    const env = await envWith();
     for (const status of [301, 302, 400, 401, 404, 500]) {
-      const { world, late } = await queued();
+      const { world, late } = await queued(env, `Acme${status}`, `https://staging-${status}.acme.dev`);
       const { send } = receiver(() => status);
       await deliverDue({ accounts: world.accounts, secretsKey: SECRETS_KEY, send, now: () => 0 });
 
       assert.equal((await late())[0]?.lastStatus, status);
-      closeAccountConnections();
     }
   });
 
@@ -449,7 +428,7 @@ describe('a delivery that does not arrive (FRU-122)', () => {
       sent += 1;
       const request = new Request('https://api.fruitback.test/health', { method: 'POST', headers, body });
 
-      return { status: (await handleRequest(request, env, { clientIp: '203.0.113.9', kv: createMemoryKv() })).status };
+      return { status: (await plain(env, request)).status };
     };
     let clock = 0;
     const pass = () => deliverDue({ accounts: world.accounts, secretsKey: SECRETS_KEY, send, now: () => clock });
@@ -612,14 +591,11 @@ describe('a delivery that does not arrive (FRU-122)', () => {
 });
 
 describe('a delivery that comes back to a worker (FRU-133)', () => {
-  const arriving = (env: WorkerEnv, method: string, path: string, headers: Record<string, string>) =>
-    handleRequest(new Request(`https://api.fruitback.test${path}`, { method, headers }), env, {
-      clientIp: '203.0.113.9',
-      kv: createMemoryKv(),
-    });
+  const arriving = (env: Env, method: string, path: string, headers: Record<string, string>) =>
+    plain(env, new Request(`https://api.fruitback.test${path}`, { method, headers }));
 
   it('is refused on every route, the readiness probe included, whatever the case of the header', async () => {
-    const env = envWith();
+    const env = await envWith();
     const routes = [
       ['GET', '/health'],
       ['POST', '/health'],
@@ -641,24 +617,30 @@ describe('a delivery that comes back to a worker (FRU-133)', () => {
   });
 
   it('is refused by a worker that is misconfigured too, and a request without the header is served', async () => {
-    assert.equal((await arriving({} as WorkerEnv, 'GET', '/health', { [DELIVERY_HEADER]: 'dl_1' })).status, 508);
-    assert.equal((await arriving(envWith(), 'GET', '/health', {})).status, 200);
+    const misconfigured = await handleRequest(
+      new Request('https://api.fruitback.test/health', { headers: { [DELIVERY_HEADER]: 'dl_1' } }),
+      {} as WorkerEnv,
+      { clientIp: '203.0.113.9', kv: createMemoryKv() },
+    );
+    assert.equal(misconfigured.status, 508);
+    const env = await envWith();
+    assert.equal((await arriving(env, 'GET', '/health', {})).status, 200);
     // The two other headers of a delivery are not the mark of one: a receiver may send them on.
     assert.equal(
-      (await arriving(envWith(), 'GET', '/health', { [SIGNATURE_HEADER]: 'sha256=00', [TIMESTAMP_HEADER]: '1' }))
-        .status,
+      (await arriving(env, 'GET', '/health', { [SIGNATURE_HEADER]: 'sha256=00', [TIMESTAMP_HEADER]: '1' })).status,
       200,
     );
   });
 
   it('is refused above the rate limit: a loop must not be answered 429, which the sender tries again', async () => {
-    const env = envWith({ RATE_LIMIT_PER_MINUTE: '1' });
+    const env = await envWith({ RATE_LIMIT_PER_MINUTE: '1' });
     const kv = createMemoryKv();
     const from = (headers: Record<string, string>) =>
-      handleRequest(
-        new Request('https://api.fruitback.test/console/me', { headers: { Origin: CONSOLE, ...headers } }),
+      plain(
         env,
-        { clientIp: '203.0.113.77', kv },
+        new Request('https://api.fruitback.test/console/me', { headers: { Origin: CONSOLE, ...headers } }),
+        '203.0.113.77',
+        kv,
       );
 
     await from({});
@@ -671,7 +653,7 @@ describe('a delivery that comes back to a worker (FRU-133)', () => {
 
 describe('who may connect an address and read its deliveries (FRU-122)', () => {
   it('refuses an address the worker must not call, and a secret that is too short', async () => {
-    const env = envWith();
+    const env = await envWith();
     const world = await acme(env);
     const add = (body: Record<string, unknown>) =>
       call(env, 'POST', `${world.base}/connectors`, { token: world.owner.token, body: { kind: 'rest', ...body } });
@@ -687,7 +669,7 @@ describe('who may connect an address and read its deliveries (FRU-122)', () => {
   });
 
   it('takes no team for an address, and still asks one for a tracker', async () => {
-    const env = envWith();
+    const env = await envWith();
     const world = await acme(env);
     const connector = await receiving(env, world);
     const place = (body: Record<string, unknown>) =>
@@ -711,18 +693,12 @@ describe('who may connect an address and read its deliveries (FRU-122)', () => {
   });
 
   it('shows the deliveries to who may see the tracker, without the note', async () => {
-    const env = envWith();
+    const env = await envWith();
     const world = await acme(env);
     const connector = await receiving(env, world);
     await call(env, 'POST', '/feedback', { origin: SITE, body: note(world.site.id, 'A note nobody must read here') });
     const guest = await world.person('guest@client.dev');
-    const { DatabaseSync } = await import('node:sqlite');
-    closeAccountConnections();
-    const database = new DatabaseSync(env.FRUITBACK_ACCOUNTS_PATH as string);
-    database
-      .prepare('INSERT INTO members (workspace_id, account_id, role, created_at) VALUES (?, ?, ?, 1)')
-      .run(world.workspace.id, guest.account.id, 'guest');
-    database.close();
+    await memberOf(env, world.workspace.id, guest.account.id, 'guest');
     const path = `${world.base}/connectors/${connector.id}/deliveries`;
 
     const listed = await call(env, 'GET', path, { token: world.owner.token });

@@ -600,7 +600,9 @@ any store` asks it of every spec rather than of Linear.
   requires the case to fail. A case with no violation, and a violation for a case that is gone, both
   fail test:`plants a violation for every case, and for no case that is gone`.
 - **A violation is a change to the source of the SQLite store**, applied to a copy in a temporary
-  directory (`mutatedModule` in `conformance.fixture.ts`). The text to change is in the test file: a
+  directory (`mutatedModule` in `conformance.fixture.ts`). For the accounts that source is
+  `accounts-sqlite.fixture.ts` since FRU-150: the worker exports no account store on SQLite, and the
+  file stays as the reference of the controls. The text to change is in the test file: a
   change to the store that removes that text fails the control with the text, and the violation is
   written again. Do not weaken a case to make a control pass.
 - **A race is a case too, and its violation is a store that waits.** `node:sqlite` is synchronous, so
@@ -645,10 +647,8 @@ same database since FRU-142: see the section after this one.
 
 ### The rules, in short
 
-- **`FRUITBACK_DATABASE_URL` puts the accounts in PostgreSQL, in place of `FRUITBACK_ACCOUNTS_PATH`.**
-  Both together are refused at boot: the accounts have one source, as the clients have. Ask
-  `hasAccounts(config)` and never one of the two fields: a route that reads `accountsPath` is off
-  for a worker on a database.
+- **`FRUITBACK_DATABASE_URL` puts the accounts in PostgreSQL**, and since FRU-150 nowhere else:
+  `FRUITBACK_ACCOUNTS_PATH` is refused at boot. Ask `hasAccounts(config)`, and never the field.
 - **`postgres.ts` is the one file that names the driver**, as types, and it loads `pg` at the first
   call. A lint rule holds the import, and test:`loads no file of Drizzle and no file of the driver
 for a worker without the variable` holds the rest in a process of its own. `/health` opens no
@@ -1085,8 +1085,8 @@ migrates the database, and the tool of before is gone**: `postgres-migrations.ts
 **Nothing changes for what a worker answers**: the two conformance suites pass on SQLite, on PGlite
 and on a server, with no change to a case.
 
-**SQLite is not in Drizzle**: `sqlite.ts`, `accounts-sqlite.ts` and `session-sqlite.ts` stay as they
-are, with their own migrations. Mathieu decided on 2026-10-11 that a worker always has PostgreSQL;
+**SQLite is not in Drizzle**: `sqlite.ts`, `accounts-sqlite.ts` (a test fixture since FRU-150) and
+`session-sqlite.ts` stay as they are, with their own migrations. Mathieu decided on 2026-10-11 that a worker always has PostgreSQL;
 the stores on SQLite and on files go with FRU-184, after the storage of the production moves to
 PostgreSQL. Porting them to Drizzle first would be work on code that leaves.
 
@@ -1407,7 +1407,8 @@ code of before is still the one that runs, `AccountStore` is the same interface,
 served no route then (FRU-147 serves it). The rows are where better-auth reads them, so the slice that signs a
 person in with it (FRU-147) has no data to move.
 
-**Nothing changes on SQLite**: `accounts-sqlite.ts` keeps its four tables until FRU-184.
+**Nothing changes on SQLite**: `accounts-sqlite.ts` keeps its four tables. FRU-150 made it a test
+fixture, `accounts-sqlite.fixture.ts`.
 
 ### The rules, in short
 
@@ -1507,9 +1508,10 @@ call of the worker waits for.
 
 ## The console signs in with better-auth (FRU-147)
 
-The worker serves the sign-in of better-auth under `/console/auth/`, **beside the path of before**,
-which does not change: a console of before signs in as it did, and its tests pass with no change.
-The console moves in FRU-148, and FRU-150 removes the path of before.
+The worker serves the sign-in of better-auth under `/console/auth/`. It came **beside the path of
+before**, which did not change; the console moved in FRU-148, and FRU-150 removed the path of
+before: see _The sign-in of before and the accounts file go_ below. What this section says of « the
+path of before » is how the two lived together until then.
 
 ### The rules, in short
 
@@ -1518,6 +1520,13 @@ The console moves in FRU-148, and FRU-150 removes the path of before.
   `auth.ts` reach better-auth; any other one answers `404` before it reads the request. A route that a
   plugin adds is closed until somebody names it there with its reason. The routes of the organization
   plugin have their own list and their own file: see _The organization plugin_ below (FRU-149).
+- **A reading of the cookie that renews the session renews the cookie** (FRU-208). `sessionOfCookie`
+  asks `getSession` with `returnHeaders`, keeps the `Set-Cookie` of the session beside the request,
+  and `handleRequest` adds it to the answer that leaves (`withRenewedCookie`). Measured on 1.7.7: a
+  session last renewed two days ago moves its end in the row at the next `GET /console/me`, and the
+  answer had no `Set-Cookie`; the same reading with `returnHeaders` hands back the cookie of the
+  sign-in, token and attributes, with `Max-Age=604800`. A new route that reads the cookie through
+  `sessionOfCookie` gets this with nothing to write.
 - **A rejection of better-auth is a `502`**, with its reason in the log and no address of the
   database: `auth.handler` rejects on a schema that is wrong.
 - **The link of the e-mail is the worker's own two routes.** `POST /console/auth/email` calls
@@ -1526,13 +1535,14 @@ The console moves in FRU-148, and FRU-150 removes the path of before.
   `POST /console/auth/email/redeem` takes the token in its body, calls `magicLinkVerify` in the
   process, and **hands the browser the `Set-Cookie` and nothing else of its answer**, which holds the
   token of the session. `/sign-in/magic-link` and `/magic-link/verify` are in `disabledPaths`: closed
-  to a request, open to `auth.api` (measured). The limit of 3 links per address per 15 minutes is
-  the key of the path of before, so the two paths together send 3.
+  to a request, open to `auth.api` (measured). The limit of 3 links per address per 15 minutes
+  (`EMAIL_LINKS_PER_WINDOW`, in `auth-routes.ts` since FRU-150) had the key of the path of before,
+  so the two paths together sent 3.
 - **`sendMagicLink` takes no mailer.** better-auth calls it in the middle of `signInMagicLink`, so the
   route leaves its delivery in a map under a ticket, and names the ticket in the `metadata` of the
   call (`sendLinkThrough`). A call with no ticket sends nothing, and throws.
-- **The routes under `/console/` take the cookie or the token of before.** The token wins when both
-  are there. **With the cookie, a call that is not a read needs the `Origin` of the console**, and a
+- **The routes under `/console/` take the cookie**, and since FRU-150 no token.
+  **With the cookie, a call that is not a read needs the `Origin` of the console**, and a
   request with none is refused (`callerOf` in `console-api.ts`, `mutationAllowed` in
   `auth-routes.ts`). `consoleCors` lets a request with no `Origin` through: it is not the check.
 - **A session is ended by its id, with a route of the worker**: `DELETE /console/sessions/<id>`, of
@@ -1541,8 +1551,9 @@ The console moves in FRU-148, and FRU-150 removes the path of before.
 - **An address that a provider did not verify creates no account.** A `databaseHooks.user.create`
   refuses a person whose `emailVerified` is not `true`. A link of the e-mail proves its address;
   better-auth already links no unverified address to an account. Nothing is in `trustedProviders`.
-- **GitHub takes a second OAuth App**, `FRUITBACK_AUTH_GITHUB_OAUTH`: an App has one callback. Google
-  takes the client of before with a second callback. **No picture is kept** (`mapProfileToUser`), as
+- **GitHub takes an OAuth App of its own**, `FRUITBACK_AUTH_GITHUB_OAUTH`: an App has one callback,
+  and the App of before had another. Google takes the client of before with the callback of
+  better-auth. **No picture is kept** (`mapProfileToUser`), as
   the accounts of before kept none.
 - **A session lasts 7 days, and each day it is used moves its end by 7 days** (`SESSION_TTL_SECONDS`,
   `SESSION_RENEWAL_SECONDS`): the defaults of 1.7.7, written. No cookie cache: a session that is
@@ -1639,8 +1650,8 @@ may change, and who », says what is protected; this section says how to change 
   remove a member calls `endSessionsOf`; the second lock is not a reason to skip it, because it acts
   ten minutes later.
 - **A workspace is made and deleted by the routes of the worker**, `POST /console/workspaces` and
-  `DELETE /console/workspaces/<id>`. The first calls the plugin in the process for somebody of the
-  cookie, and the store for a call with the token of before, until FRU-150. The second does not use
+  `DELETE /console/workspaces/<id>`. The first calls the plugin in the process, for somebody
+  of the cookie. The second does not use
   the plugin, whose deletion is off (`disableOrganizationDeletion`): it revokes the tokens of Linear
   first, and the foreign keys take the rest.
 - **`endSessionsOf` holds every chain of the person before it ends them** (`session-postgres.ts`).
@@ -1778,6 +1789,60 @@ roles, when it is accepted`.
 « Last seen » in the table (nothing records an activity), « My account » (sessions, API keys), the
 export of a workspace. The ticket said « the invitation is a pairing code »: with the plugin it is a
 row that a session of the address accepts, and the pairing code stays what connects an extension.
+
+## The sign-in of before and the accounts file go (FRU-150)
+
+One way to sign in to the console, better-auth, and one place for the accounts, PostgreSQL. The
+ticket removes; it adds no route and no table.
+
+### The rules, in short
+
+- **The console API reads the cookie, and no `Authorization` header.** `callerOf` in
+  `console-api.ts` has one branch. A token signed with the key of the worker, the one of an
+  extension included, opens nothing under `/console/` (FRU-202 refused it by its `ws`; there is no
+  token to tell it from any more).
+- **`GET /auth/providers` says `betterAuth` or nothing.** `{}` for a worker with no accounts, or
+  with no `FRUITBACK_AUTH_SECRET`. The two booleans of the path of before are gone, so a console of
+  before FRU-148 draws no button against this worker.
+- **`FRUITBACK_ACCOUNTS_PATH` and `FRUITBACK_GITHUB_OAUTH` are refused at boot, never ignored**
+  (`ACCOUNTS_FILE_REFUSED`, `GITHUB_APP_REFUSED` in `env.ts`). The message names what to set and
+  `docs/self-hosting.md`. The compose file still hands both to the container, for that reason only:
+  a variable that Compose does not pass is one the worker cannot refuse.
+- **`FRUITBACK_GOOGLE_OAUTH` needs `FRUITBACK_AUTH_SECRET`**: nothing else reads it.
+- **A database with no `FRUITBACK_AUTH_SECRET` is accepted**, and signs nobody in. It is the state of
+  the production between switch 1 and switch 2, on the image of before; refusing it here would make
+  that state a boot failure on the way back.
+- **`accounts-sqlite.fixture.ts` is a test file.** The worker imports it nowhere
+  (test:`runs for every implementation the worker exports` leaves it out by name). It stays for two
+  jobs: the planted violations of the account conformance are changes to its source, and
+  `postgres-copy.test.ts` makes with it the file that `migrate-to-postgres` copies.
+  `ACCOUNTS_FILE_VERSION` is in `postgres-copy.ts`, and a test holds it equal to the fixture's.
+- **`migrate-to-postgres` stays in the image**: it is how a deployment with an accounts file comes
+  to this one.
+- **The table `email_links` stays, and nothing reads it.** `createEmailLink` and `spendEmailLink`
+  left the `AccountStore`. Dropping the table is a migration, and a migration is not a removal that
+  an image of before survives: it goes with the tables of FRU-184.
+- **`oauth-client.ts` parses `<client id>:<client secret>`** for the three applications that are
+  left (GitHub and Google of better-auth, Linear). `console-cors.ts` holds what `console-routes.ts`
+  kept that is not a sign-in: the origin of the console, its CORS, and which paths are the console's.
+  `Authorization` is no longer an allowed header of a console route.
+
+### The reasons, and the measurements
+
+- **Refused, not ignored.** A worker that ignored `FRUITBACK_ACCOUNTS_PATH` would start with no
+  workspace, and the operator would read the empty console as the accounts lost. A `500` on
+  `/health` with the name of the variable is read in a minute:
+  test:`refuses the accounts file of before, and says what to set and where to read how (FRU-150)`.
+- **The tests of the console API, the connectors, the destinations and the deliveries moved to
+  PostgreSQL** (PGlite), with a real sign-in by a link and the cookie: `console-world.fixture.ts`.
+  They ran on an accounts file and a token minted by the test. PGlite holds one database per
+  process, so a case opens one world.
+- **Removed with their subject**: the tests of `console-routes.ts`, `github-oauth.ts` and
+  `google-oauth.ts`, the cases of the email links in the two account suites, the case of a worker
+  with accounts and no sessions (the sessions are in the same database now), and the one that
+  migrated a destination inside an accounts file of an older version.
+- **What the production must do before this image** is in `cloud/README.md`, « Switch 3 ».
+  No agent ran it on the host.
 
 ## The markdown codec, and the file that outlived its name
 
@@ -1966,7 +2031,7 @@ row that a session of the address accepts, and the pairing code stays what conne
   nothing about the workspace. `verifyForClient` compares `ws` with the client's `workspace` after
   the signature, on the read and on the write. `pair --workspace` names it, and it travels through
   every rotation.
-- **With `FRUITBACK_ACCOUNTS_PATH`, or `FRUITBACK_DATABASE_URL` (FRU-141), the sites are the clients**
+- **With `FRUITBACK_DATABASE_URL` (FRU-141), the sites are the clients**
   (FRU-96). `withSites` in `app.ts` reads
   them from the accounts on every request and lays them over the configuration as its client map
   and its allowed origins, so routing, CORS and the `ws` check run unchanged. **An empty map stays
@@ -1974,12 +2039,11 @@ row that a session of the address accepts, and the pairing code stays what conne
   holds the roles, and `can(role, action)` is the one table of who does what. The boot log says so
   too: `readExposureNotice` does not read a worker with accounts as « one client, public », which is
   what it printed on the first day of the Cloud (FRU-116).
-- **Signing in ends in a pairing code, like every session** (FRU-98). `/auth/email` sends a link whose
-  code is after the `#`; `/auth/email/redeem` spends it, makes the address an account, then mints and
-  spends a pairing code for it. **The console's refresh token is an `HttpOnly` cookie** on
-  `/console/session`, and `consoleCors` answers `FRUITBACK_CONSOLE_URL` and no other origin. A console
-  session names no workspace: the `ws` check keeps it off every site. `mail.ts` is the seam, Scaleway
-  Transactional Email over HTTP the one implementation.
+- **Signing in to the console is better-auth's, and ends in no pairing code** (FRU-98, then
+  FRU-147 and FRU-150). Until FRU-150 `/auth/email` and `/auth/email/redeem` made a session like the
+  one of an extension, with a refresh token in an `HttpOnly` cookie on `/console/session`. They are
+  gone. `consoleCors` (`console-cors.ts`) answers `FRUITBACK_CONSOLE_URL` and no other origin.
+  `mail.ts` is the seam, Scaleway Transactional Email over HTTP the one implementation.
 - **A workspace connects its own tracker, and a site chooses where its notes go** (FRU-121).
   `connectors.ts` wraps the worker's store: a client with no `connector` uses it as before, a client
   with one uses a Linear store built from the key of that connector. `clientOf` puts the connector and
@@ -2018,10 +2082,10 @@ row that a session of the address accepts, and the pairing code stays what conne
   sign-in from another browser does not change it. For a mail, the account's language wins, then the
   console that asked, then `Accept-Language`, then English. `readLocaleTag` parses every one with
   `Intl.Locale`: a value from a browser is never kept as typed.
-- **GitHub names the person, never the browser** (FRU-97). `github-oauth.ts`: `state` bound to the
-  browser by a `SameSite=Lax` cookie (a `Strict` one is not sent on the way back from github.com),
-  issued by this worker and spent once; PKCE; the account is GitHub's **verified primary** address.
-  `FRUITBACK_PUBLIC_URL` is the callback's base: behind the proxy the worker sees only `http://`.
+- **GitHub names the person, never the browser** (FRU-97). The worker's own `github-oauth.ts` did it
+  until FRU-150; better-auth does it since (FRU-147), and the account is still an address GitHub
+  verified. `FRUITBACK_PUBLIC_URL` is the callback's base: behind the proxy the worker sees only
+  `http://`.
 - **The store of a connector is built for the request, and nothing is kept between two** (FRU-102).
   A map of the stores existed, under a `WeakMap` by the object of the accounts. A request makes a new
   object of the accounts, so the map never found anything, while its comment said that a key was
@@ -2043,11 +2107,9 @@ row that a session of the address accepts, and the pairing code stays what conne
   gives up on a `508` at once, with `LOOP_ERROR` for the console. **That answer is above the rate
   limit, and not metered, on purpose**: it reads no configuration, no `Kv` and no provider, and below
   the limit a loop would get `429`, which the sender tries again seven times.
-- **Google signs a person in like GitHub, and the steps are written once** (FRU-135).
-  `oauth-sign-in.ts` holds the start, the callback, the cookie and the `state`; a provider is its
-  addresses, its scope and `identify`. The provider is in the key of the `state`, so a state of one
-  does not finish the flow of the other. Google's address is used only when `email_verified` is the
-  boolean `true`. **The console asks `GET /auth/providers` before it draws a button**: a button for a
+- **Google signs a person in like GitHub** (FRU-135), through better-auth since FRU-147;
+  `oauth-sign-in.ts`, which held the steps of both, went with FRU-150. Google's address is used only
+  when `email_verified` is `true`. **The console asks `GET /auth/providers` before it draws a button**: a button for a
   provider the worker does not have leads to a `404`. The build argument of FRU-97 still turns
   GitHub on at once.
 

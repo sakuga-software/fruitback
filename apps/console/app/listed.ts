@@ -9,9 +9,21 @@ import type { Answer } from './api.ts';
  */
 export type Listed<T> = readonly T[] | 'loading' | 'failed';
 
-/** The list an answer holds, or `failed`. */
+/**
+ * The list an answer holds, or `failed`. An answer that says yes and holds no list (no body, or
+ * another shape) is `failed` too: it is not an empty list, and reading a field of nothing threw.
+ * A selector that throws on such a shape is `failed` as well: the screen offers to try again.
+ */
 export function listedOf<D, T>(answer: Answer<D>, pick: (data: D) => readonly T[]): readonly T[] | 'failed' {
-  return answer.ok ? pick(answer.data) : 'failed';
+  if (!answer.ok || typeof answer.data !== 'object' || answer.data === null) return 'failed';
+  try {
+    const list: unknown = pick(answer.data);
+
+    return Array.isArray(list) ? (list as readonly T[]) : 'failed';
+  } catch {
+    // The selector read a list where the answer has another shape: `data.filter` of an object.
+    return 'failed';
+  }
 }
 
 /** The items of a list that was read, and none of one that was not. For a count that is drawn only when known. */
