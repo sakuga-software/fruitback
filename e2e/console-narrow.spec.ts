@@ -101,6 +101,19 @@ const headerLines = (page: Page) =>
       }),
   );
 
+/** How far the title of the current step is cut, and the lines it takes. A whole title: 0 and 1. */
+const currentStepTitle = (page: Page) =>
+  page
+    .locator('ol [aria-current="step"] span span')
+    .first()
+    .evaluate((title) => {
+      const range = document.createRange();
+      range.selectNodeContents(title);
+      const tops = new Set([...range.getClientRects()].map((rect) => Math.round(rect.top)));
+
+      return { cut: title.scrollWidth - title.clientWidth, lines: tops.size };
+    });
+
 for (const width of [390, 320]) {
   for (const locale of ['en-US', 'fr-FR']) {
     test(`no step of /setup scrolls sideways at ${width} px, in ${locale}`, async ({ browser }) => {
@@ -113,6 +126,7 @@ for (const width of [390, 320]) {
       await page.goto(`${CONSOLE}/setup`);
       await expect(continueButton).toBeVisible();
       expect.soft(await sideScroll(page), 'step 1 scrolls sideways').toBe(0);
+      expect.soft(await currentStepTitle(page), 'the title of step 1').toEqual({ cut: 0, lines: 1 });
       if (width === 390) {
         expect.soft((await headerLines(page)).filter((label) => label.lines > 1)).toEqual([]);
         const box = await continueButton.boundingBox();
@@ -125,14 +139,17 @@ for (const width of [390, 320]) {
       await page.goto(`${CONSOLE}/setup`);
       await expect(page.locator('ol [aria-current="step"]')).toContainText('2');
       expect.soft(await sideScroll(page), 'step 2 scrolls sideways').toBe(0);
+      expect.soft(await currentStepTitle(page), 'the title of step 2').toEqual({ cut: 0, lines: 1 });
       await page.goto(`${CONSOLE}/setup?step=site`);
       await expect(page.locator('ol [aria-current="step"]')).toContainText('3');
       expect.soft(await sideScroll(page), 'step 3 scrolls sideways').toBe(0);
+      expect.soft(await currentStepTitle(page), 'the title of step 3').toEqual({ cut: 0, lines: 1 });
       await page.getByRole('textbox').first().fill(`https://${LONG_HOST}`);
       await continueButton.click();
       await expect(page.locator('ol [aria-current="step"]')).toContainText('4');
       await expect(page.locator('pre')).toBeVisible();
       expect.soft(await sideScroll(page), 'step 4 scrolls sideways').toBe(0);
+      expect.soft(await currentStepTitle(page), 'the title of step 4').toEqual({ cut: 0, lines: 1 });
       // The script scrolls inside its block, and stays whole.
       expect(await page.locator('pre').evaluate((pre) => pre.scrollWidth > pre.clientWidth)).toBe(true);
       await context.close();
