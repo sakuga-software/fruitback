@@ -7,6 +7,7 @@ import {
   type ConnectorSettings,
   type ConnectorTrouble,
   type Destination,
+  type Domain,
   type DueDelivery,
   type PendingDelivery,
   ROLES,
@@ -65,6 +66,30 @@ export function siteOf(row: Record<string, unknown>, destinations: Destination[]
 }
 
 export const SITE_COLUMNS = 'id, workspace_id, origin, visibility';
+
+export const DOMAIN_COLUMNS =
+  'id, workspace_id, domain, created_at, verified_at, lost_at, checked_at, previews_site_id';
+
+/** A row is parsed, never trusted. An instant that is not a number is an instant that is not there. */
+export function domainOf(row: Record<string, unknown> | undefined): Domain | undefined {
+  if (row === undefined) return undefined;
+  if (typeof row.id !== 'string' || typeof row.workspace_id !== 'string' || typeof row.domain !== 'string') {
+    return undefined;
+  }
+
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    domain: row.domain,
+    createdAt: typeof row.created_at === 'number' ? row.created_at : 0,
+    ...(typeof row.verified_at === 'number' ? { verifiedAt: row.verified_at } : {}),
+    ...(typeof row.lost_at === 'number' ? { lostAt: row.lost_at } : {}),
+    ...(typeof row.checked_at === 'number' ? { checkedAt: row.checked_at } : {}),
+    ...(typeof row.previews_site_id === 'string' && row.previews_site_id !== ''
+      ? { previewsSite: row.previews_site_id }
+      : {}),
+  };
+}
 
 /** A row is parsed, never trusted. A row with no connector is no destination. */
 export function destinationOf(row: Record<string, unknown>): Destination | undefined {

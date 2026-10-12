@@ -1,4 +1,5 @@
 import { CACHE_TTL_MS } from './cache.ts';
+import { PROOF_GRACE_MS, RECHECK_MS } from './domain-proof.ts';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { SESSION_RENEWAL_SECONDS, SESSION_TTL_SECONDS } from './auth.ts';
@@ -151,6 +152,37 @@ describe('SECURITY.md states what the code does', () => {
     const phrase = `for ${CACHE_TTL_MS / 1000} seconds, in the clear`;
 
     assert.ok(SECURITY.includes(phrase), `SECURITY.md does not say a cached answer is readable ${phrase}`);
+  });
+
+  it('quotes how often a domain is proven again, and how long a DNS that does not answer is waited for (FRU-103)', () => {
+    const hours = (ms: number) => ms / 3_600_000;
+    const words = [
+      'zero',
+      'one',
+      'two',
+      'three',
+      'four',
+      'five',
+      'six',
+      'seven',
+      'eight',
+      'nine',
+      'ten',
+      'eleven',
+      'twelve',
+    ];
+    assert.ok(
+      SECURITY.includes(`every ${words[hours(RECHECK_MS)]} hours`),
+      `SECURITY.md does not say a proof is asked every ${hours(RECHECK_MS)} hours`,
+    );
+    assert.ok(
+      SECURITY.includes(`${words[hours(RECHECK_MS)]} hours at most`),
+      'SECURITY.md does not say how long a removed record still proves the domain',
+    );
+    assert.ok(
+      SECURITY.includes(`for ${hours(PROOF_GRACE_MS)} hours at most`),
+      `SECURITY.md does not say a proof nobody confirms holds ${hours(PROOF_GRACE_MS)} hours`,
+    );
   });
 
   it('quotes the token cap and the clock skew the verifier enforces', () => {
