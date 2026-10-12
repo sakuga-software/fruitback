@@ -563,6 +563,43 @@ describe('remembering the name, when the reporter asks (FRU-91)', () => {
     assert.deepEqual(seen, [undefined]);
     assert.deepEqual(writes, []);
   });
+
+  it('asks whether the worker names the reporter at each open, and never under an open composer (FRU-112)', async () => {
+    // In team mode the widget learns it from a read, after the composer is built, and a session ends.
+    const seen: (SeedReporter | undefined)[] = [];
+    let identified = false;
+    const { page } = mount(async (_note, reporter) => void seen.push(reporter), { identified: () => identified });
+    const asked = () => !query(page, '[data-fruitback-identify]').hidden;
+
+    composer?.open(ANCHOR);
+    assert.equal(asked(), true);
+    query(page, '[data-fruitback-identify]').click();
+    input(page, '[data-fruitback-name]').value = 'Alice';
+
+    // The answer changes while somebody types: the field stays, and the note goes with the name.
+    identified = true;
+    composer?.identityChanged();
+    assert.equal(asked(), true);
+    assert.equal(query(page, '[data-fruitback-who]').hidden, false);
+    await send(page);
+    composer?.close();
+
+    // Closed, it takes the answer at once, and the next note carries no name.
+    composer?.identityChanged();
+    assert.equal(asked(), false);
+    composer?.open(ANCHOR);
+    assert.equal(asked(), false);
+    assert.equal(query(page, '[data-fruitback-who]').hidden, true);
+    await send(page);
+    composer?.close();
+
+    // The session ended: the field comes back.
+    identified = false;
+    composer?.open(ANCHOR);
+    assert.equal(asked(), true);
+
+    assert.deepEqual(seen, [{ name: 'Alice' }, undefined]);
+  });
 });
 
 describe('the popover as a dialog (FRU-51)', () => {

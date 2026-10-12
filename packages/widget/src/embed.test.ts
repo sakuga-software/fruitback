@@ -336,6 +336,36 @@ describe('reading pins', () => {
     widget.destroy();
   });
 
+  it('asks for no name while the worker says it would sign the notes of this reader (FRU-112)', async () => {
+    // Team mode: the widget holds a transport and no token, so only a read can tell it.
+    const page = mountWithCta();
+    const answer = (more: object) => () => new Response(JSON.stringify({ issues: [], ...more }), { status: 200 });
+    stubReads(
+      answer({}),
+      answer({ identified: true }),
+      // Only `true` is the word of the worker.
+      answer({ identified: 'yes' }),
+      answer({ identified: true }),
+      // A read that fails says nothing: the reviewer is still who they were.
+      () => new Response('{}', { status: 502 }),
+      // The session ended: the field comes back.
+      answer({}),
+    );
+    const widget = init({ document: page.document, endpoint: ENDPOINT, clientId: 'acme' });
+    const asked = async () => {
+      await widget.refresh();
+
+      return !(shadowOf(page).querySelector('[data-fruitback-identify]') as HTMLElement).hidden;
+    };
+
+    assert.deepEqual(
+      [await asked(), await asked(), await asked(), await asked(), await asked(), await asked()],
+      [true, false, true, false, false, true],
+    );
+
+    widget.destroy();
+  });
+
   it('keeps the places on screen when a read fails, like the pins', async () => {
     const page = mountWithCta();
     stubReads(

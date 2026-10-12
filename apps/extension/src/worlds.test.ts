@@ -138,6 +138,27 @@ describe('the page world can reach nothing that holds a session', () => {
       }
     }
   });
+
+  /**
+   * Who the session names stays out of the page's world too (FRU-112).
+   *
+   * In team mode the page reads what the worker answers to a relayed read. Since FRU-112 that answer
+   * says `identified: true` to a paired reviewer, so the composer asks for no name: one bit, which the
+   * page could already tell from a read that came back with notes. The name and the address of the
+   * reviewer are in the session the background keeps, and nothing here may hand them over: the page
+   * learns a name when the reviewer signs a note with it, and not before.
+   */
+  it('names nothing of who the session is in code the page can read', () => {
+    for (const entry of entrypoints) {
+      for (const path of reachableFrom(entry)) {
+        assert.doesNotMatch(
+          codeOf(read(path)),
+          /\bidentity\b/,
+          `${relative(ROOT, path)} runs in, or is imported into, the page's world and names the identity of the session`,
+        );
+      }
+    }
+  });
 });
 
 /**

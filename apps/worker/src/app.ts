@@ -163,6 +163,22 @@ async function seesTracker(request: Request, config: Served, policy: ClientPolic
 }
 
 /**
+ * Whether the worker would sign a note of this caller with an identity it verified (FRU-112).
+ *
+ * The widget asks for no name then: a typed one would be replaced. It is the answer `attributionFor`
+ * gives to the same token, so a site token counts like a session.
+ *
+ * WARNING: one bit, and never who. In team mode the page reads this answer, and it must learn
+ * nothing of the session that the notes do not show already.
+ */
+async function signsNotes(request: Request, policy: ClientPolicy): Promise<boolean> {
+  const token = readBearerToken(request.headers.get('Authorization'));
+  if (token === undefined) return false;
+
+  return (await verifyForClient(token, policy))?.ok === true;
+}
+
+/**
  * One pass over the notes that wait to be sent to the address a workspace connected (FRU-122).
  *
  * The server calls it on a timer. It is here and not in `server.ts` so a test reaches it with no
@@ -771,7 +787,15 @@ async function getFeedback(
     return json(
       200,
       // `stages` does not depend on the page, so it is not in the cached answer.
-      { url, issues, stages: store.stages ?? SEED_STAGES, ...offered, ...batchOffer(config) },
+      {
+        url,
+        issues,
+        stages: store.stages ?? SEED_STAGES,
+        ...offered,
+        // Asked at each request like the places, and absent for a reader the worker cannot name.
+        ...((await signsNotes(request, route.policy)) ? { identified: true } : {}),
+        ...batchOffer(config),
+      },
       // No browser cache, deliberately. The read cache above is what protects the Linear
       // quota; letting the browser hold a copy too only buys one saved request per page load, and
       // costs the widget the pin it planted a second ago — it re-reads and gets served its own
