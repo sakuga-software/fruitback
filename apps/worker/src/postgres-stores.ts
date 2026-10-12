@@ -1,5 +1,6 @@
 import type { AccountStore } from './accounts.ts';
 import { type Database, databaseFor } from './postgres.ts';
+import type { ScreenshotStore } from './screenshots.ts';
 import type { SessionStore } from './session.ts';
 
 /**
@@ -102,6 +103,16 @@ export function sessionStoreOn(database: Database): SessionStore {
     revokeSession: true,
     endSessionsOf: true,
     purge: true,
+  });
+}
+
+/** The pictures of the notes of this database (FRU-44). */
+export function postgresScreenshotStore(url: string): ScreenshotStore {
+  const database = databaseFor(url);
+
+  return later(async () => (await import('./screenshots-postgres.ts')).createPostgresScreenshotStore(database), {
+    put: true,
+    get: true,
   });
 }
 
