@@ -10,7 +10,7 @@ import {
   parseSeedFromDescription,
   teamWords,
 } from './markdown-description.ts';
-import { SEED_VERSION } from './seed.ts';
+import { SEED_VERSION, type SeedSource } from './seed.ts';
 import { minimalSeedFixture, seedFixture } from './seed.fixture.ts';
 
 /** Rebuild the description the way a tracker's editor or a human might have left it. */
@@ -196,7 +196,7 @@ describe('the lines of a description that a member reads', () => {
   });
 
   it('writes the component and the file, each without the other', () => {
-    const componentLine = (source: Parameters<typeof seedFixture>[0]['source']) =>
+    const componentLine = (source: SeedSource | undefined) =>
       buildIssueMetadata(seedFixture({ source })).find((line) => line.startsWith('**Component**'));
 
     assert.equal(
