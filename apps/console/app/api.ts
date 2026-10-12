@@ -360,6 +360,8 @@ export type Invitation = {
   status: 'pending' | 'accepted' | 'rejected' | 'canceled';
   expiresAt: string;
   createdAt?: string;
+  /** In the answer to an invitation only: `false` when the worker kept it and sent no message. */
+  mailed?: boolean;
 };
 
 /**
