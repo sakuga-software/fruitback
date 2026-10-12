@@ -615,6 +615,13 @@ it`. The value of the row is the address it was sent to.
 the cookie from another origin, or from none, and takes it from the console`. better-auth refuses
   the same two requests on its own routes. A call with the token of before in `Authorization` is not
   a cookie, and is checked as before.
+- **A tab of the console sends nothing for another account than the one it was drawn for**
+  (FRU-210). The cookie is of the browser, so a second person who signs in in another tab changes
+  who a tab left open speaks for. The tab asks who is signed in when it is shown again and when
+  somebody presses « Continue » after a session ended; on another account it stops, shows nothing
+  of the person before but the text they were typing, and sends nothing until it is loaded again.
+  **The condition: the browser tells the page that the tab is shown again** (`focus`,
+  `visibilitychange`); the worker does not check which account a tab believes it is.
 - **« Sign out » ends both sessions of the browser, or says that it did not** (FRU-204). A browser
   that signed in before the worker served better-auth still holds the refresh cookie of the path of
   before, good for 30 days, and the worker takes it for as long as it serves that path. The console

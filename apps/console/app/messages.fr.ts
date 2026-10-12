@@ -95,6 +95,14 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Console · this browser': 'Console · ce navigateur',
   'Active now': 'Actif maintenant',
   'Sign out': 'Se déconnecter',
+  'Another account is signed in in this browser': 'Un autre compte est connecté dans ce navigateur',
+  'You were signed out': 'Vous avez été déconnecté',
+  'This tab was open for another account, so it stopped: nothing was sent from it. Load it again to go on.':
+    'Cet onglet était ouvert pour un autre compte, il s’est donc arrêté : rien n’en est parti. Rechargez-le pour continuer.',
+  'The session ended in another tab, so this tab stopped: nothing was sent from it.':
+    'La session s’est terminée dans un autre onglet, cet onglet s’est donc arrêté : rien n’en est parti.',
+  'What you were writing, to copy:': 'Ce que vous étiez en train d’écrire, à copier :',
+  'Load the console again': 'Recharger la console',
   'You are still signed in: Fruitback did not confirm the sign-out. Try again.':
     'Vous êtes toujours connecté : Fruitback n’a pas confirmé la déconnexion. Réessayez.',
   'Delete the workspace': 'Supprimer le workspace',
