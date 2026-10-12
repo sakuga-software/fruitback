@@ -12,7 +12,7 @@ import { type ReadState, type Sidebar, createSidebar } from './sidebar.ts';
 import { type CaptureHost, type CaptureTarget, createCaptureHost } from './host.ts';
 import type { FruitbackTheme } from './theme.ts';
 import { type FruitbackTransport, fetchTransport } from './transport.ts';
-import { type Composer, createComposer } from './composer.ts';
+import { type Composer, type SendFailure, createComposer } from './composer.ts';
 import {
   type OfferedDestinations,
   createOfferedDestinations,
@@ -280,13 +280,13 @@ export function init(options: FruitbackOptions): Fruitback {
     onSubmit: async (note, reporter, chosen) => {
       const destination = destinationToSend(destinations.get(), chosen);
       const planted = await plant({ note, target, place, reporter, destination, config: config.get(), options });
-      if (!planted) {
+      if (planted !== true) {
         // The worker refuses a place the site no longer has, or a reader who lost the right to
         // choose. The list on screen is then old, and a second try would be refused like the first.
         // A read brings the list of now, and the composer says what changed.
         if (destination !== undefined) await read();
 
-        return false;
+        return planted;
       }
 
       // Re-read rather than assume: the pin the reporter is about to see is the one the worker gave
@@ -453,8 +453,8 @@ export async function plant({
   destination?: string | undefined;
   config: WidgetConfig;
   options: FruitbackOptions;
-}): Promise<boolean> {
-  if (target === null) return false;
+}): Promise<true | SendFailure> {
+  if (target === null) return 'retry';
 
   const seed = captureSeed({
     element: target.element,
@@ -489,7 +489,7 @@ export async function plant({
     body: JSON.stringify(seed),
   });
 
-  return response.ok;
+  return response.ok ? true : failureOf(response);
 }
 
 /**
@@ -505,6 +505,30 @@ export async function plant({
 function placeOf(target: CaptureTarget): CapturedPlace | undefined {
   try {
     return capturePlace(target.element, target.source === undefined ? {} : { source: target.source });
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * What a refused write means for the reporter (FRU-156): try again, wait, or tell the team.
+ *
+ * A place the worker refuses (`destination-not-allowed`) is a `403` that a second try can pass: the
+ * read that follows brings the list of now, and the composer says which place is gone (FRU-123).
+ */
+export function failureOf(response: { status: number; body: string }): SendFailure {
+  if (response.status === 429) return 'wait';
+  if (response.status === 413) return 'too-large';
+  if (response.status === 401 || response.status === 403) {
+    return errorOf(response.body) === 'destination-not-allowed' ? 'retry' : 'refused';
+  }
+
+  return 'retry';
+}
+
+function errorOf(body: string): unknown {
+  try {
+    return (JSON.parse(body) as { error?: unknown }).error;
   } catch {
     return undefined;
   }

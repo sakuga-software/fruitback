@@ -22,14 +22,26 @@ const SENT_MS = 1_100;
 
 export type ComposerState = 'idle' | 'sending' | 'sent' | 'failed';
 
+/**
+ * Why a send failed, so the composer says what to do next (FRU-156). The text is kept in every case.
+ *
+ * - `retry`: no answer, or the worker failed. A second try can work.
+ * - `wait`: too many notes at once (`429`). A try in a minute can work.
+ * - `refused`: the worker does not accept this note from here (`401`, `403`). Trying again will not
+ *   work; the team of the site can change it.
+ * - `too-large`: the note is too heavy (`413`). It goes once it is shorter, or without its picture.
+ */
+export type SendFailure = 'retry' | 'wait' | 'refused' | 'too-large';
+
 export type ComposerOptions = {
   document?: Document;
   /** Inside the widget's Shadow root — `host.panel`. */
   host: Element;
   /**
-   * Send the note. Resolving means it was planted; throwing or resolving `false` keeps the popover
-   * open with the text intact, because a note lost to a network blip is the one failure this widget
-   * cannot afford.
+   * Send the note. Resolving means it was planted; throwing, resolving `false` or resolving a
+   * `SendFailure` keeps the popover open with the text intact, because a note lost to a network blip
+   * is the one failure this widget cannot afford. A `SendFailure` chooses the words; the others say
+   * to try again.
    *
    * `reporter` is what the visitor optionally typed about themselves (FRU-9). It is a **claim**:
    * the worker stores it as self-declared unless the embedder also sends a signed identity token,
@@ -38,7 +50,7 @@ export type ComposerOptions = {
    * `destination` is the id of the place the line shows (FRU-123). It is absent when the composer
    * shows no line, which is every composer but the one of a member of a site with several places.
    */
-  onSubmit: (note: string, reporter?: SeedReporter, destination?: string) => Promise<boolean | void>;
+  onSubmit: (note: string, reporter?: SeedReporter, destination?: string) => Promise<boolean | void | SendFailure>;
   onClose?: () => void;
   /**
    * Where the name of the reporter is kept between notes, when the reporter asks for it (FRU-91).
@@ -154,14 +166,14 @@ export function createComposer(options: ComposerOptions): Composer {
    */
   let session = 0;
 
-  function setState(next: ComposerState): void {
+  function setState(next: ComposerState, failure: SendFailure = 'retry'): void {
     state = next;
     root.dataset.fruitbackState = next;
     // Disabled while in flight: a second click would plant the same note twice, and the worker has
     // no way to tell the difference.
     send.disabled = next === 'sending' || next === 'sent';
     field.readOnly = next === 'sending';
-    status.textContent = next === 'idle' ? '' : t.text(STATUS[next]);
+    status.textContent = next === 'idle' ? '' : t.text(next === 'failed' ? FAILURES[failure] : STATUS[next]);
   }
 
   async function submit(): Promise<void> {
@@ -171,15 +183,21 @@ export function createComposer(options: ComposerOptions): Composer {
     setState('sending');
     // Before the send, so a failed send costs neither the name nor the choice to keep it.
     if (asksForName && remember.checked) memory?.set(typedName());
+    let failure: SendFailure | undefined;
     try {
       const result = await options.onSubmit(field.value, reporterFromFields(), selected);
-      if (result === false) throw new Error('refused');
+      if (result === false) failure = 'retry';
+      else if (typeof result === 'string') failure = result;
     } catch {
+      failure = 'retry';
+    }
+
+    if (failure !== undefined) {
       // Abandoned mid-flight: say nothing, focus nothing. The note was let go of on purpose.
       if (mine !== session) return;
 
       // The text stays exactly where it is. Retrying is one more click, not one more typing session.
-      setState('failed');
+      setState('failed', failure);
       field.focus();
       return;
     }
@@ -410,8 +428,15 @@ const GAP = 10;
 const STATUS = {
   sending: 'composer.sending',
   sent: 'composer.sent',
-  failed: 'composer.failed',
-} as const satisfies Record<Exclude<ComposerState, 'idle'>, MessageKey>;
+} as const satisfies Record<Exclude<ComposerState, 'idle' | 'failed'>, MessageKey>;
+
+/** What a failed send says, by its cause (FRU-156). */
+const FAILURES = {
+  retry: 'composer.failed',
+  wait: 'composer.failedWait',
+  refused: 'composer.failedRefused',
+  'too-large': 'composer.failedTooLarge',
+} as const satisfies Record<SendFailure, MessageKey>;
 
 const TEMPLATE = `
   <div class="fruitback-composer-drop" aria-hidden="true"></div>
@@ -545,7 +570,7 @@ const STYLES = `
   background: var(--fruitback-color-surface);
 }
 .fruitback-composer-who input[type="text"]:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 1px; }
-.fruitback-composer-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.fruitback-composer-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
 .fruitback-composer-status { flex: 1; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-composer-ghost, .fruitback-composer-send {
   border: 0;
@@ -568,6 +593,9 @@ const STYLES = `
   font-weight: 600;
 }
 .fruitback-composer[data-fruitback-state="failed"] .fruitback-composer-status { color: var(--fruitback-color-accent); }
+/* A failure says what to do in a sentence: it takes the whole line above the buttons (FRU-156). */
+.fruitback-composer[data-fruitback-state="failed"] .fruitback-composer-status { flex-basis: 100%; }
+.fruitback-composer[data-fruitback-state="failed"] .fruitback-composer-ghost { margin-inline-start: auto; }
 
 @keyframes fruitback-composer-in {
   from { opacity: 0; transform: translateY(-6px) scale(0.96); }
