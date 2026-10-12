@@ -63,7 +63,7 @@ function runners(): Runner[] {
 
 /** The quoted arguments of a `node --test` command. A script that is another command has none. */
 function globsOf(script: string): string[] {
-  if (!/^node --test\b/.test(script)) return [];
+  if (!isNodeTest(script)) return [];
 
   return [...script.matchAll(/'([^']+)'/g)].map((match) => match[1] ?? '');
 }
@@ -91,11 +91,26 @@ function unread(tests: string[], packages: Runner[], specs: string): string[] {
   });
 }
 
-/** Rule 2. The packages whose `test` script reads no file. */
+/**
+ * Rule 2. The packages whose `node --test` reads no file.
+ *
+ * A script that is another command is not counted here: this guard does not know what it reads, and
+ * `unknownRunners` says so in its own words.
+ */
 function empty(tests: string[], packages: Runner[]): string[] {
   return packages
+    .filter((candidate) => isNodeTest(candidate.script))
     .filter((candidate) => unread(tests, [candidate], '').length === tests.length)
     .map((candidate) => candidate.root);
+}
+
+/** The packages whose `test` script is not `node --test`: rules 1 and 2 cannot read what it runs. */
+function unknownRunners(packages: Runner[]): string[] {
+  return packages.filter((candidate) => !isNodeTest(candidate.script)).map((candidate) => candidate.root);
+}
+
+function isNodeTest(script: string): boolean {
+  return /^node --test\b/.test(script);
 }
 
 /**
@@ -103,7 +118,7 @@ function empty(tests: string[], packages: Runner[]): string[] {
  *
  * - `it.skip(…)`, and the same on `test`, `describe` and `suite`: `node:test` takes the reason in
  *   the options, `{ skip: 'the reason' }`. Playwright has that call alone, so a spec may write
- *   `test.skip(condition, 'the reason')` on one line.
+ *   `test.skip(condition, 'the reason')`, on one line or on several as oxfmt wraps it.
  * - `skip: true`: a reason is a string.
  * - `.skip()` with no argument, as on the context of a test: `t.skip('the reason')`.
  *
@@ -111,15 +126,18 @@ function empty(tests: string[], packages: Runner[]): string[] {
  * its type where it is declared as `string | false`.
  */
 function bareSkips(file: string, source: string, specs: string): string[] {
-  const withReason = /\btest\.skip\([^\n]+,\s*(['"`])[^'"`\n]+\1,?\s*\)/;
+  // The arguments up to the reason hold no parenthesis, or pairs that hold none: a callback with a
+  // body does not pass, so `test.skip('name', async () => { … })` is never read as a reason.
+  const withReason = /^test\.skip\((?:[^()]|\([^()]*\))*?,\s*(['"`])[^'"`\n]+\1,?\s*\)/;
+  const inSpecs = file.startsWith(`${specs}/`);
+  const lineOf = (index: number) => source.slice(0, index).split('\n').length;
 
-  return source.split('\n').flatMap((line, index) => {
-    const call = /\b(?:it|test|describe|suite)\.skip\(/.test(line);
-    const allowed = file.startsWith(`${specs}/`) && withReason.test(line);
-    const bare = (call && !allowed) || /\bskip:\s*true\b/.test(line) || /\.skip\(\s*\)/.test(line);
+  const calls = [...source.matchAll(/\b(?:it|test|describe|suite)\.skip\(/g)]
+    .filter((call) => !(inSpecs && withReason.test(source.slice(call.index))))
+    .map((call) => lineOf(call.index));
+  const options = [...source.matchAll(/\bskip:\s*true\b|\.skip\(\s*\)/g)].map((option) => lineOf(option.index));
 
-    return bare ? [`${file}:${index + 1}`] : [];
-  });
+  return [...new Set([...calls, ...options])].sort((a, b) => a - b).map((line) => `${file}:${line}`);
 }
 
 const TESTS = files('**/*').filter((path) => TEST_FILE.test(path));
@@ -179,18 +197,32 @@ describe('each test file is run (FRU-174)', () => {
 
   it('fails on a test script whose glob matches no file', () => {
     const packages: Runner[] = [
-      { root: 'packages/shared', script: '', globs: ['src/**/*.test.ts'] },
-      { root: 'packages/fruitback', script: '', globs: ['src/**/*.test.ts'] },
-      { root: 'packages/typo', script: '', globs: ['scr/**/*.test.ts'] },
-      { root: 'packages/other-runner', script: '', globs: [] },
+      { root: 'packages/shared', script: "node --test 'src/**/*.test.ts'", globs: ['src/**/*.test.ts'] },
+      { root: 'packages/fruitback', script: "node --test 'src/**/*.test.ts'", globs: ['src/**/*.test.ts'] },
+      { root: 'packages/typo', script: "node --test 'scr/**/*.test.ts'", globs: ['scr/**/*.test.ts'] },
+      { root: 'packages/no-glob', script: 'node --test', globs: [] },
     ];
-    const tests = [
-      'packages/shared/src/seed.test.ts',
-      'packages/typo/src/a.test.ts',
-      'packages/other-runner/src/a.test.ts',
+    const tests = ['packages/shared/src/seed.test.ts', 'packages/typo/src/a.test.ts', 'packages/no-glob/src/a.test.ts'];
+
+    assert.deepEqual(empty(tests, packages), ['packages/fruitback', 'packages/typo', 'packages/no-glob']);
+  });
+
+  it('knows the runner of each test script', () => {
+    assert.deepEqual(
+      unknownRunners(RUNNERS),
+      [],
+      'the test script of these packages is not node --test: teach this guard what that runner reads',
+    );
+  });
+
+  it('fails on a test script that is another runner, in its own words', () => {
+    const packages: Runner[] = [
+      { root: 'packages/shared', script: "node --test 'src/**/*.test.ts'", globs: ['src/**/*.test.ts'] },
+      { root: 'packages/other-runner', script: 'vitest run', globs: [] },
     ];
 
-    assert.deepEqual(empty(tests, packages), ['packages/fruitback', 'packages/typo', 'packages/other-runner']);
+    assert.deepEqual(unknownRunners(packages), ['packages/other-runner']);
+    assert.deepEqual(empty(['packages/shared/src/seed.test.ts', 'packages/other-runner/src/a.test.ts'], packages), []);
   });
 
   it('has one spec or more for Playwright', () => {
@@ -252,8 +284,32 @@ describe('a skip carries its reason (FRU-174)', () => {
       bareSkips('e2e/zz.spec.ts', "    test.skip(browserName === 'webkit', 'WebKit has no such API');", 'e2e'),
       [],
     );
-    assert.deepEqual(bareSkips('e2e/zz.spec.ts', "test.skip('draws a pin', async ({ page }) => {", 'e2e'), [
-      'e2e/zz.spec.ts:1',
-    ]);
+    // As oxfmt wraps a call that is longer than a line.
+    const wrapped = [
+      'test.beforeEach(async ({ browserName }) => {',
+      '  test.skip(',
+      "    browserName === 'webkit' || isMobile(browserName),",
+      "    'WebKit has no such API, and a phone has no extension',",
+      '  );',
+      '});',
+    ];
+    assert.deepEqual(bareSkips('e2e/zz.spec.ts', wrapped.join('\n'), 'e2e'), []);
+  });
+
+  it('does not read the body of a skipped spec as its reason', () => {
+    const skipped = [
+      "test.skip('draws a pin', async ({ page }) => {",
+      "  await page.goto('/pricing');",
+      "  expect(await page.title(), 'the title');",
+      '});',
+      'test.skip(',
+      "  'draws a second pin',",
+      '  async ({ page }) => {',
+      "    await expect(page.getByRole('button'), 'the button').toBeVisible();",
+      '  },',
+      ');',
+    ];
+
+    assert.deepEqual(bareSkips('e2e/zz.spec.ts', skipped.join('\n'), 'e2e'), ['e2e/zz.spec.ts:1', 'e2e/zz.spec.ts:5']);
   });
 });
