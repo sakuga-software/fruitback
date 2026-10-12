@@ -21,6 +21,7 @@ async function stubWorker(page: Page, locale: 'en' | 'fr'): Promise<void> {
     const { pathname } = new URL(route.request().url());
     const json = (body: unknown) => route.fulfill({ json: body });
     if (pathname === '/console/me') return json(me);
+    if (pathname === '/console/workspaces/w1/domains') return json({ domains: [] });
     if (pathname === '/console/workspaces/w1/sites') return json(sites);
     if (pathname === '/console/workspaces/w1/connectors') return json({ connectors: [], available: true });
     if (pathname === '/auth/providers') return json({});
@@ -78,6 +79,7 @@ async function stubSetup(page: Page, signedIn: boolean): Promise<void> {
     const { pathname } = new URL(route.request().url());
     const json = (body: unknown, status = 200) => route.fulfill({ status, json: body });
     if (pathname === '/console/me') return signedIn ? json(me) : json({ error: 'unauthorized' }, 401);
+    if (pathname === '/console/workspaces/w1/domains') return json({ domains: [] });
     if (pathname === '/console/workspaces/w1/sites') return json(site, 201);
     if (pathname === '/auth/providers') return json({});
 

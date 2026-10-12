@@ -47,6 +47,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   list, as on the board; under 1280 px right under its row, which names it in `aria-controls`, and
   the page scrolls as far as the panel needs. `e2e/console-source-panel.spec.ts` measures it at 390,
   768 and 1440 px.
+  **The console decides nothing about a domain** (FRU-103). The Sites screen shows, to an owner or an
+  admin, the domains of the workspace (`domains.tsx`): the `TXT` record to write, « Check the DNS »,
+  and for a domain the worker says is proven, the site whose previews it covers. `state` is the
+  worker's word; a DNS that did not answer is said as such, never as « not found »; a proof that is
+  lost shows since when, and its record again. `e2e/console-domains.spec.ts` holds it.
   **A refused call says its own cause** (FRU-164): `problemOf` (`problems.ts`) gives the sentence of
   the code of the worker, « Fruitback did not answer. Try again. » for no answer and a `5xx`, and a
   sentence of the screen that blames no field for the rest. No failure clears a field. A copy goes

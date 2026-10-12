@@ -32,6 +32,22 @@ export type Site = {
   destination?: Destination;
   destinations?: Destination[];
 };
+/**
+ * A domain the workspace says it owns (FRU-103), as the worker answers it. `state` is the worker's
+ * word: `proven` only while the DNS shows `record`. `previews` is the pattern a proven domain covers,
+ * and `previewsSite` the site an admin named for it.
+ */
+export type Domain = {
+  id: string;
+  domain: string;
+  state: 'pending' | 'proven' | 'lost';
+  record: { type: 'TXT'; name: string; value: string };
+  previews: string;
+  previewsSite?: string;
+  verifiedAt?: string;
+  lostAt?: string;
+  checkedAt?: string;
+};
 /** How many places a site can send to: the bound of the worker. */
 export const MAX_DESTINATIONS = 5;
 
