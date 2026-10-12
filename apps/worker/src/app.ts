@@ -1071,6 +1071,11 @@ async function postBatch(
     results.flatMap((result, index) => (held[index] && 'error' in result ? [release(kv, clientId, result.id)] : [])),
   );
 
+  // WARNING: a `Kv` that does not take this write loses the ten minutes, not the note. The seed is
+  // kept and answered; only its trace is missing. Its hold is not given back, so a second attempt in
+  // the next minute is answered « not kept » and plants nothing. After that minute, a widget that
+  // sends the whole batch again would plant it twice: a widget sends again only the seeds that were
+  // answered as not kept. The memory `Kv` of this process does not refuse a write.
   await Promise.all(
     results.flatMap((result) =>
       'issue' in result

@@ -290,6 +290,32 @@ describe('a batch of notes (FRU-124)', () => {
     assert.equal((await send(seeds(2), { kv, store: working })).status, 201);
   });
 
+  it('keeps the note and holds its seed when the Kv does not keep its trace', async () => {
+    let created = 0;
+    const store: SeedStore = {
+      name: 'counting',
+      scope: () => '',
+      findForPage: async () => [],
+      async create(seed) {
+        created += 1;
+
+        return { id: seed.id, identifier: 'FB-1' };
+      },
+    };
+    const memory = createMemoryKv();
+    // The trace of a kept seed is refused, and nothing else is.
+    const kv: Kv = {
+      ...memory,
+      set: (key, value, ttl) =>
+        key.startsWith('fruitback:sent:') ? Promise.reject(new Error('refused')) : memory.set(key, value, ttl),
+    };
+
+    assert.equal((await send(seeds(2), { kv, store })).status, 201);
+    // The same batch at once: the seeds are still held, so nothing is planted a second time.
+    assert.equal((await send(seeds(2), { kv, store })).status, 502);
+    assert.equal(created, 2);
+  });
+
   it('answers 502 when the store kept no note, as for one note', async () => {
     const down: SeedStore = {
       name: 'down',
