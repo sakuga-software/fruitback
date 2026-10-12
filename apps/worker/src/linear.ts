@@ -264,7 +264,10 @@ export async function createSeedBatch(
     try {
       answers.push({ issue: await createSeedIssue(config, routing, seed, locale, parentId) });
     } catch (error) {
-      if (!(error instanceof StoreError)) throw error;
+      // WARNING: nothing is thrown from here. The parent exists, and the notes before this one are
+      // kept: an error that left this loop would answer `500`, lose their answers, and the next
+      // attempt would write a second parent. An error that is not Linear's is said in the log.
+      if (!(error instanceof StoreError)) console.error('[fruitback] a note of a batch failed', error);
       answers.push({ error: 'store-unavailable' });
     }
   }

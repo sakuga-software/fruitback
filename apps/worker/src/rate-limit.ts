@@ -20,22 +20,12 @@ export const WINDOW_MS = 60_000;
  *
  * It rejects with `KvError` when the `Kv` does not answer. The caller decides what that means.
  */
-export async function checkRateLimit(
+export function checkRateLimit(
   kv: Kv,
   clientIp: string,
   options: { limit?: number; now?: number } = {},
 ): Promise<boolean> {
-  const { limit = DEFAULT_LIMIT, now = Date.now() } = options;
-  const window = Math.floor(now / WINDOW_MS);
-  const overlap = 1 - (now % WINDOW_MS) / WINDOW_MS;
-
-  // Two windows of expiry, so the previous count is still there for the whole current window.
-  const [current, previous] = await Promise.all([
-    kv.incr(windowKey(clientIp, window), 2 * WINDOW_MS),
-    kv.get(windowKey(clientIp, window - 1)),
-  ]);
-
-  return Number(previous ?? 0) * overlap + current <= limit;
+  return chargeRateLimit(kv, clientIp, 1, options);
 }
 
 /**
@@ -53,9 +43,12 @@ export async function chargeRateLimit(
   options: { limit?: number; now?: number } = {},
 ): Promise<boolean> {
   const { limit = DEFAULT_LIMIT, now = Date.now() } = options;
+  // A batch of one note has nothing more to count, and `incr` takes no amount below one.
   if (amount < 1) return true;
   const window = Math.floor(now / WINDOW_MS);
   const overlap = 1 - (now % WINDOW_MS) / WINDOW_MS;
+
+  // Two windows of expiry, so the previous count is still there for the whole current window.
   const [current, previous] = await Promise.all([
     kv.incr(windowKey(clientIp, window), 2 * WINDOW_MS, amount),
     kv.get(windowKey(clientIp, window - 1)),

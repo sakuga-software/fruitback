@@ -932,6 +932,33 @@ function sentKey(clientId: string | undefined, seedId: string): string {
   return `fruitback:sent:${JSON.stringify([clientId ?? null, seedId])}`;
 }
 
+/** How long a seed that a request is planting is held from another request. */
+const SENDING_TTL_MS = 60_000;
+
+function sendingKey(clientId: string | undefined, seedId: string): string {
+  return `fruitback:sending:${JSON.stringify([clientId ?? null, seedId])}`;
+}
+
+/**
+ * Takes a seed for this request, or says that another request holds it.
+ *
+ * `incr` is the one atomic call of a `Kv`: the request that reads 1 holds the seed. Two attempts of
+ * one batch at the same moment would both read « not kept yet », and both plant it. A `Kv` that does
+ * not answer holds nothing: the seed is sent, as before this guard.
+ */
+async function hold(kv: Kv, clientId: string | undefined, seedId: string): Promise<boolean> {
+  try {
+    return (await kv.incr(sendingKey(clientId, seedId), SENDING_TTL_MS)) === 1;
+  } catch {
+    return true;
+  }
+}
+
+/** Gives a seed back when it was not kept, so the next attempt can take it at once. */
+async function release(kv: Kv, clientId: string | undefined, seedId: string): Promise<void> {
+  await kv.set(sendingKey(clientId, seedId), '0', SENDING_TTL_MS).catch(() => undefined);
+}
+
 /**
  * Several notes in one request (FRU-124): `POST /feedback` with an array of seeds.
  *
@@ -941,6 +968,7 @@ function sentKey(clientId: string | undefined, seedId: string): string {
  * - One client for the whole batch, one identity, one place (`?destination=`).
  * - A seed kept in the last minutes answers its issue again and is not planted twice: its id is the
  *   key (`seed.id` « dedupes retries »). That is what a widget sends again after a partial failure.
+ *   A seed that another request is planting now is answered as not kept, and is not planted here.
  * - One answer for each seed, in order: `201` when every one was kept, `207` when some were, `502`
  *   when none was. The widget keeps the ones that were not as drafts.
  */
@@ -1010,7 +1038,12 @@ async function postBatch(
       }
     }),
   );
-  const fresh = attributed.filter((_, index) => known[index] === undefined);
+  // A seed that is not kept yet is taken for this request. One that another request holds is not
+  // sent from here: it is answered as not kept, and the next attempt reads what became of it.
+  const held = await Promise.all(
+    attributed.map((seed, index) => (known[index] === undefined ? hold(kv, clientId, seed.id) : false)),
+  );
+  const fresh = attributed.filter((_, index) => held[index]);
 
   let planted: BatchAnswer[] = [];
   try {
@@ -1024,10 +1057,14 @@ async function postBatch(
   let next = 0;
   const results = attributed.map((seed, index) => {
     const issue = known[index];
-    const answer: BatchAnswer = issue === undefined ? (planted[next++] as BatchAnswer) : { issue };
+    if (issue !== undefined) return { id: seed.id, issue };
+    const answer: BatchAnswer = held[index] ? (planted[next++] as BatchAnswer) : { error: 'store-unavailable' };
 
     return { id: seed.id, ...answer };
   });
+  await Promise.all(
+    results.flatMap((result, index) => (held[index] && 'error' in result ? [release(kv, clientId, result.id)] : [])),
+  );
 
   await Promise.all(
     results.flatMap((result) =>

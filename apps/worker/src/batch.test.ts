@@ -81,7 +81,9 @@ describe('what a worker offers to take in one request', () => {
     assert.equal(maxBatch(20), 10);
     assert.equal(maxBatch(2000), 10);
     assert.equal(maxBatch(8), 4);
+    assert.equal(maxBatch(4), 2);
     assert.equal(maxBatch(3), 0);
+    assert.equal(maxBatch(), 10);
 
     const low = { ...MEMORY, RATE_LIMIT_PER_MINUTE: '3' } as WorkerEnv;
     assert.equal(((await (await read({ env: low })).json()) as { batch?: unknown }).batch, undefined);
@@ -197,6 +199,53 @@ describe('a batch of notes (FRU-124)', () => {
     assert.equal(created, 3);
   });
 
+  it('plants each note once when two attempts of one batch arrive at the same moment', async () => {
+    let created = 0;
+    const slow: SeedStore = {
+      name: 'slow',
+      scope: () => '',
+      findForPage: async () => [],
+      async create(seed) {
+        created += 1;
+        await new Promise((done) => setTimeout(done, 20));
+
+        return { id: `id_${seed.id}`, identifier: `FB-${seed.id.slice(-1)}` };
+      },
+    };
+    const kv = createMemoryKv();
+
+    const [first, second] = await Promise.all([
+      send(seeds(2), { kv, store: slow }),
+      send(seeds(2), { kv, store: slow, ip: '203.0.113.9' }),
+    ]);
+
+    assert.equal(created, 2, 'a note was planted twice');
+    assert.deepEqual([first.status, second.status].sort(), [201, 502]);
+    // The attempt that waited sends again, and reads what the other one kept.
+    const again = await send(seeds(2), { kv, store: slow });
+    assert.equal(again.status, 201);
+    assert.equal(created, 2);
+  });
+
+  it('gives a note back when the store did not keep it, so the next attempt plants it at once', async () => {
+    let fail = true;
+    const store: SeedStore = {
+      name: 'once-down',
+      scope: () => '',
+      findForPage: async () => [],
+      async create(seed) {
+        if (fail) throw new StoreError('down');
+
+        return { id: seed.id, identifier: 'FB-1' };
+      },
+    };
+    const kv = createMemoryKv();
+
+    assert.equal((await send(seeds(2), { kv, store })).status, 502);
+    fail = false;
+    assert.equal((await send(seeds(2), { kv, store })).status, 201);
+  });
+
   it('answers 502 when the store kept no note, as for one note', async () => {
     const down: SeedStore = {
       name: 'down',
@@ -228,6 +277,9 @@ describe('the limiter counts a batch by its notes', () => {
     assert.equal(await checkRateLimit(kv, 'ip', { limit: 5, now }), false);
     assert.equal(await chargeRateLimit(kv, 'other', 5, { limit: 5, now }), true);
     assert.equal(await chargeRateLimit(kv, 'other', 1, { limit: 5, now }), false);
+    // Nothing more to count for a batch of one note: no count is written.
+    assert.equal(await chargeRateLimit(kv, 'third', 0, { limit: 5, now }), true);
+    assert.equal(await chargeRateLimit(kv, 'third', 5, { limit: 5, now }), true);
   });
 
   it('refuses an increment that is not a positive integer', async () => {
