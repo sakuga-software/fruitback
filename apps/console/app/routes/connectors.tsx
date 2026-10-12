@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import {
   type Connector,
@@ -737,6 +737,11 @@ function Settings({ base, connector }: { base: string; connector: Connector & { 
   const [settings, setSettings] = useState<ConnectorSettings>(connector.settings);
   const [states, setStates] = useState<TrackerState[] | undefined>();
   const [problem, setProblem] = useState<string | undefined>();
+  // What the worker keeps, and the writes in flight, one after the other: a later change starts from
+  // the earlier one, and the answers cannot land out of order.
+  const kept = useRef<ConnectorSettings>(connector.settings);
+  const chosen = useRef(false);
+  const writes = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     void call<{ states: TrackerState[]; settings: ConnectorSettings }>(
@@ -745,24 +750,37 @@ function Settings({ base, connector }: { base: string; connector: Connector & { 
     ).then((answer) => {
       if (!answer.ok) return setStates([]);
       setStates(answer.data.states);
+      // A choice made while the states were read wins: its write is in flight, or done.
+      if (chosen.current) return;
+      kept.current = answer.data.settings;
       setSettings(answer.data.settings);
     });
   }, [base, connector.id]);
 
-  async function save(next: ConnectorSettings) {
-    const before = settings;
-    setSettings(next);
+  function save(change: (current: ConnectorSettings) => ConnectorSettings) {
+    chosen.current = true;
     setProblem(undefined);
-    const set = await call('POST', `${base}/connectors/${connector.id}/settings`, next);
-    if (set.ok) return;
-    // What the screen shows must be what the worker keeps.
-    setSettings(before);
-    setProblem(msg('This setting did not change. Try again.'));
+    setSettings((current) => change(current));
+    writes.current = writes.current.then(async () => {
+      const next = change(kept.current);
+      const set = await call('POST', `${base}/connectors/${connector.id}/settings`, next);
+      if (set.ok) {
+        kept.current = next;
+
+        return;
+      }
+      // What the screen shows must be what the worker keeps.
+      setSettings(kept.current);
+      setProblem(msg('This setting did not change. Try again.'));
+    });
   }
 
   function stageOf(state: TrackerState, stage: Stage) {
-    const { [state.id]: _was, ...others } = settings.stages;
-    void save({ ...settings, stages: stage === state.stage ? others : { ...others, [state.id]: stage } });
+    save((current) => {
+      const { [state.id]: _was, ...others } = current.stages;
+
+      return { ...current, stages: stage === state.stage ? others : { ...others, [state.id]: stage } };
+    });
   }
 
   const teams = new Set((states ?? []).map((state) => state.teamId)).size;
@@ -791,7 +809,7 @@ function Settings({ base, connector }: { base: string; connector: Connector & { 
         <Toggle
           label={t('Show Linear comments as replies')}
           value={settings.showComments}
-          onChange={(value) => void save({ ...settings, showComments: value })}
+          onChange={(value) => save((current) => ({ ...current, showComments: value }))}
         />
       </div>
       {problem === undefined ? null : (
