@@ -5,8 +5,10 @@ import { type SiteConfig, type SiteMutation, parseSite } from './sites.ts';
  * The rules of sites, in the reviewer's other browsers too, when the reviewer asks for it (FRU-72).
  *
  * **Off until the reviewer turns it on.** `storage.sync` is kept by the account of the browser
- * (Google, Mozilla, …), so a rule that is synchronised leaves this computer: the address of a
- * staging site, the address of its worker, a client id. Nobody decides that for a reviewer.
+ * (Google, Mozilla, …), so a rule that is synchronised leaves this computer, whole: the address of a
+ * staging site, the address of its worker, a client id, the label of its button, the name of its
+ * workspace (`mount.workspace`). Nobody decides that for a reviewer. `docs/privacy.md` lists the
+ * fields: a field added to `SiteConfig` travels too, and must be added there.
  *
  * **The map in `local` stays the one that everything reads.** Nothing changes for the bridge, the
  * relay, the popup or the registration, and no stored shape moves: a browser that never turns this

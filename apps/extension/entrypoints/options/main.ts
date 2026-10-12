@@ -311,7 +311,7 @@ async function synchronise(): Promise<HTMLElement> {
     element(
       'p',
       t(
-        'When this is on, your rules (patterns, modes, endpoints and client ids) are kept by the account of this browser, and reach your other browsers where it is on too. No session and no access travel: on another browser, grant access to each site. Turning it off stops the copy, and removes nothing from the account.',
+        'When this is on, your rules (patterns, modes, endpoints, client ids, and the labels and workspace names they hold) are kept by the account of this browser, and reach your other browsers where it is on too. No session and no access travel: on another browser, grant access to each site. Turning it off stops the copy, and removes nothing from the account.',
       ),
     ),
     label,

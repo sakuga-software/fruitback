@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyMutation, createSiteOwner } from './site-writes.ts';
+import { readFileSync } from 'node:fs';
+import { createSiteOwner } from './site-writes.ts';
 import { type SyncArea, createSiteSync, patternOf, rulesIn, syncKeyOf } from './site-sync.ts';
 import type { SiteConfig, SiteMutation } from './sites.ts';
 
@@ -249,9 +250,43 @@ describe('the rules of a reviewer in two browsers (FRU-72)', () => {
     assert.equal(patternOf('sites'), undefined);
   });
 
-  it('holds nothing but the rule: no session, no access', () => {
-    const next = applyMutation({}, { kind: 'write', entries: { 'https://acme.dev': ACME } });
+  // Raised in review: the whole rule travels, its label and the name of its workspace included, and
+  // `docs/privacy.md` must say each field. A field added to `SiteConfig` fails here until it is said.
+  it('sends the whole rule and nothing beside it, and the privacy page names each field', async () => {
+    const shared = account();
+    const here = browserOn(shared);
+    const labelled: SiteConfig = { ...ACME, label: 'Review' };
+    const mounted: SiteConfig = { ...TEAM, mount: { clientId: 'site_1', workspace: 'Acme' } };
 
-    assert.deepEqual(Object.keys(next['https://acme.dev'] ?? {}).sort(), ['clientId', 'enabled', 'endpoint', 'mode']);
+    await here.change({ kind: 'write', entries: { 'https://acme.dev': labelled, 'https://team.dev': mounted } });
+
+    assert.deepEqual(shared.items, { 'site:https://acme.dev': labelled, 'site:https://team.dev': mounted });
+    const fields = new Set(
+      Object.values(shared.items).flatMap((rule) => [
+        ...Object.keys(rule as object),
+        ...Object.keys((rule as { mount?: object }).mount ?? {}).map((key) => `mount.${key}`),
+      ]),
+    );
+    assert.deepEqual([...fields].sort(), [
+      'clientId',
+      'enabled',
+      'endpoint',
+      'label',
+      'mode',
+      'mount',
+      'mount.clientId',
+      'mount.workspace',
+    ]);
+    const privacy = readFileSync(new URL('../../../docs/privacy.md', import.meta.url), 'utf8').replaceAll(/\s+/g, ' ');
+    for (const said of [
+      'its pattern',
+      'the address of its worker',
+      'a client id',
+      'whether it is on',
+      'the label of the launch button',
+      'the name of the workspace',
+    ]) {
+      assert.ok(privacy.includes(said), `docs/privacy.md does not say « ${said} »`);
+    }
   });
 });

@@ -193,7 +193,9 @@ The rules stay in the browser that holds them, unless you tick **Keep my rules i
 this browser**, at the end of the options page. The browser then keeps them with the account you
 signed it in with, and they reach your other browsers where the box is ticked too.
 
-- **What travels**: patterns, modes, endpoints and client ids, and whether a rule is on. **No session
+- **What travels**: patterns, modes, endpoints and client ids, whether a rule is on, the label of
+  the launch button when a rule has one, and the name of the workspace of a site you turned on from
+  your session. **No session
   and no access**: on another browser a rule reads `No access in this browser` until you press
   **Grant access**, and a team-mode worker still needs you to pair there.
 - **Who keeps them**: the vendor of the browser (Google for Chrome, Mozilla for Firefox), under its
