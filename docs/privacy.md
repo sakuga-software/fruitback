@@ -120,13 +120,14 @@ can read them, with or without the widget.
 
 - **The tables of better-auth, in the same PostgreSQL database** (FRU-144). Since FRU-146 the
   accounts above are in four of them (`user`, `account`, `organization`, `member`): the same things,
-  in other tables, and every address there counts as proven. The other three are empty until the
-  console signs in with better-auth. Once written, the seven hold: for each person, the address, whether it is
-  proven, the name, and an image address if a provider gives one; for each sign-in by a provider,
-  which provider and the id it gives the person, **never its tokens** (FRU-181); for each session of
-  the console, the SHA-256 of its token, never the token, its dates and the user agent of the
-  browser, and no address; for a sign-in link that waits, the SHA-256 of its token and the address
-  and name it was sent for; the workspaces, their members and the address each invitation was sent
+  in other tables, and every address there counts as proven. The console signs in with better-auth
+  since FRU-147. The seven hold: for each person, the address, whether it is proven, and the name,
+  and no picture; for each sign-in by a provider, which provider and the id it gives the person,
+  **never its tokens** (FRU-181); for each session of the console, the SHA-256 of its token, never
+  the token, and its dates. **The address and the user agent of the browser are kept with a session
+  only when the operator sets `FRUITBACK_AUTH_TRACK_IP=1`** (FRU-147); by default the row holds
+  neither. A session goes 7 days after its last day of use, or when it is ended. For a sign-in link
+  that waits, the SHA-256 of its token and the address it was sent to; the workspaces, their members and the address each invitation was sent
   to. The state of a sign-in with a provider is in a cookie of the browser that started it, not in
   the database.
 

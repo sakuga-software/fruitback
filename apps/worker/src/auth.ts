@@ -1,18 +1,23 @@
 import type { Auth, BetterAuthOptions, BetterAuthPlugin } from 'better-auth';
+
+/** An instance of better-auth, for a file that may not name the library (a lint rule). */
+export type { Auth };
 import { ACTIONS } from './accounts.ts';
 import { newId } from './account-rows.ts';
 import { type AdapterOfAuth, keepAtRest } from './auth-at-rest.ts';
 import { FRUITBACK_RESOURCE, roleStatements } from './auth-roles.ts';
 import { type WorkerConfig, hasAuth } from './env.ts';
+import type { OAuthClient } from './oauth-sign-in.ts';
 import { type PgDatabase, type PgPool, databaseFor, withoutAddress } from './postgres.ts';
 import { migrated } from './postgres-stores.ts';
 
 /**
- * better-auth, built and switched off (FRU-144), and what it keeps in the database (FRU-181).
+ * better-auth (FRU-144), what it keeps in the database (FRU-181), and the console that signs in with
+ * it (FRU-147).
  *
- * **Nothing here serves a route.** This file says how better-auth is configured for the console, and
- * builds one instance for the process when `FRUITBACK_AUTH_SECRET` and `FRUITBACK_DATABASE_URL` are
- * both set. No path under `/console/auth/` answers: `handleRequest` does not know this file.
+ * This file says how better-auth is configured for the console, and builds one instance for the
+ * process when `FRUITBACK_AUTH_SECRET` and `FRUITBACK_DATABASE_URL` are both set. `auth-routes.ts`
+ * serves it under `/console/auth/`, the paths of `SERVED_PATHS` only, beside the path of before.
  *
  * **This file imports better-auth as types only, and loads it when the instance is built**, as
  * `postgres.ts` does for its driver. A worker that has better-auth switched off loads nothing of it:
@@ -31,7 +36,85 @@ import { migrated } from './postgres-stores.ts';
 export const AUTH_BASE_PATH = '/console/auth';
 
 /** The plugins of better-auth that the worker configures. A test holds the list. */
-export const AUTH_PLUGINS = ['organization', 'fruitback-at-rest'] as const;
+export const AUTH_PLUGINS = ['organization', 'magic-link', 'fruitback-at-rest'] as const;
+
+/**
+ * The routes of better-auth that a request reaches (FRU-147), under `AUTH_BASE_PATH`. Any other path
+ * there answers `404` from the worker, before better-auth reads it: a route that a plugin adds is
+ * closed until somebody opens it here, with its reason.
+ *
+ * Not here, and on purpose: `/sign-in/magic-link` and `/magic-link/verify` (the worker's own routes
+ * call them in the process: the token of a link travels after a `#`, and never in an address), the
+ * routes of the organization plugin (FRU-149 says what a guest may read), `/list-sessions` (a route of
+ * the worker lists them, with no token), and the five of `DISABLED_PATHS`.
+ */
+export const SERVED_PATHS: Readonly<Record<string, string>> = {
+  '/ok': 'it says that better-auth answers, and nothing else',
+  '/get-session': 'the console reads who is signed in',
+  '/sign-out': 'it ends the session of this cookie',
+  '/revoke-sessions': '« sign out everywhere »: every session of the person',
+  '/sign-in/social': 'it starts a sign-in with GitHub or Google',
+  '/callback/github': 'GitHub sends the person back here',
+  '/callback/google': 'Google sends the person back here',
+  '/error': 'better-auth sends a person here when a sign-in fails before it knows the console',
+};
+
+/** How long a link of the e-mail lives: as the link of before (`EMAIL_LINK_TTL_SECONDS`, FRU-98). */
+export const MAGIC_LINK_TTL_SECONDS = 15 * 60;
+
+/**
+ * How long a session of the console lives, and how often a call that uses it moves its end (FRU-147).
+ * These are the defaults of 1.7.7, written: a later default changes nothing here. `SECURITY.md` says
+ * both numbers, and `security.test.ts` holds them.
+ */
+export const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
+export const SESSION_RENEWAL_SECONDS = 24 * 60 * 60;
+
+/**
+ * The header that carries the address of the caller to better-auth when the worker keeps addresses
+ * (FRU-147). The worker writes it on each request it hands over, from `resolveClientIp`, over
+ * anything the caller sent: better-auth reads no other header for an address.
+ */
+export const CLIENT_IP_HEADER = 'x-fruitback-client-ip';
+
+/**
+ * Who sends the link of a sign-in (FRU-147).
+ *
+ * `/sign-in/magic-link` makes the token and calls `sendMagicLink` in the middle of the call, so the
+ * worker cannot pass the mailer as an argument. The route of the worker leaves a delivery here under a
+ * ticket, and names the ticket in the `metadata` of the call. No request reaches that path: a call
+ * without a ticket sends nothing, and throws.
+ *
+ * better-auth awaits `sendMagicLink` before it answers (read in `plugins/magic-link/index.mjs` of
+ * 1.7.7), so the ticket is there for the whole delivery, and an error of the mailer reaches the
+ * route: test:`answers 202 once the link is sent, and 502 when the mail provider refuses it`.
+ */
+const deliveries = new Map<string, (token: string) => Promise<void>>();
+
+/** Asks better-auth for a link to `email`, and hands its token to `deliver`. */
+export async function sendLinkThrough(
+  auth: Auth,
+  email: string,
+  headers: Headers,
+  deliver: (token: string) => Promise<void>,
+): Promise<void> {
+  const ticket = crypto.randomUUID();
+  deliveries.set(ticket, deliver);
+  try {
+    await (auth.api as unknown as { signInMagicLink(input: object): Promise<unknown> }).signInMagicLink({
+      body: { email, metadata: { ticket } },
+      headers,
+    });
+  } finally {
+    deliveries.delete(ticket);
+  }
+}
+
+async function deliverLink({ token, metadata }: { token: string; metadata?: Record<string, unknown> }): Promise<void> {
+  const deliver = typeof metadata?.ticket === 'string' ? deliveries.get(metadata.ticket) : undefined;
+  if (deliver === undefined) throw new Error('A link of better-auth was asked for by no route of the worker');
+  await deliver(token);
+}
 
 /**
  * The routes of better-auth that the digests of `auth-at-rest.ts` break, each with its reason.
@@ -110,6 +193,12 @@ export type AuthConfig = {
   consoleUrl: string;
   /** `FRUITBACK_DATABASE_URL`. Only to take it out of a message: better-auth gets the pool. */
   databaseUrl: string;
+  /** `FRUITBACK_AUTH_GITHUB_OAUTH`: the second GitHub App, the one of better-auth (FRU-147). */
+  github?: OAuthClient;
+  /** `FRUITBACK_GOOGLE_OAUTH`: the same client as the path of before, with a second callback. */
+  google?: OAuthClient;
+  /** `FRUITBACK_AUTH_TRACK_IP`: keep the address and the user agent of a session, and limit by address. */
+  trackIp: boolean;
 };
 
 /** The configuration of better-auth for this worker, or `undefined` when it is off. */
@@ -121,7 +210,15 @@ export function authConfigOf(config: WorkerConfig): AuthConfig | undefined {
     return undefined;
   }
 
-  return { secret: authSecret, publicUrl, consoleUrl, databaseUrl };
+  return {
+    secret: authSecret,
+    publicUrl,
+    consoleUrl,
+    databaseUrl,
+    ...(config.authGithub === undefined ? {} : { github: config.authGithub }),
+    ...(config.google === undefined ? {} : { google: config.google }),
+    trackIp: config.authTrackIp,
+  };
 }
 
 /**
@@ -164,12 +261,21 @@ export function authId(model: string): string {
  * `docs/decisions/worker.md`.
  */
 export async function authOptions(config: AuthConfig, pool: PgPool): Promise<BetterAuthOptions> {
-  const [{ organization }, { createAccessControl }, { defaultStatements }, { APIError }] = await Promise.all([
-    import('better-auth/plugins/organization'),
-    import('better-auth/plugins/access'),
-    import('better-auth/plugins/organization/access'),
-    import('better-auth/api'),
-  ]);
+  const [{ organization }, { magicLink }, { createAccessControl }, { defaultStatements }, { APIError }] =
+    await Promise.all([
+      import('better-auth/plugins/organization'),
+      import('better-auth/plugins/magic-link'),
+      import('better-auth/plugins/access'),
+      import('better-auth/plugins/organization/access'),
+      import('better-auth/api'),
+    ]);
+  // No picture: the accounts of before kept none, and a picture of GitHub is an address that says
+  // when a page of the console was opened.
+  const noPicture = () => ({ image: undefined });
+  const providers = {
+    ...(config.github === undefined ? {} : { github: { ...config.github, mapProfileToUser: noPicture } }),
+    ...(config.google === undefined ? {} : { google: { ...config.google, mapProfileToUser: noPicture } }),
+  };
 
   // The four roles, read from `can` of accounts.ts: see auth-roles.ts.
   const access = createAccessControl({ ...defaultStatements, [FRUITBACK_RESOURCE]: ACTIONS });
@@ -195,13 +301,40 @@ export async function authOptions(config: AuthConfig, pool: PgPool): Promise<Bet
     // The language a person chose (FRU-146), which the worker writes mail in. `input: false`: a
     // sign-up cannot give it, the routes of the worker set it.
     user: { additionalFields: { locale: { type: 'string', required: false, input: false } } },
-    // The limit of the worker is the only one. It counts above the dispatch, for every route, with
-    // the address `resolveClientIp` read. better-auth reads `X-Forwarded-For` by itself: it takes a
-    // lone value as the caller wrote it, and refuses a chain (measured). Two limits with two
-    // addresses are two answers to « who is this caller ».
-    rateLimit: { enabled: false },
+    // Off, the limit of the worker is the only one. It counts above the dispatch, for every route,
+    // with the address `resolveClientIp` read. On (`FRUITBACK_AUTH_TRACK_IP`), better-auth counts too,
+    // with the same address: the worker hands it in `CLIENT_IP_HEADER`, and better-auth reads no
+    // other header. Left to itself, it reads `X-Forwarded-For`, takes a lone value as the caller wrote
+    // it, and refuses a chain (measured).
+    rateLimit: { enabled: config.trackIp },
     // The session is read in the database at each call, so a session that is revoked stops at once.
-    session: { cookieCache: { enabled: false } },
+    session: {
+      cookieCache: { enabled: false },
+      expiresIn: SESSION_TTL_SECONDS,
+      updateAge: SESSION_RENEWAL_SECONDS,
+    },
+    socialProviders: providers,
+    // A sign-in that fails goes back to the console, which says why. Without it, to a page of the
+    // worker that no person reads.
+    onAPIError: { errorURL: `${new URL(config.consoleUrl).origin}/setup` },
+    databaseHooks: {
+      user: {
+        create: {
+          // SECURITY.md: an address that a provider did not verify creates no account. better-auth
+          // links no such address to an account that exists (measured), and it **creates** one for
+          // it (measured on 1.7.7: a session opened, with `emailVerified` false). A link of the
+          // e-mail proves its address, so it passes.
+          before: async (user: { emailVerified?: unknown }) => (user.emailVerified === true ? undefined : false),
+        },
+      },
+      session: {
+        create: {
+          // Off, no address and no user agent in the row: the decision of 2026-10-11.
+          before: async (session: Record<string, unknown>) =>
+            config.trackIp ? undefined : { data: { ...session, ipAddress: null, userAgent: null } },
+        },
+      },
+    },
     // A link or a code is kept as its digest. `auth-at-rest.ts` digests each identifier once more,
     // because this option alone also looks the identifier up as it was given (read in the package).
     verification: { storeIdentifier: 'hashed' },
@@ -209,15 +342,24 @@ export async function authOptions(config: AuthConfig, pool: PgPool): Promise<Bet
     // the database, a copy and an intercepted code would finish the sign-in. In an encrypted cookie,
     // it is in the browser that started it, and in no copy.
     account: { storeStateStrategy: 'cookie' },
-    disabledPaths: Object.keys(DISABLED_PATHS),
+    // To a request, as `SERVED_PATHS` closes them too. The two of the link stay open to `auth.api`.
+    disabledPaths: [...Object.keys(DISABLED_PATHS), '/sign-in/magic-link', '/magic-link/verify'],
     advanced: {
       cookiePrefix: 'fruitback',
       // `HttpOnly` is the default of better-auth, and `Secure` comes with an `https://` address. The
       // cookie goes to the routes of the console and to no other route of this worker.
-      cookies: { session_token: { attributes: { sameSite: 'strict', path: '/console' } } },
-      // Same reason as the limit: no address is read from a header the caller can write, so none is
-      // kept in the `session` table.
-      ipAddress: { disableIpTracking: true },
+      // The state of a sign-in with a provider goes to the routes of better-auth only. It stays `Lax`:
+      // the provider sends the person back with a navigation from its own site, and a `Strict` cookie
+      // is not sent on it.
+      cookies: {
+        session_token: { attributes: { sameSite: 'strict', path: '/console' } },
+        oauth_state: { attributes: { path: AUTH_BASE_PATH } },
+      },
+      // Off, no address is read, and none is kept in the `session` table. On, the one that
+      // `resolveClientIp` read, in a header that the worker writes over what the caller sent.
+      ipAddress: config.trackIp
+        ? { ipAddressHeaders: [CLIENT_IP_HEADER], disableIpTracking: false }
+        : { disableIpTracking: true },
       database: { generateId: ({ model }) => authId(model) },
     },
     logger: {
@@ -230,7 +372,14 @@ export async function authOptions(config: AuthConfig, pool: PgPool): Promise<Bet
       },
     },
     // The schema of the organization plugin and the four roles. None of its routes is served.
-    plugins: [organization({ ac: access, roles }), atRest(APIError)],
+    // The link of the e-mail (FRU-147): its token is kept as a digest (`storeToken`), digested again
+    // by `verification.storeIdentifier`, then by the layer. `sendMagicLink` hands the token to the
+    // route of the worker that asked, which writes it after a `#`.
+    plugins: [
+      organization({ ac: access, roles }),
+      magicLink({ storeToken: 'hashed', expiresIn: MAGIC_LINK_TTL_SECONDS, sendMagicLink: deliverLink }),
+      atRest(APIError),
+    ],
   };
 }
 
@@ -343,7 +492,7 @@ export function authFor(
 /**
  * Builds better-auth when the server starts, and says in the log what happened.
  *
- * It serves no route, so nothing would build it before the day it does: a configuration that
+ * Built at boot and not at the first sign-in: a configuration that
  * better-auth refuses, a bundle that cannot load it, or a database whose schema is not the one it
  * expects would then show at the first sign-in. Here it shows in the first lines of the log.
  * `/health` does not wait for it, and does not read it.
@@ -359,7 +508,7 @@ export async function announceAuth(
     if (starting === undefined) return 'off';
 
     await starting;
-    log.log('[fruitback] better-auth is ready, and serves no route');
+    log.log('[fruitback] better-auth is ready, under /console/auth');
 
     return 'ready';
   } catch (error) {

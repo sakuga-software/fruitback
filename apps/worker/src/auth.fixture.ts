@@ -23,6 +23,7 @@ export const AUTH_CONFIG: AuthConfig = {
   publicUrl: PUBLIC_URL,
   consoleUrl: CONSOLE_URL,
   databaseUrl: DATABASE_URL,
+  trackIp: false,
 };
 
 /**
@@ -94,7 +95,19 @@ export function ask(auth: Auth, path: string, init: RequestInit & { headers?: Re
  * A password is the one way that needs no mail and no provider.
  */
 export function withTestSignUp(options: BetterAuthOptions): BetterAuthOptions {
-  return { ...options, emailAndPassword: { enabled: true } };
+  // The worker refuses to create a person whose address nobody proved (FRU-147), and a sign-up with
+  // a password proves none. A test that needs a session says that the address is proven.
+  return {
+    ...options,
+    emailAndPassword: { enabled: true },
+    databaseHooks: {
+      ...options.databaseHooks,
+      user: {
+        ...options.databaseHooks?.user,
+        create: { before: async (user) => ({ data: { ...user, emailVerified: true } }) },
+      },
+    },
+  };
 }
 
 /** Signs a new person up and answers the cookie as a browser would send it back, and as it was set. */
