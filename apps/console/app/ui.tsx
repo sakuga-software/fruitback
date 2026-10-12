@@ -112,6 +112,8 @@ type FieldProps = {
   value?: string;
   onChange?: (event: ChangeEvent<HTMLInputElement>) => void;
   type?: 'text' | 'email' | 'url' | 'password';
+  /** The keyboard of a phone, for a field that is not `type="url"` so that the screen judges what is typed. */
+  inputMode?: 'url';
   placeholder?: string;
   autoComplete?: string;
   maxLength?: number;

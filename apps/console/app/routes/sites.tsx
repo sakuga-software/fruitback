@@ -8,6 +8,7 @@ import { InstallOptions } from './setup';
 import { PageHead, useWorkspace } from './workspace';
 import { msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
+import { siteAddress } from '../site-address';
 
 const REMOVAL_PROBLEMS: Readonly<Record<string, string>> = {
   forbidden: msg('Only an owner or an admin of the workspace removes a site.'),
@@ -38,7 +39,11 @@ export default function Sites() {
   async function add(event: FormEvent) {
     event.preventDefault();
     setProblem(undefined);
-    const added = await call<Site>('POST', `/console/workspaces/${workspace.id}/sites`, { url, visibility });
+    // A host with no scheme is read as https. What is not an address is refused here, in the words
+    // of the console: a field of type url stopped the form with the bubble of the browser (FRU-167).
+    const address = siteAddress(url);
+    if (address === undefined) return setProblem(SITE_PROBLEMS['invalid-url'] ?? SITE_NOT_ADDED);
+    const added = await call<Site>('POST', `/console/workspaces/${workspace.id}/sites`, { url: address, visibility });
     // The field keeps its value: the sentence says the cause, and the address is often right (FRU-164).
     if (!added.ok) return setProblem(problemOf(added, SITE_PROBLEMS, SITE_NOT_ADDED));
     // On a list that was never read, the site alone would hide the others: read them all.
@@ -70,7 +75,8 @@ export default function Sites() {
           <div className="flex-1">
             <Field
               label={t('Site address')}
-              type="url"
+              inputMode="url"
+              autoComplete="url"
               placeholder="https://staging.acme.dev"
               value={url}
               onChange={(event) => setUrl(event.target.value)}
