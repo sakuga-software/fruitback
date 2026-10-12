@@ -133,7 +133,7 @@ export function createRoutedStore(base: SeedStore, connectors: ConnectorStores):
       client?.connector === undefined ? base.scope(client) : `${client.connector}:${client.teamId ?? ''}`,
     create: async (seed, client, policy) => (await pick(client)).create(seed, client, policy),
     // The store of the client decides how a batch is written: under a parent, or one note at a time.
-    createBatch: async (seeds, client, policy) => createAll(await pick(client), seeds, client, policy),
+    createBatch: async (seeds, client, policy, memory) => createAll(await pick(client), seeds, client, policy, memory),
     findForPage: async (query, client, policy) => (await pick(client)).findForPage(query, client, policy),
     ...(base.forget === undefined ? {} : { forget: base.forget }),
   };

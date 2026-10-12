@@ -1,6 +1,6 @@
 import type { Seed } from '@fruitback/shared';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
-import { type BatchAnswer, type SeedStore, StoreError } from './store.ts';
+import { type BatchAnswer, type BatchMemory, type SeedStore, StoreError } from './store.ts';
 
 /**
  * Plants the seeds of a batch (FRU-124): through the store's own `createBatch`, or one `create` for
@@ -15,9 +15,12 @@ export async function createAll(
   seeds: readonly Seed[],
   client: ClientConfig | undefined,
   policy: ClientPolicy,
+  /** What an earlier attempt left for these seeds (FRU-195). */
+  memory?: BatchMemory,
 ): Promise<BatchAnswer[]> {
   const answers = store.createBatch === undefined ? await oneByOne(store, seeds, client, policy) : undefined;
-  const found = answers ?? (await (store.createBatch as NonNullable<SeedStore['createBatch']>)(seeds, client, policy));
+  const found =
+    answers ?? (await (store.createBatch as NonNullable<SeedStore['createBatch']>)(seeds, client, policy, memory));
   if (found.length !== seeds.length) throw new StoreError('The store did not answer for every note of the batch');
   if (found.every((answer) => 'error' in answer)) throw new StoreError('The store kept no note of the batch');
 

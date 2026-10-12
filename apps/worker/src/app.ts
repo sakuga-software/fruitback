@@ -24,7 +24,7 @@ import { DELIVERY_HEADER, LOOP_STATUS, type Send, deliverDue } from './rest-conn
 import { type Mailer, createTemMailer } from './mail.ts';
 import { createSqliteAccountStore } from './accounts-sqlite.ts';
 import { type WorkerConfig, type WorkerEnv, hasAccounts, hasSessions, readAllowedOrigins, readConfig } from './env.ts';
-import { type BatchAnswer, type CreatedIssue, type SeedStore, StoreError } from './store.ts';
+import { type BatchAnswer, type BatchMemory, type CreatedIssue, type SeedStore, StoreError } from './store.ts';
 import { createAll } from './batch.ts';
 import { watchedStore } from './connector-health.ts';
 import { type CorsDecision, diagnosticCorsHeaders, openCors, resolveCors } from './cors.ts';
@@ -959,6 +959,53 @@ async function release(kv: Kv, clientId: string | undefined, seedId: string): Pr
   await kv.set(sendingKey(clientId, seedId), '0', SENDING_TTL_MS).catch(() => undefined);
 }
 
+function parentKey(clientId: string | undefined, scope: string, seedId: string): string {
+  return `fruitback:batch-parent:${JSON.stringify([clientId ?? null, scope, seedId])}`;
+}
+
+/**
+ * The parent of a batch, from one attempt to the next (FRU-195), in the `Kv`: one entry for each seed,
+ * for as long as a seed is remembered. An attempt that sends again only some of the notes still
+ * finds the parent. The place is in the key: a parent of one team is not used for another.
+ *
+ * WARNING: nothing throws from here. A `Kv` that does not answer costs a second parent, not a note.
+ */
+function batchMemory(
+  kv: Kv,
+  store: SeedStore,
+  clientId: string | undefined,
+  target: ClientConfig | undefined,
+  seeds: readonly Seed[],
+): BatchMemory {
+  const keys = (): string[] => {
+    const scope = store.scope(target);
+
+    return seeds.map((seed) => parentKey(clientId, scope, seed.id));
+  };
+  const write = async (value: string): Promise<void> => {
+    try {
+      await Promise.all(keys().map((key) => kv.set(key, value, SENT_TTL_MS)));
+    } catch {
+      // Not remembered: the next attempt writes a parent, as before FRU-195.
+    }
+  };
+
+  return {
+    async parent() {
+      try {
+        const found = await Promise.all(keys().map((key) => kv.get(key)));
+
+        // An entry that was forgotten is empty: the `Kv` has no delete.
+        return found.find((id) => id !== undefined && id !== '');
+      } catch {
+        return undefined;
+      }
+    },
+    keepParent: (id) => write(id),
+    forgetParent: () => write(''),
+  };
+}
+
 /**
  * Several notes in one request (FRU-124): `POST /feedback` with an array of seeds.
  *
@@ -1047,7 +1094,9 @@ async function postBatch(
 
   let planted: BatchAnswer[] = [];
   try {
-    if (fresh.length > 0) planted = await createAll(store, fresh, target, route.policy);
+    if (fresh.length > 0) {
+      planted = await createAll(store, fresh, target, route.policy, batchMemory(kv, store, clientId, target, fresh));
+    }
   } catch (error) {
     if (!(error instanceof StoreError)) {
       // An error nobody expected answers `500`. The seeds are given back first: the next attempt

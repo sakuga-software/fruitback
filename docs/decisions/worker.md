@@ -156,6 +156,19 @@ degradation the ticket asked to have written down rather than discovered.
 - **One answer for each seed, in order**: `201` when every note was kept, `207` when some were, `502`
   when none was. **A seed kept in the last ten minutes answers its issue again** and is not planted
   twice: `seed.id` is the key, in the `Kv`. That is what a widget sends again after a `207`.
+- **A parent whose sub-issues Linear all refused is kept, and used again** (FRU-195). The request
+  answers `502` and the parent stays in the team with no sub-issue. The worker remembers it in the
+  `Kv` for the ten minutes of a seed, by seed and by place (`batchMemory` in `app.ts`), and the next
+  attempt for one of those notes writes its sub-issues under it: one parent for a batch, not one for
+  each attempt. The note of a `207` that is sent again goes under the same parent too. **The worker
+  archives nothing and changes nothing in the workspace of a team**: it calls `issueCreate` and no
+  other mutation of an issue, so this asks no permission more than a batch did. A parent that was
+  used again and still kept no note is forgotten, and the attempt after it writes a new one: it may
+  be a parent the team deleted, and holding on to it would refuse the notes for ten minutes. A `Kv`
+  that does not answer costs a second parent, never a note. **Not measured on a real Linear**: that
+  a sub-issue takes a `parentId`, and what Linear answers for a parent that is gone, are read in
+  its schema and held by a double (`batch-parent.test.ts`). An empty parent that nobody sends again
+  stays: the team deletes it.
 - Not done: the delivery of an address that receives (FRU-122) does not carry the id of its batch.
 
 ## Who may read a pin
