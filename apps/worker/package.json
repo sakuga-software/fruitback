@@ -15,7 +15,7 @@
     "db:generate": "drizzle-kit generate",
     "test": "node --test ${FRUITBACK_TEST_CONCURRENCY:+--test-concurrency=$FRUITBACK_TEST_CONCURRENCY} 'src/**/*.test.ts'",
     "test:watch": "node --test --watch 'src/**/*.test.ts'",
-    "test:postgres": "FRUITBACK_TEST_POSTGRES=required node --test src/postgres.test.ts src/postgres-outage.test.ts src/postgres-copy.test.ts src/postgres-adopt.test.ts src/postgres-numbers.test.ts src/account-conformance.test.ts src/accounts-postgres.test.ts src/session-conformance.test.ts src/session-postgres.test.ts src/auth.test.ts src/auth-schema.test.ts src/auth-instance.test.ts src/auth-at-rest.test.ts src/accounts-move.test.ts src/auth-routes.test.ts",
+    "test:postgres": "FRUITBACK_TEST_POSTGRES=required node --test src/postgres.test.ts src/postgres-outage.test.ts src/postgres-copy.test.ts src/postgres-adopt.test.ts src/postgres-numbers.test.ts src/account-conformance.test.ts src/accounts-postgres.test.ts src/session-conformance.test.ts src/session-postgres.test.ts src/auth.test.ts src/auth-schema.test.ts src/auth-instance.test.ts src/auth-at-rest.test.ts src/accounts-move.test.ts src/auth-routes.test.ts src/auth-organization.test.ts",
     "dev:fake": "FRUITBACK_STORE=memory PORT=8788 ALLOWED_ORIGINS=http://localhost:5177 node --watch src/main.ts",
     "serve:fake": "FRUITBACK_STORE=memory PORT=8788 node src/main.ts"
   },

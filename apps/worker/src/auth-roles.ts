@@ -38,6 +38,8 @@ export type PluginPermissions = {
 export const IMPLIED: Record<Action, PluginPermissions> = {
   'read-feedback': {},
   'see-tracker': {},
+  // The plugin asks no permission to list the members: the route of the worker asks `can` (FRU-149).
+  'read-members': {},
   'manage-sites': {},
   'manage-members': { member: ['create', 'update', 'delete'], invitation: ['create', 'cancel'] },
   'manage-workspace': { organization: ['update'] },

@@ -80,9 +80,35 @@ export type SessionStore = {
   }): Promise<RotationOutcome>;
   /** `true` when this call is what revoked it. A second logout is not an error, it is a no-op. */
   revokeSession(tokenHash: string, now: number): Promise<boolean>;
+  /**
+   * Ends every session of a person in a workspace, and spends the codes minted for them there and
+   * not redeemed yet (FRU-149). A person who is removed from a workspace, or who leaves it, keeps no
+   * extension that refreshes for it.
+   *
+   * No `subject`: everybody of the workspace, which is deleted. No `workspace`: every session of the
+   * person, whose account is deleted. Neither: it throws, and ends nothing.
+   *
+   * A refresh that runs at the same moment leaves no live successor: the store holds the chains
+   * before it ends them.
+   */
+  endSessionsOf(of: SessionsOf, now: number): Promise<void>;
   /** Drops what is expired. Called on redeem, so a worker nobody administers still stays small. */
   purge(now: number): Promise<void>;
 };
+
+/** Whose sessions end: a person, a workspace, or a person in a workspace. Never everybody. */
+export type SessionsOf = { subject: string; workspace?: string } | { subject?: string; workspace: string };
+
+/** The same refusal in every store: a call that names nobody would end every session of the worker. */
+export function namedSessionsOf(of: SessionsOf): { subject: string | undefined; workspace: string | undefined } {
+  const subject = typeof of.subject === 'string' && of.subject !== '' ? of.subject : undefined;
+  const workspace = typeof of.workspace === 'string' && of.workspace !== '' ? of.workspace : undefined;
+  if (subject === undefined && workspace === undefined) {
+    throw new Error('endSessionsOf names neither a person nor a workspace: it would end every session of the worker');
+  }
+
+  return { subject, workspace };
+}
 
 /**
  * Crockford's base32, and the reason is that a person retypes this.

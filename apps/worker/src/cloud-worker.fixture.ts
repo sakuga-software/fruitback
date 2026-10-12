@@ -40,9 +40,10 @@ export async function cloudWorker(options: { betterAuth: boolean; consoleUrl: st
   const config = readConfig(env);
   if (!config.ok) throw new Error(`The worker of a test is misconfigured: ${config.missing.join(', ')}`);
   const settings = authConfigOf(config.config);
-  const auth = settings === undefined ? undefined : await startAuth(await authOptions(settings, await database.pool()));
   const accounts = createPostgresAccountStore(database);
   const sessions = createPostgresSessionStore(database);
+  const auth =
+    settings === undefined ? undefined : await startAuth(await authOptions(settings, await database.pool(), sessions));
   const kv = createMemoryKv();
   const sent: MailMessage[] = [];
   const received: { method: string; path: string; authorization: boolean; cookie: boolean }[] = [];

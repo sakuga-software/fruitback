@@ -97,6 +97,12 @@ describe('SECURITY.md states what the code does', () => {
     );
   });
 
+  /** FRU-149: what a member who was removed keeps is an access token, for its lifetime and the skew. */
+  it('says how long an access token outlives a member who was removed', () => {
+    const phrase = `**${(ACCESS_TTL_SECONDS + CLOCK_SKEW_SECONDS) / 60} minutes at\n  most**, its ${ACCESS_TTL_SECONDS / 60} minutes and the ${CLOCK_SKEW_SECONDS} seconds of clock skew`;
+    assert.ok(SECURITY.includes(phrase), `SECURITY.md does not say that a removed member keeps a token ${phrase}`);
+  });
+
   it('quotes what a burst can get through the shared window', () => {
     // The number a reader would use to size a quota. It is `2 × limit − 1`, held against the code by
     // `rate-limit.test.ts`, so it moves with the default.

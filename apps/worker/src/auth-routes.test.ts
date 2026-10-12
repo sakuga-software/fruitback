@@ -7,15 +7,16 @@ import { type Auth, CLIENT_IP_HEADER, authOptions, startAuth } from './auth.ts';
 import {
   AUTH_CONFIG,
   AUTH_SECRET,
+  NO_SESSIONS,
   CONSOLE_URL,
   DATABASES,
   PUBLIC_URL,
   databasesOfACase,
   make,
 } from './auth.fixture.ts';
-import type { WorkerEnv } from './env.ts';
-import { type Kv, createMemoryKv } from './kv.ts';
-import { MailError, type MailMessage, type Mailer } from './mail.ts';
+import { createMemoryKv } from './kv.ts';
+import { MailError } from './mail.ts';
+import { GITHUB, GOOGLE, SESSION_COOKIE, cookieOf, envWith, workerOf } from './auth-worker.fixture.ts';
 import type { PgDatabase } from './postgres.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
@@ -30,114 +31,11 @@ import { digest } from './session.ts';
  * in an address that a proxy logs.
  */
 
-const IDENTITY_SECRET = 'an-identity-secret-of-exactly-enough-x';
-const SESSION_COOKIE = '__Secure-fruitback.session_token';
-const GITHUB = { clientId: 'the-second-app-of-github', clientSecret: 'a-secret-of-github-0123456789' };
-const GOOGLE = { clientId: 'the-client-of-google', clientSecret: 'a-secret-of-google-0123456789' };
-
 const { opening } = databasesOfACase();
 
-function envWith(overrides: Partial<WorkerEnv> = {}): WorkerEnv {
-  return {
-    FRUITBACK_STORE: 'memory',
-    ALLOWED_ORIGINS: CONSOLE_URL,
-    FRUITBACK_IDENTITY_SECRET: IDENTITY_SECRET,
-    // Port 1 of this machine: nothing listens there. Each case hands over its stores and its instance.
-    FRUITBACK_DATABASE_URL: 'postgres://fruitback:not-a-password@127.0.0.1:1/fruitback',
-    FRUITBACK_CONSOLE_URL: CONSOLE_URL,
-    FRUITBACK_PUBLIC_URL: PUBLIC_URL,
-    FRUITBACK_AUTH_SECRET: AUTH_SECRET,
-    ...overrides,
-  };
-}
-
-/** A mailer that keeps what it was asked to send. */
-function inbox(): Mailer & { sent: MailMessage[] } {
-  const sent: MailMessage[] = [];
-
-  return {
-    sent,
-    async send(message) {
-      sent.push(message);
-    },
-  };
-}
-
-type Call = {
-  method?: string;
-  body?: unknown;
-  headers?: Record<string, string>;
-  /** `null`: no `Origin` header. */
-  origin?: string | null;
-  ip?: string;
-};
-
-/** A worker with better-auth on, on the database of a case, and every request it was given. */
+/** A worker with better-auth on, on the database of a case. */
 async function workerOn(open: () => Promise<PgDatabase>, more: { trackIp?: boolean } = {}) {
-  const database = await opening(open);
-  await make(database);
-  const options = await authOptions(
-    { ...AUTH_CONFIG, github: GITHUB, google: GOOGLE, trackIp: more.trackIp === true },
-    await database.pool(),
-  );
-  const auth: Auth = await startAuth(options);
-  const accounts = createPostgresAccountStore(database);
-  const sessions = createPostgresSessionStore(database);
-  const mail = inbox();
-  const kv: Kv = createMemoryKv();
-  const env = envWith(more.trackIp === true ? { FRUITBACK_AUTH_TRACK_IP: '1' } : {});
-  const received: string[] = [];
-  let ip = 0;
-
-  const call = (path: string, init: Call = {}): Promise<Response> => {
-    ip += 1;
-    const url = path.startsWith('http') ? path : `${PUBLIC_URL}${path}`;
-    received.push(url);
-    const origin = init.origin === undefined ? CONSOLE_URL : init.origin;
-    const headers: Record<string, string> = {
-      ...(origin === null ? {} : { Origin: origin }),
-      ...(init.body === undefined ? {} : { 'Content-Type': 'application/json' }),
-      ...init.headers,
-    };
-
-    return handleRequest(
-      new Request(url, {
-        method: init.method ?? (init.body === undefined ? 'GET' : 'POST'),
-        headers,
-        ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
-      }),
-      env,
-      { clientIp: init.ip ?? `198.51.100.${ip % 250}`, accounts, sessionStore: sessions, mailer: mail, kv, auth },
-    );
-  };
-
-  /** The token of the last link that was sent, read after the `#` of the link, as the console reads it. */
-  const lastToken = (): string => {
-    const text = mail.sent.at(-1)?.text ?? '';
-    const link = /https:\/\/\S+/.exec(text)?.[0] ?? '';
-    assert.ok(link.startsWith(`${CONSOLE_URL}/sign-in#`), `the link is not after a # of the console: ${link}`);
-
-    return link.slice(link.indexOf('#') + 1);
-  };
-
-  /** A link asked for and spent: the cookie of the session, as the browser sends it back. */
-  const signIn = async (email: string): Promise<string> => {
-    assert.equal((await call('/console/auth/email', { body: { email } })).status, 202);
-    const answer = await call('/console/auth/email/redeem', { body: { token: lastToken() } });
-    assert.equal(answer.status, 200, await answer.clone().text());
-
-    return cookieOf(answer);
-  };
-
-  return { database, auth, accounts, sessions, mail, kv, env, received, call, lastToken, signIn };
-}
-
-function cookieOf(answer: Response): string {
-  return answer.headers
-    .getSetCookie()
-    .filter((each) => each.startsWith(`${SESSION_COOKIE}=`))
-    .map((each) => each.split(';')[0])
-    .join('; ');
+  return workerOf(await opening(open), more);
 }
 
 /** The value of the cookie of a session, as the browser holds it, without its signature. */
@@ -531,7 +429,11 @@ for (const { label, open, skip } of DATABASES) {
     it('makes an account for an address that GitHub did not verify, without the hook of the worker', async () => {
       const database = await opening(open);
       await make(database);
-      const options = await authOptions({ ...AUTH_CONFIG, github: GITHUB, trackIp: false }, await database.pool());
+      const options = await authOptions(
+        { ...AUTH_CONFIG, github: GITHUB, trackIp: false },
+        await database.pool(),
+        NO_SESSIONS,
+      );
       const auth = await startAuth({ ...options, databaseHooks: { ...options.databaseHooks, user: {} } });
       const start = await auth.handler(
         new Request(`${PUBLIC_URL}/console/auth/sign-in/social`, {
@@ -672,7 +574,11 @@ for (const { label, open, skip } of DATABASES) {
       const database = await opening(open);
       await make(database);
       // GitHub only: this worker has no client of Google.
-      const options = await authOptions({ ...AUTH_CONFIG, github: GITHUB, trackIp: false }, await database.pool());
+      const options = await authOptions(
+        { ...AUTH_CONFIG, github: GITHUB, trackIp: false },
+        await database.pool(),
+        NO_SESSIONS,
+      );
       const auth = await startAuth(options);
       const through = (path: string, instance: Auth) =>
         handleRequest(new Request(`${PUBLIC_URL}${path}`), envWith(), {

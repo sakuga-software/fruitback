@@ -9,6 +9,7 @@ import {
   MAX_DESTINATIONS,
   type Site,
   VISIBILITIES,
+  type Workspace,
   type Visibility,
   can,
   destinationId,
@@ -55,6 +56,12 @@ export type ConsoleApiContext = {
   cookieSession?: (request: Request) => Promise<string | undefined>;
   /** `FRUITBACK_CONSOLE_URL`: the one origin a call with the cookie may change something from. */
   consoleUrl?: string;
+  /**
+   * Makes a workspace for the person of the cookie of this request, through the organization plugin
+   * of better-auth (FRU-149). Absent: better-auth is off, and the store makes it, as for a call that
+   * came with the token of before.
+   */
+  createWorkspace?: (request: Request, name: string) => Promise<Workspace>;
 };
 
 function json(status: number, body: unknown, headers: Record<string, string>): Response {
@@ -264,7 +271,9 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 async function callerOf(
   request: Request,
   context: ConsoleApiContext,
-): Promise<{ ok: true; subject: string } | { ok: false; status: number; body: Record<string, string> }> {
+): Promise<
+  { ok: true; subject: string; by: 'token' | 'cookie' } | { ok: false; status: number; body: Record<string, string> }
+> {
   const token = readBearerToken(request.headers.get('Authorization'));
   if (token !== undefined) {
     const verified = await verifyIdentityToken(token, context.secret, context.now);
@@ -274,7 +283,7 @@ async function callerOf(
       return { ok: false, status: 401, body: { error: 'identity-required', reason: 'invalid-claims' } };
     }
 
-    return { ok: true, subject };
+    return { ok: true, subject, by: 'token' };
   }
 
   const subject = context.cookieSession === undefined ? undefined : await context.cookieSession(request);
@@ -284,7 +293,7 @@ async function callerOf(
     return { ok: false, status: 403, body: { error: 'origin-not-allowed' } };
   }
 
-  return { ok: true, subject };
+  return { ok: true, subject, by: 'cookie' };
 }
 
 /**
@@ -336,7 +345,13 @@ export async function handleConsoleApi(
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
     const name = workspaceName((await readBody(request))?.name);
     if (name === undefined) return json(400, { error: 'invalid-name' }, headers);
-    const workspace = await context.accounts.createWorkspace(name, account.id);
+    // By the organization plugin for somebody of the cookie (FRU-149): its hooks see the workspace
+    // and its first member. A call with the token of before has no session of better-auth to make it
+    // for, and the store writes the same two rows.
+    const workspace =
+      identified.by === 'cookie' && context.createWorkspace !== undefined
+        ? await context.createWorkspace(request, name)
+        : await context.accounts.createWorkspace(name, account.id);
 
     return json(201, { ...workspace, role: 'owner' }, headers);
   }
@@ -648,7 +663,17 @@ export async function handleConsoleApi(
   if (rest === '') {
     if (request.method !== 'DELETE') return json(405, { error: 'method-not-allowed' }, headers);
     if (!allowed('delete-workspace')) return forbidden();
+    // The tokens of its trackers are revoked at Linear first, as when one connector is removed
+    // (FRU-149): once the rows are gone, nothing holds a token to revoke it with. What Linear answers
+    // changes nothing.
+    for (const connector of await context.accounts.connectors(workspaceId as string)) {
+      if (connector.kind !== 'linear') continue;
+      const leaving = await context.accounts.sealedKey(connector.id);
+      if (leaving !== undefined) await revokeLinear(leaving.sealed, context.secretsKey);
+    }
     await context.accounts.deleteWorkspace(workspaceId as string);
+    // Nobody is a member of it any more: the extensions that were paired for it stop.
+    await context.sessions.endSessionsOf({ workspace: workspaceId as string }, context.now ?? Date.now());
 
     return new Response(null, { status: 204, headers });
   }

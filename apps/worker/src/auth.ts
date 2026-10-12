@@ -2,14 +2,16 @@ import type { Auth, BetterAuthOptions, BetterAuthPlugin } from 'better-auth';
 
 /** An instance of better-auth, for a file that may not name the library (a lint rule). */
 export type { Auth };
-import { ACTIONS } from './accounts.ts';
-import { newId } from './account-rows.ts';
+import { ACTIONS, ROLES } from './accounts.ts';
+import { newId, roleOf } from './account-rows.ts';
 import { type AdapterOfAuth, keepAtRest } from './auth-at-rest.ts';
+import { ORGANIZATION_PATHS } from './organization-paths.ts';
 import { FRUITBACK_RESOURCE, roleStatements } from './auth-roles.ts';
 import { type WorkerConfig, hasAuth } from './env.ts';
 import type { OAuthClient } from './oauth-sign-in.ts';
 import { type PgDatabase, type PgPool, databaseFor, withoutAddress } from './postgres.ts';
-import { migrated } from './postgres-stores.ts';
+import { migrated, sessionStoreOn } from './postgres-stores.ts';
+import type { SessionStore } from './session.ts';
 
 /**
  * better-auth (FRU-144), what it keeps in the database (FRU-181), and the console that signs in with
@@ -44,9 +46,10 @@ export const AUTH_PLUGINS = ['organization', 'magic-link', 'fruitback-at-rest'] 
  * closed until somebody opens it here, with its reason.
  *
  * Not here, and on purpose: `/sign-in/magic-link` and `/magic-link/verify` (the worker's own routes
- * call them in the process: the token of a link travels after a `#`, and never in an address), the
- * routes of the organization plugin (FRU-149 says what a guest may read), `/list-sessions` (a route of
- * the worker lists them, with no token), and the five of `DISABLED_PATHS`.
+ * call them in the process: the token of a link travels after a `#`, and never in an address),
+ * `/list-sessions` (a route of the worker lists them, with no token), and the five of
+ * `DISABLED_PATHS`. The routes of the organization plugin have their own list, with a rule for each:
+ * `ORGANIZATION_PATHS` of `auth-organization.ts` (FRU-149).
  */
 export const SERVED_PATHS: Readonly<Record<string, string>> = {
   '/ok': 'it says that better-auth answers, and nothing else',
@@ -183,6 +186,13 @@ export const REFUSED_PLUGINS: Readonly<Record<string, string>> = {
     'it ends in a session token of better-auth, and the extension keeps its own session, which rotates',
 };
 
+/**
+ * The code of the refusal of a role that is not one of the four of `ROLES`, or that is several
+ * (FRU-149). better-auth takes a list of roles, writes it as `guest,admin`, and reads the union of
+ * what each one may do (measured on 1.7.7). In this worker a member has one role.
+ */
+export const ROLE_REFUSED = 'ROLE_IS_NOT_ONE_OF_THE_FOUR';
+
 /** The part of the configuration of the worker that better-auth is built from. */
 export type AuthConfig = {
   /** `FRUITBACK_AUTH_SECRET`. It signs the cookie of a session. */
@@ -260,7 +270,12 @@ export function authId(model: string): string {
  * Read in the documentation of 1.7.7 on 2026-10-11, and measured: see « better-auth » in
  * `docs/decisions/worker.md`.
  */
-export async function authOptions(config: AuthConfig, pool: PgPool): Promise<BetterAuthOptions> {
+export async function authOptions(
+  config: AuthConfig,
+  pool: PgPool,
+  /** The sessions of the extensions: a member who is removed keeps none for the workspace (FRU-149). */
+  sessions: Pick<SessionStore, 'endSessionsOf'>,
+): Promise<BetterAuthOptions> {
   const [{ organization }, { magicLink }, { createAccessControl }, { defaultStatements }, { APIError }] =
     await Promise.all([
       import('better-auth/plugins/organization'),
@@ -282,6 +297,44 @@ export async function authOptions(config: AuthConfig, pool: PgPool): Promise<Bet
   const roles = Object.fromEntries(
     Object.entries(roleStatements()).map(([role, statements]) => [role, access.newRole(statements as never)]),
   );
+
+  const refuseOtherRoles = (role: unknown): void => {
+    if (roleOf(role) !== undefined) return;
+    throw new APIError('BAD_REQUEST', {
+      code: ROLE_REFUSED,
+      message: `A member has one role, one of ${ROLES.join(', ')}`,
+    });
+  };
+  const organizations = organization({
+    ac: access,
+    roles,
+    creatorRole: 'owner',
+    // Written, though both are the defaults of 1.7.7: no team, and no role made at run time. A role
+    // is one of the four of `ROLES`, and what it may do is in `RIGHTS` of accounts.ts.
+    teams: { enabled: false },
+    dynamicAccessControl: { enabled: false },
+    // A workspace is deleted by `DELETE /console/workspaces/<id>`, which revokes the tokens of its
+    // trackers first and ends the sessions of its extensions. The route of the plugin does neither,
+    // and a call to it in the process is refused too.
+    disableOrganizationDeletion: true,
+    organizationHooks: {
+      // Every way the plugin writes a role: a member it adds (the owner of a new workspace is one),
+      // a role it changes, an invitation it keeps.
+      beforeAddMember: async ({ member }) => refuseOtherRoles(member.role),
+      beforeUpdateMemberRole: async ({ newRole }) => refuseOtherRoles(newRole),
+      beforeCreateInvitation: async ({ invitation }) => refuseOtherRoles(invitation.role),
+      // `/organization/leave` runs no hook (read in `routes/crud-members.mjs` of 1.7.7): the route of
+      // the worker ends the sessions of somebody who leaves, in `auth-organization.ts`.
+      afterRemoveMember: async ({ member }) =>
+        sessions.endSessionsOf({ subject: member.userId, workspace: member.organizationId }, Date.now()),
+    },
+  });
+  // Every route of the plugin that `ORGANIZATION_PATHS` does not name is closed to a request by
+  // better-auth itself, under the list of the worker: the list is read from the plugin as it is
+  // installed, so a route that a later version adds is closed here before anybody reads its name.
+  const closedOrganizationPaths = Object.values(organizations.endpoints as Record<string, { path?: string }>)
+    .map((endpoint) => endpoint.path)
+    .filter((path): path is string => typeof path === 'string' && !Object.hasOwn(ORGANIZATION_PATHS, path));
 
   return {
     appName: 'Fruitback',
@@ -326,6 +379,11 @@ export async function authOptions(config: AuthConfig, pool: PgPool): Promise<Bet
           // e-mail proves its address, so it passes.
           before: async (user: { emailVerified?: unknown }) => (user.emailVerified === true ? undefined : false),
         },
+        // An account that is deleted keeps no extension, in any workspace (FRU-149). No route deletes
+        // an account today: this holds for the day one does.
+        delete: {
+          after: async (user: { id: string }) => sessions.endSessionsOf({ subject: user.id }, Date.now()),
+        },
       },
       session: {
         create: {
@@ -343,7 +401,12 @@ export async function authOptions(config: AuthConfig, pool: PgPool): Promise<Bet
     // it is in the browser that started it, and in no copy.
     account: { storeStateStrategy: 'cookie' },
     // To a request, as `SERVED_PATHS` closes them too. The two of the link stay open to `auth.api`.
-    disabledPaths: [...Object.keys(DISABLED_PATHS), '/sign-in/magic-link', '/magic-link/verify'],
+    disabledPaths: [
+      ...Object.keys(DISABLED_PATHS),
+      '/sign-in/magic-link',
+      '/magic-link/verify',
+      ...closedOrganizationPaths,
+    ],
     advanced: {
       cookiePrefix: 'fruitback',
       // `HttpOnly` is the default of better-auth, and `Secure` comes with an `https://` address. The
@@ -371,12 +434,12 @@ export async function authOptions(config: AuthConfig, pool: PgPool): Promise<Bet
         (level === 'error' ? console.error : console.warn)(`[fruitback] better-auth ${level}: ${text}`);
       },
     },
-    // The schema of the organization plugin and the four roles. None of its routes is served.
+    // The organization plugin: its schema, the four roles, and the routes of `ORGANIZATION_PATHS`.
     // The link of the e-mail (FRU-147): its token is kept as a digest (`storeToken`), digested again
     // by `verification.storeIdentifier`, then by the layer. `sendMagicLink` hands the token to the
     // route of the worker that asked, which writes it after a `#`.
     plugins: [
-      organization({ ac: access, roles }),
+      organizations,
       magicLink({ storeToken: 'hashed', expiresIn: MAGIC_LINK_TTL_SECONDS, sendMagicLink: deliverLink }),
       atRest(APIError),
     ],
@@ -479,7 +542,9 @@ export function authFor(
   // A pool that was closed is another object: the instance that held it is not handed out again.
   if (started !== undefined && started.database === database && started.key === key) return started.auth;
 
-  const starting = migrated(database).then(async () => startAuth(await authOptions(auth, await database.pool())));
+  const starting = migrated(database).then(async () =>
+    startAuth(await authOptions(auth, await database.pool(), sessionStoreOn(database))),
+  );
   const mine = { key, database, auth: starting };
   started = mine;
   starting.catch(() => {
