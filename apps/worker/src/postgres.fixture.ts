@@ -3,12 +3,11 @@ import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync }
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after } from 'node:test';
-import { PGlite, types } from '@electric-sql/pglite';
+import type { PGlite } from '@electric-sql/pglite';
 import { type SQL, sql } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/pglite';
-import { migrate as migrateOnPglite } from 'drizzle-orm/pglite/migrator';
 import { type Cases, type Subject, collect, mutatedModule } from './conformance.fixture.ts';
-import { type Database, type PgDatabase, type PgPool, causeOfQueryError, createPgDatabase } from './postgres.ts';
+import { type Database, type PgDatabase, createPgDatabase } from './postgres.ts';
+import { databaseOn, newPglite } from './pglite.fixture.ts';
 import { migrated, migrationsFolder } from './postgres-migrate.ts';
 
 /**
@@ -113,7 +112,7 @@ export function migrationsThrough(tag: string): string {
 let shared: PGlite | undefined;
 
 function pglite(): PGlite {
-  shared ??= new PGlite({ parsers: { [types.INT8]: (value: string) => Number(value) } });
+  shared ??= newPglite();
 
   return shared;
 }
@@ -124,68 +123,9 @@ after(async () => {
   shared = undefined;
 });
 
-const EMPTY_PUBLIC = 'DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;';
-
-/**
- * A pool of `pg`, as Kysely's PostgreSQL dialect uses one, on PGlite: what better-auth takes (FRU-144).
- *
- * PGlite is one connection, so one client is out at a time: a transaction of better-auth is `begin`
- * and `commit` on the client it holds, and no other client may come between the two.
- */
-function poolOver(instance: PGlite): PgPool {
-  let tail: Promise<void> = Promise.resolve();
-
-  const pool = {
-    async connect() {
-      let release = (): void => {};
-      const held = new Promise<void>((resolve) => (release = resolve));
-      const before = tail;
-      tail = before.then(() => held);
-      await before;
-
-      return {
-        async query(text: string, values?: readonly unknown[]) {
-          const answer = await instance.query<Row>(text, values === undefined ? [] : [...values]);
-
-          return {
-            command: (text.trim().split(/\s+/)[0] ?? '').toUpperCase(),
-            rowCount: answer.affectedRows ?? answer.rows.length,
-            rows: answer.rows,
-          };
-        },
-        release,
-      };
-    },
-    async end() {},
-  };
-
-  return pool as unknown as PgPool;
-}
-
 /** An empty database on PGlite: the one database of the shared instance, with nothing in `public`. */
-export async function createPgliteDatabase(): Promise<PgDatabase> {
-  const instance = pglite();
-  await instance.exec(EMPTY_PUBLIC);
-  const db = drizzle({ client: instance });
-
-  /** The error of PGlite, and not the one of Drizzle around it: a test reads its code. */
-  const plain = async <T>(work: Promise<T>): Promise<T> => {
-    try {
-      return await work;
-    } catch (error) {
-      throw causeOfQueryError(error) ?? error;
-    }
-  };
-
-  return {
-    run: (work) => plain(work(db)),
-    transaction: (work) => plain(db.transaction((transaction) => work(transaction))),
-    alone: (work) => plain(work(db, (config) => migrateOnPglite(db, config))),
-    pool: async () => poolOver(instance),
-    async close() {
-      await instance.exec(EMPTY_PUBLIC);
-    },
-  };
+export function createPgliteDatabase(): Promise<PgDatabase> {
+  return databaseOn(pglite());
 }
 
 /**

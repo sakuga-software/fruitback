@@ -11,6 +11,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Fruitback cannot reach its server. Check your connection.':
     'Fruitback ne joint pas son serveur. Vérifiez votre connexion.',
   'Try again': 'Réessayer',
+  'Sign in': 'Se connecter',
+  'Your session ended. Sign in again in another tab: what you wrote here stays.':
+    'Votre session a pris fin. Reconnectez-vous dans un autre onglet : ce que vous avez écrit ici reste.',
+  'You are still signed out. Sign in in the other tab, then continue.':
+    "Vous n'êtes toujours pas connecté. Connectez-vous dans l'autre onglet, puis continuez.",
   'Loading…': 'Chargement…',
 
   'My account': 'Mon compte',
@@ -191,6 +196,18 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'GitHub n’a pas d’adresse principale vérifiée pour ce compte. Vérifiez-la sur GitHub, ou utilisez un lien par e-mail.',
   'The sign-in with GitHub did not finish. Try again, or use an email link.':
     'La connexion avec GitHub n’a pas abouti. Réessayez, ou utilisez un lien par e-mail.',
+  'The access was declined. Try again, or use an email link.':
+    "L'accès a été refusé. Réessayez, ou utilisez un lien par e-mail.",
+  'The sign-in started in another browser, or too long ago. Start it again from here.':
+    'La connexion a commencé dans un autre navigateur, ou il y a trop longtemps. Recommencez-la depuis cette page.',
+  'The provider has no verified address for this account. Verify it there, or use an email link.':
+    "Le fournisseur n'a pas d'adresse vérifiée pour ce compte. Vérifiez-la chez lui, ou utilisez un lien par e-mail.",
+  'The provider gave no address for this account. Use an email link.':
+    "Le fournisseur n'a donné aucune adresse pour ce compte. Utilisez un lien par e-mail.",
+  'This way to sign in is not set up on this Fruitback. Use an email link.':
+    "Cette façon de se connecter n'est pas configurée sur ce Fruitback. Utilisez un lien par e-mail.",
+  'The sign-in did not finish. Try again, or use an email link.':
+    "La connexion n'a pas abouti. Réessayez, ou utilisez un lien par e-mail.",
   'The link could not be sent just now. Try again in a minute.':
     'Le lien n’a pas pu être envoyé. Réessayez dans une minute.',
   'One workspace for your team, your sites and your sources. Hosted in Europe.':

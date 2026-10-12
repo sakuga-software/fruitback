@@ -2,6 +2,7 @@ import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import {
   API,
+  providerStart,
   type Me,
   type Providers,
   type Site,
@@ -75,7 +76,8 @@ function resolveOnce(step: string | null): Promise<Stage> {
 }
 
 async function resolveStage(step: string | null): Promise<Stage> {
-  const me = await call<Me>('GET', '/console/me');
+  // Quiet: a person who is not signed in gets the sign-in screen, not the notice of a session that ended.
+  const me = await call<Me>('GET', '/console/me', undefined, { quiet: true });
   if (!me.ok) return { kind: 'sign-in' };
   adoptLanguage(me.data.account, saveLanguage);
 
@@ -234,6 +236,13 @@ const SEND_PROBLEMS: Record<string, string> = {
   'too-many-links': msg('Several links went to this address already. Use the last one, or wait fifteen minutes.'),
 };
 
+/** The state of the sign-in is not in this browser: another browser, or a page left open too long. */
+const SIGN_IN_RESTARTED = msg('The sign-in started in another browser, or too long ago. Start it again from here.');
+/** better-auth made no account: the worker refuses an address the provider did not verify (FRU-147). */
+const NO_VERIFIED_ADDRESS = msg(
+  'The provider has no verified address for this account. Verify it there, or use an email link.',
+);
+
 /** What the worker says when a sign-in with a provider comes back without a session (FRU-97, FRU-135). */
 const PROVIDER_PROBLEMS: Record<string, string> = {
   'google-declined': msg('Google did not sign you in: the access was declined. Try again, or use an email link.'),
@@ -244,7 +253,28 @@ const PROVIDER_PROBLEMS: Record<string, string> = {
     'GitHub has no verified primary address for this account. Verify it on GitHub, or use an email link.',
   ),
   'github-failed': msg('The sign-in with GitHub did not finish. Try again, or use an email link.'),
+  // The codes of better-auth (FRU-148), read in 1.7.7. They do not name the provider.
+  access_denied: msg('The access was declined. Try again, or use an email link.'),
+  state_mismatch: SIGN_IN_RESTARTED,
+  state_not_found: SIGN_IN_RESTARTED,
+  state_invalid: SIGN_IN_RESTARTED,
+  please_restart_the_process: SIGN_IN_RESTARTED,
+  unable_to_create_user: NO_VERIFIED_ADDRESS,
+  account_not_linked: NO_VERIFIED_ADDRESS,
+  email_not_verified: NO_VERIFIED_ADDRESS,
+  email_not_found: msg('The provider gave no address for this account. Use an email link.'),
+  oauth_provider_not_found: msg('This way to sign in is not set up on this Fruitback. Use an email link.'),
 };
+
+/** Any other code that a sign-in sends back: it did not finish, and there is still a way in. */
+const SIGN_IN_FAILED = msg('The sign-in did not finish. Try again, or use an email link.');
+
+/** What a code that comes back after a sign-in means, or nothing when no code came back. */
+function providerProblem(code: string | null): string | undefined {
+  if (code === null || code === '') return undefined;
+
+  return Object.hasOwn(PROVIDER_PROBLEMS, code) ? PROVIDER_PROBLEMS[code] : SIGN_IN_FAILED;
+}
 
 function SignIn({ onSent }: { onSent: (email: string) => void }) {
   useLocale();
@@ -252,7 +282,7 @@ function SignIn({ onSent }: { onSent: (email: string) => void }) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | undefined>(PROVIDER_PROBLEMS[search.get('error') ?? '']);
+  const [problem, setProblem] = useState<string | undefined>(providerProblem(search.get('error')));
   const [providers, setProviders] = useState(PROVIDERS_AT_FIRST);
 
   useEffect(() => {
@@ -294,7 +324,7 @@ function SignIn({ onSent }: { onSent: (email: string) => void }) {
       }
     >
       {providers.google ? (
-        <WideButton onClick={() => (window.location.href = `${API}/auth/google`)}>
+        <WideButton onClick={() => (window.location.href = providerStart('google'))}>
           {t('Continue with Google')}
         </WideButton>
       ) : (
@@ -303,7 +333,7 @@ function SignIn({ onSent }: { onSent: (email: string) => void }) {
         </WideButton>
       )}
       {providers.github ? (
-        <WideButton onClick={() => (window.location.href = `${API}/auth/github`)}>
+        <WideButton onClick={() => (window.location.href = providerStart('github'))}>
           {t('Continue with GitHub')}
         </WideButton>
       ) : (
