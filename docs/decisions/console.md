@@ -88,10 +88,16 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   (`/console/auth/email`, `/console/auth/email/redeem`, `/console/auth/sign-out`). The bundle and the
   policy of the image do not change: `csp.mjs`, hashed scripts, no `'unsafe-inline'` for a script.
 - **The worker says which path it serves, in `GET /auth/providers`.** With `betterAuth` in the
-  answer, the console takes the cookie, and the providers of `betterAuth`. Without it, and until the
-  worker answered, it signs in as before: `session-of-before.ts` holds the access token and the one
-  refresh in flight of FRU-99. The console and the worker are not deployed at the same instant.
+  answer, the console takes the cookie, and the providers of `betterAuth`. With an answer that has
+  none, it signs in as before: `session-of-before.ts` holds the access token and the one refresh in
+  flight of FRU-99. The console and the worker are not deployed at the same instant.
   **FRU-150 removes `session-of-before.ts`**, and with it every token of the console.
+- **A worker that refuses that question said nothing** (FRU-205). On a `429`, a `5xx` or no answer,
+  no call leaves on either path: each one answers that refusal, a sign-out answers `false`, and the
+  question is asked again at the next call, once for the calls of one moment. The console used to
+  take the path of before then: against a worker that serves better-auth, it spent the refresh
+  cookie of before and held an access token, for the session of whoever used the browser last. A
+  link opened during a refusal is not spent, and its screen offers « Try again ».
 - **A sign-in with a provider is a navigation of the whole page**, to
   `<worker>/console/auth/start/<provider>` (`providerStart`). Never a `fetch` of `/sign-in/social`:
   the cookie of the state would be set on the answer of a call, and WebKit did not send it back when

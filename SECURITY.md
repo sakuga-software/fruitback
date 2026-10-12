@@ -625,6 +625,10 @@ the cookie from another origin, or from none, and takes it from the console`. be
 - **The console holds no token** (FRU-148): no access token in its memory, nothing in `localStorage`
   or `sessionStorage`, and a cookie that `document.cookie` does not show. A script injected into the
   console can call the worker while the page is open, as before; it has nothing to carry away.
+  **The condition: the worker said that it serves better-auth**, in `GET /auth/providers`. A worker
+  that answers with no `betterAuth` is a worker of before, and the console holds the access token
+  of before. A worker that refuses the question (`429`, `5xx`) or does not answer said nothing, and
+  the console then takes neither path and holds nothing (FRU-205).
 - **A sign-in with a provider starts by a navigation** to `GET /console/auth/start/<provider>`, which
   answers a redirect to the provider and the cookie of the state. It changes nothing by itself: the
   person still consents at the provider, and comes back with a state that only this browser holds.

@@ -21,7 +21,9 @@ export default function SignIn() {
       setWaiting(undefined);
       void redeemLink(code).then((redeemed) => {
         if (redeemed.ok) return navigate('/', { replace: true });
-        if (redeemed.status === 0) return setWaiting(code);
+        // No answer, or a refusal that is not about the link (FRU-205): the link was not spent, or
+        // the next try says that it was.
+        if (redeemed.status === 0 || redeemed.status === 429 || redeemed.status >= 500) return setWaiting(code);
         setFailed(true);
       });
     },
