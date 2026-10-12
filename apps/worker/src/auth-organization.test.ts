@@ -1168,6 +1168,35 @@ for (const { label, open, skip } of DATABASES) {
       assert.deepEqual([fromElsewhere.status, await fromElsewhere.json()], [429, { error: 'too-many-invitations' }]);
       assert.equal(toPaul(), 3);
       assert.equal((await rowsOf(worker.database, 'SELECT id FROM invitation')).length, 1);
+
+      // Two calls at the same moment read the same count, under the limit; the count that is taken
+      // then is over it for one of them, which sends nothing. Its invitation is kept.
+      const racing = {
+        auth: worker.auth,
+        accounts: worker.accounts,
+        sessions: worker.sessions,
+        mailer: worker.mail,
+        kv: { ...worker.kv, get: async () => '2', incr: async () => 4 },
+        consoleUrl: CONSOLE_URL,
+        clientIp: '198.51.100.7',
+        trackIp: false,
+      };
+      const lost = await handleOrganizationRoutes(
+        new Request(`${PUBLIC_URL}${ORG}/invite-member`, {
+          method: 'POST',
+          headers: { Cookie: acme.owner.cookie, Origin: CONSOLE_URL, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ organizationId: acme.workspace, email: 'max@client.dev', role: 'member' }),
+        }),
+        `${ORG}/invite-member`,
+        racing,
+        {},
+      );
+      assert.deepEqual([lost?.status, await lost?.json()], [429, { error: 'too-many-invitations' }]);
+      assert.equal(worker.mail.sent.filter((each) => each.to === 'max@client.dev').length, 0);
+      assert.equal(
+        (await rowsOf(worker.database, `SELECT id FROM invitation WHERE email = 'max@client.dev'`)).length,
+        1,
+      );
       // Another address is not held by it.
       assert.equal((await invite(worker, other.owner, other.workspace, { email: 'lea@client.dev' })).status, 200);
     });

@@ -198,7 +198,11 @@ export async function handleOrganizationRoutes(
       .json()
       .catch(() => undefined)) as { id?: unknown } | undefined;
     if (typeof kept?.id !== 'string') throw new AuthUnavailable('better-auth answered an invitation with no id');
-    await context.kv.incr(window, EMAIL_LINK_WINDOW_MS);
+    // The count is taken here, in one step: of two calls that read the same count above, the one
+    // that goes over sends nothing. Its invitation is kept, to send again when the window allows.
+    if ((await context.kv.incr(window, EMAIL_LINK_WINDOW_MS)) > INVITATIONS_PER_WINDOW) {
+      return json(429, { error: 'too-many-invitations' }, headers);
+    }
     try {
       await context.mailer.send(
         await messageOf(context, { to: invited, role: String(read.input.role), workspace, inviter: mine.userId }),
