@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { sql } from 'drizzle-orm';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
 import type { Database, Db } from './postgres.ts';
+import { BASELINE_CATALOGUE } from './postgres-baseline-catalogue.ts';
 import { StoreError } from './store.ts';
 
 /**
@@ -80,6 +81,92 @@ export const HOME_MADE = ['accounts', 'site_destinations', 'sessions', 'better-a
  */
 export const BASELINE = '0000_baseline';
 
+/** The two journals: `schema_migrations` of the tool of before, and the one of Drizzle. */
+const JOURNALS = ['schema_migrations', APPLIED.migrationsTable] as const;
+
+/**
+ * The catalogue of `public`, one line for each column (with its place, its type, its default and
+ * « not null »), each constraint (with its name and its definition) and each index, in the order of
+ * their text. The journals of the two tools are left out.
+ *
+ * The lines are the same on PostgreSQL 16, 17 and 18 (measured on 16.x, 17.11 and 18.3, FRU-189),
+ * with one thing left out: from 18 on, `pg_constraint` holds a row for each « not null » (`contype`
+ * `n`), 85 of them for the baseline. The line of a column says « not null » already.
+ */
+export async function catalogueOf(db: Db): Promise<string[]> {
+  return (await catalogueWithTables(db)).map((entry) => entry.line);
+}
+
+/** Each line of the catalogue, with the table it is about. */
+async function catalogueWithTables(db: Db): Promise<{ table: string; line: string }[]> {
+  const rows = rowsOf(
+    await db.execute(
+      sql`SELECT t, line FROM (
+            SELECT table_name AS t, 'column ' || table_name || '.' || column_name || ' #' || ordinal_position || ' ' ||
+                   data_type || ' null:' || is_nullable || ' default:' || coalesce(column_default, '') AS line
+              FROM information_schema.columns WHERE table_schema = 'public'
+            UNION ALL
+            SELECT t.relname, 'constraint ' || t.relname || ' ' || c.conname || ': ' || pg_get_constraintdef(c.oid)
+              FROM pg_constraint c
+              JOIN pg_class t ON t.oid = c.conrelid
+              JOIN pg_namespace n ON n.oid = c.connamespace
+             WHERE n.nspname = 'public' AND c.contype <> 'n'
+            UNION ALL
+            SELECT tablename, 'index ' || indexname || ': ' || indexdef FROM pg_indexes WHERE schemaname = 'public'
+          ) AS catalogue
+          WHERE t NOT IN (${sql.join(
+            JOURNALS.map((name) => sql`${name}`),
+            sql`, `,
+          )})
+          ORDER BY line COLLATE "C"`,
+    ),
+  );
+
+  return rows.map((row) => ({ table: String(row.t), line: String(row.line) }));
+}
+
+/** The tables that the baseline makes: each one has a column, and a line of a column starts with its table. */
+const BASELINE_TABLES = new Set(
+  BASELINE_CATALOGUE.filter((line) => line.startsWith('column ')).map((line) =>
+    line.slice('column '.length, line.indexOf('.')),
+  ),
+);
+
+/**
+ * Refuses a database of the tool of before whose tables are not the ones that the baseline makes
+ * (FRU-189), before the adoption writes anything.
+ *
+ * The adoption runs nothing: it says that the baseline is applied. That is true only when the
+ * database is what the baseline would have made. A column that somebody dropped by hand, an index or
+ * a constraint that is gone, and a later migration fails in its middle, or the worker runs without a
+ * `UNIQUE` that its stores count on. So each line of `BASELINE_CATALOGUE` must be in the catalogue
+ * of the database, and each line of the database about a table of the baseline must be in
+ * `BASELINE_CATALOGUE`. A table that the baseline does not make is another application's, and is
+ * left alone.
+ *
+ * The message names the first line that is missing and the first one that is not expected: a
+ * column of another type is both. It quotes the catalogue only, never a row.
+ */
+async function refuseACatalogueThatIsNotTheBaseline(db: Db): Promise<void> {
+  const expected = new Set(BASELINE_CATALOGUE);
+  const found = await catalogueWithTables(db);
+  const here = new Set(found.map((entry) => entry.line));
+
+  const missing = BASELINE_CATALOGUE.find((line) => !here.has(line));
+  const unexpected = found.find((entry) => BASELINE_TABLES.has(entry.table) && !expected.has(entry.line))?.line;
+  if (missing === undefined && unexpected === undefined) return;
+
+  const gaps = [
+    missing === undefined ? undefined : `it does not have « ${missing} »`,
+    unexpected === undefined ? undefined : `it has « ${unexpected} », which that migration does not make`,
+  ].filter((gap) => gap !== undefined);
+  throw new StoreError(
+    `This database was made by the migration tool of before, and its tables are not the ones that « ${BASELINE} » makes: ` +
+      `${gaps.join(', and ')}. Nothing was written. Change the database by hand until it is what the image of ` +
+      'before made, then start this one again (docs/decisions/worker.md, FRU-189)',
+  );
+}
+
 /**
  * Puts a database that the tool of before made under Drizzle, and runs nothing of the baseline.
  *
@@ -95,7 +182,8 @@ export const BASELINE = '0000_baseline';
  * journal says that Drizzle applied nothing, so the database is adopted all the same.
  *
  * Anything else is refused before any write, with what to do: a database stopped at an earlier
- * migration of that tool, or one whose list was edited. `schema_migrations` is kept as it is. An
+ * migration of that tool, one whose list was edited, or one whose tables are not the ones that the
+ * baseline makes (`refuseACatalogueThatIsNotTheBaseline`). `schema_migrations` is kept as it is. An
  * image of before reads it, so a roll back to such an image still finds its database.
  *
  * The caller holds the lock: two processes do not adopt one database twice.
@@ -133,6 +221,8 @@ async function adoptWhatTheHomeMadeToolMade(db: Db, folder: string): Promise<voi
   if (entry?.tag !== BASELINE || baseline === undefined) {
     throw new StoreError(`The first migration of the journal is « ${entry?.tag ?? 'none'} », and not « ${BASELINE} »`);
   }
+
+  await refuseACatalogueThatIsNotTheBaseline(db);
 
   await db.transaction(async (transaction) => {
     // The table that `migrate` of Drizzle makes, to the last word (pg-core/dialect.js of 0.45.4).

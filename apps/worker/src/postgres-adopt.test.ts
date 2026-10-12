@@ -16,6 +16,7 @@ import {
   madeByTheHomeMadeTool,
   withRows,
 } from './postgres-home-made.fixture.ts';
+import { BASELINE_CATALOGUE } from './postgres-baseline-catalogue.ts';
 import { APPLIED, BASELINE, HOME_MADE, migrate, migrationsFolder } from './postgres-migrate.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
 import { StoreError } from './store.ts';
@@ -294,6 +295,118 @@ for (const { label, open, skip } of DATABASES) {
 
       await assert.rejects(migrate(database), /holds « accounts, site_destinations, sessions, better_auth »/);
       assert.equal(await has(database, `public.${APPLIED.migrationsTable}`), false);
+    });
+  });
+
+  /**
+   * The adoption runs nothing, so it first reads that the database is what the baseline makes
+   * (FRU-189). Each case changes by hand a database that holds the four migrations of before.
+   */
+  describe(`a database of before that somebody changed by hand, on ${label} (FRU-189)`, { skip }, () => {
+    it('is the catalogue that the baseline makes', async () => {
+      const fresh = await opening(open);
+      await migrate(fresh, baselineAlone());
+
+      assert.ok(BASELINE_CATALOGUE.length > 150, `only ${BASELINE_CATALOGUE.length} lines in the catalogue`);
+      assert.deepEqual(await catalogueOf(fresh), [...BASELINE_CATALOGUE]);
+    });
+
+    const CHANGES = [
+      {
+        what: 'a column that is gone',
+        change: 'ALTER TABLE sites DROP COLUMN project_id',
+        names: /it does not have « column sites\.project_id #8 text null:YES default: »/,
+      },
+      {
+        what: 'an index that is gone',
+        change: 'DROP INDEX sites_by_connector',
+        names:
+          /it does not have « index sites_by_connector: CREATE INDEX sites_by_connector ON public\.sites USING btree \(connector_id\) »/,
+      },
+      {
+        what: 'a constraint that is gone',
+        change: 'ALTER TABLE sites DROP CONSTRAINT sites_workspace_id_origin_key',
+        names: /it does not have « constraint sites sites_workspace_id_origin_key: UNIQUE \(workspace_id, origin\) »/,
+      },
+      {
+        what: 'a foreign key that deletes nothing any more',
+        change:
+          'ALTER TABLE deliveries DROP CONSTRAINT deliveries_connector_id_fkey, ' +
+          'ADD CONSTRAINT deliveries_connector_id_fkey FOREIGN KEY (connector_id) REFERENCES connectors (id)',
+        names:
+          /it does not have « constraint deliveries deliveries_connector_id_fkey: FOREIGN KEY \(connector_id\) REFERENCES connectors\(id\) ON DELETE CASCADE », and it has « constraint deliveries deliveries_connector_id_fkey: FOREIGN KEY \(connector_id\) REFERENCES connectors\(id\) », which that migration does not make/,
+      },
+      {
+        what: 'a column of another type',
+        change: 'ALTER TABLE deliveries ALTER COLUMN attempts TYPE bigint',
+        names:
+          /it does not have « column deliveries\.attempts #5 integer null:NO default:0 », and it has « column deliveries\.attempts #5 bigint null:NO default:0 », which that migration does not make/,
+      },
+      {
+        what: 'a column that may be null now',
+        change: 'ALTER TABLE accounts ALTER COLUMN email DROP NOT NULL',
+        names: /it does not have « column accounts\.email #2 text null:NO default: »/,
+      },
+      {
+        what: 'a column that nothing of the baseline makes',
+        change: 'ALTER TABLE sites ADD COLUMN note text',
+        names: /it has « column sites\.note #9 text null:YES default: », which that migration does not make/,
+      },
+      {
+        what: 'a table that is gone',
+        change: 'DROP TABLE email_links',
+        names: /it does not have « column email_links\.code_hash #1 text null:NO default: »/,
+      },
+    ] as const;
+
+    for (const { what, change, names } of CHANGES) {
+      it(`refuses ${what}, names it, and writes nothing`, async () => {
+        const database = await opening(open);
+        await madeByTheHomeMadeTool(database);
+        await withRows(database);
+        await rowsOf(database, change);
+        const content = what === 'a table that is gone' ? undefined : await contentOf(database);
+        const catalogue = await catalogueOf(database);
+
+        await assert.rejects(migrate(database), (error: unknown) => {
+          assert.ok(error instanceof StoreError, String(error));
+          assert.match(error.message, /its tables are not the ones that « 0000_baseline » makes/);
+          assert.match(error.message, names);
+          assert.match(error.message, /Nothing was written\. Change the database by hand/);
+
+          return true;
+        });
+
+        assert.equal(await has(database, `public.${APPLIED.migrationsTable}`), false);
+        assert.deepEqual(await catalogueOf(database), catalogue);
+        if (content !== undefined) assert.deepEqual(await contentOf(database), content);
+        assert.equal((await homeMadeJournal(database)).length, HOME_MADE.length);
+      });
+    }
+
+    it('is adopted once the database is again what the image of before made', async () => {
+      const database = await opening(open);
+      await madeByTheHomeMadeTool(database);
+      await withRows(database);
+      await rowsOf(database, 'DROP INDEX sites_by_connector');
+      await assert.rejects(migrate(database), /it does not have « index sites_by_connector/);
+
+      await rowsOf(database, 'CREATE INDEX sites_by_connector ON sites (connector_id)');
+      await migrate(database);
+
+      assert.deepEqual(await drizzleJournal(database), WHOLE_JOURNAL);
+    });
+
+    it('leaves alone a table that the baseline does not make: it is adopted with it', async () => {
+      const database = await opening(open);
+      await madeByTheHomeMadeTool(database);
+      await rowsOf(database, 'CREATE TABLE of_another_application (id text PRIMARY KEY, note text)');
+      await rowsOf(database, 'CREATE INDEX of_another_application_by_note ON of_another_application (note)');
+
+      await migrate(database);
+
+      assert.deepEqual(await drizzleJournal(database), WHOLE_JOURNAL);
+      assert.equal(await has(database, 'public.of_another_application'), true);
     });
   });
 }
