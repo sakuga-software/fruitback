@@ -34,6 +34,9 @@ export class StoreError extends Error {}
  */
 export type CreatedIssue = { id: string; identifier: string; url?: string };
 
+/** What became of one seed of a batch: its issue, or a store that did not keep it. */
+export type BatchAnswer = { issue: CreatedIssue } | { error: 'store-unavailable' };
+
 /** The read the worker asks for: every seed on one page, for one client. */
 export type SeedIssueQuery = { url: string; clientId: string | undefined };
 
@@ -57,6 +60,14 @@ export type SeedStore = {
    */
   scope(client: ClientConfig | undefined): string;
   create(seed: Seed, client: ClientConfig | undefined, policy: ClientPolicy): Promise<CreatedIssue>;
+  /**
+   * Plant several seeds as one batch (FRU-124): a tracker groups them under one parent, and each
+   * seed is still its own issue, with its own state. One answer for each seed, in order.
+   *
+   * It throws `StoreError` only when nothing was written. A store without it gets one `create` for
+   * each seed: `createAll` in `batch.ts`.
+   */
+  createBatch?(seeds: readonly Seed[], client: ClientConfig | undefined, policy: ClientPolicy): Promise<BatchAnswer[]>;
   findForPage(query: SeedIssueQuery, client: ClientConfig | undefined, policy: ClientPolicy): Promise<SeedIssue[]>;
   /**
    * Delete the seeds that `which` selects, and the replies to them (FRU-85, FRU-111).

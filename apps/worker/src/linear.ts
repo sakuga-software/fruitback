@@ -13,7 +13,7 @@ import {
 } from '@fruitback/shared';
 import { z } from 'zod';
 import type { ClientConfig, ClientPolicy } from './clients.ts';
-import { type CreatedIssue, type SeedIssueQuery, type SeedStore, StoreError } from './store.ts';
+import { type BatchAnswer, type CreatedIssue, type SeedIssueQuery, type SeedStore, StoreError } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
 
 const LINEAR_GRAPHQL_ENDPOINT = 'https://api.linear.app/graphql';
@@ -190,6 +190,8 @@ export async function createSeedIssue(
   seed: Seed,
   /** The language the description's prose is written in (FRU-39). English when nothing says. */
   locale?: string,
+  /** The issue of the batch this seed belongs to (FRU-124): the seed becomes one of its sub-issues. */
+  parentId?: string,
 ): Promise<CreatedIssue> {
   const labelIds = await resolveLabelIds(config, routing, buildIssueLabels(seed));
 
@@ -200,6 +202,7 @@ export async function createSeedIssue(
       title: buildIssueTitle(seed),
       description: buildIssueDescription(seed, { locale }),
       labelIds,
+      ...(parentId === undefined ? {} : { parentId }),
     },
   });
 
@@ -208,6 +211,68 @@ export async function createSeedIssue(
   }
 
   return created.issueCreate.issue;
+}
+
+/** The words of the parent of a batch, in the language of the team (FRU-39). */
+const BATCH_WORDS: Record<'en' | 'fr', { title: (count: number, host: string) => string; lead: string }> = {
+  en: {
+    title: (count, host) => `${count} notes on ${host}`,
+    lead: 'Sent together from Fruitback. Each note is a sub-issue, with its own state and its pin on the page.',
+  },
+  fr: {
+    title: (count, host) => `${count} notes sur ${host}`,
+    lead: 'Envoyées ensemble depuis Fruitback. Chaque note est un sous-ticket, avec son état et son pin sur la page.',
+  },
+};
+
+/**
+ * The parent of a batch (FRU-124): a title, a sentence and the list of the notes. **It holds no
+ * seed**: `parseSeedFromDescription` finds none in it, so no read draws it as a pin. Its state is the
+ * team's business, and the widget never reads it.
+ */
+export function batchParent(seeds: readonly Seed[], locale?: string): { title: string; description: string } {
+  const words = BATCH_WORDS[locale?.toLowerCase().startsWith('fr') ? 'fr' : 'en'];
+  const hosts = [...new Set(seeds.map((seed) => new URL(seed.page.url).host))];
+  const list = seeds.map((seed) => `- ${buildIssueTitle(seed)} (${seed.page.url})`);
+
+  return { title: words.title(seeds.length, hosts.join(', ')), description: [words.lead, '', ...list].join('\n') };
+}
+
+/**
+ * A batch in Linear (FRU-124): one parent issue, then one sub-issue for each seed, in order. A
+ * parent that Linear refuses throws, and nothing is written. A sub-issue that it refuses is answered
+ * as such, and the next ones are still sent: each one is a note somebody wrote.
+ */
+export async function createSeedBatch(
+  config: LinearConfig,
+  routing: LinearRouting,
+  seeds: readonly Seed[],
+  locale?: string,
+): Promise<BatchAnswer[]> {
+  const parent = batchParent(seeds, locale);
+  const labelIds = await resolveLabelIds(config, routing, buildIssueLabels(seeds[0] as Seed));
+  const created = await graphql<CreateIssueResult>(config, CREATE_ISSUE_MUTATION, {
+    input: { teamId: routing.teamId, projectId: routing.projectId, ...parent, labelIds },
+  });
+  if (!created.issueCreate.success || created.issueCreate.issue === null) {
+    throw new StoreError('Linear refused to create the issue of the batch');
+  }
+  const parentId = created.issueCreate.issue.id;
+
+  const answers: BatchAnswer[] = [];
+  for (const seed of seeds) {
+    try {
+      answers.push({ issue: await createSeedIssue(config, routing, seed, locale, parentId) });
+    } catch (error) {
+      // WARNING: nothing is thrown from here. The parent exists, and the notes before this one are
+      // kept: an error that left this loop would answer `500`, lose their answers, and the next
+      // attempt would write a second parent. An error that is not Linear's is said in the log.
+      if (!(error instanceof StoreError)) console.error('[fruitback] a note of a batch failed', error);
+      answers.push({ error: 'store-unavailable' });
+    }
+  }
+
+  return answers;
 }
 
 const ISSUES_QUERY = `
@@ -575,6 +640,8 @@ export function createLinearStore(config: LinearConfig, stages: StageExceptions 
     // used to reach for `routing.teamId` itself, which meant the read cache knew how Linear routes.
     scope: (client) => linearRoutingFor(config, client).teamId,
     create: (seed, client, policy) => createSeedIssue(config, linearRoutingFor(config, client), seed, policy.locale),
+    createBatch: (seeds, client, policy) =>
+      createSeedBatch(config, linearRoutingFor(config, client), seeds, policy.locale),
     findForPage: (query, client, policy) =>
       fetchSeedIssues(config, linearRoutingFor(config, client), query, policy, stages),
   };

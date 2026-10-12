@@ -20,22 +20,52 @@ export const WINDOW_MS = 60_000;
  *
  * It rejects with `KvError` when the `Kv` does not answer. The caller decides what that means.
  */
-export async function checkRateLimit(
+export function checkRateLimit(
   kv: Kv,
   clientIp: string,
   options: { limit?: number; now?: number } = {},
 ): Promise<boolean> {
+  return chargeRateLimit(kv, clientIp, 1, options);
+}
+
+/**
+ * Counts `amount` more requests for this caller in the window of `now`, and says whether the caller
+ * is still within the limit (FRU-124).
+ *
+ * A batch of N notes has passed `checkRateLimit` for one request when its body is read: the N − 1
+ * others are counted here, before anything is written. Counted even when refused, as a refused
+ * request is.
+ */
+export async function chargeRateLimit(
+  kv: Kv,
+  clientIp: string,
+  amount: number,
+  options: { limit?: number; now?: number } = {},
+): Promise<boolean> {
   const { limit = DEFAULT_LIMIT, now = Date.now() } = options;
+  // A batch of one note has nothing more to count, and `incr` takes no amount below one.
+  if (amount < 1) return true;
   const window = Math.floor(now / WINDOW_MS);
   const overlap = 1 - (now % WINDOW_MS) / WINDOW_MS;
 
   // Two windows of expiry, so the previous count is still there for the whole current window.
   const [current, previous] = await Promise.all([
-    kv.incr(windowKey(clientIp, window), 2 * WINDOW_MS),
+    kv.incr(windowKey(clientIp, window), 2 * WINDOW_MS, amount),
     kv.get(windowKey(clientIp, window - 1)),
   ]);
 
   return Number(previous ?? 0) * overlap + current <= limit;
+}
+
+/**
+ * The most notes one request may carry (FRU-124): half the limit of a minute, and ten at most. A
+ * reviewer who reads pages and then sends a full batch stays under the limit. Below two, a worker
+ * takes no batch, and does not offer one.
+ */
+export function maxBatch(limit: number = DEFAULT_LIMIT): number {
+  const max = Math.min(10, Math.floor(limit / 2));
+
+  return max < 2 ? 0 : max;
 }
 
 /** JSON, because an IPv6 address contains the separator a plain join would use. */

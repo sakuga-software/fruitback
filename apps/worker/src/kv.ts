@@ -11,8 +11,11 @@
 export type Kv = {
   get(key: string): Promise<string | undefined>;
   set(key: string, value: string, ttlMs: number): Promise<void>;
-  /** Add one and return the new count. A new key starts at 1 and expires after `ttlMs`. */
-  incr(key: string, ttlMs: number): Promise<number>;
+  /**
+   * Add `by` (one when absent) and return the new count. A new key starts at `by` and expires after
+   * `ttlMs`. `by` is a positive integer: a batch of notes costs its size (FRU-124).
+   */
+  incr(key: string, ttlMs: number, by?: number): Promise<number>;
   close(): Promise<void>;
 };
 
@@ -63,14 +66,15 @@ export function createMemoryKv(options: { now?: () => number } = {}): MemoryKv {
       sweep();
       entries.set(key, { value, expiresAt: now() + ttlMs });
     },
-    async incr(key, ttlMs) {
+    async incr(key, ttlMs, by = 1) {
       sweep();
+      if (!Number.isSafeInteger(by) || by < 1) throw new KvError('an increment is a positive integer');
       const entry = live(key);
 
       if (entry === undefined) {
-        entries.set(key, { value: '1', expiresAt: now() + ttlMs });
+        entries.set(key, { value: String(by), expiresAt: now() + ttlMs });
 
-        return 1;
+        return by;
       }
 
       // Redis counts only a canonical integer: no `+`, no leading zero, no `-0`, no space. Measured
@@ -80,7 +84,7 @@ export function createMemoryKv(options: { now?: () => number } = {}): MemoryKv {
       // safe integer, and the count would then come back one too high. Raised in review.
       const previous = Number(entry.value);
       if (!Number.isSafeInteger(previous)) throw new KvError('value is out of range');
-      const count = previous + 1;
+      const count = previous + by;
       // Redis refuses at 2^63 and this store at 2^53. No counter gets near either.
       if (!Number.isSafeInteger(count)) throw new KvError('value is out of range');
       entry.value = String(count);

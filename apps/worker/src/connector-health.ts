@@ -1,4 +1,5 @@
 import type { AccountStore, ConnectorTrouble } from './accounts.ts';
+import { createAll } from './batch.ts';
 import { LinearKeyForbidden, LinearKeyRefused } from './linear.ts';
 import { LinearConnectionEnded } from './linear-oauth.ts';
 import type { SeedStore } from './store.ts';
@@ -76,6 +77,8 @@ export function watchedStore(
   return {
     ...store,
     create: (seed, client, policy) => watched(client?.connector, () => store.create(seed, client, policy)),
+    // A batch is one call for the health of the connector: its answer is the one of the whole batch.
+    createBatch: (seeds, client, policy) => watched(client?.connector, () => createAll(store, seeds, client, policy)),
     findForPage: (query, client, policy) => watched(client?.connector, () => store.findForPage(query, client, policy)),
   };
 }
