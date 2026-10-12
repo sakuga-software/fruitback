@@ -47,8 +47,10 @@ export type OrganizationRouteContext = Pick<AuthRouteContext, 'consoleUrl' | 'cl
 export const INVITATION_DAYS = INVITATION_SECONDS / 86_400;
 
 /**
- * How many invitations one address is sent in a window, from every workspace together: the numbers
- * of the sign-in link. An admin cannot fill the mailbox of somebody with the name of Fruitback.
+ * How many messages one workspace sends one address in a window: the numbers of the sign-in link.
+ * It counts by workspace and address, not by address alone: a count of every workspace together let
+ * somebody else close the window of an address, and told an admin that it was invited elsewhere.
+ * Past it the invitation is kept and no message goes (`mailed: false`).
  */
 export const INVITATIONS_PER_WINDOW = EMAIL_LINKS_PER_WINDOW;
 
@@ -158,16 +160,6 @@ export async function handleOrganizationRoutes(
   }
 
   const invited = path === '/organization/invite-member' ? String(read.input.email) : undefined;
-  // The window keeps a mailbox from being filled, so it counts the messages that go, below, and
-  // only reads the count here: a call that better-auth then refuses (somebody who is a member, an
-  // invitation that waits) spends nothing of the window of that address. A worker with no mailer
-  // sends nothing, and the person who invites sends the link of the console by hand.
-  const window = `fruitback:invitation:${invited}`;
-  if (invited !== undefined && context.mailer !== undefined) {
-    const sent = Number((await context.kv.get(window)) ?? 0);
-    if (sent >= INVITATIONS_PER_WINDOW) return json(429, { error: 'too-many-invitations' }, headers);
-  }
-
   // The request better-auth reads is written here: the fields of the rule, as they were read.
   const address = new URL(`${AUTH_BASE_PATH}${path}`, request.url);
   if (rule.method === 'GET')
@@ -189,36 +181,47 @@ export async function handleOrganizationRoutes(
     await context.sessions.endSessionsOf({ subject: mine.userId, workspace }, Date.now());
   }
 
-  // The invitation is kept: its message goes now. A message that does not leave answers `502`, and
-  // the invitation waits, to be sent again.
-  if (invited !== undefined && answer.ok && workspace !== undefined && context.mailer !== undefined) {
+  // The invitation is kept: its message goes now, when the worker sends mail and the window of this
+  // workspace for this address allows one more. The answer says which, in `mailed`: with `false` the
+  // person who invites gives the link of the console by hand. No refusal here: the invitation
+  // exists, and a `429` said that an address was invited already, here or elsewhere.
+  let told: string | undefined;
+  if (invited !== undefined && answer.ok && workspace !== undefined) {
     // No message for an answer that names no invitation: nothing would wait for the person.
     const kept = (await answer
       .clone()
       .json()
       .catch(() => undefined)) as { id?: unknown } | undefined;
     if (typeof kept?.id !== 'string') throw new AuthUnavailable('better-auth answered an invitation with no id');
-    // The count is taken here, in one step: of two calls that read the same count above, the one
-    // that goes over sends nothing. Its invitation is kept, to send again when the window allows.
-    if ((await context.kv.incr(window, EMAIL_LINK_WINDOW_MS)) > INVITATIONS_PER_WINDOW) {
-      return json(429, { error: 'too-many-invitations' }, headers);
-    }
-    try {
-      await context.mailer.send(
-        await messageOf(context, { to: invited, role: String(read.input.role), workspace, inviter: mine.userId }),
-      );
-    } catch (error) {
-      if (!(error instanceof MailError)) throw error;
-      console.error(`[fruitback] ${error.message}`);
+    let mailed = false;
+    // The count is taken in one step, after better-auth kept the invitation: a call that it refused
+    // spends nothing, and of two calls at the same moment the one that goes over sends nothing.
+    const window = `fruitback:invitation:${workspace}:${invited}`;
+    if (
+      context.mailer !== undefined &&
+      (await context.kv.incr(window, EMAIL_LINK_WINDOW_MS)) <= INVITATIONS_PER_WINDOW
+    ) {
+      try {
+        await context.mailer.send(
+          await messageOf(context, { to: invited, role: String(read.input.role), workspace, inviter: mine.userId }),
+        );
+        mailed = true;
+      } catch (error) {
+        if (!(error instanceof MailError)) throw error;
+        console.error(`[fruitback] ${error.message}`);
 
-      return json(502, { error: 'mail-unavailable' }, headers);
+        return json(502, { error: 'mail-unavailable' }, headers);
+      }
     }
+
+    told = JSON.stringify({ ...kept, mailed });
   }
 
   const merged = new Headers(answer.headers);
   for (const [name, value] of Object.entries(headers)) merged.set(name, value);
+  if (told !== undefined) merged.delete('Content-Length');
 
-  return new Response(answer.body, { status: answer.status, statusText: answer.statusText, headers: merged });
+  return new Response(told ?? answer.body, { status: answer.status, statusText: answer.statusText, headers: merged });
 }
 
 /**
