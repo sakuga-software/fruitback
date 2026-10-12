@@ -60,8 +60,12 @@ export type ComposerOptions = {
   /**
    * The worker names the reporter from a signed identity, so the composer asks for no name.
    * A typed name would be replaced by the identity, and the reporter would not know.
+   *
+   * A function is asked at each open, and by `identityChanged` (FRU-112): in team mode the widget
+   * learns it from a read, after the composer is built. An open composer keeps the answer it opened
+   * with.
    */
-  identified?: boolean;
+  identified?: boolean | (() => boolean);
   /**
    * The places this note can go, and where the last choice is kept (FRU-123). If left out, or while
    * it offers fewer than two places, the composer is the one of FRU-89: it holds no line about where
@@ -96,6 +100,11 @@ export type Composer = {
   open(anchor: { left: number; top: number; bottom: number; right: number }): void;
   close(): void;
   state(): ComposerState;
+  /**
+   * The answer of `identified` may be another one now. A closed composer takes it at once. An open
+   * one takes it at its next open: a field must not leave under somebody who types in it.
+   */
+  identityChanged(): void;
   /** The popover's own root, for tests and for whoever needs to measure it. */
   element: HTMLElement;
   destroy(): void;
@@ -138,7 +147,9 @@ export function createComposer(options: ComposerOptions): Composer {
   const placeList = root.querySelector('[data-fruitback-destinations]') as HTMLElement;
   const gone = root.querySelector('[data-fruitback-destination-gone]') as HTMLElement;
   const memory = options.memory;
-  const asksForName = options.identified !== true;
+  const isIdentified = (): boolean =>
+    typeof options.identified === 'function' ? options.identified() : options.identified === true;
+  let asksForName = true;
   const choice = options.destinations;
 
   // Set after parsing and never interpolated into TEMPLATE: a host translation is text, not markup.
@@ -149,7 +160,7 @@ export function createComposer(options: ComposerOptions): Composer {
   name.setAttribute('aria-label', t.text('composer.nameLabel'));
   (rememberLabel.querySelector('span') as HTMLElement).textContent = t.text('composer.remember');
   rememberLabel.hidden = memory === undefined;
-  identify.hidden = !asksForName;
+  askForNameOrNot();
   cancel.textContent = t.text('composer.cancel');
   placeList.setAttribute('aria-label', t.text('composer.destinations'));
 
@@ -208,6 +219,16 @@ export function createComposer(options: ComposerOptions): Composer {
     closing = view?.setTimeout(close, SENT_MS) ?? 0;
   }
 
+  /** The typed name is kept, hidden, and not sent: an identity that ends gives the field back with it. */
+  function askForNameOrNot(): void {
+    asksForName = !isIdentified();
+    identify.hidden = !asksForName;
+    if (asksForName) return;
+
+    who.hidden = true;
+    identify.setAttribute('aria-expanded', 'false');
+  }
+
   function open(anchor: { left: number; top: number; bottom: number; right: number }): void {
     if (closing !== 0) {
       view?.clearTimeout(closing);
@@ -216,6 +237,7 @@ export function createComposer(options: ComposerOptions): Composer {
 
     session += 1;
     field.value = '';
+    askForNameOrNot();
     showRememberedName();
     // Folded at each open, on the place chosen last. The line says where, and that is enough for
     // the many notes that go where the one before went.
@@ -411,6 +433,9 @@ export function createComposer(options: ComposerOptions): Composer {
     open,
     close,
     state: () => state,
+    identityChanged() {
+      if (root.hidden) askForNameOrNot();
+    },
     element: root,
     destroy() {
       if (closing !== 0) view?.clearTimeout(closing);

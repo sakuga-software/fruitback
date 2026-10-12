@@ -16,6 +16,9 @@ first publish made it expensive.
   page would offer the wrong boxes. `offeredStages` reads it tolerantly and answers every stage when
   the field is absent. GitHub reports `seeded`, `ripe` and `composted`. A read-envelope field, so
   `SEED_VERSION` does not move.
+- **A read says `identified: true` to a reader whose token the worker verified** (FRU-112), and
+  leaves the field out for everybody else. Only `true` is the word of the worker. It says that a note
+  of this reader would be signed by the worker, never who the reader is. A read-envelope field too.
 
 ### The reasons, and the history
 

@@ -196,7 +196,7 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   `onSubmit`: the composer does not know where the name is kept, and `embed.ts` gives it the config
   store. The name is written before the send, so a failed send costs neither the name nor the
   choice. Unticking the box erases at once. With `identityToken`, the composer asks for no name: the
-  worker would replace a typed one.
+  worker would replace a typed one. In team mode the worker says so on a read (`identified`, FRU-112).
 - **A line says where the note goes, only to a reader the worker offers two places or more**
   (FRU-123). The worker names the places in `destinations` on a read, to a member of the workspace
   and to nobody else, so every other composer is the one of FRU-89. `offeredDestinations` reads the
@@ -255,10 +255,31 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
   - **A stored name is read like the rest of the config**: a string, trimmed, at most 120
     characters, or nothing. The key stays absent rather than empty.
   - **With `identityToken`, the composer asks for no name.** The worker replaces a typed name by the
-    identity of the token, so the field would promise a signature that is not used. **Team mode is
-    not covered**: there the session names the reviewer, and the widget cannot know it — it is given
-    a transport and nothing about who is behind it. The field stays, and the worker still signs the
-    note with the session's name.
+    identity of the token, so the field would promise a signature that is not used.
+  - **In team mode the worker tells the widget, on a read (FRU-112).** There the session names the
+    reviewer, and the widget is given a transport and nothing about who is behind it: the field
+    stayed, and what was typed in it was dropped with no word. `GET /feedback` now answers
+    `identified: true` to a reader whose token it verified, and `embed.ts` keeps the word of the last
+    read that answered, like the places of FRU-123: an answer without the field takes it back, a
+    failed read changes nothing. Of the three ways the ticket listed, this is the one with no new
+    option of `init` and no new field on the API the extension announces.
+    - **One bit, and not « Signing as Alex ».** The page reads that answer. A name there would give
+      the page the name of a reviewer who has written nothing yet, and the notes do not show that.
+      Showing who signs is an open question in the ticket.
+    - **`ComposerOptions.identified` takes a function, asked at each open and by
+      `identityChanged()`.** A closed composer takes the new answer at once. An open one keeps the
+      answer it opened with: a field must not leave under somebody who types in it. A name typed
+      before is kept, hidden, and not sent.
+    - **Before the first read answers, the composer asks.** A reviewer who opens it in that moment,
+      or whose first read failed, can still type a name that the worker replaces. The field hidden
+      by default would take it from every anonymous reporter for the time of a read.
+    - **The page is not told of a pairing**, so a reviewer who pairs and writes at once, on a page
+      that was open before, is still asked for the first note: the send makes a read, and the field
+      is gone for the next one. A reload, or a return to the tab after 15 seconds, makes that read
+      too. Measured in `e2e/extension.spec.ts`, where the first version of the assertion failed for
+      this reason. Telling the page is a change of the extension, and a question in the ticket.
+    - `e2e/extension.spec.ts` holds it in a browser: the field is there before the pairing, which is
+      the control, and gone after.
 - **A member chooses where a note goes, on a line at the foot of the composer (FRU-123).** The
   worker half is `apps/worker` (`Site.destinations`, `seesTracker`); this is what the widget does
   with its answer.

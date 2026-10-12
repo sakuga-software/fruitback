@@ -256,8 +256,18 @@ test('team mode: paired from the popup, the site reads and writes through the re
   await mountTheSiteWidget(page, AUTHENTICATED_WORKER_ORIGIN);
   await expect(page.getByRole('button', { name: 'Team feedback' })).toBeVisible();
 
+  // The control of the absence below: before the pairing nobody names this reviewer, and the
+  // composer asks (FRU-112).
+  const nameField = page.locator('[data-fruitback-identify]');
+  await page.getByRole('button', { name: 'Team feedback' }).click();
+  await page.locator('[data-testid="card-latte"] .add').click();
+  await expect(nameField).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+
   await pairFromPopup(extension, page, mintPairingCode(REVIEWER), REVIEWER);
 
+  // The page is not told of a pairing, so its widget learns it at its next read: the send below
+  // makes one.
   await plantOnTheLatteCard(page, 'Team feedback', 'Planté par le mode équipe');
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 
@@ -273,6 +283,14 @@ test('team mode: paired from the popup, the site reads and writes through the re
   await mountTheSiteWidget(page, AUTHENTICATED_WORKER_ORIGIN);
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
   await expectNoCredentialReadable(page, tokens);
+
+  // Paired, and read through the relay: the session names the reviewer, the worker says so on the
+  // read, and a name typed here would be replaced with no word. The composer does not ask (FRU-112).
+  await page.getByRole('button', { name: 'Team feedback' }).click();
+  await page.locator('[data-testid="card-latte"] .add').click();
+  await expect(page.getByPlaceholder('What is wrong here?')).toBeVisible();
+  await expect(nameField).toBeHidden();
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
 
   // Every call went through the background. The page itself never called a worker.
   expect(calls).toEqual([]);
