@@ -152,6 +152,60 @@ describe('the memory Kv, bounded', () => {
     assert.equal(kv.size(), 1);
   });
 
+  /**
+   * The sweep is a walk of every entry, so it runs at most once in `SWEEP_INTERVAL_MS` (one second),
+   * whatever the number of calls. `size()` counts an expired entry until the sweep that drops it.
+   *
+   * These three cases hold the two lines of that rule (FRU-190). Before them the mutants « always
+   * sweep » (`if (false) return`, `nextSweep = at - SWEEP_INTERVAL_MS`) and « one millisecond late »
+   * (`at <= nextSweep`) passed every test: a mutation run counted them killed only when it ran out of
+   * time.
+   */
+  it('does not sweep again within a second of the last sweep: an expired entry stays until then', async () => {
+    let clock = 0;
+    const kv = createMemoryKv({ now: () => clock });
+    // The first call sweeps, at 0: the next sweep is due at 1 000.
+    await kv.set('short', 'answer', 10);
+    await kv.set('long', 'answer', 600_000);
+
+    clock = 999;
+    await kv.get('long');
+    await kv.set('other', 'answer', 600_000);
+    await kv.incr('address', 600_000);
+
+    // « short » expired at 10 and no call asked for it: only a sweep drops it.
+    assert.equal(kv.size(), 4);
+  });
+
+  it('sweeps at the instant the second ends, not one millisecond later', async () => {
+    let clock = 0;
+    const kv = createMemoryKv({ now: () => clock });
+    await kv.set('short', 'answer', 10);
+    await kv.set('long', 'answer', 600_000);
+
+    clock = 1_000;
+    await kv.get('long');
+
+    assert.equal(kv.size(), 1);
+  });
+
+  it('counts the second from the last sweep, each time', async () => {
+    let clock = 0;
+    const kv = createMemoryKv({ now: () => clock });
+    await kv.set('long', 'answer', 600_000);
+
+    // A sweep at 1 500: the next one is due at 2 500, not at 2 000.
+    clock = 1_500;
+    await kv.set('short', 'answer', 10);
+    clock = 2_499;
+    await kv.get('long');
+    assert.equal(kv.size(), 2);
+
+    clock = 2_500;
+    await kv.get('long');
+    assert.equal(kv.size(), 1);
+  });
+
   it('drops expired entries under a workload that only counts a known address', async () => {
     const { kv, advance } = await filled();
 

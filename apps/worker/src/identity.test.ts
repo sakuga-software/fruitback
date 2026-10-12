@@ -322,6 +322,35 @@ describe('verifyIdentityToken', () => {
   });
 });
 
+/**
+ * The key made from a secret cannot be exported (FRU-190). WebCrypto keeps the bytes of a key that
+ * is not extractable out of reach of any code that holds the `CryptoKey`: `exportKey` refuses it.
+ * The key never leaves `hmac`, so no answer of the worker shows the flag. This case reads the keys
+ * that `importKey` hands back, and a mutation run counts `extractable: true` killed by an assertion,
+ * not by running out of time.
+ */
+describe('the signing key', () => {
+  it('cannot be exported, when a token is signed and when one is verified', async (t) => {
+    const keys: CryptoKey[] = [];
+    const importKey = crypto.subtle.importKey.bind(crypto.subtle);
+    t.mock.method(crypto.subtle, 'importKey', async (...args: Parameters<typeof importKey>) => {
+      const key = await importKey(...args);
+      keys.push(key);
+
+      return key;
+    });
+
+    const token = await signIdentityToken({ sub: 'user_42', exp: inSeconds(HOUR) }, SECRET);
+    assert.equal((await verifyIdentityToken(token, SECRET)).ok, true);
+
+    assert.equal(keys.length, 2);
+    for (const key of keys) {
+      assert.equal(key.extractable, false);
+      await assert.rejects(crypto.subtle.exportKey('raw', key));
+    }
+  });
+});
+
 describe('stripClaimedVerification', () => {
   it('removes a verified flag the client tried to assert', () => {
     // The whole check. A browser posting this would otherwise read in Linear as an identity the
