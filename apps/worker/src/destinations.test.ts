@@ -361,10 +361,12 @@ describe('a site that can send to several places (FRU-123)', () => {
     const database = new DatabaseSync(env.FRUITBACK_ACCOUNTS_PATH as string);
     const { user_version: version } = database.prepare('PRAGMA user_version').get() as { user_version: number };
     database.exec('DROP TABLE site_destinations');
+    // The settings of a connector came after the list (FRU-102): the file of before had neither.
+    database.exec('ALTER TABLE connectors DROP COLUMN settings');
     database
       .prepare("UPDATE sites SET connector_id = ?, team_id = 'team_design', project_id = 'proj_site' WHERE id = ?")
       .run(world.connector, world.site.id);
-    database.exec(`PRAGMA user_version = ${version - 1}`);
+    database.exec(`PRAGMA user_version = ${version - 2}`);
     database.close();
 
     const after = createSqliteAccountStore(env.FRUITBACK_ACCOUNTS_PATH as string);

@@ -96,6 +96,8 @@ export const connectors = pgTable(
     created_at: instant('created_at').notNull(),
     attention: text('attention'),
     attention_at: instant('attention_at'),
+    // What a workspace sets on the connector (FRU-102), as JSON: `connectorSettingsOf` reads it.
+    settings: text('settings').notNull().default('{}'),
   },
   (table) => [
     foreignKey({

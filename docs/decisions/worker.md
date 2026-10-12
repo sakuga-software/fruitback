@@ -196,6 +196,16 @@ degradation the ticket asked to have written down rather than discovered.
   and anyone who can load the client's page; under `read: 'authenticated'` (FRU-40) it is back to
   being the editorial choice it should always have been, because the reader is someone the worker
   checked.
+- **A connector of a workspace has its own settings** (FRU-102), in one JSON column `settings` of
+  `connectors`, read by `connectorSettingsOf` and written by `setConnectorSettings`. The next setting
+  of a connector needs no migration. `connectors.ts` applies them to the store of the connector:
+  - `showComments: false` takes the replies away; `true` keeps what the worker decides. It can never
+    show what `FRUITBACK_HIDE_COMMENTS=1` hides.
+  - `stages` holds the exceptions to the projection by type, by **id** of the state, never by name: a
+    state that is renamed keeps its colour. A state with no entry takes the stage of its type
+    (`stageForLinearState`). `GET /console/workspaces/:id/connectors/:id/states` lists the states of
+    the teams the sites of the workspace send to, with the stage of each type.
+  - A change reaches the next read of the tracker. The read cache keeps an answer for its TTL.
 
 ## Where a seed is stored
 

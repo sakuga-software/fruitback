@@ -68,6 +68,7 @@ export function postgresAccountStore(url: string): AccountStore {
     removeConnector: true,
     resealConnector: true,
     noteConnector: true,
+    setConnectorSettings: true,
     sealedKey: true,
     setDestination: true,
     setDestinations: true,

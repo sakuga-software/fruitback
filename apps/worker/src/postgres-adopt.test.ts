@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, afterEach, describe, it } from 'node:test';
@@ -49,6 +49,23 @@ after(() => {
   for (const folder of folders) rmSync(folder, { recursive: true, force: true });
 });
 
+/**
+ * The folder with the baseline alone: what the first image of Drizzle had. The tool of before made
+ * the database of the baseline, so the two are compared there, before any later migration.
+ */
+function baselineAlone(): string {
+  const folder = mkdtempSync(join(tmpdir(), 'fruitback-adopt-'));
+  folders.push(folder);
+  cpSync(migrationsFolder(), folder, { recursive: true });
+  const journalFile = join(folder, 'meta', '_journal.json');
+  const journal = JSON.parse(readFileSync(journalFile, 'utf8')) as { entries: { tag: string }[] };
+  writeFileSync(journalFile, JSON.stringify({ ...journal, entries: journal.entries.slice(0, 1) }));
+  for (const file of readdirSync(folder))
+    if (file.endsWith('.sql') && file !== `${BASELINE}.sql`) rmSync(join(folder, file));
+
+  return folder;
+}
+
 /** The migrations of the worker, and one more after them that adds a column. */
 function withOneMoreMigration(): string {
   const folder = mkdtempSync(join(tmpdir(), 'fruitback-adopt-'));
@@ -83,8 +100,11 @@ async function homeMadeJournal(database: Database): Promise<string[]> {
   return rows.map((row) => `${String(row.version)} ${String(row.name)}`);
 }
 
-const [BASELINE_FILE] = readMigrationFiles({ migrationsFolder: migrationsFolder() });
+const FILES = readMigrationFiles({ migrationsFolder: migrationsFolder() });
+const [BASELINE_FILE] = FILES;
 assert.ok(BASELINE_FILE !== undefined, 'the worker has no migration');
+/** The journal of a database that has every migration of the worker: the baseline first. */
+const WHOLE_JOURNAL = FILES.map((file) => ({ hash: file.hash, created_at: file.folderMillis }));
 
 const DATABASES = [
   { label: 'PGlite', open: createPgliteDatabase, skip: false },
@@ -108,7 +128,7 @@ for (const { label, open, skip } of DATABASES) {
       opened.splice(opened.indexOf(before), 1);
 
       const fresh = await opening(open);
-      await migrate(fresh);
+      await migrate(fresh, baselineAlone());
       const drizzle = await catalogueOf(fresh);
 
       // Eighteen tables: a count that is not zero, so that two empty lists do not pass.
@@ -127,13 +147,17 @@ for (const { label, open, skip } of DATABASES) {
         'a table has no row, so its digest proves nothing',
       );
 
-      await migrate(database);
+      // The baseline alone first: the adoption runs nothing, so nothing of the database changes.
+      await migrate(database, baselineAlone());
 
       assert.deepEqual(await drizzleJournal(database), [
         { hash: BASELINE_FILE.hash, created_at: BASELINE_FILE.folderMillis },
       ]);
       assert.deepEqual(await contentOf(database), content);
       assert.deepEqual(await catalogueOf(database), catalogue);
+      // Then the migrations that came after it, which the stores of this build read.
+      await migrate(database);
+      assert.deepEqual(await drizzleJournal(database), WHOLE_JOURNAL);
       // Kept as it is: an image of before reads it after a roll back.
       assert.deepEqual(await homeMadeJournal(database), [
         '1 accounts',
@@ -186,7 +210,7 @@ for (const { label, open, skip } of DATABASES) {
         name: 'Alice',
         locale: 'fr',
       });
-      assert.equal((await drizzleJournal(database)).length, 1);
+      assert.deepEqual(await drizzleJournal(database), WHOLE_JOURNAL);
     });
 
     it('then gets the migrations that come after the baseline, and only those', async () => {
@@ -196,7 +220,7 @@ for (const { label, open, skip } of DATABASES) {
 
       await migrate(database, withOneMoreMigration());
 
-      assert.equal((await drizzleJournal(database)).length, 2);
+      assert.equal((await drizzleJournal(database)).length, WHOLE_JOURNAL.length + 1);
       assert.deepEqual(await rowsOf(database, 'SELECT id, one_more FROM accounts'), [
         { id: 'acc_alice', one_more: null },
       ]);
@@ -228,7 +252,7 @@ for (const { label, open, skip } of DATABASES) {
       await assert.rejects(database.alone((_, apply) => apply({ migrationsFolder: migrationsFolder(), ...APPLIED })));
       assert.deepEqual(await drizzleJournal(database), [], 'Drizzle left no empty journal: nothing is tested');
 
-      await migrate(database);
+      await migrate(database, baselineAlone());
 
       assert.deepEqual(await drizzleJournal(database), [
         { hash: BASELINE_FILE.hash, created_at: BASELINE_FILE.folderMillis },
@@ -244,9 +268,7 @@ for (const { label, open, skip } of DATABASES) {
 
       assert.equal(await has(database, 'public.accounts'), true);
       assert.equal(await has(database, 'public.schema_migrations'), false);
-      assert.deepEqual(await drizzleJournal(database), [
-        { hash: BASELINE_FILE.hash, created_at: BASELINE_FILE.folderMillis },
-      ]);
+      assert.deepEqual(await drizzleJournal(database), WHOLE_JOURNAL);
     });
 
     it('refuses a database that the tool of before left at an earlier migration, and writes nothing', async () => {
@@ -290,7 +312,9 @@ describe('a database of before that two workers meet at once (FRU-180)', { skip:
       await withRows(first);
       const content = await contentOf(first);
 
-      await Promise.all([migrate(first), migrate(second)]);
+      // The baseline alone: the two adopt it, and nothing of the database changes.
+      const folder = baselineAlone();
+      await Promise.all([migrate(first, folder), migrate(second, folder)]);
 
       assert.deepEqual(await drizzleJournal(first), [
         { hash: BASELINE_FILE.hash, created_at: BASELINE_FILE.folderMillis },

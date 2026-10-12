@@ -1,4 +1,4 @@
-import type { AccountStore, ConnectorKind } from './accounts.ts';
+import type { AccountStore, ConnectorKind, ConnectorSettings } from './accounts.ts';
 import type { ClientConfig } from './clients.ts';
 import { createLinearStore } from './linear.ts';
 import { deliveryBody } from './rest-connector.ts';
@@ -16,10 +16,28 @@ import { type SeedStore, StoreError } from './store.ts';
  * store: a note written there would be invisible to the team that reads its tracker. The widget keeps
  * the note and tries again (`502 store-unavailable`).
  */
-const TRACKERS: Record<Exclude<ConnectorKind, 'rest'>, (apiKey: string) => SeedStore> = {
+const TRACKERS: Record<Exclude<ConnectorKind, 'rest'>, (apiKey: string, settings: ConnectorSettings) => SeedStore> = {
   // The team is the client's. This default is never read for a client that has a destination.
-  linear: (apiKey) => createLinearStore({ apiKey, teamId: 'no-team', projectId: undefined }),
+  linear: (apiKey, settings) => createLinearStore({ apiKey, teamId: 'no-team', projectId: undefined }, settings.stages),
 };
+
+/**
+ * The store of a connector whose workspace does not show the replies of its tracker (FRU-102).
+ *
+ * The switch can only take the replies away: a worker that hides them everywhere still hides them.
+ * It is applied to the policy each store reads, so a store keeps the promise of `showComments`: the
+ * replies are not asked for, and not returned.
+ */
+function withSettings(store: SeedStore, settings: ConnectorSettings): SeedStore {
+  if (settings.showComments) return store;
+  const quiet = <P extends { showComments: boolean }>(policy: P): P => ({ ...policy, showComments: false });
+
+  return {
+    ...store,
+    create: (seed, client, policy) => store.create(seed, client, quiet(policy)),
+    findForPage: (query, client, policy) => store.findForPage(query, client, quiet(policy)),
+  };
+}
 
 /** `own` is the worker's own store: a connector that only receives keeps its notes there. */
 export type ConnectorStores = (connector: string, workspace: string | undefined, own: SeedStore) => Promise<SeedStore>;
@@ -89,7 +107,9 @@ export function createConnectorStores(
     if (kept.kind === 'rest') return receivingStore(own, accounts, connector, now);
 
     // A token of OAuth near its end is refreshed here.
-    return TRACKERS[kept.kind](await linearAuthorization(connector, kept.sealed, { accounts, secretsKey, oauth, now }));
+    const authorization = await linearAuthorization(connector, kept.sealed, { accounts, secretsKey, oauth, now });
+
+    return withSettings(TRACKERS[kept.kind](authorization, kept.settings), kept.settings);
   };
 }
 

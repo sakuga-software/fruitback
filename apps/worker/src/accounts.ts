@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { SEED_STAGES, type SeedStage } from '@fruitback/shared';
 import type { ClientMap } from './clients.ts';
 
 /**
@@ -157,6 +158,46 @@ export type ConnectorTrouble = (typeof CONNECTOR_TROUBLES)[number];
 export type ConnectorAttention = { reason: ConnectorTrouble; since: string };
 
 /**
+ * What a workspace sets on a connector (FRU-102), in the panel of the connector.
+ *
+ * - `showComments`: the replies of the tracker come back to the widget as replies. It can only take
+ *   them away: a worker that hides them everywhere (`FRUITBACK_HIDE_COMMENTS=1`) still hides them.
+ * - `stages`: the exceptions to the projection by type, by **id** of the state of the tracker, never
+ *   by its name. A state that is renamed keeps its colour. A state with no entry takes the stage of
+ *   its type, as before.
+ */
+export type ConnectorSettings = { showComments: boolean; stages: Readonly<Record<string, SeedStage>> };
+
+export const DEFAULT_CONNECTOR_SETTINGS: ConnectorSettings = { showComments: true, stages: {} };
+
+/** A Linear team has some ten states. This bounds what one connector keeps, whatever a request sends. */
+export const MAX_STAGE_EXCEPTIONS = 200;
+
+/** An id of a state of a tracker, as a key of `stages`. */
+const STATE_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * The settings of a connector from what a row or a request holds, or `undefined` for a value that is
+ * not settings. Nothing is folded: a stage this build does not know, or one entry too many, refuses
+ * the whole value.
+ */
+export function readConnectorSettings(value: unknown): ConnectorSettings | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const { showComments = true, stages = {} } = value as Record<string, unknown>;
+  if (typeof showComments !== 'boolean') return undefined;
+  if (typeof stages !== 'object' || stages === null || Array.isArray(stages)) return undefined;
+  const entries = Object.entries(stages);
+  if (entries.length > MAX_STAGE_EXCEPTIONS) return undefined;
+  const kept: Record<string, SeedStage> = {};
+  for (const [state, stage] of entries) {
+    if (!STATE_ID.test(state) || !(SEED_STAGES as readonly unknown[]).includes(stage)) return undefined;
+    kept[state] = stage as SeedStage;
+  }
+
+  return { showComments, stages: kept };
+}
+
+/**
  * A connector as the console reads it. The key is not here, and no route answers it.
  *
  * `attention` absent: the last call the tracker answered was not a refusal.
@@ -168,6 +209,7 @@ export type Connector = {
   label: string;
   createdAt: string;
   attention?: ConnectorAttention;
+  settings: ConnectorSettings;
 };
 
 /** How a sign-in method names the person. `email` is the link, and its subject is the address. */
@@ -216,8 +258,15 @@ export type AccountStore = {
    * answered. A refusal of the same kind keeps its first moment. A connector that is gone is ignored.
    */
   noteConnector(connector: string, trouble: ConnectorTrouble | undefined, now: number): Promise<void>;
-  /** The encrypted key of a connector, for the worker's own calls. */
-  sealedKey(connector: string): Promise<{ kind: ConnectorKind; sealed: string; workspaceId: string } | undefined>;
+  /**
+   * What a workspace set on its connector (FRU-102). `false` when the connector is not of this
+   * workspace, and then nothing changes.
+   */
+  setConnectorSettings(workspace: string, connector: string, settings: ConnectorSettings): Promise<boolean>;
+  /** The encrypted key of a connector and its settings, for the worker's own calls. */
+  sealedKey(
+    connector: string,
+  ): Promise<{ kind: ConnectorKind; sealed: string; workspaceId: string; settings: ConnectorSettings } | undefined>;
   /**
    * Where the notes of a site go. `false` when the site or the connector is not of this workspace:
    * a site must not write through the key of another team.

@@ -4,6 +4,7 @@ import {
   type Connector,
   type ConnectorAttention,
   type ConnectorKind,
+  type ConnectorSettings,
   type Destination,
   MAX_DESTINATIONS,
   type Site,
@@ -12,11 +13,12 @@ import {
   can,
   destinationId,
   siteOrigin,
+  readConnectorSettings,
   readLocaleTag,
 } from './accounts.ts';
 import { readBearerToken, verifyIdentityToken } from './identity.ts';
 import { noteConnectorCall } from './connector-health.ts';
-import { LinearKeyForbidden, LinearKeyRefused, listLinearTeams } from './linear.ts';
+import { LinearKeyForbidden, LinearKeyRefused, listLinearStates, listLinearTeams } from './linear.ts';
 import { isAcceptableSecret, newSecret, parseTargetUrl, sealTarget, targetLabel } from './rest-connector.ts';
 import type { Kv } from './kv.ts';
 import { type LinearOAuth, linearAuthorization, linearTicket, revokeLinear } from './linear-oauth.ts';
@@ -114,6 +116,35 @@ const KIND_NAMES: Record<ConnectorKind, string> = { linear: 'Linear', rest: 'RES
 class UnknownPlace extends Error {}
 
 /**
+ * A call to the Linear of a connector, with its stored key. What Linear answers is noted on the
+ * connector, as for a note (FRU-102): a refusal makes it « Needs attention », and an answer ends it.
+ */
+async function askLinear<T>(
+  context: ConsoleApiContext,
+  connector: string,
+  sealed: string,
+  ask: (authorization: string) => Promise<T>,
+): Promise<T> {
+  const moment = context.now;
+  const clock = moment === undefined ? undefined : () => moment;
+  try {
+    // A key goes as it is. A token of OAuth near its end is refreshed first.
+    const authorization = await linearAuthorization(connector, sealed, {
+      accounts: context.accounts,
+      secretsKey: context.secretsKey,
+      oauth: context.linearOAuth,
+    });
+    const answer = await ask(authorization);
+    await noteConnectorCall(context.accounts, connector, undefined, clock);
+
+    return answer;
+  } catch (error) {
+    await noteConnectorCall(context.accounts, connector, error, clock);
+    throw error;
+  }
+}
+
+/**
  * The destinations with the label a member reads when they choose one (FRU-123): « Linear · Design ».
  *
  * The worker writes the label from what the tracker answers, never from the request: a member
@@ -178,12 +209,14 @@ function connectorView(connector: Connector): {
   label: string;
   createdAt: string;
   attention?: ConnectorAttention;
+  settings: ConnectorSettings;
 } {
   return {
     id: connector.id,
     kind: connector.kind,
     label: connector.label,
     createdAt: connector.createdAt,
+    settings: connector.settings,
     // Absent for a connector that works: the console draws « Needs attention » from this field only.
     ...(connector.attention === undefined ? {} : { attention: connector.attention }),
   };
@@ -477,6 +510,45 @@ export async function handleConsoleApi(
     return due ? new Response(null, { status: 204, headers }) : json(404, { error: 'not-found' }, headers);
   }
 
+  // What a workspace sets on a tracker (FRU-102): the replies, and the exceptions to the stages.
+  const tuned = /^\/connectors\/([A-Za-z0-9_-]+)\/(settings|states)$/.exec(rest);
+  if (tuned !== null) {
+    const id = tuned[1] as string;
+    const writes = tuned[2] === 'settings';
+    if (request.method !== (writes ? 'POST' : 'GET')) return json(405, { error: 'method-not-allowed' }, headers);
+    if (!allowed('manage-workspace')) return forbidden();
+    const kept = await context.accounts.sealedKey(id);
+    // A connector of another workspace answers like one that does not exist, and so does an address
+    // that only receives: it has no replies and no states.
+    if (kept === undefined || kept.workspaceId !== workspaceId || kept.kind !== 'linear') {
+      return json(404, { error: 'not-found' }, headers);
+    }
+
+    if (writes) {
+      const settings = readConnectorSettings(await readBody(request));
+      if (settings === undefined) return json(400, { error: 'invalid-settings' }, headers);
+      const set = await context.accounts.setConnectorSettings(workspaceId as string, id, settings);
+
+      return set ? json(200, { settings }, headers) : json(404, { error: 'not-found' }, headers);
+    }
+
+    // The states of the teams the sites of this workspace send to through this connector: those are
+    // the states a pin can have. A team nobody sends to is not asked.
+    if (context.secretsKey === undefined) return json(404, CONNECTORS_UNAVAILABLE, headers);
+    const teams = [
+      ...new Set(
+        (await context.accounts.sites(workspaceId as string)).flatMap((site) =>
+          site.destinations.flatMap((place) =>
+            place.connector === id && place.teamId !== undefined ? [place.teamId] : [],
+          ),
+        ),
+      ),
+    ];
+    const states = await askLinear(context, id, kept.sealed, (authorization) => listLinearStates(authorization, teams));
+
+    return json(200, { states, settings: kept.settings }, headers);
+  }
+
   const connector = /^\/connectors\/([A-Za-z0-9_-]+)(\/teams)?$/.exec(rest);
   if (connector !== null) {
     const id = connector[1] as string;
@@ -505,23 +577,9 @@ export async function handleConsoleApi(
     if (kept.kind !== 'linear') return json(404, { error: 'not-found' }, headers);
     // This read is a call to the tracker like a note is, so what Linear answers is noted too
     // (FRU-102): somebody who opens the panel of a connector that Linear refuses sees it at once.
-    const moment = context.now;
-    const clock = moment === undefined ? undefined : () => moment;
-    try {
-      // A key goes as it is. A token of OAuth near its end is refreshed first.
-      const authorization = await linearAuthorization(id, kept.sealed, {
-        accounts: context.accounts,
-        secretsKey: context.secretsKey,
-        oauth: context.linearOAuth,
-      });
-      const { teams } = await listLinearTeams(authorization);
-      await noteConnectorCall(context.accounts, id, undefined, clock);
+    const { teams } = await askLinear(context, id, kept.sealed, listLinearTeams);
 
-      return json(200, { teams }, headers);
-    } catch (error) {
-      await noteConnectorCall(context.accounts, id, error, clock);
-      throw error;
-    }
+    return json(200, { teams }, headers);
   }
 
   if (rest === '/connect') {

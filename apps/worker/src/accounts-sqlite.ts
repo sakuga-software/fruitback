@@ -11,7 +11,14 @@ import {
   SITE_COLUMNS,
   workspaceOf,
 } from './account-rows.ts';
-import { type AccountStore, type Destination, type Site, clientOf, normalizeEmail } from './accounts.ts';
+import {
+  type AccountStore,
+  DEFAULT_CONNECTOR_SETTINGS,
+  type Destination,
+  type Site,
+  clientOf,
+  normalizeEmail,
+} from './accounts.ts';
 import type { ClientMap } from './clients.ts';
 import { StoreError } from './store.ts';
 
@@ -143,6 +150,11 @@ const MIGRATIONS: readonly string[] = [
 
   INSERT INTO site_destinations (site_id, position, connector_id, team_id, project_id)
     SELECT id, 0, connector_id, team_id, project_id FROM sites WHERE connector_id IS NOT NULL;
+  `,
+  // What a workspace sets on a connector (FRU-102), as JSON: `connectorSettingsOf` reads it. One
+  // column, so the next setting of a connector needs no migration.
+  `
+  ALTER TABLE connectors ADD COLUMN settings TEXT NOT NULL DEFAULT '{}';
   `,
 ];
 
@@ -385,13 +397,20 @@ export function createSqliteAccountStore(path: string): AccountStore {
         .prepare('INSERT INTO connectors (id, workspace_id, kind, label, sealed, created_at) VALUES (?, ?, ?, ?, ?, ?)')
         .run(id, workspace, kind, label, sealed, now);
 
-      return { id, workspaceId: workspace, kind, label, createdAt: new Date(now).toISOString() };
+      return {
+        id,
+        workspaceId: workspace,
+        kind,
+        label,
+        createdAt: new Date(now).toISOString(),
+        settings: DEFAULT_CONNECTOR_SETTINGS,
+      };
     },
 
     async connectors(workspace) {
       const rows = connect(path)
         .prepare(
-          `SELECT id, workspace_id, kind, label, created_at, attention, attention_at
+          `SELECT id, workspace_id, kind, label, created_at, attention, attention_at, settings
            FROM connectors WHERE workspace_id = ? ORDER BY created_at, id`,
         )
         .all(workspace) as Record<string, unknown>[];
@@ -419,14 +438,22 @@ export function createSqliteAccountStore(path: string): AccountStore {
         .run(trouble ?? null, trouble === undefined ? null : now, connector, trouble ?? null);
     },
 
+    async setConnectorSettings(workspace, connector, settings) {
+      const result = connect(path)
+        .prepare('UPDATE connectors SET settings = ? WHERE workspace_id = ? AND id = ?')
+        .run(JSON.stringify(settings), workspace, connector);
+
+      return result.changes === 1;
+    },
+
     async sealedKey(connector) {
       const row = connect(path)
-        .prepare('SELECT id, workspace_id, kind, label, sealed, created_at FROM connectors WHERE id = ?')
+        .prepare('SELECT id, workspace_id, kind, label, sealed, created_at, settings FROM connectors WHERE id = ?')
         .get(connector) as Record<string, unknown> | undefined;
       const known = connectorOf(row);
       if (known === undefined || typeof row?.sealed !== 'string') return undefined;
 
-      return { kind: known.kind, sealed: row.sealed, workspaceId: known.workspaceId };
+      return { kind: known.kind, sealed: row.sealed, workspaceId: known.workspaceId, settings: known.settings };
     },
 
     async setDestination(workspace, site, destination) {
