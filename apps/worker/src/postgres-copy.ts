@@ -173,7 +173,11 @@ async function compare(
     const there = tallyOf(await targetRows(db, table), columns);
     targetCounts.set(table, there.count);
     const rows = source.get(table);
-    if (rows === undefined) continue;
+    if (rows === undefined) {
+      // A table that is not copied: a row in it is a row that the files do not have.
+      same &&= there.count === 0;
+      continue;
+    }
 
     const here = tallyOf(rows, columns);
     const equal = here.count === there.count && here.digest === there.digest;

@@ -254,6 +254,24 @@ for (const subject of SUBJECTS) {
       assert.deepEqual(await counts(database), COPIED_COUNTS);
     });
 
+    it('refuses a database that holds these rows and a sign-in link made since', async () => {
+      const files = await filesOfAWorker();
+      database = await subject.open();
+      assert.equal((await copySqliteFiles({ ...files, database, dryRun: false })).ok, true);
+      // A worker served on PostgreSQL since the copy: the links are not copied, and this one is new.
+      await createPostgresAccountStore(database).createEmailLink({
+        codeHash: 'digest-2',
+        email: 'dave@acme.dev',
+        expiresAt: Date.now() + 60_000,
+      });
+
+      const again = await copySqliteFiles({ ...files, database, dryRun: false });
+
+      assert.equal(again.ok, false, again.lines.join('\n'));
+      assert.match(again.lines.join('\n'), /PostgreSQL is not empty, and does not hold these rows/);
+      assert.deepEqual(await counts(database), { ...COPIED_COUNTS, email_links: 1 });
+    });
+
     it('refuses a database that holds other rows, and writes nothing', async () => {
       const files = await filesOfAWorker();
       database = await subject.open();

@@ -1300,7 +1300,10 @@ again`. Another one removes a pairing as soon as it is written:
   test:`fails its final count when a row goes missing in the target, and keeps nothing`.
 - **Idempotence is « the same rows », not « a mark that the copy ran ».** A mark would say nothing
   of what a worker wrote after it: test:`writes nothing again when it runs a second time`,
-  test:`refuses a database that holds other rows, and writes nothing`.
+  test:`refuses a database that holds other rows, and writes nothing`. A row in a table that
+  is not copied counts too (raised in review): a sign-in link made since the copy is a row that
+  the files do not have, test:`refuses a database that holds these rows and a sign-in link made
+since`.
 - **The command runs as a process against a server** in
   test:`copies, ends with 0, and never prints the address of the database`: a dry run, the copy, a
   second run, and a file that does not exist, which `node:sqlite` would otherwise make.
