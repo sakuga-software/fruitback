@@ -1,9 +1,12 @@
+import { existsSync } from 'node:fs';
 import { workspacesOf } from './clients.ts';
 import { type WorkerEnv, readConfig } from './env.ts';
 import { PAIRING_TTL_SECONDS } from './session.ts';
 import { createPairingCommand } from './app.ts';
 import { CACHE_TTL_MS } from './cache.ts';
 import { pairingLink } from './pair-page.ts';
+import { createPgDatabase, readDatabaseUrl } from './postgres.ts';
+import { copySqliteFiles } from './postgres-stores.ts';
 import type { ForgetSelector, ForgottenSeed } from './store.ts';
 
 /**
@@ -335,4 +338,76 @@ function excerpt(note: string): string {
   const line = note.replace(/\s+/g, ' ').trim();
 
   return line.length > NOTE_EXCERPT_LENGTH ? `${line.slice(0, NOTE_EXCERPT_LENGTH - 1)}…` : line;
+}
+
+/**
+ * The copy of the switch n° 1, as a command for the same reason as `pair` (FRU-145).
+ *
+ * `node server.mjs migrate-to-postgres --accounts /data/accounts.db --sessions /data/sessions.db --dry-run`
+ *
+ * It copies the accounts and the sessions of the two SQLite files into the database of
+ * `FRUITBACK_DATABASE_URL`, and never writes the two files: `postgres-copy.ts` says how. The runbook
+ * of the switch is in `cloud/README.md`.
+ */
+
+export type MigrateArgs = { accountsPath: string; sessionsPath: string; dryRun: boolean };
+
+export type MigrateArgsResult = { ok: true; args: MigrateArgs } | { ok: false; error: string };
+
+const MIGRATE_USAGE = 'usage: migrate-to-postgres --accounts <file> --sessions <file> [--dry-run]';
+
+export function parseMigrateArgs(argv: readonly string[]): MigrateArgsResult {
+  const refuse = (reason: string): MigrateArgsResult => ({ ok: false, error: `${MIGRATE_USAGE}\n${reason}` });
+  const paths = new Map<string, string>();
+  let dryRun = false;
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const flag = argv[index] ?? '';
+    if (flag === '--dry-run') {
+      dryRun = true;
+    } else if (flag === '--accounts' || flag === '--sessions') {
+      const value = argv[index + 1];
+      // `--accounts --dry-run` would otherwise read the flag as the file, and copy for good.
+      if (value === undefined || value.startsWith('--') || value.trim() === '') return refuse(`${flag} needs a file`);
+      if (paths.has(flag)) return refuse(`${flag} takes one file`);
+      paths.set(flag, value.trim());
+      index += 1;
+    } else {
+      // Refused rather than ignored: `--dryrun` must not copy for good what `--dry-run` would only try.
+      return refuse(`unexpected: ${flag}`);
+    }
+  }
+
+  const accountsPath = paths.get('--accounts');
+  const sessionsPath = paths.get('--sessions');
+  if (accountsPath === undefined || sessionsPath === undefined) return refuse('--accounts and --sessions are required');
+
+  return { ok: true, args: { accountsPath, sessionsPath, dryRun } };
+}
+
+export async function runMigrateToPostgres(
+  argv: readonly string[],
+  env: WorkerEnv,
+): Promise<{ ok: boolean; lines: string[] }> {
+  const parsed = parseMigrateArgs(argv);
+  if (!parsed.ok) return { ok: false, lines: [parsed.error] };
+
+  // Named by its variable, never quoted: the address holds the password.
+  const url = readDatabaseUrl(env.FRUITBACK_DATABASE_URL);
+  if (url === undefined)
+    return { ok: false, lines: ['FRUITBACK_DATABASE_URL (a postgres:// address with a host) is required'] };
+
+  const { accountsPath, sessionsPath, dryRun } = parsed.args;
+  // Checked here: `node:sqlite` makes an empty database of a path that names no file.
+  const absent = [accountsPath, sessionsPath].filter((path) => !existsSync(path));
+  if (absent.length > 0) return { ok: false, lines: [`no file at ${absent.join(', ')}. Nothing was written.`] };
+
+  const database = createPgDatabase(url, { max: 1 });
+  try {
+    return await copySqliteFiles({ accountsPath, sessionsPath, database, dryRun });
+  } catch (error) {
+    return { ok: false, lines: [`${String(error instanceof Error ? error.message : error)}. Nothing was written.`] };
+  } finally {
+    await database.close();
+  }
 }

@@ -1,19 +1,21 @@
 import { startServer } from './server.ts';
-import { runForget, runPair } from './cli.ts';
+import { runForget, runMigrateToPostgres, runPair } from './cli.ts';
 import { closeDatabases } from './postgres.ts';
 
 /**
  * Container entry point, kept apart from `server.ts` so importing the server in a test does not bind
  * a port as a side effect.
  *
- * Two subcommands: `pair` mints a pairing code for the extension (FRU-42), and `forget` deletes the
- * notes of one reporter (FRU-85). Anything else starts the server, so the image's `CMD` is unchanged
+ * Three subcommands: `pair` mints a pairing code for the extension (FRU-42), `forget` deletes the
+ * notes of one reporter (FRU-85), and `migrate-to-postgres` copies the accounts and the sessions of
+ * the SQLite files into PostgreSQL (FRU-145). Anything else starts the server, so the image's `CMD` is unchanged
  * and a deployment that knows nothing about sessions behaves exactly as before.
  */
 // A Map and not an object literal: `COMMANDS.constructor` would be a function, and the server would not start.
-const COMMANDS = new Map<string | undefined, typeof runPair | typeof runForget>([
+const COMMANDS = new Map<string | undefined, typeof runPair | typeof runForget | typeof runMigrateToPostgres>([
   ['pair', runPair],
   ['forget', runForget],
+  ['migrate-to-postgres', runMigrateToPostgres],
 ]);
 const command = COMMANDS.get(process.argv[2]);
 

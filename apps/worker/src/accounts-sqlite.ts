@@ -158,6 +158,9 @@ const MIGRATIONS: readonly string[] = [
   `,
 ];
 
+/** The `user_version` of a accounts file that this worker migrated: what `migrate-to-postgres` copies (FRU-145). */
+export const ACCOUNTS_FILE_VERSION = MIGRATIONS.length;
+
 const connections = new Map<string, DatabaseSync>();
 
 function connect(path: string): DatabaseSync {

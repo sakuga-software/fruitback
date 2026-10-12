@@ -179,6 +179,130 @@ Steps 1 to 3 come before switch 1 (the runbook of FRU-145), step 4 after it.
 `FRUITBACK_AUTH_SECRET` came with better-auth (FRU-144), which stays off on a worker that does not
 have it. When the Cloud sets it, it joins the secrets that are in no backup, and step 2 of this list.
 
+## Switch 1: the accounts and the sessions into PostgreSQL (FRU-145)
+
+For the operator, step by step. **No agent ran any of it on the host.** The switch changes the
+storage, and nothing else: the code of the sessions is the same before and after, so the digests of
+the tokens are copied as they are. **Nobody signs in again and no extension pairs again**, on one
+condition: `FRUITBACK_IDENTITY_SECRET` and `FRUITBACK_SECRETS_KEY` do not change during the switch.
+
+The copy is a command of the worker:
+
+```bash
+node server.mjs migrate-to-postgres --accounts <file> --sessions <file> [--dry-run]
+```
+
+- It reads a copy of each file, made with its `-wal`, in a folder of its own. **It never writes the
+  two files**: they are the way back. It reads them on a volume mounted read-only.
+- It applies the migrations of Drizzle to the database, then copies, in one transaction: the
+  accounts, their sign-in methods, the workspaces and their members, the sites and their
+  destinations, the sealed keys of the connectors, the deliveries that wait, the pairing codes and
+  the sessions. The sign-in links are not copied: they live 15 minutes.
+- It ends with one line for each table: the rows of the file, the rows of PostgreSQL, and whether
+  their digests are the same. A difference rolls everything back, and the command exits 1.
+  `--dry-run` does everything and rolls back.
+- It refuses a database with a row in any table, and a file that a worker of another version wrote.
+  Run again on a database that holds exactly these rows, it writes nothing and exits 0. An
+  interruption leaves nothing: run it again.
+
+**Before you start.** The digest of the image that has this command, called `D_new` below, has
+FRU-180 and FRU-145, and not FRU-146 nor FRU-184. Steps 1 to 3 of « What to do on the host » above
+are done, and the window is chosen. With an automatic deployment on, nothing is merged during the
+window.
+
+In the commands, `$PG` is the container of the database and `$WORKER` the Swarm service of the worker:
+
+```bash
+PG=$(docker ps -q --filter label=com.docker.swarm.service.name=fruitback-cloud-postgres | head -1) && test -n "$PG"
+WORKER=fruitback-cloud-worker-a9zdeo
+```
+
+1. **`D_new`, with the configuration of SQLite unchanged.** The code changes before the data. Check
+   `/health` and a sign-in to the console, then check that the command is in the image:
+   `docker exec <container of the worker> node server.mjs migrate-to-postgres` prints its usage and
+   exits 1. Way back: the digest before.
+2. **A fresh copy.** Run `sh snapshot.sh`, then copy `/data/snapshots` into a dated folder of the
+   host: `docker cp <container of the worker>:/data/snapshots <folder>/switch1-<date>`. Copy the
+   environment of the worker into a secure note of the Keychain.
+3. **Stop the worker.** From here the widget and the console have no worker.
+
+   ```bash
+   docker service scale "$WORKER"=0 &&
+     test -z "$(docker ps -q --filter label=com.docker.swarm.service.name=$WORKER)" &&
+     docker run --rm -v fruitback-cloud-data:/data:ro alpine sh -c 'sha256sum /data/accounts.db* /data/sessions.db*'
+   ```
+
+   Keep the digests: step 5 compares them.
+
+4. **The dry run.** The address is read from the terminal, so it is in no history and in no log.
+
+   ```bash
+   read -rs FRUITBACK_DATABASE_URL   # postgres://fruitback:<password>@127.0.0.1:5432/fruitback
+   export FRUITBACK_DATABASE_URL
+   docker run --rm --network "container:$PG" -v fruitback-cloud-data:/data:ro -e FRUITBACK_DATABASE_URL \
+     ghcr.io/sakuga-software/fruitback-worker@sha256:<D_new> \
+     node server.mjs migrate-to-postgres --accounts /data/accounts.db --sessions /data/sessions.db --dry-run
+   ```
+
+   `--network container:$PG` puts the command in the network of the container of the database: the
+   address is `127.0.0.1`, whatever the network of Dokploy. Check: the command exits 0, each line
+   says `same`, and the last one says `dry run`. Way back: nothing was kept.
+
+5. **The copy.** The same command, without `--dry-run`. Check:
+   - the command exits 0, each line says `same`, and the last one says `copied`;
+   - `docker exec "$PG" psql -U fruitback -d fruitback -Atc 'SELECT count(*) FROM __drizzle_migrations'`
+     gives the number of entries of `apps/worker/drizzle/meta/_journal.json` at the commit of `D_new`;
+   - the digests of step 3, computed again, are the same.
+
+   Then `unset FRUITBACK_DATABASE_URL`. Way back: drop the database and make it again, then go back to
+   step 4:
+   `docker exec "$PG" psql -U fruitback -d postgres -c 'DROP DATABASE fruitback' -c 'CREATE DATABASE fruitback OWNER fruitback'`.
+
+6. **The environment.** Remove `FRUITBACK_ACCOUNTS_PATH` and `FRUITBACK_SESSION_PATH`. Add
+   `FRUITBACK_DATABASE_URL` with the **internal host** of the database service, not `127.0.0.1`.
+   Change nothing else: the variables of the notes, the secrets, the OAuth applications,
+   `FRUITBACK_CONSOLE_URL`, `FRUITBACK_PUBLIC_URL`. No `FRUITBACK_AUTH_SECRET` yet. Then « Deploy »:
+   the service comes back to one container.
+7. **Check, in this order.**
+   1. `/health` answers `200`, and the first line of the log does not say `misconfigured`.
+   2. A read of the widget answers `unknown-client` for a client that does not exist, and not `502`.
+   3. A sign-in to the console shows the list of the sites.
+   4. An extension that was paired before sends a note, without pairing again: the sessions were
+      copied.
+   5. A connector answers: its sealed key opens, so `FRUITBACK_SECRETS_KEY` did not change.
+8. **A dump with the data.** Run `snapshot-pg.sh` by hand, and copy the dump apart.
+9. **The next day**, step 4 of « What to do on the host ».
+
+### The way back, written before it is needed
+
+Until the point of no return:
+
+1. `docker service scale "$WORKER"=0`.
+2. Paste the environment of the secure note back: the two paths, and no `FRUITBACK_DATABASE_URL`.
+3. « Deploy »: `D_new` reads SQLite as before. The two files are as the worker left them at step 3.
+
+**What it costs.** Everything written in PostgreSQL since step 6 is lost: the accounts, the
+workspaces, the sites and the connectors added since, and the deliveries made since. **An extension
+that refreshed its session since step 6 must pair again**: the refresh rotates its token, and the new
+token is in PostgreSQL only. A session that did
+not refresh since is still good.
+
+**The point of no return** is at the latest the deployment of FRU-146, which moves the accounts into
+the tables of better-auth. After it there is no way back to the two files. Then:
+
+1. A pull request makes `snapshot.sh` copy `fb.db` alone, and rewrites « Restore » above, which
+   requires the two files.
+2. The operator moves `accounts.db*` and `sessions.db*` out of `/data`. They can go when the last
+   archive that holds them is older than 30 days.
+
+### What was tried, and what was not
+
+**Tried on 2026-10-11, on a laptop and never on the host**, by `postgres-copy.test.ts`: files made
+by the stores of the worker with their real migrations, their rows still in the `-wal`, copied into
+PGlite and into PostgreSQL 17 (dry run, copy, second run, refusals, a planted interruption, a planted
+lost row). **Not tried yet:** the steps of this runbook with the image, `docker service scale`,
+the label of the Swarm service, the files of a worker of real size and the time the copy takes.
+
 ## The two OAuth applications
 
 Both send a person back to the worker, so `FRUITBACK_PUBLIC_URL` is `https://api.fruitback.com`.

@@ -94,3 +94,14 @@ export function postgresSessionStore(url: string): SessionStore {
     purge: true,
   });
 }
+
+/** What `migrate-to-postgres` copies, and where (FRU-145). */
+export type SqliteCopy = { accountsPath: string; sessionsPath: string; database: Database; dryRun: boolean };
+
+/**
+ * The copy of the two SQLite files into the database: `copySqliteFiles` of `postgres-copy.ts`, loaded
+ * at the call. The command is in `cli.ts`, which every worker loads.
+ */
+export async function copySqliteFiles(copy: SqliteCopy): Promise<{ ok: boolean; lines: string[] }> {
+  return (await import('./postgres-copy.ts')).copySqliteFiles(copy);
+}
