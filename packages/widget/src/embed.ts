@@ -525,7 +525,8 @@ function placeOf(target: CaptureTarget): CapturedPlace | undefined {
 }
 
 /**
- * What a refused write means for the reporter (FRU-156): try again, wait, or tell the team.
+ * What a refused write means for the reporter (FRU-156): try again, wait, sign in again, or tell the
+ * team.
  *
  * A place the worker refuses (`destination-not-allowed`) is a `403` that a second try can pass: the
  * read that follows brings the list of now, and the composer says which place is gone (FRU-123).
@@ -533,7 +534,9 @@ function placeOf(target: CaptureTarget): CapturedPlace | undefined {
 export function failureOf(response: { status: number; body: string }): SendFailure {
   if (response.status === 429) return 'wait';
   if (response.status === 413) return 'too-large';
-  if (response.status === 401 || response.status === 403) {
+  // Not « try again »: a host that mints a bad token mints it again at the next send (FRU-193).
+  if (response.status === 401) return 'signed-out';
+  if (response.status === 403) {
     return errorOf(response.body) === 'destination-not-allowed' ? 'retry' : 'refused';
   }
 
