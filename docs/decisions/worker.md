@@ -622,6 +622,11 @@ for a worker without the variable` holds the rest in a process of its own. `/hea
 - **No message holds the address of the database.** It carries the password. A value that is refused
   is named by its variable, and `withoutAddress` takes the address and the password out of what the
   driver says. A database that does not answer is `StoreError`, so `502`, and the reason is in the log.
+- **Each connection of the pool has a listener for `error`, for its whole life** (FRU-187). A
+  connection that the server closes emits `error`, and with no listener the process stops. The pool
+  listens to a connection only while it is idle: one that a transaction, a migration or better-auth
+  holds is not listened to by the pool. The call on that connection fails with `502`, and the
+  worker stays up.
 - **One schema and one folder of migrations for the whole database**: `postgres-schema.ts` and
   `drizzle/`, since FRU-180. See _The database in Drizzle_ for how a migration is written, applied
   and held.
@@ -670,6 +675,14 @@ for a worker without the variable` holds the rest in a process of its own. `/hea
   on a database for that reason, and probes a read, not `/health`.
 - **The bundle went from 739,751 to 951,408 bytes** with `pg` 8.23.1 and its six packages. PGlite is
   not in it: no shipped file may import it.
+- **A restart of PostgreSQL stopped the worker** (FRU-187). Measured on a worker started with
+  `node src/main.ts` on PostgreSQL 17: the backend of a `/session/pair` that waits in its
+  transaction is ended with `pg_terminate_backend`. Before the fix the worker stopped with
+  `Unhandled 'error' event` (`Connection terminated unexpectedly`, `pg/lib/client.js`), and the
+  request got no answer. The pool of `pg-pool` 3.14 removes its listener from a connection when it
+  hands it out, and puts it back when the connection is released. `postgres.ts` now adds one
+  listener to each connection when the pool makes it. test:`answers an error for that request, stays
+up, and serves the next one` runs that worker in a process of its own: the defect stops a process.
 - **An outage of the accounts is in the log now.** `handleRequest` answered `502` and wrote nothing,
   for SQLite too. That is how the missing banner looked like a database that was down.
 
@@ -1083,6 +1096,14 @@ variable` holds the rest.
 - **The words of an error of Drizzle reach no log.** They quote the statement and its values: an
   address, a digest. `causeOfQueryError` takes the error of the driver out, and `postgres.ts` reports
   only that one.
+- **A store gives Drizzle no `undefined`, and no limit that is not a positive integer** (FRU-187).
+  Drizzle writes no `NULL` for `undefined`: in `.set()` it leaves the column out, and the row keeps
+  its value; in a fragment of `sql` it leaves the value out of the text. It also leaves out a
+  `LIMIT` that is negative or `NaN`, and the statement answers every row. No caller passes such a
+  value, and the types forbid it. `accounts-postgres.ts` refuses them with a `TypeError` that names
+  the value: test:`refuses undefined in place of a value it writes, and changes no row`,
+  test:`refuses a limit of due deliveries that is not a positive integer, where Drizzle drops the
+LIMIT`.
 - **A write that must say whether it changed a row returns that row** (`returning`), and the store
   counts what comes back. The two drivers do not count the rows of a statement in the same way.
 - **The tables are in `public`, and so is the journal** (`__drizzle_migrations`). A test that needs

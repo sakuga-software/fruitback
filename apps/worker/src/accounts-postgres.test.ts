@@ -16,6 +16,7 @@ import {
   createRealDatabase,
   journalDates,
   outcomeOnChangedStore,
+  rowsOf,
 } from './postgres.fixture.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
 import { type SessionStore, createPairing, redeemPairing } from './session.ts';
@@ -341,5 +342,89 @@ describe('Drizzle and the driver of PostgreSQL, loaded only by a worker that has
     assert.deepEqual(answered.statuses, [200, 502]);
     assert.ok(answered.driver > 0, 'the count of the files of the driver found none, so a zero proves nothing');
     assert.ok(answered.drizzle > 0, 'the count of the files of Drizzle found none, so a zero proves nothing');
+  });
+});
+
+/**
+ * The values that the types say are given, as the store reads them at run time (FRU-187).
+ *
+ * No caller passes these values. With Drizzle they would change rows in silence: a `LIMIT` that is not
+ * a positive number is left out, and an `undefined` in `.set()` leaves its column out. The store
+ * refuses them, and the rows stay as they were.
+ */
+describe('a value that the types say is given, and that a caller leaves out (FRU-187)', () => {
+  let database: Database | undefined;
+
+  afterEach(async () => {
+    await database?.close();
+    database = undefined;
+  });
+
+  /** A store with a workspace, a connector, three deliveries due, and a link that can be spent. */
+  async function world() {
+    database = await createPgliteDatabase();
+    const store = createPostgresAccountStore(database);
+    const alice = await store.signIn({ provider: 'email', subject: 'alice@acme.dev', email: 'alice@acme.dev' });
+    const workspace = await store.createWorkspace('Acme', alice.id);
+    const hook = await store.addConnector(workspace.id, { kind: 'rest', label: 'Hook', sealed: 'sealed-1' });
+    const ids = [
+      await store.enqueueDelivery(hook.id, '{"n":1}', 100),
+      await store.enqueueDelivery(hook.id, '{"n":2}', 200),
+      await store.enqueueDelivery(hook.id, '{"n":3}', 300),
+    ];
+    await store.createEmailLink({ codeHash: 'digest-1', email: 'alice@acme.dev', expiresAt: Date.now() + 60_000 });
+
+    return { store, workspace, hook, ids };
+  }
+
+  /** Each column that one of these calls writes, for every row. */
+  async function snapshot(): Promise<unknown> {
+    assert.ok(database !== undefined);
+
+    return {
+      connectors: await rowsOf(database, 'SELECT id, sealed, attention, attention_at FROM connectors ORDER BY id'),
+      deliveries: await rowsOf(
+        database,
+        'SELECT id, attempts, next_at, last_at, last_status, last_error FROM deliveries ORDER BY id',
+      ),
+      links: await rowsOf(database, 'SELECT code_hash, spent_at FROM email_links ORDER BY code_hash'),
+    };
+  }
+
+  it('refuses a limit of due deliveries that is not a positive integer, where Drizzle drops the LIMIT', async () => {
+    const { store } = await world();
+
+    for (const limit of [-1, 0, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      await assert.rejects(store.dueDeliveries(1_000, limit), TypeError, `limit ${limit}`);
+    }
+    assert.equal((await store.dueDeliveries(1_000, 2)).length, 2);
+  });
+
+  it('refuses undefined in place of a value it writes, and changes no row', async () => {
+    const { store, workspace, hook, ids } = await world();
+    const [first, second] = ids as [string, string, string];
+    const before = await snapshot();
+    const none = undefined as unknown as never;
+
+    const calls: [string, () => Promise<unknown>][] = [
+      ['resealConnector: sealed', () => store.resealConnector(hook.id, none)],
+      ['resealConnector: connector', () => store.resealConnector(none, 'sealed-2')],
+      ['noteConnector: now', () => store.noteConnector(hook.id, 'key-refused', none)],
+      ['dueDeliveries: now', () => store.dueDeliveries(none, 10)],
+      ['settleDelivery: outcome.at', () => store.settleDelivery(first, { delivered: false, attempts: 0, at: none })],
+      [
+        'settleDelivery: outcome.attempts',
+        () => store.settleDelivery(first, { delivered: false, attempts: none, at: 1_000, nextAt: 2_000 }),
+      ],
+      ['settleDelivery: id', () => store.settleDelivery(none, { delivered: true })],
+      ['retryDelivery: now', () => store.retryDelivery(workspace.id, hook.id, second, none)],
+      ['dropAbandonedDeliveries: before', () => store.dropAbandonedDeliveries(none)],
+      ['spendEmailLink: now', () => store.spendEmailLink('digest-1', none)],
+    ];
+    for (const [what, call] of calls) {
+      await assert.rejects(call(), { name: 'TypeError', message: `${what} is required` }, what);
+    }
+
+    assert.deepEqual(await snapshot(), before);
   });
 });
