@@ -71,6 +71,11 @@ export type OverlayOptions = {
    * fetched again (FRU-14). Defaults to drawing everything.
    */
   shouldShow?: (issue: SeedIssue) => boolean;
+  /**
+   * Which issues are notes kept for later, not sent yet (FRU-124). Their pin is neutral, because no
+   * tracker gave them a state, and their thread says they are not sent. Defaults to none.
+   */
+  isDraft?: (issue: SeedIssue) => boolean;
   /** Called when a pin is clicked, in case the host wants to do more than open the thread. */
   onSelect?: (issue: SeedIssue) => void;
   /**
@@ -338,6 +343,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
       .filter((issue) => options.shouldShow?.(issue) ?? true)
       .map((issue) => {
         const resolution = resolveAnchor(issue.seed.anchor, { document });
+        if (options.isDraft?.(issue) === true) DRAFTS.add(issue);
         const pin = buildPin(document, issue, resolution, t);
         const entry = { issue, resolution, pin };
 
@@ -510,6 +516,14 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   };
 }
 
+/** The issues an overlay was told are drafts. Marked on the object, which the overlay draws as it got it. */
+const DRAFTS = new WeakSet<SeedIssue>();
+
+/** The stage's token, or a neutral one for a draft: it has no state in any tracker yet (FRU-124). */
+function pinColor(issue: SeedIssue): string {
+  return DRAFTS.has(issue) ? 'var(--fruitback-color-text-muted)' : stageToken(issue.stage);
+}
+
 function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolution, t: Translator): HTMLElement {
   const pin = document.createElement('div');
 
@@ -517,14 +531,15 @@ function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolu
   // The token rather than the hexadecimal the contract carries (FRU-35). One indirection buys the
   // dark theme, the host override and, once FRU-24 lands, a contract that stops shipping colours at
   // all — a widget's palette has no business travelling in the payload both ends must agree on.
-  pin.style.setProperty('--fruitback-pin-color', stageToken(issue.stage));
+  pin.style.setProperty('--fruitback-pin-color', pinColor(issue));
   pin.dataset.fruitbackPin = issue.seed.id;
+  if (DRAFTS.has(issue)) pin.dataset.fruitbackDraft = '';
   pin.dataset.fruitbackStage = issue.stage;
 
   const badge = document.createElement('button');
   badge.type = 'button';
   badge.className = 'fruitback-pin-badge';
-  badge.title = `${issue.identifier} · ${stateLabel(issue, t)}`;
+  badge.title = DRAFTS.has(issue) ? stateLabel(issue, t) : `${issue.identifier} · ${stateLabel(issue, t)}`;
   // The drop is rotated, so the glyph rides in its own span and is turned back upright.
   const glyph = document.createElement('span');
   glyph.className = 'fruitback-pin-glyph';
@@ -556,10 +571,12 @@ function applyResolution(pin: HTMLElement, issue: SeedIssue, resolution: AnchorR
   // also what keeps it reachable by a screen reader and by a test looking for it by role.
   badge?.setAttribute(
     'aria-label',
-    t.text(resolution.confident ? 'pin.label' : 'pin.labelUncertain', {
-      stage: t.stage(issue.stage),
-      note: summarise(issue),
-    }),
+    DRAFTS.has(issue)
+      ? t.text('pin.labelDraft', { note: summarise(issue) })
+      : t.text(resolution.confident ? 'pin.label' : 'pin.labelUncertain', {
+          stage: t.stage(issue.stage),
+          note: summarise(issue),
+        }),
   );
   const glyph = pin.querySelector('.fruitback-pin-glyph');
   // Empty when the pin is sure of itself (FRU-24): the drop's shape and its stage colour say which
@@ -639,6 +656,8 @@ function replies(document: Document, issue: SeedIssue, t: Translator): HTMLEleme
  * `||` and not `??`: an empty string is exactly the case being caught, and `??` would let it through.
  */
 function stateLabel(issue: SeedIssue, t: Translator): string {
+  if (DRAFTS.has(issue)) return t.text('thread.draft');
+
   return issue.stateName || t.stage(issue.stage);
 }
 
@@ -648,8 +667,11 @@ function buildThread(document: Document, issue: SeedIssue, resolution: AnchorRes
   thread.className = 'fruitback-thread';
   thread.dataset.fruitbackThread = issue.seed.id;
   thread.setAttribute('role', 'dialog');
-  thread.setAttribute('aria-label', t.text('thread.dialog', { identifier: issue.identifier }));
-  thread.style.setProperty('--fruitback-pin-color', stageToken(issue.stage));
+  thread.setAttribute(
+    'aria-label',
+    DRAFTS.has(issue) ? t.text('thread.draftDialog') : t.text('thread.dialog', { identifier: issue.identifier }),
+  );
+  thread.style.setProperty('--fruitback-pin-color', pinColor(issue));
 
   const reporter = issue.seed.reporter?.name ?? issue.seed.reporter?.email ?? t.text('thread.anonymous');
 

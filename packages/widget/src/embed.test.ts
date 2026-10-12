@@ -1,7 +1,7 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseSeed } from '@fruitback/shared';
-import { failureOf, init, plant } from './embed.ts';
+import { failureOf, init, plant, sendDrafts } from './embed.ts';
 import { capturePlace } from './capture.ts';
 import type { TransportRequest, TransportResponse } from './transport.ts';
 import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
@@ -1211,5 +1211,128 @@ describe('why a send failed', () => {
 
   it('leaves a place that is gone to a second try, which the read after it makes right (FRU-123)', () => {
     assert.equal(failureOf(answer(403, 'destination-not-allowed')), 'retry');
+  });
+});
+
+/**
+ * Sending the notes kept for later (FRU-124). The worker half is on main (#171): it answers each
+ * seed of a batch, and protects a kept one against a second copy for ten minutes only.
+ */
+describe('sending the drafts', () => {
+  const ENDPOINT = 'https://worker.test';
+  const draftOf = (id: string, destination?: string) => ({
+    seed: seedFixture({ id, client: { id: 'acme' } }),
+    ...(destination === undefined ? {} : { destination }),
+  });
+
+  function transportAnswering(...answers: ((request: TransportRequest) => TransportResponse)[]) {
+    const requests: TransportRequest[] = [];
+    const transport = async (request: TransportRequest): Promise<TransportResponse> => {
+      requests.push(request);
+      const next = answers.shift();
+      if (next === undefined) throw new Error('one request more than the test planned');
+
+      return next(request);
+    };
+
+    return { requests, options: { endpoint: ENDPOINT, clientId: 'acme', transport } };
+  }
+
+  const results =
+    (status: number, kept: string[], refused: string[] = []) =>
+    (): TransportResponse => ({
+      ok: status < 300,
+      status,
+      body: JSON.stringify({
+        results: [
+          ...kept.map((id) => ({ id, issue: { id: `i_${id}`, identifier: `DEV-${id}` } })),
+          ...refused.map((id) => ({ id, error: 'store-unavailable' })),
+        ],
+      }),
+    });
+
+  it('sends one array for a batch, and says every note was kept', async () => {
+    const { requests, options } = transportAnswering(results(201, ['sd_a', 'sd_b']));
+
+    const outcome = await sendDrafts({
+      drafts: [draftOf('sd_a'), draftOf('sd_b')],
+      offer: { max: 10, maxBytes: 65_536 },
+      options,
+    });
+
+    assert.deepEqual(outcome, { kept: ['sd_a', 'sd_b'] });
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0]?.url, `${ENDPOINT}/feedback`);
+    const body = JSON.parse(requests[0]?.body ?? '') as unknown[];
+    assert.deepEqual(
+      body.map((seed) => (parseSeed(seed).ok ? (seed as { id: string }).id : 'not a seed')),
+      ['sd_a', 'sd_b'],
+    );
+  });
+
+  it('after a 207 keeps only the notes answered « not kept », and sends only those again', async () => {
+    const { requests, options } = transportAnswering(results(207, ['sd_a'], ['sd_b']), results(201, ['sd_b']));
+    const drafts = [draftOf('sd_a'), draftOf('sd_b')];
+    const offer = { max: 10, maxBytes: 65_536 };
+
+    const first = await sendDrafts({ drafts, offer, options });
+    assert.deepEqual(first, { kept: ['sd_a'], failure: 'retry' });
+
+    const second = await sendDrafts({
+      drafts: drafts.filter((each) => !first.kept.includes(each.seed.id)),
+      offer,
+      options,
+    });
+    assert.deepEqual(second, { kept: ['sd_b'] });
+    assert.deepEqual(
+      (JSON.parse(requests[1]?.body ?? '') as { id: string }[]).map((seed) => seed.id),
+      ['sd_b'],
+      'the second attempt sent a note that was already kept',
+    );
+  });
+
+  it('stops at a request the worker refuses, and keeps every note it did not answer', async () => {
+    const { requests, options } = transportAnswering(results(201, ['sd_a', 'sd_b']), () => ({
+      ok: false,
+      status: 429,
+      body: '{"error":"rate-limited"}',
+    }));
+
+    const outcome = await sendDrafts({
+      drafts: ['sd_a', 'sd_b', 'sd_c', 'sd_d', 'sd_e'].map((id) => draftOf(id)),
+      offer: { max: 2, maxBytes: 65_536 },
+      options,
+    });
+
+    assert.deepEqual(outcome, { kept: ['sd_a', 'sd_b'], failure: 'wait' });
+    assert.equal(requests.length, 2, 'a request was sent after a 429');
+  });
+
+  it('sends a seed and not an array to a worker that offers no batch, and the place in the query', async () => {
+    const { requests, options } = transportAnswering(
+      () => ({ ok: true, status: 201, body: '{}' }),
+      () => ({ ok: false, status: 502, body: '{"error":"store-unavailable"}' }),
+    );
+
+    const outcome = await sendDrafts({
+      drafts: [draftOf('sd_a', 'dst_design'), draftOf('sd_b')],
+      offer: undefined,
+      options,
+    });
+
+    assert.deepEqual(outcome, { kept: ['sd_a'], failure: 'retry' });
+    assert.equal(requests[0]?.url, `${ENDPOINT}/feedback?destination=dst_design`);
+    assert.equal(parseSeed(JSON.parse(requests[0]?.body ?? '')).ok, true, 'the body of a single note is not a seed');
+  });
+
+  it('keeps every note when the worker cannot be reached', async () => {
+    const { options } = transportAnswering(() => {
+      throw new Error('offline');
+    });
+
+    assert.deepEqual(await sendDrafts({ drafts: [draftOf('sd_a')], offer: { max: 10, maxBytes: 65_536 }, options }), {
+      kept: [],
+      failure: 'retry',
+    });
   });
 });
