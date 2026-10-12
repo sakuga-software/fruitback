@@ -19,6 +19,7 @@ import { NAME_PROBLEMS, SITE_NOT_ADDED, SITE_PROBLEMS, WORKSPACE_NOT_CREATED, co
 import { Button, Field, Mark, Pick, Problem, WideButton } from '../ui';
 import { adoptLanguage, locale, msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
+import { siteAddress } from '../site-address';
 
 /**
  * « Create your workspace », the four steps of the setup (design/boards/2-onboarding.png).
@@ -446,7 +447,11 @@ function SiteStep({ workspace, onAdded }: { workspace: Workspace; onAdded: (site
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const added = await call<Site>('POST', `/console/workspaces/${workspace.id}/sites`, { url, visibility });
+    setProblem(undefined);
+    // The same reading as the Sites screen: a host with no scheme is https (FRU-167).
+    const address = siteAddress(url);
+    if (address === undefined) return setProblem(SITE_PROBLEMS['invalid-url'] ?? SITE_NOT_ADDED);
+    const added = await call<Site>('POST', `/console/workspaces/${workspace.id}/sites`, { url: address, visibility });
     if (added.ok) return onAdded(added.data);
     setProblem(problemOf(added, SITE_PROBLEMS, SITE_NOT_ADDED));
   }
@@ -465,7 +470,8 @@ function SiteStep({ workspace, onAdded }: { workspace: Workspace; onAdded: (site
     >
       <Field
         label={t('Site address')}
-        type="url"
+        inputMode="url"
+        autoComplete="url"
         placeholder="https://staging.acme.dev"
         value={url}
         onChange={(event) => setUrl(event.target.value)}
