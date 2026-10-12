@@ -8,7 +8,7 @@ import { type AdapterOfAuth, keepAtRest } from './auth-at-rest.ts';
 import { ORGANIZATION_PATHS } from './organization-paths.ts';
 import { FRUITBACK_RESOURCE, roleStatements } from './auth-roles.ts';
 import { type WorkerConfig, hasAuth } from './env.ts';
-import type { OAuthClient } from './oauth-sign-in.ts';
+import type { OAuthClient } from './oauth-client.ts';
 import { type PgDatabase, type PgPool, databaseFor, withoutAddress } from './postgres.ts';
 import { migrated, sessionStoreOn } from './postgres-stores.ts';
 import type { SessionStore } from './session.ts';
@@ -19,7 +19,8 @@ import type { SessionStore } from './session.ts';
  *
  * This file says how better-auth is configured for the console, and builds one instance for the
  * process when `FRUITBACK_AUTH_SECRET` and `FRUITBACK_DATABASE_URL` are both set. `auth-routes.ts`
- * serves it under `/console/auth/`, the paths of `SERVED_PATHS` only, beside the path of before.
+ * serves it under `/console/auth/`, the paths of `SERVED_PATHS` only. It is the one way to sign in to
+ * the console since FRU-150.
  *
  * **This file imports better-auth as types only, and loads it when the instance is built**, as
  * `postgres.ts` does for its driver. A worker that has better-auth switched off loads nothing of it:
@@ -66,7 +67,7 @@ export const SERVED_PATHS: Readonly<Record<string, string>> = {
 /** How long an invitation waits (FRU-104). `auth-organization.ts` says the same number in its message. */
 export const INVITATION_SECONDS = 7 * 24 * 60 * 60;
 
-/** How long a link of the e-mail lives: as the link of before (`EMAIL_LINK_TTL_SECONDS`, FRU-98). */
+/** How long a link of the e-mail lives: fifteen minutes, as since FRU-98. */
 export const MAGIC_LINK_TTL_SECONDS = 15 * 60;
 
 /**
@@ -209,7 +210,7 @@ export type AuthConfig = {
   databaseUrl: string;
   /** `FRUITBACK_AUTH_GITHUB_OAUTH`: the second GitHub App, the one of better-auth (FRU-147). */
   github?: OAuthClient;
-  /** `FRUITBACK_GOOGLE_OAUTH`: the same client as the path of before, with a second callback. */
+  /** `FRUITBACK_GOOGLE_OAUTH`: the Google client, with the callback of better-auth. */
   google?: OAuthClient;
   /** `FRUITBACK_AUTH_TRACK_IP`: keep the address and the user agent of a session, and limit by address. */
   trackIp: boolean;

@@ -272,7 +272,9 @@ WORKER=fruitback-cloud-worker-a9zdeo
    `FRUITBACK_DATABASE_URL` with the **internal host** of the database service, not `127.0.0.1`.
    Change nothing else: the variables of the notes, the secrets, the OAuth applications,
    `FRUITBACK_CONSOLE_URL`, `FRUITBACK_PUBLIC_URL`. No `FRUITBACK_AUTH_SECRET` yet. Then « Deploy »:
-   the service comes back to one container.
+   the service comes back to one container. **This step is for an image from before FRU-150**
+   (`D_new` of this switch). An image of FRU-150 signs nobody in without `FRUITBACK_AUTH_SECRET`,
+   and refuses to start with `FRUITBACK_GITHUB_OAUTH`: see « Switch 3 ».
 7. **Check, in this order.**
    1. `/health` answers `200`, and the first line of the log does not say `misconfigured`.
    2. A read of the widget answers `unknown-client` for a client that does not exist, and not `502`.
@@ -399,6 +401,9 @@ better-auth, and nothing of it changes.
 En français : « La console vous redemandera de vous connecter, une fois. Votre extension reste
 connectée. »
 
+**Do this switch with an image from before FRU-150**: the steps and the way back below count on
+the sign-in of before, which the image of FRU-150 no longer has (« Switch 3 »).
+
 **The order. Each step can stay for days: the console and the worker need not move together.**
 
 1. **The worker of FRU-147, without `FRUITBACK_AUTH_SECRET`.** Nothing changes: it says no
@@ -425,20 +430,70 @@ the sessions of better-auth that have not ended good again.
 
 **Not tried:** any of this on the host, and Safari.
 
-## The two OAuth applications
+## Switch 3: the sign-in of before goes (FRU-150)
 
-Both send a person back to the worker, so `FRUITBACK_PUBLIC_URL` is `https://api.fruitback.com`.
+For the operator. **No agent ran any of it on the host.** The image of FRU-150 has one way to sign
+in to the console, better-auth, and one place for the accounts, PostgreSQL. It no longer has the
+routes `/auth/email`, `/auth/github`, `/auth/google` and `/console/session/*`, the token the console
+held in memory, nor the accounts file. **Nobody signs in again and no extension pairs again**: the
+cookie of switch 2 and the sessions of the extensions are what they were. No table changes, so this
+image and the one before read the same database.
+
+**Before. All of it true on the host, or this image must not be deployed:**
+
+1. Switch 1 is done: the worker has `FRUITBACK_DATABASE_URL`, and neither `FRUITBACK_ACCOUNTS_PATH`
+   nor `FRUITBACK_SESSION_PATH`.
+2. Switch 2 is done, and was left in place long enough to trust it: the worker has
+   `FRUITBACK_AUTH_SECRET` and `FRUITBACK_AUTH_GITHUB_OAUTH`, its log says « better-auth is ready,
+   under /console/auth », and people sign in by a link, with GitHub and with Google. The Google
+   client has the callback `https://api.fruitback.com/console/auth/callback/google`.
+3. A dump with the data (`snapshot-pg.sh`), copied apart, and the digest of the image that runs
+   written down.
+
+**The order.**
+
+1. **Remove `FRUITBACK_GITHUB_OAUTH` from the environment of the worker**, and « Deploy » the image
+   that runs. Nothing reads it since switch 2. The image of FRU-150 **refuses to start** with it, or
+   with `FRUITBACK_ACCOUNTS_PATH`: `/health` answers `500`, and the log names the variable and
+   `docs/self-hosting.md`. `saveEnvironment` replaces the whole environment: build it again from the
+   Keychain entries, without that one.
+2. **The worker of FRU-150.** « Deploy ». Check: `/health` answers `200`; the log says « better-auth
+   is ready, under /console/auth »; `GET /auth/providers` answers `betterAuth` and nothing else;
+   `POST /auth/email` answers `404`.
+3. **The console of FRU-150**, after the worker and not before: against a worker that does not say
+   `betterAuth` this console offers no way to sign in. The console of switch 2 works against the
+   worker of FRU-150, so the two need not move in the same minute.
+4. **Check, in this order.** A page of the console that was open goes on, without signing in again.
+   A sign-in by a link, one with GitHub and one with Google. « Sign out », then a reload, asks to
+   sign in. An extension paired before sends a note. A connector answers.
+5. **Days later**, when nothing came back: delete the first GitHub OAuth App (the one whose callback
+   is `/auth/github/callback`), and remove the redirect URI `/auth/google/callback` from the Google
+   client. Remove the Keychain entry of `FRUITBACK_GITHUB_OAUTH`.
+
+**The way back** is the image of before, by its digest, and « Deploy »: the database is the same,
+and the sessions of better-auth stay good, since the secret did not move. The sign-in of before
+comes back with it only if `FRUITBACK_GITHUB_OAUTH` is put back, and nobody needs it: the console
+of switch 2 reads `betterAuth`. **What it costs:** nothing is lost. After step 5 the way back is the
+same, without the sign-in of before for GitHub.
+
+**The files of before.** `accounts.db` and `sessions.db` in the volume are read by nothing since
+switch 1. This image still has `migrate-to-postgres`, which reads them once; it does not need them
+to run. Delete them when the dump of step 3 of « Before » was restored once somewhere else.
+
+**Not tried:** any of this on the host.
+
+## The OAuth applications
+
+Each sends a person back to the worker, so `FRUITBACK_PUBLIC_URL` is `https://api.fruitback.com`.
 Each value below is `<client id>:<client secret>`, in the environment of the worker in Dokploy and in
 the Keychain of the operator. `saveEnvironment` replaces the whole environment: build it again from
-the Keychain entries, and add these two.
+the Keychain entries, and add these.
 
-| Variable                                   | Where the application is made                                                                   | Its callback                                             |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `FRUITBACK_GITHUB_OAUTH`                   | GitHub, the organisation's settings, « OAuth Apps »                                             | `https://api.fruitback.com/auth/github/callback`         |
-| `FRUITBACK_GOOGLE_OAUTH`                   | Google Cloud, « APIs & Services », « Credentials », an OAuth client of type « Web application » | `https://api.fruitback.com/auth/google/callback`         |
-| `FRUITBACK_LINEAR_OAUTH`                   | Linear, Settings, API, « OAuth applications »                                                   | `https://api.fruitback.com/auth/linear/callback`         |
-| `FRUITBACK_AUTH_GITHUB_OAUTH`              | GitHub, a **second** OAuth App: an App has one callback (FRU-147)                               | `https://api.fruitback.com/console/auth/callback/github` |
-| `FRUITBACK_GOOGLE_OAUTH` (the same client) | Google Cloud, the client above: add a second « Authorized redirect URI » (FRU-147)              | `https://api.fruitback.com/console/auth/callback/google` |
+| Variable                      | Where the application is made                                                                   | Its callback                                             |
+| ----------------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `FRUITBACK_LINEAR_OAUTH`      | Linear, Settings, API, « OAuth applications »                                                   | `https://api.fruitback.com/auth/linear/callback`         |
+| `FRUITBACK_AUTH_GITHUB_OAUTH` | GitHub, the organisation's settings, « OAuth Apps » (FRU-147)                                   | `https://api.fruitback.com/console/auth/callback/github` |
+| `FRUITBACK_GOOGLE_OAUTH`      | Google Cloud, « APIs & Services », « Credentials », an OAuth client of type « Web application » | `https://api.fruitback.com/console/auth/callback/google` |
 
 - **GitHub** signs a person in (FRU-97). The console shows its button only when it is built with
   `VITE_FRUITBACK_GITHUB=1`: set that build argument of the console when the worker has the variable,

@@ -7,12 +7,11 @@ import {
   SERVED_PATHS,
   sendLinkThrough,
 } from './auth.ts';
-import { EMAIL_LINKS_PER_WINDOW, EMAIL_LINK_WINDOW_MS } from './console-routes.ts';
 import type { Kv } from './kv.ts';
 import { MailError, type Mailer, signInMessage } from './mail.ts';
 
 /**
- * The console signs in with better-auth (FRU-147), beside the path of before (`console-routes.ts`).
+ * The console signs in with better-auth (FRU-147): since FRU-150, the one way.
  *
  * - **`/console/auth/<path>` reaches better-auth for the paths of `SERVED_PATHS` only.** Any other path
  *   answers `404` here, before better-auth reads it: a route that a plugin adds stays closed until it
@@ -41,6 +40,10 @@ export type AuthRouteContext = {
   clientIp: string;
   trackIp: boolean;
 };
+
+/** Links per address, per window: enough for a lost one, too few to fill someone's mailbox (FRU-98). */
+export const EMAIL_LINKS_PER_WINDOW = 3;
+export const EMAIL_LINK_WINDOW_MS = 15 * 60 * 1000;
 
 /** The routes of the worker that this file answers, beside the ones of better-auth. */
 export const EMAIL_LINK_PATH = `${AUTH_BASE_PATH}/email`;
@@ -157,7 +160,7 @@ export async function sessionOfCookie(
   auth: Auth | Promise<Auth>,
   request: Request,
 ): Promise<{ userId: string; sessionId: string } | undefined> {
-  // No cookie of a session, no call: a request of the path of before reads no database here.
+  // No cookie of a session, no call: a request that names nobody reads no database here.
   if (!(request.headers.get('Cookie') ?? '').includes('fruitback.session_token=')) return undefined;
   type Found = { user?: { id?: unknown }; session?: { id?: unknown } } | null;
   let read: { headers?: Headers; response?: Found } | null;
@@ -196,6 +199,12 @@ function failed(consoleUrl: string, code: string): Response {
 
 async function startWithProvider(request: Request, provider: string, context: AuthRouteContext): Promise<Response> {
   if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, {});
+  // FRU-211: a page of another site does not start a sign-in. This route calls better-auth in the
+  // process, so the check better-auth makes on its own route does not run. The person lands on the
+  // sign-in screen of the console, and starts from there if they want to. A browser that sends no
+  // `Sec-Fetch-Site` is served as before: the header cannot be asked of a browser that has none.
+  if (request.headers.get('Sec-Fetch-Site') === 'cross-site')
+    return failed(context.consoleUrl, 'started_from_another_site');
   const auth = await context.auth;
   const consoleOrigin = new URL(context.consoleUrl).origin;
   // A provider that this worker does not have: the console says so. Read in the options, and not in
@@ -234,14 +243,14 @@ async function sendLink(
   const body = await readBody(request);
   const email = typeof body?.email === 'string' ? normalizeEmail(body.email) : undefined;
   if (email === undefined) return json(400, { error: 'invalid-email' }, headers);
-  // The words of the message, never the link (FRU-119), as on the path of before.
+  // The words of the message, never the link (FRU-119).
   const locale =
     (await context.accounts.localeOf(email)) ??
     readLocaleTag(body?.locale) ??
     readLocaleTag(request.headers.get('Accept-Language')?.split(',')[0]?.split(';')[0]) ??
     'en';
 
-  // The same key as the path of before: the two paths together send three links in the window.
+  // Three links to one address in the window.
   const sent = await context.kv.incr(`fruitback:mail:${email}`, EMAIL_LINK_WINDOW_MS);
   if (sent > EMAIL_LINKS_PER_WINDOW) return json(429, { error: 'too-many-links' }, headers);
 

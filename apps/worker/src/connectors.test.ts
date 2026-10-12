@@ -1,47 +1,24 @@
 import { afterEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
 import { seedFixture } from '@fruitback/shared/seed.fixture';
-import { closeAccountConnections, createSqliteAccountStore } from './accounts-sqlite.ts';
+import { IDENTITY_SECRET, envWith as workerEnv } from './auth-worker.fixture.ts';
+import { type CallOptions, type World, callOn, memberOf, signInTo, worlds } from './console-world.fixture.ts';
 import { type WorkerEnv, readConfig } from './env.ts';
-import { closeSessionConnections } from './session-sqlite.ts';
-import { handleRequest } from './app.ts';
-import { signIdentityToken } from './identity.ts';
 import { createMemoryKv } from './kv.ts';
+import { rowsOf } from './postgres.fixture.ts';
 import { open, seal } from './secrets.ts';
 
-const SECRET = 'a-worker-secret-of-exactly-enough';
 const SECRETS_KEY = 'another-secret-that-opens-the-connectors';
-const CONSOLE = 'https://app.fruitback.test';
 const SITE = 'https://staging.acme.dev';
 const LINEAR_KEY = 'lin_api_the_real_key_of_acme';
-const directories: string[] = [];
+const opened = worlds();
 
 afterEach(() => {
   mock.restoreAll();
-  closeAccountConnections();
-  closeSessionConnections();
-  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
 });
 
-function envWith(overrides: Partial<WorkerEnv> = {}): WorkerEnv {
-  const directory = mkdtempSync(join(tmpdir(), 'fruitback-connectors-'));
-  directories.push(directory);
-
-  return {
-    FRUITBACK_STORE: 'sqlite',
-    FRUITBACK_SQLITE_PATH: join(directory, 'fb.db'),
-    ALLOWED_ORIGINS: CONSOLE,
-    FRUITBACK_IDENTITY_SECRET: SECRET,
-    FRUITBACK_SECRETS_KEY: SECRETS_KEY,
-    FRUITBACK_SESSION_PATH: join(directory, 'sessions.db'),
-    FRUITBACK_ACCOUNTS_PATH: join(directory, 'accounts.db'),
-    FRUITBACK_CONSOLE_URL: CONSOLE,
-    ...overrides,
-    // The path of the SQLite store is that store's own variable, so `WorkerEnv` does not name it.
-  } as WorkerEnv;
+function envWith(overrides: Partial<WorkerEnv> = {}): Promise<World> {
+  return opened({ env: { FRUITBACK_SECRETS_KEY: SECRETS_KEY, ...overrides } });
 }
 
 /**
@@ -132,38 +109,18 @@ function fakeLinear(keys: string[] = [LINEAR_KEY]) {
   return { issues, asked };
 }
 
-let ip = 0;
-function call(
-  env: WorkerEnv,
-  method: string,
-  path: string,
-  options: { token?: string; body?: unknown; origin?: string } = {},
-): Promise<Response> {
-  ip += 1;
-
-  return handleRequest(
-    new Request(`https://api.fruitback.test${path}`, {
-      method,
-      headers: {
-        Origin: options.origin ?? CONSOLE,
-        ...(options.token === undefined ? {} : { Authorization: `Bearer ${options.token}` }),
-        ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
-      },
-      ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
-    }),
-    env,
-    { clientIp: `203.0.113.${ip % 250}`, kv: createMemoryKv() },
-  );
+/** A request with a cache of its own: no read is answered by the cache of the request before. */
+function call(env: World, method: string, path: string, options: CallOptions = {}): Promise<Response> {
+  return callOn(env, method, path, options, { kv: createMemoryKv() });
 }
 
-/** A workspace with its owner, a member, a guest and one site read by everyone. */
-async function acme(env: WorkerEnv) {
-  const accounts = createSqliteAccountStore(env.FRUITBACK_ACCOUNTS_PATH as string);
-  const exp = Math.floor(Date.now() / 1000) + 600;
+/** A workspace with its owner and one site read by everyone. `person` signs somebody else in. */
+async function acme(env: World) {
+  const accounts = env.accounts;
   const person = async (email: string) => {
-    const account = await accounts.signIn({ provider: 'email', subject: email, email });
+    const { id, token } = await signInTo(env, email);
 
-    return { account, token: await signIdentityToken({ sub: account.id, exp }, SECRET) };
+    return { account: { id }, token };
   };
   const owner = await person('owner@acme.dev');
   const workspace = await accounts.createWorkspace('Acme', owner.account.id);
@@ -173,7 +130,7 @@ async function acme(env: WorkerEnv) {
   return { accounts, owner, workspace, site, base, person };
 }
 
-async function connected(env: WorkerEnv, world: Awaited<ReturnType<typeof acme>>): Promise<string> {
+async function connected(env: World, world: Awaited<ReturnType<typeof acme>>): Promise<string> {
   const added = await call(env, 'POST', `${world.base}/connectors`, {
     token: world.owner.token,
     body: { kind: 'linear', apiKey: LINEAR_KEY },
@@ -191,7 +148,7 @@ function note(site: string, path = '/pricing') {
 
 describe('a workspace connects Linear (FRU-121)', () => {
   it('keeps the key encrypted, and never answers it', async () => {
-    const env = envWith();
+    const env = await envWith();
     fakeLinear();
     const world = await acme(env);
 
@@ -205,18 +162,17 @@ describe('a workspace connects Linear (FRU-121)', () => {
     assert.equal(added.status, 201);
     assert.match(body, /"label":"Linear · Camille"/);
     assert.equal(body.includes(LINEAR_KEY) || listed.includes(LINEAR_KEY), false, 'no route answers the key');
-    closeAccountConnections();
-    const directory = dirname(env.FRUITBACK_ACCOUNTS_PATH as string);
-    const onDisk = readdirSync(directory)
-      .filter((file) => file.startsWith('accounts.db'))
-      .map((file) => readFileSync(join(directory, file)).toString('latin1'))
-      .join('');
-    assert.equal(onDisk.includes(LINEAR_KEY), false, 'the file holds no key in the clear');
-    assert.ok(onDisk.includes('Camille'), 'the control: the row is in the bytes that were read');
+    const tables = await rowsOf(env.database, "SELECT tablename FROM pg_tables WHERE schemaname = 'public'");
+    let inDatabase = '';
+    for (const { tablename } of tables) {
+      inDatabase += JSON.stringify(await rowsOf(env.database, `SELECT * FROM "${String(tablename)}"`));
+    }
+    assert.equal(inDatabase.includes(LINEAR_KEY), false, 'the database holds no key in the clear');
+    assert.ok(inDatabase.includes('Camille'), 'the control: the row is in the rows that were read');
   });
 
   it('stores nothing for a key Linear refuses', async () => {
-    const env = envWith();
+    const env = await envWith();
     fakeLinear();
     const world = await acme(env);
 
@@ -231,7 +187,7 @@ describe('a workspace connects Linear (FRU-121)', () => {
   });
 
   it('says Linear is down, not that the key is refused, when Linear does not answer', async () => {
-    const env = envWith();
+    const env = await envWith();
     const world = await acme(env);
     const body = { kind: 'linear', apiKey: LINEAR_KEY };
 
@@ -273,7 +229,7 @@ describe('a workspace connects Linear (FRU-121)', () => {
   });
 
   it('sends the notes of a site to the team it chose, and reads them back from there', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = fakeLinear();
     const world = await acme(env);
     const connector = await connected(env, world);
@@ -313,7 +269,7 @@ describe('a workspace connects Linear (FRU-121)', () => {
   });
 
   it('keeps the notes of a site with no destination in the worker, and asks Linear nothing', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = fakeLinear();
     const world = await acme(env);
     await connected(env, world);
@@ -327,14 +283,14 @@ describe('a workspace connects Linear (FRU-121)', () => {
   });
 
   it('answers 502, and writes nowhere else, when the connector cannot be used', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = fakeLinear();
     const world = await acme(env);
     const connector = await connected(env, world);
     await world.accounts.setDestination(world.workspace.id, world.site.id, { connector, teamId: 'team_design' });
 
-    // The key the worker holds no longer opens what the file keeps.
-    const moved = { ...env, FRUITBACK_SECRETS_KEY: 'a-different-key-of-at-least-32-chars' };
+    // The key the worker holds no longer opens what the database keeps.
+    const moved = { ...env, env: { ...env.env, FRUITBACK_SECRETS_KEY: 'a-different-key-of-at-least-32-chars' } };
     const written = await call(moved, 'POST', '/feedback', { origin: SITE, body: note(world.site.id) });
     assert.equal(written.status, 502);
     assert.equal(((await written.json()) as { error: string }).error, 'store-unavailable');
@@ -353,7 +309,7 @@ describe('a workspace connects Linear (FRU-121)', () => {
   });
 
   it('gives the notes back to the worker when the connector is removed', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = fakeLinear();
     const world = await acme(env);
     const connector = await connected(env, world);
@@ -371,26 +327,19 @@ describe('a workspace connects Linear (FRU-121)', () => {
 
 describe('who may touch a connector (FRU-121)', () => {
   it('lets an owner add and remove one, a member see it, and a guest see nothing of the tracker', async () => {
-    const env = envWith();
+    const env = await envWith();
     fakeLinear();
     const world = await acme(env);
     const connector = await connected(env, world);
     await world.accounts.setDestination(world.workspace.id, world.site.id, { connector, teamId: 'team_design' });
-    closeAccountConnections();
-    const { DatabaseSync } = await import('node:sqlite');
     const member = await world.person('member@acme.dev');
     const guest = await world.person('guest@acme.dev');
-    closeAccountConnections();
-    const database = new DatabaseSync(env.FRUITBACK_ACCOUNTS_PATH as string);
     for (const [person, role] of [
       [member, 'member'],
       [guest, 'guest'],
     ] as const) {
-      database
-        .prepare('INSERT INTO members (workspace_id, account_id, role, created_at) VALUES (?, ?, ?, 1)')
-        .run(world.workspace.id, person.account.id, role);
+      await memberOf(env, world.workspace.id, person.account.id, role);
     }
-    database.close();
     const body = { kind: 'linear', apiKey: LINEAR_KEY };
 
     assert.equal((await call(env, 'GET', `${world.base}/connectors`, { token: member.token })).status, 200);
@@ -416,7 +365,7 @@ describe('who may touch a connector (FRU-121)', () => {
   });
 
   it('refuses a destination through the connector of another workspace', async () => {
-    const env = envWith();
+    const env = await envWith();
     fakeLinear();
     const world = await acme(env);
     const connector = await connected(env, world);
@@ -438,23 +387,19 @@ describe('who may touch a connector (FRU-121)', () => {
   });
 
   it('does not write through the key of another workspace, whatever the row of the site says', async () => {
-    const env = envWith();
+    const env = await envWith();
     const linear = fakeLinear();
     const world = await acme(env);
     const connector = await connected(env, world);
     const other = await world.person('other@else.dev');
     const elsewhere = await world.accounts.createWorkspace('Elsewhere', other.account.id);
     const theirs = await world.accounts.addSite(elsewhere.id, { origin: 'https://else.dev', visibility: 'everyone' });
-    // A row no route can write: the store refuses it. Written by hand, as a damaged file would hold it.
-    closeAccountConnections();
-    const { DatabaseSync } = await import('node:sqlite');
-    const database = new DatabaseSync(env.FRUITBACK_ACCOUNTS_PATH as string);
-    database
-      .prepare(
-        "INSERT INTO site_destinations (site_id, position, connector_id, team_id) VALUES (?, 0, ?, 'team_design')",
-      )
-      .run(theirs.id, connector);
-    database.close();
+    // A row no route can write: the store refuses it. Written by hand, as a damaged database would hold it.
+    await rowsOf(
+      env.database,
+      `INSERT INTO site_destinations (site_id, position, connector_id, team_id)
+         VALUES ('${theirs.id}', 0, '${connector}', 'team_design')`,
+    );
     linear.asked.length = 0;
     const seed = seedFixture();
 
@@ -469,7 +414,7 @@ describe('who may touch a connector (FRU-121)', () => {
   });
 
   it('offers no connector on a worker with no key to encrypt one', async () => {
-    const env = envWith({ FRUITBACK_SECRETS_KEY: undefined });
+    const env = await envWith({ FRUITBACK_SECRETS_KEY: undefined });
     fakeLinear();
     const world = await acme(env);
 
@@ -499,12 +444,12 @@ describe('the key that encrypts the connectors', () => {
   });
 
   it('must differ from the identity secret, and needs the accounts', () => {
-    assert.equal(readConfig(envWith({ FRUITBACK_SECRETS_KEY: SECRET })).ok, false);
-    assert.equal(readConfig(envWith({ FRUITBACK_SECRETS_KEY: 'short' })).ok, false);
-    const alone = envWith();
-    delete alone.FRUITBACK_ACCOUNTS_PATH;
+    assert.equal(readConfig(workerEnv({ FRUITBACK_SECRETS_KEY: IDENTITY_SECRET })).ok, false);
+    assert.equal(readConfig(workerEnv({ FRUITBACK_SECRETS_KEY: 'short' })).ok, false);
+    const alone = workerEnv({ FRUITBACK_SECRETS_KEY: SECRETS_KEY });
+    delete alone.FRUITBACK_DATABASE_URL;
     delete alone.FRUITBACK_CONSOLE_URL;
     assert.equal(readConfig(alone).ok, false);
-    assert.equal(readConfig(envWith()).ok, true);
+    assert.equal(readConfig(workerEnv({ FRUITBACK_SECRETS_KEY: SECRETS_KEY })).ok, true);
   });
 });

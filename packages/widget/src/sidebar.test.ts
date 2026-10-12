@@ -350,3 +350,38 @@ describe('the list before a read answered (FRU-153)', () => {
     assert.equal(text('.fruitback-sidebar-count'), '1 note');
   });
 });
+
+describe('the notes kept for later, in the list (FRU-124)', () => {
+  it('says how many notes went and why the others stay, when a send did both', async () => {
+    const page = mountPage('<main></main>');
+    const host = page.document.createElement('div');
+    page.document.body.append(host);
+    const kept = [{ seed: seedFixture({ id: 'sd_a' }) }, { seed: seedFixture({ id: 'sd_b' }) }];
+    let outcome: { sent: number; failure?: 'wait' } = { sent: 1, failure: 'wait' };
+    const sidebar = createSidebar({
+      document: page.document,
+      host,
+      entries: () => [],
+      drafts: () => kept,
+      onSendDrafts: async () => outcome,
+      onSelect: () => {},
+    });
+    sidebar.open();
+    const send = host.querySelector('[data-fruitback-send-drafts]') as HTMLButtonElement;
+    const said = async () => {
+      send.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      return host.querySelector('[data-fruitback-drafts-sent]')?.textContent;
+    };
+
+    assert.equal(send.textContent, 'Send the 2 notes');
+    assert.equal(await said(), '1 note sent — Too many notes just now. Your text is kept: send it again in a minute.');
+    // Nothing left: the sentence of the failure alone, with no « 0 note sent ».
+    outcome = { sent: 0, failure: 'wait' };
+    assert.equal(await said(), 'Too many notes just now. Your text is kept: send it again in a minute.');
+    outcome = { sent: 2 };
+    assert.equal(await said(), '2 notes sent');
+    sidebar.destroy();
+  });
+});

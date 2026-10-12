@@ -219,8 +219,8 @@ for (const { label, open, skip } of DATABASES) {
       const unknown = await worker.call('/console/auth/email', { body: { email: 'nobody@acme.dev' } });
       assert.deepEqual([known.status, await known.text()], [unknown.status, await unknown.text()]);
 
-      // One of the window is spent above. The path of before counts in the same window.
-      await worker.call('/auth/email', { body: { email: 'alice@acme.dev' } });
+      // One of the window is spent above.
+      assert.equal((await worker.call('/console/auth/email', { body: { email: 'alice@acme.dev' } })).status, 202);
       assert.equal((await worker.call('/console/auth/email', { body: { email: 'alice@acme.dev' } })).status, 202);
       const fourth = await worker.call('/console/auth/email', { body: { email: 'alice@acme.dev' } });
       assert.equal(fourth.status, 429);
@@ -858,6 +858,34 @@ for (const { label, open, skip } of DATABASES) {
       assert.equal(failedAt.searchParams.get('error'), 'access_denied');
     });
 
+    it('starts no sign-in for a navigation that a page of another site made (FRU-211)', async () => {
+      const worker = await workerOn(open);
+      const from = (site: string | undefined) =>
+        worker.call('/console/auth/start/github', {
+          origin: null,
+          headers: site === undefined ? {} : { 'Sec-Fetch-Site': site },
+        });
+
+      // A link or a redirect of another site: the browser says so, and no state is made.
+      const refused = await from('cross-site');
+      assert.equal(refused.status, 302);
+      const to = new URL(refused.headers.get('Location') ?? '');
+      assert.equal(`${to.origin}${to.pathname}`, `${CONSOLE_URL}/setup`);
+      assert.equal(to.searchParams.get('error'), 'started_from_another_site');
+      assert.deepEqual(refused.headers.getSetCookie(), []);
+      assert.equal(refused.headers.get('Cache-Control'), 'no-store');
+      assert.deepEqual(await rowsOf(worker.database, 'SELECT 1 FROM "verification"'), []);
+
+      // The control: the button of the console (the same site), the address typed by hand, and a
+      // browser that sends no such header all start the sign-in, as before.
+      for (const site of ['same-site', 'same-origin', 'none', undefined]) {
+        const started = await from(site);
+        assert.equal(started.status, 302, String(site));
+        assert.equal(new URL(started.headers.get('Location') ?? '').origin, 'https://github.com', String(site));
+        assert.equal(started.headers.getSetCookie().length > 0, true, String(site));
+      }
+    });
+
     it('sends the console a code of better-auth when a sign-in with a provider fails (FRU-148)', async () => {
       const worker = await workerOn(open);
       // The person came back with no cookie of the state: another browser, or a link that is old.
@@ -914,15 +942,24 @@ for (const { label, open, skip } of DATABASES) {
       assert.deepEqual(errors, ['[fruitback] better-auth did not answer: SCHEMA_MISMATCH of a test']);
     });
 
-    it('says which ways the routes of better-auth offer, beside the two booleans of before', async () => {
+    it('says which ways the routes of better-auth offer, and no boolean of the path of before', async () => {
       const worker = await workerOn(open);
       const answer = await worker.call('/auth/providers');
 
-      assert.deepEqual(await answer.json(), {
-        github: false,
-        google: false,
-        betterAuth: { email: true, github: false, google: false },
-      });
+      assert.deepEqual(await answer.json(), { betterAuth: { email: true, github: false, google: false } });
+      // The routes of the path of before are gone (FRU-150).
+      for (const [method, path] of [
+        ['POST', '/auth/email'],
+        ['POST', '/auth/email/redeem'],
+        ['POST', '/console/session/refresh'],
+        ['POST', '/console/session/logout'],
+        ['GET', '/auth/github'],
+        ['GET', '/auth/google'],
+        ['GET', '/auth/github/callback'],
+      ] as const) {
+        const gone = await worker.call(path, method === 'POST' ? { body: {} } : {});
+        assert.equal(gone.status, 404, `${method} ${path}`);
+      }
     });
   });
 
