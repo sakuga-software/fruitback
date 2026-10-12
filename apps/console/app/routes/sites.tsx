@@ -1,5 +1,6 @@
-import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
+import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react';
 import { type Site, type Visibility, call } from '../api';
+import { type Listed, known, listedOf } from '../listed';
 import { Button, Card, Chip, Choice, Field, Problem } from '../ui';
 import { InstallOptions } from './setup';
 import { PageHead, useWorkspace } from './workspace';
@@ -10,32 +11,37 @@ import { useLocale } from '../use-locale';
 export default function Sites() {
   useLocale();
   const { workspace } = useWorkspace();
-  const [sites, setSites] = useState<Site[] | undefined>();
+  const [sites, setSites] = useState<Listed<Site>>('loading');
   const [open, setOpen] = useState<string | undefined>();
   const [url, setUrl] = useState('');
   const [visibility, setVisibility] = useState<Visibility>('members');
   const [problem, setProblem] = useState<string | undefined>();
   const manages = workspace.role === 'owner' || workspace.role === 'admin';
 
-  useEffect(() => {
-    void call<{ sites: Site[] }>('GET', `/console/workspaces/${workspace.id}/sites`).then((answer) =>
-      setSites(answer.ok ? answer.data.sites : []),
-    );
+  // A read that failed says so, and is asked again: it never reads as « No site yet » (FRU-162).
+  const read = useCallback(async () => {
+    setSites('loading');
+    const answer = await call<{ sites: Site[] }>('GET', `/console/workspaces/${workspace.id}/sites`);
+    setSites(listedOf(answer, (data) => data.sites));
   }, [workspace.id]);
+
+  useEffect(() => void read(), [read]);
 
   async function add(event: FormEvent) {
     event.preventDefault();
     setProblem(undefined);
     const added = await call<Site>('POST', `/console/workspaces/${workspace.id}/sites`, { url, visibility });
     if (!added.ok) return setProblem(msg('Paste the full address of the site, starting with https://.'));
-    setSites((current) => [...(current ?? []).filter((site) => site.id !== added.data.id), added.data]);
+    // On a list that was never read, the site alone would hide the others: read them all.
+    if (typeof sites === 'string') void read();
+    else setSites((current) => [...(known(current) ?? []).filter((site) => site.id !== added.data.id), added.data]);
     setOpen(added.data.id);
     setUrl('');
   }
 
   async function remove(site: Site) {
     const removed = await call('DELETE', `/console/workspaces/${workspace.id}/sites/${site.id}`);
-    if (removed.ok) setSites((current) => (current ?? []).filter((each) => each.id !== site.id));
+    if (removed.ok) setSites((current) => (known(current) ?? []).filter((each) => each.id !== site.id));
   }
 
   return (
@@ -82,6 +88,7 @@ export default function Sites() {
           manages={manages}
           onToggle={(site) => setOpen(open === site.id ? undefined : site.id)}
           onRemove={(site) => void remove(site)}
+          onRetry={() => void read()}
           install={(site) => <InstallOptions workspace={workspace} site={site} />}
         />
       </Card>
@@ -95,17 +102,30 @@ function SiteList({
   manages,
   onToggle,
   onRemove,
+  onRetry,
   install,
 }: {
-  sites: Site[] | undefined;
+  sites: Listed<Site>;
   open: string | undefined;
   manages: boolean;
   onToggle: (site: Site) => void;
   onRemove: (site: Site) => void;
+  onRetry: () => void;
   install: (site: Site) => ReactNode;
 }) {
   useLocale();
-  if (sites === undefined) return <p className="p-5 text-sm text-muted">{t('Loading…')}</p>;
+  if (sites === 'loading') return <p className="p-5 text-sm text-muted">{t('Loading…')}</p>;
+  if (sites === 'failed')
+    return (
+      <div className="flex flex-wrap items-center gap-3 p-5">
+        <p role="alert" className="flex-1 text-sm text-muted">
+          {t('Fruitback did not answer. Your sites are not lost.')}
+        </p>
+        <Button tone="outline" onClick={onRetry}>
+          {t('Try again')}
+        </Button>
+      </div>
+    );
   if (sites.length === 0)
     return <p className="p-5 text-sm text-muted">{t('No site yet. Paste the address of the one you review.')}</p>;
 

@@ -1,6 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { type Connector, type Delivery, type Destination, type Site, type Team, call } from '../api';
+import { type Listed, known, listedOf } from '../listed';
 import { Button, Card, Choice, Field, Problem } from '../ui';
 import { PageHead, useWorkspace } from './workspace';
 import { locale, msg, t } from '../i18n';
@@ -85,7 +86,9 @@ export default function Connectors() {
   const [search, setSearch] = useSearchParams();
   const [leaving, setLeaving] = useState(false);
   const [problem, setProblem] = useState<string | undefined>(LINEAR_RETURNS[search.get('linear') ?? '']);
-  const [sites, setSites] = useState<Site[]>([]);
+  const [sites, setSites] = useState<Listed<Site>>('loading');
+  // A read that failed is not an empty list (FRU-162): no « 0 site », and a way to read again.
+  const [unread, setUnread] = useState(false);
   const [selected, setSelected] = useState<string | undefined>();
   const [adding, setAdding] = useState<Connector['kind'] | undefined>();
 
@@ -94,11 +97,16 @@ export default function Connectors() {
       call<{ connectors: Connector[]; available: boolean; linearOAuth?: boolean }>('GET', `${base}/connectors`),
       call<{ sites: Site[] }>('GET', `${base}/sites`),
     ]);
-    setConnectors(listed.ok ? listed.data.connectors : []);
-    setAvailable(listed.ok ? listed.data.available : true);
-    setOauth(listed.ok && listed.data.linearOAuth === true);
+    // A failed read keeps what the screen already showed, and says it could not read.
+    if (listed.ok) {
+      setConnectors(listed.data.connectors);
+      setAvailable(listed.data.available);
+      setOauth(listed.data.linearOAuth === true);
+    }
+    setUnread(!listed.ok || !placed.ok);
 
-    setSites(placed.ok ? placed.data.sites : []);
+    const read = listedOf(placed, (data) => data.sites);
+    setSites((current) => (read === 'failed' && typeof current !== 'string' ? current : read));
 
     return listed.ok ? listed.data.connectors : [];
   }, [base]);
@@ -127,9 +135,10 @@ export default function Connectors() {
   }
 
   const open = connectors?.find((connector) => connector.id === selected);
-  const countOf = (connector: Connector): number =>
-    sites.filter((site) => site.destination?.connector === connector.id).length;
-  const kept = sites.filter((site) => site.destination === undefined).length;
+  const placed = known(sites);
+  /** « · 3 sites », only from a list that was read. */
+  const countOf = (keep: (site: Site) => boolean): string =>
+    placed === undefined ? '' : ` · ${siteCount(placed.filter(keep).length)}`;
 
   return (
     <>
@@ -140,6 +149,16 @@ export default function Connectors() {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div>
           <h2 className="mb-2 text-sm font-semibold text-muted">{t('Connected')}</h2>
+          {unread ? (
+            <div className="mb-3 flex flex-wrap items-center gap-3">
+              <p role="alert" className="flex-1 text-sm text-muted">
+                {t('Fruitback did not answer. The sources and their sites could not be read.')}
+              </p>
+              <Button tone="outline" onClick={() => void reload()}>
+                {t('Try again')}
+              </Button>
+            </div>
+          ) : null}
           <div className="mb-8 space-y-2">
             <Card>
               <div className="flex items-center gap-3 px-4 py-3.5">
@@ -147,7 +166,8 @@ export default function Connectors() {
                 <span className="flex-1">
                   <span className="block text-[15px] font-semibold">{t('Fruitback')}</span>
                   <span className="block text-xs text-muted">
-                    {t('The notes stay in this workspace')} · {siteCount(kept)}
+                    {t('The notes stay in this workspace')}
+                    {countOf((site) => site.destination === undefined)}
                   </span>
                 </span>
                 <Working />
@@ -167,7 +187,8 @@ export default function Connectors() {
                 <span className="flex-1">
                   <span className="block text-[15px] font-semibold">{t(KINDS[connector.kind].name)}</span>
                   <span className="block text-xs text-muted">
-                    {sourceLine(connector)} · {siteCount(countOf(connector))}
+                    {sourceLine(connector)}
+                    {countOf((site) => site.destination?.connector === connector.id)}
                   </span>
                 </span>
                 <Working connected={connector.kind === 'rest'} attention={connector.attention !== undefined} />
@@ -289,7 +310,7 @@ export default function Connectors() {
 type PanelProps = {
   base: string;
   connector: Connector;
-  sites: Site[];
+  sites: Listed<Site>;
   manages: boolean;
   onChanged: () => Promise<void>;
   onRemoved: () => void;
@@ -517,7 +538,7 @@ function RestDetail({
 }: {
   base: string;
   connector: Connector;
-  sites: Site[];
+  sites: Listed<Site>;
   manages: boolean;
   onChanged: () => Promise<void>;
   onRemoved: () => void;
@@ -569,9 +590,9 @@ function RestDetail({
       </div>
       <div className="px-5 py-4">
         <h3 className="mb-2 text-sm font-semibold">{t('Which sites send their notes there')}</h3>
-        {sites.length === 0 ? <p className="text-sm text-muted">{t('This workspace has no site yet.')}</p> : null}
+        <SitesState sites={sites} />
         <ul className="space-y-2">
-          {sites.map((site) => {
+          {(known(sites) ?? []).map((site) => {
             const elsewhere = site.destination !== undefined && site.destination.connector !== connector.id;
 
             return (
@@ -660,6 +681,15 @@ function sourceLine(connector: Connector): string {
   return t('Key of {person}', { person: personOf(connector) });
 }
 
+/** What the list of sites of a panel says before its rows: loading, not read, or none (FRU-162). */
+function SitesState({ sites }: { sites: Listed<Site> }) {
+  useLocale();
+  if (sites === 'loading') return <p className="text-sm text-muted">{t('Loading…')}</p>;
+  if (sites === 'failed') return <p className="text-sm text-muted">{t('Fruitback did not answer. Try again.')}</p>;
+
+  return sites.length === 0 ? <p className="text-sm text-muted">{t('This workspace has no site yet.')}</p> : null;
+}
+
 function siteCount(count: number): string {
   return count === 1 ? t('{count} site', { count }) : t('{count} sites', { count });
 }
@@ -675,7 +705,7 @@ function Detail({
 }: {
   base: string;
   connector: Connector;
-  sites: Site[];
+  sites: Listed<Site>;
   manages: boolean;
   onChanged: () => Promise<void>;
   onRemoved: () => void;
@@ -737,9 +767,9 @@ function Detail({
           </div>
         )}
         <h3 className="mb-2 text-sm font-semibold">{t('Where each site sends its notes')}</h3>
-        {sites.length === 0 ? <p className="text-sm text-muted">{t('This workspace has no site yet.')}</p> : null}
+        <SitesState sites={sites} />
         <ul className="space-y-2">
-          {sites.map((site) => {
+          {(known(sites) ?? []).map((site) => {
             const elsewhere = site.destination !== undefined && site.destination.connector !== connector.id;
             const current =
               site.destination === undefined || elsewhere
