@@ -26,13 +26,13 @@ export type Worker = {
  * Starts a worker of the Cloud on PGlite, in a process of its own: `cloud-worker.fixture.ts` says
  * why it is not imported here.
  */
-export async function cloudWorker(options: { betterAuth: boolean }): Promise<Worker> {
+export async function cloudWorker(): Promise<Worker> {
   const child: ChildProcess = spawn(process.execPath, ['src/cloud-worker.fixture.ts'], {
     // Relative to the root of the repository, where Playwright runs: a spec has no `import.meta.url`.
     cwd: 'apps/worker',
     env: {
       ...process.env,
-      CLOUD_WORKER: JSON.stringify({ ...options, consoleUrl: CONSOLE, publicUrl: WORKER_ORIGIN }),
+      CLOUD_WORKER: JSON.stringify({ consoleUrl: CONSOLE, publicUrl: WORKER_ORIGIN }),
     },
     stdio: ['ignore', 'pipe', 'inherit', 'ipc'],
   });

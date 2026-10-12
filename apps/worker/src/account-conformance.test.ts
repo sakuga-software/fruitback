@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { accountCases } from './account-conformance.fixture.ts';
 import type { AccountStore } from './accounts.ts';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
-import { closeAccountConnections, createSqliteAccountStore } from './accounts-sqlite.ts';
+import { closeAccountConnections, createSqliteAccountStore } from './accounts-sqlite.fixture.ts';
 import type { ClientMap } from './clients.ts';
 import {
   type FileStoreModule,
@@ -48,7 +48,7 @@ const SUBJECTS: Subject<AccountStore>[] = [
 
 for (const subject of SUBJECTS) describeConformance('AccountStore', accountCases, subject);
 
-/** One change to `accounts-sqlite.ts`, or one store around it, for each case: the case must fail. */
+/** One change to `accounts-sqlite.fixture.ts`, or one store around it, for each case: the case must fail. */
 const VIOLATIONS: Violation<AccountStore>[] = [
   {
     breaks: 'makes one account of two providers that prove the same address',
@@ -420,56 +420,10 @@ const VIOLATIONS: Violation<AccountStore>[] = [
       to: 'WHERE COALESCE(last_at, created_at) < ?',
     },
   },
-  {
-    breaks: 'spends a sign-in link once, and answers its address',
-    by: 'spends a link each time it is asked',
-    replace: { from: 'AND spent_at IS NULL AND expires_at > ?', to: 'AND expires_at > ?' },
-  },
-  {
-    breaks: 'refuses a sign-in link at its expiry, and after',
-    by: 'never reads the expiry',
-    replace: { from: 'AND spent_at IS NULL AND expires_at > ?', to: 'AND spent_at IS NULL AND ? IS NOT NULL' },
-  },
-  {
-    breaks: 'refuses a sign-in link at its expiry, and after',
-    by: 'still takes a link at the instant of its expiry',
-    replace: { from: 'AND spent_at IS NULL AND expires_at > ?', to: 'AND spent_at IS NULL AND expires_at >= ?' },
-  },
-  {
-    breaks: 'gives one sign-in to two calls that spend one link at the same moment',
-    by: 'reads the link, waits, then marks it spent',
-    wrap: (real) => {
-      const links = new Map<string, { email: string; expiresAt: number }>();
-      const spent = new Set<string>();
-
-      return {
-        ...real,
-        async createEmailLink(link) {
-          links.set(link.codeHash, link);
-        },
-        async spendEmailLink(codeHash, now) {
-          const link = links.get(codeHash);
-          if (link === undefined || spent.has(codeHash) || link.expiresAt <= now) return undefined;
-          await turn();
-          spent.add(codeHash);
-
-          return link.email;
-        },
-      };
-    },
-  },
-  {
-    breaks: 'keeps a link that can still be spent when another one is made',
-    by: 'removes every link when it makes one',
-    replace: {
-      from: 'DELETE FROM email_links WHERE expires_at <= ? OR spent_at IS NOT NULL',
-      to: 'DELETE FROM email_links WHERE ? IS NOT NULL',
-    },
-  },
 ];
 
 describeControls('AccountStore', accountCases, VIOLATIONS, SQLITE, async (change) => {
-  const mutant = await mutatedModule('accounts-sqlite.ts', change);
+  const mutant = await mutatedModule('accounts-sqlite.fixture.ts', change);
   const subject = onFile<AccountStore>('a changed SQLite account store', 'createSqliteAccountStore', () => ({
     create: mutant.module.createSqliteAccountStore as FileStoreModule<AccountStore>['create'],
     close: mutant.module.closeAccountConnections as FileStoreModule<AccountStore>['close'],
@@ -486,6 +440,9 @@ describeControls('AccountStore', accountCases, VIOLATIONS, SQLITE, async (change
 
 describe('the AccountStore conformance suite', () => {
   it('runs for every implementation the worker exports', () => {
-    assert.deepEqual([...new Set(SUBJECTS.map((subject) => subject.factory))].sort(), factoriesOf('AccountStore'));
+    // The store on a file is a fixture since FRU-150: the reference of the controls below, and what
+    // makes a file for `migrate-to-postgres`. The worker exports the store on PostgreSQL only.
+    const exported = SUBJECTS.filter((subject) => subject !== SQLITE).map((subject) => subject.factory);
+    assert.deepEqual([...new Set(exported)].sort(), factoriesOf('AccountStore'));
   });
 });

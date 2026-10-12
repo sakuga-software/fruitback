@@ -227,9 +227,8 @@ relayed write, no stored token appears in anything the page's JavaScript can rea
 ### What a session protects, and what it does not
 
 The worker can hold sessions for the browser extension. An operator mints a pairing code for a named
-person; redeeming it opens a session. **This table is the session of the extension**, and of the
-console when it signs in by the path of before. A console that signs in with better-auth (FRU-147)
-holds another kind of session, which does not rotate: see
+person; redeeming it opens a session. **This table is the session of the extension.** The console
+holds another kind of session, a cookie of better-auth (FRU-147), which does not rotate: see
 [Signing in to the console with better-auth](#signing-in-to-the-console-with-better-auth-fru-147).
 
 |               |                                                            |
@@ -464,28 +463,24 @@ surface, so:
 It is a small amount of cryptography and it is reviewed as such. If you find a flaw in it, that is
 squarely a vulnerability and we want to hear about it.
 
-### With accounts, the worker key opens the console (FRU-203)
+### With accounts, the worker key opened the console (FRU-203)
 
-`FRUITBACK_IDENTITY_SECRET` signs the access token of every session. On a worker with accounts, the
-routes of the console take a token signed with it, with the id of an account in `sub`, for a
-console session of that account. **Whoever holds the key signs one for any account**, with no
-sign-in, and the id of an account is on every note its person leaves. Nothing in the token says
-that the worker minted it, and a claim that did would not help: the holder of the key writes any
-claim. test:`takes a token that the holder of the worker key signed for the console session of its sub`.
+`FRUITBACK_IDENTITY_SECRET` signs the access token of every session of an extension. Until FRU-150
+the routes of the console took a token signed with it too, with the id of an account in `sub`, for
+a console session of that account: whoever held the key signed one for any account, with no
+sign-in. **That is closed.** A console session is the cookie of better-auth, which this key does
+not sign, and no route of the console reads a token:
+test:`takes no token that the holder of the worker key signed: a console session is the cookie (FRU-150)`.
 
-**The condition that protects the console is that no site holds this key.** With accounts no site
-needs it: a site is a row the console wrote, and it signs nothing. A worker that served one site
-with this key, and then got accounts, must change it. Changing it refuses every token of the old
-key at once and ends no session:
-test:`refuses every token of the old key once the key changed, and a session that was open goes on at its next refresh`.
-The steps are in [docs/self-hosting.md](docs/self-hosting.md#change-fruitback_identity_secret). The
-cookie of better-auth is not signed with this key, and once the console signs in with that cookie
-only (FRU-150), no route of the console reads a token.
+**The key still signs the token of an extension, so no site holds it on a worker with accounts.**
+With accounts no site needs it: a site is a row the console wrote, and it signs nothing. A worker
+that served one site with this key, and then got accounts, must change it. The steps are in
+[docs/self-hosting.md](docs/self-hosting.md#change-fruitback_identity_secret).
 
 ### The accounts, and what decides who reads a site (FRU-96)
 
-With `FRUITBACK_ACCOUNTS_PATH` the clients of the worker are the sites the console wrote, read from
-that file on every request. A site is a client of one workspace, so a session reaches it only through
+With `FRUITBACK_DATABASE_URL` the clients of the worker are the sites the console wrote, read from
+that database on every request. A site is a client of one workspace, so a session reaches it only through
 the `ws` check above. A site read by `members` is `read: 'authenticated'`; one read by `everyone` is
 `public`, with the exposure that section describes. **A worker with accounts and no site serves no
 client**: an empty map is not the absence of a map, which would answer every page to anybody. The
@@ -554,39 +549,33 @@ this paragraph is a password of 32 random characters or more, which is what the 
 holder of its access token, while that person is still a member: the extension turns such a site on in
 one click. It answers an origin, an id and a visibility per site, and the language of the account
 (FRU-131), and nothing a member cannot already read in the console. The extension sends that language
-to a page where it mounts the widget: it is a locale tag, and the page can read it. A console session names no workspace, and gets `401`. The entry the extension
+to a page where it mounts the widget: it is a locale tag, and the page can read it. The cookie of the console is not read here, and gets `401`. The entry the extension
 stores is team mode, so the relay's refusals all apply: the widget it mounts calls through the relay,
 and the page never holds the token.
 
 ### Signing in to the console (FRU-98)
 
-`POST /auth/email` sends a link to the address it is given, and answers the same whether that address
-has an account or not. It is limited to 3 links per address per 15 minutes, on top of the limit per IP
-of every route. The link carries 256 random bits after a `#`, so no server and no proxy log sees it;
-the accounts file keeps a SHA-256 digest of it, never the code. A link works once, for 15 minutes,
-and the first redemption wins.
-
-Opening the link proves the address, and only then does it become an account. The worker then mints a
-pairing code for that account and spends it at once: the console's session is an ordinary session,
-with the same rotation and the same replay detection. **Its refresh token is a cookie the console's
-script cannot read** (`HttpOnly`, `Secure`, `SameSite=Strict`, on `/console/session` only), and the
-console routes answer one origin, `FRUITBACK_CONSOLE_URL`, with credentials. A script injected into the
-console can use the session while the page is open; it cannot carry the refresh token away. A
-console session names no workspace, so it reads no site.
-
-This path stays beside the one below until FRU-150 removes it: a console of before keeps signing in.
+The console signs in with better-auth, and with nothing else (FRU-150): the section below. The
+routes of before (`POST /auth/email`, `/auth/email/redeem`, `/auth/github`, `/auth/google`,
+`/console/session/refresh`, `/console/session/logout`) answer `404`:
+test:`says which ways the routes of better-auth offer, and no boolean of the path of before`. The
+console API reads no `Authorization` header:
+test:`refuses GET /console/me to the token of an extension`. What they held is gone with them: the access token the console kept in memory, and the
+refresh token that rotated in a cookie. The table `email_links` of the links of before stays in the
+database, and nothing reads or writes it.
 
 ### Signing in to the console with better-auth (FRU-147)
 
-With `FRUITBACK_AUTH_SECRET` the worker also signs the console in with better-auth, under
-`/console/auth/`. **A session of the console is then one token that does not rotate**, and that is a
-step back from the path above, written and accepted (FRU-139, point 3 of 2026-10-11):
+With `FRUITBACK_AUTH_SECRET` the worker signs the console in with better-auth, under
+`/console/auth/`. Without it nobody signs in. **A session of the console is one token that does not
+rotate**, and that is a step back from the sign-in of before, whose refresh token rotated, written
+and accepted (FRU-139, point 3 of 2026-10-11):
 
 - **It lasts 7 days, and each day it is used moves its end by 7 days.** It is a cookie that no
   script reads: `__Secure-fruitback.session_token`, `HttpOnly`, `Secure`, `SameSite=Strict`,
   `Path=/console`. **It never rotates, so a stolen cookie is good until it ends or is ended, and
-  nothing detects the theft**: there is no second token to replay. The refresh token of the path
-  above rotates, and a replay ends its chain.
+  nothing detects the theft**: there is no second token to replay. The session of an extension
+  still rotates, and a replay ends its chain.
 - **The cookie is renewed with the session** (FRU-208). When a call of the console renews the
   session, the worker sets the cookie again on its answer, with the same token and attributes and
   7 days more. Until then the row lived on and the cookie of the browser ended 7 days after the
@@ -606,8 +595,8 @@ next call, and a session that was ended`. A session is named by its id, never by
   closed to a request: test:`opens a session with a link asked for, then spent, and the token reaches
 the worker in no address`. A link works once, for 15 minutes, and two calls at the same moment open
   one session (test:`opens one session for a link spent twice, or by two calls at the same moment`).
-  It answers the same with or without an account, and the 3 links per address per 15 minutes are
-  counted with the path above. The redeem hands the browser the cookie, and not the answer of
+  It answers the same with or without an account, and is limited to 3 links per address per
+  15 minutes, on top of the limit per IP of every route. The redeem hands the browser the cookie, and not the answer of
   better-auth, which holds the token of the session. **It answers the console only**, and not a
   request with no `Origin`: another page that spent a link of its own in this browser would sign the
   person in to its account (test:`spends a link for the console only, and not for a request with no
@@ -626,22 +615,19 @@ the cookie from another origin, or from none, and takes it from the console`. **
   checks nothing when the request has no cookie. No route is excepted: GitHub and Google come
   back by a `GET`, and a provider that comes back by a form would need its route named.
   test:`lists every served route that is not only read` names those routes, and one case for each
-  refuses it with no `Origin`, with the `Referer` of the console, and with the `Referer` of the worker. A call with the token of before in `Authorization` is not
-  a cookie, and is checked as before.
-- **« Sign out » ends both sessions of the browser, or says that it did not** (FRU-204). A browser
-  that signed in before the worker served better-auth still holds the refresh cookie of the path of
-  before, good for 30 days, and the worker takes it for as long as it serves that path. The console
-  ends it with the cookie of better-auth, and stays on « My account » with « You are still signed
-  in » when the worker did not confirm one of the two. **What remains: a session of before in a
-  browser where nobody presses « Sign out »** goes on until its 30 days, or until the path of before
-  is removed (FRU-150).
+  refuses it with no `Origin`, with the `Referer` of the console, and with the `Referer` of the
+  worker. No call opens these routes with a token in
+  `Authorization` (FRU-150).
+- **« Sign out » ends the session, or says that it did not** (FRU-204). The console stays on « My
+  account » with « You are still signed in » when the worker did not confirm. The refresh cookie
+  of the path of before, which a browser could hold for 30 days, opens nothing since FRU-150: no
+  route reads it.
 - **The console holds no token** (FRU-148): no access token in its memory, nothing in `localStorage`
   or `sessionStorage`, and a cookie that `document.cookie` does not show. A script injected into the
   console can call the worker while the page is open, as before; it has nothing to carry away.
-  **The condition: the worker said that it serves better-auth**, in `GET /auth/providers`. A worker
-  that answers with no `betterAuth` is a worker of before, and the console holds the access token
-  of before. A worker that refuses the question (`429`, `5xx`) or does not answer said nothing, and
-  the console then takes neither path and holds nothing (FRU-205).
+  **With no condition since FRU-150**: the console has one path. Until then a worker that answered
+  `GET /auth/providers` with no `betterAuth` was a worker of before, and the console held its
+  access token (FRU-205 kept a refusal of that question from being read as one).
 - **A sign-in with a provider starts by a navigation** to `GET /console/auth/start/<provider>`, which
   answers a redirect to the provider and the cookie of the state. It changes nothing by itself: the
   person still consents at the provider, and comes back with a state that only this browser holds.
@@ -744,9 +730,9 @@ caller writes`. Left alone, better-auth takes an `X-Forwarded-For` that holds on
 A workspace can hand the worker the API key of its Linear, and the notes of the sites that choose it
 go there. **This is the first secret of a customer that the Cloud holds.**
 
-- The accounts file keeps the key encrypted (AES-256-GCM) with `FRUITBACK_SECRETS_KEY`, which stays
-  in the environment. A copy of the file alone opens nothing; a copy of the file **and** of the
-  environment opens every key. A value changed in the file does not decrypt.
+- The database keeps the key encrypted (AES-256-GCM) with `FRUITBACK_SECRETS_KEY`, which stays
+  in the environment. A copy of the database alone opens nothing; a copy of the database **and** of
+  the environment opens every key. A value changed in the database does not decrypt.
 - No route answers a key, in the clear or encrypted. The console sends it once, and the worker asks
   Linear who it belongs to before it keeps anything: a refused key is never stored.
 - The worker sends the key to Linear on every write and read of a site that chose it. It cannot be a
@@ -830,7 +816,7 @@ chose it. The notes stay in the worker: this is one more copy, sent out.
 - The address and the secret are kept like a tracker key: encrypted with `FRUITBACK_SECRETS_KEY`,
   and answered by no route. A secret the worker made is answered once, when the connector is made.
   The console shows the host of the address only: its path and query can hold a token.
-- **A note that waits to be sent is kept in the accounts file, in the clear**, as the request body.
+- **A note that waits to be sent is kept in the database of the accounts, in the clear**, as the request body.
   It goes when it arrives. One that never arrives is given up after seven attempts, and removed
   30 days after its last attempt. The route that lists the waiting deliveries answers no body.
 - The reporter is answered when the note is kept. A receiver that is down, slow or hostile costs the
@@ -841,18 +827,11 @@ chose it. The notes stay in the worker: this is one more copy, sent out.
 
 ### Signing in with GitHub (FRU-97)
 
-An OAuth App, the authorization code, `state` and PKCE (S256). The worker asks only for the identity
-(`read:user user:email`), and **GitHub names the person, never the browser**: the account is the
-primary address GitHub says it verified. An unverified address creates no account and joins none,
-since it would join the account of whoever owns it. The `state` is bound to the browser that left by
-an `HttpOnly` cookie on the callback path (`SameSite=Lax`, because GitHub sends the person back with a
-top-level navigation from another site), must be one this worker issued, and is spent once, within ten
-minutes. The client secret never leaves the worker. GitHub's token is used for these two reads and
-kept nowhere. The session that follows is a console session, as for a link.
-
-**Through better-auth** (FRU-147), with a second OAuth App (`FRUITBACK_AUTH_GITHUB_OAUTH`, callback
-`/console/auth/callback/github`): the same code, `state` and PKCE, and the state in an encrypted
-cookie (`SameSite=Lax`, `Path=/console/auth`, ten minutes). better-auth takes the address of the
+Through better-auth (FRU-147), with an OAuth App (`FRUITBACK_AUTH_GITHUB_OAUTH`, callback
+`/console/auth/callback/github`): the authorization code, `state` and PKCE, and the state in an
+encrypted cookie (`SameSite=Lax`, `Path=/console/auth`, ten minutes). The sign-in of before, with
+its own App and `FRUITBACK_GITHUB_OAUTH`, is gone (FRU-150): the worker refuses to start with that
+variable. better-auth takes the address of the
 profile, or the primary one when the profile shows none, and calls it verified only when GitHub says
 so. **An address that GitHub did not verify creates no account and joins none**: better-auth links no
 such address to an account, and the worker refuses the account that better-auth would otherwise
@@ -863,38 +842,37 @@ No provider is in `trustedProviders`. No token of GitHub and no picture is kept.
 
 ### Signing in with Google (FRU-135)
 
-The same steps as GitHub, in the same code: the authorization code, a `state` bound to the browser
-by a cookie and spent once, and PKCE. Only the identity is asked for (`openid email profile`).
+Through better-auth too (FRU-147), with the client of `FRUITBACK_GOOGLE_OAUTH` and the callback
+`/console/auth/callback/google`: the authorization code, a `state` and PKCE, as for GitHub. Only the
+identity is asked for (`openid email profile`).
 
-- The worker asks Google who the token is for, at Google's own address over TLS. It reads no
-  identity from a token by itself, so it checks no signature of one.
-- **An address is used only when Google says it is verified.** Another one makes no account and
-  joins none.
+- **better-auth reads the identity from the id token** that the token endpoint of Google answers,
+  over TLS, and checks no signature of it: the token comes from Google itself, in the answer to a
+  request of the worker.
+- **An address is used only when Google says it is verified** (`email_verified`). Another one makes
+  no account and joins none: test:`creates no account for an address that Google did not
+verify`.
 - A person who signs in with Google, with GitHub or with a link for the same verified address is one
   account. That is the rule of FRU-97, and it means the account is as safe as the weakest of the
   providers that can prove the address.
-- `GET /auth/providers` answers two booleans to the console, and no client id. With better-auth on,
-  it also says which ways its routes offer (`betterAuth`), and still no client id.
-- **Through better-auth** (FRU-147), the same client with a second callback,
-  `/console/auth/callback/google`. **better-auth reads the identity from the id token** that the token
-  endpoint of Google answers, over TLS, and checks no signature of it: the token comes from Google
-  itself, in the answer to a request of the worker. An address that Google did not verify
-  (`email_verified`) creates no account: test:`creates no account for an address that Google did not
-verify`.
+- `GET /auth/providers` answers the console which ways the routes of better-auth offer
+  (`betterAuth`), and no client id. A worker with no accounts, or with no `FRUITBACK_AUTH_SECRET`,
+  answers `{}`.
 
 ### What the console may change, and who (FRU-99)
 
-The console's routes under `/console/` take the access token of a console session, and read the role
-of its account in the workspace **on every call**, from the accounts file: a token says who, never
+The console's routes under `/console/` take the cookie of a console session, and read the role
+of its account in the workspace **on every call**, from the database: a session says who, never
 what they may do, so a member removed a minute ago is refused at once. `can(role, action)` in
 `accounts.ts` is the one table. A workspace somebody is not a member of answers `404`, like one that
 does not exist. Adding a site keeps the origin of the pasted address and nothing else.
 
-**The access token of an extension opens none of these routes** (FRU-202). It is signed with the
-same worker key as the token of a console session, and only the `ws` claim tells them apart: a
-token with a `ws` is refused with `401`, in its own workspace too. Until then, the 10-minute token
-of an extension paired for one workspace read and changed every workspace of the person, with the
-role of the person, and could mint a pairing code, so a new 30-day session, in any of them.
+**The access token of an extension opens none of these routes** (FRU-202). Until FRU-150 the
+console held a token signed with the same worker key, and only the `ws` claim told the two apart;
+before FRU-202, the 10-minute token of an extension paired for one workspace read and changed every
+workspace of the person, with the role of the person, and could mint a pairing code, so a new
+30-day session, in any of them. Since FRU-150 these routes read no token at all: any
+`Authorization` header is answered `401`, in the workspace of the extension too.
 test:`refuses POST connect to the token of an extension, in another workspace and in its own`, and
 one test for each other route.
 

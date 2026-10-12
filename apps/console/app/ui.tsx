@@ -89,7 +89,7 @@ export function WideButton({
       fullWidth
       isDisabled={disabled}
       {...(onClick === undefined ? {} : { onPress: onClick })}
-      className="font-semibold"
+      className="wide-button font-semibold"
     >
       {children}
     </HeroButton>
