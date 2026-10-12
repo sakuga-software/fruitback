@@ -48,7 +48,7 @@ test.describe('an invited reviewer (FRU-104)', () => {
   const contexts: BrowserContext[] = [];
 
   test.beforeEach(async () => {
-    worker = await cloudWorker({ betterAuth: true });
+    worker = await cloudWorker();
   });
   test.afterEach(async () => {
     for (const context of contexts.splice(0)) {

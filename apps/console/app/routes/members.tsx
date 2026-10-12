@@ -1,14 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
-import {
-  type Invitation,
-  type Member,
-  ORGANIZATION,
-  type Role,
-  call,
-  invitationLink,
-  sendsMail,
-  servesBetterAuth,
-} from '../api';
+import { type Invitation, type Member, ORGANIZATION, type Role, call, invitationLink, sendsMail } from '../api';
 import { Confirm } from '../confirm';
 import { type Listed, edited, listedOf } from '../listed';
 import { DID_NOT_ANSWER, copyText, problemOf } from '../problems';
@@ -49,14 +40,13 @@ const MEMBER_PROBLEMS: Readonly<Record<string, string>> = {
  * Who belongs to the workspace, and who is invited (design/boards/5-workspace.png, FRU-104).
  *
  * The lists come from the organization plugin of better-auth, through the worker. A guest reads only
- * their own row: the worker refuses them the list (FRU-149). A worker of before has no list.
+ * their own row: the worker refuses them the list (FRU-149).
  */
 export default function Members() {
   useLocale();
   const { me, workspace } = useWorkspace();
   const manages = workspace.role === 'owner' || workspace.role === 'admin';
   const reads = workspace.role !== 'guest';
-  const [served, setServed] = useState<boolean | undefined>();
   const [mailed, setMailed] = useState(false);
   const [members, setMembers] = useState<Listed<Member>>('loading');
   const [invitations, setInvitations] = useState<Listed<Invitation>>('loading');
@@ -70,10 +60,8 @@ export default function Members() {
   const query = `organizationId=${encodeURIComponent(workspace.id)}`;
 
   const read = useCallback(async () => {
-    const serves = await servesBetterAuth();
-    setServed(serves);
     setMailed(await sendsMail());
-    if (!serves || !reads) return;
+    if (!reads) return;
     setMembers('loading');
     const listed = await call<{ members: Member[] }>('GET', `${base}/list-members?${query}`);
     setMembers(listedOf(listed, (data) => data.members));
@@ -161,7 +149,7 @@ export default function Members() {
   return (
     <>
       <PageHead title={t('Members')} lead={t('Who can see and leave feedback, and who can change the workspace.')} />
-      {manages && served === true ? (
+      {manages ? (
         <form onSubmit={invite} className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end">
           <div className="flex-1">
             <Field
@@ -191,12 +179,7 @@ export default function Members() {
           </Button>
         </form>
       ) : null}
-      {manages && served === false ? (
-        <p className="mb-4 text-xs text-muted">
-          {t('Invitations come after the beta. Until then, each person signs in and makes their own workspace.')}
-        </p>
-      ) : null}
-      {manages && served === true ? (
+      {manages ? (
         <p className="mb-4 text-xs text-muted">
           {t('The person signs in with that address, and joins. Guests, who see one site only, come later.')}
         </p>
@@ -216,8 +199,8 @@ export default function Members() {
           <span className="hidden sm:block" />
         </div>
         <Rows
-          members={served === true && reads ? members : [self]}
-          invitations={manages && served === true ? invitations : []}
+          members={reads ? members : [self]}
+          invitations={manages ? invitations : []}
           me={me.account.id}
           manages={manages}
           stuck={stuck}

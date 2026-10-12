@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { type AccountStore, can } from './accounts.ts';
-import { type GitHubOAuth, parseGitHubOAuth } from './github-oauth.ts';
+import { type OAuthClient, parseOAuthClient } from './oauth-client.ts';
 import type { Kv } from './kv.ts';
 import { listLinearTeams } from './linear.ts';
 import { open, seal } from './secrets.ts';
@@ -20,8 +20,8 @@ import { StoreError } from './store.ts';
  */
 
 /** `FRUITBACK_LINEAR_OAUTH`: the client id and the client secret of the application, joined by a colon. */
-export type LinearOAuth = GitHubOAuth;
-export const parseLinearOAuth = parseGitHubOAuth;
+export type LinearOAuth = OAuthClient;
+export const parseLinearOAuth = parseOAuthClient;
 
 export const LINEAR_START = '/auth/linear/start';
 export const LINEAR_CALLBACK = '/auth/linear/callback';

@@ -1,10 +1,17 @@
 import { type AccountStore, type Workspace, can, mailboxOf } from './accounts.ts';
 import { newId, roleOf } from './account-rows.ts';
 import { AUTH_BASE_PATH, type Auth, INVITATION_SECONDS, INVITER_GONE } from './auth.ts';
-import { type AuthRouteContext, AuthUnavailable, headersFor, mutationAllowed, sessionOfCookie } from './auth-routes.ts';
+import {
+  type AuthRouteContext,
+  AuthUnavailable,
+  EMAIL_LINKS_PER_WINDOW,
+  EMAIL_LINK_WINDOW_MS,
+  headersFor,
+  mutationAllowed,
+  sessionOfCookie,
+} from './auth-routes.ts';
 import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
 import { ORGANIZATION_PATHS, type OrganizationRule, readOrganizationInput } from './organization-paths.ts';
-import { EMAIL_LINKS_PER_WINDOW, EMAIL_LINK_WINDOW_MS } from './console-routes.ts';
 import type { Kv } from './kv.ts';
 import { MailError, type Mailer, invitationMessage } from './mail.ts';
 import type { SessionStore } from './session.ts';

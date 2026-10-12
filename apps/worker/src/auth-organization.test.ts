@@ -188,24 +188,6 @@ for (const { label, open, skip } of DATABASES) {
       assert.deepEqual(await rowsOf(worker.database, 'SELECT id FROM organization'), []);
     });
 
-    it('still makes a workspace in the store for a call with the token of before', async () => {
-      const worker = await workerOn(open);
-      await worker.call('/auth/email', { body: { email: 'bob@acme.dev' } });
-      const code = /#([A-Za-z0-9_-]+)/.exec(worker.mail.sent.at(-1)?.text ?? '')?.[1];
-      const opened = await worker.call('/auth/email/redeem', { body: { code } });
-      const { accessToken } = (await opened.json()) as { accessToken: string };
-
-      const made = await worker.call('/console/workspaces', {
-        body: { name: 'Before' },
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-
-      assert.equal(made.status, 201, await made.clone().text());
-      const { id } = (await made.json()) as { id: string };
-      assert.deepEqual(await rowsOf(worker.database, 'SELECT id, slug FROM organization'), [{ id, slug: id }]);
-      assert.deepEqual(await rowsOf(worker.database, 'SELECT role FROM member'), [{ role: 'owner' }]);
-    });
-
     it('answers each role, on each open route of the plugin, what its rule says', async () => {
       const worker = await workerOn(open);
       const acme = await team(worker);
