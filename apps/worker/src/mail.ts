@@ -3,7 +3,7 @@
  *
  * A seam like `SeedStore`. The worker names what it sends, and an implementation knows how. The one
  * implementation is Scaleway Transactional Email, over its HTTP API: one `fetch`, no SMTP client to
- * carry. A worker with no mailer sends nothing, and its `/auth/email` route does not exist.
+ * carry. A worker with no mailer sends nothing, and its `/console/auth/email` route does not exist.
  */
 
 export type MailMessage = { to: string; subject: string; text: string; html: string };

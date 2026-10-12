@@ -13,16 +13,13 @@ import { createPostgresSessionStore } from './session-postgres.ts';
  * A worker of the Cloud for a test that drives the console in a browser (FRU-148): accounts and
  * sessions in PostgreSQL (PGlite), and a mailer that keeps what it was asked to send.
  *
- * `betterAuth: false` is a worker of before FRU-147: it says no `betterAuth` in `/auth/providers`,
- * and signs in as before.
- *
  * **Run as a process, it listens on a port of its own** (`node cloud-worker.fixture.ts`, with
  * `CLOUD_WORKER` as JSON): Playwright compiles a spec as CommonJS and cannot import the worker, which
  * is ES modules. The spec starts this file, and hands it each request the console sends to the
  * address of the worker. `/__test/sent` and `/__test/received` answer what a test reads: the mail,
  * and the requests. It imports nothing of `node:test`.
  */
-export async function cloudWorker(options: { betterAuth: boolean; consoleUrl: string; publicUrl: string }) {
+export async function cloudWorker(options: { consoleUrl: string; publicUrl: string }) {
   const instance = newPglite();
   const database = await databaseOn(instance);
   await migrate(database);
@@ -35,7 +32,7 @@ export async function cloudWorker(options: { betterAuth: boolean; consoleUrl: st
     FRUITBACK_CONSOLE_URL: options.consoleUrl,
     FRUITBACK_PUBLIC_URL: options.publicUrl,
     RATE_LIMIT_PER_MINUTE: '2000',
-    ...(options.betterAuth ? { FRUITBACK_AUTH_SECRET: 'a-secret-of-better-auth-for-a-browser-test' } : {}),
+    FRUITBACK_AUTH_SECRET: 'a-secret-of-better-auth-for-a-browser-test',
   };
   const config = readConfig(env);
   if (!config.ok) throw new Error(`The worker of a test is misconfigured: ${config.missing.join(', ')}`);
