@@ -1560,6 +1560,11 @@ The console moves in FRU-148, and FRU-150 removes the path of before.
   the state. `/sign-in/social` stays served, and sets that cookie on the answer of a `fetch`, which
   WebKit did not send back between two sites. A provider this worker does not have goes back to the
   console with `oauth_provider_not_found`.
+  A navigation marked `Sec-Fetch-Site: cross-site` goes back to the console with
+  `started_from_another_site` and makes no state (FRU-211): the call in the process skips the check
+  better-auth makes on `/sign-in/social`. `same-site`, `same-origin`, `none` (an address typed by
+  hand) and no header at all start the sign-in. A link to this route from a page of another site,
+  in a document or a mail read in a webmail, therefore lands on the sign-in screen.
 - **`GET /auth/providers` says `betterAuth: { email, github, google }`** when better-auth is on, and
   nothing more when it is off: a console of before reads the answer it always read.
 

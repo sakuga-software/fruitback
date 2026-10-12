@@ -632,6 +632,14 @@ the cookie from another origin, or from none, and takes it from the console`. be
 - **A sign-in with a provider starts by a navigation** to `GET /console/auth/start/<provider>`, which
   answers a redirect to the provider and the cookie of the state. It changes nothing by itself: the
   person still consents at the provider, and comes back with a state that only this browser holds.
+  **A page of another site does not start one** (FRU-211): a navigation that the browser marks
+  `Sec-Fetch-Site: cross-site` gets no state and no redirect to the provider, and lands on the
+  sign-in screen of the console. Without that, a page anywhere could send somebody who had already
+  consented at the provider through a sign-in they did not ask for, and replace the session they
+  had with one of their own provider account. **The condition: a browser that sends
+  `Sec-Fetch-Site`.** One that sends none is served as before; and a page of the same site as the
+  worker is not « another site », as for the cookie above.
+  test:`starts no sign-in for a navigation that a page of another site made (FRU-211)`.
 - **Only the routes it names are served.** `SERVED_PATHS` of `auth.ts` lists them: `/ok`,
   `/sign-out`, `/revoke-sessions`, `/sign-in/social`, the two callbacks and `/error`.
   Any other path under `/console/auth/` answers `404` before better-auth reads it. `/get-session`
