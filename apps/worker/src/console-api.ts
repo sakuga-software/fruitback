@@ -149,7 +149,8 @@ async function askLinear<T>(
  *
  * The worker writes the label from what the tracker answers, never from the request: a member
  * chooses by this word, so it must name the place the note goes to. A tracker is asked once for a
- * connector. It throws `UnknownPlace` for a team or a project the key does not reach.
+ * connector, and what it answers is noted on the connector. It throws `UnknownPlace` for a team or a
+ * project the key does not reach.
  */
 async function labelled(
   context: ConsoleApiContext,
@@ -172,12 +173,7 @@ async function labelled(
     if (teams === undefined) {
       const kept = await context.accounts.sealedKey(connector.id);
       if (kept === undefined) throw new UnknownPlace();
-      const authorization = await linearAuthorization(connector.id, kept.sealed, {
-        accounts: context.accounts,
-        secretsKey: context.secretsKey,
-        oauth: context.linearOAuth,
-      });
-      teams = (await listLinearTeams(authorization)).teams;
+      teams = (await askLinear(context, connector.id, kept.sealed, listLinearTeams)).teams;
       teamsOf.set(connector.id, teams);
     }
     const team = teams.find((each) => each.id === destination.teamId);
@@ -349,6 +345,12 @@ export async function handleConsoleApi(
   if (destination !== null) {
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
     if (!allowed('manage-sites')) return forbidden();
+    // This route writes a list of one place, or of none. A site with two places or more is set by
+    // the list route only: a console of before FRU-123 must not take the other places away.
+    const current = (await context.accounts.sites(workspaceId as string)).find((site) => site.id === destination[1]);
+    if (current !== undefined && current.destinations.length > 1) {
+      return json(409, { error: 'site-has-destinations', count: current.destinations.length }, headers);
+    }
 
     const body = await readBody(request);
     // The kind of the connector says what a destination holds. A connector of another workspace

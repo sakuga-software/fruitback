@@ -5,6 +5,7 @@ import {
   type ConnectorSettings,
   type Delivery,
   type Destination,
+  MAX_DESTINATIONS,
   STAGES,
   type Site,
   type Stage,
@@ -12,11 +13,15 @@ import {
   type TrackerState,
   UNREACHABLE,
   call,
+  hasRoomFor,
+  placesOf,
+  samePlace,
+  setPlaces,
 } from '../api';
 import { Confirm } from '../confirm';
 import { copyText } from '../problems';
 import { type Listed, known, listedOf } from '../listed';
-import { Button, Card, Choice, Field, Problem, Toggle } from '../ui';
+import { Button, Card, Chip, Choice, Field, Problem, Toggle } from '../ui';
 import { PageHead, useWorkspace } from './workspace';
 import { locale, msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
@@ -181,7 +186,7 @@ export default function Connectors() {
                   <span className="block text-[15px] font-semibold">{t('Fruitback')}</span>
                   <span className="block text-xs text-muted">
                     {t('The notes stay in this workspace')}
-                    {countOf((site) => site.destination === undefined)}
+                    {countOf((site) => placesOf(site).length === 0)}
                   </span>
                 </span>
                 <Working />
@@ -202,7 +207,7 @@ export default function Connectors() {
                   <span className="block text-[15px] font-semibold">{t(KINDS[connector.kind].name)}</span>
                   <span className="block text-xs text-muted">
                     {sourceLine(connector)}
-                    {countOf((site) => site.destination?.connector === connector.id)}
+                    {countOf((site) => placesOf(site).some((place) => place.connector === connector.id))}
                   </span>
                 </span>
                 <Working connected={connector.kind === 'rest'} attention={connector.attention !== undefined} />
@@ -569,6 +574,10 @@ function RestDetail({
 }) {
   useLocale();
   const [late, setLate] = useState<Delivery[] | undefined>();
+  // A list is written whole, from the list on the screen. A second change before the first one is
+  // kept and read again would be made from the list of before, and would take the first one away:
+  // the controls wait.
+  const [writing, setWriting] = useState(false);
   const [problem, setProblem] = useState<string | undefined>();
 
   const read = useCallback(async () => {
@@ -580,14 +589,16 @@ function RestDetail({
   useEffect(() => void read(), [read]);
 
   async function place(site: Site, value: string) {
+    // One write at a time: see `writing`.
+    if (writing) return;
+    setWriting(true);
     setProblem(undefined);
-    const set = await call(
-      'POST',
-      `${base}/sites/${site.id}/destination`,
-      value === THERE ? { connector: connector.id } : { connector: null },
-    );
+    // The other places of the site stay, in their order: this address is added last, or taken out.
+    const others = placesOf(site).filter((each) => each.connector !== connector.id);
+    const set = await setPlaces(base, site, value === THERE ? [...others, { connector: connector.id }] : others);
     if (!set.ok) setProblem(msg('The destination of this site did not change. Try again.'));
     await onChanged();
+    setWriting(false);
   }
 
   async function retry(delivery: Delivery) {
@@ -617,21 +628,30 @@ function RestDetail({
         <SitesState sites={sites} />
         <ul className="space-y-2">
           {(known(sites) ?? []).map((site) => {
-            const elsewhere = site.destination !== undefined && site.destination.connector !== connector.id;
+            const places = placesOf(site);
+            const sends = places.some((each) => each.connector === connector.id);
+            // The worker refuses a sixth place: the reason is said here, and the choice is not offered.
+            const full = !hasRoomFor(site, connector.id);
+            const elsewhere = places.some((each) => each.connector !== connector.id);
 
             return (
               <li key={site.id} className="rounded-md bg-chip px-3 py-2">
                 <Choice
                   label={new URL(site.origin).host}
                   labelStrong
-                  value={site.destination === undefined || elsewhere ? HERE : THERE}
-                  disabled={!manages}
+                  value={sends ? THERE : HERE}
+                  disabled={!manages || full || writing}
                   onChange={(value) => void place(site, value)}
                   options={[
                     { value: HERE, label: elsewhere ? t('Another source') : t('Fruitback only') },
                     { value: THERE, label: t('Fruitback, and this address') },
                   ]}
                 />
+                {manages && full ? (
+                  <p className="mt-1 text-xs text-muted">
+                    {t('A site sends to {count} places at most.', { count: MAX_DESTINATIONS })}
+                  </p>
+                ) : null}
               </li>
             );
           })}
@@ -860,6 +880,10 @@ function Detail({
   const [teams, setTeams] = useState<Team[] | undefined>();
   const [problem, setProblem] = useState<string | undefined>();
   const [silent, setSilent] = useState(false);
+  // A list is written whole, from the list on the screen. A second change before the first one is
+  // kept and read again would be made from the list of before, and would take the first one away:
+  // the controls wait.
+  const [writing, setWriting] = useState(false);
 
   useEffect(() => {
     if (!manages) return;
@@ -875,16 +899,35 @@ function Detail({
     // `onChanged` is not a reason to ask Linear again: the read above runs once for a connector.
   }, [base, connector.id, manages]);
 
-  async function place(site: Site, value: string) {
+  /** Writes the whole list of a site: the worker keeps all of it, or none of it. */
+  async function place(site: Site, places: Destination[]) {
+    // One write at a time: see `writing`.
+    if (writing) return;
+    setWriting(true);
     setProblem(undefined);
-    const [teamId, projectId] = value.split('/');
-    const body: { connector: null } | Destination =
-      value === HERE || teamId === undefined
-        ? { connector: null }
-        : { connector: connector.id, teamId, ...(projectId === undefined ? {} : { projectId }) };
-    const set = await call('POST', `${base}/sites/${site.id}/destination`, body);
-    if (!set.ok) setProblem(msg('The destination of this site did not change. Try again.'));
+    const set = await setPlaces(base, site, places);
+    if (!set.ok) setProblem(msg('The destinations of this site did not change. Try again.'));
     await onChanged();
+    setWriting(false);
+  }
+
+  /** The place a value of the list of teams names: `team`, or `team/project`. */
+  function placeOf(value: string): Destination | undefined {
+    const [teamId, projectId] = value.split('/');
+
+    return teamId === undefined || teamId === ''
+      ? undefined
+      : { connector: connector.id, teamId, ...(projectId === undefined ? {} : { projectId }) };
+  }
+
+  /** The words of a place: what the worker wrote for it, or the name of its team while that is all there is. */
+  function nameOf(each: Destination): string {
+    if (each.label !== undefined) return each.label;
+    if (each.connector !== connector.id) return t('Another source');
+    const team = teams?.find((one) => one.id === each.teamId);
+    const project = team?.projects.find((one) => one.id === each.projectId);
+
+    return [t('Linear'), team?.name, project?.name].filter(Boolean).join(' · ');
   }
 
   async function disconnect() {
@@ -916,38 +959,91 @@ function Detail({
         <SitesState sites={sites} />
         <ul className="space-y-2">
           {(known(sites) ?? []).map((site) => {
-            const elsewhere = site.destination !== undefined && site.destination.connector !== connector.id;
-            const current =
-              site.destination === undefined || elsewhere
-                ? HERE
-                : [site.destination.teamId, site.destination.projectId].filter(Boolean).join('/');
+            const places = placesOf(site);
+            const host = new URL(site.origin).host;
+            // A place that is already in the list is not offered again: the worker refuses it twice.
+            const free = (value: string): boolean => {
+              const wanted = placeOf(value);
+
+              return wanted !== undefined && !places.some((each) => samePlace(each, wanted));
+            };
+            const offered = (teams ?? [])
+              .map((team) => ({
+                heading: team.name,
+                options: [
+                  { value: team.id, label: t('{team}, no project', { team: team.name }) },
+                  ...team.projects.map((project) => ({
+                    value: `${team.id}/${project.id}`,
+                    label: `${team.name} · ${project.name}`,
+                  })),
+                ].filter((option) => free(option.value)),
+              }))
+              .filter((group) => group.options.length > 0);
 
             return (
-              <li key={site.id} className="rounded-md bg-chip px-3 py-2">
-                <Choice
-                  label={new URL(site.origin).host}
-                  labelStrong
-                  value={current}
-                  disabled={!manages || teams === undefined}
-                  onChange={(value) => void place(site, value)}
-                  options={[
-                    { value: HERE, label: elsewhere ? t('Another source') : t('Fruitback, in this workspace') },
-                    ...(teams ?? []).map((team) => ({
-                      heading: team.name,
-                      options: [
-                        { value: team.id, label: t('{team}, no project', { team: team.name }) },
-                        ...team.projects.map((project) => ({
-                          value: `${team.id}/${project.id}`,
-                          label: `${team.name} · ${project.name}`,
-                        })),
-                      ],
-                    })),
-                  ]}
-                />
+              <li key={site.id} className="rounded-md bg-chip px-3 py-2" data-site={host}>
+                <p className="text-sm font-semibold">{host}</p>
+                {places.length === 0 ? (
+                  <p className="text-xs text-muted">{t('Its notes stay in Fruitback, in this workspace.')}</p>
+                ) : null}
+                <ol className="mt-1 space-y-1">
+                  {places.map((each, index) => {
+                    const own = each.connector === connector.id;
+                    const rest = places.filter((_, position) => position !== index);
+
+                    return (
+                      <li key={`${each.connector}/${each.teamId}/${each.projectId}`} className="text-sm">
+                        <span className="flex items-center gap-2">
+                          <span className="min-w-0 flex-1 truncate">{nameOf(each)}</span>
+                          {index === 0 ? <Chip>{t('Default')}</Chip> : null}
+                        </span>
+                        {manages && own ? (
+                          <span className="-ml-3 flex flex-wrap">
+                            {index === 0 ? null : (
+                              <Button tone="quiet" disabled={writing} onClick={() => void place(site, [each, ...rest])}>
+                                {t('Make it the default')}
+                              </Button>
+                            )}
+                            <Button tone="quiet" disabled={writing} onClick={() => void place(site, rest)}>
+                              {t('Remove')}
+                            </Button>
+                          </span>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ol>
+                {manages && places.length < MAX_DESTINATIONS && offered.length > 0 ? (
+                  <div className="mt-2">
+                    <Choice
+                      label={t('Add a destination for {site}', { site: host })}
+                      labelHidden
+                      value={HERE}
+                      disabled={teams === undefined || writing}
+                      onChange={(value) => {
+                        const added = placeOf(value);
+                        if (value !== HERE && added !== undefined) void place(site, [...places, added]);
+                      }}
+                      options={[{ value: HERE, label: t('Add a destination…') }, ...offered]}
+                    />
+                  </div>
+                ) : null}
+                {manages && places.length >= MAX_DESTINATIONS ? (
+                  <p className="mt-1 text-xs text-muted">
+                    {t('A site sends to {count} places at most.', { count: MAX_DESTINATIONS })}
+                  </p>
+                ) : null}
               </li>
             );
           })}
         </ul>
+        {(known(sites) ?? []).length === 0 ? null : (
+          <p className="mt-2 text-xs text-muted">
+            {t(
+              'A note goes to the default place. With two places or more, a member chooses one in the widget when they write.',
+            )}
+          </p>
+        )}
         {/* A source with a reason says it above: this sentence is for a Linear that only did not answer. */}
         {silent && connector.attention === undefined ? (
           <div className="mt-3">

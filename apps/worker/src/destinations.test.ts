@@ -317,6 +317,76 @@ describe('a site that can send to several places (FRU-123)', () => {
     }
   });
 
+  it('notes a refused key on the connector from both routes, as the read of its teams does, and an answer ends it', async () => {
+    /** What the console reads of the connector: the reason it needs somebody, or nothing. */
+    const reasonOf = async (world: Awaited<ReturnType<typeof acme>>, env: WorkerEnv) => {
+      const listed = await call(env, 'GET', `${world.base}/connectors`, { token: world.consoleToken });
+      const body = (await listed.json()) as { connectors: { attention?: { reason: string } }[] };
+
+      return body.connectors[0]?.attention?.reason;
+    };
+    for (const route of ['list', 'one'] as const) {
+      for (const as of ['revoked', 'down'] as const) {
+        const env = envWith();
+        const linear = twoTeams();
+        const world = await acme(env);
+        const one = { connector: world.connector, teamId: DESIGN };
+        linear.answers.as = as;
+
+        const asked =
+          route === 'list'
+            ? await world.place([one])
+            : await call(env, 'POST', `${world.base}/sites/${world.site.id}/destination`, {
+                token: world.consoleToken,
+                body: one,
+              });
+
+        assert.equal(asked.status, route === 'list' ? 502 : 200, `${route} ${as}`);
+        // A refusal is the workspace's to fix. A tracker that is down is nobody's, and is not noted.
+        assert.equal(await reasonOf(world, env), as === 'revoked' ? 'key-refused' : undefined, `${route} ${as}`);
+
+        linear.answers.as = 'working';
+        assert.equal((await world.place([one])).status, 200, `${route} ${as}`);
+        assert.equal(await reasonOf(world, env), undefined, `${route} ${as}`);
+
+        mock.restoreAll();
+        closeAccountConnections();
+      }
+    }
+  });
+
+  it('refuses one destination for a site that has two places or more, and keeps its list', async () => {
+    const env = envWith();
+    twoTeams();
+    const world = await acme(env);
+    const both = [
+      { connector: world.connector, teamId: DESIGN },
+      { connector: world.connector, teamId: SUPPORT },
+    ];
+    const single = (body: unknown) =>
+      call(env, 'POST', `${world.base}/sites/${world.site.id}/destination`, { token: world.consoleToken, body });
+    assert.equal((await world.place(both)).status, 200);
+
+    // A console of before the list knows one place: what it sends must not take the others away.
+    for (const body of [{ connector: world.connector, teamId: SUPPORT }, { connector: null }]) {
+      const refused = await single(body);
+      assert.equal(refused.status, 409);
+      assert.deepEqual(await refused.json(), { error: 'site-has-destinations', count: 2 });
+    }
+    assert.deepEqual(
+      (await world.accounts.sites(world.workspace.id))[0]?.destinations.map((each) => each.teamId),
+      [DESIGN, SUPPORT],
+    );
+
+    // A site with one place keeps the route: one place takes the place of the other.
+    assert.equal((await world.place([both[0]])).status, 200);
+    assert.equal((await single(both[1])).status, 200);
+    assert.deepEqual(
+      (await world.accounts.sites(world.workspace.id))[0]?.destinations.map((each) => each.teamId),
+      [SUPPORT],
+    );
+  });
+
   it('lets an owner set the places, and not a member', async () => {
     const env = envWith();
     twoTeams();

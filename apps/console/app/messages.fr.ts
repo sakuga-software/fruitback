@@ -145,7 +145,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Where each site sends its notes': 'Où chaque site envoie ses notes',
   'This workspace has no site yet.': 'Ce workspace n’a pas encore de site.',
   'Another source': 'Une autre source',
-  'Fruitback, in this workspace': 'Fruitback, dans ce workspace',
   '{team}, no project': '{team}, sans projet',
   Disconnect: 'Déconnecter',
 
@@ -298,4 +297,14 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Show Linear comments as replies': 'Montrer les commentaires de Linear comme réponses',
   'Fruitback could not read the states of Linear. The colours you set are not lost.':
     'Fruitback n’a pas pu lire les états de Linear. Les couleurs que vous avez réglées ne sont pas perdues.',
+  'The destinations of this site did not change. Try again.':
+    'Les destinations de ce site n’ont pas changé. Réessayez.',
+  'Its notes stay in Fruitback, in this workspace.': 'Ses notes restent dans Fruitback, dans ce workspace.',
+  Default: 'Par défaut',
+  'Make it the default': 'Mettre par défaut',
+  'Add a destination for {site}': 'Ajouter une destination pour {site}',
+  'Add a destination…': 'Ajouter une destination…',
+  'A site sends to {count} places at most.': 'Un site envoie vers {count} destinations au plus.',
+  'A note goes to the default place. With two places or more, a member chooses one in the widget when they write.':
+    'Une note va vers la destination par défaut. À partir de deux destinations, un membre en choisit une dans le widget quand il écrit.',
 };
