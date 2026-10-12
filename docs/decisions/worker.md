@@ -1151,6 +1151,17 @@ LIMIT`.
   counts what comes back. The two drivers do not count the rows of a statement in the same way.
 - **The tables are in `public`, and so is the journal** (`__drizzle_migrations`). A test that needs
   an empty database on a server makes a database (`createRealDatabase`, `ownDatabase`), not a schema.
+- **The database of a case is dropped when its connections have ended, not while they end**
+  (FRU-196). `pool.end()` of pg-pool 3.14 answers when it has asked its clients to end, and the
+  server still holds their backends for a moment (0.2 to 1 ms, measured on 17.11). The fixture sent
+  `DROP DATABASE … WITH (FORCE)` at once: the server ended such a backend, and its client read
+  « terminating connection due to administrator command ». A pool of `postgres.ts` writes one line
+  for it; a pool of `pg` with no listener throws it, and `node:test` fails the test whose
+  `afterEach` runs (`postgres-numbers.test.ts`, twice in CI on 2026-10-12). `drop` of `ownDatabase`
+  now waits until `pg_stat_activity` lists no client on the database, two seconds at most, and
+  `FORCE` stays for a process that a test killed. test:`ends no connection of a pool that has just
+ended` holds it, and test:`ended one when it did not wait, which is what failed a test in CI` is its
+  control.
 - **`drizzle/` is not formatted.** `drizzle-kit` writes it again at the next `generate`, in its own
   form: the `format` scripts of the worker and the pre-commit hook leave the folder out.
 

@@ -128,12 +128,44 @@ export function createPgliteDatabase(): Promise<PgDatabase> {
   return databaseOn(pglite());
 }
 
+/** How long `drop` waits for the connections of a database to end, before it drops it all the same. */
+const LEFT_PATIENCE_MS = 2_000;
+
+/**
+ * Waits until the server holds no connection of a client on `name`, at most `patienceMs`.
+ *
+ * **A pool that has ended still has its connections on the server for a moment** (FRU-196).
+ * `pool.end()` of pg-pool 3.14 answers when it has asked its clients to end, not when they have:
+ * `pg_stat_activity` still listed the backend 0.2 to 1 ms later (measured on 17.11). A
+ * `DROP DATABASE … WITH (FORCE)` sent then ends that backend, and the client reads « terminating
+ * connection due to administrator command » on a socket it was closing. A pool of `postgres.ts`
+ * writes one line for it. A pool with no listener, like the one of `postgres-numbers.test.ts`, throws
+ * it as an unhandled error, in the `afterEach` of the test that made it: that test failed in CI.
+ *
+ * The workers of the autovacuum are not clients: they go by themselves, and `FORCE` ends them.
+ */
+async function noClientLeftOn(admin: Database, name: string, patienceMs: number): Promise<void> {
+  const until = Date.now() + patienceMs;
+  for (;;) {
+    const [row] = await rowsOf(
+      admin,
+      sql`SELECT count(*)::int AS left FROM pg_stat_activity WHERE datname = ${name} AND backend_type = 'client backend'`,
+    );
+    if (Number(row?.left) === 0 || Date.now() >= until) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
 /**
  * A new empty database on the real server, and its address. `drop` removes it.
  *
+ * `drop` first waits for the connections on the database to end, see `noClientLeftOn`. `FORCE` stays
+ * for what does not end by itself: a process that a test killed. `dropAtOnce` does not wait: it is
+ * what `drop` was, kept for the test that shows the difference.
+ *
  * For a test that gives the address to another process. Any other test takes `createRealDatabase`.
  */
-export async function ownDatabase(): Promise<{ url: string; drop(): Promise<void> }> {
+export async function ownDatabase(): Promise<{ url: string; drop(): Promise<void>; dropAtOnce(): Promise<void> }> {
   if (TEST_DATABASE_URL === undefined) throw new Error('FRUITBACK_TEST_DATABASE_URL is not set');
   const name = databaseName();
   const admin = createPgDatabase(TEST_DATABASE_URL, { max: 1 });
@@ -142,12 +174,18 @@ export async function ownDatabase(): Promise<{ url: string; drop(): Promise<void
   const url = new URL(TEST_DATABASE_URL);
   url.pathname = `/${name}`;
 
+  const dropAtOnce = async (): Promise<void> => {
+    await rowsOf(admin, `DROP DATABASE ${name} WITH (FORCE)`);
+    await admin.close();
+  };
+
   return {
     url: url.href,
     async drop() {
-      await rowsOf(admin, `DROP DATABASE ${name} WITH (FORCE)`);
-      await admin.close();
+      await noClientLeftOn(admin, name, LEFT_PATIENCE_MS);
+      await dropAtOnce();
     },
+    dropAtOnce,
   };
 }
 
