@@ -558,6 +558,108 @@ for (const { label, open, skip } of DATABASES) {
       assert.equal((await worker.call('/console/me', { headers: { Cookie: cookieOf(back) } })).status, 200);
     });
 
+    it('starts a sign-in with a provider on a GET only, and sets no cookie of a state on another method (FRU-207)', async () => {
+      const worker = await workerOn(open);
+
+      // A form of another site posts where a link only navigates, and a `fetch` chooses its method.
+      for (const method of ['POST', 'PUT', 'PATCH', 'DELETE', 'HEAD']) {
+        for (const origin of [null, CONSOLE_URL]) {
+          const refused = await worker.call('/console/auth/start/github', { method, origin });
+          assert.equal(refused.status, 405, `${method} from ${origin}`);
+          assert.deepEqual(refused.headers.getSetCookie(), [], `${method} from ${origin}`);
+          assert.equal(refused.headers.get('Location'), null, `${method} from ${origin}`);
+        }
+      }
+      // The control: the same address, by a GET, starts the sign-in.
+      const started = await worker.call('/console/auth/start/github', { origin: null });
+      assert.equal(started.status, 302);
+      assert.equal(started.headers.getSetCookie().length > 0, true);
+    });
+
+    it('sends the address of the start to no provider: the redirect says no-referrer, and is not kept (FRU-207)', async () => {
+      const worker = await workerOn(open);
+
+      for (const provider of ['github', 'google']) {
+        const started = await worker.call(`/console/auth/start/${provider}`, { origin: null });
+        assert.equal(started.status, 302, provider);
+        assert.equal(started.headers.get('Referrer-Policy'), 'no-referrer', provider);
+        assert.equal(started.headers.get('Cache-Control'), 'no-store', provider);
+      }
+    });
+
+    it('sends the person back to the console, whatever the address of the start asks for (FRU-207)', async () => {
+      const worker = await workerOn(open);
+      await worker.accounts.signIn({ provider: 'github', subject: '4242', email: 'alice@acme.dev' });
+      // Every name a return address goes by, each with another site: an open redirect reads one.
+      const elsewhere = 'https://evil.example/landing';
+      const asked = new URLSearchParams();
+      for (const name of [
+        'to',
+        'callbackURL',
+        'callbackUrl',
+        'callback',
+        'errorCallbackURL',
+        'newUserCallbackURL',
+        'redirect',
+        'redirectTo',
+        'redirect_uri',
+        'returnTo',
+        'return_to',
+        'next',
+        'url',
+        'continue',
+      ]) {
+        asked.set(name, elsewhere);
+      }
+
+      const start = await worker.call(`/console/auth/start/github?${asked}`, { origin: null });
+      assert.equal(start.status, 302);
+      const to = new URL(start.headers.get('Location') ?? '');
+      assert.equal(`${to.origin}${to.pathname}`, 'https://github.com/login/oauth/authorize');
+      // The provider is sent back to the worker, and is told of no other site.
+      assert.equal(to.searchParams.get('redirect_uri'), `${PUBLIC_URL}/console/auth/callback/github`);
+      assert.equal(to.href.includes('evil.example'), false, to.href);
+      const stateCookie = start.headers
+        .getSetCookie()
+        .map((each) => each.split(';')[0])
+        .join('; ');
+      const state = to.searchParams.get('state');
+
+      // The way back that works lands on the console.
+      const back = await withProvider(
+        {
+          ...GITHUB_TOKEN,
+          'https://api.github.com/user': { id: 4242, login: 'alice', name: 'Alice', email: 'alice@acme.dev' },
+          'https://api.github.com/user/emails': [{ email: 'alice@acme.dev', primary: true, verified: true }],
+        },
+        () =>
+          worker.call(`/console/auth/callback/github?code=a-code&state=${state}`, {
+            origin: null,
+            headers: { Cookie: stateCookie },
+          }),
+      );
+      assert.equal(back.headers.get('Location'), `${CONSOLE_URL}/`);
+
+      // And the way back that fails lands on the console too: the provider refused, with the same state.
+      const again = await worker.call(`/console/auth/start/github?${asked}`, { origin: null });
+      const refused = await worker.call(
+        `/console/auth/callback/github?error=access_denied&state=${new URL(again.headers.get('Location') ?? '').searchParams.get('state')}`,
+        {
+          origin: null,
+          headers: {
+            Cookie: again.headers
+              .getSetCookie()
+              .map((each) => each.split(';')[0])
+              .join('; '),
+          },
+        },
+      );
+      assert.equal(refused.status, 302);
+      const failedAt = new URL(refused.headers.get('Location') ?? '');
+      assert.equal(`${failedAt.origin}${failedAt.pathname}`, `${CONSOLE_URL}/setup`);
+      assert.equal(failedAt.searchParams.get('error'), 'access_denied');
+    });
+
     it('sends the console a code of better-auth when a sign-in with a provider fails (FRU-148)', async () => {
       const worker = await workerOn(open);
       // The person came back with no cookie of the state: another browser, or a link that is old.
