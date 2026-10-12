@@ -34,7 +34,7 @@ const INVITE_PROBLEMS: Readonly<Record<string, string>> = {
     'This address is invited already. Send the invitation again from its row.',
   ),
   'too-many-invitations': msg(
-    'This address received three invitations in the last fifteen minutes. Wait, then send it again.',
+    'This address received three invitations in the last fifteen minutes. Wait, then send it again. An invitation that is kept has its link in its row.',
   ),
   'mail-unavailable': msg('The invitation is kept, but its message did not leave. Send it again from its row.'),
   INVITATION_LIMIT_REACHED: msg('A workspace has a hundred invitations waiting at most. Cancel some first.'),
@@ -101,8 +101,9 @@ export default function Members() {
     });
     setBusy(false);
     if (!sent.ok) {
-      // A message that did not leave: the invitation is kept, so it is shown, to send again.
-      if (sent.error === 'mail-unavailable') void read();
+      // A message that did not leave, or one too many in the window: the invitation may be kept all
+      // the same, so the list is read again. Its row has the link to copy, and « Resend ».
+      if (sent.error === 'mail-unavailable' || sent.error === 'too-many-invitations') void read();
       // The field keeps what was typed: the sentence says the cause.
       return setProblem(problemOf(sent, INVITE_PROBLEMS, NOT_INVITED));
     }
