@@ -71,7 +71,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   it fails** (FRU-163): it lightens a hovered button, and white on that red was 3.9:1, so
   `--accent-hover` is the strong accent (6.47:1). It draws an alert as a white card with muted text, so
   `.alert--danger` puts the danger of the theme on the text and the border (5.84:1 on its tint).
-  `e2e/console-kit.spec.ts` measures both. **A button takes no `title`**: a tooltip does not open on a disabled
+  `e2e/console-kit.spec.ts` measures both. **The shapes are the boards', not HeroUI's** (FRU-168):
+  HeroUI draws every button as a pill and a field at 12 px with a shadow and a border of 1.49:1.
+  `app.css` gives `--field-radius` 8 px, `--field-shadow` nothing to paint and `--field-border`
+  `#8f8883` (3.49:1); `.wide-button` is 6 px with that border, and the pill stays for the action of
+  a step; the asterisk of a required label is taken off, as on the boards. The same spec measures them. **A button takes no `title`**: a tooltip does not open on a disabled
   control, so the reason is written beside it. The overlays of React Aria position with inline
   styles, which the console's CSP allows (`style-src 'unsafe-inline'`); its scripts stay hashed.
 
