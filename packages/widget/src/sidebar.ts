@@ -164,7 +164,7 @@ export function createSidebar(options: SidebarOptions): Sidebar {
   });
   drafted.append(draftsTitle, draftList, sendAll);
 
-  root.append(head, empty, failedText, failed, drafted, sentText, list);
+  root.append(head, drafted, sentText, empty, failedText, failed, list);
   options.host.append(style, root);
 
   /** What had focus when the list opened, to give it back. */
@@ -380,7 +380,8 @@ const STYLES = `
   font-size: 15px;
   cursor: pointer;
 }
-.fruitback-sidebar-empty { padding: 4px 14px 14px; color: var(--fruitback-color-text-muted); }
+/* The dock sits over the bottom of the sheet on a phone: under the drafts, these words must clear it (FRU-124). */
+.fruitback-sidebar-empty { padding: 4px 14px 64px; color: var(--fruitback-color-text-muted); }
 .fruitback-sidebar-drafts { margin: 0 8px 8px; padding: 10px; border-radius: var(--fruitback-radius-md); box-shadow: inset 0 0 0 1px var(--fruitback-color-border); }
 .fruitback-sidebar-drafts[hidden] { display: none; }
 .fruitback-sidebar-drafts-title { margin: 0 0 6px; font-weight: 600; font-size: 12px; }
