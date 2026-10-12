@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { type Providers, call, saveLanguage, signInProviders, signOut } from '../api';
+import { problemOf } from '../problems';
 import { Button, Card, Choice, Problem } from '../ui';
 import { PageHead, useWorkspace } from './workspace';
 import { LOCALES, chooseLanguage, locale, msg, t } from '../i18n';
@@ -20,6 +21,11 @@ function providerWord(asked: Asked, provider: keyof Providers): string {
 }
 
 /** My account (design/boards/5-workspace.png): the profile, how I sign in, and the workspace's end. */
+const DELETION_PROBLEMS: Readonly<Record<string, string>> = {
+  forbidden: msg('Only the owner of the workspace deletes it.'),
+};
+const WORKSPACE_NOT_DELETED = msg('The workspace was not deleted. Try again.');
+
 export default function Account() {
   useLocale();
   const { me, workspace } = useWorkspace();
@@ -45,9 +51,14 @@ export default function Account() {
     navigate('/setup', { replace: true });
   }
 
+  const [undeleted, setUndeleted] = useState<string | undefined>();
+
   async function destroy() {
+    setUndeleted(undefined);
     const deleted = await call('DELETE', `/console/workspaces/${workspace.id}`);
-    if (deleted.ok) navigate('/', { replace: true });
+    if (deleted.ok) return navigate('/', { replace: true });
+    // The workspace is still there: say so beside the button (FRU-164).
+    setUndeleted(problemOf(deleted, DELETION_PROBLEMS, WORKSPACE_NOT_DELETED));
   }
 
   return (
@@ -120,6 +131,11 @@ export default function Account() {
             <span className="block text-sm text-muted">
               {t('Sites, members and pin positions go. Items already in your sources stay there.')}
             </span>
+            {undeleted === undefined ? null : (
+              <span className="mt-2 block">
+                <Problem>{t(undeleted)}</Problem>
+              </span>
+            )}
           </span>
           {confirming ? (
             <span className="flex gap-2">

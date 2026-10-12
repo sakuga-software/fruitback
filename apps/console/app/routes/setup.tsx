@@ -15,6 +15,7 @@ import {
   signInProviders,
   takeWorkspaceName,
 } from '../api';
+import { NAME_PROBLEMS, SITE_NOT_ADDED, SITE_PROBLEMS, WORKSPACE_NOT_CREATED, copyText, problemOf } from '../problems';
 import { Button, Field, Mark, Pick, Problem, WideButton } from '../ui';
 import { adoptLanguage, locale, msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
@@ -351,7 +352,7 @@ function NameIt({ onCreated }: { onCreated: (workspace: Workspace) => void }) {
     event.preventDefault();
     const created = await call<Workspace>('POST', '/console/workspaces', { name });
     if (created.ok) return onCreated(created.data);
-    setProblem(msg('A workspace needs a name of one line, up to 80 characters.'));
+    setProblem(problemOf(created, NAME_PROBLEMS, WORKSPACE_NOT_CREATED));
   }
 
   return (
@@ -434,7 +435,7 @@ function SiteStep({ workspace, onAdded }: { workspace: Workspace; onAdded: (site
     event.preventDefault();
     const added = await call<Site>('POST', `/console/workspaces/${workspace.id}/sites`, { url, visibility });
     if (added.ok) return onAdded(added.data);
-    setProblem(msg('Paste the full address of the site, starting with https://.'));
+    setProblem(problemOf(added, SITE_PROBLEMS, SITE_NOT_ADDED));
   }
 
   return (
@@ -506,20 +507,27 @@ function Install({ workspace, site }: { workspace: Workspace; site: Site }) {
   );
 }
 
+// Every role connects a browser, so no code of the worker has a sentence of its own here.
+const CONNECT_PROBLEMS: Readonly<Record<string, string>> = {};
+const BROWSER_NOT_CONNECTED = msg('This browser was not connected. Try again.');
+
 export function InstallOptions({ workspace, site }: { workspace: Workspace; site: Site }) {
   useLocale();
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'no' | 'yes' | 'refused'>('no');
   const [link, setLink] = useState<string | undefined>();
+  const [problem, setProblem] = useState<string | undefined>();
   const snippet = snippetFor(site);
 
   async function connect() {
     // Open the tab in the click, before the await: a browser blocks a window opened after one.
     // The tab loses its `opener` before it loads the pairing page.
     const tab = window.open('', '_blank');
+    setProblem(undefined);
     const minted = await call<{ code: string }>('POST', `/console/workspaces/${workspace.id}/connect`, {});
     if (!minted.ok) {
+      // The tab that just opened closes: the reason is said under the button (FRU-164).
       tab?.close();
-      return;
+      return setProblem(problemOf(minted, CONNECT_PROBLEMS, BROWSER_NOT_CONNECTED));
     }
     const target = pairingLink(minted.data.code);
     setLink(target);
@@ -538,15 +546,15 @@ export function InstallOptions({ workspace, site }: { workspace: Workspace; site
         <Button
           tone="outline"
           className="mt-2"
-          onClick={() =>
-            void navigator.clipboard.writeText(snippet).then(
-              () => setCopied(true),
-              () => setCopied(false),
-            )
-          }
+          onClick={() => void copyText(snippet).then((taken) => setCopied(taken ? 'yes' : 'refused'))}
         >
-          {copied ? t('Copied') : t('Copy the script')}
+          {copied === 'yes' ? t('Copied') : t('Copy the script')}
         </Button>
+        {copied === 'refused' ? (
+          <p role="alert" className="mt-2 text-xs text-muted">
+            {t('The browser refused the copy. Select the script above and copy it by hand.')}
+          </p>
+        ) : null}
       </div>
       <div>
         <h2 className="text-sm font-semibold">{t('Extension')}</h2>
@@ -558,6 +566,11 @@ export function InstallOptions({ workspace, site }: { workspace: Workspace; site
         <Button tone="outline" onClick={() => void connect()}>
           {t('Connect this browser')}
         </Button>
+        {problem === undefined ? null : (
+          <div className="mt-2">
+            <Problem>{t(problem)}</Problem>
+          </div>
+        )}
         {link === undefined ? null : (
           <p className="mt-2 text-xs text-muted">
             {t('A page opened in a new tab. If it did not, open')}{' '}

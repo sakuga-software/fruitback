@@ -37,6 +37,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   source go through `Confirm` (`confirm.tsx`), which says what the gesture costs, gives focus to
   « Keep it », and acts only on a second button that names the site or the source. « Keep it » and
   Escape give the row back, with focus on its first button.
+  **A refused call says its own cause** (FRU-164): `problemOf` (`problems.ts`) gives the sentence of
+  the code of the worker, « Fruitback did not answer. Try again. » for no answer and a `5xx`, and a
+  sentence of the screen that blames no field for the rest. No failure clears a field. A copy goes
+  through `copyText`, and a copy the browser refuses says so: the text stays on screen to select.
 - **The console draws its controls with HeroUI v3, through its own kit** (FRU-125). `ui.tsx` is the
   one file that imports `@heroui/react`: `Button`, `Field`, `Choice` (a select), `Pick` (radios),
   `Chip` and `Problem`. A screen uses the kit, and `messages.test.ts` fails on a native control in a
