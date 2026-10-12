@@ -24,11 +24,11 @@
         "mutants": 208
       },
       "src/identity.ts": {
-        "score": 93,
+        "score": 93.5,
         "mutants": 200
       },
       "src/kv.ts": {
-        "score": 81.08,
+        "score": 86.48,
         "mutants": 74
       },
       "src/rate-limit.ts": {
@@ -48,7 +48,7 @@
         "mutants": 75
       },
       "src/store-config.ts": {
-        "score": 89.65,
+        "score": 100,
         "mutants": 87
       }
     }
