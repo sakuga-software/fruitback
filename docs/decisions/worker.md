@@ -1518,6 +1518,13 @@ The console moves in FRU-148, and FRU-150 removes the path of before.
   `auth.ts` reach better-auth; any other one answers `404` before it reads the request. A route that a
   plugin adds is closed until somebody names it there with its reason. The routes of the organization
   plugin have their own list and their own file: see _The organization plugin_ below (FRU-149).
+- **A reading of the cookie that renews the session renews the cookie** (FRU-208). `sessionOfCookie`
+  asks `getSession` with `returnHeaders`, keeps the `Set-Cookie` of the session beside the request,
+  and `handleRequest` adds it to the answer that leaves (`withRenewedCookie`). Measured on 1.7.7: a
+  session last renewed two days ago moves its end in the row at the next `GET /console/me`, and the
+  answer had no `Set-Cookie`; the same reading with `returnHeaders` hands back the cookie of the
+  sign-in, token and attributes, with `Max-Age=604800`. A new route that reads the cookie through
+  `sessionOfCookie` gets this with nothing to write.
 - **A rejection of better-auth is a `502`**, with its reason in the log and no address of the
   database: `auth.handler` rejects on a schema that is wrong.
 - **The link of the e-mail is the worker's own two routes.** `POST /console/auth/email` calls
@@ -1724,9 +1731,13 @@ joins. Six routes of the organization plugin more, under the rules of the sectio
   worker reads the workspace of the invitation before better-auth does, and answers `404` when it is
   not the one whose role it read. `cancel-invitation` needs it; a later route on an invitation does too.
 - **The worker sends the message, not the plugin** (`sendInvitationEmail` is not set). The route
-  reads the window of the address (`fruitback:invitation:<address>`, 3 in 15 minutes, the numbers
-  of the sign-in link), asks the plugin, and counts and sends only for an answer that names an
-  invitation: a call that the plugin refuses spends nothing of the window of somebody else. A message that does not leave answers `502`, and the
+  asks the plugin first, then counts in one step (`kv.incr`) the window of the workspace for the
+  address (`fruitback:invitation:<workspace>:<address>`, 3 in 15 minutes, the numbers of the
+  sign-in link), and sends only under it. A call that the plugin refuses spends nothing. **Past the
+  window the invitation is kept, no message goes, and the answer says `mailed: false`**: no `429`.
+  The window was by address alone, read before the plugin: another workspace closed it, the
+  invitation was then not made at all, and the `429` said that the address was invited elsewhere
+  (FRU-209). A message that does not leave answers `502`, and the
   invitation waits, to send again with `resend: true`. **A worker with no mailer still invites**
   (decided on FRU-107): the invitation is kept, nothing is sent and nothing is counted, and the
   console shows the link to send by hand. The link is the same `<console>/invitations`, so a link

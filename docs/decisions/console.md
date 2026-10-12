@@ -71,7 +71,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   it fails** (FRU-163): it lightens a hovered button, and white on that red was 3.9:1, so
   `--accent-hover` is the strong accent (6.47:1). It draws an alert as a white card with muted text, so
   `.alert--danger` puts the danger of the theme on the text and the border (5.84:1 on its tint).
-  `e2e/console-kit.spec.ts` measures both. **A button takes no `title`**: a tooltip does not open on a disabled
+  `e2e/console-kit.spec.ts` measures both. **The shapes are the boards', not HeroUI's** (FRU-168):
+  HeroUI draws every button as a pill and a field at 12 px with a shadow and a border of 1.49:1.
+  `app.css` gives `--field-radius` 8 px, `--field-shadow` nothing to paint and `--field-border`
+  `#8f8883` (3.49:1); `.wide-button` is 6 px with that border, and the pill stays for the action of
+  a step; the asterisk of a required label is taken off, as on the boards. The same spec measures them. **A button takes no `title`**: a tooltip does not open on a disabled
   control, so the reason is written beside it. The overlays of React Aria position with inline
   styles, which the console's CSP allows (`style-src 'unsafe-inline'`); its scripts stay hashed.
 
@@ -88,10 +92,16 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   (`/console/auth/email`, `/console/auth/email/redeem`, `/console/auth/sign-out`). The bundle and the
   policy of the image do not change: `csp.mjs`, hashed scripts, no `'unsafe-inline'` for a script.
 - **The worker says which path it serves, in `GET /auth/providers`.** With `betterAuth` in the
-  answer, the console takes the cookie, and the providers of `betterAuth`. Without it, and until the
-  worker answered, it signs in as before: `session-of-before.ts` holds the access token and the one
-  refresh in flight of FRU-99. The console and the worker are not deployed at the same instant.
+  answer, the console takes the cookie, and the providers of `betterAuth`. With an answer that has
+  none, it signs in as before: `session-of-before.ts` holds the access token and the one refresh in
+  flight of FRU-99. The console and the worker are not deployed at the same instant.
   **FRU-150 removes `session-of-before.ts`**, and with it every token of the console.
+- **A worker that refuses that question said nothing** (FRU-205). On a `429`, a `5xx` or no answer,
+  no call leaves on either path: each one answers that refusal, a sign-out answers `false`, and the
+  question is asked again at the next call, once for the calls of one moment. The console used to
+  take the path of before then: against a worker that serves better-auth, it spent the refresh
+  cookie of before and held an access token, for the session of whoever used the browser last. A
+  link opened during a refusal is not spent, and its screen offers « Try again ».
 - **A sign-in with a provider is a navigation of the whole page**, to
   `<worker>/console/auth/start/<provider>` (`providerStart`). Never a `fetch` of `/sign-in/social`:
   the cookie of the state would be set on the answer of a call, and WebKit did not send it back when
@@ -107,6 +117,17 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the sign-in itself: it has nothing typed to keep.
 - **« Sign out » ends the session on the worker** (`/console/auth/sign-out`): the cookie is refused
   at the next call, in every tab and for whoever copied it.
+- **« Sign out » ends the session of before too** (`/console/session/logout`, FRU-204). A browser
+  that signed in before the worker served better-auth still holds the refresh cookie of before, good
+  for 30 days, and the worker takes it while it serves the path of before. Both calls are made,
+  whatever the first one answers. A `404` on the second one is a worker with no path of before: it
+  reads no refresh cookie, and that is an end. FRU-150 removes this call.
+- **« Sign out » says when it failed.** `signOut` answers `false` unless the worker said that both
+  sessions ended, and « My account » then stays, with « You are still signed in ». A screen that
+  says « signed out » over a session that is still good leaves the browser open to the next person.
+  better-auth 1.7.7 answers `200` to a sign-out with no session, with one that already ended, and
+  with a cookie that is not one (measured, and held by a test of the worker): somebody who signs
+  out in a second tab is not held on that sentence.
 
 ### The reasons, and the measurements
 

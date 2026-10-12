@@ -76,6 +76,46 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     await expect(page.getByText('https://staging.acme.dev')).toBeVisible();
   });
 
+  test('takes the token of a link out of the address bar, for a link that works and for one that does not (FRU-207)', async ({
+    page,
+  }) => {
+    // A link that opens nothing: the screen stays, and the address it shows holds no token. A reload,
+    // a shared screen or the history would show it.
+    const spent = 'a-token-of-a-link-that-opens-nothing';
+    await page.goto(`${CONSOLE}/sign-in#${spent}`);
+    await expect(page.getByRole('heading', { name: 'This link no longer works' })).toBeVisible();
+    expect(page.url()).toBe(`${CONSOLE}/sign-in`);
+    // The control: the worker is asked with that token, so the screen read it before it took it away.
+    // Asked for, and not read at once: in development React runs the effect twice, and the second run
+    // finds no token and draws this screen before the first call reaches the worker.
+    await expect
+      .poll(async () => (await worker.received()).map((each) => each.path))
+      .toContain('/console/auth/email/redeem');
+
+    // A link that works, held while the worker answers: the token is gone before the answer.
+    await page.goto(`${CONSOLE}/setup`);
+    await page.getByRole('textbox', { name: 'Work email' }).fill('ana@acme.dev');
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await expect.poll(async () => (await worker.sent()).length).toBe(1);
+    const link = await linkIn(worker);
+    const token = link.split('#')[1] as string;
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const redeem = `${WORKER_ORIGIN}/console/auth/email/redeem`;
+    await page.route(redeem, async (route) => {
+      await held;
+      await route.fallback();
+    });
+    const asked = page.waitForRequest(redeem);
+    await page.goto(link);
+    await asked;
+    expect(page.url()).toBe(`${CONSOLE}/sign-in`);
+    expect(await page.evaluate(() => window.location.href)).not.toContain(token);
+    release();
+    await expect(page).toHaveURL(/\/setup|\/sites$/);
+    await page.unroute(redeem);
+  });
+
   test('keeps what was typed when the session ended, says so, and goes on after a new sign-in', async ({
     page,
     context,
@@ -153,6 +193,77 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
       headers: { Origin: CONSOLE, Cookie: `${SESSION_COOKIE}=${before[0]?.value}` },
     });
     expect(again.status).toBe(401);
+  });
+
+  test('ends the session of before too when the person signs out (FRU-204)', async ({ page, context }) => {
+    await signInByLink(page, worker, 'ana@acme.dev');
+    // A session of before the worker served better-auth: opened on the routes of before, which the
+    // worker still serves, and kept by this browser in its refresh cookie of 30 days.
+    const calling = { Origin: CONSOLE, 'Content-Type': 'application/json' };
+    await fetch(`${worker.origin}/auth/email`, {
+      method: 'POST',
+      headers: calling,
+      body: JSON.stringify({ email: 'ana@acme.dev' }),
+    });
+    const code = (await linkIn(worker)).split('#')[1];
+    const opened = await fetch(`${worker.origin}/auth/email/redeem`, {
+      method: 'POST',
+      headers: calling,
+      body: JSON.stringify({ code }),
+    });
+    expect(opened.status).toBe(200);
+    const kept = (opened.headers.getSetCookie()[0] ?? '').split(';')[0] ?? '';
+    const [name, value] = kept.split('=') as [string, string];
+    expect(name).toBe('fruitback_console');
+    await context.addCookies([
+      { name, value, domain: 'localhost', path: '/console/session', httpOnly: true, secure: true, sameSite: 'Strict' },
+    ]);
+    const refresh = (): Promise<Response> =>
+      fetch(`${worker.origin}/console/session/refresh`, { method: 'POST', headers: { Origin: CONSOLE, Cookie: kept } });
+
+    await page.getByRole('link', { name: 'My account' }).click();
+    await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Create your workspace' })).toBeVisible();
+
+    const asked = (await worker.received()).filter((each) => each.path === '/console/session/logout');
+    expect(asked.map((each) => each.cookie)).toEqual([true]);
+    // The refresh cookie the browser held opens nothing, whoever presents it.
+    expect((await refresh()).status).toBe(401);
+  });
+
+  test('stays on the account, and says so, when the worker did not end the session (FRU-204)', async ({
+    page,
+    context,
+  }) => {
+    await signInByLink(page, worker, 'ana@acme.dev');
+    const session = (await context.cookies(`${WORKER_ORIGIN}/console/me`)).find((each) => each.name === SESSION_COOKIE);
+    const me = (): Promise<Response> =>
+      fetch(`${worker.origin}/console/me`, {
+        headers: { Origin: CONSOLE, Cookie: `${SESSION_COOKIE}=${session?.value}` },
+      });
+    await page.getByRole('link', { name: 'My account' }).click();
+
+    // better-auth does not answer: what the worker says then (`auth-unavailable`), as the console reads it.
+    const refused = `${WORKER_ORIGIN}/console/auth/sign-out`;
+    await page.route(refused, (route) =>
+      route.fulfill({
+        status: 502,
+        headers: { 'Access-Control-Allow-Origin': CONSOLE, 'Access-Control-Allow-Credentials': 'true' },
+        json: { error: 'auth-unavailable' },
+      }),
+    );
+    await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+
+    await expect(page.getByRole('alert').filter({ hasText: 'You are still signed in' })).toBeVisible();
+    await expect(page).toHaveURL(/\/account$/);
+    await expect(page.getByRole('heading', { name: 'My account' })).toBeVisible();
+    // The sentence is true: the cookie still opens the account.
+    expect((await me()).status).toBe(200);
+
+    await page.unroute(refused);
+    await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Create your workspace' })).toBeVisible();
+    expect((await me()).status).toBe(401);
   });
 });
 

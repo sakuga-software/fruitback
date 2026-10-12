@@ -22,7 +22,7 @@ Please do not open a public issue for a vulnerability once the repository is pub
 
 ## What is supported
 
-Nothing is released yet. `@fruitback/shared`, `@fruitback/widget` and `fruitback` are at `0.1.0` and
+Nothing is released yet. `@fruitback/shared`, `@fruitback/widget` and `fruitback` are at `0.2.0` and
 **unpublished**; the worker image on GHCR is the only distributed artefact. There is no supported
 version policy to state, and pretending otherwise would be the first thing in this file that is not
 true.
@@ -464,6 +464,24 @@ surface, so:
 It is a small amount of cryptography and it is reviewed as such. If you find a flaw in it, that is
 squarely a vulnerability and we want to hear about it.
 
+### With accounts, the worker key opens the console (FRU-203)
+
+`FRUITBACK_IDENTITY_SECRET` signs the access token of every session. On a worker with accounts, the
+routes of the console take a token signed with it, with the id of an account in `sub`, for a
+console session of that account. **Whoever holds the key signs one for any account**, with no
+sign-in, and the id of an account is on every note its person leaves. Nothing in the token says
+that the worker minted it, and a claim that did would not help: the holder of the key writes any
+claim. test:`takes a token that the holder of the worker key signed for the console session of its sub`.
+
+**The condition that protects the console is that no site holds this key.** With accounts no site
+needs it: a site is a row the console wrote, and it signs nothing. A worker that served one site
+with this key, and then got accounts, must change it. Changing it refuses every token of the old
+key at once and ends no session:
+test:`refuses every token of the old key once the key changed, and a session that was open goes on at its next refresh`.
+The steps are in [docs/self-hosting.md](docs/self-hosting.md#change-fruitback_identity_secret). The
+cookie of better-auth is not signed with this key, and once the console signs in with that cookie
+only (FRU-150), no route of the console reads a token.
+
 ### The accounts, and what decides who reads a site (FRU-96)
 
 With `FRUITBACK_ACCOUNTS_PATH` the clients of the worker are the sites the console wrote, read from
@@ -569,6 +587,13 @@ step back from the path above, written and accepted (FRU-139, point 3 of 2026-10
   `Path=/console`. **It never rotates, so a stolen cookie is good until it ends or is ended, and
   nothing detects the theft**: there is no second token to replay. The refresh token of the path
   above rotates, and a replay ends its chain.
+- **The cookie is renewed with the session** (FRU-208). When a call of the console renews the
+  session, the worker sets the cookie again on its answer, with the same token and attributes and
+  7 days more. Until then the row lived on and the cookie of the browser ended 7 days after the
+  sign-in, whatever the person did. Only the cookie of the session leaves by this way, only for a
+  session that is there, and not for the session that the call itself ends.
+  test:`renews the cookie with the session, on each route that reads the cookie, and on no other call`,
+  test:`hands the browser the cookie of the session and no other header of a reading`.
 - **It is read in the database at each call**, with no cache. A session that is ended, by « sign
   out », by « sign out everywhere » (`/console/auth/revoke-sessions`) or by its id
   (`DELETE /console/sessions/<id>`), is refused at the next call, and so is a member who was removed
@@ -597,15 +622,29 @@ it`. The value of the row is the address it was sent to.
 the cookie from another origin, or from none, and takes it from the console`. better-auth refuses
   the same two requests on its own routes. A call with the token of before in `Authorization` is not
   a cookie, and is checked as before.
+- **« Sign out » ends both sessions of the browser, or says that it did not** (FRU-204). A browser
+  that signed in before the worker served better-auth still holds the refresh cookie of the path of
+  before, good for 30 days, and the worker takes it for as long as it serves that path. The console
+  ends it with the cookie of better-auth, and stays on « My account » with « You are still signed
+  in » when the worker did not confirm one of the two. **What remains: a session of before in a
+  browser where nobody presses « Sign out »** goes on until its 30 days, or until the path of before
+  is removed (FRU-150).
 - **The console holds no token** (FRU-148): no access token in its memory, nothing in `localStorage`
   or `sessionStorage`, and a cookie that `document.cookie` does not show. A script injected into the
   console can call the worker while the page is open, as before; it has nothing to carry away.
+  **The condition: the worker said that it serves better-auth**, in `GET /auth/providers`. A worker
+  that answers with no `betterAuth` is a worker of before, and the console holds the access token
+  of before. A worker that refuses the question (`429`, `5xx`) or does not answer said nothing, and
+  the console then takes neither path and holds nothing (FRU-205).
 - **A sign-in with a provider starts by a navigation** to `GET /console/auth/start/<provider>`, which
   answers a redirect to the provider and the cookie of the state. It changes nothing by itself: the
   person still consents at the provider, and comes back with a state that only this browser holds.
 - **Only the routes it names are served.** `SERVED_PATHS` of `auth.ts` lists them: `/ok`,
-  `/get-session`, `/sign-out`, `/revoke-sessions`, `/sign-in/social`, the two callbacks and `/error`.
-  Any other path under `/console/auth/` answers `404` before better-auth reads it. The routes of the
+  `/sign-out`, `/revoke-sessions`, `/sign-in/social`, the two callbacks and `/error`.
+  Any other path under `/console/auth/` answers `404` before better-auth reads it. `/get-session`
+  is one of those (FRU-206): it answers the token of the session in its body, to any script of the
+  console, and the console does not call it. No route answers that token:
+  test:`answers no route that hands the token of the session to a script of the console`. The routes of the
   organization plugin have a list of their own, with a rule for each of the four that are open: see
   [What the console may change, and who](#what-the-console-may-change-and-who-fru-99).
 
@@ -886,11 +925,16 @@ the console. Each one has a rule in `ORGANIZATION_PATHS` (`organization-paths.ts
   reaches every site, so the console creates none (above). The role of an accepted invitation is
   refused again when its row holds two roles: test:`refuses an invitation whose row holds two roles,
 when it is accepted`. An invitation waits 7 days; one address gets one invitation of a workspace at a
-  time, sent again on request; and **3 messages to one address in 15 minutes**, from every workspace
-  together, as the sign-in link: an admin cannot fill a mailbox with the name of Fruitback. A worker
-  with no mailer sends nothing and keeps the invitation: the console shows the same link, to send by
-  hand (FRU-107), and it opens nothing more than the message does.
-  test:`sends an invitation again when asked to, and no more than three messages to one address in the window`.
+  time, sent again on request; and **3 messages from one workspace to one address in 15 minutes**,
+  the numbers of the sign-in link. Past them the invitation is kept and no message goes: the answer
+  says `mailed: false`, and the console gives the link to send by hand. The count is by workspace
+  and address (FRU-209): counted for every workspace together, somebody else closed the window of
+  an address from a workspace of their own, and the refusal told an admin that the address was
+  invited elsewhere. **It does not bound what one account sends to many addresses, or from many
+  workspaces.** A worker with no mailer sends nothing and keeps the invitation: the console shows
+  the same link (FRU-107), and it opens nothing more than the message does.
+  test:`sends an invitation again when asked to, and no more than three messages to one address in the window`,
+  test:`keeps the window of an address to its workspace: another workspace neither closes it nor learns of it (FRU-209)`.
 - **A cancel names the workspace, and the invitation must be of it.** better-auth reads the
   workspace of an invitation from the invitation; the worker reads the role in the workspace of the
   call, so it checks first that the two are one:

@@ -1,6 +1,6 @@
 {
   "name": "fruitback",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Visual feedback widget: click an element, write a note, get a Linear issue.",
   "license": "MIT",
   "files": [

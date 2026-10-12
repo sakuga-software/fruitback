@@ -1130,6 +1130,35 @@ for (const { label, open, skip } of DATABASES) {
       assert.equal((await as(worker, paul, `${ORG}/accept-invitation`, { body: { invitationId: ours } })).status, 400);
     });
 
+    it('keeps the window of an address to its workspace: another workspace neither closes it nor learns of it (FRU-209)', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const other = await team(worker, 'globex');
+      const toBob = () => worker.mail.sent.filter((each) => each.to === 'bob@corp.example').length;
+
+      // Somebody else spends three messages on the address, from a workspace of their own.
+      assert.equal((await invite(worker, other.owner, other.workspace, { email: 'bob@corp.example' })).status, 200);
+      for (let n = 0; n < 3; n += 1) {
+        await invite(worker, other.owner, other.workspace, { email: 'bob@corp.example', resend: true });
+      }
+      assert.equal(toBob(), 3);
+
+      // The workspace that does invite Bob is not refused, its invitation exists, and its message goes.
+      const ours = await invite(worker, acme.owner, acme.workspace, { email: 'bob@corp.example' });
+      assert.equal(ours.status, 200, await ours.clone().text());
+      assert.equal(((await ours.json()) as { mailed?: boolean }).mailed, true);
+      assert.equal(toBob(), 4);
+      assert.equal(
+        (
+          await rowsOf(
+            worker.database,
+            `SELECT id FROM invitation WHERE email = 'bob@corp.example' AND "organizationId" = '${acme.workspace}'`,
+          )
+        ).length,
+        1,
+      );
+    });
+
     it('sends an invitation again when asked to, and no more than three messages to one address in the window', async () => {
       const worker = await workerOn(open);
       const acme = await team(worker);
@@ -1156,18 +1185,50 @@ for (const { label, open, skip } of DATABASES) {
       assert.ok(new Date(String(after?.expiresAt)) >= new Date(String(first?.expiresAt)));
 
       // The four calls that were refused above counted nothing: the window counts the messages that
-      // went. A third one goes, and the fourth is refused, unsent, from another workspace too.
-      assert.equal(
-        (await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev', resend: true })).status,
-        200,
-      );
+      // went. A third one goes. The fourth is kept and sends nothing, and says so: no refusal.
+      const third = await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev', resend: true });
+      assert.equal(third.status, 200);
+      assert.equal(((await third.json()) as { mailed?: boolean }).mailed, true);
       assert.equal(toPaul(), 3);
       const fourth = await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev', resend: true });
-      assert.deepEqual([fourth.status, await fourth.json()], [429, { error: 'too-many-invitations' }]);
-      const fromElsewhere = await invite(worker, other.owner, other.workspace, { email: 'paul@client.dev' });
-      assert.deepEqual([fromElsewhere.status, await fromElsewhere.json()], [429, { error: 'too-many-invitations' }]);
+      assert.equal(fourth.status, 200);
+      assert.deepEqual(
+        (({ id, mailed }) => ({ id, mailed }))((await fourth.json()) as { id: string; mailed: boolean }),
+        { id: first?.id, mailed: false },
+      );
       assert.equal(toPaul(), 3);
       assert.equal((await rowsOf(worker.database, 'SELECT id FROM invitation')).length, 1);
+
+      // Two calls at the same moment: the count is taken in one step, and the one that comes back
+      // over the limit sends nothing. Its invitation is kept.
+      const racing = {
+        auth: worker.auth,
+        accounts: worker.accounts,
+        sessions: worker.sessions,
+        mailer: worker.mail,
+        kv: { ...worker.kv, get: async () => '2', incr: async () => 4 },
+        consoleUrl: CONSOLE_URL,
+        clientIp: '198.51.100.7',
+        trackIp: false,
+      };
+      const lost = await handleOrganizationRoutes(
+        new Request(`${PUBLIC_URL}${ORG}/invite-member`, {
+          method: 'POST',
+          headers: { Cookie: acme.owner.cookie, Origin: CONSOLE_URL, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ organizationId: acme.workspace, email: 'max@client.dev', role: 'member' }),
+        }),
+        `${ORG}/invite-member`,
+        racing,
+        {},
+      );
+      assert.ok(lost !== undefined);
+      assert.equal(lost.status, 200);
+      assert.equal(((await lost.json()) as { mailed?: boolean }).mailed, false);
+      assert.equal(worker.mail.sent.filter((each) => each.to === 'max@client.dev').length, 0);
+      assert.equal(
+        (await rowsOf(worker.database, `SELECT id FROM invitation WHERE email = 'max@client.dev'`)).length,
+        1,
+      );
       // Another address is not held by it.
       assert.equal((await invite(worker, other.owner, other.workspace, { email: 'lea@client.dev' })).status, 200);
     });

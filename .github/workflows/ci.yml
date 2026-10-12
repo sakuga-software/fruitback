@@ -331,8 +331,9 @@ jobs:
         # FRU-144. better-auth is in the bundle behind a dynamic import, and no route reads it, so
         # /health is green on a bundle that cannot load it. With its secret and a database the worker
         # builds it at boot and says so in its log: that line is what proves the bundle. The same
-        # image without the secret must say nothing of it. FRU-147: the one with the secret serves /ok and
-        # /get-session, and answers 404 on a route it does not serve; the other answers 404 on all three.
+        # image without the secret must say nothing of it. FRU-147: the one with the secret serves /ok, and
+        # answers 404 on a route it does not serve (/get-session since FRU-206, and a route of the
+        # organization plugin); the other answers 404 on all three.
         run: |
           docker network create auth
           docker run -d --name auth-db --network auth \
@@ -375,7 +376,7 @@ jobs:
                 "http://127.0.0.1:$port/console/auth/$route")
               echo "$port /console/auth/$route $status"
               expected=404
-              if [ "$port" = 8085 ] && [ "$route" != organization/list ]; then expected=200; fi
+              if [ "$port" = 8085 ] && [ "$route" = ok ]; then expected=200; fi
               test "$status" = "$expected"
             done
           done

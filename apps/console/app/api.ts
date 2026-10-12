@@ -6,9 +6,11 @@
  * call sends it (`credentials: 'include'`, in `transport.ts`). There is nothing to refresh: the worker
  * reads the session in its database at each call.
  *
- * The worker says in `GET /auth/providers` which path it serves. Until it says `betterAuth`, the
- * console signs in as before (`session-of-before.ts`): the console and the worker are not deployed at
- * the same instant.
+ * The worker says in `GET /auth/providers` which path it serves. A worker that answers with no
+ * `betterAuth` is a worker of before, and the console signs in as before (`session-of-before.ts`):
+ * the console and the worker are not deployed at the same instant. **A worker that refuses that
+ * question, or does not answer it, said nothing** (FRU-205): no call leaves, on either path, and the
+ * caller gets that refusal.
  */
 
 import { locale } from './i18n.ts';
@@ -92,26 +94,37 @@ export type Me = { account: Account; workspaces: Workspace[] };
 
 export type Answer<T> = { ok: true; data: T } | { ok: false; status: number; error: string };
 
+type Way = 'cookie' | 'token';
+type Refusal = Extract<Answer<never>, { ok: false }>;
+
 /**
  * Which way of signing in the worker serves: `cookie` (better-auth, FRU-147) or `token` (before).
- * `undefined` until it said: the path of before is the one taken then.
+ * `undefined` until the worker said.
  */
-let path: 'cookie' | 'token' | undefined;
+let path: Way | undefined;
 /** Whether the worker sends mail with better-auth: `email` in its `betterAuth`. */
 let mails = false;
 
-/** The path of the worker, asked once: the answer of `/auth/providers` says it. */
-async function pathOfWorker(): Promise<'cookie' | 'token' | undefined> {
-  if (path === undefined) await signInProviders();
+/**
+ * The path of the worker, asked until it says: the answer of `/auth/providers` says it. When the
+ * worker did not say, this is its refusal, and the caller answers it.
+ *
+ * WARNING: a refusal is not a worker of before (FRU-205). Taking the path of before on a `429` or a
+ * `5xx` spent the refresh cookie of before against a worker that serves better-auth, and put an
+ * access token in this tab.
+ */
+async function pathOfWorker(): Promise<Way | Refusal> {
+  if (path !== undefined) return path;
+  const asked = await askProviders();
 
-  return path;
+  return asked.ok ? asked.data.way : asked;
 }
 
 function send(method: string, to: string, body?: unknown): Promise<Response | undefined> {
   const headers: Record<string, string> = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   // With the cookie of better-auth there is no header to add: the browser sends the cookie.
-  if (path !== 'cookie') Object.assign(headers, before.authorization());
+  if (path === 'token') Object.assign(headers, before.authorization());
 
   return reach(to, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 }
@@ -177,9 +190,10 @@ export async function call<T>(
   options: { quiet?: boolean } = {},
 ): Promise<Answer<T>> {
   const way = await pathOfWorker();
-  if (way !== 'cookie' && !before.holdsToken()) await before.refresh();
+  if (typeof way !== 'string') return way;
+  if (way === 'token' && !before.holdsToken()) await before.refresh();
   let response = await send(method, to, body);
-  if (way !== 'cookie' && response?.status === 401 && (await before.refresh())) response = await send(method, to, body);
+  if (way === 'token' && response?.status === 401 && (await before.refresh())) response = await send(method, to, body);
   if (response?.status === 401 && options.quiet !== true) for (const listener of signedOutListeners) listener();
 
   return answer<T>(response);
@@ -203,8 +217,31 @@ type Announced = Partial<Providers> & { betterAuth?: Partial<Providers> & { emai
  * its own providers; no `betterAuth` is the path of before, and its two booleans.
  */
 export async function signInProviders(): Promise<Providers | undefined> {
+  const asked = await askProviders();
+
+  return asked.ok ? asked.data.providers : undefined;
+}
+
+/** What the worker said: its path, and the providers of that path. */
+type Said = { way: Way; providers: Providers };
+
+let asking: Promise<Answer<Said>> | undefined;
+
+/**
+ * Asks the worker, once for every caller that waits at the same moment: a screen that opens makes
+ * several calls, and each one asked for itself.
+ */
+function askProviders(): Promise<Answer<Said>> {
+  asking ??= learnPath().finally(() => {
+    asking = undefined;
+  });
+
+  return asking;
+}
+
+async function learnPath(): Promise<Answer<Said>> {
   const asked = await answer<Announced>(await reach('/auth/providers', { method: 'GET' }));
-  if (!asked.ok) return undefined;
+  if (!asked.ok) return asked;
   // An answer with no body says nothing of better-auth: the path of before.
   const said: Announced = typeof asked.data === 'object' && asked.data !== null ? asked.data : {};
   const served = said.betterAuth;
@@ -212,7 +249,10 @@ export async function signInProviders(): Promise<Providers | undefined> {
   mails = path === 'cookie' && (served as { email?: unknown }).email === true;
   const providers = path === 'cookie' ? (served as Partial<Providers>) : said;
 
-  return { github: providers.github === true, google: providers.google === true };
+  return {
+    ok: true,
+    data: { way: path, providers: { github: providers.github === true, google: providers.google === true } },
+  };
 }
 
 /**
@@ -227,6 +267,7 @@ export function providerStart(provider: keyof Providers): string {
 
 export async function requestLink(email: string, tag: string): Promise<Answer<{ sent: true }>> {
   const way = await pathOfWorker();
+  if (typeof way !== 'string') return way;
 
   return answer(await send('POST', way === 'cookie' ? '/console/auth/email' : '/auth/email', { email, locale: tag }));
 }
@@ -237,6 +278,8 @@ export async function requestLink(email: string, tag: string): Promise<Answer<{ 
  */
 export async function redeemLink(code: string): Promise<Answer<{ account: Account }>> {
   const way = await pathOfWorker();
+  // The link is not spent: no route was asked.
+  if (typeof way !== 'string') return way;
   if (way === 'cookie') {
     return answer(await send('POST', '/console/auth/email/redeem', { token: code, locale: locale() }));
   }
@@ -248,14 +291,25 @@ export async function redeemLink(code: string): Promise<Answer<{ account: Accoun
   return result;
 }
 
-/** Ends the session on the worker: the cookie is refused at the next call, in every tab. */
-export async function signOut(): Promise<void> {
-  if ((await pathOfWorker()) === 'cookie') {
-    await send('POST', '/console/auth/sign-out', {});
+/**
+ * Ends the session on the worker: the cookie is refused at the next call, in every tab.
+ *
+ * `false` when the worker did not say that every session ended (FRU-204). The screen then says so
+ * and stays: somebody who reads « signed out » leaves the browser to the next person.
+ *
+ * With better-auth, the session of before is ended too. A browser that signed in before the worker
+ * served better-auth still holds its refresh cookie, good for 30 days, and the worker still takes
+ * it. Both calls are made, whatever the first one answers. FRU-150 removes the second one with the
+ * path of before.
+ */
+export async function signOut(): Promise<boolean> {
+  const way = await pathOfWorker();
+  // The worker did not say which sessions it keeps: nothing confirmed that one ended.
+  if (typeof way !== 'string') return false;
+  if (way === 'token') return before.logOut();
+  const [ended, endedBefore] = await Promise.all([send('POST', '/console/auth/sign-out', {}), before.logOut()]);
 
-    return;
-  }
-  await before.logOut();
+  return ended?.ok === true && endedBefore;
 }
 
 /**
@@ -306,6 +360,8 @@ export type Invitation = {
   status: 'pending' | 'accepted' | 'rejected' | 'canceled';
   expiresAt: string;
   createdAt?: string;
+  /** In the answer to an invitation only: `false` when the worker kept it and sent no message. */
+  mailed?: boolean;
 };
 
 /**

@@ -95,6 +95,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Console · this browser': 'Console · ce navigateur',
   'Active now': 'Actif maintenant',
   'Sign out': 'Se déconnecter',
+  'You are still signed in: Fruitback did not confirm the sign-out. Try again.':
+    'Vous êtes toujours connecté : Fruitback n’a pas confirmé la déconnexion. Réessayez.',
   'Delete the workspace': 'Supprimer le workspace',
   'Sites, members and pin positions go. Items already in your sources stay there.':
     'Les sites, les membres et la position des pins disparaissent. Les éléments déjà dans vos sources y restent.',
@@ -190,8 +192,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'This person is already a member of the workspace.': 'Cette personne est déjà membre de l’espace de travail.',
   'This address is invited already. Send the invitation again from its row.':
     'Cette adresse est déjà invitée. Renvoyez l’invitation depuis sa ligne.',
-  'This address received three invitations in the last fifteen minutes. Wait, then send it again.':
-    'Cette adresse a reçu trois invitations dans le dernier quart d’heure. Attendez, puis renvoyez-la.',
+  'Invitation kept for {email}, but no message was sent: this workspace sent that address three in fifteen minutes. Send them this link:':
+    'Invitation gardée pour {email}, mais aucun message n’est parti : cet espace a déjà écrit trois fois à cette adresse en un quart d’heure. Envoyez-lui ce lien :',
   'The invitation is kept, but its message did not leave. Send it again from its row.':
     'L’invitation est gardée, mais son message n’est pas parti. Renvoyez-la depuis sa ligne.',
   'A workspace has a hundred invitations waiting at most. Cancel some first.':
