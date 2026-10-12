@@ -36,7 +36,12 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   **A gesture that cannot be undone asks twice** (FRU-165): « Remove » a site and « Disconnect » a
   source go through `Confirm` (`confirm.tsx`), which says what the gesture costs, gives focus to
   « Keep it », and acts only on a second button that names the site or the source. « Keep it » and
-  Escape give the row back, with focus on its first button.
+  Escape give the row back, with focus on its first button. `e2e/console-confirm.spec.ts` measures it
+  on both screens, at 1440 px in English and 390 px in French (FRU-191).
+  **A panel writes the whole list of a site, one write at a time** (FRU-123): a second gesture made
+  before the first list is kept would start from the list of before and take the first change away,
+  so the controls of the list are disabled while it is written. `e2e/console-destinations.spec.ts`
+  holds a write open and tries the second gesture, on the panel of a Linear and of an address.
   **The panel of a source opens where it is seen** (FRU-161): from 1280 px in its column beside the
   list, as on the board; under 1280 px right under its row, which names it in `aria-controls`, and
   the page scrolls as far as the panel needs. `e2e/console-source-panel.spec.ts` measures it at 390,

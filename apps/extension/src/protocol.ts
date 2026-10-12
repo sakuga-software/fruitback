@@ -97,8 +97,9 @@ export type UnmountMessage = {
  * simply lost. The main world therefore says when it is there, rather than the isolated one guessing
  * with a timeout.
  *
- * The page can forge this, and the cost of that is one extra mount of the widget it is already
- * looking at, with a config it can already read. Worth naming, not worth defending against.
+ * The page can forge this. The isolated world then posts its decision again, which the main world
+ * already applied: it builds nothing for a mount that is the one on screen (FRU-186), so an open
+ * composer stays open.
  */
 export type ReadyMessage = {
   channel: typeof CHANNEL;

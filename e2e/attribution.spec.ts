@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { WORKER_ORIGIN, openPlayground, plantPin, storedSeeds } from './pin.ts';
+import { WORKER_ORIGIN, openPlayground, plantPin, sendNote, storedSeeds } from './pin.ts';
 
 /**
  * Attribution (FRU-9), through the popover a reporter actually uses.
@@ -17,8 +17,7 @@ test('a note is anonymous unless the reporter says otherwise', async ({ page }) 
   // The fields are behind a disclosure: anonymous is what happens if you do nothing.
   await expect(page.locator('[data-fruitback-who]')).toBeHidden();
   await page.getByPlaceholder('What is wrong here?').fill('Personne ne saura qui je suis');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(page.locator('[data-fruitback-dev="status"]')).toHaveText(/^planté ·/);
+  await sendNote(page);
 
   const [seed] = await storedSeeds(page);
   expect(seed?.reporter).toBeUndefined();
@@ -32,8 +31,7 @@ test('a typed name reaches Linear, and is stored as the claim it is', async ({ p
   await page.getByRole('button', { name: /Add my name/ }).click();
   await page.getByLabel('Your name (optional)').fill('Alice');
   await page.getByPlaceholder('What is wrong here?').fill('Signé Alice');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(page.locator('[data-fruitback-dev="status"]')).toHaveText(/^planté ·/);
+  await sendNote(page);
 
   const [seed] = await storedSeeds(page);
   expect(seed?.reporter).toEqual({ name: 'Alice' });
@@ -57,8 +55,7 @@ test('a reporter who asks to be remembered signs the next note too, until the bo
   await page.getByLabel('Your name (optional)').fill('Alice');
   await page.getByLabel('Remember me on this site').check();
   await page.getByPlaceholder('What is wrong here?').fill('Signé, et retenu');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(page.locator('[data-fruitback-dev="status"]')).toHaveText(/^planté ·/);
+  await sendNote(page);
   expect(await stored()).toContain('Alice');
 
   // After a reload nothing of the first popover is left: the name comes from storage.
@@ -69,8 +66,7 @@ test('a reporter who asks to be remembered signs the next note too, until the bo
   await expect(page.getByLabel('Your name (optional)')).toHaveValue('Alice');
   await expect(page.getByLabel('Remember me on this site')).toBeChecked();
   await page.getByPlaceholder('What is wrong here?').fill('Signé sans rien retaper');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(page.locator('[data-fruitback-dev="status"]')).toHaveText(/^planté ·/);
+  await sendNote(page);
 
   const seeds = await storedSeeds(page);
   expect(seeds.find((seed) => seed.note === 'Signé sans rien retaper')?.reporter).toEqual({ name: 'Alice' });
