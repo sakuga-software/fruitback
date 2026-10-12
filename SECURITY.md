@@ -586,6 +586,12 @@ it`. The value of the row is the address it was sent to.
 the cookie from another origin, or from none, and takes it from the console`. better-auth refuses
   the same two requests on its own routes. A call with the token of before in `Authorization` is not
   a cookie, and is checked as before.
+- **The console holds no token** (FRU-148): no access token in its memory, nothing in `localStorage`
+  or `sessionStorage`, and a cookie that `document.cookie` does not show. A script injected into the
+  console can call the worker while the page is open, as before; it has nothing to carry away.
+- **A sign-in with a provider starts by a navigation** to `GET /console/auth/start/<provider>`, which
+  answers a redirect to the provider and the cookie of the state. It changes nothing by itself: the
+  person still consents at the provider, and comes back with a state that only this browser holds.
 - **Only the routes it names are served.** `SERVED_PATHS` of `auth.ts` lists them: `/ok`,
   `/get-session`, `/sign-out`, `/revoke-sessions`, `/sign-in/social`, the two callbacks and `/error`.
   Any other path under `/console/auth/`, the routes of the organization plugin included, answers
