@@ -817,12 +817,11 @@ is its configuration, its tables and the guards, so the slice that signs a perso
   builds one instance when it starts (`announceAuth`, from `server.ts`) and says so in its log.
   Without the secret, `authFor` answers `undefined`: nothing is loaded and nothing is opened. Ask
   `hasAuth(config)`, as you ask `hasAccounts(config)`.
-- **better-auth serves no route.** No path under `/console/auth/` answers anything but `404`, with or
-  without a database, with or without the secret: `app.ts` does not import `auth.ts`, and a test reads
-  that in the source. test:`answers 404 on every route of better-auth, with or without a database,
-with or without its secret` asks nine routes that better-auth really has, and its control asks
-  better-auth for the same nine. A worker whose database does not answer says `502` there, as on
-  every route: the accounts are read before the dispatch.
+- **Off, better-auth serves no route.** No path under `/console/auth/` answers anything but `404`,
+  with or without a database: test:`answers 404 on every route of better-auth when it is off, with
+or without a database`. On, it serves the paths of `SERVED_PATHS` and no other (FRU-147: see _The
+  console signs in with better-auth_). A worker whose database does not answer says `502` there, as
+  on every route: the accounts are read before the dispatch.
 - **`auth.ts` is the one file that names better-auth**, as types, and it loads the library when the
   instance is built, as `postgres.ts` does for its driver. A lint rule holds the import, for `kysely`
   too. test:`loads no file of better-auth for a worker that has it off, and answers 404 under
@@ -908,9 +907,9 @@ whether it was read there, read in the source of the package, or measured.
 - **Why it is built when the server starts, while it serves nothing.** `/health` reads no database
   and no library, so a bundle that cannot load better-auth is green there. That is how the bundle
   without its `createRequire` banner answered `200` on `/health` and `502` on every read (FRU-141).
-  With no route, nothing else would build the instance before the first sign-in of the next slice.
-  So a worker that has the secret builds it at boot and writes one line: « better-auth is ready, and
-  serves no route », or why it did not start. `/health` does not wait for it.
+  Built at the first sign-in, a bundle or a schema that is wrong would show there, to a person. So
+  a worker that has the secret builds it at boot and writes one line: « better-auth is ready, under
+  /console/auth », or why it did not start. `/health` does not wait for it.
 - **better-auth reads the schema of the database while it starts** (measured, with
   `NODE_ENV=production` too; reference/options says « outside production », concepts/database says
   « including in production »). On an empty database it writes « Database schema mismatch » in the
@@ -924,8 +923,9 @@ it on does not answer`.
   and the line of the boot then says what is missing in place of « ready ». The message of
   better-auth ends with « Run `npx auth migrate` », which is the one thing not to do on a database
   of the worker: the worker writes its own words. test:`refuses to call better-auth ready on a
-schema that lost a column, and names the column` holds it. **The slice that mounts the handler must
-  catch that rejection**, or a schema that is wrong is an exception in `handleRequest`.
+schema that lost a column, and names the column` holds it. **The mount catches that rejection**
+  (FRU-147), and answers `502` with the reason in the log: test:`answers 502, and says why in its
+log, when better-auth rejects`.
 - **A pool of `pg` is what better-auth takes** (read: adapters/postgresql). `postgres.ts` hands over
   the pool of the process, `PgDatabase.pool()`, and nothing else may take it. The tests on PGlite
   give better-auth a pool made of the instance of the case, in `postgres.fixture.ts`: one client out
@@ -964,8 +964,8 @@ in` keeps the first two measured.
 - **A request that has the cookie is refused from another origin, and with no `Origin`** (measured:
   `403` both times). `demo.fruitback.com` is the same site as the worker, so `SameSite` does not keep
   it out: the check of the origin does. This is true of the routes of better-auth. The routes of the
-  worker under `/console/` read no cookie yet, and the slice that makes them read one must refuse
-  the same two requests itself.
+  worker under `/console/` read the cookie since FRU-147, and refuse the same two requests when they
+  change something.
 - **Some lines of better-auth do not go through the logger of the options.** The refusal of an
   origin is written twice: once by the logger the worker gives, as a `[fruitback]` line, and once by
   a logger of the library, with colours (measured). No such line held a secret or an address.
@@ -1016,15 +1016,15 @@ nothing`.
   plain are taken in a database that another application shares: the migration then fails, and
   every read of the accounts answers `502`. The database of a worker is its own. A schema of its
   own does the same, with `options=-c search_path=<schema>` in the address: that is how
-  test:`builds better-auth at boot on a real server, and still answers 404` gives each run an empty
+  test:`builds better-auth at boot on a real server, and serves its routes` gives each run an empty
   database, and better-auth reads the search path (read: adapters/postgresql).
 - **The organization plugin is in the configuration for its tables and its roles.** `getMigrations`
   reads the schema from the plugins, and `member` is a table of that plugin. None of its routes is
   served. What a guest reads through them, and two roles on one member, are the next slices: the
   constraint on `member` closes only the second row for one person.
-- **What is left to the slices that serve a route**, so nobody reads a decision in a default: how
-  long a session lasts (7 days, renewed each day of use, by default), which ways to sign in, how two
-  providers that prove one address are linked, and whether the `session` table keeps an address.
+- **What was left to the slice that serves a route** (FRU-147 decided each one, below): how long a
+  session lasts, which ways to sign in, how two providers that prove one address are linked, and
+  whether the `session` table keeps an address.
 - **The generated DDL has no unique constraint on `account ("providerId", "accountId")` either.**
   The `logins` table of the worker had that pair as its primary key. FRU-146 moved the rows there
   and added the constraint: see _The accounts in the tables of better-auth_.
@@ -1372,7 +1372,7 @@ since`.
 A person, a way to sign in, a workspace and a membership are rows of `user`, `account`,
 `organization` and `member`: the tables of better-auth. **Nothing changes for a caller.** The sign-in
 code of before is still the one that runs, `AccountStore` is the same interface, and better-auth
-still serves no route. The rows are where better-auth will read them, so the slice that signs a
+served no route then (FRU-147 serves it). The rows are where better-auth reads them, so the slice that signs a
 person in with it (FRU-147) has no data to move.
 
 **Nothing changes on SQLite**: `accounts-sqlite.ts` keeps its four tables until FRU-184.
@@ -1472,6 +1472,94 @@ more`.
 **Not measured:** a database of real size. The migration holds the four tables for the time of four
 `INSERT … SELECT` and of two foreign keys that PostgreSQL validates, in a transaction that the first
 call of the worker waits for.
+
+## The console signs in with better-auth (FRU-147)
+
+The worker serves the sign-in of better-auth under `/console/auth/`, **beside the path of before**,
+which does not change: a console of before signs in as it did, and its tests pass with no change.
+The console moves in FRU-148, and FRU-150 removes the path of before.
+
+### The rules, in short
+
+- **`auth-routes.ts` serves `/console/auth/*`, under the limit of the worker**, with the headers of
+  `consoleCors` added to the answer: better-auth sets none. **Only the paths of `SERVED_PATHS`** in
+  `auth.ts` reach better-auth; any other one answers `404` before it reads the request. A route that a
+  plugin adds is closed until somebody names it there with its reason. The routes of the organization
+  plugin are closed until FRU-149.
+- **A rejection of better-auth is a `502`**, with its reason in the log and no address of the
+  database: `auth.handler` rejects on a schema that is wrong.
+- **The link of the e-mail is the worker's own two routes.** `POST /console/auth/email` calls
+  `signInMagicLink` in the process; its `sendMagicLink` hands the token to the route, which writes
+  `<console>/sign-in#<token>` and sends it by `mail.ts`, in the language of the person.
+  `POST /console/auth/email/redeem` takes the token in its body, calls `magicLinkVerify` in the
+  process, and **hands the browser the `Set-Cookie` and nothing else of its answer**, which holds the
+  token of the session. `/sign-in/magic-link` and `/magic-link/verify` are in `disabledPaths`: closed
+  to a request, open to `auth.api` (measured). The limit of 3 links per address per 15 minutes is
+  the key of the path of before, so the two paths together send 3.
+- **`sendMagicLink` takes no mailer.** better-auth calls it in the middle of `signInMagicLink`, so the
+  route leaves its delivery in a map under a ticket, and names the ticket in the `metadata` of the
+  call (`sendLinkThrough`). A call with no ticket sends nothing, and throws.
+- **The routes under `/console/` take the cookie or the token of before.** The token wins when both
+  are there. **With the cookie, a call that is not a read needs the `Origin` of the console**, and a
+  request with none is refused (`callerOf` in `console-api.ts`, `mutationAllowed` in
+  `auth-routes.ts`). `consoleCors` lets a request with no `Origin` through: it is not the check.
+- **A session is ended by its id, with a route of the worker**: `DELETE /console/sessions/<id>`, of
+  the person of the cookie only. `GET /console/sessions` lists them, with no token. The routes of
+  better-auth that name a session by its token are closed (FRU-181).
+- **An address that a provider did not verify creates no account.** A `databaseHooks.user.create`
+  refuses a person whose `emailVerified` is not `true`. A link of the e-mail proves its address;
+  better-auth already links no unverified address to an account. Nothing is in `trustedProviders`.
+- **GitHub takes a second OAuth App**, `FRUITBACK_AUTH_GITHUB_OAUTH`: an App has one callback. Google
+  takes the client of before with a second callback. **No picture is kept** (`mapProfileToUser`), as
+  the accounts of before kept none.
+- **A session lasts 7 days, and each day it is used moves its end by 7 days** (`SESSION_TTL_SECONDS`,
+  `SESSION_RENEWAL_SECONDS`): the defaults of 1.7.7, written. No cookie cache: a session that is
+  ended is refused at the next call. `SECURITY.md` gives the numbers, and `security.test.ts` holds
+  them.
+- **`FRUITBACK_AUTH_TRACK_IP=1` keeps the address and the user agent of a session, and turns the
+  limit of better-auth on** (decision of 2026-10-11). Off, which is the default, a
+  `databaseHooks.session.create` empties both columns. On, the worker writes the address that
+  `resolveClientIp` read in `x-fruitback-client-ip`, over anything the caller sent, and that header
+  is the only one better-auth reads (`ipAddressHeaders`).
+- **A sign-in that fails goes back to `<console>/setup?error=<code of better-auth>`**
+  (`onAPIError.errorURL`). FRU-148 gives each code its sentence.
+- **`GET /auth/providers` says `betterAuth: { email, github, google }`** when better-auth is on, and
+  nothing more when it is off: a console of before reads the answer it always read.
+
+### The reasons, and the measurements
+
+Read on better-auth 1.7.7, in `plugins/magic-link/index.mjs`, `@better-auth/core` `social-providers`,
+`cookies/index.mjs`; measured in `auth-routes.test.ts`, on PGlite and on PostgreSQL 17.
+
+- **better-auth creates an account for an address that GitHub did not verify, and opens its session**
+  (measured on 1.7.7, `emailVerified` false in the row). It links no such address to an account that
+  exists (`account_not_linked`). test:`makes an account for an address that GitHub did not verify,
+without the hook of the worker` is the control of the hook.
+- **GitHub: better-auth takes the address of the profile**, or the primary one when the profile shows
+  none, and reads its `verified` in `/user/emails`. The path of before took the primary verified
+  address. The two differ for a person whose public address is another verified one: they then
+  reach the account of that address.
+- **Google: better-auth reads the identity in the id token** that the token endpoint answers, and
+  checks no signature. The path of before asked Google's user info. The token comes from Google over
+  TLS in the answer to the worker's own request, so nobody else wrote it.
+- **The digest of a link, three times.** `storeToken: 'hashed'` keeps `magic-link:<base64url of the
+SHA-256 of the token>`, `verification.storeIdentifier: 'hashed'` digests that, and the layer of
+  FRU-181 digests it again. None of the three, nor the token, is in a row:
+  test:`keeps the link as a digest of a digest, which opens nothing when a copy presents it`. The
+  value of the row is `{"type":"magic-link","email":…}`: no secret.
+- **A link spent twice**: `consumeVerificationValue` deletes the row in one statement, so of two calls
+  at the same moment one finds it. The other gets a redirect to `INVALID_TOKEN`, which the route
+  answers as `401`.
+- **better-auth signs up a new address by a link**, with an empty name and a verified address, as the
+  path of before did. The language of the browser that opened the link is kept when the account has
+  none.
+- **The state of a sign-in with a provider** is a cookie `__Secure-fruitback.oauth_state`, encrypted,
+  `HttpOnly`, `SameSite=Lax`, ten minutes; its path was `/` and is `/console/auth` now (measured).
+- **A test that needs a session with a password** says, in `withTestSignUp`, that its address is
+  proven: the hook refuses a sign-up with a password otherwise, and that sign-up is off in the worker.
+
+**Not measured here:** Safari; and the two OAuth applications for real, which need Mathieu. The
+measures in a browser are in the pull request of FRU-147.
 
 ## The markdown codec, and the file that outlived its name
 

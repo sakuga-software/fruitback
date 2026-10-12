@@ -118,7 +118,7 @@ immutable.
   a test reads that on the graph of the bundle. It serves no route, so nothing reads it on `/health`
   or on any request. The `docker image` job therefore boots the image a third and a fourth time on
   one database, without the secret and with it: the one with the secret must write « better-auth is
-  ready, and serves no route » in its log, the other must write nothing of better-auth, and both
+  ready, under /console/auth » in its log, the other must write nothing of better-auth, and both
   must answer `404` under `/console/auth/`. The numbers are in [worker.md](worker.md).
 - **The image holds one folder beside the bundle since FRU-180: `drizzle/`**, the migrations of the
   PostgreSQL database. They are files that `drizzle-kit` wrote, and the worker reads them when it

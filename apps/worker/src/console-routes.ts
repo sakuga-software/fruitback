@@ -59,8 +59,12 @@ export function consoleOrigin(config: WorkerConfig): string | undefined {
 /**
  * CORS for the console routes: the console's origin and no other, with credentials.
  *
- * A request with no `Origin` is not a browser, so there is no cookie it could have carried by
- * accident; it is answered like any other caller of this worker.
+ * A request with no `Origin` passes this check, and it **can** carry a cookie: a navigation or a
+ * form of a page of the same site as the worker sends the cookie of a session of better-auth
+ * (FRU-147). So the routes that read that cookie refuse, each one, a call with no `Origin` that
+ * changes something: see `callerOf` of `console-api.ts` and `mutationAllowed` of `auth-routes.ts`.
+ * The refresh cookie of before goes to `/console/session` only, and its two routes change nothing
+ * that a third party gains from.
  */
 export function consoleCors(
   request: Request,

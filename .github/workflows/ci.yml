@@ -331,7 +331,8 @@ jobs:
         # FRU-144. better-auth is in the bundle behind a dynamic import, and no route reads it, so
         # /health is green on a bundle that cannot load it. With its secret and a database the worker
         # builds it at boot and says so in its log: that line is what proves the bundle. The same
-        # image without the secret must say nothing of it. Both answer 404 under /console/auth.
+        # image without the secret must say nothing of it. FRU-147: the one with the secret serves /ok and
+        # /get-session, and answers 404 on a route it does not serve; the other answers 404 on all three.
         run: |
           docker network create auth
           docker run -d --name auth-db --network auth \
@@ -362,18 +363,20 @@ jobs:
           start worker-auth-off 8084
           start worker-auth-on 8085 -e FRUITBACK_AUTH_SECRET=ci-not-a-real-secret-of-better-auth-0123456789
           for attempt in $(seq 1 30); do
-            if docker logs worker-auth-on 2>&1 | grep -q 'better-auth is ready, and serves no route'; then break; fi
+            if docker logs worker-auth-on 2>&1 | grep -q 'better-auth is ready, under /console/auth'; then break; fi
             sleep 1
           done
           docker logs worker-auth-on
           docker logs worker-auth-off
-          docker logs worker-auth-on 2>&1 | grep -q 'better-auth is ready, and serves no route'
+          docker logs worker-auth-on 2>&1 | grep -q 'better-auth is ready, under /console/auth'
           for port in 8084 8085; do
             for route in ok get-session organization/list; do
               status=$(curl -s -o /dev/null -w '%{http_code}' -H 'Origin: https://app.fruitback.example' \
                 "http://127.0.0.1:$port/console/auth/$route")
               echo "$port /console/auth/$route $status"
-              test "$status" = 404
+              expected=404
+              if [ "$port" = 8085 ] && [ "$route" != organization/list ]; then expected=200; fi
+              test "$status" = "$expected"
             done
           done
           # After the requests above: a line of better-auth in the log of the worker that has it off

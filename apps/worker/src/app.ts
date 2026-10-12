@@ -13,6 +13,8 @@ import {
 } from './clients.ts';
 import { type AccountStore, type Role, can } from './accounts.ts';
 import { SESSION_SITES_PATH, handleSessionSites } from './session-sites.ts';
+import { type Auth, authFor } from './auth.ts';
+import { handleAuthRoutes, isAuthRoute, sessionOfCookie } from './auth-routes.ts';
 import { consoleCors, handleConsoleSession, isConsoleRoute } from './console-routes.ts';
 import { handleConsoleApi } from './console-api.ts';
 import { handleGitHub } from './github-oauth.ts';
@@ -33,6 +35,7 @@ import { chargeRateLimit, checkRateLimit, maxBatch } from './rate-limit.ts';
 import { cached, invalidate } from './cache.ts';
 import { type Kv, KvError, processKv } from './kv.ts';
 import { postgresAccountStore, postgresSessionStore } from './postgres-stores.ts';
+import { withoutAddress } from './postgres.ts';
 import {
   type SessionStore,
   createPairing as openPairing,
@@ -203,6 +206,11 @@ export type RequestContext = {
   /** What reaches GitHub on a sign-in (FRU-97). A suite hands over a double of GitHub. */
   fetcher?: typeof fetch;
   /**
+   * better-auth, for a worker that has it on (FRU-147). Absent, the handler takes the one instance of
+   * the process (`authFor`), built when the server started. A suite hands over one on PGlite.
+   */
+  auth?: Auth | Promise<Auth>;
+  /**
    * Where the rate limiter and the read cache keep their state (FRU-49). When it is absent, the
    * handler uses `processKv`, which gives the one instance of this process and never a new empty one.
    */
@@ -331,18 +339,70 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
     const sessions = context.sessionStore ?? sessionStoreFor(served);
     if (sessions === undefined || served.identitySecret === undefined)
       return json(404, { error: 'not-found' }, cors.headers);
+    // better-auth, when it is on (FRU-147): the instance of the process, built at boot.
+    const auth = context.auth ?? authFor(served);
+    const mailer = context.mailer ?? mailerFor(served);
 
     try {
       // Which providers this worker signs people in with (FRU-135). The console asks before it draws
-      // a button: a button for a provider the worker does not have leads to a `404`.
+      // a button: a button for a provider the worker does not have leads to a `404`. `betterAuth`
+      // says which ways the routes of better-auth offer (FRU-147), so a console of after takes them,
+      // and a console of before reads the two booleans it always read.
       if (pathname === SIGN_IN_PROVIDERS && request.method === 'GET') {
         const ready = served.publicUrl !== undefined && served.consoleUrl !== undefined;
 
         return json(
           200,
-          { github: ready && served.github !== undefined, google: ready && served.google !== undefined },
+          {
+            github: ready && served.github !== undefined,
+            google: ready && served.google !== undefined,
+            // Absent when better-auth is off: the answer of before, to the letter.
+            ...(auth === undefined
+              ? {}
+              : {
+                  betterAuth: {
+                    email: mailer !== undefined,
+                    github: served.authGithub !== undefined,
+                    google: served.google !== undefined,
+                  },
+                }),
+          },
           cors.headers,
         );
+      }
+
+      // The routes of better-auth, and the worker's own beside them (FRU-147). A worker that has it
+      // off answers `404` there, as before.
+      if (isAuthRoute(pathname)) {
+        if (auth === undefined || served.consoleUrl === undefined)
+          return json(404, { error: 'not-found' }, cors.headers);
+        try {
+          const answer = await handleAuthRoutes(
+            request,
+            pathname,
+            {
+              auth,
+              accounts,
+              mailer,
+              kv,
+              consoleUrl: served.consoleUrl,
+              clientIp: context.clientIp,
+              trackIp: served.authTrackIp,
+            },
+            cors.headers,
+          );
+          if (answer !== undefined) return answer;
+        } catch (error) {
+          if (error instanceof StoreError) throw error;
+          // better-auth rejects, and does not answer, on a schema that is not the one it expects, or
+          // a database that does not answer (FRU-144). Said in the log, with no address and no token.
+          const said = error instanceof Error ? error.message : String(error);
+          console.error(
+            `[fruitback] better-auth did not answer: ${served.databaseUrl === undefined ? said : withoutAddress(said, served.databaseUrl)}`,
+          );
+
+          return json(502, { error: 'auth-unavailable' }, cors.headers);
+        }
       }
 
       // Top-level navigations to and from a provider, not calls of the console (FRU-97, FRU-135).
@@ -389,7 +449,7 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
           request,
           pathname,
           served,
-          { accounts, sessions, mailer: context.mailer ?? mailerFor(served), kv, secret: served.identitySecret },
+          { accounts, sessions, mailer, kv, secret: served.identitySecret },
           cors.headers,
         )) ??
         (await handleConsoleApi(
@@ -403,6 +463,13 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
             kv,
             ...(served.linearOAuth === undefined ? {} : { linearOAuth: served.linearOAuth }),
             ...(served.publicUrl === undefined ? {} : { publicUrl: served.publicUrl }),
+            // The cookie of better-auth, beside the token of before (FRU-147).
+            ...(auth === undefined || served.consoleUrl === undefined
+              ? {}
+              : {
+                  cookieSession: async (each: Request) => (await sessionOfCookie(auth, each))?.userId,
+                  consoleUrl: served.consoleUrl,
+                }),
           },
           cors.headers,
         ));

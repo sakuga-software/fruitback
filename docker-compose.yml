@@ -74,6 +74,8 @@ services:
       FRUITBACK_LINEAR_OAUTH: ${FRUITBACK_LINEAR_OAUTH:-}
       FRUITBACK_SECRETS_KEY: ${FRUITBACK_SECRETS_KEY:-}
       FRUITBACK_AUTH_SECRET: ${FRUITBACK_AUTH_SECRET:-}
+      FRUITBACK_AUTH_GITHUB_OAUTH: ${FRUITBACK_AUTH_GITHUB_OAUTH:-}
+      FRUITBACK_AUTH_TRACK_IP: ${FRUITBACK_AUTH_TRACK_IP:-}
 
   # PostgreSQL, for a worker that has accounts (FRU-143). It starts only with its profile:
   #   docker compose --profile postgres up -d --wait

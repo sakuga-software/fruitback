@@ -115,15 +115,23 @@ for (const { label, open, skip } of DATABASES) {
       const { options } = await optionsOn(database);
       await signUp(await startAuth(withTestSignUp(options)), 'alice@acme.dev', { 'X-Forwarded-For': '203.0.113.7' });
 
-      assert.deepEqual(await rowsOf(database, 'SELECT "ipAddress" FROM "session"'), [{ ipAddress: '' }]);
+      // FRU-147: no address and no user agent at all, and not the empty text of 1.7.7 alone.
+      assert.deepEqual(await rowsOf(database, 'SELECT "ipAddress", "userAgent" FROM "session"'), [
+        { ipAddress: null, userAgent: null },
+      ]);
     });
 
     // Why the worker does not let better-auth read the address: measured, with the tracking on.
     it('takes a lone X-Forwarded-For as the caller wrote it, and refuses a chain, when it tracks addresses', async () => {
       const database = await opening(open);
       const { options } = await optionsOn(database);
+      // better-auth alone: no header named by the worker, and not the hook that empties the row.
       const tracking = await startAuth(
-        withTestSignUp({ ...options, advanced: { ...options.advanced, ipAddress: { disableIpTracking: false } } }),
+        withTestSignUp({
+          ...options,
+          databaseHooks: { ...options.databaseHooks, session: {} },
+          advanced: { ...options.advanced, ipAddress: { disableIpTracking: false } },
+        }),
       );
       await signUp(tracking, 'lone@acme.dev', { 'X-Forwarded-For': '203.0.113.7' });
       await signUp(tracking, 'chain@acme.dev', { 'X-Forwarded-For': '203.0.113.7, 198.51.100.9' });
