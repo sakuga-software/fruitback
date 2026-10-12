@@ -1524,6 +1524,36 @@ for (const { label, open, skip } of DATABASES) {
       assert.equal((await refresh(worker, paired.refreshToken)).status, 401);
     });
 
+    it('removes an admin and cancels their invitations when the second end of their extensions fails (FRU-209)', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const made = await invite(worker, acme.admin, acme.workspace, { email: 'second@elsewhere.dev' });
+      const { id } = (await made.json()) as { id: string };
+      const paired = await extension(worker, acme.admin, acme.workspace);
+      // The first pass, before the member is deleted, answers; the one after does not.
+      const failing = sessionsThatFail(worker);
+      failing.now = false;
+      const real = worker.sessions.endSessionsOf.bind(worker.sessions);
+      (worker.sessions as { endSessionsOf: unknown }).endSessionsOf = async (...args: Parameters<typeof real>) => {
+        const answered = await real(...args);
+        failing.now = true;
+
+        return answered;
+      };
+
+      const removed = await as(worker, acme.owner, `${ORG}/remove-member`, {
+        body: { organizationId: acme.workspace, memberIdOrEmail: acme.admin.member },
+      });
+
+      assert.equal(removed.status, 200, await removed.clone().text());
+      assert.equal(failing.now, true, 'the second pass was not played');
+      assert.equal(
+        (await rowsOf(worker.database, `SELECT status FROM invitation WHERE id = '${id}'`))[0]?.status,
+        'canceled',
+      );
+      assert.equal((await refresh(worker, paired.refreshToken)).status, 401);
+    });
+
     it('finishes what follows a departure when somebody who left asks again (FRU-209)', async () => {
       const worker = await workerOn(open);
       const acme = await team(worker);

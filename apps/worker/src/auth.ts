@@ -350,8 +350,15 @@ export async function authOptions(
       // answered `MEMBER_NOT_FOUND`. It runs again after, for a session opened between the two.
       beforeRemoveMember: async ({ member }) =>
         sessions.endSessionsOf({ subject: member.userId, workspace: member.organizationId }, Date.now()),
-      afterRemoveMember: async ({ member }) =>
-        sessions.endSessionsOf({ subject: member.userId, workspace: member.organizationId }, Date.now()),
+      // The second pass must not fail the call: the member is deleted, the first pass ended their
+      // sessions, and a `500` here kept the route from cancelling their invitations.
+      afterRemoveMember: async ({ member }) => {
+        try {
+          await sessions.endSessionsOf({ subject: member.userId, workspace: member.organizationId }, Date.now());
+        } catch (error) {
+          console.error(`[fruitback] the sessions of a removed member were ended once, not twice: ${String(error)}`);
+        }
+      },
     },
   });
   // Every route of the plugin that `ORGANIZATION_PATHS` does not name is closed to a request by
