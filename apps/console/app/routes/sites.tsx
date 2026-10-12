@@ -1,7 +1,7 @@
 import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react';
 import { type Site, type Visibility, call } from '../api';
 import { Confirm } from '../confirm';
-import { type Listed, known, listedOf } from '../listed';
+import { type Listed, edited, listedOf } from '../listed';
 import { Button, Card, Chip, Choice, Field, Problem } from '../ui';
 import { InstallOptions } from './setup';
 import { PageHead, useWorkspace } from './workspace';
@@ -35,14 +35,18 @@ export default function Sites() {
     if (!added.ok) return setProblem(msg('Paste the full address of the site, starting with https://.'));
     // On a list that was never read, the site alone would hide the others: read them all.
     if (typeof sites === 'string') void read();
-    else setSites((current) => [...(known(current) ?? []).filter((site) => site.id !== added.data.id), added.data]);
+    else
+      setSites((current) =>
+        edited(current, (items) => [...items.filter((each) => each.id !== added.data.id), added.data]),
+      );
     setOpen(added.data.id);
     setUrl('');
   }
 
   async function remove(site: Site) {
     const removed = await call('DELETE', `/console/workspaces/${workspace.id}/sites/${site.id}`);
-    if (removed.ok) setSites((current) => (known(current) ?? []).filter((each) => each.id !== site.id));
+    // A list that was not read stays what it is (`edited`).
+    if (removed.ok) setSites((current) => edited(current, (items) => items.filter((each) => each.id !== site.id)));
   }
 
   return (

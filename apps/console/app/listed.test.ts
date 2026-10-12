@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { UNREACHABLE } from './api.ts';
-import { known, listedOf } from './listed.ts';
+import { edited, known, listedOf } from './listed.ts';
 
 describe('a list read from the worker (FRU-162)', () => {
   const sites = (data: { sites: string[] }) => data.sites;
@@ -21,5 +21,13 @@ describe('a list read from the worker (FRU-162)', () => {
     assert.equal(known('loading'), undefined);
     assert.equal(known('failed'), undefined);
     assert.deepEqual(known([]), []);
+  });
+
+  it('stays not read when a row is removed from it or added to it', () => {
+    const remove = (items: readonly string[]) => items.filter((item) => item !== 'a');
+
+    assert.equal(edited('failed', remove), 'failed');
+    assert.equal(edited('loading', remove), 'loading');
+    assert.deepEqual(edited(['a', 'b'], remove), ['b']);
   });
 });
