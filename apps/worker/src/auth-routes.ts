@@ -1,4 +1,4 @@
-import { type AccountStore, normalizeEmail, readLocaleTag } from './accounts.ts';
+import { type AccountStore, mailboxOf, normalizeEmail, readLocaleTag } from './accounts.ts';
 import {
   AUTH_BASE_PATH,
   type Auth,
@@ -207,7 +207,7 @@ async function sendLink(
     'en';
 
   // The same key as the path of before: the two paths together send three links in the window.
-  const sent = await context.kv.incr(`fruitback:mail:${email}`, EMAIL_LINK_WINDOW_MS);
+  const sent = await context.kv.incr(`fruitback:mail:${mailboxOf(email)}`, EMAIL_LINK_WINDOW_MS);
   if (sent > EMAIL_LINKS_PER_WINDOW) return json(429, { error: 'too-many-links' }, headers);
 
   const mailer = context.mailer;

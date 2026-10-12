@@ -1,5 +1,4 @@
 import { type Action, normalizeEmail } from './accounts.ts';
-import { roleOf } from './account-rows.ts';
 
 /**
  * The routes of the organization plugin of better-auth that a request reaches (FRU-149), each with
@@ -49,6 +48,12 @@ const count =
  */
 export const INVITED_ROLES = ['admin', 'member'] as const;
 
+/**
+ * The roles a change of role gives (FRU-209): the ones of an invitation, and `owner`. Not `guest`,
+ * for the reason an invitation gives none: the route made the guest that the console does not.
+ */
+export const GIVEN_ROLES = ['owner', ...INVITED_ROLES] as const;
+
 export type OrganizationRule = {
   method: 'GET' | 'POST';
   /**
@@ -94,9 +99,13 @@ export const ORGANIZATION_PATHS: Readonly<Record<string, OrganizationRule>> = {
   '/organization/update-member-role': {
     method: 'POST',
     needs: 'manage-members',
-    fields: { organizationId: id, memberId: id, role: (value) => roleOf(value) },
+    fields: {
+      organizationId: id,
+      memberId: id,
+      role: (value) => ((GIVEN_ROLES as readonly unknown[]).includes(value) ? (value as string) : undefined),
+    },
     required: ['organizationId', 'memberId', 'role'],
-    why: 'an owner or an admin changes the role of a member: one role, one of the four',
+    why: 'an owner or an admin changes the role of a member: one role, owner, admin or member. Not guest, as for an invitation',
   },
   '/organization/remove-member': {
     method: 'POST',

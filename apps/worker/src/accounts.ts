@@ -366,6 +366,19 @@ export function siteOrigin(value: string): string | undefined {
   }
 }
 
+/**
+ * The mailbox a window of messages counts (FRU-209): the address without its `+suffix`.
+ * `carol+0@…` to `carol+5@…` are six addresses and one mailbox for most providers, so a window by
+ * address let six messages into it. Only the count reads this: an account, an invitation and a
+ * message keep the address as it was written.
+ */
+export function mailboxOf(email: string): string {
+  const at = email.lastIndexOf('@');
+  const plus = email.indexOf('+');
+
+  return plus > 0 && plus < at ? `${email.slice(0, plus)}${email.slice(at)}` : email;
+}
+
 /** An address as an account stores it: trimmed, lower case. A provider can answer either case. */
 export function normalizeEmail(value: string): string | undefined {
   const email = value.trim().toLowerCase();

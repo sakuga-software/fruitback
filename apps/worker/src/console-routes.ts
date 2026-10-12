@@ -1,5 +1,5 @@
 import type { AccountStore } from './accounts.ts';
-import { normalizeEmail, readLocaleTag } from './accounts.ts';
+import { mailboxOf, normalizeEmail, readLocaleTag } from './accounts.ts';
 import type { WorkerConfig } from './env.ts';
 import type { Kv } from './kv.ts';
 import { MailError, type Mailer, signInMessage } from './mail.ts';
@@ -166,7 +166,7 @@ export async function handleConsoleSession(
       readLocaleTag(request.headers.get('Accept-Language')?.split(',')[0]?.split(';')[0]) ??
       'en';
 
-    const sent = await context.kv.incr(`fruitback:mail:${email}`, EMAIL_LINK_WINDOW_MS);
+    const sent = await context.kv.incr(`fruitback:mail:${mailboxOf(email)}`, EMAIL_LINK_WINDOW_MS);
     if (sent > EMAIL_LINKS_PER_WINDOW) return json(429, { error: 'too-many-links' }, headers);
 
     const code = newLinkCode();

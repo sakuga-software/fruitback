@@ -344,6 +344,12 @@ export async function authOptions(
       beforeAcceptInvitation: async ({ invitation }) => refuseOtherRoles(invitation.role),
       // `/organization/leave` runs no hook (read in `routes/crud-members.mjs` of 1.7.7): the route of
       // the worker ends the sessions of somebody who leaves, in `auth-organization.ts`.
+      // The extensions of somebody who is removed stop **before** the member is deleted (FRU-209):
+      // when this fails the plugin deletes nothing, and the call is made again. After the write, a
+      // failure left a member who was gone with a session that was alive, and the second call
+      // answered `MEMBER_NOT_FOUND`. It runs again after, for a session opened between the two.
+      beforeRemoveMember: async ({ member }) =>
+        sessions.endSessionsOf({ subject: member.userId, workspace: member.organizationId }, Date.now()),
       afterRemoveMember: async ({ member }) =>
         sessions.endSessionsOf({ subject: member.userId, workspace: member.organizationId }, Date.now()),
     },
