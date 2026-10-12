@@ -241,15 +241,17 @@ open composer and its note` fails without the check, 3 runs out of 3.
   console draws it (`Mark` of `apps/console/app/ui.tsx`). It is a drawing of the stylesheet, not an
   element: a screen reader reads the name alone.
 
-### The reasons, and what is not decided
+### The reasons, and who decided
 
 The extension had a palette of its own: an orange accent (`#c2410c`, `#fb923c` in the dark scheme)
 and rectangles of 6 px. Beside the console and the widget it read as another product, and the popup
 is the picture of the store listings. The review of 2026-10-11 (FRU-151) asked the designer three
 things. `design/README.md` already answers the first two: a screen with no board takes the language
-of the boards, on the tokens of the widget. **The third is open: the options page follows the popup
-here** (one stylesheet, a white surface), and not the console (`#faf9f5` page, cards of 14 px). Its
-layout did not change: the fields of 760 px and the file input of the browser are as they were.
+of the boards, on the tokens of the widget. The third was open: **the options page follows the
+popup** (one stylesheet, a white surface), and not the console (`#faf9f5` page, cards of 14 px). The
+three were settled on 2026-10-12 by the orchestrator of the agents, to whom Mathieu handed the
+current decisions, with the simplest answer that fits what exists. The layout of the options page
+did not change: the fields of 760 px and the file input of the browser are as they were.
 
 ## A problem, and the one thing to do about it (FRU-90)
 
