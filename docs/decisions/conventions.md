@@ -44,6 +44,12 @@ How this repository is formatted, tested and documented, and which test holds ea
 - **Tests run on `node:test` and `node:assert/strict`** — no test runner, no transpiler, no loader.
   `pnpm test` is `node --test 'src/**/*.test.ts'`; Node strips the types itself. Colocated as
   `*.test.ts`, fixtures in `*.fixture.ts`.
+  - **`node --test` exits 0 on a test file its glob does not match, on a glob that matches no file,
+    and on `it.skip`** (FRU-174, measured). `test-discovery.test.ts` fails on a JavaScript or
+    TypeScript file named `*.test.*` or `*.spec.*` (`.ts`, `.tsx`, `.js`, `.jsx`, and their `c` and
+    `m` forms) that no `test` script and no Playwright directory reads, on a `test` script that
+    reads no file, and on a skip with no reason. The reason goes in the options:
+    `{ skip: 'the reason' }`, never `it.skip(…)` nor `skip: true`.
   - `assert.equal` / `assert.deepEqual` from `node:assert/strict` are the strict variants — no need
     for `strictEqual`.
   - Partial matching is `assert.partialDeepStrictEqual`. There is no `expect.arrayContaining`; assert
