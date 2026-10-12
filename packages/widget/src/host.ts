@@ -429,9 +429,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   something says otherwise: in the note thread the note, its byline and the "found by position"
   warning all ran together into one line, vertical margins silently doing nothing. Restoring it here
   rather than on each class is what keeps the next element added to the widget from inheriting the
-  same surprise. Found by looking at a recording — every unit test passed.
+  same surprise. Found by looking at a recording — every unit test passed. A list was missing from
+  this rule until FRU-154: the replies of a thread were inline, so their height limit, their scroll
+  and their indent did nothing.
 */
-div, p, header, footer, section, form { display: block; }
+div, p, header, footer, section, form, ul, ol { display: block; }
 li { display: list-item; }
 /*
   Every glyph in the widget, and this rule sizes them and nothing else. The paint is on the paths

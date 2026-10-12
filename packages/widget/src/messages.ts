@@ -78,6 +78,7 @@ export const ENGLISH = {
   'thread.dialog': 'Feedback {identifier}',
   'thread.noNote': 'No note.',
   'thread.noReplies': 'No reply yet.',
+  'thread.replies': 'Replies',
   'thread.team': 'Team',
   'thread.anonymous': 'Anonymous',
   'thread.orphan': 'Element not found — approximate position.',

@@ -501,6 +501,10 @@ describe('the team’s replies', () => {
     const bodies = [...page.document.querySelectorAll('.fruitback-thread-reply-body')].map((node) => node.textContent);
     assert.deepEqual(bodies, ['On regarde ça.', 'Corrigé sur la préprod.']);
     assert.match(page.document.querySelector('.fruitback-thread-reply-who')?.textContent ?? '', /Alice/);
+    // The list scrolls, so a keyboard must be able to stop on it, and the stop has a name (FRU-154).
+    const list = page.document.querySelector('.fruitback-thread-replies');
+    assert.equal(list?.getAttribute('tabindex'), '0');
+    assert.equal(list?.getAttribute('aria-label'), 'Replies');
   });
 
   it('renders a reply as text, never as markup', () => {

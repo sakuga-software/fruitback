@@ -551,6 +551,10 @@ function replies(document: Document, issue: SeedIssue, t: Translator): HTMLEleme
 
   const list = document.createElement('ul');
   list.className = 'fruitback-thread-replies';
+  // The list scrolls past 180 px, and a region that scrolls must take focus, or a keyboard cannot
+  // read its end (FRU-154). The name says what the stop is.
+  list.tabIndex = 0;
+  list.setAttribute('aria-label', t.text('thread.replies'));
 
   for (const comment of issue.comments) {
     const item = document.createElement('li');
@@ -838,7 +842,8 @@ const STYLES = `
   color: var(--fruitback-color-text-muted);
 }
 .fruitback-thread-close:hover { color: var(--fruitback-color-text); }
-.fruitback-thread-note { margin: 8px 0 0; white-space: pre-wrap; }
+/* anywhere: an address has no space, and it must wrap inside the thread instead of leaving it (FRU-154). */
+.fruitback-thread-note { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .fruitback-thread-meta { margin: 8px 0 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-thread-orphan { margin: 8px 0 0; font-size: 12px; color: var(--fruitback-color-warning); }
 .fruitback-thread-empty {
@@ -862,10 +867,11 @@ const STYLES = `
   item's own list-style-type to its initial value of disc — and a reset value beats what it would have
   inherited from the list. The bullets came back, and only a recording showed it.
 */
+.fruitback-thread-replies:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 2px; }
 .fruitback-thread-reply { list-style: none; }
 .fruitback-thread-reply + .fruitback-thread-reply { margin-top: 8px; }
 .fruitback-thread-reply-who { display: block; font-size: 11px; color: var(--fruitback-color-text-muted); }
-.fruitback-thread-reply-body { margin: 2px 0 0; font-size: 12px; white-space: pre-wrap; }
+.fruitback-thread-reply-body { margin: 2px 0 0; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .fruitback-thread-link {
   display: inline-block;
   margin-top: 10px;
