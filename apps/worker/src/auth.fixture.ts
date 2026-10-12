@@ -26,6 +26,13 @@ export const AUTH_CONFIG: AuthConfig = {
   trackIp: false,
 };
 
+/** The sessions of the extensions, for a case that removes nobody: it ends none, and says it was not asked. */
+export const NO_SESSIONS = {
+  async endSessionsOf(): Promise<void> {
+    throw new Error('This case gave better-auth no session store, and a member was removed');
+  },
+};
+
 /**
  * What is in the database of a case when better-auth reads it.
  *
@@ -63,7 +70,7 @@ export async function optionsOn(
   made: Made = MIGRATED,
 ): Promise<{ options: BetterAuthOptions; said: Said }> {
   await make(database, made);
-  const options = await authOptions(AUTH_CONFIG, await database.pool());
+  const options = await authOptions(AUTH_CONFIG, await database.pool(), NO_SESSIONS);
   const said: Said = [];
 
   return {

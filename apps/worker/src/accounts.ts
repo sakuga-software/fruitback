@@ -41,7 +41,8 @@ export type Workspace = { id: string; name: string };
  * - `owner`: everything, and the only one who can delete the workspace.
  * - `admin`: sites, sources and members.
  * - `member`: every site of the workspace, and the links to the tracker.
- * - `guest`: leaves and reads notes, never sees the tracker. Sharing a site with one guest is FRU-104.
+ * - `guest`: leaves and reads notes, never sees the tracker, and does not read who the members are
+ *   (FRU-149). Sharing a site with one guest is FRU-104.
  */
 export const ROLES = ['owner', 'admin', 'member', 'guest'] as const;
 export type Role = (typeof ROLES)[number];
@@ -50,6 +51,7 @@ export type Role = (typeof ROLES)[number];
 export const ACTIONS = [
   'read-feedback',
   'see-tracker',
+  'read-members',
   'manage-sites',
   'manage-members',
   'manage-workspace',
@@ -59,8 +61,8 @@ export type Action = (typeof ACTIONS)[number];
 
 const RIGHTS: Record<Role, readonly Action[]> = {
   owner: ACTIONS,
-  admin: ['read-feedback', 'see-tracker', 'manage-sites', 'manage-members', 'manage-workspace'],
-  member: ['read-feedback', 'see-tracker'],
+  admin: ['read-feedback', 'see-tracker', 'read-members', 'manage-sites', 'manage-members', 'manage-workspace'],
+  member: ['read-feedback', 'see-tracker', 'read-members'],
   guest: ['read-feedback'],
 };
 

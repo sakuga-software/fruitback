@@ -3,7 +3,7 @@ import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
 import { pairings, sessions } from './postgres-schema.ts';
 import { chainOf, identityOf } from './session-rows.ts';
-import type { RotationOutcome, SessionStore } from './session.ts';
+import { type RotationOutcome, type SessionStore, namedSessionsOf } from './session.ts';
 
 /**
  * The sessions in PostgreSQL (FRU-142): the same interface as `session-sqlite.ts`, the same names of
@@ -303,6 +303,38 @@ export function createPostgresSessionStore(database: Database): SessionStore {
         await revokeChain(tx, root, now);
 
         return revoked;
+      });
+    },
+
+    async endSessionsOf(of, now) {
+      const { subject, workspace } = namedSessionsOf(of);
+      const theirs = (table: typeof sessions | typeof pairings) =>
+        and(
+          subject === undefined ? undefined : eq(table.subject, subject),
+          workspace === undefined ? undefined : eq(table.workspace, workspace),
+        );
+
+      await transaction(async (tx) => {
+        // Every row of these chains is held first, their heads among them: a head carries the person
+        // and the workspace of its chain. A rotation holds its head before it writes, so one that
+        // runs now ends before this line answers, and none starts after it. The statement below then
+        // reads the successor that such a rotation wrote: without this hold, it would not see a row
+        // that was written after it started, and that successor would stay live.
+        await tx
+          .select({ token_hash: sessions.token_hash })
+          .from(sessions)
+          .where(theirs(sessions))
+          .orderBy(sessions.token_hash)
+          .for('update');
+        await tx
+          .update(sessions)
+          .set({ revoked_at: now })
+          .where(and(isNull(sessions.revoked_at), theirs(sessions)));
+        // A code that nobody redeemed yet would open a session for a membership that is gone.
+        await tx
+          .update(pairings)
+          .set({ redeemed_at: now })
+          .where(and(isNull(pairings.redeemed_at), theirs(pairings)));
       });
     },
 

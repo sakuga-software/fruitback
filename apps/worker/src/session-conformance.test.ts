@@ -83,6 +83,17 @@ function decidesThenWaits(real: SessionStore): SessionStore {
       return identity;
     },
     async purge() {},
+    // It reads the live tokens of the person, waits, then ends the ones it read.
+    async endSessionsOf(of, now) {
+      const read = [...sessions].filter(
+        ([, session]) =>
+          session.revokedAt === undefined &&
+          (of.subject === undefined || session.identity.subject === of.subject) &&
+          (of.workspace === undefined || session.identity.workspace === of.workspace),
+      );
+      await turn();
+      for (const [, session] of read) session.revokedAt ??= now;
+    },
     async rotateSession({ tokenHash, successorHash, now, graceMs }): Promise<RotationOutcome> {
       const row = sessions.get(tokenHash);
       if (row === undefined || row.expiresAt <= now) return { outcome: 'gone' };
@@ -128,6 +139,10 @@ const RETIRE_PREDECESSOR = "if (typeof row.predecessor_hash === 'string') revoke
 const NAME_THE_HEAD = 'if (root !== keep) revoke(database, root, now);';
 const SPEND_THE_CODE = 'AND redeemed_at IS NULL AND expires_at > ?';
 const PURGE_SESSIONS = "'DELETE FROM sessions WHERE expires_at <= ?'";
+const END_SESSIONS =
+  "'UPDATE sessions SET revoked_at = ? WHERE revoked_at IS NULL AND (? IS NULL OR subject = ?) AND (? IS NULL OR workspace = ?)'";
+const SPEND_CODES =
+  "'UPDATE pairings SET redeemed_at = ? WHERE redeemed_at IS NULL AND (? IS NULL OR subject = ?) AND (? IS NULL OR workspace = ?)'";
 
 /** One change to `session-sqlite.ts`, or one store around it, for each case: the case must fail. */
 const VIOLATIONS: Violation<SessionStore>[] = [
@@ -373,6 +388,90 @@ const VIOLATIONS: Violation<SessionStore>[] = [
     breaks: 'drops the codes and the sessions that are expired, and nothing that is not',
     by: 'keeps the sessions that are expired',
     replace: { from: PURGE_SESSIONS, to: "'DELETE FROM sessions WHERE expires_at <= ? AND 0'" },
+  },
+  {
+    breaks: 'ends every session of a person in a workspace, from any link of each chain',
+    by: 'ends nothing when a member is removed',
+    replace: {
+      from: END_SESSIONS,
+      to: END_SESSIONS.replace('WHERE revoked_at IS NULL', 'WHERE 0 AND revoked_at IS NULL'),
+    },
+  },
+  {
+    breaks: 'ends every session of a person in a workspace, from any link of each chain',
+    by: 'ends the tokens that never issued a successor, and leaves the others',
+    replace: {
+      from: END_SESSIONS,
+      to: END_SESSIONS.replace('WHERE revoked_at IS NULL', 'WHERE rotated_at IS NULL AND revoked_at IS NULL'),
+    },
+  },
+  {
+    breaks: 'leaves the same person in another workspace, and another person in the same one',
+    by: 'ends every session of the person, whatever the workspace',
+    replace: {
+      from: END_SESSIONS,
+      to: END_SESSIONS.replace('(? IS NULL OR workspace = ?)', '(? IS NULL OR ? IS NOT NULL)'),
+    },
+  },
+  {
+    breaks: 'leaves the same person in another workspace, and another person in the same one',
+    by: 'ends every session of the workspace, whoever the person',
+    replace: {
+      from: END_SESSIONS,
+      to: END_SESSIONS.replace('(? IS NULL OR subject = ?)', '(? IS NULL OR ? IS NOT NULL)'),
+    },
+  },
+  {
+    breaks: 'ends every session of a workspace when no person is named, and of a person when no workspace is',
+    by: 'ends nothing when no person is named',
+    replace: {
+      from: END_SESSIONS,
+      to: END_SESSIONS.replace('(? IS NULL OR subject = ?)', '(? IS NOT NULL AND subject = ?)'),
+    },
+  },
+  {
+    breaks: 'ends every session of a workspace when no person is named, and of a person when no workspace is',
+    by: 'keeps the sessions that name no workspace when the person is the only name',
+    replace: {
+      from: END_SESSIONS,
+      to: END_SESSIONS.replace(
+        '(? IS NULL OR workspace = ?)',
+        '((? IS NULL AND workspace IS NOT NULL) OR workspace = ?)',
+      ),
+    },
+  },
+  {
+    breaks: 'spends the codes minted for the person in the workspace, and no other code',
+    by: 'leaves the code of a removed member spendable',
+    replace: {
+      from: SPEND_CODES,
+      to: SPEND_CODES.replace('WHERE redeemed_at IS NULL', 'WHERE 0 AND redeemed_at IS NULL'),
+    },
+  },
+  {
+    breaks: 'spends the codes minted for the person in the workspace, and no other code',
+    by: 'spends every code of the workspace',
+    replace: {
+      from: SPEND_CODES,
+      to: SPEND_CODES.replace('(? IS NULL OR subject = ?)', '(? IS NULL OR ? IS NOT NULL)'),
+    },
+  },
+  {
+    breaks: 'ends nothing, and throws, when neither a person nor a workspace is named',
+    by: 'ends every session when nobody is named',
+    wrap: (real) => ({
+      ...real,
+      async endSessionsOf(of, now) {
+        const all = of.subject || of.workspace ? of : { subject: 'alice' };
+        await real.endSessionsOf(all, now);
+        if (all !== of) throw new Error('names neither a person nor a workspace');
+      },
+    }),
+  },
+  {
+    breaks: 'leaves no live successor when a refresh and the end of the sessions run at the same moment',
+    by: 'reads the live tokens, waits, then ends the ones it read',
+    wrap: decidesThenWaits,
   },
   {
     breaks: 'never leaves two live successors when one token is refreshed twice at the same moment',
