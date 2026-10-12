@@ -163,17 +163,24 @@ async function startWithProvider(request: Request, provider: string, context: Au
   if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, {});
   const auth = await context.auth;
   const consoleOrigin = new URL(context.consoleUrl).origin;
-  const answer = await (auth.api as unknown as { signInSocial(input: object): Promise<Response> })
-    .signInSocial({
-      body: { provider, callbackURL: `${consoleOrigin}/`, errorCallbackURL: `${consoleOrigin}/setup` },
-      headers: headersFor(request, context),
-      asResponse: true,
-    })
-    .catch(() => undefined);
-  const body = answer?.ok === true ? ((await answer.json()) as { url?: unknown }) : undefined;
-  // A provider that this worker does not have, or a refusal of better-auth: the console says so.
-  if (answer === undefined || typeof body?.url !== 'string')
-    return failed(context.consoleUrl, 'oauth_provider_not_found');
+  // A provider that this worker does not have: the console says so. Read in the options, and not in
+  // a failure of the call: a database that is down is not a provider that is not set up.
+  const configured = (auth.options.socialProviders ?? {}) as Record<string, unknown>;
+  if (!Object.hasOwn(configured, provider)) return failed(context.consoleUrl, 'oauth_provider_not_found');
+
+  // A rejection goes up: the caller answers `502`, and writes the reason in the log.
+  const answer = await (auth.api as unknown as { signInSocial(input: object): Promise<Response> }).signInSocial({
+    body: { provider, callbackURL: `${consoleOrigin}/`, errorCallbackURL: `${consoleOrigin}/setup` },
+    headers: headersFor(request, context),
+    asResponse: true,
+  });
+  const body = answer.ok ? ((await answer.json()) as { url?: unknown }) : undefined;
+  if (typeof body?.url !== 'string') {
+    // better-auth refused, and said why in its own log line. The person is told that it did not finish.
+    console.error(`[fruitback] better-auth answered ${answer.status} to the start of a sign-in with ${provider}`);
+
+    return failed(context.consoleUrl, 'internal_server_error');
+  }
 
   const headers = new Headers({ Location: body.url, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
   for (const cookie of answer.headers.getSetCookie()) headers.append('Set-Cookie', cookie);

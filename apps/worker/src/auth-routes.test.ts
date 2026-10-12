@@ -668,6 +668,46 @@ for (const { label, open, skip } of DATABASES) {
       assert.equal((await worker.call('/console/auth/start/linear', { origin: null })).status, 404);
     });
 
+    it('says that a provider is not set up only when it is not, and answers 502 when better-auth rejects (FRU-148)', async () => {
+      const database = await opening(open);
+      await make(database);
+      // GitHub only: this worker has no client of Google.
+      const options = await authOptions({ ...AUTH_CONFIG, github: GITHUB, trackIp: false }, await database.pool());
+      const auth = await startAuth(options);
+      const through = (path: string, instance: Auth) =>
+        handleRequest(new Request(`${PUBLIC_URL}${path}`), envWith(), {
+          clientIp: '198.51.100.201',
+          accounts: createPostgresAccountStore(database),
+          sessionStore: createPostgresSessionStore(database),
+          kv: createMemoryKv(),
+          auth: instance,
+        });
+
+      const absent = await through('/console/auth/start/google', auth);
+      assert.equal(absent.headers.get('Location'), `${CONSOLE_URL}/setup?error=oauth_provider_not_found`);
+      assert.equal(
+        (await through('/console/auth/start/github', auth)).headers.get('Location')?.startsWith('https://github.com/'),
+        true,
+      );
+
+      // A provider that is set up, and a better-auth that rejects: not « not set up », and in the log.
+      const rejecting = {
+        options: auth.options,
+        api: { signInSocial: async () => Promise.reject(new Error('SCHEMA_MISMATCH of a test')) },
+      } as unknown as Auth;
+      const errors: string[] = [];
+      const logged = mock.method(console, 'error', (line: string) => void errors.push(line));
+      try {
+        const down = await through('/console/auth/start/github', rejecting);
+
+        assert.equal(down.status, 502);
+        assert.equal(down.headers.get('Location'), null);
+      } finally {
+        logged.mock.restore();
+      }
+      assert.deepEqual(errors, ['[fruitback] better-auth did not answer: SCHEMA_MISMATCH of a test']);
+    });
+
     it('says which ways the routes of better-auth offer, beside the two booleans of before', async () => {
       const worker = await workerOn(open);
       const answer = await worker.call('/auth/providers');
