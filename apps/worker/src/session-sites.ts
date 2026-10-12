@@ -50,7 +50,7 @@ export async function handleSessionSites(
   const locale = (await accounts.account(subject))?.locale;
   // The previews a site covers (FRU-103): the wildcard of each domain of the workspace that is proven
   // now and names this site. A proof that is lost or that nobody confirmed is not here.
-  const instant = Date.now();
+  const instant = now ?? Date.now();
   const proven = (await accounts.domains(workspaceId)).filter(
     (domain) => domain.previewsSite !== undefined && proofState(domain, instant) === 'proven',
   );

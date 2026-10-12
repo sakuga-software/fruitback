@@ -764,6 +764,9 @@ async function domainRoute(
     const domain = readDomain((await readBody(request))?.domain);
     if (domain === undefined) return json(400, { error: 'invalid-domain' }, headers);
     const known = await accounts.domains(workspace);
+    // Counted, then written: two calls of one admin at the same moment can both pass at 19, and leave
+    // 21. The bound is the cost of the DNS for one workspace, not a wall between two: it is not held
+    // in a transaction.
     if (!known.some((each) => each.domain === domain) && known.length >= MAX_DOMAINS) {
       return json(409, { error: 'too-many-domains', max: MAX_DOMAINS }, headers);
     }
