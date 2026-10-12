@@ -17,7 +17,7 @@ import {
   relayRefusal,
 } from '../src/protocol.ts';
 import { createRelay } from '../src/relay.ts';
-import { SYNC_SETTING, createSiteSync } from '../src/site-sync.ts';
+import { KNOWN_SETTING, SYNC_SETTING, createSiteSync } from '../src/site-sync.ts';
 
 /** Named once: the alarm is created, cleared and answered in three different places. */
 const SESSION_ALARM = 'fruitback-session-refresh';
@@ -123,6 +123,14 @@ export default defineBackground(() => {
   // FRU-72: the rules in the account of the browser, when the reviewer asked for it. See `site-sync.ts`.
   const siteSync = createSiteSync({
     enabled: async () => (await browser.storage.local.get(SYNC_SETTING))[SYNC_SETTING] === true,
+    known: {
+      read: async () => {
+        const stored = (await browser.storage.local.get(KNOWN_SETTING))[KNOWN_SETTING];
+
+        return Array.isArray(stored) ? stored.filter((each): each is string => typeof each === 'string') : [];
+      },
+      write: (patterns) => browser.storage.local.set({ [KNOWN_SETTING]: patterns }),
+    },
     readLocal: readAll,
     area: {
       get: () => browser.storage.sync.get(null),
@@ -207,6 +215,9 @@ export default defineBackground(() => {
     if (area !== 'local') return;
     // The reviewer just turned the copy on: each side takes the rules it does not have.
     if (changes[SYNC_SETTING]?.newValue === true) mergeRules();
+    // Turned off: what was known of the account is forgotten, so the next merge removes nothing.
+    if (changes[SYNC_SETTING] !== undefined && changes[SYNC_SETTING].newValue !== true)
+      void browser.storage.local.remove(KNOWN_SETTING);
     if (changes.sites !== undefined) void sync();
     // A pairing or a logout from the popup, this run's own writes — the worker rotates on every
     // refresh (FRU-61), so every refresh stores a new token — and the upgrade in `upgradeAreas`,

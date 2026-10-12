@@ -72,9 +72,10 @@ function account() {
 
 /** A browser: its map, its one writer, and its copy to `sync` when `on`. */
 function browserOn(shared: ReturnType<typeof account>, start: Record<string, SiteConfig> = {}, on = true) {
-  const self = { on, map: { ...start } };
+  const self = { on, map: { ...start }, known: [] as string[] };
   const sync = createSiteSync({
     enabled: async () => self.on,
+    known: { read: async () => self.known, write: async (patterns) => void (self.known = patterns) },
     readLocal: async () => self.map,
     area: shared.areaOf(self),
     apply: (mutation) => own(mutation),
@@ -148,7 +149,7 @@ describe('the rules of a reviewer in two browsers (FRU-72)', () => {
     assert.deepEqual(there.self.map, all);
   });
 
-  it('merges without removing: a browser that holds fewer rules erases none by turning it on', async () => {
+  it('merges without removing what it never knew: a browser that holds fewer rules erases none by turning it on', async () => {
     const shared = account();
     const here = browserOn(shared, { 'https://acme.dev': ACME, 'https://globex.dev': GLOBEX });
     await here.sync.merge();
@@ -168,6 +169,49 @@ describe('the rules of a reviewer in two browsers (FRU-72)', () => {
     assert.equal(late.self.map['https://acme.dev']?.enabled, false);
     assert.equal(here.self.map['https://acme.dev']?.enabled, true);
     assert.deepEqual(here.self.map['https://team.dev'], TEAM);
+  });
+
+  /**
+   * Raised in review: Bob removes a rule in one browser while his other browser is closed. At its
+   * start, that browser held the rule and the account did not: an additive merge sent it back, and
+   * the rule came back everywhere.
+   */
+  it('carries a removal made while this browser was closed, and does not bring the rule back', async () => {
+    const shared = account();
+    const here = browserOn(shared);
+    const there = browserOn(shared);
+    await here.change({ kind: 'write', entries: { 'https://acme.dev': ACME, 'https://globex.dev': GLOBEX } });
+    assert.deepEqual(there.self.known, ['https://acme.dev', 'https://globex.dev']);
+
+    // Closed: it hears nothing of the removal.
+    shared.listeners.splice(1, 1);
+    await here.change({ kind: 'remove', pattern: 'https://acme.dev' });
+    assert.ok(there.self.map['https://acme.dev'] !== undefined);
+
+    await there.sync.merge();
+    await shared.idle();
+
+    assert.deepEqual(Object.keys(there.self.map), ['https://globex.dev']);
+    assert.deepEqual(Object.keys(shared.items), ['site:https://globex.dev']);
+    assert.deepEqual(Object.keys(here.self.map), ['https://globex.dev']);
+  });
+
+  it('finishes a removal made here whose copy failed, at the next merge', async () => {
+    const shared = account();
+    const here = browserOn(shared);
+    await here.change({ kind: 'write', entries: { 'https://acme.dev': ACME } });
+
+    // The account is away when the rule is removed here.
+    const away = browserOn(shared, {}, true);
+    shared.listeners.splice(-1, 1);
+    here.self.map = {};
+    assert.deepEqual(Object.keys(shared.items), ['site:https://acme.dev']);
+    void away;
+
+    await here.sync.merge();
+
+    assert.deepEqual(shared.items, {});
+    assert.deepEqual(here.self.known, []);
   });
 
   it('sends nothing and takes nothing while the reviewer has not turned it on', async () => {

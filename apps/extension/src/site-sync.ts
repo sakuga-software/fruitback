@@ -20,9 +20,12 @@ import { type SiteConfig, type SiteMutation, parseSite } from './sites.ts';
  * - **a change that arrives** from another browser is applied to the map here, by the one writer of
  *   the map (`createSiteOwner`), and is not sent back;
  * - **`merge`**, when the reviewer turns it on and when the browser starts: each side takes the rules
- *   it does not have. **A merge removes nothing.** A browser that was closed while a rule was removed
- *   elsewhere hears of it as a change that arrives; a browser that holds fewer rules must not erase
- *   the rules of the others by starting.
+ *   it does not have, **except a rule that this browser knew in the account** (`KnownRules`, in
+ *   `local`): that one was removed on one side while the other was closed, and the removal is carried
+ *   (raised in review: a browser closed during a removal brought the rule back). A browser that holds
+ *   fewer rules erases none of the others' by starting: the rules it never knew are taken, not removed.
+ *   Turning the copy off forgets what was known, so a later merge takes and removes nothing it cannot
+ *   tell apart.
  *
  * **What does not travel: the access, and the session.** A host permission is of one browser. A rule
  * that arrives runs nowhere until the reviewer grants access there: the options page says « No
@@ -32,6 +35,9 @@ import { type SiteConfig, type SiteMutation, parseSite } from './sites.ts';
 
 /** In `local`: whether this browser copies its rules to `sync`. Absent is off. */
 export const SYNC_SETTING = 'syncRules';
+
+/** In `local`: the patterns this browser knows to be in the account (`KnownRules`). */
+export const KNOWN_SETTING = 'syncedRules';
 
 /** The key of a rule in `sync`. */
 export const SYNC_PREFIX = 'site:';
@@ -54,8 +60,15 @@ export type SyncArea = {
   remove(keys: string[]): Promise<void>;
 };
 
+/**
+ * The patterns that this browser knows to be in the account: written there from here, or taken from
+ * there. A merge tells by it a rule that was never copied from one that was removed elsewhere.
+ */
+export type KnownRules = { read(): Promise<string[]>; write(patterns: string[]): Promise<void> };
+
 export type SiteSyncSeams = {
   enabled: () => Promise<boolean>;
+  known: KnownRules;
   readLocal: () => Promise<Record<string, SiteConfig>>;
   area: SyncArea;
   /** The one writer of the map. A mutation that comes from here is marked with `markArrived`. */
@@ -88,9 +101,15 @@ function sorted(value: unknown): unknown {
   );
 }
 
-export function createSiteSync({ enabled, readLocal, area, apply }: SiteSyncSeams) {
+export function createSiteSync({ enabled, known, readLocal, area, apply }: SiteSyncSeams) {
   /** The mutations that came from `sync`: they are stored here, and not sent back there. */
   const arrived = new WeakSet<SiteMutation>();
+  const remember = async (add: string[], drop: string[] = []): Promise<void> => {
+    const now = new Set(await known.read());
+    for (const pattern of add) now.add(pattern);
+    for (const pattern of drop) now.delete(pattern);
+    await known.write([...now].sort());
+  };
 
   return {
     /** A change that the one writer just stored. Sent to `sync` unless it came from there. */
@@ -99,13 +118,16 @@ export function createSiteSync({ enabled, readLocal, area, apply }: SiteSyncSeam
 
       if (mutation.kind === 'remove') {
         await area.remove([syncKeyOf(mutation.pattern)]);
+        await remember([], [mutation.pattern]);
 
         return;
       }
       const remote = rulesIn(await area.get());
       const changed = Object.entries(mutation.entries).filter(([pattern, site]) => !same(remote[pattern], site));
-      if (changed.length === 0) return;
-      await area.set(Object.fromEntries(changed.map(([pattern, site]) => [syncKeyOf(pattern), site])));
+      if (changed.length > 0) {
+        await area.set(Object.fromEntries(changed.map(([pattern, site]) => [syncKeyOf(pattern), site])));
+      }
+      await remember(Object.keys(mutation.entries));
     },
 
     /** What `storage.onChanged` says of the `sync` area: applied here, rule by rule. */
@@ -119,6 +141,7 @@ export function createSiteSync({ enabled, readLocal, area, apply }: SiteSyncSeam
         if (pattern === undefined) continue;
 
         if (change.newValue === undefined) {
+          await remember([], [pattern]);
           if (local[pattern] === undefined) continue;
           const mutation: SiteMutation = { kind: 'remove', pattern };
           arrived.add(mutation);
@@ -134,26 +157,57 @@ export function createSiteSync({ enabled, readLocal, area, apply }: SiteSyncSeam
       const mutation: SiteMutation = { kind: 'write', entries };
       arrived.add(mutation);
       await apply(mutation);
+      await remember(Object.keys(entries));
     },
 
-    /** Each side takes the rules it does not have. Nothing is removed, and a rule of both stays as it is on each. */
+    /**
+     * Each side takes the rules it does not have, **unless this browser knew the rule in the account**:
+     * then it was removed on one side while the other was closed, or while its copy failed, and the
+     * removal is what is carried. A rule of both stays as it is on each.
+     */
     async merge(): Promise<void> {
       if (!(await enabled())) return;
-      const [local, remote] = [await readLocal(), rulesIn(await area.get())];
+      const [local, remote, before] = [await readLocal(), rulesIn(await area.get()), new Set(await known.read())];
+      const valid = (pattern: string): boolean => parseSitePattern(pattern) === pattern;
 
-      const missingHere = Object.entries(remote).filter(([pattern]) => local[pattern] === undefined);
-      if (missingHere.length > 0) {
-        const mutation: SiteMutation = { kind: 'write', entries: Object.fromEntries(missingHere) };
+      // In the account, not here.
+      const takeHere: Record<string, SiteConfig> = {};
+      const removeThere: string[] = [];
+      for (const [pattern, site] of Object.entries(remote)) {
+        if (local[pattern] !== undefined) continue;
+        if (before.has(pattern)) removeThere.push(pattern);
+        else takeHere[pattern] = site;
+      }
+      // Here, not in the account.
+      const sendThere: Record<string, SiteConfig> = {};
+      const removeHere: string[] = [];
+      for (const [pattern, site] of Object.entries(local)) {
+        if (!valid(pattern) || remote[pattern] !== undefined) continue;
+        if (before.has(pattern)) removeHere.push(pattern);
+        else sendThere[pattern] = site;
+      }
+
+      if (Object.keys(takeHere).length > 0) {
+        const mutation: SiteMutation = { kind: 'write', entries: takeHere };
         arrived.add(mutation);
         await apply(mutation);
       }
-
-      const missingThere = Object.entries(local).filter(
-        ([pattern]) => parseSitePattern(pattern) === pattern && remote[pattern] === undefined,
-      );
-      if (missingThere.length > 0) {
-        await area.set(Object.fromEntries(missingThere.map(([pattern, site]) => [syncKeyOf(pattern), site])));
+      for (const pattern of removeHere) {
+        const mutation: SiteMutation = { kind: 'remove', pattern };
+        arrived.add(mutation);
+        await apply(mutation);
       }
+      if (removeThere.length > 0) await area.remove(removeThere.map(syncKeyOf));
+      if (Object.keys(sendThere).length > 0) {
+        await area.set(
+          Object.fromEntries(Object.entries(sendThere).map(([pattern, site]) => [syncKeyOf(pattern), site])),
+        );
+      }
+
+      const both = [...Object.keys(remote), ...Object.keys(sendThere)].filter(
+        (pattern) => !removeThere.includes(pattern) && !removeHere.includes(pattern),
+      );
+      await known.write([...new Set(both)].sort());
     },
   };
 }

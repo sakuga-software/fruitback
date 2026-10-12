@@ -266,8 +266,11 @@ did not change: the fields of 760 px and the file input of the browser are as th
   rules do not write one item, and the quota of 8 KB is for one rule.
 - **Three moves** (`src/site-sync.ts`): a change made here goes to `sync` as that change; a change
   that arrives is applied by the one writer of the map and is not sent back; a merge, when the box
-  is ticked and when the browser starts, gives each side the rules it does not have. **A merge
-  removes nothing**: a browser that holds fewer rules must not erase the rules of the others.
+  is ticked and when the browser starts, gives each side the rules it does not have, **except a rule
+  this browser knew in the account** (`syncedRules`, in `local`): that one was removed on one side
+  while the other was closed, and the removal is carried. A rule it never knew is taken, never
+  removed: a browser that holds fewer rules erases none of the others' by starting. Raised in
+  review: an additive merge brought back a rule removed while the other browser was closed.
 - **The access and the session do not travel.** A rule that arrives runs nowhere until access is
   granted in that browser; the options page says « No access in this browser » beside it, with the
   button. test:`the rules go to the account of the browser only when the reviewer asks, and a rule
@@ -283,9 +286,11 @@ rule of 2026-10-12 (the orchestrator decides the current choices on Mathieu's de
 
 - **A rule of both browsers that differs stays as it is on each**, until one of them changes it:
   the merge does not choose. A change, made after, is carried.
-- **A browser that was closed** hears of the removals made meanwhile from `storage.sync` itself,
-  when the browser brings its copy up to date. Not measured between two real browsers: the E2E
-  Chromium has no account, so its `sync` area stays on the machine.
+- **A browser that was closed** during a removal finds the rule it knew gone from the account at its
+  start, and removes it. Whether the browser also says so with `storage.onChanged` was not measured
+  between two real browsers: the E2E Chromium has no account, so its `sync` area stays on the machine.
+- **Turning the box off forgets what was known**, so the next merge removes nothing: a rule removed
+  here while the box was off comes back from the account when it is ticked again.
 - **Turning the box off removes nothing from the account.** Removing there would remove the rules of
   the other browsers.
 - **A quota of `sync` that refuses a write** is logged, and the rule stays in `local`.
