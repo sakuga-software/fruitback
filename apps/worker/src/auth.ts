@@ -196,6 +196,12 @@ export const REFUSED_PLUGINS: Readonly<Record<string, string>> = {
  */
 export const ROLE_REFUSED = 'ROLE_IS_NOT_ONE_OF_THE_FOUR';
 
+/**
+ * The code of an invitation that nobody stands behind any more (FRU-209): whoever made it was
+ * removed from the workspace, left it, or may no longer invite there.
+ */
+export const INVITER_GONE = 'INVITER_NO_LONGER_INVITES';
+
 /** The part of the configuration of the worker that better-auth is built from. */
 export type AuthConfig = {
   /** `FRUITBACK_AUTH_SECRET`. It signs the cookie of a session. */

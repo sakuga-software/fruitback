@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it, mock } from 'node:test';
 import { ROLES, type Role, can } from './accounts.ts';
 import { handleRequest } from './app.ts';
-import { type Auth, INVITATION_SECONDS, ROLE_REFUSED, startAuth } from './auth.ts';
+import { type Auth, INVITATION_SECONDS, INVITER_GONE, ROLE_REFUSED, startAuth } from './auth.ts';
 import { CONSOLE_URL, DATABASES, PUBLIC_URL, ask, databasesOfACase } from './auth.fixture.ts';
 import { handleOrganizationRoutes } from './auth-organization.ts';
 import { type Call, workerOf } from './auth-worker.fixture.ts';
@@ -1264,6 +1264,148 @@ for (const { label, open, skip } of DATABASES) {
 
       assert.equal(worker.mail.sent.length, before);
       assert.equal(await worker.kv.get('fruitback:invitation:paul@client.dev'), undefined);
+    });
+
+    it('cancels the invitations of an admin who is removed, demoted, or leaves, so nobody joins on their word (FRU-209)', async () => {
+      for (const how of ['removed', 'demoted', 'left'] as const) {
+        const worker = await workerOn(open);
+        const acme = await team(worker);
+        const made = await as(worker, acme.admin, `${ORG}/invite-member`, {
+          body: { organizationId: acme.workspace, email: 'second@elsewhere.dev', role: 'admin' },
+        });
+        assert.equal(made.status, 200, await made.clone().text());
+        const { id } = (await made.json()) as { id: string };
+        // The control: an invitation of the owner, and one the same admin made in another workspace.
+        const kept = await invited(worker, acme, 'kept@elsewhere.dev');
+        const other = await team(worker, 'globex');
+        await added(worker, other.workspace, acme.admin, 'admin');
+        const elsewhere = await as(worker, acme.admin, `${ORG}/invite-member`, {
+          body: { organizationId: other.workspace, email: 'second@elsewhere.dev', role: 'member' },
+        });
+        assert.equal(elsewhere.status, 200, await elsewhere.clone().text());
+
+        const calls = {
+          removed: () =>
+            as(worker, acme.owner, `${ORG}/remove-member`, {
+              body: { organizationId: acme.workspace, memberIdOrEmail: acme.admin.member },
+            }),
+          demoted: () =>
+            as(worker, acme.owner, `${ORG}/update-member-role`, {
+              body: { organizationId: acme.workspace, memberId: acme.admin.member, role: 'member' },
+            }),
+          left: () => as(worker, acme.admin, `${ORG}/leave`, { body: { organizationId: acme.workspace } }),
+        };
+        const done = await calls[how]();
+        assert.equal(done.status, 200, `${how}: ${await done.clone().text()}`);
+
+        const statuses = Object.fromEntries(
+          (await rowsOf(worker.database, 'SELECT id, status FROM invitation')).map((row) => [row.id, row.status]),
+        );
+        assert.equal(statuses[id], 'canceled', how);
+        assert.equal(statuses[kept], 'pending', how);
+        assert.equal(statuses[((await elsewhere.json()) as { id: string }).id], 'pending', how);
+        const second = await person(worker, 'second@elsewhere.dev');
+        const accepted = await as(worker, second, `${ORG}/accept-invitation`, { body: { invitationId: id } });
+        assert.equal(accepted.status, 400, how);
+        assert.equal(
+          (await rowsOf(worker.database, `SELECT id FROM member WHERE "userId" = '${second.id}'`)).length,
+          0,
+          how,
+        );
+      }
+    });
+
+    it('cancels the invitations of somebody who leaves when the end of their extensions fails, and says the failure (FRU-209)', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const made = await as(worker, acme.admin, `${ORG}/invite-member`, {
+        body: { organizationId: acme.workspace, email: 'second@elsewhere.dev', role: 'admin' },
+      });
+      const { id } = (await made.json()) as { id: string };
+      const failing = {
+        auth: worker.auth,
+        accounts: worker.accounts,
+        sessions: {
+          ...worker.sessions,
+          endSessionsOf: async () => {
+            throw new Error('the sessions of a test do not answer');
+          },
+        },
+        mailer: worker.mail,
+        kv: worker.kv,
+        consoleUrl: CONSOLE_URL,
+        clientIp: '198.51.100.7',
+        trackIp: false,
+      };
+
+      await assert.rejects(
+        handleOrganizationRoutes(
+          new Request(`${PUBLIC_URL}${ORG}/leave`, {
+            method: 'POST',
+            headers: { Cookie: acme.admin.cookie, Origin: CONSOLE_URL, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ organizationId: acme.workspace }),
+          }),
+          `${ORG}/leave`,
+          failing,
+          {},
+        ),
+        /the sessions of a test do not answer/,
+      );
+      assert.equal(
+        (await rowsOf(worker.database, `SELECT status FROM invitation WHERE id = '${id}'`))[0]?.status,
+        'canceled',
+      );
+    });
+
+    it('keeps the invitations of an admin who becomes owner, and of one whose role does not change (FRU-209)', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const made = await as(worker, acme.admin, `${ORG}/invite-member`, {
+        body: { organizationId: acme.workspace, email: 'second@elsewhere.dev', role: 'member' },
+      });
+      const { id } = (await made.json()) as { id: string };
+      for (const role of ['admin', 'owner']) {
+        const changed = await as(worker, acme.owner, `${ORG}/update-member-role`, {
+          body: { organizationId: acme.workspace, memberId: acme.admin.member, role },
+        });
+        assert.equal(changed.status, 200, await changed.clone().text());
+      }
+
+      const second = await person(worker, 'second@elsewhere.dev');
+      const accepted = await as(worker, second, `${ORG}/accept-invitation`, { body: { invitationId: id } });
+      assert.equal(accepted.status, 200, await accepted.clone().text());
+    });
+
+    it('refuses at the acceptance an invitation whose inviter no longer invites, when no cancellation ran (FRU-209)', async () => {
+      for (const how of ['no member row', 'a member row under manage-members'] as const) {
+        const worker = await workerOn(open);
+        const acme = await team(worker);
+        const made = await as(worker, acme.admin, `${ORG}/invite-member`, {
+          body: { organizationId: acme.workspace, email: 'second@elsewhere.dev', role: 'admin' },
+        });
+        const { id } = (await made.json()) as { id: string };
+        // Written under the plugin, as a hook that failed after the write would leave it.
+        await rowsOf(
+          worker.database,
+          how === 'no member row'
+            ? `DELETE FROM member WHERE id = '${acme.admin.member}'`
+            : `UPDATE member SET role = 'member' WHERE id = '${acme.admin.member}'`,
+        );
+        assert.equal(
+          (await rowsOf(worker.database, `SELECT status FROM invitation WHERE id = '${id}'`))[0]?.status,
+          'pending',
+        );
+
+        const second = await person(worker, 'second@elsewhere.dev');
+        const accepted = await as(worker, second, `${ORG}/accept-invitation`, { body: { invitationId: id } });
+        assert.equal(accepted.status, 400, how);
+        assert.equal(((await accepted.json()) as { code?: string }).code, INVITER_GONE, how);
+        assert.equal(
+          (await rowsOf(worker.database, `SELECT id FROM member WHERE "userId" = '${second.id}'`)).length,
+          0,
+          how,
+        );
+      }
     });
 
     it('answers 502 when the message does not leave, keeps the invitation, and sends it again', async () => {

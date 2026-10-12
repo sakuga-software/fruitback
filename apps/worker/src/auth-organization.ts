@@ -1,6 +1,6 @@
 import { type AccountStore, type Workspace, can } from './accounts.ts';
-import { newId } from './account-rows.ts';
-import { AUTH_BASE_PATH, type Auth, INVITATION_SECONDS } from './auth.ts';
+import { newId, roleOf } from './account-rows.ts';
+import { AUTH_BASE_PATH, type Auth, INVITATION_SECONDS, INVITER_GONE } from './auth.ts';
 import { type AuthRouteContext, AuthUnavailable, headersFor, mutationAllowed, sessionOfCookie } from './auth-routes.ts';
 import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
 import { ORGANIZATION_PATHS, type OrganizationRule, readOrganizationInput } from './organization-paths.ts';
@@ -54,13 +54,67 @@ export const INVITATION_DAYS = INVITATION_SECONDS / 86_400;
  */
 export const INVITATIONS_PER_WINDOW = EMAIL_LINKS_PER_WINDOW;
 
-/** The adapter of better-auth, to read which workspace an invitation is of. */
+/** The adapter of better-auth, to read which workspace an invitation is of, and who made it. */
 type InvitationAdapter = {
   findOne(input: {
+    model: 'invitation' | 'member';
+    where: { field: string; value: string }[];
+  }): Promise<{ organizationId?: unknown; inviterId?: unknown; role?: unknown } | null>;
+  updateMany(input: {
     model: 'invitation';
     where: { field: string; value: string }[];
-  }): Promise<{ organizationId?: unknown } | null>;
+    update: { status: 'canceled' };
+  }): Promise<unknown>;
 };
+
+/**
+ * An invitation is the word of whoever made it (FRU-209). When that person is removed, leaves, or
+ * loses `manage-members`, the invitations of theirs that wait in the workspace are cancelled in the
+ * same call. An admin who was removed left a second admin behind, for 7 days, or for ever with
+ * « Resend ».
+ */
+async function cancelInvitationsOf(adapter: InvitationAdapter, workspace: string, inviter: string): Promise<void> {
+  await adapter.updateMany({
+    model: 'invitation',
+    where: [
+      { field: 'organizationId', value: workspace },
+      { field: 'inviterId', value: inviter },
+      { field: 'status', value: 'pending' },
+    ],
+    update: { status: 'canceled' },
+  });
+}
+
+/**
+ * What follows a departure that better-auth already wrote: each step runs whatever the other does,
+ * and the first failure is thrown when both are done. A cancellation that failed must not leave
+ * the extensions of the person alive, nor the other way round.
+ */
+async function afterSomebodyWent(...steps: Promise<unknown>[]): Promise<void> {
+  const failed = (await Promise.allSettled(steps)).find((step) => step.status === 'rejected');
+  if (failed !== undefined) throw failed.reason;
+}
+
+/**
+ * Whether whoever made an invitation still invites to its workspace: the second lock, at the
+ * acceptance. It holds when the cancellation above did not run (it comes after the write of the
+ * plugin, in no transaction), and for an invitation that waited before the cancellation existed.
+ * An invitation that does not exist is left to better-auth, which answers it.
+ */
+async function inviterStillInvites(adapter: InvitationAdapter, invitationId: string): Promise<boolean> {
+  const invitation = await adapter.findOne({ model: 'invitation', where: [{ field: 'id', value: invitationId }] });
+  if (invitation === null) return true;
+  const member = await adapter.findOne({
+    model: 'member',
+    where: [
+      { field: 'organizationId', value: String(invitation.organizationId) },
+      { field: 'userId', value: String(invitation.inviterId) },
+    ],
+  });
+  const role = roleOf(member?.role);
+
+  return role !== undefined && can(role, 'manage-members');
+}
 
 const PREFIX = `${AUTH_BASE_PATH}/organization/`;
 
@@ -139,6 +193,7 @@ export async function handleOrganizationRoutes(
   if (!read.ok) return json(400, { error: 'invalid-request', field: read.field }, headers);
   // A route of the person names no workspace: better-auth reads the address of the session.
   const workspace = rule.scope === 'person' ? undefined : String(read.input.organizationId);
+  const adapter = (await auth.$context).adapter as unknown as InvitationAdapter;
 
   if (workspace !== undefined) {
     // Read by the store of the worker, which takes one role of the four and nothing else. Not a
@@ -150,13 +205,23 @@ export async function handleOrganizationRoutes(
     // better-auth finds the workspace of an invitation from the invitation. The role was read in the
     // workspace the call names: the invitation must be one of it, or it does not exist.
     if (rule.ofTheWorkspace === 'invitation') {
-      const adapter = (await auth.$context).adapter as unknown as InvitationAdapter;
       const invitation = await adapter.findOne({
         model: 'invitation',
         where: [{ field: 'id', value: String(read.input.invitationId) }],
       });
       if (invitation?.organizationId !== workspace) return json(404, { error: 'not-found' }, headers);
     }
+  }
+
+  if (
+    path === '/organization/accept-invitation' &&
+    !(await inviterStillInvites(adapter, String(read.input.invitationId)))
+  ) {
+    return json(
+      400,
+      { code: INVITER_GONE, message: 'Whoever made this invitation no longer invites to the workspace' },
+      headers,
+    );
   }
 
   const invited = path === '/organization/invite-member' ? String(read.input.email) : undefined;
@@ -178,7 +243,25 @@ export async function handleOrganizationRoutes(
   // Somebody who left keeps no extension for the workspace. `remove-member` does the same in a hook
   // of the plugin (`auth.ts`); `leave` runs none in 1.7.7, so it is here.
   if (path === '/organization/leave' && answer.ok && workspace !== undefined) {
-    await context.sessions.endSessionsOf({ subject: mine.userId, workspace }, Date.now());
+    await afterSomebodyWent(
+      context.sessions.endSessionsOf({ subject: mine.userId, workspace }, Date.now()),
+      cancelInvitationsOf(adapter, workspace, mine.userId),
+    );
+  }
+  // Somebody who is removed, or whose new role does not invite, keeps no invitation that waits.
+  if (
+    (path === '/organization/remove-member' || path === '/organization/update-member-role') &&
+    answer.ok &&
+    workspace !== undefined
+  ) {
+    const told = (await answer
+      .clone()
+      .json()
+      .catch(() => undefined)) as { member?: { userId?: unknown }; userId?: unknown; role?: unknown } | undefined;
+    const changed = path === '/organization/remove-member' ? told?.member?.userId : told?.userId;
+    if (typeof changed !== 'string') throw new AuthUnavailable('better-auth answered a member with no person');
+    const role = path === '/organization/remove-member' ? undefined : roleOf(told?.role);
+    if (role === undefined || !can(role, 'manage-members')) await cancelInvitationsOf(adapter, workspace, changed);
   }
 
   // The invitation is kept: its message goes now, when the worker sends mail and the window of this

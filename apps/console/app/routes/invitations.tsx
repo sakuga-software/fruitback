@@ -18,6 +18,7 @@ import { useLocale } from '../use-locale';
 const ROLE_WORDS: Readonly<Record<string, string>> = { admin: msg('Admin'), member: msg('Member') };
 const ANSWER_PROBLEMS: Readonly<Record<string, string>> = {
   INVITATION_NOT_FOUND: msg('This invitation was cancelled, or it ended. Ask for another one.'),
+  INVITER_NO_LONGER_INVITES: msg('This invitation was cancelled, or it ended. Ask for another one.'),
 };
 const NOT_ANSWERED = msg('The invitation could not be answered. Try again.');
 

@@ -1757,6 +1757,13 @@ roles, when it is accepted`.
   there. Without `ofTheWorkspace`, an admin of a workspace would have passed the check of the worker
   in their workspace, and better-auth's check in the other one only if they were an admin there too:
   safe by better-auth alone, but the worker's own check would have read the wrong workspace.
+- **The invitations of somebody who no longer invites are cancelled, and refused at the acceptance**
+  (FRU-209, `cancelInvitationsOf` and `inviterStillInvites` in `auth-organization.ts`). better-auth
+  never reads the inviter again when an invitation is accepted. They are in the route and not in
+  the hooks of the plugin: a hook gets no adapter, the pool of `authOptions` is not a `pg` pool on
+  PGlite (`pool.query is not a function`, measured), and `leave` runs no hook at all. The route reads
+  who was removed, and the new role, in the answer of better-auth. A demotion that keeps
+  `manage-members` (admin to owner, owner to admin) cancels nothing.
 - **A second invitation of an address that waits** is refused (`USER_IS_ALREADY_INVITED…`), unless
   `resend`, which moves its end to 7 days from now and sends the message again.
 - **What the plugin answers on a resend is the invitation as it was**, with the new end.
