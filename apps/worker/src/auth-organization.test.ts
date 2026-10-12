@@ -1197,6 +1197,17 @@ for (const { label, open, skip } of DATABASES) {
       // Nobody is over their own count: the workspace is.
       assert.deepEqual(mailed, [...Array(INVITATIONS_PER_WORKSPACE).fill(true), false]);
       assert.equal(worker.mail.sent.length - before, INVITATIONS_PER_WORKSPACE);
+
+      // A workspace that is full spends nothing of who tries: the third admin tried once above, and
+      // still sends their twenty from another workspace.
+      const other = await team(worker, 'globex');
+      await added(worker, other.workspace, third, 'admin');
+      const elsewhere: boolean[] = [];
+      for (let n = 0; n < INVITATIONS_PER_INVITER; n += 1) {
+        const answer = await invite(worker, third, other.workspace, { email: `other${n}@client.dev` });
+        elsewhere.push(((await answer.json()) as { mailed: boolean }).mailed);
+      }
+      assert.deepEqual(elsewhere, Array(INVITATIONS_PER_INVITER).fill(true));
     });
 
     it('keeps the window of an address to its workspace: another workspace neither closes it nor learns of it (FRU-209)', async () => {

@@ -317,8 +317,13 @@ export async function handleOrganizationRoutes(
 
 /**
  * Whether one more invitation message may go: under the window of the address in this workspace,
- * of the account that invites, and of the workspace. Each count is taken in one step, and the next
- * one is not asked when one is over: a message that does not go spends nothing further.
+ * of the account that invites, and of the workspace.
+ *
+ * The three are read first, and nothing is counted when one is full: a workspace past its count
+ * would otherwise spend the count of each admin who tries, in every workspace of theirs, and an
+ * account past its own would spend the window of each address it tries. Then each is counted in one
+ * step, and the message goes only when none came back over: of two calls at the same moment, the
+ * one that goes over sends nothing. Only that call, in a race, spends a count for no message.
  */
 async function mayMail(kv: Kv, sent: { workspace: string; invited: string; inviter: string }): Promise<boolean> {
   const windows: [string, number, number][] = [
@@ -326,11 +331,12 @@ async function mayMail(kv: Kv, sent: { workspace: string; invited: string; invit
     [`fruitback:invitations-of:${sent.inviter}`, INVITER_WINDOW_MS, INVITATIONS_PER_INVITER],
     [`fruitback:invitations-in:${sent.workspace}`, INVITER_WINDOW_MS, INVITATIONS_PER_WORKSPACE],
   ];
-  for (const [key, ttl, most] of windows) {
-    if ((await kv.incr(key, ttl)) > most) return false;
+  for (const [key, , most] of windows) {
+    if (Number((await kv.get(key)) ?? 0) >= most) return false;
   }
+  const counts = await Promise.all(windows.map(([key, ttl]) => kv.incr(key, ttl)));
 
-  return true;
+  return counts.every((count, index) => count <= (windows[index] as [string, number, number])[2]);
 }
 
 /**
