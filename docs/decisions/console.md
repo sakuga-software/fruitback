@@ -30,7 +30,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   does not. **A secret that the worker made is on the screen once**, in the form that made the
   connector, and in no state after it. An address says « Connected », never « Working »: the list
   cannot know that its notes arrive. **No list of deliveries is not an empty list**: a worker that did
-  not answer must not read as « every note arrived ».
+  not answer must not read as « every note arrived ». The same holds for the sites and the sources
+  (FRU-162): `listed.ts` gives a read `loading`, `failed` or the list, only a list shows the empty
+  state or a count, and a failed read says so with « Try again ».
 - **The console draws its controls with HeroUI v3, through its own kit** (FRU-125). `ui.tsx` is the
   one file that imports `@heroui/react`: `Button`, `Field`, `Choice` (a select), `Pick` (radios),
   `Chip` and `Problem`. A screen uses the kit, and `messages.test.ts` fails on a native control in a

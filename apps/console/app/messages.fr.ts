@@ -259,6 +259,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Add the site': 'Ajouter le site',
   'No site yet. Paste the address of the one you review.':
     'Pas encore de site. Collez l’adresse de celui que vous relisez.',
+  'Fruitback did not answer. Your sites are not lost.': 'Fruitback n’a pas répondu. Vos sites ne sont pas perdus.',
+  'Fruitback did not answer. The sources and their sites could not be read.':
+    'Fruitback n’a pas répondu. Les sources et leurs sites n’ont pas pu être lus.',
   Close: 'Fermer',
   Remove: 'Retirer',
   'Cloud workspace · beta': 'Workspace Cloud · bêta',
