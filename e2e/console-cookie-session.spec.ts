@@ -32,7 +32,7 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
   let worker: Worker;
 
   test.beforeEach(async ({ page }) => {
-    worker = await cloudWorker({ betterAuth: true });
+    worker = await cloudWorker();
     await served(page, worker);
   });
   test.afterEach(({ page }) => finished(page, worker));
@@ -195,42 +195,6 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     expect(again.status).toBe(401);
   });
 
-  test('ends the session of before too when the person signs out (FRU-204)', async ({ page, context }) => {
-    await signInByLink(page, worker, 'ana@acme.dev');
-    // A session of before the worker served better-auth: opened on the routes of before, which the
-    // worker still serves, and kept by this browser in its refresh cookie of 30 days.
-    const calling = { Origin: CONSOLE, 'Content-Type': 'application/json' };
-    await fetch(`${worker.origin}/auth/email`, {
-      method: 'POST',
-      headers: calling,
-      body: JSON.stringify({ email: 'ana@acme.dev' }),
-    });
-    const code = (await linkIn(worker)).split('#')[1];
-    const opened = await fetch(`${worker.origin}/auth/email/redeem`, {
-      method: 'POST',
-      headers: calling,
-      body: JSON.stringify({ code }),
-    });
-    expect(opened.status).toBe(200);
-    const kept = (opened.headers.getSetCookie()[0] ?? '').split(';')[0] ?? '';
-    const [name, value] = kept.split('=') as [string, string];
-    expect(name).toBe('fruitback_console');
-    await context.addCookies([
-      { name, value, domain: 'localhost', path: '/console/session', httpOnly: true, secure: true, sameSite: 'Strict' },
-    ]);
-    const refresh = (): Promise<Response> =>
-      fetch(`${worker.origin}/console/session/refresh`, { method: 'POST', headers: { Origin: CONSOLE, Cookie: kept } });
-
-    await page.getByRole('link', { name: 'My account' }).click();
-    await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Create your workspace' })).toBeVisible();
-
-    const asked = (await worker.received()).filter((each) => each.path === '/console/session/logout');
-    expect(asked.map((each) => each.cookie)).toEqual([true]);
-    // The refresh cookie the browser held opens nothing, whoever presents it.
-    expect((await refresh()).status).toBe(401);
-  });
-
   test('stays on the account, and says so, when the worker did not end the session (FRU-204)', async ({
     page,
     context,
@@ -264,27 +228,5 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     await page.getByRole('button', { name: 'Sign out', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Create your workspace' })).toBeVisible();
     expect((await me()).status).toBe(401);
-  });
-});
-
-test.describe('this console, against a worker of before (FRU-148)', () => {
-  let worker: Worker;
-
-  test.beforeEach(async ({ page }) => {
-    worker = await cloudWorker({ betterAuth: false });
-    await served(page, worker);
-  });
-  test.afterEach(({ page }) => finished(page, worker));
-
-  test('signs in by a link as before, with the token of before, while the worker does not say betterAuth', async ({
-    page,
-  }) => {
-    await signInByLink(page, worker, 'ana@acme.dev');
-
-    const received = await worker.received();
-    const paths = received.map((each) => each.path);
-    expect(paths).toContain('/auth/email/redeem');
-    expect(paths.filter((path) => path.startsWith('/console/auth/'))).toEqual([]);
-    expect(received.some((each) => each.path === '/console/me' && each.authorization)).toBe(true);
   });
 });

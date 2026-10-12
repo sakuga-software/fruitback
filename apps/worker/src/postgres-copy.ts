@@ -5,7 +5,6 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { getTableColumns, getTableName, sql } from 'drizzle-orm';
 import { type PgTable, bigint, foreignKey, index, pgTable, primaryKey, text } from 'drizzle-orm/pg-core';
-import { ACCOUNTS_FILE_VERSION } from './accounts-sqlite.ts';
 import type { Database, Db } from './postgres.ts';
 import { migrate, migrationsFolder } from './postgres-migrate.ts';
 import {
@@ -18,6 +17,13 @@ import {
   sites,
 } from './postgres-schema.ts';
 import { SESSIONS_FILE_VERSION } from './session-sqlite.ts';
+
+/**
+ * The `user_version` of the accounts file of the last worker that kept its accounts in one (until
+ * FRU-150): the one version this command copies. The store that wrote that file is a test fixture now
+ * (`accounts-sqlite.fixture.ts`), and a test holds this number to it.
+ */
+export const ACCOUNTS_FILE_VERSION = 8;
 
 /**
  * The accounts and the sessions of the two SQLite files, copied into PostgreSQL (FRU-145).
