@@ -194,12 +194,57 @@ describe('createOverlay', () => {
     // The stylesheet is what turns the slot into a distance.
     assert.match(
       page.document.querySelector('style')?.textContent ?? '',
-      /left: calc\(-6px \+ var\(--fruitback-pin-slot, 0\) \* 30px\)/,
+      /right: calc\(100% \+ var\(--fruitback-pin-slot, 0\) \* 30px\)/,
     );
 
     // Each badge still opens its own note.
     (page.document.querySelector('[data-fruitback-pin="sd_cta_2"] .fruitback-pin-badge') as HTMLElement).click();
     assert.equal(page.document.querySelector('.fruitback-thread-note')?.textContent, 'Note 2');
+  });
+
+  it('keeps the badges above an element too close to the left edge for them (FRU-158)', () => {
+    // Outside the corner means left of the element. A button 10 px from the edge of the page would put
+    // its badge off the page, where nothing can click it.
+    const page = mountPage(`${PAGE}<p id="edge">Au bord</p>`, { width: 1_000, height: 1_000 });
+    setDocumentSize(page.document, 1_000, 1_000);
+    setRect(page.query('button'), { left: 100, top: 200, width: 200, height: 40 });
+    setRect(page.query('#edge'), { left: 10, top: 400, width: 100, height: 20 });
+    overlay = createOverlay({ document: page.document });
+
+    const onCta = (n: number) =>
+      seedIssueFixture({
+        id: `issue_${n}`,
+        seed: { ...issueOnCta().seed, id: `sd_cta_${n}` },
+      });
+    const edge = seedIssueFixture({
+      id: 'issue_edge',
+      seed: seedFixture({
+        id: 'sd_edge',
+        anchor: { selector: '#edge', tag: 'p', text: 'Au bord', bounds: { xPct: 1, yPct: 40, wPct: 10, hPct: 2 } },
+      }),
+    });
+    // 100 px leaves room for three badges on the left (26 + 2 × 30 = 86), not for four.
+    overlay.render([onCta(1), onCta(2), onCta(3), edge]);
+    const tight = () =>
+      [...page.document.querySelectorAll<HTMLElement>('[data-fruitback-pin]')]
+        .filter((pin) => pin.classList.contains('fruitback-pin-tight'))
+        .map((pin) => pin.dataset.fruitbackPin);
+    assert.deepEqual(tight(), ['sd_edge']);
+
+    overlay.render([onCta(1), onCta(2), onCta(3), onCta(4)]);
+    assert.deepEqual(tight(), ['sd_cta_1', 'sd_cta_2', 'sd_cta_3', 'sd_cta_4']);
+  });
+
+  it('tints the frame only while its note is pointed at, focused or open (FRU-158)', () => {
+    // A tint left on greyed every annotated element, and a page with many notes became hard to read.
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([issueOnCta()]);
+
+    const sheet = page.document.querySelector('style')?.textContent ?? '';
+    const pinRule = /\.fruitback-pin \{[^}]*\}/.exec(sheet)?.[0] ?? '';
+    assert.doesNotMatch(pinRule, /background/);
+    assert.match(sheet, /\.fruitback-pin\[data-fruitback-open\] \{\s*background: color-mix/);
   });
 
   it('falls back to the stage when the store reports no state name (FRU-24)', () => {
