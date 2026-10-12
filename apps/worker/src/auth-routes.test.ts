@@ -499,6 +499,23 @@ for (const { label, open, skip } of DATABASES) {
       assert.equal(ended.status, 204);
       assert.deepEqual(ended.headers.getSetCookie(), []);
       assert.equal((await worker.call('/console/me', { headers })).status, 401);
+
+      // The two routes of better-auth that end the session of the cookie do not go through the
+      // reading of the worker. « Sign out » clears the cookie. « Sign out everywhere » is better-auth
+      // alone, before and after FRU-208: it can set the cookie again on its own answer, and whatever
+      // it sets opens nothing, because every session of the person is gone.
+      for (const route of ['sign-out', 'revoke-sessions']) {
+        const again = { Cookie: await worker.signIn('alice@acme.dev') };
+        await aged(worker);
+        const out = await worker.call(`/console/auth/${route}`, { body: {}, headers: again });
+        assert.equal(out.status, 200, route);
+        if (route === 'sign-out') {
+          for (const each of sessionCookies(out)) assert.match(each, /fruitback\.session_token=;.*Max-Age=0/);
+        }
+        for (const held of [again.Cookie, cookieOf(out)].filter((each) => each !== '')) {
+          assert.equal((await worker.call('/console/me', { headers: { Cookie: held } })).status, 401, route);
+        }
+      }
     });
   });
 
