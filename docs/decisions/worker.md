@@ -2218,6 +2218,25 @@ signed with the worker-wide key, and a worker with `FRUITBACK_CLIENTS` ignored t
 refused at boot instead of shipping a feature that paired successfully and then answered `401` to
 everything. FRU-95 lifted it, below.
 
+## The first reviewer, named in the environment (FRU-108)
+
+- **`FRUITBACK_FIRST_REVIEWER` names the person, and the worker mints their code when it starts**,
+  only while `SessionStore.holdsSession()` is false: no session, live or ended. A code that nobody
+  spent is not a session, so each start mints another one until somebody pairs.
+- **`first-reviewer.ts` holds it, `announceFirstReviewer` in `app.ts` writes the lines, and
+  `server.ts` calls it after the boot lines.** It never rejects: a store that does not open is one
+  line of error, and the worker serves.
+- **The code is in the log in the clear.** That is the price of not entering the container, and why
+  the variable is off by default: `SECURITY.md` says who can then pair.
+- **`readConfig` refuses the variable where it would do nothing**: with no sessions, with a value
+  that names nobody, and on a worker with accounts or workspaces, where a session names a workspace.
+- **The link needs `FRUITBACK_PUBLIC_URL`**: the container does not know its address. Without it
+  the code is written alone.
+- **Measured on the image built from this branch**, from an empty folder with `docker-compose.yml`
+  and a `.env` of eight lines, under `env -i`: the first start writes the code, `POST /session/pair`
+  with it answers `200` and a token of the person named, the next start writes nothing. With
+  `FRUITBACK_PUBLIC_URL` the line is the link, and `GET /pair` answers `200`.
+
 ## Rotation, and the grace that is not a clock (FRU-61)
 
 A refresh token that never changes is a thirty-day password. A copy taken from a browser profile

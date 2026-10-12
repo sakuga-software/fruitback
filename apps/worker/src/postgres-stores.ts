@@ -103,6 +103,7 @@ export function sessionStoreOn(database: Database): SessionStore {
     revokeSession: true,
     endSessionsOf: true,
     purge: true,
+    holdsSession: true,
   });
 }
 
