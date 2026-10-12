@@ -464,6 +464,24 @@ surface, so:
 It is a small amount of cryptography and it is reviewed as such. If you find a flaw in it, that is
 squarely a vulnerability and we want to hear about it.
 
+### With accounts, the worker key opens the console (FRU-203)
+
+`FRUITBACK_IDENTITY_SECRET` signs the access token of every session. On a worker with accounts, the
+routes of the console take a token signed with it, with the id of an account in `sub`, for a
+console session of that account. **Whoever holds the key signs one for any account**, with no
+sign-in, and the id of an account is on every note its person leaves. Nothing in the token says
+that the worker minted it, and a claim that did would not help: the holder of the key writes any
+claim. test:`takes a token that the holder of the worker key signed for the console session of its sub`.
+
+**The condition that protects the console is that no site holds this key.** With accounts no site
+needs it: a site is a row the console wrote, and it signs nothing. A worker that served one site
+with this key, and then got accounts, must change it. Changing it refuses every token of the old
+key at once and ends no session:
+test:`refuses every token of the old key once the key changed, and a session that was open goes on at its next refresh`.
+The steps are in [docs/self-hosting.md](docs/self-hosting.md#change-fruitback_identity_secret). The
+cookie of better-auth is not signed with this key, and once the console signs in with that cookie
+only (FRU-150), no route of the console reads a token.
+
 ### The accounts, and what decides who reads a site (FRU-96)
 
 With `FRUITBACK_ACCOUNTS_PATH` the clients of the worker are the sites the console wrote, read from
