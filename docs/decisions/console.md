@@ -42,6 +42,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   `Chip` and `Problem`. A screen uses the kit, and `messages.test.ts` fails on a native control in a
   screen. **HeroUI takes the theme**: `app.css` gives its variables the tokens of `design/README.md`,
   and HeroUI names `--color-accent`, `--color-muted` and `--color-surface` from them, so those three
-  are no longer in our `@theme`. **A button takes no `title`**: a tooltip does not open on a disabled
+  are no longer in our `@theme`. **A state that HeroUI derives is measured, and given in `app.css` when
+  it fails** (FRU-163): it lightens a hovered button, and white on that red was 3.9:1, so
+  `--accent-hover` is the strong accent (6.47:1). It draws an alert as a white card with muted text, so
+  `.alert--danger` puts the danger of the theme on the text and the border (5.84:1 on its tint).
+  `e2e/console-kit.spec.ts` measures both. **A button takes no `title`**: a tooltip does not open on a disabled
   control, so the reason is written beside it. The overlays of React Aria position with inline
   styles, which the console's CSP allows (`style-src 'unsafe-inline'`); its scripts stay hashed.
