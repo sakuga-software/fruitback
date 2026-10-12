@@ -28,6 +28,7 @@ import {
   proofRecord,
   proofState,
   readDomain,
+  sayLoss,
   systemResolver,
 } from './domain-proof.ts';
 import { noteConnectorCall } from './connector-health.ts';
@@ -790,6 +791,8 @@ async function domainRoute(
     }
     const answer = await checkProof(context.resolveTxt ?? systemResolver, workspace, domain.domain);
     await accounts.noteDomainCheck(domain.id, answer, now);
+    // The same line as the timer writes, when this click is the check that finds the proof ended.
+    sayLoss(domain, answer, now);
     const checked = (await accounts.domains(workspace)).find((each) => each.id === domain.id);
     if (checked === undefined) return json(404, { error: 'not-found' }, headers);
 

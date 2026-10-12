@@ -211,6 +211,35 @@ describe('the proofs, asked again', () => {
     assert.equal((await accounts.domains(workspace.id))[0]?.lostAt, undefined);
   });
 
+  it('says the lapse once when a click in the console finds it before the timer does', async () => {
+    const env = envWith();
+    const { alice, workspace } = await world(env);
+    const base = `/console/workspaces/${workspace}/domains`;
+    const domain = (await (
+      await call(env, 'POST', base, { token: alice.token, body: { domain: 'acme.dev' } })
+    ).json()) as View;
+    const accounts = createSqliteAccountStore(env.FRUITBACK_ACCOUNTS_PATH as string);
+    // Proven long ago, and last asked inside the grace.
+    await accounts.noteDomainCheck(domain.id, 'found', Date.now() - PROOF_GRACE_MS - 60_000);
+    await accounts.noteDomainCheck(domain.id, 'unknown', Date.now() - RECHECK_MS - 60_000);
+    const warned = mock.method(console, 'warn', () => {});
+
+    const checked = await call(
+      env,
+      'POST',
+      `${base}/${domain.id}/check`,
+      { token: alice.token },
+      { resolveTxt: silent },
+    );
+    assert.equal(((await checked.json()) as View).state, 'lost');
+    assert.equal(warned.mock.callCount(), 1);
+    assert.match(String(warned.mock.calls[0]?.arguments[0]), /the DNS did not confirm the domain acme\.dev/);
+
+    // The timer comes after: the click already said it.
+    await recheckDomains(accounts, silent, Date.now() + RECHECK_MS);
+    assert.equal(warned.mock.callCount(), 1);
+  });
+
   it('changes nothing when the DNS does not answer', async () => {
     const accounts = store();
     const alice = await accounts.signIn({ provider: 'email', subject: 'a@acme.dev', email: 'a@acme.dev' });

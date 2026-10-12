@@ -159,6 +159,33 @@ export function previewPattern(domain: string): string {
   return `https://*.${domain}`;
 }
 
+/**
+ * Writes one line in the log when this answer is the one that ends a proof: the DNS answered without
+ * the record, or it did not answer and the grace ran out since the check before. The timer and the
+ * « Check » of the console both call it with the domain as it was before the answer, so the line is
+ * written once, whichever of the two finds the loss. The domain and the workspace are not secrets.
+ */
+export function sayLoss(
+  domain: { domain: string; workspaceId: string; verifiedAt?: number; lostAt?: number; checkedAt?: number },
+  answer: ProofAnswer,
+  now: number,
+): void {
+  if (domain.verifiedAt === undefined || domain.lostAt !== undefined) return;
+  const lapsed = (at: number) => at - (domain.verifiedAt as number) > PROOF_GRACE_MS;
+  if (answer === 'missing' && !lapsed(now)) {
+    console.warn(
+      `[fruitback] the domain ${domain.domain} of the workspace ${domain.workspaceId} lost its proof: its previews are not covered any more`,
+    );
+  }
+  // A proof that nothing confirmed for `PROOF_GRACE_MS` is lost too, with no answer to date it by.
+  // Said by the check that crosses the line, and by no other: the check before this one was inside it.
+  if (answer !== 'found' && lapsed(now) && !lapsed(domain.checkedAt ?? domain.verifiedAt)) {
+    console.warn(
+      `[fruitback] the DNS did not confirm the domain ${domain.domain} of the workspace ${domain.workspaceId} for ${PROOF_GRACE_MS / 3_600_000} hours: its previews are not covered any more`,
+    );
+  }
+}
+
 /** How many domains one pass asks. The next pass takes the rest. */
 export const RECHECK_BATCH = 20;
 
@@ -177,20 +204,7 @@ export async function recheckDomains(
   for (const domain of await accounts.domainsToCheck(now - RECHECK_MS, limit)) {
     const answer = await checkProof(resolve, domain.workspaceId, domain.domain);
     await accounts.noteDomainCheck(domain.id, answer, now);
-    if (answer === 'missing' && domain.lostAt === undefined) {
-      console.warn(
-        `[fruitback] the domain ${domain.domain} of the workspace ${domain.workspaceId} lost its proof: its previews are not covered any more`,
-      );
-    }
-    // A proof that nothing confirmed for `PROOF_GRACE_MS` is lost too, with no answer to date it by.
-    // Said at the pass that crosses the line, and at no other: the check before this one was inside it.
-    const lapsed = (at: number | undefined) =>
-      domain.verifiedAt !== undefined && at !== undefined && at - domain.verifiedAt > PROOF_GRACE_MS;
-    if (answer === 'unknown' && domain.lostAt === undefined && lapsed(now) && !lapsed(domain.checkedAt)) {
-      console.warn(
-        `[fruitback] the DNS did not confirm the domain ${domain.domain} of the workspace ${domain.workspaceId} for ${PROOF_GRACE_MS / 3_600_000} hours: its previews are not covered any more`,
-      );
-    }
+    sayLoss(domain, answer, now);
   }
 }
 
