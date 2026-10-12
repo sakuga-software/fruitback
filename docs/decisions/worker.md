@@ -1525,6 +1525,15 @@ The console moves in FRU-148, and FRU-150 removes the path of before.
   answer had no `Set-Cookie`; the same reading with `returnHeaders` hands back the cookie of the
   sign-in, token and attributes, with `Max-Age=604800`. A new route that reads the cookie through
   `sessionOfCookie` gets this with nothing to write.
+- **A change on a route of better-auth carries the `Origin` of the console** (FRU-212, decided for
+  Mathieu on 2026-10-12): `handleAuthRoutes` applies `mutationAllowed` to every call that is not a
+  read, before it hands the request over. Read in `api/middlewares/origin-check.mjs` of 1.7.7:
+  `validateOrigin` takes `origin || referer`, has no option that asks for the `Origin`, and returns
+  at once for a request with no cookie. `trustedOrigins` as a function of the request was tried and
+  left: it refuses the `Referer` of the console, but better-auth always adds its own address to the
+  list, so the `Referer` of the worker still passed. **A provider that comes back by a `POST`**
+  (`response_mode=form_post`: Apple) posts from its own origin, and is refused here: adding one
+  means naming its callback as an exception, with a test.
 - **A rejection of better-auth is a `502`**, with its reason in the log and no address of the
   database: `auth.handler` rejects on a schema that is wrong.
 - **The link of the e-mail is the worker's own two routes.** `POST /console/auth/email` calls

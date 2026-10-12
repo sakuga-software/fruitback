@@ -593,6 +593,64 @@ for (const { label, open, skip } of DATABASES) {
     });
   });
 
+  describe(`a change on a route of better-auth comes from the console, on ${label} (FRU-212)`, { skip }, () => {
+    /** Every route of better-auth that the worker serves and that a request can change something by. */
+    const WRITES: Record<string, unknown> = {
+      '/sign-out': {},
+      '/revoke-sessions': {},
+      '/sign-in/social': { provider: 'github', callbackURL: CONSOLE_URL },
+      // better-auth takes a POST on its callbacks, for a provider that comes back by a form. GitHub
+      // and Google come back by a GET, so nothing legitimate posts here.
+      '/callback/github': { code: 'a-code', state: 'a-state' },
+      '/callback/google': { code: 'a-code', state: 'a-state' },
+    };
+
+    it('lists every served route that is not only read', () => {
+      const read = ['/ok', '/error'];
+
+      assert.deepEqual(Object.keys(SERVED_PATHS).sort(), [...Object.keys(WRITES), ...read].sort());
+    });
+
+    for (const [path, body] of Object.entries(WRITES)) {
+      it(`refuses a change on ${path} with no Origin, whatever its Referer`, async () => {
+        const worker = await workerOn(open);
+        const cookie = await worker.signIn('alice@acme.dev');
+        const from = (more: { origin: string | null; referer?: string }) =>
+          worker.call(`${AUTH_BASE_PATH}${path}`, {
+            body,
+            origin: more.origin,
+            headers: { Cookie: cookie, ...(more.referer === undefined ? {} : { Referer: more.referer }) },
+          });
+
+        for (const [name, referer] of [
+          ['no Origin', undefined],
+          ['the Referer of the console only', `${CONSOLE_URL}/w/ws_1/account`],
+          ['the Referer of the worker only', `${PUBLIC_URL}/pair`],
+        ] as const) {
+          const refused = await from({ origin: null, ...(referer === undefined ? {} : { referer }) });
+          assert.equal(refused.status, 403, name);
+          assert.deepEqual(await refused.json(), { error: 'origin-not-allowed' }, name);
+          assert.deepEqual(refused.headers.getSetCookie(), [], name);
+        }
+        // Nothing changed: the session of the cookie is still there.
+        assert.equal((await worker.call('/console/me', { headers: { Cookie: cookie } })).status, 200);
+
+        // The control: the same call from the console reaches better-auth, which answers it.
+        const taken = await from({ origin: CONSOLE_URL });
+        assert.notEqual(taken.status, 403, await taken.clone().text());
+      });
+    }
+
+    it('still answers a read of better-auth with no Origin: the way back from a provider is one', async () => {
+      const worker = await workerOn(open);
+
+      assert.equal((await worker.call(`${AUTH_BASE_PATH}/ok`, { origin: null })).status, 200);
+      // No state: better-auth answers its own refusal, a redirect to the console, and not the worker's 403.
+      const back = await worker.call(`${AUTH_BASE_PATH}/callback/github?code=a-code&state=a-state`, { origin: null });
+      assert.equal(back.status, 302);
+    });
+  });
+
   describe(`GitHub and Google, through better-auth, on ${label} (FRU-147)`, { skip }, () => {
     it('creates no account and joins none for an address that GitHub did not verify', async () => {
       const worker = await workerOn(open);
