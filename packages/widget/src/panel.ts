@@ -395,4 +395,10 @@ const STYLES = `
 @media (max-width: 480px) {
   .fruitback-panel-config { inset-inline: 8px; width: auto; }
 }
+/* A thumb, not a pointer (FRU-157): a box is toggled by its whole row, and the row is tall enough. */
+@media (pointer: coarse) {
+  .fruitback-config-close { min-width: 44px; min-height: 44px; margin-block: -12px; margin-inline-end: -14px; }
+  .fruitback-config-check { min-height: 36px; }
+  .fruitback-config-copy-button { min-height: 36px; }
+}
 `;

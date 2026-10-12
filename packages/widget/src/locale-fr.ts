@@ -9,8 +9,10 @@ import type { Catalog } from './messages.ts';
 export const FRENCH: Catalog = {
   'launch.label': 'Laisser un feedback',
   'launch.capturing': 'Échap pour annuler',
+  'launch.capturingTouch': 'Annuler',
   'widget.label': 'Feedback Fruitback',
   'capture.instructions': 'Pointez un élément, ou déplacez-vous avec les flèches puis appuyez sur Entrée.',
+  'capture.instructionsTouch': 'Touchez un élément.',
   'capture.element': '{tag} : {text}',
   'capture.elementEmpty': '{tag}, sans texte',
 

@@ -591,6 +591,18 @@ const STYLES = `
   .fruitback-composer textarea { min-height: 96px; }
 }
 
+/*
+  A thumb, not a pointer (FRU-157). iOS Safari zooms the page into a field under 16 px, and the zoom
+  stays after the field loses focus. A box is toggled by its whole row, and the row is tall enough.
+*/
+@media (pointer: coarse) {
+  .fruitback-composer textarea, .fruitback-composer-who input[type="text"] { font-size: 16px; }
+  .fruitback-composer-who input[type="text"] { padding-block: 8px; }
+  .fruitback-composer-identify { min-height: 36px; }
+  .fruitback-composer-remember, .fruitback-composer-place { min-height: 36px; }
+  .fruitback-composer-ghost, .fruitback-composer-send { min-height: 44px; padding-inline: 18px; }
+}
+
 @keyframes fruitback-composer-sheet-in {
   from { transform: translateY(100%); }
   to { transform: none; }
