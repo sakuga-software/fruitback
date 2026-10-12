@@ -604,8 +604,11 @@ the cookie from another origin, or from none, and takes it from the console`. be
   answers a redirect to the provider and the cookie of the state. It changes nothing by itself: the
   person still consents at the provider, and comes back with a state that only this browser holds.
 - **Only the routes it names are served.** `SERVED_PATHS` of `auth.ts` lists them: `/ok`,
-  `/get-session`, `/sign-out`, `/revoke-sessions`, `/sign-in/social`, the two callbacks and `/error`.
-  Any other path under `/console/auth/` answers `404` before better-auth reads it. The routes of the
+  `/sign-out`, `/revoke-sessions`, `/sign-in/social`, the two callbacks and `/error`.
+  Any other path under `/console/auth/` answers `404` before better-auth reads it. `/get-session`
+  is one of those (FRU-206): it answers the token of the session in its body, to any script of the
+  console, and the console does not call it. No route answers that token:
+  test:`answers no route that hands the token of the session to a script of the console`. The routes of the
   organization plugin have a list of their own, with a rule for each of the four that are open: see
   [What the console may change, and who](#what-the-console-may-change-and-who-fru-99).
 
