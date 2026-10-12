@@ -636,6 +636,18 @@ the cookie from another origin, or from none, and takes it from the console`. be
 - **A sign-in with a provider starts by a navigation** to `GET /console/auth/start/<provider>`, which
   answers a redirect to the provider and the cookie of the state. It changes nothing by itself: the
   person still consents at the provider, and comes back with a state that only this browser holds.
+  **A page of another site does not start one** (FRU-211): a navigation that the browser marks
+  `Sec-Fetch-Site: cross-site` gets no state and no redirect to the provider, and lands on the
+  sign-in screen of the console. Without that, a page anywhere could send somebody who had already
+  consented at the provider through a sign-in they did not ask for, and replace the session they
+  had with one of their own provider account. **The condition: a browser that sends
+  `Sec-Fetch-Site`.** One that sends none is served as before; and a page of the same site as the
+  worker is not « another site », as for the cookie above. **The console is of the same site as
+  the worker**: a console on another site has no session at all, because the browser does not keep
+  a `SameSite=Strict` cookie from the answer of its `fetch` (measured in Chromium, Firefox and
+  WebKit: the sign-in answers `200`, no cookie is kept, the next call answers `401`). So this
+  refusal takes nothing from a deployment that signs in.
+  test:`starts no sign-in for a navigation that a page of another site made (FRU-211)`.
 - **Only the routes it names are served.** `SERVED_PATHS` of `auth.ts` lists them: `/ok`,
   `/sign-out`, `/revoke-sessions`, `/sign-in/social`, the two callbacks and `/error`.
   Any other path under `/console/auth/` answers `404` before better-auth reads it. `/get-session`
@@ -775,6 +787,38 @@ destination-not-allowed`, and nothing is written, in the first place either.
 - **A read asks each place.** The cost of a page that opens is the number of places, which is why the
   list is short. A place that cannot be read answers `502` for the page, like one connector that
   cannot be used.
+
+### A domain a workspace proves it owns, to cover its previews (FRU-103)
+
+A wildcard in team mode lends the reviewer's session to every page it covers, and nothing in a
+pattern tells `*.preview.acme.dev` from `*.vercel.app`. The DNS can: only who holds the zone of a
+domain writes a record under it. So the worker takes the subdomains of a domain as the previews of a
+site only while the workspace of that site proves the domain.
+
+- **The proof is a `TXT` record**, `_fruitback.<domain>`, whose value is a digest of the workspace id
+  and the domain (`proofRecord` in `domain-proof.ts`). It is public in the DNS and grants nothing to
+  whoever reads it: writing it is the proof. **The record of one workspace proves nothing for
+  another**, and the record of `preview.acme.dev` proves nothing for `acme.dev`.
+- **A domain under a shared host cannot be proven by its tenants.** A tenant of `vercel.app` writes
+  no record under `vercel.app` or under the names of the other tenants. **Limit:** a host that lets a
+  tenant write `TXT` records under its own subdomain (`_fruitback.myapp.example-host.com`) lets that
+  tenant prove that subdomain, and so cover what is under it, which is its own.
+- **Only an owner or an admin** adds a domain, asks the DNS, names the site whose previews it covers
+  (`manage-sites`). A site of another workspace and a domain of another workspace answer `404`. A
+  domain that is not proven cannot name a site (`409 domain-not-proven`).
+- **The proof is asked again** every six hours (`RECHECK_MS`). An answer of the DNS without the record
+  ends it at once: `GET /session/sites` stops listing the previews of the site, the console shows the
+  domain as lost with the moment, and the log says it once. A DNS that does not answer changes
+  nothing, **for 72 hours at most** (`PROOF_GRACE_MS`): after that a proof nobody confirmed is lost
+  in the same way, the console says that the DNS did not confirm it, with no moment, and the log says
+  it once, at the pass that finds it.
+  **Limit:** between two checks, a record that was removed still proves the domain, six hours at most.
+- **The worker asks the DNS of its host**, with no DNSSEC check of its own. Who can answer the
+  resolver of the worker in place of the zone can prove any domain. Tests never ask a real DNS: the
+  resolver is a seam, and every case hands over a double.
+- **What this does not open yet:** the worker lists the previews of a site in `GET /session/sites`
+  (`previews`), and nothing else reads them. The extension still refuses every wildcard in team mode
+  (`lendsSession`). Letting it take one that the worker lists is a separate change.
 
 ### Linear, connected with OAuth (FRU-134)
 
@@ -924,6 +968,17 @@ when it is accepted`. An invitation waits 7 days; one address gets one invitatio
   the same link (FRU-107), and it opens nothing more than the message does.
   test:`sends an invitation again when asked to, and no more than three messages to one address in the window`,
   test:`keeps the window of an address to its workspace: another workspace neither closes it nor learns of it (FRU-209)`.
+- **An invitation does not outlive the right of whoever made it** (FRU-209). When a member is
+  removed, leaves, or gets a role that does not invite, the invitations of theirs that wait in the
+  workspace are cancelled in the same call. Without it an admin who was removed left a second
+  admin behind: the invitation stayed good for 7 days, and « Resend » moved its end.
+  test:`cancels the invitations of an admin who is removed, demoted, or leaves, so nobody joins on their word (FRU-209)`.
+  The acceptance checks it again, for a cancellation that did not run (it comes after the write of
+  better-auth, in no transaction): an invitation whose inviter is no longer an owner or an admin
+  of the workspace is refused,
+  test:`refuses at the acceptance an invitation whose inviter no longer invites, when no cancellation ran (FRU-209)`.
+  **Both are on the routes of the worker**, not in better-auth: a call to the plugin in the process
+  passes neither, and no code of the worker makes one for these routes.
 - **A cancel names the workspace, and the invitation must be of it.** better-auth reads the
   workspace of an invitation from the invitation; the worker reads the role in the workspace of the
   call, so it checks first that the two are one:

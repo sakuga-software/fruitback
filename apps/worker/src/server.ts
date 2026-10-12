@@ -1,7 +1,8 @@
 import { type IncomingMessage, type Server, type ServerResponse, createServer } from 'node:http';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { announceFirstReviewer, handleRequest, storeFor, deliverPending } from './app.ts';
+import { announceFirstReviewer, handleRequest, storeFor, deliverPending, recheckPending } from './app.ts';
+import { systemResolver } from './domain-proof.ts';
 import { announceAuth } from './auth.ts';
 import type { SeedStore } from './store.ts';
 import { readExposureNotice } from './clients.ts';
@@ -14,6 +15,9 @@ import { createSender } from './rest-send.ts';
 
 /** How often the worker looks for a delivery that is due. A first attempt waits this long at most. */
 export const DELIVERY_PASS_MS = 15_000;
+
+/** How often the worker looks for a domain to ask the DNS about again (FRU-103). */
+export const DOMAIN_PASS_MS = 10 * 60_000;
 
 /**
  * Node entry point: adapts `node:http` onto the web-standard handler in `app.ts`.
@@ -161,6 +165,18 @@ export function startServer(env: WorkerEnv = process.env): Server {
     // The loop must not keep the process open after the server closed.
     pass.unref();
     server.on('close', () => clearInterval(pass));
+
+    // FRU-103: the proofs of the domains, asked again. The same one pass at a time.
+    let checking = false;
+    const check = setInterval(() => {
+      if (checking) return;
+      checking = true;
+      void recheckPending(env, systemResolver)
+        .catch((error: unknown) => console.error('[fruitback] a pass over the domains did not finish', error))
+        .finally(() => (checking = false));
+    }, DOMAIN_PASS_MS);
+    check.unref();
+    server.on('close', () => clearInterval(check));
   }
 
   // FRU-144: better-auth is built here when it is on, before its first request. See `announceAuth`.

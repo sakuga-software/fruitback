@@ -199,6 +199,12 @@ function failed(consoleUrl: string, code: string): Response {
 
 async function startWithProvider(request: Request, provider: string, context: AuthRouteContext): Promise<Response> {
   if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, {});
+  // FRU-211: a page of another site does not start a sign-in. This route calls better-auth in the
+  // process, so the check better-auth makes on its own route does not run. The person lands on the
+  // sign-in screen of the console, and starts from there if they want to. A browser that sends no
+  // `Sec-Fetch-Site` is served as before: the header cannot be asked of a browser that has none.
+  if (request.headers.get('Sec-Fetch-Site') === 'cross-site')
+    return failed(context.consoleUrl, 'started_from_another_site');
   const auth = await context.auth;
   const consoleOrigin = new URL(context.consoleUrl).origin;
   // A provider that this worker does not have: the console says so. Read in the options, and not in
