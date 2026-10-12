@@ -1221,6 +1221,36 @@ for (const { label, open, skip } of DATABASES) {
       );
     });
 
+    it('sends three messages and no more for calls at the same moment, and keeps one invitation', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const toPaul = () => worker.mail.sent.filter((each) => each.to === 'paul@client.dev').length;
+      assert.equal((await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev' })).status, 200);
+      assert.equal(toPaul(), 1);
+
+      // Twelve « Resend » at once, by two people. The count is taken after better-auth answers, so
+      // every call is past the plugin before any of them counts.
+      const answers = await Promise.all(
+        Array.from({ length: 12 }, (_, n) =>
+          invite(worker, n % 2 === 0 ? acme.owner : acme.admin, acme.workspace, {
+            email: 'paul@client.dev',
+            resend: true,
+          }),
+        ),
+      );
+      const mailed = await Promise.all(
+        answers.map(async (answer) => {
+          assert.equal(answer.status, 200, await answer.clone().text());
+
+          return ((await answer.json()) as { mailed: boolean }).mailed;
+        }),
+      );
+
+      assert.equal(toPaul(), 3);
+      assert.equal(mailed.filter(Boolean).length, 2);
+      assert.equal((await rowsOf(worker.database, 'SELECT id FROM invitation')).length, 1);
+    });
+
     it('sends an invitation again when asked to, and no more than three messages to one address in the window', async () => {
       const worker = await workerOn(open);
       const acme = await team(worker);

@@ -167,4 +167,38 @@ test.describe('an invited reviewer (FRU-104)', () => {
     const mine = (read.issues ?? []).find((each) => each.seed.note === note.note);
     expect(mine?.seed.reporter).toMatchObject({ email: 'paul@client.dev', verified: true });
   });
+
+  test('says that the fourth message did not go, and gives the link to send by hand (FRU-209)', async ({ browser }) => {
+    const owners = await browser.newContext({ locale: 'en-US' });
+    contexts.push(owners);
+    await served(owners, worker);
+    const owner = await owners.newPage();
+    await signIn(owner, worker, 'owner@acme.dev', 'Acme');
+    await expect(owner.getByRole('heading', { name: 'Where should feedback go?' })).toBeVisible();
+    await owner.goto(CONSOLE);
+    await expect(owner).toHaveURL(/\/w\/ws_[0-9a-f]{20}\/sites$/);
+    const workspace = /\/w\/(ws_[0-9a-f]{20})\//.exec(owner.url())?.[1] as string;
+    const toPaul = async (): Promise<number> =>
+      (await worker.mail()).filter((each) => each.to === 'paul@client.dev').length;
+
+    await owner.goto(`${CONSOLE}/w/${workspace}/members`);
+    await owner.getByRole('textbox', { name: 'Address of the person to invite' }).fill('paul@client.dev');
+    await owner.getByRole('button', { name: 'Invite', exact: true }).click();
+    const notice = owner.getByRole('status');
+    await expect(notice).toContainText('Invitation sent to paul@client.dev.');
+    // Two more messages go: three in the window of this workspace for this address.
+    for (const sent of [2, 3]) {
+      await owner.getByRole('button', { name: 'Resend' }).click();
+      await expect.poll(toPaul).toBe(sent);
+      await expect(notice).toContainText('Invitation sent to paul@client.dev.');
+    }
+
+    // The fourth is kept and not sent: the worker answers `mailed: false`, and the console says so.
+    await owner.getByRole('button', { name: 'Resend' }).click();
+    await expect(notice).toContainText('Invitation kept for paul@client.dev, but no message was sent');
+    await expect(notice).toContainText(`${CONSOLE}/invitations`);
+    await expect(notice.getByRole('button', { name: 'Copy the link' })).toBeVisible();
+    expect(await toPaul()).toBe(3);
+    await expect(owner.getByText('Invited', { exact: true })).toBeVisible();
+  });
 });

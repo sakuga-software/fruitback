@@ -1,6 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { type Invitation, type Member, ORGANIZATION, type Role, call, invitationLink, sendsMail } from '../api';
 import { Confirm } from '../confirm';
+import { INVITED, type Message, messageOf } from '../invitation-message';
 import { type Listed, edited, listedOf } from '../listed';
 import { DID_NOT_ANSWER, copyText, problemOf } from '../problems';
 import { Button, Card, Chip, Choice, Field, Initial, Problem } from '../ui';
@@ -232,27 +233,6 @@ export default function Members() {
  * What an invitation became, and the link to send by hand (FRU-104, decided on FRU-107): the link
  * opens nothing by itself, so a chat is as good as a message. With a mailer, the message went too.
  */
-/** What became of the message of an invitation that the worker kept. */
-type Message = 'sent' | 'no-mailer' | 'held';
-
-/**
- * `held`: the worker sends mail, and sent none for this one: the address, the person who invites or
- * the workspace is past its count. The invitation is kept all the same, and its link is given by hand.
- */
-function messageOf(invitation: Invitation, mails: boolean): Message {
-  if (!mails) return 'no-mailer';
-
-  return invitation.mailed === false ? 'held' : 'sent';
-}
-
-const INVITED: Readonly<Record<Message, string>> = {
-  sent: msg('Invitation sent to {email}. You can also send them this link:'),
-  'no-mailer': msg('Invitation kept for {email}. Send them this link:'),
-  held: msg(
-    'Invitation kept for {email}, but no message was sent: too many invitation messages went in a short time. Send them this link:',
-  ),
-};
-
 function Invited({ email, message }: { email: string; message: Message }) {
   useLocale();
   const [copied, setCopied] = useState<'no' | 'yes' | 'refused'>('no');
