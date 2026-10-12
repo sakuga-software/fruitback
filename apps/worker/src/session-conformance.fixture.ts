@@ -781,6 +781,10 @@ export function sessionCases(it: Declare<SessionStore>): void {
       store.endSessionsOf({ subject: '' } as never, at + 1),
       /names neither a person nor a workspace/,
     );
+    await assert.rejects(
+      store.endSessionsOf({ workspace: '' } as never, at + 1),
+      /names neither a person nor a workspace/,
+    );
     await assert.rejects(store.endSessionsOf({} as never, at + 1), /names neither a person nor a workspace/);
 
     assert.equal(await presented(store, token, at + 2), 'rotated');

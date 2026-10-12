@@ -101,8 +101,9 @@ export type SessionsOf = { subject: string; workspace?: string } | { subject?: s
 
 /** The same refusal in every store: a call that names nobody would end every session of the worker. */
 export function namedSessionsOf(of: SessionsOf): { subject: string | undefined; workspace: string | undefined } {
-  const subject = typeof of.subject === 'string' && of.subject !== '' ? of.subject : undefined;
-  const workspace = typeof of.workspace === 'string' && of.workspace !== '' ? of.workspace : undefined;
+  // An empty name is no name: it would match no row, and read as a call that ended something.
+  const subject = of.subject || undefined;
+  const workspace = of.workspace || undefined;
   if (subject === undefined && workspace === undefined) {
     throw new Error('endSessionsOf names neither a person nor a workspace: it would end every session of the worker');
   }
