@@ -1,0 +1,10 @@
+{
+  // This package has no test. `build.ts` runs on Node and needs Node types, and the sources must not
+  // have them, so `build.ts` has a configuration of its own, named as in the other packages (FRU-173).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["src/**/*", "*.ts"],
+  "exclude": []
+}

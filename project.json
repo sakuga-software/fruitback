@@ -5,6 +5,9 @@
     "lint": {
       "command": "oxlint . --ignore-path .oxfmtignore"
     },
+    "typecheck": {
+      "command": "tsc --noEmit -p e2e/tsconfig.json"
+    },
     "format": {
       "command": "oxfmt --check . --ignore-path .gitignore --ignore-path .oxfmtignore"
     },

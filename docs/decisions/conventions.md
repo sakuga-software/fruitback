@@ -16,8 +16,8 @@ How this repository is formatted, tested and documented, and which test holds ea
     oxlint turns on by default, to `error`. A warning fails nothing, so nobody reads it: `main` held
     thirteen, two unused imports of `app.ts` among them. Do not set a rule to `warn`. Turn it `off`
     with its reason, or leave it an error.
-  - **The root is an Nx project too, named `workspace`, with `lint`, `format` and `format:fix`**
-    (FRU-55, FRU-172). It lints and formats what no package owns: `e2e/`, `playwright.config.ts`,
+  - **The root is an Nx project too, named `workspace`, with `lint`, `format`, `format:fix` and
+    `typecheck`** (FRU-55, FRU-172, FRU-173). It lints and formats what no package owns: `e2e/`, `playwright.config.ts`,
     `docs/`, the root Markdown and JSON, and a directory added to the root later. Until it had a
     `lint` target, a nested ternary in `e2e/` passed `pnpm lint` (measured).
     `.oxfmtignore` gives `apps/` and `packages/` back to their own targets, and only the targets of
@@ -56,6 +56,15 @@ How this repository is formatted, tested and documented, and which test holds ea
 - `packages/shared` keeps `types: []` on purpose — it is bundled into a browser widget, so touching
   `process` or `Buffer` must fail to compile. Its tests need Node types, so they typecheck through a
   separate `tsconfig.test.json`; do not "fix" this by adding `node` to the main config.
+- **Every `.ts` file is read by one `typecheck` target** (FRU-173). Until then no target read
+  `e2e/`, `playwright.config.ts` or the `build.ts` of a package, and `e2e/` held 14 type errors.
+  - `e2e/tsconfig.json` reads the specs and `playwright.config.ts`. The `typecheck` target of the
+    root (`project.json`) runs it, so `pnpm typecheck` and CI do too.
+  - The `tsconfig.test.json` of a package includes `*.ts`, which is its `build.ts`: the script runs
+    on Node, and that configuration is the one with Node types. `packages/fruitback` has no test and
+    has that file for its `build.ts` alone.
+  - A new `.ts` file in a directory that no `include` names is read by nothing. Plant a type error
+    in it and run `pnpm typecheck` to know.
 - **No backticks inside the CSS template literals** (`STYLES` in `host.ts`, `overlay.ts`,
   `composer.ts`, `panel.ts`, `orphans.ts`, and `THEME_STYLES` in `theme.ts`). A comment quoting a
   symbol closes the literal and the file stops parsing. It has now happened **five** times — twice

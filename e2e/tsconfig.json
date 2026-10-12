@@ -1,0 +1,20 @@
+{
+  // The Playwright specs and their configuration (FRU-173). No package owns them, so no `typecheck`
+  // target read them until the root had one: `project.json` runs `tsc` on this file.
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    // Relative imports carry `.ts`, as everywhere in this repository.
+    "allowImportingTsExtensions": true,
+    // A spec runs in Node and passes functions to the page, so both worlds are in scope.
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["./**/*.ts", "../playwright.config.ts"]
+}

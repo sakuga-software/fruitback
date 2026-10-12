@@ -21,6 +21,12 @@ import { WORKER_ORIGIN } from './pin.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 /**
+ * The part of the extension API that a spec calls inside the service worker. The types of the whole
+ * API belong to `apps/extension`, and the root does not depend on them.
+ */
+declare const chrome: { storage: { local: { get(key: string): Promise<Record<string, unknown>> } } };
+
+/**
  * The extension across its worlds (FRU-45): what a site gets with it, without it, and what its page
  * can never read.
  */
@@ -122,7 +128,7 @@ async function mountTheSiteWidget(page: Page, endpoint: string): Promise<void> {
   await page.addScriptTag({ path: IIFE });
   await page.evaluate((endpoint) => {
     type Mounted = { destroy(): void };
-    const scope = globalThis as {
+    const scope = globalThis as unknown as {
       Fruitback: { init(options: Record<string, unknown>): Mounted };
       fruitbackExtension?: { transport: unknown };
     };

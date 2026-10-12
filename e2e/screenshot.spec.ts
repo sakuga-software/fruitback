@@ -30,7 +30,7 @@ async function mountWith(page: import('@playwright/test').Page, capture: 'ok' | 
         urlless: async () => ({ width: 120, height: 40 }),
       } as const;
 
-      (globalThis as { Fruitback: { init(options: unknown): unknown } }).Fruitback.init({
+      (globalThis as unknown as { Fruitback: { init(options: unknown): unknown } }).Fruitback.init({
         endpoint,
         clientId: 'playground',
         label: '🌱 Feedback',
@@ -104,7 +104,7 @@ test('the setting is not offered when the host cannot take a picture', async ({ 
   await page.addScriptTag({ path: IIFE });
   await page.evaluate(
     (endpoint) =>
-      (globalThis as { Fruitback: { init(options: unknown): unknown } }).Fruitback.init({
+      (globalThis as unknown as { Fruitback: { init(options: unknown): unknown } }).Fruitback.init({
         endpoint,
         clientId: 'playground',
         label: '🌱 Feedback',
