@@ -66,8 +66,33 @@ export type Workspace = { id: string; name: string; role: Role };
 export type Visibility = 'members' | 'everyone';
 /** Where the notes of a site go. Absent: they stay in the workspace. Only a member reads it. */
 /** A tracker has teams, so `teamId` is there for one. An address that only receives has none (FRU-122). */
-export type Destination = { connector: string; teamId?: string; projectId?: string };
-export type Site = { id: string; origin: string; visibility: Visibility; destination?: Destination };
+/** `label` is what a member reads when they choose (FRU-123). The worker writes it, from what the tracker answers. */
+export type Destination = { connector: string; teamId?: string; projectId?: string; label?: string };
+/**
+ * `destinations` is every place the site can send to, in order (FRU-123): the first one is where a
+ * note goes when nobody chose. `destination` is that first one, and all a worker of before sends.
+ */
+export type Site = {
+  id: string;
+  origin: string;
+  visibility: Visibility;
+  destination?: Destination;
+  destinations?: Destination[];
+};
+/** How many places a site can send to: the bound of the worker. */
+export const MAX_DESTINATIONS = 5;
+
+/** Every place of a site, in order, whatever the age of the worker that answered. */
+export function placesOf(site: Site): Destination[] {
+  if (site.destinations !== undefined) return site.destinations;
+
+  return site.destination === undefined ? [] : [site.destination];
+}
+
+/** Whether two places are one: the same source, team and project. */
+export function samePlace(one: Destination, other: Destination): boolean {
+  return one.connector === other.connector && one.teamId === other.teamId && one.projectId === other.projectId;
+}
 /** Why a source needs somebody (FRU-102): its tracker refuses it since `since`. Absent: it works. */
 export type ConnectorAttention = { reason: 'key-refused' | 'key-lacks-access' | 'connection-ended'; since: string };
 export type Connector = {
@@ -249,4 +274,17 @@ export function takeWorkspaceName(): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Sets every place a site sends to, in order (FRU-123). The label is not sent: the worker writes it.
+ */
+export function setPlaces(base: string, site: Site, places: readonly Destination[]): Promise<Answer<unknown>> {
+  return call('POST', `${base}/sites/${site.id}/destinations`, {
+    destinations: places.map(({ connector, teamId, projectId }) => ({
+      connector,
+      ...(teamId === undefined ? {} : { teamId }),
+      ...(projectId === undefined ? {} : { projectId }),
+    })),
+  });
 }
