@@ -145,6 +145,12 @@ burst at the end of a window and spaces the next ones out gets **at most 39 requ
 seconds** through, for the default limit of 20. That is `2 × limit − 1`, and `rate-limit.test.ts`
 holds the number against the code. A steady caller stays at the limit.
 
+**A batch of notes costs one request for each note** (FRU-124). `POST /feedback` with an array passes
+the limiter for one when it arrives, and the worker counts the others once the body is read, before
+anything is written: over the limit, `429` and no note. A batch holds half the limit of a minute at
+most, and ten at most; a worker whose limit is below four takes no batch. The body keeps its cap of
+64 KiB, whatever the number of notes.
+
 It protects your provider quota; it is not a defence against a determined caller, who can rotate
 addresses anyway.
 

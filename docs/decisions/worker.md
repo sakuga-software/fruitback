@@ -137,6 +137,27 @@ The in-flight promise stays per process, and it cannot be otherwise: a promise d
 process. Ten visitors on one replica still cost one call; ten replicas cost ten. That is the
 degradation the ticket asked to have written down rather than discovered.
 
+## Several notes in one request (FRU-124)
+
+- **`POST /feedback` with an array is a batch; an object is one note**, as before. The relay of the
+  extension, CORS and the list of paths do not change. The worker offers a batch in the envelope of
+  `GET /feedback` (`batch: { max, maxBytes }`), as it offers `stages`. A widget that gets no `batch`
+  sends its notes one by one, so a worker of before never receives an array.
+- **`max` is half the limit of a minute, ten at most** (`maxBatch`), and `maxBytes` is the cap of the
+  body, which does not move for a batch. The widget cuts its drafts into as many requests as it needs.
+- **Every seed is read before anything is written**: a batch with one thing that is not a seed, the
+  same seed twice, or two clients is refused whole (`400`). One identity, one place (`?destination=`)
+  for the whole batch.
+- **The N − 1 other notes are counted by the limiter after the body is read** (`chargeRateLimit`, with
+  the amount of `Kv.incr`), before any write.
+- **A store groups a batch with `createBatch?`**: Linear writes a parent issue, which holds no seed
+  and is no pin, and one sub-issue for each note, which keeps its seed and its state. A store without
+  it gets one `create` for each seed (`createAll` in `batch.ts`).
+- **One answer for each seed, in order**: `201` when every note was kept, `207` when some were, `502`
+  when none was. **A seed kept in the last ten minutes answers its issue again** and is not planted
+  twice: `seed.id` is the key, in the `Kv`. That is what a widget sends again after a `207`.
+- Not done: the delivery of an address that receives (FRU-122) does not carry the id of its batch.
+
 ## Who may read a pin
 
 ### The rules, in short

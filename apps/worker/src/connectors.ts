@@ -1,4 +1,5 @@
 import type { AccountStore, ConnectorKind, ConnectorSettings } from './accounts.ts';
+import { createAll } from './batch.ts';
 import type { ClientConfig } from './clients.ts';
 import { createLinearStore } from './linear.ts';
 import { deliveryBody } from './rest-connector.ts';
@@ -35,6 +36,12 @@ function withSettings(store: SeedStore, settings: ConnectorSettings): SeedStore 
   return {
     ...store,
     create: (seed, client, policy) => store.create(seed, client, quiet(policy)),
+    ...(store.createBatch === undefined
+      ? {}
+      : {
+          createBatch: (seeds, client, policy) =>
+            (store.createBatch as NonNullable<SeedStore['createBatch']>)(seeds, client, quiet(policy)),
+        }),
     findForPage: (query, client, policy) => store.findForPage(query, client, quiet(policy)),
   };
 }
@@ -125,6 +132,8 @@ export function createRoutedStore(base: SeedStore, connectors: ConnectorStores):
     scope: (client) =>
       client?.connector === undefined ? base.scope(client) : `${client.connector}:${client.teamId ?? ''}`,
     create: async (seed, client, policy) => (await pick(client)).create(seed, client, policy),
+    // The store of the client decides how a batch is written: under a parent, or one note at a time.
+    createBatch: async (seeds, client, policy) => createAll(await pick(client), seeds, client, policy),
     findForPage: async (query, client, policy) => (await pick(client)).findForPage(query, client, policy),
     ...(base.forget === undefined ? {} : { forget: base.forget }),
   };

@@ -1,4 +1,4 @@
-import { SEED_STAGES, canonicalizePageUrl, parseSeed, type SeedReporter } from '@fruitback/shared';
+import { SEED_STAGES, type Seed, canonicalizePageUrl, parseSeed, type SeedReporter } from '@fruitback/shared';
 import { type IdentityResult, readBearerToken, stripClaimedVerification, verifyIdentityToken } from './identity.ts';
 import {
   type ClientConfig,
@@ -24,11 +24,12 @@ import { DELIVERY_HEADER, LOOP_STATUS, type Send, deliverDue } from './rest-conn
 import { type Mailer, createTemMailer } from './mail.ts';
 import { createSqliteAccountStore } from './accounts-sqlite.ts';
 import { type WorkerConfig, type WorkerEnv, hasAccounts, hasSessions, readAllowedOrigins, readConfig } from './env.ts';
-import { type SeedStore, StoreError } from './store.ts';
+import { type BatchAnswer, type CreatedIssue, type SeedStore, StoreError } from './store.ts';
+import { createAll } from './batch.ts';
 import { watchedStore } from './connector-health.ts';
 import { type CorsDecision, diagnosticCorsHeaders, openCors, resolveCors } from './cors.ts';
 import { PAIR_PATH, pairPage } from './pair-page.ts';
-import { checkRateLimit } from './rate-limit.ts';
+import { chargeRateLimit, checkRateLimit, maxBatch } from './rate-limit.ts';
 import { cached, invalidate } from './cache.ts';
 import { type Kv, KvError, processKv } from './kv.ts';
 import { postgresAccountStore, postgresSessionStore } from './postgres-stores.ts';
@@ -456,7 +457,7 @@ export async function handleRequest(request: Request, env: WorkerEnv, context: R
   // FRU-102: what the tracker of a connector answers is noted on it, for the console.
   return request.method === 'GET'
     ? getFeedback(request, served, watchedStore(store, accounts), kv, cors.headers)
-    : postFeedback(request, served, watchedStore(store, accounts), kv, cors.headers);
+    : postFeedback(request, served, watchedStore(store, accounts), kv, cors.headers, context.clientIp);
 }
 
 /**
@@ -770,7 +771,7 @@ async function getFeedback(
     return json(
       200,
       // `stages` does not depend on the page, so it is not in the cached answer.
-      { url, issues, stages: store.stages ?? SEED_STAGES, ...offered },
+      { url, issues, stages: store.stages ?? SEED_STAGES, ...offered, ...batchOffer(config) },
       // No browser cache, deliberately. The read cache above is what protects the Linear
       // quota; letting the browser hold a copy too only buys one saved request per page load, and
       // costs the widget the pin it planted a second ago — it re-reads and gets served its own
@@ -806,6 +807,7 @@ async function postFeedback(
   store: SeedStore,
   kv: Kv,
   corsHeaders: Record<string, string>,
+  clientIp: string,
 ): Promise<Response> {
   const body = await readBoundedText(request);
   if (body === null) {
@@ -819,24 +821,16 @@ async function postFeedback(
     return json(400, { error: 'invalid-json' }, corsHeaders);
   }
 
+  // FRU-124: an array is a batch, an object is one note, as before.
+  if (Array.isArray(payload)) return postBatch(request, config, store, kv, corsHeaders, clientIp, payload);
+
   const parsed = parseSeed(payload);
   if (!parsed.ok) {
     return json(400, { error: 'invalid-seed', reason: parsed.reason }, corsHeaders);
   }
 
-  // Re-canonicalize server-side. The read path finds seeds by matching this URL inside the
-  // description, so a client that skipped normalization would plant a pin nobody can find again.
-  //
-  // The client id gets the same treatment and for the same reason: it becomes the `fruitback:<id>`
-  // label the read filters on, so a padded id here means an issue nobody can query back.
-  const clientId = normalizeClientId(parsed.seed.client?.id);
-  const seed = {
-    ...parsed.seed,
-    page: { ...parsed.seed.page, url: canonicalizePageUrl(parsed.seed.page.url) },
-    ...(parsed.seed.client !== undefined && clientId !== undefined
-      ? { client: { ...parsed.seed.client, id: clientId } }
-      : {}),
-  };
+  const seed = canonicalSeed(parsed.seed);
+  const clientId = seed.client?.id;
 
   const route = routeFor(request, config, clientId);
   if (!route.ok) return routingFailure(route, corsHeaders);
@@ -850,32 +844,12 @@ async function postFeedback(
 
   const attributed = { ...seed, ...optionalReporter(identity.reporter) };
 
-  // FRU-123: a member chose where this note goes. The name is in the query, and the body stays the
-  // seed: the relay of the extension carries a query and no other header. Absent, the note goes to
-  // the first place of the site. A name the site does not have and a caller who may not see the
-  // tracker get the same answer, and nothing is written.
-  const wanted = new URL(request.url).searchParams.get('destination');
-  let target = route.client;
-  if (wanted !== null) {
-    const place = route.client?.destinations?.find((each) => each.id === wanted);
-    if (route.client === undefined || place === undefined || !(await seesTracker(request, config, route.policy))) {
-      return json(403, { error: 'destination-not-allowed' }, corsHeaders);
-    }
-    target = placedAt(route.client, place);
-  }
+  const target = await chosenPlace(request, config, route);
+  if (target === null) return json(403, { error: 'destination-not-allowed' }, corsHeaders);
 
   try {
     const issue = await store.create(attributed, target, route.policy);
-
-    // The page just changed, so every cached answer for it is wrong, for every client.
-    try {
-      await invalidate(kv, attributed.page.url);
-    } catch (error) {
-      if (!(error instanceof KvError)) throw error;
-      // The issue exists now. A 502 here tells the widget to retry, and the retry plants the note a
-      // second time. The cost of answering 201 is a pin that shows up one TTL late.
-      console.error(`[fruitback] cache not invalidated after a write: ${error.message}`);
-    }
+    await invalidatePages(kv, [attributed.page.url]);
 
     return json(201, { issue }, corsHeaders);
   } catch (error) {
@@ -885,6 +859,192 @@ async function postFeedback(
     }
     throw error;
   }
+}
+
+/**
+ * Re-canonicalized server-side. The read path finds seeds by matching this URL inside the
+ * description, so a client that skipped normalization would plant a pin nobody can find again.
+ *
+ * The client id gets the same treatment and for the same reason: it becomes the `fruitback:<id>`
+ * label the read filters on, so a padded id here means an issue nobody can query back.
+ */
+function canonicalSeed(seed: Seed): Seed {
+  const clientId = normalizeClientId(seed.client?.id);
+
+  return {
+    ...seed,
+    page: { ...seed.page, url: canonicalizePageUrl(seed.page.url) },
+    ...(seed.client !== undefined && clientId !== undefined ? { client: { ...seed.client, id: clientId } } : {}),
+  };
+}
+
+/**
+ * FRU-123: a member chose where the note goes. The name is in the query, and the body stays the
+ * seed: the relay of the extension carries a query and no other header. Absent, the note goes to
+ * the first place of the site. `null`: a name the site does not have, or a caller who may not see
+ * the tracker. Both get the same answer, and nothing is written. For a batch, the place is the one
+ * of all its notes.
+ */
+async function chosenPlace(
+  request: Request,
+  config: Served,
+  route: Extract<ClientResolution, { ok: true }>,
+): Promise<ClientConfig | undefined | null> {
+  const wanted = new URL(request.url).searchParams.get('destination');
+  if (wanted === null) return route.client;
+  const place = route.client?.destinations?.find((each) => each.id === wanted);
+  if (route.client === undefined || place === undefined || !(await seesTracker(request, config, route.policy))) {
+    return null;
+  }
+
+  return placedAt(route.client, place);
+}
+
+/** The page just changed, so every cached answer for it is wrong, for every client. */
+async function invalidatePages(kv: Kv, urls: readonly string[]): Promise<void> {
+  for (const url of new Set(urls)) {
+    try {
+      await invalidate(kv, url);
+    } catch (error) {
+      if (!(error instanceof KvError)) throw error;
+      // The issue exists now. A 502 here tells the widget to retry, and the retry plants the note a
+      // second time. The cost of answering 201 is a pin that shows up one TTL late.
+      console.error(`[fruitback] cache not invalidated after a write: ${error.message}`);
+    }
+  }
+}
+
+/**
+ * What a worker takes in one request (FRU-124), in the envelope of `GET /feedback` as `stages` is:
+ * the most notes, and the most bytes of the body. Absent where the limit of a minute is too low for
+ * a batch: the widget then sends its notes one by one, and never sends an array.
+ */
+function batchOffer(config: WorkerConfig): { batch?: { max: number; maxBytes: number } } {
+  const max = maxBatch(config.rateLimitPerMinute);
+
+  return max === 0 ? {} : { batch: { max, maxBytes: MAX_BODY_BYTES } };
+}
+
+/** How long a seed that was kept answers its issue again, for a widget that sends it twice. */
+const SENT_TTL_MS = 10 * 60_000;
+
+function sentKey(clientId: string | undefined, seedId: string): string {
+  return `fruitback:sent:${JSON.stringify([clientId ?? null, seedId])}`;
+}
+
+/**
+ * Several notes in one request (FRU-124): `POST /feedback` with an array of seeds.
+ *
+ * - Every seed is read before anything is written: one that is not a seed refuses the batch.
+ * - The request passed the limiter for one. The N − 1 others are counted here, before any write:
+ *   over the limit, `429`, and nothing is written.
+ * - One client for the whole batch, one identity, one place (`?destination=`).
+ * - A seed kept in the last minutes answers its issue again and is not planted twice: its id is the
+ *   key (`seed.id` « dedupes retries »). That is what a widget sends again after a partial failure.
+ * - One answer for each seed, in order: `201` when every one was kept, `207` when some were, `502`
+ *   when none was. The widget keeps the ones that were not as drafts.
+ */
+async function postBatch(
+  request: Request,
+  config: Served,
+  store: SeedStore,
+  kv: Kv,
+  corsHeaders: Record<string, string>,
+  clientIp: string,
+  payload: unknown[],
+): Promise<Response> {
+  const max = maxBatch(config.rateLimitPerMinute);
+  if (payload.length === 0 || payload.length > max) {
+    return json(400, { error: 'invalid-batch', max }, corsHeaders);
+  }
+
+  const seeds: Seed[] = [];
+  for (const [index, each] of payload.entries()) {
+    const parsed = parseSeed(each);
+    if (!parsed.ok) return json(400, { error: 'invalid-seed', index, reason: parsed.reason }, corsHeaders);
+    seeds.push(canonicalSeed(parsed.seed));
+  }
+  if (new Set(seeds.map((seed) => seed.id)).size !== seeds.length) {
+    return json(400, { error: 'invalid-batch', reason: 'the same seed twice', max }, corsHeaders);
+  }
+  const clientId = seeds[0]?.client?.id;
+  if (!seeds.every((seed) => seed.client?.id === clientId)) {
+    return json(400, { error: 'invalid-batch', reason: 'one client for the whole batch', max }, corsHeaders);
+  }
+
+  let allowed: boolean;
+  try {
+    allowed = await chargeRateLimit(kv, clientIp, seeds.length - 1, { limit: config.rateLimitPerMinute });
+  } catch (error) {
+    if (!(error instanceof KvError)) throw error;
+    console.error(`[fruitback] rate limit unavailable: ${error.message}`);
+
+    return json(503, { error: 'limiter-unavailable' }, corsHeaders);
+  }
+  if (!allowed) return json(429, { error: 'rate-limited' }, corsHeaders);
+
+  const route = routeFor(request, config, clientId);
+  if (!route.ok) return routingFailure(route, corsHeaders);
+
+  // One request is one caller: the identity is checked once, and written on every note it signs.
+  const attributed: Seed[] = [];
+  for (const seed of seeds) {
+    const identity = await attributionFor(request, route.policy, seed.reporter);
+    if (!identity.ok) return json(401, { error: 'invalid-identity', reason: identity.reason }, corsHeaders);
+    attributed.push({ ...seed, ...optionalReporter(identity.reporter) });
+  }
+
+  const target = await chosenPlace(request, config, route);
+  if (target === null) return json(403, { error: 'destination-not-allowed' }, corsHeaders);
+
+  // The notes kept by an earlier attempt are answered from the `Kv`, and only the others are sent.
+  const known = await Promise.all(
+    attributed.map(async (seed) => {
+      try {
+        const kept = await kv.get(sentKey(clientId, seed.id));
+
+        return kept === undefined ? undefined : (JSON.parse(kept) as CreatedIssue);
+      } catch {
+        // A `Kv` that does not answer only loses the protection against a second copy.
+        return undefined;
+      }
+    }),
+  );
+  const fresh = attributed.filter((_, index) => known[index] === undefined);
+
+  let planted: BatchAnswer[] = [];
+  try {
+    if (fresh.length > 0) planted = await createAll(store, fresh, target, route.policy);
+  } catch (error) {
+    if (!(error instanceof StoreError)) throw error;
+    // Nothing of this attempt was kept. A seed of an earlier one still answers its issue.
+    planted = fresh.map(() => ({ error: 'store-unavailable' }) as const);
+  }
+
+  let next = 0;
+  const results = attributed.map((seed, index) => {
+    const issue = known[index];
+    const answer: BatchAnswer = issue === undefined ? (planted[next++] as BatchAnswer) : { issue };
+
+    return { id: seed.id, ...answer };
+  });
+
+  await Promise.all(
+    results.flatMap((result) =>
+      'issue' in result
+        ? [kv.set(sentKey(clientId, result.id), JSON.stringify(result.issue), SENT_TTL_MS).catch(() => undefined)]
+        : [],
+    ),
+  );
+  const kept = results.filter((result) => 'issue' in result);
+  await invalidatePages(
+    kv,
+    attributed.filter((_, index) => 'issue' in (results[index] as object)).map((seed) => seed.page.url),
+  );
+
+  if (kept.length === 0) return json(502, { error: 'store-unavailable', results }, corsHeaders);
+
+  return json(kept.length === results.length ? 201 : 207, { results }, corsHeaders);
 }
 
 /**
