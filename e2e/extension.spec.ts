@@ -123,6 +123,43 @@ test('private mode: the mounted widget reads the component, and the pin comes ba
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 });
 
+/**
+ * The decision of the isolated world can reach the page twice: once when it starts, and once when the
+ * page's world says it is ready. On CI the second one came after the reviewer's click, and the widget
+ * was built again under the composer (FRU-186). Here the page posts `ready` itself, which makes the
+ * isolated world post the same mount again, at the moment the test picks.
+ */
+test('private mode: the same decision posted again keeps the open composer and its note', async ({ extension }) => {
+  await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'ext-private-again');
+
+  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.locator('[data-testid="card-latte"] .add').click();
+  const note = page.getByPlaceholder('What is wrong here?');
+  await note.fill('Une note à moitié écrite');
+
+  // The page asks, and waits until the isolated world has answered with its mount.
+  const answered = await page.evaluate(
+    () =>
+      new Promise<boolean>((resolve) => {
+        window.addEventListener('message', (event: MessageEvent) => {
+          const data = event.data as { channel?: unknown; kind?: unknown } | null;
+          if (data?.channel === 'fruitback-extension' && data.kind === 'mount') setTimeout(() => resolve(true), 250);
+        });
+        window.postMessage({ channel: 'fruitback-extension', kind: 'ready' }, '*');
+        setTimeout(() => resolve(false), 5_000);
+      }),
+  );
+  expect(answered, 'the isolated world posted its mount again').toBe(true);
+
+  await expect(note).toBeVisible();
+  await expect(note).toHaveValue('Une note à moitié écrite');
+  await expect(page.getByRole('button', { name: /Leave feedback/ })).toHaveCount(1);
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
+});
+
 /** What a team-mode site ships: a dormant widget that mounts when the extension announces itself. */
 async function mountTheSiteWidget(page: Page, endpoint: string): Promise<void> {
   await page.addScriptTag({ path: IIFE });
