@@ -95,14 +95,32 @@ describe('a tab of the console is of one account (FRU-210)', () => {
     await api.call('GET', '/console/me');
     me = () => Response.json(BOB);
 
-    // The tab comes back, and a click lands before the worker said who is signed in.
+    // The tab comes back, and a click lands before the worker said who is signed in. So does a
+    // list that the screen reads again: its answer would be the sites of Bob, on the screen of Ana.
+    const before = sent.length;
     const asked = api.checkTab();
     const clicked = api.call('POST', '/console/workspaces/ws_1/sites', { url: 'https://a.dev' });
+    const read = api.call('GET', '/console/workspaces/ws_1/sites');
     await asked;
 
     assert.deepEqual(await clicked, LEFT);
+    assert.deepEqual(await read, LEFT);
     assert.deepEqual(told, ['changed']);
-    assert.equal(sent.filter((each) => each.method !== 'GET').length, 0);
+    // Nothing left but the question itself.
+    assert.deepEqual(sent.slice(before), [{ method: 'GET', path: '/console/me' }]);
+  });
+
+  it('lets a call made while the tab is asked go on, when nothing changed', async () => {
+    const api = await tab();
+    const sent = worker({ me: () => Response.json(ANA) });
+    await api.call('GET', '/console/me');
+
+    const asked = api.checkTab();
+    const read = api.call('GET', '/console/workspaces/ws_1/sites');
+    await asked;
+
+    assert.equal((await read).ok, true);
+    assert.deepEqual(sent.at(-1), { method: 'GET', path: '/console/workspaces/ws_1/sites' });
   });
 
   it('stops a tab that comes back when its session ended somewhere else', async () => {

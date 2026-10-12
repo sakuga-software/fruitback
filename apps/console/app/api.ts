@@ -164,12 +164,13 @@ function leave(why: Left): void {
  * Asks the worker who the browser is signed in as, when the tab comes back. A change of account
  * stops the tab; so does a session that ended while the tab was away.
  *
- * WARNING: a call that changes something waits for this one (`call`). Without the wait, a click
- * in the moment after the tab comes back leaves with the cookie of the other account.
+ * WARNING: every call waits for this one (`call`). Without the wait, a click in the moment after
+ * the tab comes back leaves with the cookie of the other account, and a list that the screen reads
+ * in that moment comes back with the data of the other account.
  */
 export function checkTab(): Promise<void> {
   if (tabAccount === undefined || left !== undefined) return Promise.resolve();
-  checking ??= call('GET', '/console/me', undefined, { quiet: true })
+  checking ??= ask('GET', '/console/me', undefined, { quiet: true })
     .then((me) => {
       // No answer, and a refusal that is not about the session, say nothing of who is signed in.
       if (!me.ok && me.status === 401 && !endSeen) leave('ended');
@@ -217,8 +218,21 @@ export async function call<T>(
   body?: unknown,
   options: { quiet?: boolean } = {},
 ): Promise<Answer<T>> {
-  // A change waits for the question of a tab that came back, and a tab that stopped sends nothing.
-  if (method !== 'GET' && checking !== undefined) await checking;
+  // A call waits for the question of a tab that came back: its answer would be of whoever is signed
+  // in now, and its change would be made in their name.
+  if (checking !== undefined) await checking;
+
+  return ask<T>(method, to, body, options);
+}
+
+/** The call itself, with no wait: the question of a tab that came back is asked through it. */
+async function ask<T>(
+  method: string,
+  to: string,
+  body?: unknown,
+  options: { quiet?: boolean } = {},
+): Promise<Answer<T>> {
+  // A tab that stopped sends nothing.
   if (left !== undefined) return LEFT;
   const response = await send(method, to, body);
   if (response?.status === 401 && options.quiet !== true) {
