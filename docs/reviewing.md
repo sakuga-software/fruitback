@@ -200,8 +200,11 @@ signed it in with, and they reach your other browsers where the box is ticked to
   **Grant access**, and a team-mode worker still needs you to pair there.
 - **Who keeps them**: the vendor of the browser (Google for Chrome, Mozilla for Firefox), under its
   own terms. The addresses of your staging sites are in those rules.
-- A rule you remove is removed in your other browsers. Turning the box off stops the copy, and
-  removes nothing from the account.
+- A rule you remove is removed in your other browsers where the box is ticked. Turning the box off
+  stops the copy, and removes nothing from the account.
+- **A browser where the box was off does not hear of the removals made meanwhile.** When you tick it
+  there, the rules it still holds go back to the account, and to your other browsers: remove them
+  again, or remove them in that browser before you tick the box.
 - Firefox with no account keeps them on the machine, as before.
 
 ## What log out does, and what it cannot undo

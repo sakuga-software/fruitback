@@ -289,8 +289,14 @@ rule of 2026-10-12 (the orchestrator decides the current choices on Mathieu's de
 - **A browser that was closed** during a removal finds the rule it knew gone from the account at its
   start, and removes it. Whether the browser also says so with `storage.onChanged` was not measured
   between two real browsers: the E2E Chromium has no account, so its `sync` area stays on the machine.
-- **Turning the box off forgets what was known**, so the next merge removes nothing: a rule removed
-  here while the box was off comes back from the account when it is ticked again.
+- **Turning the box off forgets what was known**, so the next merge removes nothing, in either
+  direction. Two cases follow, and both bring a removed rule back. A rule removed here while the box
+  was off comes back from the account when it is ticked again. **A rule removed in another browser
+  while the box was off here is sent back to the account by this browser when it is ticked again,
+  and so comes back in the other browser too** (raised in review). This browser cannot tell that rule
+  from one it holds and never copied: telling them apart needs a mark of each removal in the account
+  (a tombstone), and a rule has no date to compare it with. Not done: a removal that comes back is
+  seen and done again, and a merge that removed a rule nobody removed would lose one silently.
 - **Turning the box off removes nothing from the account.** Removing there would remove the rules of
   the other browsers.
 - **A quota of `sync` that refuses a write** is logged, and the rule stays in `local`.
