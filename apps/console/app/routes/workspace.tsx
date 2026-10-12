@@ -42,8 +42,12 @@ export default function WorkspaceFrame() {
   if (context === undefined) return <p className="p-8 text-sm text-muted">{t('Loading…')}</p>;
 
   return (
-    <div className="mx-auto grid min-h-screen max-w-[1440px] gap-8 px-4 py-6 md:grid-cols-[224px_1fr] md:px-6">
-      <aside className="md:sticky md:top-6 md:self-start">
+    // Under md the grid is one column (FRU-159). `content-start` keeps its rows at their height: the
+    // minimum height of the screen went into the first row, and left a gap under the sections. The
+    // gap is smaller there, because the title has its own space above it. `min-w-0` lets the row of
+    // sections scroll instead of widening the page.
+    <div className="mx-auto grid min-h-screen max-w-[1440px] content-start gap-4 px-4 py-6 md:grid-cols-[224px_1fr] md:content-normal md:gap-8 md:px-6">
+      <aside className="min-w-0 md:sticky md:top-6 md:self-start">
         <div className="mb-6 flex items-center gap-3 px-2">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-sm font-bold text-white">
             {context.workspace.name.charAt(0).toUpperCase()}
