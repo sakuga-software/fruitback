@@ -1,50 +1,50 @@
 {
   "packages/shared": {
-    "score": 74.35,
+    "score": 87.29,
     "files": {
       "src/markdown-description.ts": {
-        "score": 75.74,
+        "score": 83.4,
         "mutants": 235
       },
       "src/seed.ts": {
-        "score": 72.12,
+        "score": 90.9,
         "mutants": 165
       },
       "src/issue.ts": {
-        "score": 76,
+        "score": 100,
         "mutants": 25
       }
     }
   },
   "apps/worker": {
-    "score": 82.36,
+    "score": 90.78,
     "files": {
-      "src/cache.ts": {
-        "score": 65.9,
-        "mutants": 44
-      },
       "src/clients.ts": {
-        "score": 88.46,
+        "score": 89.42,
         "mutants": 208
       },
       "src/identity.ts": {
-        "score": 73,
+        "score": 93,
         "mutants": 200
       },
       "src/kv.ts": {
-        "score": 80.59,
-        "mutants": 67
+        "score": 81.08,
+        "mutants": 74
       },
       "src/rate-limit.ts": {
-        "score": 86.79,
-        "mutants": 53
+        "score": 89.39,
+        "mutants": 66
+      },
+      "src/cache.ts": {
+        "score": 86.36,
+        "mutants": 44
       },
       "src/cors.ts": {
-        "score": 81.66,
+        "score": 100,
         "mutants": 60
       },
       "src/session.ts": {
-        "score": 90.66,
+        "score": 96,
         "mutants": 75
       },
       "src/store-config.ts": {
