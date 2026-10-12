@@ -164,7 +164,7 @@ without TLS, and the ordinary deployment is a container on the same private Dock
 `rediss://` buys nothing. The day that path leaves a network you control, use `rediss://`. A rule that
 required TLS only when a password is set would protect the password and still send the notes in the
 clear. **`rediss://` checks the certificate against the authorities that Node trusts**, and no variable
-turns that off: a certificate that none of them signed is refused before any command is sent. No message of the worker quotes the URL, which carries the password.
+turns that off, `NODE_TLS_REJECT_UNAUTHORIZED=0` included: the client asks for the check itself. A certificate that none of them signed is refused before any command is sent. No message of the worker quotes the URL, which carries the password.
 
 The window slides, estimated from the current minute and the one before it. A caller who sends a full
 burst at the end of a window and spaces the next ones out gets **at most 39 requests in any 60

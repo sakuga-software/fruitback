@@ -177,8 +177,11 @@ export function createRedisKv(url: string, options: { timeoutMs?: number } = {})
 function connect(target: RedisTarget, timeoutMs: number, onDead: () => void): Connection {
   const { host, port } = target;
   // Node refuses a server name that is an IP address, so SNI is sent for a hostname only.
+  // WARNING: `rejectUnauthorized` is written, not left to its default. Left out, Node takes it from
+  // `NODE_TLS_REJECT_UNAUTHORIZED`, and an operator who set that to 0 for something else would send
+  // the password and the notes to a server nobody vouched for. `redis.test.ts` holds this.
   const socket: Socket = target.tls
-    ? connectTls({ host, port, ...(isIP(host) === 0 ? { servername: host } : {}) })
+    ? connectTls({ host, port, rejectUnauthorized: true, ...(isIP(host) === 0 ? { servername: host } : {}) })
     : connectTcp({ host, port });
   const pending: Pending[] = [];
   let buffer: Buffer<ArrayBufferLike> = Buffer.alloc(0);

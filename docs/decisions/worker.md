@@ -155,7 +155,9 @@ pattern (`NOPERM` outside it); a password with a space, percent-encoded, signs i
 is refused without being quoted; two worker processes with a limit of 6 answer six `200` then six
 `429` to twelve reads sent in turn, where on memory they answer twelve `200`; with the Redis paused
 a read answers `503` and `/health` `200`. `rediss://` against a server whose certificate nobody
-signed is refused before a command is sent. **Not measured**: a Redis behind TLS with a certificate
+signed is refused before a command is sent. A test holds that one, with
+`NODE_TLS_REJECT_UNAUTHORIZED=0` set: the client writes `rejectUnauthorized` itself, because Node
+reads that variable for every connection that leaves the choice to it. **Not measured**: a Redis behind TLS with a certificate
 that an authority signed, Valkey, a cluster or a sentinel (the client speaks to one server), and
 Traefik's `RateLimit` middleware, which the ticket asked to weigh first: it would give one limit
 with no code, and no shared cache.

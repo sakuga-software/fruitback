@@ -1,6 +1,11 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { type AddressInfo, type Socket, createServer } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createServer as createTlsServer } from 'node:tls';
 import { KvError } from './kv.ts';
 import { type Reply, ReplyError, createRedisKv, encodeCommand, parseReply } from './redis.ts';
 import { parseRedisUrl } from './redis-url.ts';
@@ -247,5 +252,61 @@ describe('createRedisKv', () => {
     cleanup.push(kv.close);
 
     await assert.rejects(kv.get('k'), KvError);
+  });
+
+  // SECURITY.md says no variable turns the check of the certificate off. Node has one that does, for
+  // every connection that leaves the choice to it: the client makes the choice itself.
+  it('refuses a certificate nobody signed, with NODE_TLS_REJECT_UNAUTHORIZED=0 too, before any command', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'fruitback-rediss-'));
+    const key = join(directory, 'key.pem');
+    const cert = join(directory, 'cert.pem');
+    // The key is made here and removed with its directory: no key is kept in the repository.
+    execFileSync(
+      'openssl',
+      [
+        'req',
+        '-x509',
+        '-newkey',
+        'rsa:2048',
+        '-nodes',
+        '-keyout',
+        key,
+        '-out',
+        cert,
+        '-days',
+        '1',
+        '-subj',
+        '/CN=localhost',
+      ],
+      { stdio: 'ignore' },
+    );
+    let received = 0;
+    const server = createTlsServer({ key: readFileSync(key), cert: readFileSync(cert) }, (socket) => {
+      socket.on('error', () => {});
+      // A client that trusted this server gets an answer, so trusting it cannot pass for a refusal.
+      socket.on('data', (chunk: Buffer) => {
+        received += chunk.length;
+        socket.write('$-1\r\n');
+      });
+    });
+    server.on('tlsClientError', () => {});
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as AddressInfo;
+    const before = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    const kv = createRedisKv(`rediss://localhost:${port}`, { timeoutMs: 2_000 });
+    // The steps run last first: the client closes before the server waits for its sockets.
+    cleanup.push(async () => {
+      if (before === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+      else process.env.NODE_TLS_REJECT_UNAUTHORIZED = before;
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      rmSync(directory, { recursive: true, force: true });
+    }, kv.close);
+
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+    await assert.rejects(
+      kv.get('k'),
+      (error: unknown) => error instanceof KvError && /self.signed/i.test(error.message),
+    );
+    assert.equal(received, 0, 'no command reached a server whose certificate nobody signed');
   });
 });
