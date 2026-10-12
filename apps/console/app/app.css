@@ -33,9 +33,16 @@
   --field-background: #ffffff;
   --field-foreground: #1c1917;
   --field-placeholder: #a8a29e;
-  --field-border: #d6d3d1;
+  /* The boards draw a dark border on a field and on a wide button, and give it no token. This is
+     the strong border of the widget (packages/widget/src/theme.ts): 3.49:1 on white, over the 3:1
+     a border needs when it alone says where a control is (WCAG 1.4.11). #d6d3d1 was 1.49:1. */
+  --field-border: #8f8883;
   --field-border-width: 1px;
   --radius: 0.5rem;
+  /* design/README.md: 8 to 10 px for a field. HeroUI derives 12 px from --radius. */
+  --field-radius: 8px;
+  /* The boards draw a field flat. Transparent and not none: the rings of HeroUI are shadows too. */
+  --field-shadow: 0 0 0 0 transparent;
 }
 
 /*
@@ -83,4 +90,23 @@ body {
 
 .alert--danger .alert__description {
   color: var(--danger);
+}
+
+/*
+  A wide button (`WideButton` in ui.tsx, FRU-168): a provider to sign in with, on the boards a
+  rectangle of the shape of a field. HeroUI draws every button as a pill, with the faint line as its
+  border. The pill stays for the action of a step, which its shape then tells from the controls.
+*/
+.wide-button {
+  border-radius: 6px;
+  border-color: var(--field-border);
+}
+
+/*
+  No mark on a required field (FRU-168): the boards draw none, and HeroUI adds a red asterisk after
+  the label. The field stays required for the browser and for a screen reader.
+*/
+.label--required::after,
+[data-required='true'] > .label::after {
+  content: none;
 }
