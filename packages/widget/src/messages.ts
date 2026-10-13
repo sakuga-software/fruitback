@@ -115,16 +115,26 @@ export const ENGLISH = {
   // And `sidebar.dialog` must not start like `thread.dialog`: both are open at once, and a reader
   // or a test that looks for « Note … » must find one.
   'sidebar.open': 'Show every note of this page',
-  'sidebar.dialog': 'Every note of this page',
-  'sidebar.title': 'Notes',
-  'sidebar.close': 'Close the list',
+  // The name of the dialog, and the title its head shows (FRU-259).
+  'sidebar.dialog': 'Notes on this page',
+  'sidebar.close': 'Close the notes',
+  // The three tabs. `sidebar.tabs` names their group; a number follows each word.
+  'sidebar.tabs': 'Which notes',
+  'sidebar.tabOpen': 'Open',
+  'sidebar.tabDone': 'Done',
+  'sidebar.tabAll': 'All',
+  // A tab that shows nothing, on a page that has notes.
+  'sidebar.emptyTab': 'No note here.',
+  'sidebar.replies': { one: '{count} reply', other: '{count} replies' },
+  // After the date of a note whose element is under the part of the page in sight.
+  'sidebar.below': 'further down',
+  'sidebar.unplaced': 'Could not be placed · {count}',
+  'sidebar.unplacedWhy': 'Its element is no longer on this page. The note stays here.',
   'sidebar.empty': 'No note on this page yet.',
   'sidebar.loading': 'Reading the notes of this page…',
   'sidebar.failed': 'The notes of this page could not be read. They are not lost.',
   'sidebar.retry': 'Try again',
-  'sidebar.count': { one: '{count} note', other: '{count} notes' },
   'sidebar.approximate': 'Approximate position',
-  'sidebar.detached': 'Element not found on this page',
   // The notes kept for later in this tab, on every page, and the button that sends them (FRU-124).
   'sidebar.drafts': 'Kept for later, not sent yet',
   'sidebar.sendDrafts': { one: 'Send {count} note', other: 'Send the {count} notes' },

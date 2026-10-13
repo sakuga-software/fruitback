@@ -1092,7 +1092,8 @@ describe('the list after a failed read (FRU-153)', () => {
     open();
 
     assert.equal(visible('.fruitback-sidebar-empty'), false);
-    assert.equal(text('.fruitback-sidebar-count'), '');
+    // The tabs carry no number: zero notes would be a guess.
+    assert.equal(text('[role="tab"]'), 'Open');
     assert.equal(visible('.fruitback-sidebar-failed'), true);
     assert.match(text('[role="status"]'), /could not be read/);
     assert.equal(shadow.activeElement?.textContent, 'Try again');
@@ -1129,7 +1130,7 @@ describe('the list after a failed read (FRU-153)', () => {
     assert.equal(visible('.fruitback-sidebar-failed'), false);
     assert.equal(visible('.fruitback-sidebar-empty'), true);
     assert.equal(text('.fruitback-sidebar-empty'), 'No note on this page yet.');
-    assert.equal(text('.fruitback-sidebar-count'), '0 notes');
+    assert.equal(text('[role="tab"]'), 'Open 0');
 
     widget.destroy();
   });

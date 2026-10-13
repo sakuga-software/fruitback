@@ -718,6 +718,11 @@ li { display: list-item; }
   clip-path: inset(50%);
   white-space: nowrap;
 }
+/*
+  The dock stands aside while the list of the page is open (FRU-259), as the mock-up draws it: the
+  list covers this corner, and holds its own button to leave a note and its own cross.
+*/
+:host([data-fruitback-listing]) .fruitback-dock { display: none; }
 /* Pressed while a capture runs: the strong accent of the mock-up, under the same foreground (FRU-252). */
 :host([data-fruitback-capturing]) .fruitback-launch { background: var(--fruitback-color-accent-strong); }
 /*
