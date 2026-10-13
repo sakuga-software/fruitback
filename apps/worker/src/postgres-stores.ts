@@ -1,7 +1,7 @@
 import type { AccountStore } from './accounts.ts';
 import type { Kv } from './kv.ts';
 import { z } from 'zod';
-import { type Database, databaseFor, readDatabaseSchema, readDatabaseUrl } from './postgres.ts';
+import { type Database, databaseFor, databaseUrlOf, readDatabaseSchema } from './postgres.ts';
 import type { ScreenshotStore } from './screenshots.ts';
 import type { SessionStore } from './session.ts';
 import type { SeedStore } from './store.ts';
@@ -180,7 +180,7 @@ export function createPostgresStoreSpec(): StoreSpec {
     provider: 'postgres',
     envNames: { url: 'FRUITBACK_DATABASE_URL', schema: 'FRUITBACK_DATABASE_SCHEMA' },
     read: (env) => ({
-      url: readDatabaseUrl(env.FRUITBACK_DATABASE_URL),
+      url: databaseUrlOf(env),
       schema: readDatabaseSchema(env.FRUITBACK_DATABASE_SCHEMA),
     }),
     schema: z.object({ url: z.string().min(1), schema: z.string().min(1) }),

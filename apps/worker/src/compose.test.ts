@@ -26,6 +26,8 @@ const NOT_PASSED: Readonly<Record<string, string>> = {
   NODE_ENV: 'the image sets production, which is what refuses the in-memory store',
   HOST: 'the default, 0.0.0.0, is the only value that works inside a container',
   FRUITBACK_FAKE_LINEAR: 'deprecated and dev-only, and the image ignores it',
+  FRUITBACK_DEV_DATABASE: 'dev-only: the image refuses it, and holds no database to put in the process (FRU-223)',
+  FRUITBACK_DEV_VISIBILITY: 'read by the worker of development alone, which is not in the image (FRU-223)',
 };
 
 function workerVariables(): string[] {

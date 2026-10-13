@@ -70,7 +70,7 @@ From the sources, with no container and no `.env`. The command keeps running, so
 terminal for anything else:
 
 ```bash
-pnpm --filter @fruitback/worker dev:fake   # node --watch, in-memory store
+pnpm --filter @fruitback/worker dev:pglite   # node --watch, a database in the process
 ```
 
 In a container, with the image built from this checkout:

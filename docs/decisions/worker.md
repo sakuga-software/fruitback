@@ -1381,6 +1381,26 @@ an earlier migration, and writes nothing`.
 - **Not measured: Node 26 on a developer machine.** The measurements of this section ran on Node 25.8
   and on the runners of CI, which have the version of `.nvmrc`.
 
+## The database of development (FRU-223)
+
+- **`FRUITBACK_DEV_DATABASE=pglite` gives a worker the database that its own process made**, in
+  place of the one of `FRUITBACK_DATABASE_URL`. `pnpm dev` and the E2E suite run that way:
+  [dev-loop.md](dev-loop.md) says what the worker of development is.
+- **It is refused under `NODE_ENV=production`, by name, and never ignored**, as
+  `FRUITBACK_STORE=memory` is (test:`is refused in production, by its name, whatever else is set`).
+  It is refused beside `FRUITBACK_DATABASE_URL` too: one database, named once.
+- **`postgres.ts` holds the switch and loads nothing for it.** `databaseUrlOf` answers
+  `DEV_DATABASE_URL`, an address whose host no DNS answers, and `provideDevDatabase` gives the
+  process its database under that address. Only `dev-worker.fixture.ts` calls it. A process that
+  has the switch and no database opens no connection
+  (test:`opens no connection in a process that has the switch and no database`).
+- **The switch takes `FRUITBACK_DATABASE_SCHEMA` as any database does** (FRU-219): the PGlite is
+  made in that schema, and `public` holds nothing
+  (test:`keeps its tables, its workspace and its notes in a schema of its own when one is named
+(FRU-219)`).
+- **`migrate-to-postgres` does not read the switch.** It copies files into a server, and takes
+  `FRUITBACK_DATABASE_URL` alone.
+
 ## The notes in PostgreSQL (FRU-218)
 
 Mathieu decided on 2026-10-13 that a worker always has PostgreSQL, self-hosted too. Nothing can take

@@ -140,9 +140,8 @@ describe('CONTRIBUTING.md', () => {
 
   it('gives the ports that pnpm dev opens', () => {
     const playground = /\bport: (\d+)/.exec(read('../../playground/vite.config.ts'))?.[1];
-    const worker = /\bPORT=(\d+)/.exec(
-      (JSON.parse(read('../package.json')) as { scripts: Record<string, string> }).scripts['dev:fake'] ?? '',
-    )?.[1];
+    // The worker of `pnpm dev` is `dev-worker.fixture.ts` (FRU-223), which holds its port.
+    const worker = /\bPORT: '(\d+)'/.exec(read('./dev-worker.fixture.ts'))?.[1];
 
     assert.ok(playground !== undefined && worker !== undefined, 'a port source was not found');
     assert.match(section(CONTRIBUTING, 'Set up'), new RegExp(`\`http://localhost:${playground}\``));

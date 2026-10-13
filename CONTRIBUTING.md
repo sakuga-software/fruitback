@@ -26,7 +26,7 @@ pnpm dev
 |                         |                                                                               |
 | ----------------------- | ----------------------------------------------------------------------------- |
 | `http://localhost:5177` | the playground: a deliberately hostile fake client site with the widget on it |
-| `http://localhost:8788` | the worker, on an in-memory store                                             |
+| `http://localhost:8788` | the worker, on a database in its process and an in-memory store               |
 
 The in-memory store needs no API key and writes to nobody's workspace. The playground is scaffolding
 for trying the widget, not the product: build features in `packages/widget`.

@@ -8,24 +8,44 @@ it writes a spec, in short; the reasoning behind them follows.
 
 **`pnpm dev` starts both halves. The ports are fixed, and these are them:**
 
-|                         |                                     |
-| ----------------------- | ----------------------------------- |
-| `http://localhost:5177` | the playground page                 |
-| `http://localhost:8788` | the worker, on its in-memory Linear |
+|                         |                                            |
+| ----------------------- | ------------------------------------------ |
+| `http://localhost:5177` | the playground page                        |
+| `http://localhost:8788` | the worker, on a PostgreSQL in its process |
 
 `8788` and not `8080`: 8080 is the container's port, and something is usually already sitting on it
 on a developer's machine. `/tf` and `/tfp` read these numbers from here rather than probing.
 
-- **`FRUITBACK_STORE=memory` swaps the real Linear for `linear-memory.ts`**, so the whole loop —
-  capture, issue, pins coloured by state — runs with no API key and writes to nobody's workspace. It
-  is refused under `NODE_ENV=production` (which the Dockerfile sets), `/health` answers
-  `{ ok: true, store: 'memory', openRead: 1 }` (measured on `dev:fake`, FRU-50: it sets no
-  `FRUITBACK_READ`, so reads are public), and the boot log says so. `FRUITBACK_FAKE_LINEAR=1` is the older
-  spelling, still works, and now says at boot that it is deprecated — see _Which store, and who
-  validates it_ ([worker.md](worker.md)). It is
+- **The worker of `pnpm dev` is `apps/worker/src/dev-worker.fixture.ts`** (FRU-223): the server of
+  `main.ts`, on a PostgreSQL in the process (PGlite), with no Docker and no variable. It applies the
+  migrations, makes one workspace and one site, `playground`, at `http://localhost:5177`, and starts.
+  A worker with a database serves the sites of its workspaces and nothing else, so that site is what
+  `FRUITBACK_CLIENTS` was. Sites, sessions and accounts are in that database, and all of it dies
+  with the process: `node --watch` starts an empty one at each edit of the worker.
+- **`FRUITBACK_DEV_DATABASE=pglite` is the switch, and production refuses it.** The fixture sets it;
+  `readConfig` then takes the database of the process in place of `FRUITBACK_DATABASE_URL`. Under
+  `NODE_ENV=production` the worker answers `503` on `/health` and names the variable, as for
+  `FRUITBACK_STORE=memory`, and the job `docker image` starts the image with it to see that
+  ([image.md](image.md)). The image holds neither the fixture nor PGlite. A process that has the
+  switch and was not started by the fixture opens no connection: its address is a host of
+  `.invalid`, and the first call says to start `pnpm dev`.
+- **The notes of the dev loop stay on `linear-memory.ts`** (`FRUITBACK_STORE=memory`, the default of
+  the fixture), so the whole loop — capture, issue, pins coloured by state — runs with no API key
+  and writes to nobody's workspace. That store gives a new note the next state of a workflow, a
+  reply on every third one and a link: what a site with a Linear connector shows, and what the
+  store of the database does not (its notes have one stage, no reply and no link). Eight specs of
+  the widget read those (measured: with the notes in the database, 173 specs pass and those 8
+  fail). `FRUITBACK_STORE=postgres pnpm dev` keeps the notes in the database instead. `/health`
+  answers `{ ok: true, store: 'memory' }`. It is
   **not** a mock: an issue is stored as the description `buildIssueDescription` produces and read
   back through the same `toSeedIssue` as production, so a broken round trip breaks the playground
-  too.
+  too. `FRUITBACK_FAKE_LINEAR=1` is the older spelling of that store: see _Which store, and who
+  validates it_ ([worker.md](worker.md)).
+- **`POST /__dev/pair` answers a pairing code for the workspace**, with its link. The `pair`
+  command is another process, and cannot write in a database that lives in the worker. The route is
+  in the fixture, not in the worker. **The fixture listens on `127.0.0.1`** unless `HOST` says
+  otherwise: that route gives a session to whoever can reach it (raised in review). `FRUITBACK_DEV_VISIBILITY=members` makes the site one that
+  only a session of the workspace reads.
 - **The playground is a React app on purpose, and it is the only place three things are true.** The
   widget mounts in an effect, so it arrives _after_ hydration. A client-side navigation changes the
   page identity with no page load to notice it. And `source` finally has a fiber to read, which is
@@ -193,11 +213,18 @@ builds `dist` first, because `package.spec.ts` loads the real file.
   default loads no extension (measured). Automation cannot answer a host permission prompt, so it
   loads a **copy** whose manifest declares the playground and both workers. The shipped manifest still asks for
   nothing at install, and the no-rule spec runs with that grant.
-- **The worker holds extension sessions during the suite** (`e2e/worker-sessions.ts`), and the team
-  spec mints its code with the real `pair` command. The suite never reuses a worker already on its port: one started without
-  that env holds no session store, or not that one. Stop `pnpm dev` before `pnpm e2e`. The team spec
-  pairs with a **second worker on `8789`, with `FRUITBACK_READ=authenticated`**: on `public` a pin read
-  back proves nothing about the relay, because the page could read it with no credential.
+- **Each worker of the suite is the worker of development** (`dev-worker.fixture.ts`, FRU-223): a
+  database in its process, one workspace, the site `playground`. No spec reads `FRUITBACK_CLIENTS`
+  or a session file. A spec mints its pairing code with `mintPairing` of `e2e/extension.ts`, which
+  asks `POST /__dev/pair` of the worker that will take the code; the `pair` command has its tests in
+  `cli.test.ts`, and the job `docker image` runs it in the image. The suite never reuses a worker
+  already on its port. Stop `pnpm dev` before `pnpm e2e`.
+- **The team spec pairs with a second worker on `8789`, whose site is read by members only**
+  (`FRUITBACK_DEV_VISIBILITY=members`): on a site that everyone reads, a pin read back proves
+  nothing about the relay, because the page could read it with no credential. **Its notes are in
+  its database** (`FRUITBACK_STORE=postgres`), so the suite writes and reads a note through the
+  store of the database in a browser; the first worker keeps the Linear in memory, for the specs
+  of the widget.
 
 ### The reasons, and the history
 
@@ -306,3 +333,28 @@ product to somebody without `pnpm dev`.
 - **The toolbar says what the page is** when `VITE_FRUITBACK_DEMO_NOTICE` is set. The dev loop and
   the E2E suite do not set it.
 - **What it does not show: team mode.** That mode needs sessions, and sessions need a secret.
+
+### On PostgreSQL: what is prepared, and what is not decided (FRU-223)
+
+PostgreSQL becomes required (FRU-184), and the demonstration has no database and no secret, by the
+choice written above. **What it becomes is a decision of Mathieu that is not taken**: a database
+beside it that is emptied every night, the image of before kept as it is, or no demonstration.
+Nothing here changes the demonstration of today, and nothing was deployed.
+
+- **The worker of development is not an answer for it.** The demonstration runs the image, which
+  refuses `FRUITBACK_DEV_DATABASE` and holds no PGlite.
+- **`apps/playground/demo/postgres/` is what the first option needs from this repository.**
+  `seed.sql` makes the workspace and the site `playground` that the page names: the console makes a
+  site for a person who signed in, and nobody signs in there. It can run again.
+  `reset.sh` takes the place of `../reset.sh`: it empties the notes, their replies and their
+  pictures in the container of the database, gives the numbers back to 1, and runs `seed.sql`. The
+  worker is not restarted. test:`gets its workspace and its site from seed.sql, twice with one
+result, and the worker serves the site` and test:`empties tables that the schema has, and no other,
+in reset.sh` hold the two files to the schema. `reset.sh` itself ran once by hand, on PostgreSQL 17
+  in a container: see the pull request.
+- **What that option costs, and why it is a decision.** A worker with a database refuses to start
+  without `FRUITBACK_IDENTITY_SECRET` and `FRUITBACK_CONSOLE_URL`: the instance would hold a secret
+  and the password of a database, where it holds nothing today, and the two sentences above (« the
+  container holds nothing », « this instance must hold none ») stop being true for the worker. It
+  also needs a PostgreSQL service in Dokploy, a volume or the acceptance of an empty database at
+  each deployment, and the crontab of the host changed to the new script.

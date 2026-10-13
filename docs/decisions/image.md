@@ -94,6 +94,13 @@ immutable.
   It matches the `503` and the **variable name**, never the prose beside it — the diagnostic has to
   name the variable and has its own tests, while the wording is free to change, and a check reading
   the wording would go green on a broken image.
+- **The job `docker image` of `ci.yml` asserts that the image refuses `FRUITBACK_DEV_DATABASE`**
+  (FRU-223), the same way: the `503` and the name of the variable. That switch gives `pnpm dev` and
+  the E2E suite a PostgreSQL in the process (PGlite). The step also lists the files of the image and
+  fails on a name that holds `pglite` or `dev-worker`: the refusal is a line of `env.ts`, and the
+  absence of the files is what makes it true whatever that line says. PGlite is a development
+  dependency, and the bundle starts at `main.ts`, which imports no `*.fixture.ts`
+  (test:`is in no file that the bundle of the image starts from`).
 - **`ci.yml`'s `image` job stays, and it is not the same job.** It is the only one that runs on a
   **pull request**, which is where a broken Dockerfile has to be caught; this workflow runs after the
   merge. They use different gha cache scopes, so neither evicts the other.
