@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { badgeFor, openPlayground, plantPin } from './pin.ts';
+import { WORKER_ORIGIN, badgeFor, openPlayground, plantPin } from './pin.ts';
 
 /**
  * The Shadow DOM host (FRU-3), in a browser that has a real selector engine, a real cascade and
@@ -278,4 +278,87 @@ test('a note, its byline and its warning are three lines, not one paragraph', as
 
   expect(lines, 'the thread should show a note and a byline').not.toBeNull();
   expect(lines!.metaTop, 'the byline starts below the note, not beside it').toBeGreaterThanOrEqual(lines!.noteBottom);
+});
+
+test('the dock has the measures of the mock-up: three controls of 44 px, 24 px from the corner (FRU-252)', async ({
+  page,
+}) => {
+  // The widget as `init` assembles it, from the built script: the playground has no button of the list.
+  await page.goto('/?widget=off&case=dock-measures');
+  await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
+  await page.addScriptTag({ path: 'packages/widget/dist/fruitback.iife.js' });
+  await page.evaluate(
+    (endpoint) =>
+      (globalThis as unknown as { Fruitback: { init(options: Record<string, string>): unknown } }).Fruitback.init({
+        endpoint,
+        clientId: 'playground',
+        locale: 'en-US',
+      }),
+    WORKER_ORIGIN,
+  );
+  const launch = page.getByRole('button', { name: 'Leave feedback' });
+  const gear = page.getByRole('button', { name: 'Open Fruitback settings' });
+  const list = page.getByRole('button', { name: 'Show every note of this page' });
+  await expect(launch).toBeVisible();
+  await page.mouse.move(0, 0);
+
+  const viewport = page.viewportSize()!;
+  const [launchBox, gearBox, listBox] = await Promise.all([launch, gear, list].map((each) => each.boundingBox()));
+  // 24 px from the right and from the bottom, and 10 px between two controls, the list first.
+  expect(viewport.width - (launchBox!.x + launchBox!.width)).toBe(24);
+  expect(viewport.height - (launchBox!.y + launchBox!.height)).toBe(24);
+  expect(launchBox!.x - (gearBox!.x + gearBox!.width)).toBe(10);
+  expect(gearBox!.x - (listBox!.x + listBox!.width)).toBe(10);
+  for (const round of [gearBox!, listBox!]) expect([round.width, round.height]).toEqual([44, 44]);
+  expect(launchBox!.height).toBe(44);
+
+  const painted = (locator: typeof launch) =>
+    locator.evaluate((element) => {
+      const style = getComputedStyle(element);
+      const icon = element.querySelector('svg')!.getBoundingClientRect();
+
+      return {
+        fill: style.backgroundColor,
+        text: style.color,
+        radius: style.borderTopLeftRadius,
+        shadow: style.boxShadow,
+        padding: `${style.paddingLeft} ${style.paddingRight}`,
+        font: `${style.fontSize} ${style.fontWeight}`,
+        gap: style.columnGap,
+        icon: [Math.round(icon.width), Math.round(icon.height)],
+      };
+    });
+  const shadow = 'rgba(0, 0, 0, 0.25) 0px 4px 18px 0px';
+  expect(await painted(launch)).toEqual({
+    fill: 'rgb(221, 44, 39)',
+    text: 'rgb(255, 255, 255)',
+    radius: '999px',
+    shadow,
+    padding: '20px 20px',
+    font: '13px 600',
+    gap: '8px',
+    icon: [12, 15],
+  });
+  for (const round of [gear, list]) {
+    expect(await painted(round)).toMatchObject({
+      fill: 'rgb(63, 63, 70)',
+      text: 'rgb(255, 255, 255)',
+      radius: '999px',
+      shadow,
+      icon: [18, 18],
+    });
+  }
+
+  // Under the pointer, and while a capture runs: the strong accent. The button changes its words
+  // then, so it is not yet a switch with a state: that comes with the banner of FRU-258.
+  await launch.hover();
+  await expect.poll(async () => (await painted(launch)).fill).toBe('rgb(185, 28, 28)');
+  await launch.click();
+  await page.mouse.move(0, 0);
+  const pressed = page.locator('[data-fruitback-host-launch]');
+  await expect(page.locator('[data-fruitback-host][data-fruitback-capturing]')).toHaveCount(1);
+  expect((await painted(pressed)).fill).toBe('rgb(185, 28, 28)');
+  expect(await pressed.getAttribute('aria-pressed')).toBeNull();
+  await page.keyboard.press('Escape');
+  await expect.poll(async () => (await painted(pressed)).fill).toBe('rgb(221, 44, 39)');
 });

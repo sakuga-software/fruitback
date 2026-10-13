@@ -73,7 +73,10 @@ test('an element that is gone never leaves a pin that claims to be sure', async 
   const pin = pinFor(page, 'Sur une carte qui');
   await expect(pin).toBeVisible();
   await expect(pin).toHaveAttribute('data-fruitback-confident', 'false');
-  await expect(pin.getByRole('button')).toContainText('≈');
+  // The drop holds the number of the note since FRU-252. The name of the pin and its dashed frame
+  // say that the place is a guess.
+  await expect(pin.getByRole('button')).toHaveAccessibleName(/approximate position/);
+  expect(await pin.evaluate((frame) => getComputedStyle(frame).borderTopStyle)).toBe('dashed');
 });
 
 test('a note whose element is gone lands in the detached list, and one merely moved does not', async ({ page }) => {

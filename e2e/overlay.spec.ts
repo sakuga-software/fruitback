@@ -81,6 +81,144 @@ test('the colour of a pin is the Linear state, and nothing the widget decided', 
   assertDistinct(stages);
 });
 
+test('each of the five statuses has the colour of the mock-up, and the amber is written dark (FRU-233)', async ({
+  page,
+}) => {
+  // The in-memory Linear gives five notes in a row the five states of its workflow.
+  await openPlayground(page, 'status-colours');
+  const targets = [
+    '[data-testid="card-espresso"] .add',
+    '[data-testid="card-latte"] .add',
+    '[data-testid="card-mocha"] .add',
+    '#checkout-cta',
+    'main header button',
+  ];
+  for (const [index, target] of targets.entries()) await plantPin(page, page.locator(target), `Statut ${index + 1}`);
+
+  const drawn = await page.locator('[data-fruitback-pin]').evaluateAll((pins) =>
+    Object.fromEntries(
+      pins.map((pin) => {
+        const badge = pin.querySelector('.fruitback-pin-badge') as HTMLElement;
+        const style = getComputedStyle(badge);
+
+        return [
+          (pin as HTMLElement).dataset.fruitbackStage,
+          { fill: style.backgroundColor, text: style.color, frame: getComputedStyle(pin).borderTopColor },
+        ];
+      }),
+    ),
+  );
+
+  const white = 'rgb(255, 255, 255)';
+  const status = (fill: string, text = white) => ({ fill, text, frame: fill });
+  expect(drawn).toEqual({
+    seeded: status('rgb(221, 44, 39)'),
+    green: status('rgb(37, 99, 235)'),
+    // White on this amber is 2.15:1. The ink is 8.25:1.
+    ripening: status('rgb(245, 158, 11)', 'rgb(24, 24, 27)'),
+    ripe: status('rgb(21, 128, 61)'),
+    composted: status('rgb(100, 116, 139)'),
+  });
+});
+
+test('a pin and its frame have the measures of the mock-up, at each of the five statuses (FRU-252)', async ({
+  page,
+}) => {
+  await openPlayground(page, 'pin-measures');
+  const targets = [
+    '[data-testid="card-espresso"] .add',
+    '[data-testid="card-latte"] .add',
+    '[data-testid="card-mocha"] .add',
+    '#checkout-cta',
+    'main header button',
+  ];
+  for (const [index, target] of targets.entries()) await plantPin(page, page.locator(target), `Mesure ${index + 1}`);
+  await page.mouse.move(0, 0);
+  // The entrance of a drop scales it: measured once it has landed.
+  await page.waitForTimeout(600);
+
+  const stages: string[] = [];
+  for (const [index, target] of targets.entries()) {
+    const pin = pinFor(page, `Mesure ${index + 1}`);
+    const measured = await pin.evaluate((frame, selector) => {
+      const element = document.querySelector(selector)!.getBoundingClientRect();
+      const box = frame.getBoundingClientRect();
+      const badge = frame.querySelector('.fruitback-pin-badge') as HTMLElement;
+      const drop = badge.getBoundingClientRect();
+      const frameStyle = getComputedStyle(frame);
+      const badgeStyle = getComputedStyle(badge);
+      const glyph = getComputedStyle(badge.querySelector('.fruitback-pin-glyph')!);
+
+      return {
+        stage: (frame as HTMLElement).dataset.fruitbackStage ?? '',
+        // The frame: 4 px off the element on every side, 2 px thick, 6 px of corner, no fill at rest.
+        outset: [
+          element.left - box.left,
+          element.top - box.top,
+          box.right - element.right,
+          box.bottom - element.bottom,
+        ],
+        border: `${frameStyle.borderTopWidth} ${frameStyle.borderTopStyle}`,
+        radius: frameStyle.borderTopLeftRadius,
+        fill: frameStyle.backgroundColor,
+        frameIsStage: frameStyle.borderTopColor === badgeStyle.backgroundColor,
+        // The drop: 26 px, outside the top-left corner of the frame. Its point is on the inner corner
+        // of the 2 px border, as in the mock-up, so it is 2 px short of the element and never on it.
+        drop: [Math.round(drop.width), Math.round(drop.height)],
+        corner: [Math.round(box.left - drop.right), Math.round(box.top - drop.bottom)],
+        shape: `${badgeStyle.borderTopLeftRadius} ${badgeStyle.borderBottomLeftRadius}`,
+        shadow: badgeStyle.boxShadow,
+        number: badge.textContent,
+        font: `${glyph.fontSize} ${glyph.fontWeight}`,
+        name: badge.getAttribute('aria-label'),
+        expanded: badge.getAttribute('aria-expanded'),
+      };
+    }, target);
+
+    stages.push(measured.stage);
+    expect(measured, `pin ${index + 1}`).toMatchObject({
+      outset: [4, 4, 4, 4],
+      border: '2px solid',
+      radius: '6px',
+      fill: 'rgba(0, 0, 0, 0)',
+      frameIsStage: true,
+      drop: [26, 26],
+      corner: [-2, -2],
+      shape: '50% 0px',
+      shadow: 'rgba(24, 24, 27, 0.28) 0px 3px 10px 0px',
+      number: String(index + 1),
+      font: '13px 600',
+      expanded: 'false',
+    });
+    expect(measured.name).toMatch(new RegExp(`^Note ${index + 1}, [a-z ]+: Mesure ${index + 1}$`));
+  }
+  expect(new Set(stages).size, `stages: ${stages.join(', ')}`).toBe(5);
+
+  // Open, the frame takes its colour at 12 %, and the pin says it is open.
+  const open = pinFor(page, 'Mesure 3');
+  await badgeFor(page, 'Mesure 3').click();
+  await page.mouse.move(0, 0);
+  await expect(badgeFor(page, 'Mesure 3')).toHaveAttribute('aria-expanded', 'true');
+  const tint = await open.evaluate((frame) => {
+    const style = getComputedStyle(frame);
+
+    return { stage: style.borderTopColor, fill: style.backgroundColor };
+  });
+  // The colour of the stage at 12 %: `color(srgb r g b / 0.12)`, the same three channels as the border.
+  const channels = (colour: string) => (colour.match(/[\d.]+/g) ?? []).map(Number);
+  const [red = 0, green = 0, blue = 0] = channels(tint.stage);
+  const [fillRed = 0, fillGreen = 0, fillBlue = 0, alpha = 0] = channels(tint.fill);
+  expect(tint.fill).toMatch(/^color\(srgb /);
+  expect(alpha).toBeCloseTo(0.12, 2);
+  for (const [stage, fill] of [
+    [red, fillRed],
+    [green, fillGreen],
+    [blue, fillBlue],
+  ] as const) {
+    expect(fill).toBeCloseTo(stage / 255, 2);
+  }
+});
+
 function assertDistinct(stages: (string | undefined)[]): void {
   expect(stages).toHaveLength(3);
   expect(new Set(stages).size, `expected three different stages, got ${stages.join(', ')}`).toBe(3);

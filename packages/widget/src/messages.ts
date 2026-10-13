@@ -76,12 +76,14 @@ export const ENGLISH = {
   'composer.destinationGone':
     'Sending to {destination} is no longer possible. This note will go to the default destination.',
 
-  'pin.label': '{stage} · {note}',
-  'pin.labelUncertain': '{stage} · {note} (approximate position)',
+  // The name of a pin (FRU-252): its number and its status, as the mock-up names it, then the note.
+  // `{stage}` is the name of the stage in lower case.
+  'pin.label': 'Note {number}, {stage}: {note}',
+  'pin.labelUncertain': 'Note {number}, {stage}, approximate position: {note}',
   'pin.labelDraft': 'Not sent yet · {note}',
 
-  'thread.close': 'Close',
-  'thread.dialog': 'Feedback {identifier}',
+  'thread.close': 'Close the note',
+  'thread.dialog': 'Note {number}',
   'thread.draft': 'Not sent yet',
   // Must not start like `sidebar.dialog`: both can be open at once.
   'thread.draftDialog': 'Note not sent yet',
@@ -92,8 +94,9 @@ export const ENGLISH = {
   'thread.anonymous': 'Anonymous',
   'thread.orphan': 'Element not found — approximate position.',
   'thread.uncertain': 'Element found by its position, not by its identity — the page may have changed under the pin.',
-  // The arrow is in the message because a right-to-left catalog points it the other way.
-  'thread.link': '{identifier} →',
+  // The identifier alone (FRU-256): the widget does not know the name of the store behind the worker.
+  // A message all the same, so that a language can put a word around it.
+  'thread.link': '{identifier}',
 
   'orphans.count': { one: '{count} detached note', other: '{count} detached notes' },
   'orphans.entry': '{stage} · {note}',
@@ -101,7 +104,7 @@ export const ENGLISH = {
   // The list of every note of the page (FRU-129). `sidebar.open` and `sidebar.dialog` must stay
   // different: they name the button and its dialog.
   // And `sidebar.dialog` must not start like `thread.dialog`: both are open at once, and a reader
-  // or a test that looks for « Feedback … » must find one.
+  // or a test that looks for « Note … » must find one.
   'sidebar.open': 'Show every note of this page',
   'sidebar.dialog': 'Every note of this page',
   'sidebar.title': 'Notes',

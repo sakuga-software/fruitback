@@ -73,6 +73,12 @@ export type ConsoleApiContext = {
    * of better-auth (FRU-149). Absent, the store makes it: a test that gives no plugin.
    */
   createWorkspace?: (request: Request, name: string) => Promise<Workspace>;
+  /**
+   * Renames a workspace for the person of the cookie of this request, through the organization plugin
+   * of better-auth (FRU-236). Absent: better-auth is off, nobody is signed in, and the route is not
+   * reached.
+   */
+  renameWorkspace?: (request: Request, workspace: string, name: string) => Promise<Workspace>;
 };
 
 /** How long a domain is not asked again on a click: a person who presses twice asks the DNS once. */
@@ -692,6 +698,19 @@ export async function handleConsoleApi(
     );
 
     return json(201, { code, expiresIn: PAIRING_TTL_SECONDS, expiresAt: new Date(expiresAt).toISOString() }, headers);
+  }
+
+  // FRU-236: the name of a workspace, changed by who manages it. The rule of the name is the one
+  // of the creation. Nothing else of the workspace moves: its id, its sites, its members, and the
+  // sessions of its extensions, which name the id.
+  if (rest === '' && request.method === 'POST') {
+    if (!allowed('manage-workspace')) return forbidden();
+    const name = workspaceName((await readBody(request))?.name);
+    if (name === undefined) return json(400, { error: 'invalid-name' }, headers);
+    if (context.renameWorkspace === undefined) return json(404, { error: 'not-found' }, headers);
+    const renamed = await context.renameWorkspace(request, workspaceId as string, name);
+
+    return json(200, { ...renamed, role }, headers);
   }
 
   if (rest === '') {

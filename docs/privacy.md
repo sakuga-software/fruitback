@@ -67,11 +67,12 @@ The widget talks to one address: the worker the integrator, or the reviewer in t
 Fruitback runs no service of its own and receives nothing. The worker then writes the seed to the
 store it is configured with:
 
-| Store    | Where a note lands                                       | Who runs it                         |
-| -------- | -------------------------------------------------------- | ----------------------------------- |
-| `linear` | an issue in your Linear workspace, the seed in its body  | Linear, outside your infrastructure |
-| `github` | an issue in your GitHub repository, the seed in its body | GitHub, outside your infrastructure |
-| `sqlite` | a row in a database file on your volume                  | you                                 |
+| Store      | Where a note lands                                       | Who runs it                         |
+| ---------- | -------------------------------------------------------- | ----------------------------------- |
+| `linear`   | an issue in your Linear workspace, the seed in its body  | Linear, outside your infrastructure |
+| `github`   | an issue in your GitHub repository, the seed in its body | GitHub, outside your infrastructure |
+| `sqlite`   | a row in a database file on your volume                  | you                                 |
+| `postgres` | a row in the database of the worker, beside the accounts | you                                 |
 
 On the Cloud, a workspace can also connect **an address of its own** (FRU-122). The note is then kept
 in the worker and a copy is posted to that address, whole and signed. Who runs that address decides
@@ -155,6 +156,17 @@ Since FRU-119 an account also holds the language its person reads, taken from th
   reporter chose to keep for later and has not sent yet** (FRU-124), each a whole seed, with the name
   they typed if any. Only after a click on « Keep for later ». They go when they are sent, and with
   the tab. Any script of the page can read them while they are there.
+- **The rules of the extension leave the browser only when the reviewer asks** (FRU-72). With
+  « Keep my rules in the account of this browser » ticked in the options page, the extension copies
+  its rules to `storage.sync`, which the vendor of the browser keeps with the reviewer's account
+  (Google for Chrome, Mozilla for Firefox) and gives to their other browsers. A rule holds the
+  address of a site, or its pattern, the address of its worker, a client id, whether it is on, and
+  two things the reviewer or the workspace named: the label of the launch button, when the rule has
+  one, and the name of the workspace of a site turned on from a session.
+  **No session token, no access, no note, and no name or address of a person travel.** The box is off by default, and
+  turning it off stops the copy; what the account already holds stays there until the rules are
+  removed while it is on. That vendor is a recipient you did not have before: say so to a reviewer
+  whose staging addresses are confidential.
 - The extension keeps its rules and its session tokens in its own storage, which no page can read.
   It also keeps the language of the reviewer's account there. That language goes to a page where
   the extension mounts the widget, so the widget speaks it: a site a reviewer turned on can read
@@ -169,6 +181,8 @@ As long as the issue or the row exists. Fruitback deletes nothing on its own.
   delete it.
 - **SQLite:** yours, and the file's backups are part of it. A backup kept for a year keeps every
   note for a year.
+- **PostgreSQL:** yours too, and the dumps of the database are part of it. The notes of a site stay
+  when the site is removed from its workspace: nothing deletes them but the command below.
 
 ## Deleting a reporter's notes
 
@@ -181,7 +195,7 @@ one. So list the notes first, read the list, and delete after.
 nothing to search for at all. Each note has an identifier, and the thread of its pin shows it on the
 page.
 
-- **SQLite:** the worker has a command for it. Run it in the container, like `pair`:
+- **SQLite and PostgreSQL:** the worker has a command for it. Run it in the container, like `pair`:
 
   ```bash
   docker exec <container> node server.mjs forget --email alice@example.com --dry-run
@@ -191,8 +205,11 @@ page.
   The first line lists the notes that give this address, with their `FB-n`, date, page and the start
   of the note, and deletes nothing. The second deletes them, with the team's replies to them. The
   address is compared without case and without the spaces around it. You do not have to stop the
-  worker: the file is in WAL mode. A page can still show a deleted note for up to 15 seconds, from
-  the cache. Then delete it from your backups too, or record when they expire.
+  worker: the file is in WAL mode, and the database takes the deletion in one transaction. A page
+  can still show a deleted note for up to 15 seconds, from the cache. Then delete it from your
+  backups too, or record when they expire. **On PostgreSQL the command reads the notes of every
+  site of the worker**, whatever their workspace: it is for whoever runs the worker, not for a
+  workspace.
 
   For a note with no address, list by name, then delete by identifier:
 
@@ -210,6 +227,9 @@ page.
   the command says so rather than deleting anything. Search the issues for the address, because the
   description states it, read them, and delete the ones that are this reporter's. On GitHub only an
   administrator of the repository can delete an issue. Closing an issue does not delete it.
+
+If you delete PostgreSQL rows by hand, delete the row of `seeds`: its replies in `seed_comments` go
+with it.
 
 If you delete SQLite rows by hand with `sqlite3`, start the session with `PRAGMA foreign_keys = ON`.
 The `sqlite3` shell turns foreign keys off for each new connection, and without them the note goes

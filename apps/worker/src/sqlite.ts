@@ -1,16 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
-import {
-  DEFAULT_SEED_STAGE,
-  SEED_STAGES,
-  type Seed,
-  type SeedComment,
-  type SeedIssue,
-  type SeedStage,
-  buildIssueTitle,
-  seedIssueSchema,
-  seedSchema,
-} from '@fruitback/shared';
+import { DEFAULT_SEED_STAGE, type Seed, type SeedComment, type SeedIssue } from '@fruitback/shared';
 import type { ClientPolicy } from './clients.ts';
 import {
   type CreatedIssue,
@@ -21,6 +11,9 @@ import {
   StoreError,
 } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
+import { COMMENTS_PER_ISSUE, forgetSelectorFor, identifierFor, noteOf, threadsOf, toSeedIssue } from './seed-rows.ts';
+
+export { COMMENTS_PER_ISSUE };
 
 /**
  * Seeds in a SQLite file, so self-hosting needs nobody's account (FRU-31).
@@ -87,9 +80,6 @@ const MIGRATIONS: readonly string[] = [
   CREATE INDEX comments_by_seed ON comments (seed_id, created_at);
   `,
 ];
-
-/** How many replies travel with a pin. A longer thread belongs wherever the team actually talks. */
-export const COMMENTS_PER_ISSUE = 20;
 
 /**
  * One connection per file, for the lifetime of the process.
@@ -194,68 +184,6 @@ type SeedRow = {
 
 type CommentRow = { id: number; seed_id: number; author: string | null; body: string; created_at: string };
 
-/**
- * The states are ours, so there is nothing to project.
- *
- * Linear needs `stageForLinearState` because its vocabulary is its own and the contract's is the
- * contract's. Here the column *is* a `SeedStage`, and the only translation left is the one the
- * contract already owns: an unrecognised value colours the pin rather than hiding someone's note.
- */
-function stageOf(value: string): SeedStage {
-  return (SEED_STAGES as readonly string[]).includes(value) ? (value as SeedStage) : DEFAULT_SEED_STAGE;
-}
-
-/**
- * A row back into the read envelope.
- *
- * Parsed through `seedSchema` rather than trusted: the column holds JSON this worker wrote, but a
- * file on a volume is something an operator can edit, a restore can be older than the code, and a
- * malformed row must cost that one pin instead of the whole page. Same reasoning as the tolerant
- * parser on Linear descriptions.
- */
-function toSeedIssue(row: SeedRow, comments: SeedComment[] | undefined): SeedIssue | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(row.seed);
-  } catch {
-    return null;
-  }
-
-  const seed = seedSchema.safeParse(parsed);
-  if (!seed.success) return null;
-
-  // The row was selected on `page_url`, and the seed carries its own `page.url`. They are written
-  // together and can only drift through an edit or a restore — but if they do, this seed belongs to
-  // another page, and returning it puts one page's note on top of another's element. The Linear
-  // connector keeps the same invariant, there because its filter is a substring match and here
-  // because a file is something a human can open. Same promise, different reason.
-  if (seed.data.page.url !== row.page_url) return null;
-
-  const stage = stageOf(row.stage);
-  const candidate = {
-    id: String(row.id),
-    identifier: identifierFor(row.id),
-    // No `url`: there is no interface to open. See the field's own note in the contract.
-    title: buildIssueTitle(seed.data),
-    stage,
-    // Nobody named the states of this store: they are the stages. An empty name makes the widget
-    // write the stage in the words of its catalog, in the language of the reader (FRU-114).
-    stateName: '',
-    updatedAt: row.updated_at,
-    ...(comments === undefined ? {} : { comments }),
-    seed: seed.data,
-  };
-
-  const result = seedIssueSchema.safeParse(candidate);
-
-  return result.success ? result.data : null;
-}
-
-/** `FB-12`, because a reporter quoting a number to their team needs something to say out loud. */
-function identifierFor(id: number): string {
-  return `FB-${id}`;
-}
-
 export function createSqliteStore(config: SqliteConfig): SeedStore {
   return {
     name: 'sqlite',
@@ -308,7 +236,7 @@ async function forget(
   options: { dryRun: boolean },
 ): Promise<ForgottenSeed[]> {
   const database = connect(config.path);
-  const selects = selectorFor(which);
+  const selects = forgetSelectorFor(which);
 
   try {
     const rows = database.prepare('SELECT id, page_url, seed, created_at FROM seeds ORDER BY id').all() as {
@@ -342,39 +270,6 @@ async function forget(
   }
 }
 
-function selectorFor(which: ForgetSelector): (row: { id: number; seed: string }) => boolean {
-  if ('identifiers' in which) {
-    const wanted = new Set(which.identifiers);
-
-    return (row) => wanted.has(identifierFor(row.id));
-  }
-
-  const [field, value] = 'email' in which ? (['email', which.email] as const) : (['name', which.name] as const);
-  const wanted = value.trim().toLowerCase();
-
-  return (row) => reporterFieldOf(row.seed, field) === wanted;
-}
-
-function reporterFieldOf(text: string, field: 'email' | 'name'): string | undefined {
-  const value = (readJson(text) as { reporter?: Record<string, unknown> } | undefined)?.reporter?.[field];
-
-  return typeof value === 'string' ? value.trim().toLowerCase() : undefined;
-}
-
-function noteOf(text: string): string {
-  const note = (readJson(text) as { note?: unknown } | undefined)?.note;
-
-  return typeof note === 'string' ? note : '';
-}
-
-function readJson(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return undefined;
-  }
-}
-
 /** `async` for the same reason as `insert`: an unopenable file must reject, never throw. */
 async function select(config: SqliteConfig, query: SeedIssueQuery, policy: ClientPolicy): Promise<SeedIssue[]> {
   const database = connect(config.path);
@@ -396,7 +291,12 @@ async function select(config: SqliteConfig, query: SeedIssueQuery, policy: Clien
       rows
         // `undefined` when the worker was not asked for replies, so the field is left out entirely
         // and the widget says nothing rather than claiming the team never answered.
-        .map((row) => toSeedIssue(row, comments?.get(row.id) ?? (policy.showComments ? [] : undefined)))
+        .map((row) =>
+          toSeedIssue(
+            { id: row.id, page_url: row.page_url, stage: row.stage, seed: row.seed, updatedAt: row.updated_at },
+            comments?.get(row.id) ?? (policy.showComments ? [] : undefined),
+          ),
+        )
         .filter((issue): issue is SeedIssue => issue !== null)
     );
   } catch (error) {
@@ -425,26 +325,15 @@ function commentsFor(database: DatabaseSync, rows: SeedRow[]): Map<number, SeedC
     )
     .all(...rows.map((row) => row.id)) as CommentRow[];
 
-  for (const row of found) {
-    const thread = byId.get(row.seed_id) ?? [];
-    if (thread.length >= COMMENTS_PER_ISSUE) continue;
-
-    thread.push({
-      id: String(row.id),
-      // Plain text, never markup: the widget renders it as `textContent`, and this column holds
-      // whatever anyone with write access to the file put there.
+  return threadsOf(
+    found.map((row) => ({
+      id: row.id,
+      seed_id: row.seed_id,
+      author: row.author,
       body: row.body,
       createdAt: row.created_at,
-      ...(row.author === null ? {} : { author: row.author }),
-    });
-    byId.set(row.seed_id, thread);
-  }
-
-  // Reversed on the way out: selected newest-first so the cap keeps the right end, handed over
-  // oldest-first because that is the end a conversation reads from.
-  for (const thread of byId.values()) thread.reverse();
-
-  return byId;
+    })),
+  );
 }
 
 /**

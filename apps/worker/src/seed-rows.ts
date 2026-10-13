@@ -1,0 +1,147 @@
+import {
+  DEFAULT_SEED_STAGE,
+  SEED_STAGES,
+  type SeedComment,
+  type SeedIssue,
+  type SeedStage,
+  buildIssueTitle,
+  seedIssueSchema,
+  seedSchema,
+} from '@fruitback/shared';
+import type { ForgetSelector } from './store.ts';
+
+/**
+ * A row of a store that keeps the notes itself, read: what `sqlite.ts` and `seeds-postgres.ts` share
+ * (FRU-218). The two databases have the same columns, and a row of either is parsed here and never
+ * trusted: a file is something an operator can edit, and a restore can be older than the code.
+ *
+ * This file imports no database.
+ */
+
+/** How many replies travel with a pin. A longer thread belongs wherever the team actually talks. */
+export const COMMENTS_PER_ISSUE = 20;
+
+/** A note, as both databases hand it over. `updatedAt` is an ISO date. */
+export type SeedRow = { id: number; page_url: string; stage: string; seed: string; updatedAt: string };
+
+/** A reply, as both databases hand it over, the newest first for one note. */
+export type CommentRow = { id: number; seed_id: number; author: string | null; body: string; createdAt: string };
+
+/** `FB-12`, because a reporter quoting a number to their team needs something to say out loud. */
+export function identifierFor(id: number): string {
+  return `FB-${id}`;
+}
+
+/**
+ * The states are ours, so there is nothing to project.
+ *
+ * Linear needs `stageForLinearState` because its vocabulary is its own and the contract's is the
+ * contract's. Here the column *is* a `SeedStage`, and the only translation left is the one the
+ * contract already owns: an unrecognised value colours the pin rather than hiding someone's note.
+ */
+function stageOf(value: string): SeedStage {
+  return (SEED_STAGES as readonly string[]).includes(value) ? (value as SeedStage) : DEFAULT_SEED_STAGE;
+}
+
+/**
+ * A row back into the read envelope, or `null` for a row that is not a note of its page.
+ *
+ * Parsed through `seedSchema` rather than trusted: a malformed row must cost that one pin instead of
+ * the whole page. Same reasoning as the tolerant parser on Linear descriptions.
+ */
+export function toSeedIssue(row: SeedRow, comments: SeedComment[] | undefined): SeedIssue | null {
+  const seed = seedSchema.safeParse(readJson(row.seed));
+  if (!seed.success) return null;
+
+  // The row was selected on `page_url`, and the seed carries its own `page.url`. They are written
+  // together and can only drift through an edit or a restore — but if they do, this seed belongs to
+  // another page, and returning it puts one page's note on top of another's element.
+  if (seed.data.page.url !== row.page_url) return null;
+
+  const result = seedIssueSchema.safeParse({
+    id: String(row.id),
+    identifier: identifierFor(row.id),
+    // No `url`: there is no interface to open. See the field's own note in the contract.
+    title: buildIssueTitle(seed.data),
+    stage: stageOf(row.stage),
+    // Nobody named the states of this store: they are the stages. An empty name makes the widget
+    // write the stage in the words of its catalog, in the language of the reader (FRU-114).
+    stateName: '',
+    updatedAt: row.updatedAt,
+    ...(comments === undefined ? {} : { comments }),
+    seed: seed.data,
+  });
+
+  return result.success ? result.data : null;
+}
+
+/**
+ * The replies of each note, from rows that are **the newest first** for one note: the cap keeps the
+ * newest, and each thread is handed over oldest first, the end a conversation reads from.
+ *
+ * Ordering oldest-first and capping while iterating kept the *oldest* twenty, so past twenty replies
+ * every new answer became unreachable — and these stores report no `url`, so the pin's thread is the
+ * only interface there is.
+ */
+export function threadsOf(rows: readonly CommentRow[]): Map<number, SeedComment[]> {
+  const byId = new Map<number, SeedComment[]>();
+
+  for (const row of rows) {
+    const thread = byId.get(row.seed_id) ?? [];
+    if (thread.length >= COMMENTS_PER_ISSUE) continue;
+
+    thread.push({
+      id: String(row.id),
+      // Plain text, never markup: the widget renders it as `textContent`, and this column holds
+      // whatever anyone with write access to the database put there.
+      body: row.body,
+      createdAt: row.createdAt,
+      ...(row.author === null ? {} : { author: row.author }),
+    });
+    byId.set(row.seed_id, thread);
+  }
+  for (const thread of byId.values()) thread.reverse();
+
+  return byId;
+}
+
+/**
+ * Which rows `forget` selects. An address and a name are compared trimmed and in lower case, on both
+ * sides. An identifier is compared as it is written, `FB-12`.
+ *
+ * The filter runs on the rows, and not in the database: one row that is not JSON makes a query on
+ * the JSON throw for every row, and a row is parsed, never trusted.
+ */
+export function forgetSelectorFor(which: ForgetSelector): (row: { id: number; seed: string }) => boolean {
+  if ('identifiers' in which) {
+    const wanted = new Set(which.identifiers);
+
+    return (row) => wanted.has(identifierFor(row.id));
+  }
+
+  const [field, value] = 'email' in which ? (['email', which.email] as const) : (['name', which.name] as const);
+  const wanted = value.trim().toLowerCase();
+
+  return (row) => reporterFieldOf(row.seed, field) === wanted;
+}
+
+function reporterFieldOf(text: string, field: 'email' | 'name'): string | undefined {
+  const value = (readJson(text) as { reporter?: Record<string, unknown> } | undefined)?.reporter?.[field];
+
+  return typeof value === 'string' ? value.trim().toLowerCase() : undefined;
+}
+
+/** The text of the note of a row, for the list an operator reads before a deletion. */
+export function noteOf(text: string): string {
+  const note = (readJson(text) as { note?: unknown } | undefined)?.note;
+
+  return typeof note === 'string' ? note : '';
+}
+
+function readJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}

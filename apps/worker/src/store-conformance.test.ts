@@ -11,6 +11,10 @@ import type { ClientPolicy } from './clients.ts';
 import { COMMENTS_PER_ISSUE as GITHUB_REPLY_CAP, createGithubStore } from './github.ts';
 import { createMemoryStore, resetMemoryLinear } from './linear-memory.ts';
 import { COMMENTS_PER_ISSUE as LINEAR_REPLY_CAP, type IssueNode, createLinearStore } from './linear.ts';
+import { type Database, type PgDatabase, createPgDatabase } from './postgres.ts';
+import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase, rowsOf } from './postgres.fixture.ts';
+import { COMMENTS_PER_ISSUE as POSTGRES_REPLY_CAP } from './seed-rows.ts';
+import { createPostgresSeedStore } from './seeds-postgres.ts';
 import { COMMENTS_PER_ISSUE as SQLITE_REPLY_CAP, closeSqliteConnections, createSqliteStore } from './sqlite.ts';
 import type { CreatedIssue, SeedStore } from './store.ts';
 import { type ConformanceSubject, describeStoreConformance, repliesNewestFirst } from './store-conformance.fixture.ts';
@@ -293,6 +297,71 @@ function freshDirectory(): string {
   return directory;
 }
 
+/** The databases a case opened, the one of `open` first. Closed after the case. */
+let databases: Database[] = [];
+
+/**
+ * The store of the database, on PGlite and on a real server (FRU-218). One provider, two subjects:
+ * PGlite has one connection, and the job « postgres » of CI has a server with several.
+ */
+function postgresSubject(on: string, create: () => Promise<PgDatabase>, skip: string | false): ConformanceSubject {
+  const opened = (): Database => {
+    const [database] = databases;
+    if (database === undefined) throw new Error('the case opened no database');
+
+    return database;
+  };
+
+  return {
+    provider: 'postgres',
+    on,
+    skip,
+    writtenStage: DEFAULT_SEED_STAGE,
+    replyCap: POSTGRES_REPLY_CAP,
+    otherTenant: 'one database holds the seeds of every site, so there is no other tenant',
+    readWithNoClient:
+      'one database holds the seeds of every workspace: a read that names no site gets the seeds that name none',
+    async open() {
+      const database = await create();
+      databases.push(database);
+
+      return createPostgresSeedStore(database);
+    },
+    async close() {
+      for (const database of databases.splice(0)) await database.close();
+    },
+    unknownState: async (created) => {
+      await rowsOf(opened(), `UPDATE seeds SET stage = 'marmalade' WHERE id = ${Number(created.id)}`);
+    },
+    plantReplies: async (store, seed, count) => {
+      const created = await store.create(seed, undefined, POLICY);
+      for (const reply of repliesNewestFirst(count)) {
+        await rowsOf(
+          opened(),
+          `INSERT INTO seed_comments (seed_id, author, body, created_at) VALUES (${Number(created.id)}, 'Alice', '${reply.body}', ${Date.parse(reply.createdAt)})`,
+        );
+      }
+    },
+    // A database that refuses every statement, as one whose tables are gone would.
+    broken() {
+      const refuses = async (): Promise<never> => {
+        throw Object.assign(new Error('relation "seeds" does not exist'), { code: '42P01' });
+      };
+
+      return createPostgresSeedStore({ run: refuses, transaction: refuses, alone: refuses, close: async () => {} });
+    },
+    // Nothing listens on port 1: the driver is refused the connection.
+    unreachable() {
+      const database = createPgDatabase('postgres://fruitback:not-a-password@127.0.0.1:1/fruitback');
+      databases.push(database);
+
+      return createPostgresSeedStore(database);
+    },
+    garbled:
+      'a row the store cannot read costs that one note, and the read answers the others: seeds-postgres.test.ts holds it',
+  };
+}
+
 const LINEAR_CONFIG = { apiKey: 'lin_api_test', teamId: 'team_1' };
 const GITHUB_CONFIG = { appId: '12345', privateKey: GITHUB_KEY, repository: 'acme/site' };
 
@@ -417,6 +486,8 @@ const SUBJECTS: ConformanceSubject[] = [
       return createSqliteStore({ path });
     },
   },
+  postgresSubject('PGlite', createPgliteDatabase, false),
+  postgresSubject('a real server', createRealDatabase, NO_REAL_POSTGRES),
   {
     provider: 'memory',
     replyCap: 'the dev store writes two canned replies and no more',
@@ -446,7 +517,7 @@ for (const subject of SUBJECTS) describeStoreConformance(subject);
 
 describe('the conformance suite', () => {
   it('runs for every store the worker can select', () => {
-    assert.deepEqual(SUBJECTS.map((subject) => subject.provider).sort(), storeProviders().sort());
+    assert.deepEqual([...new Set(SUBJECTS.map((subject) => subject.provider))].sort(), storeProviders().sort());
   });
 });
 
@@ -471,11 +542,16 @@ describe('the store matrix in docs/self-hosting.md', () => {
     assert.deepEqual(rows.map((row) => row.provider).sort(), storeProviders().sort());
   });
 
-  for (const subject of SUBJECTS) {
-    it(`gives the stages, the reply cap and the production answer of ${subject.provider}`, () => {
-      const store = subject.open();
+  // One row for a provider, whatever the number of places its suite runs on.
+  const first = SUBJECTS.filter(
+    (subject, index) => SUBJECTS.findIndex((each) => each.provider === subject.provider) === index,
+  );
+
+  for (const subject of first) {
+    it(`gives the stages, the reply cap and the production answer of ${subject.provider}`, async () => {
+      const store = await subject.open();
       const stages = [...(store.stages ?? SEED_STAGES)];
-      subject.close();
+      await subject.close();
       const cells = rows.find((row) => row.provider === subject.provider)?.cells ?? [];
 
       assert.deepEqual(

@@ -296,9 +296,13 @@ test('the buttons have the measures of the mockup (FRU-232)', async ({ page }) =
     paddingLeft: '16px',
     paddingRight: '16px',
   });
-  expect
-    .soft((await button('Send again in 0:41').boundingBox())!.width, 'the width of « Send again »')
-    .toBeCloseTo(157.5, 0);
+  // The width of a text is of its font. The mockup is measured in the system font of macOS, and the
+  // CI draws the system font of Linux: there the padding is measured, and the width is not.
+  if (process.platform === 'darwin') {
+    expect
+      .soft((await button('Send again in 0:41').boundingBox())!.width, 'the width of « Send again »')
+      .toBeCloseTo(157.5, 0);
+  }
   // A link drawn as a control has the same box.
   await expectStyle(buttons.getByRole('link', { name: 'Continue in this tab' }), 'outline, link', {
     ...outline,
@@ -331,6 +335,13 @@ test('the buttons have the measures of the mockup (FRU-232)', async ({ page }) =
   });
   const target = await button('Use another address').boundingBox();
   expect.soft(target!.height, 'the target of a link').toBeGreaterThanOrEqual(24);
+
+  // The tones of before the mockup stay as HeroUI draws them: a pill, in semibold.
+  for (const name of ['Quiet', 'Danger']) {
+    const before = await styleOf(button(name), ['borderTopLeftRadius', 'fontWeight']);
+    expect.soft(Number.parseFloat(String(before.borderTopLeftRadius)), `${name}: a pill`).toBeGreaterThanOrEqual(18);
+    expect.soft(before.fontWeight, `${name}: weight`).toBe('600');
+  }
 
   // `.b-ghost`: a picture of 36 px.
   const icon = button('More for staging.acme.dev');
@@ -378,6 +389,9 @@ test('a button changes under the pointer as on the mockup, and shows its focus (
     ['outline', buttons.getByRole('button', { name: 'Try again' })],
     ['link', buttons.getByRole('button', { name: 'Use another address' })],
     ['icon', buttons.getByRole('button', { name: 'More for staging.acme.dev' })],
+    // The two tones of before the mockup keep the ring too, and their round shape.
+    ['quiet', buttons.getByRole('button', { name: 'Quiet', exact: true })],
+    ['danger', buttons.getByRole('button', { name: 'Danger', exact: true })],
     ['field', page.getByRole('textbox', { name: 'Work email' })],
     ['chip', page.getByRole('button', { name: /^New/ })],
   ];
