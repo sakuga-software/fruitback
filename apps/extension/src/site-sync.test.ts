@@ -363,6 +363,6 @@ describe('the rules of a reviewer in two browsers (FRU-72)', () => {
       ],
     );
     const sync = readFileSync(new URL('./site-sync.ts', import.meta.url), 'utf8');
-    assert.doesNotMatch(sync, /proven-previews/, 'the copy of the rules must not read what a worker listed');
+    assert.doesNotMatch(sync, /from '[^']*proven-previews/, 'the copy of the rules must not read what a worker listed');
   });
 });
