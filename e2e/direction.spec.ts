@@ -84,11 +84,12 @@ test('in Arabic the dock and the popover move, and the pin stays on its element'
       const now = await target.boundingBox();
       if (pin === null || now === null) return Number.POSITIVE_INFINITY;
 
+      // The frame of a pin stands 4 px off its element on every side (FRU-252), in both directions.
       return Math.max(
-        Math.abs(pin.x - now.x),
-        Math.abs(pin.y - now.y),
-        Math.abs(pin.width - now.width),
-        Math.abs(pin.height - now.height),
+        Math.abs(pin.x - (now.x - 4)),
+        Math.abs(pin.y - (now.y - 4)),
+        Math.abs(pin.width - (now.width + 8)),
+        Math.abs(pin.height - (now.height + 8)),
       );
     })
     .toBeLessThanOrEqual(1);
