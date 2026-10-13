@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router';
 import { type Me, type Site, type Workspace, call, myInvitations, saveLanguage } from '../api';
 import { adoptLanguage, t } from '../i18n';
 import { InstallOptions } from '../install-options';
+import { PreviewScene } from '../preview-scene';
 import { type SetupCalls, type Stage, firstWorkspace, leaveFor, resolveStage, siteStage } from '../setup-stage';
 import { BrowserFrame, Button, EntryPage, Lead, Step, type StepState, Steps, Title } from '../ui';
 import { useLocale } from '../use-locale';
 import { Account, Ask, Sent, Unnamed } from './setup-account';
+import { PutOnSite } from './setup-install';
 import { SiteForm, SiteSummary } from './setup-site';
 
 /**
@@ -210,14 +212,7 @@ export default function Setup() {
 
           <Step state={third} number={3} title={t('Put it on the site')} currentPrefix={prefix}>
             {stage.kind === 'install' ? (
-              // No `items-start` here: the script would take the width of its longest line, and the page
-              // would scroll sideways. It scrolls in its own box.
-              <div className="mt-3 flex min-w-0 flex-col gap-5">
-                <InstallOptions workspace={stage.workspace} site={stage.site} />
-                <div>
-                  <Button to={`/w/${stage.workspace.id}/sites`}>{t('Finish')}</Button>
-                </div>
-              </div>
+              <PutOnSite workspace={stage.workspace} site={stage.site} />
             ) : (
               <p className="mt-0.5 text-small text-muted">{t('The extension, or a script tag.')}</p>
             )}
@@ -226,13 +221,21 @@ export default function Setup() {
       </section>
 
       <section aria-label={t('Preview of your site')} className="min-w-0 flex-999 basis-130">
-        <BrowserFrame
-          address={stage.kind === 'install' ? new URL(stage.site.origin).host : t('your site')}
-          // Once the site is added the sentence would be false, and the picture of it comes with the
-          // last step (FRU-242): the frame stays, with its drop.
-          empty={stage.kind === 'install' ? '' : t('Your site shows here once you add it, with its pins.')}
-          caption={t('A preview of your site. Pins show the same way on the real page.')}
-        />
+        {stage.kind === 'install' ? (
+          <BrowserFrame
+            address={new URL(stage.site.origin).host}
+            // A picture of an example page, not the site of the person: the caption says so.
+            caption={t('An example page. Pins show the same way on your site.')}
+          >
+            <PreviewScene launch={t('Leave feedback')} hint={t('Click Leave feedback, then any part of the page.')} />
+          </BrowserFrame>
+        ) : (
+          <BrowserFrame
+            address={t('your site')}
+            empty={t('Your site shows here once you add it, with its pins.')}
+            caption={t('A preview of your site. Pins show the same way on the real page.')}
+          />
+        )}
       </section>
     </EntryPage>
   );

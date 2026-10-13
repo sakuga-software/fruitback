@@ -83,7 +83,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the keyboard, the contrasts and axe.
 - **The setup is one screen, and resumes where the worker says the person is** (FRU-239, screen 01 of
   the mockup of 2026-10-13). `setup.tsx` shows three steps together (step 1 in `setup-account.tsx`,
-  step 2 in `setup-site.tsx`; where the person is, decided from the answers of the worker, in
+  step 2 in `setup-site.tsx`, step 3 in `setup-install.tsx`; where the person is, decided from the answers of the worker, in
   `setup-stage.ts`, which knows no React and no network and has its own `setup-stage.test.ts`): « Your account », « Your site »,
   « Put it on the site ». The step is read from the worker at each visit: nobody signed in, no
   workspace, no site, a site. So a visit goes on anywhere, and the address has no `?step=`. **The
@@ -113,8 +113,20 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **What the setup does not say, on purpose.** The hint of « Site address » stops at « Any page of it
   will do. »: the mockup goes on with a pattern for the previews, which a domain that is proven
   covers (FRU-103, decided on 2026-10-13), and the worker takes no pattern as an address. So what is
-  under the hint is 19.5 px higher than on the mockup. The last step keeps the script and the
-  browser of `install-options.tsx` until FRU-242 draws it.
+  under the hint is 19.5 px higher than on the mockup.
+- **The last step is two cards, and the preview is a picture** (FRU-242). « Browser extension » and
+  « Script tag » share the logic of the Sites screen (`useCopy`, `useConnect` in
+  `install-options.tsx`). **The preview asks the site of the person for nothing**: it is the example
+  page of the mockup (`preview-scene.tsx`), with the address of the site in its bar, and no frame
+  (decided on 2026-10-13: a fixed illustration). Its caption says « An example page ». The picture
+  is `aria-hidden` and `inert`: its two buttons are drawn, and take no focus. **Its colours are the
+  example site's, in `preview-scene.css`, and are no tokens**: nothing of the console takes them.
+  **Two things of the mockup wait, each for a decision that is open** (FRU-230): « Signs in with
+  this account. No code to type. » (Q8: a browser is still connected from here, with « Connect this
+  browser »), and the first note that ends the setup (FRU-237: nothing tells the console that a
+  note came). So the step does not say « Waiting for your first note. », and « Open the console »
+  is always there. **The script keeps `data-fruitback-endpoint`** (inventory A24): the widget finds
+  its worker by that attribute only.
 - **An invitation has a screen, and joining says what comes next** (FRU-241, screen 03 of the mockup
   of 2026-10-13). `/invitations` shows the most recent invitation of the address that is signed in:
   the workspace that invites, the role and what it lets its person do, « Join », and « Decline »

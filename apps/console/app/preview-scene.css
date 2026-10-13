@@ -1,0 +1,190 @@
+/*
+  The example page of the setup (`preview-scene.tsx`, FRU-242): a shop that does not exist, drawn in
+  the window of the preview.
+
+  WARNING: the colours and the serif here are the example site's, not Fruitback's. They are no tokens,
+  and nothing of the console takes them. What is Fruitback's on this picture (the two buttons of the
+  widget, the hint) is drawn with the tokens of `app.css`.
+*/
+.scene {
+  position: relative;
+  height: 100%;
+  background: #f6f6f3;
+  color: #22302a;
+  font-family: Georgia, 'Times New Roman', serif;
+  /* A picture: nothing in it is selected or pressed. */
+  user-select: none;
+}
+
+.scene__nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 28px;
+  line-height: normal;
+}
+
+.scene__name {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.scene__links {
+  display: flex;
+  gap: 20px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+
+.scene__hero {
+  position: relative;
+  margin: 0 28px;
+  padding: 44px 36px 40px;
+  border-radius: 6px;
+  background: #2f4a3a;
+  color: #f6f6f3;
+}
+
+.scene__headline {
+  position: relative;
+  max-width: 340px;
+  font-size: 40px;
+  line-height: 1.06;
+}
+
+.scene__tagline {
+  margin: 14px 0 22px;
+  color: #dfe6df;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: normal;
+}
+
+.scene__action {
+  display: inline-block;
+  padding: 10px 16px;
+  border-radius: 4px;
+  background: #f6f6f3;
+  color: #22302a;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: normal;
+}
+
+.scene__products {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 16px;
+  padding: 24px 28px;
+}
+
+.scene__photo {
+  display: flex;
+  align-items: flex-end;
+  box-sizing: border-box;
+  height: 120px;
+  padding: 8px;
+  border-radius: 4px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: normal;
+}
+
+.scene__photo[data-tone='blue'] {
+  background: #d8dee8;
+  color: #3f4652;
+}
+
+.scene__photo[data-tone='green'] {
+  background: #cfe0d6;
+  color: #35483c;
+}
+
+.scene__photo[data-tone='rose'] {
+  background: #ecd5cf;
+  color: #5c3a36;
+}
+
+.scene__product {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: normal;
+}
+
+/* What is Fruitback's on the picture: the hint, and the two buttons of the widget. */
+.scene__hint {
+  position: absolute;
+  right: 18px;
+  bottom: 74px;
+  max-width: 230px;
+  padding: 10px 14px;
+  border-radius: var(--radius-box);
+  background: var(--color-ink);
+  color: var(--surface);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  font-family: var(--font-sans);
+  font-size: var(--text-hint);
+  line-height: 1.45;
+}
+
+.scene__hint::after {
+  position: absolute;
+  right: 52px;
+  bottom: -5px;
+  width: 10px;
+  height: 10px;
+  background: var(--color-ink);
+  transform: rotate(45deg);
+  content: '';
+}
+
+.scene__dock {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-sans);
+}
+
+.scene__settings {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: var(--color-avatar);
+  color: var(--surface);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
+}
+
+.scene__settings svg {
+  width: 16px;
+  height: 16px;
+}
+
+.scene__launch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
+  font-size: var(--text-hint);
+  font-weight: 600;
+  line-height: normal;
+  letter-spacing: var(--tracking-button);
+}
+
+.scene__launch svg {
+  width: 12px;
+  height: 14px;
+}
