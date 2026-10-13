@@ -281,7 +281,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Paste the full address of the site, starting with https://.':
     'Collez l’adresse complète du site, en commençant par https://.',
   'Site address': 'Adresse du site',
-  Finish: 'Terminer',
   Script: 'Script',
   'Paste it before the closing body tag of the site.': 'Collez-le avant la balise body fermante du site.',
   Copied: 'Copié',
@@ -515,4 +514,25 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Open {site}': 'Ouvrir {site}',
   'Using Firefox?': 'Vous utilisez Firefox ?',
   'Get the Firefox add-on': 'Obtenir le module pour Firefox',
+  // The last step of the setup, and the example page of its preview (FRU-242).
+  'An example page. Pins show the same way on your site.':
+    'Une page d’exemple. Les pins s’affichent de la même façon sur votre site.',
+  'Leave feedback': 'Laisser un feedback',
+  'Click Leave feedback, then any part of the page.':
+    'Cliquez sur Laisser un feedback, puis sur n’importe quelle partie de la page.',
+  'Use one, or both.': 'Utilisez l’un, ou les deux.',
+  'Browser extension': 'Extension de navigateur',
+  "Nothing to deploy. Right for a client's site you cannot touch.":
+    'Rien à déployer. Convient au site d’un client auquel vous ne pouvez pas toucher.',
+  'Add it, then connect this browser: a page opens, and you click the Fruitback icon there.':
+    'Ajoutez-la, puis connectez ce navigateur : une page s’ouvre, et vous y cliquez sur l’icône Fruitback.',
+  'Script tag': 'Balise de script',
+  'Before the closing body tag. Members see their pins on every visit.':
+    'Avant la balise body fermante. Les membres voient leurs pins à chaque visite.',
+  'Before the closing body tag. Every visitor sees the pins.':
+    'Avant la balise body fermante. Chaque visiteur voit les pins.',
+  'Copy script': 'Copier le script',
+  'Open the site, click Leave feedback, then any part of the page.':
+    'Ouvrez le site, cliquez sur Laisser un feedback, puis sur n’importe quelle partie de la page.',
+  'Open the console': 'Ouvrir la console',
 };

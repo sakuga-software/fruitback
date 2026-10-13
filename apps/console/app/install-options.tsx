@@ -26,12 +26,30 @@ export function snippetFor(site: Site): string {
 const CONNECT_PROBLEMS: Readonly<Record<string, string>> = {};
 const BROWSER_NOT_CONNECTED = msg('This browser was not connected. Try again.');
 
-export function InstallOptions({ workspace, site }: { workspace: Workspace; site: Site }) {
-  useLocale();
+/**
+ * Where the extension is explained. It is in no store yet (FRU-130): until it is, « Add to Chrome »
+ * and « Get the Firefox add-on » lead to the page that says how to install it.
+ */
+export const EXTENSION_GUIDE = 'https://fruitback.com/reviewing.html#1-install-it';
+
+/** A text put in the clipboard: whether the browser took it. « refused »: it stays on screen to select. */
+export function useCopy(text: string): { copied: 'no' | 'yes' | 'refused'; copy: () => void } {
   const [copied, setCopied] = useState<'no' | 'yes' | 'refused'>('no');
+
+  return { copied, copy: () => void copyText(text).then((taken) => setCopied(taken ? 'yes' : 'refused')) };
+}
+
+/**
+ * Connects the browser of the person: a code is made, and the pairing page of the worker opens with
+ * it in another tab. `link` is that page, for a browser that blocked the tab.
+ */
+export function useConnect(workspace: Workspace): {
+  link: string | undefined;
+  problem: string | undefined;
+  connect: () => void;
+} {
   const [link, setLink] = useState<string | undefined>();
   const [problem, setProblem] = useState<string | undefined>();
-  const snippet = snippetFor(site);
 
   async function connect() {
     // Open the tab in the click, before the await: a browser blocks a window opened after one.
@@ -42,6 +60,7 @@ export function InstallOptions({ workspace, site }: { workspace: Workspace; site
     if (!minted.ok) {
       // The tab that just opened closes: the reason is said under the button (FRU-164).
       tab?.close();
+
       return setProblem(problemOf(minted, CONNECT_PROBLEMS, BROWSER_NOT_CONNECTED));
     }
     const target = pairingLink(minted.data.code);
@@ -52,6 +71,15 @@ export function InstallOptions({ workspace, site }: { workspace: Workspace; site
     }
   }
 
+  return { link, problem, connect: () => void connect() };
+}
+
+export function InstallOptions({ workspace, site }: { workspace: Workspace; site: Site }) {
+  useLocale();
+  const snippet = snippetFor(site);
+  const { copied, copy } = useCopy(snippet);
+  const { link, problem, connect } = useConnect(workspace);
+
   return (
     <div className="space-y-5">
       <div>
@@ -59,11 +87,7 @@ export function InstallOptions({ workspace, site }: { workspace: Workspace; site
         <p className="mb-2 text-xs text-muted">{t('Paste it before the closing body tag of the site.')}</p>
         {/* The box of the script takes focus, so a keyboard scrolls its long lines (axe, FRU-239). */}
         <Snippet label={t('Script')}>{snippet}</Snippet>
-        <Button
-          tone="outline"
-          className="mt-2"
-          onClick={() => void copyText(snippet).then((taken) => setCopied(taken ? 'yes' : 'refused'))}
-        >
+        <Button tone="outline" className="mt-2" onClick={copy}>
           {copied === 'yes' ? t('Copied') : t('Copy the script')}
         </Button>
         {copied === 'refused' ? (
@@ -79,7 +103,7 @@ export function InstallOptions({ workspace, site }: { workspace: Workspace; site
             'Nothing to change on the site. Connect this browser, then click the Fruitback icon on the page that opens.',
           )}
         </p>
-        <Button tone="outline" onClick={() => void connect()}>
+        <Button tone="outline" onClick={connect}>
           {t('Connect this browser')}
         </Button>
         {problem === undefined ? null : (
