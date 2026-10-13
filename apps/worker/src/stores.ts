@@ -1,6 +1,7 @@
 import { createGithubStoreSpec } from './github.ts';
 import { createMemoryStoreSpec } from './linear-memory.ts';
 import { createLinearStoreSpec } from './linear.ts';
+import { createPostgresStoreSpec } from './postgres-stores.ts';
 import { createSqliteStoreSpec } from './sqlite.ts';
 import { type StoreConfigResult, type StoreEnv, type StoreSpec, storeProviderFor } from './store-config.ts';
 
@@ -14,6 +15,7 @@ import { type StoreConfigResult, type StoreEnv, type StoreSpec, storeProviderFor
 export const STORE_SPECS: readonly StoreSpec[] = [
   createLinearStoreSpec(),
   createSqliteStoreSpec(),
+  createPostgresStoreSpec(),
   createGithubStoreSpec(),
   createMemoryStoreSpec(),
 ];

@@ -112,15 +112,25 @@ and an address are a claim by whoever was on the page, and they are stored as on
 The whole seed — note, page URL, selector, the reporter's name and address, the screenshot URL — is
 stored as it arrived, and **where** depends on the connector:
 
-| Store    | Where a seed lands                                       | Who can read it                                                                    |
-| -------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `linear` | verbatim in an issue description                         | anyone with access to that workspace                                               |
-| `sqlite` | `JSON.stringify(seed)` in a column of your database file | anyone who can read the file, or a backup of it                                    |
-| `github` | verbatim in an issue body                                | anyone who can read that repository. **On a public repository, that is everyone.** |
+| Store      | Where a seed lands                                                                              | Who can read it                                                                                                      |
+| ---------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `linear`   | verbatim in an issue description                                                                | anyone with access to that workspace                                                                                 |
+| `sqlite`   | `JSON.stringify(seed)` in a column of your database file                                        | anyone who can read the file, or a backup of it                                                                      |
+| `postgres` | `JSON.stringify(seed)` in the `seed` column of the table `seeds`, in the database of the worker | anyone who can read that database, or a dump of it: the role of `FRUITBACK_DATABASE_URL`, and whoever holds a backup |
+| `github`   | verbatim in an issue body                                                                       | anyone who can read that repository. **On a public repository, that is everyone.**                                   |
 
 Whichever store, it outlives any expiry you had in mind, which is why an identity token travels in an
 `Authorization` header and never in the seed. On SQLite the file and its backups are the boundary,
 and they deserve the care a database of personal data deserves.
+
+**On PostgreSQL one database holds the notes of every workspace** (FRU-218), in the clear, beside
+the accounts. Nothing is sealed: `FRUITBACK_SECRETS_KEY` covers the keys of the trackers, not the
+notes. What keeps one workspace from the notes of another is the read itself, which names its site
+(`client_id`), and a read that names none gets the notes that name none:
+test:`never gives a site of one workspace the notes of a site of another, on one page of one address`,
+test:`gives a read that names no site the notes that name none, and never the notes of a site`.
+`node server.mjs forget` deletes across every site of the worker: it is the command of whoever runs
+the worker. The notes of a site that is removed stay in the table (FRU-194 will decide).
 
 Tell your reporters not to type credentials into a feedback note, because the note is going to sit
 somewhere for a long time.
