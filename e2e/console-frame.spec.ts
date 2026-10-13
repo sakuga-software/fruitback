@@ -365,8 +365,10 @@ test('a change of workspace shows nothing of the workspace of before while the n
   await expect(rail(page).getByRole('button', { name: /Lumen Studio/ })).toBeVisible();
   await expect(page.locator('main h1')).toBeVisible();
   expect(asked.filter((pathname) => pathname.includes('/workspaces/w1/'))).toEqual([]);
-  // The control: the screen of the new workspace did read its own lists.
-  expect(asked.some((pathname) => pathname.includes('/workspaces/w2/'))).toBe(true);
+  // The control: the screen of the new workspace reads its own lists. Its title can come before the
+  // request, so the request is waited for (FRU-268: one run of four workers was faster than it).
+  await expect.poll(() => asked.some((pathname) => pathname.includes('/workspaces/w2/'))).toBe(true);
+  expect(asked.filter((pathname) => pathname.includes('/workspaces/w1/'))).toEqual([]);
 });
 
 test('a person with one workspace has its name, and no menu', async ({ page }) => {
