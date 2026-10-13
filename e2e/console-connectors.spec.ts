@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page, type Route, expect, test } from '@playwright/test';
+import { WORKER_ORIGIN } from './pin.ts';
 import {
   ACME,
   type Role,
@@ -416,11 +417,17 @@ test('with no source, and with a read that failed, the screen says which of the 
     'Fruitback did not answer. The sources and their sites could not be read.',
   );
   await expect(page.getByText('No tracker yet. The notes stay in Fruitback.')).toHaveCount(0);
+  // Nothing to add while the list is not read: the screen does not know how this worker connects
+  // Linear, by the consent at Linear or by a key.
+  await expect(sources(page)).toHaveCount(0);
   worker.down = false;
   worker.connectors = [LINEAR, ADDRESS];
   await page.getByRole('button', { name: 'Try again', exact: true }).click();
   await expect(rows(page)).toHaveCount(2);
   await expect(page.getByRole('alert')).toHaveCount(0);
+  // The control of the count above: once read, the sources to add are there, and Linear is by consent.
+  await expect(sources(page)).toHaveCount(8);
+  await expect(page.getByRole('button', { name: 'Use an API key', exact: true })).toBeVisible();
 });
 
 test('« Add a source » lists what connects, and what does not yet with a button that says when', async ({ page }) => {
@@ -492,6 +499,38 @@ test('« Add a source » lists what connects, and what does not yet with a butto
   await page.getByRole('button', { name: 'I kept it', exact: true }).click();
   await expect(page.locator('[data-secret]')).toHaveCount(0);
   await expect(page.getByText('made-by-fruitback-0123456789')).toHaveCount(0);
+});
+
+test('« Add a source » waits for the list of the sources, and its buttons do not move under a press', async ({
+  page,
+}) => {
+  await workerWith(page);
+  // The read is held: the screen is drawn without the list, as on a slow line.
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(`${WORKER_ORIGIN}/console/workspaces/w1/connectors`, async (route) => {
+    await held;
+    await route.fallback();
+  });
+  await open(page);
+  const connect = page.getByRole('button', { name: 'Connect REST API', exact: true });
+  await expect(page.getByRole('region', { name: 'Connected' }).getByText('Loading…')).toBeVisible();
+  // Nothing to press yet: the list arrives above these buttons, and what « Connect Linear » does
+  // (the consent at Linear, or a key) is said by the same read.
+  await expect(sources(page)).toHaveCount(0);
+  await expect(connect).toHaveCount(0);
+
+  release();
+  await expect(rows(page)).toHaveCount(2);
+  await expect(sources(page)).toHaveCount(8);
+  // The buttons came with the list: a press finds them where they stay.
+  const before = await connect.boundingBox();
+  await page.mouse.move(before!.x + before!.width / 2, before!.y + before!.height / 2);
+  await page.mouse.down();
+  await page.waitForLoadState('networkidle');
+  expect(await connect.boundingBox()).toEqual(before);
+  await page.mouse.up();
+  await expect(page.getByRole('textbox', { name: 'Address of your receiver' })).toBeVisible();
 });
 
 test('a worker with no Linear application connects Linear by a key, under its row', async ({ page }) => {
