@@ -1003,8 +1003,19 @@ when it is accepted`. An invitation waits 7 days; one address gets one invitatio
   says `mailed: false`, and the console gives the link to send by hand. The count is by workspace
   and address (FRU-209): counted for every workspace together, somebody else closed the window of
   an address from a workspace of their own, and the refusal told an admin that the address was
-  invited elsewhere. **It does not bound what one account sends to many addresses, or from many
-  workspaces.** A worker with no mailer sends nothing and keeps the invitation: the console shows
+  invited elsewhere. **One account sends 20 invitation messages an hour, in every workspace together,
+  and one workspace 40, whoever invites** (FRU-209): anybody makes a workspace, so the window of an
+  address alone let one account write to as many addresses as it wanted, 60 messages from 12
+  workspaces (measured). Past either count the invitation is kept and no message goes, as for the
+  address. test:`sends no more messages than one account may in an hour, in every workspace together, and keeps the invitations (FRU-209)`,
+  test:`sends no more messages than one workspace may in an hour, whoever invites (FRU-209)`.
+  **The subject of the message is the same for every invitation**, and holds no text that a person
+  wrote: the name of the workspace was the subject, so « Your invoice is ready: https://… » went
+  out under the name of Fruitback. The names of the workspace and of the inviter are in the body
+  only, escaped, and written so that a mail client makes no link of them:
+  test:`writes no text of a person in the subject, and makes no link of a name in the body (FRU-209)`.
+  What remains: 20 messages an hour by account, with a sentence of the sender in the body, and
+  nothing that tells accounts of one person apart. A worker with no mailer sends nothing and keeps the invitation: the console shows
   the same link (FRU-107), and it opens nothing more than the message does.
   test:`sends an invitation again when asked to, and no more than three messages to one address in the window`,
   test:`keeps the window of an address to its workspace: another workspace neither closes it nor learns of it (FRU-209)`.

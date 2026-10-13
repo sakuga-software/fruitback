@@ -1787,7 +1787,11 @@ joins. Six routes of the organization plugin more, under the rules of the sectio
   The window was by address alone, read before the plugin: another workspace closed it, the
   invitation was then not made at all, and the `429` said that the address was invited elsewhere
   (FRU-209). A message that does not leave answers `502`, and the
-  invitation waits, to send again with `resend: true`. **A worker with no mailer still invites**
+  invitation waits, to send again with `resend: true`. **Two more windows, of an hour**
+  (`mayMail`): 20 messages by account in every workspace together, 40 by workspace. The three are read first, and nothing is counted when one is full: a workspace past its count would otherwise spend the count of each admin who tries. Then each is counted in one step, and the message goes when none came back over.
+  The numbers are a guess for a team that invites in one sitting. **The subject is fixed**, and
+  `unlinked` in `mail.ts` puts a zero-width space after each `.`, `:`, `/` and `@` of a name in the
+  body: a client then makes no link of `https://…`, `www.…` or an address (FRU-209). **A worker with no mailer still invites**
   (decided on FRU-107): the invitation is kept, nothing is sent and nothing is counted, and the
   console shows the link to send by hand. The link is the same `<console>/invitations`, so a link
   sent in a chat is worth exactly the message: nothing without a session of the address.

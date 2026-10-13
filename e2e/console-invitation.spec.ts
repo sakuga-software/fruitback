@@ -89,7 +89,10 @@ test.describe('an invited reviewer (FRU-104)', () => {
 
     // Paul: the message names the workspace, and its link holds nothing to spend.
     const message = await lastTo(worker, 'paul@client.dev');
-    expect(message).toContain('owner@acme.dev invites you to the workspace « Acme » on Fruitback, as a member.');
+    // The names a person wrote hold a zero-width space after each `.` and `@`: no client links them.
+    expect(message.replaceAll('\u200B', '')).toContain(
+      'owner@acme.dev invites you to the workspace « Acme » on Fruitback, as a member.',
+    );
     const link = /http:\/\/\S+/.exec(message)?.[0];
     expect(link).toBe(`${CONSOLE}/invitations`);
 
