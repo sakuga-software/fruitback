@@ -6,7 +6,6 @@
 export const FRENCH: Readonly<Record<string, string>> = {
   Fruitback: 'Fruitback',
   Linear: 'Linear',
-  'Fruitback Cloud': 'Fruitback Cloud',
 
   'Fruitback cannot reach its server. Check your connection.':
     'Fruitback ne joint pas son serveur. Vérifiez votre connexion.',
@@ -102,8 +101,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Google n’a pas d’adresse vérifiée pour ce compte. Utilisez un lien par e-mail.',
   'The sign-in with Google did not finish. Try again, or use an email link.':
     'La connexion avec Google n’a pas abouti. Réessayez, ou utilisez un lien par e-mail.',
-  'Google sign-in is not set up on this Fruitback': 'La connexion Google n’est pas configurée sur ce Fruitback',
-  'GitHub sign-in is not set up on this Fruitback': 'La connexion GitHub n’est pas configurée sur ce Fruitback',
   'Not set up': 'Non configuré',
   'Could not check': 'Vérification impossible',
   'Where you are signed in': 'Où vous êtes connecté',
@@ -248,20 +245,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Seulement les sites partagés avec lui. Gratuit, et ne voit jamais le tracker.',
 
   Workspace: 'Workspace',
-  'Sign in, name it': 'Se connecter, le nommer',
-  Source: 'Source',
-  Sources: 'Sources',
-  'Where feedback goes': 'Où vont les retours',
-  Site: 'Site',
-  'The address you review': 'L’adresse que vous relisez',
   Install: 'Installer',
-  'Script or extension': 'Script ou extension',
-  'Set up': 'Mise en place',
-  'How to run Fruitback': 'Comment faire tourner Fruitback',
-  'Self-hosted': 'Auto-hébergé',
-  Steps: 'Étapes',
-  'Step {step} of {total}': 'Étape {step} sur {total}',
-  'Create your workspace': 'Créez votre workspace',
   'That is not an e-mail address. Check it and send again.':
     'Ce n’est pas une adresse e-mail. Vérifiez-la et renvoyez.',
   'Several links went to this address already. Use the last one, or wait fifteen minutes.':
@@ -286,45 +270,19 @@ export const FRENCH: Readonly<Record<string, string>> = {
     "La connexion n'a pas abouti. Réessayez, ou utilisez un lien par e-mail.",
   'The link could not be sent just now. Try again in a minute.':
     'Le lien n’a pas pu être envoyé. Réessayez dans une minute.',
-  'One workspace for your team, your sites and your sources. Hosted in Europe.':
-    'Un workspace pour votre équipe, vos sites et vos sources. Hébergé en Europe.',
   'Sending…': 'Envoi…',
   Continue: 'Continuer',
   'Continue with Google': 'Continuer avec Google',
   'Continue with GitHub': 'Continuer avec GitHub',
-  'or with an email link': 'ou avec un lien par e-mail',
   'Work email': 'E-mail professionnel',
   'Workspace name': 'Nom du workspace',
   'Check your inbox': 'Regardez votre boîte de réception',
-  'A sign-in link is on its way to {email}. It works once, for fifteen minutes.':
-    'Un lien de connexion est en route vers {email}. Il fonctionne une fois, pendant quinze minutes.',
   'Use another address': 'Utiliser une autre adresse',
-  'Open it in this browser. Nothing in it asks for a password, and ignoring it is safe.':
-    'Ouvrez-le dans ce navigateur. Rien n’y demande un mot de passe, et l’ignorer est sans risque.',
   'A workspace needs a name of one line, up to 80 characters.':
     'Un workspace a besoin d’un nom d’une ligne, de 80 caractères au plus.',
-  'Name your workspace': 'Nommez votre workspace',
-  'You are signed in. One more word, and the workspace exists.':
-    'Vous êtes connecté. Encore un mot, et le workspace existe.',
-  'Notes stay in this workspace. Nothing to connect.': 'Les notes restent dans ce workspace. Rien à connecter.',
-  'Where should feedback go?': 'Où doivent aller les retours ?',
-  Selected: 'Sélectionné',
-  'In Connectors, after the set-up': 'Dans Connecteurs, après la mise en place',
-  'For now the notes stay in this workspace. Linear and a REST API connect after the set-up, in Connectors.':
-    'Pour l’instant, les notes restent dans ce workspace. Linear et une API REST se connectent après la mise en place, dans Connecteurs.',
   'Paste the full address of the site, starting with https://.':
     'Collez l’adresse complète du site, en commençant par https://.',
-  'Which site do you review?': 'Quel site relisez-vous ?',
-  'Paste its address. Any page of it will do.': 'Collez son adresse. N’importe laquelle de ses pages convient.',
   'Site address': 'Adresse du site',
-  'Who sees the feedback?': 'Qui voit les retours ?',
-  'The members of {workspace}': 'Les membres de {workspace}',
-  'Visitors of the site see no note.': 'Les visiteurs du site ne voient aucune note.',
-  'Everyone who visits the site': 'Tous ceux qui visitent le site',
-  'For a public « report a problem ».': 'Pour un « signaler un problème » public.',
-  'Install it': 'Installez-le',
-  'Two ways to put Fruitback on {site}. Use one, or both.':
-    'Deux façons de mettre Fruitback sur {site}. Utilisez l’une, ou les deux.',
   Finish: 'Terminer',
   Script: 'Script',
   'Paste it before the closing body tag of the site.': 'Collez-le avant la balise body fermante du site.',
@@ -501,4 +459,42 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'A link works once, for fifteen minutes. This one was already used or ran out of time.':
     'Un lien fonctionne une fois, pendant quinze minutes. Celui-ci a déjà servi, ou son délai est passé.',
   'Send me a new link': 'M’envoyer un nouveau lien',
+  // The setup on one screen (FRU-239).
+  'Set up Fruitback': 'Mettre en place Fruitback',
+  'Current step:': 'Étape en cours :',
+  'Running your own server?': 'Vous hébergez votre propre serveur ?',
+  'Self-hosting guide': 'Guide d’auto-hébergement',
+  'Three steps to your first note on a live page. Hosted in Europe.':
+    'Trois étapes jusqu’à votre première note sur une page en ligne. Hébergé en Europe.',
+  'Your account': 'Votre compte',
+  'Your site': 'Votre site',
+  'The address you review.': 'L’adresse que vous relisez.',
+  'Put it on the site': 'Le mettre sur le site',
+  'The extension, or a script tag.': 'L’extension, ou une balise de script.',
+  'Preview of your site': 'Aperçu de votre site',
+  'your site': 'votre site',
+  'Your site shows here once you add it, with its pins.': 'Votre site s’affiche ici une fois ajouté, avec ses pins.',
+  'A preview of your site. Pins show the same way on the real page.':
+    'Un aperçu de votre site. Les pins s’affichent de la même façon sur la vraie page.',
+  'We send you a sign-in link. No password to make up.':
+    'Nous vous envoyons un lien de connexion. Aucun mot de passe à inventer.',
+  'Your workspace takes the name of your domain. Rename it whenever you like.':
+    'Votre workspace prend le nom de votre domaine. Renommez-le quand vous voulez.',
+  'A sign-in link is on its way to {email}. Open it in this browser: this page carries on by itself.':
+    'Un lien de connexion est en route vers {email}. Ouvrez-le dans ce navigateur : cette page continue toute seule.',
+  'The link works once, for fifteen minutes. Nothing in it asks for a password.':
+    'Le lien fonctionne une fois, pendant quinze minutes. Rien n’y demande un mot de passe.',
+  'Signed in as {email}': 'Connecté en tant que {email}',
+  'The workspace was not renamed. Try again.': 'Le workspace n’a pas été renommé. Réessayez.',
+  'Only an owner or an admin of the workspace renames it.': 'Seul un propriétaire ou un admin du workspace le renomme.',
+  Save: 'Enregistrer',
+  Rename: 'Renommer',
+  'Any page of it will do.': 'N’importe laquelle de ses pages convient.',
+  'Members of {workspace} see the notes': 'Les membres de {workspace} voient les notes',
+  'Everyone who visits sees the notes': 'Tous les visiteurs voient les notes',
+  'Fruitback did not answer. Your sites are not lost.': 'Fruitback n’a pas répondu. Vos sites ne sont pas perdus.',
+  Site: 'Site',
+  Change: 'Modifier',
+  '{site} is still in your sites, with its notes. Remove it in Sites if you no longer review it.':
+    '{site} est toujours dans vos sites, avec ses notes. Retirez-le dans Sites si vous ne le relisez plus.',
 };

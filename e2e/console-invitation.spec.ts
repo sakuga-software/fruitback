@@ -30,13 +30,15 @@ async function lastTo(worker: Worker, to: string): Promise<string> {
   return found as string;
 }
 
-/** Signs `email` in by the link of the setup, in this browser. */
-async function signIn(page: Page, worker: Worker, email: string, workspace?: string): Promise<void> {
+/**
+ * Signs `email` in by the link of the setup, in this browser. Somebody with no workspace and no
+ * invitation gets one named after their address (FRU-239): « Acme » for `owner@acme.dev`.
+ */
+async function signIn(page: Page, worker: Worker, email: string): Promise<void> {
   const before = (await worker.mail()).filter((each) => each.to === email).length;
   await page.goto(`${CONSOLE}/setup`);
   await page.getByRole('textbox', { name: 'Work email' }).fill(email);
-  if (workspace !== undefined) await page.getByRole('textbox', { name: 'Workspace name' }).fill(workspace);
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByRole('button', { name: 'Email me a link' }).click();
   await expect.poll(async () => (await worker.mail()).filter((each) => each.to === email).length).toBe(before + 1);
   const link = /http:\/\/\S+\/sign-in#\S+/.exec(await lastTo(worker, email))?.[0];
   expect(link, 'no sign-in link in the message').toBeDefined();
@@ -68,13 +70,15 @@ test.describe('an invited reviewer (FRU-104)', () => {
     const paul = await pauls.newPage();
 
     // The owner: a workspace, a site, and an invitation.
-    await signIn(owner, worker, 'owner@acme.dev', 'Acme');
-    await expect(owner.getByRole('heading', { name: 'Where should feedback go?' })).toBeVisible();
+    await signIn(owner, worker, 'owner@acme.dev');
+    // The second step of the setup adds the site, and the front door then leads to the sites.
+    await expect(owner.getByRole('heading', { name: 'Current step: Your site' })).toBeVisible();
+    await owner.getByRole('textbox', { name: 'Site address' }).fill(SITE);
+    await owner.getByRole('button', { name: 'Add site' }).click();
+    await expect(owner.getByRole('heading', { name: 'Current step: Put it on the site' })).toBeVisible();
     await owner.goto(CONSOLE);
     await expect(owner).toHaveURL(/\/w\/ws_[0-9a-f]{20}\/sites$/);
     const workspace = /\/w\/(ws_[0-9a-f]{20})\//.exec(owner.url())?.[1] as string;
-    await owner.getByRole('textbox', { name: 'Site address' }).fill(SITE);
-    await owner.getByRole('button', { name: 'Add site' }).click();
     await expect(owner.getByText('staging.acme.dev', { exact: true })).toBeVisible();
 
     await owner.goto(`${CONSOLE}/w/${workspace}/members`);
@@ -175,11 +179,14 @@ test.describe('an invited reviewer (FRU-104)', () => {
     contexts.push(owners);
     await served(owners, worker);
     const owner = await owners.newPage();
-    await signIn(owner, worker, 'owner@acme.dev', 'Acme');
-    await expect(owner.getByRole('heading', { name: 'Where should feedback go?' })).toBeVisible();
-    await owner.goto(CONSOLE);
-    await expect(owner).toHaveURL(/\/w\/ws_[0-9a-f]{20}\/sites$/);
-    const workspace = /\/w\/(ws_[0-9a-f]{20})\//.exec(owner.url())?.[1] as string;
+    await signIn(owner, worker, 'owner@acme.dev');
+    await expect(owner.getByRole('heading', { name: 'Current step: Your site' })).toBeVisible();
+    // The workspace has no site, so the front door leads back to the setup: its id is read where
+    // the worker received it.
+    const workspace = (await worker.received())
+      .map((each) => /^\/console\/workspaces\/(ws_[0-9a-f]{20})\/sites$/.exec(each.path)?.[1])
+      .findLast((id) => id !== undefined) as string;
+    expect(workspace).toMatch(/^ws_[0-9a-f]{20}$/);
     const toPaul = async (): Promise<number> =>
       (await worker.mail()).filter((each) => each.to === 'paul@client.dev').length;
 

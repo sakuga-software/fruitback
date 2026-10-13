@@ -37,10 +37,10 @@ test('says that nobody can sign in, and shows no form, when the worker offers no
   await page.goto(`${CONSOLE}/setup`);
 
   await expect(page.getByRole('alert').filter({ hasText: CLOSED })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Create your workspace' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Set up Fruitback' })).toBeVisible();
   // Nothing to type in, and nothing to press: a link asked for here is never sent.
   await expect(page.getByRole('textbox')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /Continue/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Email me a link|Continue with/ })).toHaveCount(0);
   expect(asked.filter((each) => each.startsWith('POST'))).toEqual([]);
   // The screen fits a phone.
   await page.setViewportSize({ width: 390, height: 844 });

@@ -14,7 +14,8 @@ import { useLocale } from '../use-locale';
 /** How each kind of source is drawn. The mark is a letter of the mockup, not a logo. */
 export const KINDS = {
   linear: { mark: 'L', name: 'Linear' },
-  rest: { mark: '{ }', name: 'REST API' },
+  // « REST API » is said « API REST » in French: `msg` marks it for the guard of the words.
+  rest: { mark: '{ }', name: msg('REST API') },
 } as const;
 
 /** What a refused key means for the person, and what to do. */

@@ -1,12 +1,12 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { type Me, callUntilAnswered, myInvitations } from '../api';
+import { type Me, type Site, call, callUntilAnswered, myInvitations } from '../api';
 import { t } from '../i18n';
 import { useLocale } from '../use-locale';
 
 /**
  * The front door: the invitations that wait for a signed-in person, then their first workspace, or
- * the setup.
+ * the setup, which a workspace with no site goes back to.
  *
  * Somebody who was invited (FRU-104) signs in from the link of the message, and lands here: they see
  * the invitation before the setup offers to make a workspace of their own.
@@ -25,7 +25,16 @@ export default function Home() {
         // An invitation that could not be read does not hold the front door: it is on its own page.
         if (invitations.ok && invitations.data.length > 0) return navigate('/invitations', { replace: true });
         const workspace = me.data.workspaces[0];
-        navigate(workspace === undefined ? '/setup' : `/w/${workspace.id}/sites`, { replace: true });
+        if (workspace === undefined) return navigate('/setup', { replace: true });
+        const sites = `/w/${workspace.id}/sites`;
+        // Only somebody who adds a site is sent back to the step that adds one.
+        if (workspace.role !== 'owner' && workspace.role !== 'admin') return navigate(sites, { replace: true });
+        void call<{ sites: Site[] }>('GET', `/console/workspaces/${workspace.id}/sites`).then((listed) => {
+          if (stopped) return;
+          // A workspace with no site is a setup that stopped at its second step (FRU-239). A list
+          // that could not be read is not an empty list: the Sites screen says so itself.
+          navigate(listed.ok && listed.data.sites.length === 0 ? '/setup' : sites, { replace: true });
+        });
       });
     });
 

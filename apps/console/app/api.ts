@@ -471,28 +471,11 @@ export function pairingLink(code: string): string {
 }
 
 /**
- * The name typed before the link was sent, kept for the moment the link is opened. A convenience: when
- * storage is refused, the person types it again.
+ * Renames a workspace (FRU-236): its owner or an admin. The worker answers the workspace as
+ * `/console/me` lists it, with the role of the person.
  */
-const PENDING = 'fruitback:pending-workspace';
-
-export function rememberWorkspaceName(name: string): void {
-  try {
-    localStorage.setItem(PENDING, name);
-  } catch {
-    // Private browsing can refuse storage. The name is asked again after the sign-in.
-  }
-}
-
-export function takeWorkspaceName(): string | undefined {
-  try {
-    const name = localStorage.getItem(PENDING) ?? undefined;
-    localStorage.removeItem(PENDING);
-
-    return name === '' ? undefined : name;
-  } catch {
-    return undefined;
-  }
+export function renameWorkspace(workspace: Workspace, name: string): Promise<Answer<Workspace>> {
+  return call<Workspace>('POST', `/console/workspaces/${workspace.id}`, { name });
 }
 
 /**

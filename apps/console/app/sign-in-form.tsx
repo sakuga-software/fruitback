@@ -2,7 +2,7 @@ import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'rea
 import { type Providers, call, offersSignIn, providerStart, requestLink, signInProviders } from './api';
 import { locale, msg, t } from './i18n';
 import { awaitSignIn } from './tab-signal';
-import { Button, Divider, Field, LinkButton, Problem, WideButton } from './ui';
+import { AutoGrid, Button, Divider, Field, LinkButton, Problem, WideButton } from './ui';
 import { useLocale } from './use-locale';
 
 /**
@@ -117,8 +117,8 @@ type EmailFormProps = {
   onSent: (email: string) => void;
   /** A refusal that came from elsewhere, as the code a provider sent back, shown until a link is asked for. */
   problem?: string | undefined;
-  /** Runs before the link is asked for: the setup keeps what it needs after the sign-in. */
-  before?: () => void;
+  /** « row »: the field and the button on one line while there is room, as in the setup. */
+  layout?: 'column' | 'row';
 };
 
 /**
@@ -127,7 +127,7 @@ type EmailFormProps = {
  * WARNING: nothing here clears the field. A link that is refused leaves the address as it was typed,
  * with the reason under it (`CLAUDE.md`: no error path clears a field).
  */
-export function EmailForm({ action, email, onEmail, onSent, problem: given, before }: EmailFormProps) {
+export function EmailForm({ action, email, onEmail, onSent, problem: given, layout = 'column' }: EmailFormProps) {
   useLocale();
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState(given);
@@ -138,7 +138,6 @@ export function EmailForm({ action, email, onEmail, onSent, problem: given, befo
     if (email.trim() === '') return setProblem(SEND_PROBLEMS['invalid-email']);
     setBusy(true);
     setProblem(undefined);
-    before?.();
     const sent = await requestLink(email, locale());
     setBusy(false);
     if (sent.ok) return onSent(email.trim());
@@ -146,23 +145,36 @@ export function EmailForm({ action, email, onEmail, onSent, problem: given, befo
     setProblem(SEND_PROBLEMS[sent.error] ?? LINK_NOT_SENT);
   }
 
+  const row = layout === 'row';
+
   return (
     // `noValidate`: the browser would stop the form with its own bubble, in its own language, and the
     // sentence of the console would never show (FRU-167). The field stays required for a screen reader.
-    <form noValidate onSubmit={(event) => void submit(event)} className="flex flex-col gap-3.5">
-      <Field
-        label={t('Work email')}
-        type="email"
-        autoComplete="email"
-        placeholder="you@studio.com"
-        value={email}
-        onChange={(event) => onEmail(event.target.value)}
-        required
-      />
-      <Button type="submit" wide disabled={busy}>
+    <form
+      noValidate
+      onSubmit={(event) => void submit(event)}
+      className={row ? 'flex flex-wrap items-end gap-2.5' : 'flex flex-col gap-3.5'}
+    >
+      {/* In a row the field takes what the button leaves, and the button goes under it below 240 px. */}
+      <div className={row ? 'min-w-0 flex-1 basis-60' : ''}>
+        <Field
+          label={t('Work email')}
+          type="email"
+          autoComplete="email"
+          placeholder="you@studio.com"
+          value={email}
+          onChange={(event) => onEmail(event.target.value)}
+          required
+        />
+      </div>
+      <Button type="submit" wide={!row} disabled={busy}>
         {busy ? t('Sending…') : t(action)}
       </Button>
-      {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
+      {problem === undefined ? null : (
+        <div className="w-full">
+          <Problem>{t(problem)}</Problem>
+        </div>
+      )}
     </form>
   );
 }
@@ -171,37 +183,56 @@ export function EmailForm({ action, email, onEmail, onSent, problem: given, befo
  * The providers this worker signs people in with, under « or ». A provider the worker does not offer
  * has no button, and with none there is nothing here, not even the word.
  */
-export function ProviderButtons({ providers }: { providers: Providers }) {
+export function ProviderButtons({
+  providers,
+  layout = 'column',
+}: {
+  providers: Providers;
+  /** « grid »: side by side while there is room, in a column that spaces its own parts (the setup). */
+  layout?: 'column' | 'grid';
+}) {
   useLocale();
   if (!providers.google && !providers.github) return null;
+  const buttons = (
+    <>
+      {providers.google ? (
+        <WideButton onClick={() => (window.location.href = providerStart('google'))}>
+          {t('Continue with Google')}
+        </WideButton>
+      ) : null}
+      {providers.github ? (
+        <WideButton onClick={() => (window.location.href = providerStart('github'))}>
+          {t('Continue with GitHub')}
+        </WideButton>
+      ) : null}
+    </>
+  );
+  if (layout === 'grid') {
+    return (
+      <>
+        <Divider>{t('or')}</Divider>
+        <AutoGrid>{buttons}</AutoGrid>
+      </>
+    );
+  }
 
   return (
     <>
       <Divider className="my-5.5">{t('or')}</Divider>
-      <div className="flex flex-col gap-2.5">
-        {providers.google ? (
-          <WideButton onClick={() => (window.location.href = providerStart('google'))}>
-            {t('Continue with Google')}
-          </WideButton>
-        ) : null}
-        {providers.github ? (
-          <WideButton onClick={() => (window.location.href = providerStart('github'))}>
-            {t('Continue with GitHub')}
-          </WideButton>
-        ) : null}
-      </div>
+      <div className="flex flex-col gap-2.5">{buttons}</div>
     </>
   );
 }
 
 /** A sentence with one value in bold: the words around `{name}` come from the translation. */
-export function withStrong(sentence: string, name: string, value: string): ReactNode {
+export function withStrong(sentence: string, name: string, value: string, tone = ''): ReactNode {
   const [before = '', after = ''] = t(sentence).split(`{${name}}`);
 
   return (
     <>
       {before}
-      <strong className="font-semibold">{value}</strong>
+      {/* `tone`: the colour of the value where the sentence around it is muted. */}
+      <strong className={`font-semibold ${tone}`}>{value}</strong>
       {after}
     </>
   );
@@ -300,11 +331,11 @@ export function useCarryOn(carryOn: () => void): void {
 }
 
 /** « Use another address »: back to the form, with the address still in it. */
-export function AnotherAddress({ onBack }: { onBack: () => void }) {
+export function AnotherAddress({ onBack, space = 'loose' }: { onBack: () => void; space?: 'normal' | 'loose' }) {
   useLocale();
 
   return (
-    <LinkButton space="loose" onClick={onBack}>
+    <LinkButton space={space} onClick={onBack}>
       {t('Use another address')}
     </LinkButton>
   );
