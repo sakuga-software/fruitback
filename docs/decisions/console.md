@@ -100,10 +100,13 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   a value set elsewhere), `Pick` (radio cards), `Toggle`, `FilterChip` (`aria-pressed`), `StatusDot`
   and `StatusBar`, `DataTable`, `SidePanel`, `KeyValue`, `SuccessMark`, `Title`, `Lead`, `PageHead`,
   `Initial`, `Card`, `Chip`, `Problem`, `Logo` (the name as outlines, in tokens: `logo.tsx`), `EntryPage`
-  (the header and the column of a page outside a workspace; `/kit/entry` mounts it), `Divider`, and `Menu`
+  (the header and the column of a page outside a workspace; `/kit/entry` mounts it), `Divider`, `Menu`
   (a button that opens a menu, on the dropdown of HeroUI: the menu is named after its button, a
   `chosen` item makes it a choice of radios, and it is drawn as a page wherever its button is; the
-  mockup draws no open menu). The tones `quiet` and `danger` of `Button` are of before the
+  mockup draws no open menu), and
+  for the setup `Steps` and `Step` (a drop with its number, the current step said to a screen reader),
+  `Callout`, `OptionCard`, `AutoGrid` (side by side while there is room, with no width of a screen
+  named), `Snippet` and `BrowserFrame` (the window of a browser, drawn). The tones `quiet` and `danger` of `Button` are of before the
   mockup: they stay as HeroUI draws them until their screens are drawn again.
 - **`/kit` mounts each component once, on the development server only** (`kit-gallery.tsx`):
   `e2e/console-kit.spec.ts` reads there what the browser computes (colour, border, corner, height,
