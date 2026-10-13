@@ -173,6 +173,12 @@ const EMPTY = Object.fromEntries(Object.keys(COPIED_COUNTS).map((table) => [tabl
 const SUBJECTS: { label: string; open: () => Promise<Database>; skip: string | false }[] = [
   { label: 'PGlite', open: createPgliteDatabase, skip: false },
   { label: 'a real server', open: createRealDatabase, skip: NO_REAL_POSTGRES },
+  // FRU-219: the copy writes where the worker of that database reads, and names no schema.
+  {
+    label: 'a real server, in a schema of its own',
+    open: () => createRealDatabase('fruitback_copy'),
+    skip: NO_REAL_POSTGRES,
+  },
 ];
 
 for (const subject of SUBJECTS) {
