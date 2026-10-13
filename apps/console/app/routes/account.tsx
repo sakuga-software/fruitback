@@ -312,10 +312,6 @@ function SectionHelp({ children }: { children: string }) {
 }
 
 /**
- * A row of a list of the account: a name, a line under it, and at its end a state or one action. The
- * mockup sizes it by its content: 56 px at the least inside its padding.
- */
-/**
  * The box of a list of one row, where there is no list yet: its two rules, and the height of a row.
  *
  * WARNING: the list of the browsers arrives after the screen is drawn, and « Sign out » is under it.
@@ -326,6 +322,10 @@ function SectionHelp({ children }: { children: string }) {
  */
 const ONE_ROW = 'box-content flex min-h-[56px] flex-wrap items-center border-y border-line py-[8px]';
 
+/**
+ * A row of a list of the account: a name, a line under it, and at its end a state or one action. The
+ * mockup sizes it by its content: 56 px at the least inside its padding.
+ */
 function Row({
   title,
   detail,
