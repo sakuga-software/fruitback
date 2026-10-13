@@ -16,6 +16,9 @@ const REMOVAL_PROBLEMS: Readonly<Record<string, string>> = {
 };
 const SITE_NOT_REMOVED = msg('This site is still here. Try again.');
 
+/** What somebody is typing in the form that adds a site. */
+type Draft = { url: string; visibility: Visibility };
+
 /** What is open under the row of a site: one thing at a time, on one row at a time. */
 type Under = { site: string; what: 'install' | 'previews' | 'remove' };
 
@@ -33,6 +36,9 @@ export default function Sites() {
   const [sites, setSites] = useState<Listed<Site>>('loading');
   const [under, setUnder] = useState<Under | undefined>();
   const [adding, setAdding] = useState(false);
+  // What is typed in the form that adds a site is kept here, above every state of the list: the
+  // form goes when the list is read again, and what somebody typed must not go with it.
+  const [draft, setDraft] = useState<Draft>({ url: '', visibility: 'members' });
   const [stuck, setStuck] = useState<{ site: string; problem: string } | undefined>();
   const manages = workspace.role === 'owner' || workspace.role === 'admin';
   // The worker says where the notes of a site go to whoever sees the tracker: not to a guest.
@@ -112,7 +118,7 @@ export default function Sites() {
                 )}
               </p>
               <div className="mt-[6px] w-full">
-                <AddSite workspace={workspace} onAdded={added} />
+                <AddSite workspace={workspace} draft={draft} onDraft={setDraft} onAdded={added} />
               </div>
             </>
           ) : (
@@ -132,7 +138,13 @@ export default function Sites() {
               aria-label={t('Add a site')}
               className="mb-[16px] rounded-frame border border-line bg-subtle px-[22px] py-[20px]"
             >
-              <AddSite workspace={workspace} onAdded={added} onCancel={() => setAdding(false)} />
+              <AddSite
+                workspace={workspace}
+                draft={draft}
+                onDraft={setDraft}
+                onAdded={added}
+                onCancel={() => setAdding(false)}
+              />
             </section>
           ) : null}
           <DataTable label={t('Sites')} minWidth={0} hover>
@@ -191,16 +203,19 @@ export default function Sites() {
  */
 function AddSite({
   workspace,
+  draft,
+  onDraft,
   onAdded,
   onCancel,
 }: {
   workspace: Workspace;
+  draft: Draft;
+  onDraft: (draft: Draft) => void;
   onAdded: (site: Site) => void;
   onCancel?: () => void;
 }) {
   useLocale();
-  const [url, setUrl] = useState('');
-  const [visibility, setVisibility] = useState<Visibility>('members');
+  const { url, visibility } = draft;
   const [problem, setProblem] = useState<string | undefined>();
 
   async function add(event: FormEvent) {
@@ -212,7 +227,7 @@ function AddSite({
     if (address === undefined) return setProblem(SITE_PROBLEMS['invalid-url'] ?? SITE_NOT_ADDED);
     const added = await call<Site>('POST', `/console/workspaces/${workspace.id}/sites`, { url: address, visibility });
     if (!added.ok) return setProblem(problemOf(added, SITE_PROBLEMS, SITE_NOT_ADDED));
-    setUrl('');
+    onDraft({ url: '', visibility: 'members' });
     onAdded(added.data);
   }
 
@@ -226,7 +241,7 @@ function AddSite({
             autoComplete="url"
             placeholder="staging.acme.dev"
             value={url}
-            onChange={(event) => setUrl(event.target.value)}
+            onChange={(event) => onDraft({ ...draft, url: event.target.value })}
           />
         </div>
         <Button type="submit">{t('Add site')}</Button>
@@ -235,7 +250,7 @@ function AddSite({
       <Pick
         label={t('Who sees the notes?')}
         value={visibility}
-        onChange={setVisibility}
+        onChange={(chosen) => onDraft({ ...draft, visibility: chosen })}
         options={[
           {
             value: 'members',

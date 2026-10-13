@@ -459,6 +459,35 @@ test('the menu of a row is walked with the keyboard, and what it opens gives foc
   await expect(page.getByRole('region', { name: 'Install on acme.dev' })).toBeVisible();
 });
 
+test('what is typed in the form stays when the form goes and comes back', async ({ page }) => {
+  await workerWith(page);
+  await open(page);
+  await page.getByRole('button', { name: 'Add a site', exact: true }).click();
+  const form = page.getByRole('region', { name: 'Add a site' });
+  await form.getByRole('textbox', { name: 'Site address' }).fill('docs.acme.dev');
+  await form.getByText('Everyone who visits').click();
+  // « Cancel » closes the form. What was typed is not thrown away: the form shows it again.
+  await form.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(form).toHaveCount(0);
+  await page.getByRole('button', { name: 'Add a site', exact: true }).click();
+  await expect(form.getByRole('textbox', { name: 'Site address' })).toHaveValue('docs.acme.dev');
+  await expect(form.getByRole('radio', { name: /Everyone who visits/ })).toBeChecked();
+});
+
+test('a destination with no words of the worker reads as a tracker, and not as nothing', async ({ page }) => {
+  // A worker of before FRU-123 writes no label on a destination.
+  await workerWith(page, 'owner', [
+    {
+      id: 's1',
+      origin: 'https://staging.acme.dev',
+      visibility: 'members',
+      destination: { connector: 'c1', teamId: 't1' },
+    },
+  ]);
+  await open(page);
+  await expect(row(page, 'staging.acme.dev').locator('td').nth(1)).toHaveText('A tracker');
+});
+
 test('removing a site asks twice, and a site that is still there says so on its row', async ({ page }) => {
   const worker = await workerWith(page);
   await open(page);
