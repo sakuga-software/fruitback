@@ -336,14 +336,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'This link no longer works': 'Ce lien ne fonctionne plus',
   'Signing you in…': 'Connexion en cours…',
 
-  'The addresses you review. Adding a site is pasting its URL.':
-    'Les adresses que vous relisez. Ajouter un site, c’est coller son URL.',
-  'Who sees the feedback': 'Qui voit les retours',
-  Everyone: 'Tout le monde',
-  'Add the site': 'Ajouter le site',
-  'No site yet. Paste the address of the one you review.':
-    'Pas encore de site. Collez l’adresse de celui que vous relisez.',
-  'Fruitback did not answer. Your sites are not lost.': 'Fruitback n’a pas répondu. Vos sites ne sont pas perdus.',
   'Fruitback did not answer. The sources and their sites could not be read.':
     'Fruitback n’a pas répondu. Les sources et leurs sites n’ont pas pu être lus.',
   Close: 'Fermer',
@@ -363,6 +355,36 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Only the owner of the workspace deletes it.': 'Seul le propriétaire du workspace le supprime.',
   'The workspace was not deleted. Try again.': 'Le workspace n’a pas été supprimé. Réessayez.',
   'Remove {site}': 'Retirer {site}',
+  'Where {workspace} collects notes, and where they stand.':
+    'Là où {workspace} recueille des notes, et où elles en sont.',
+  'Add a site': 'Ajouter un site',
+  'The sites did not load': 'Les sites ne se sont pas chargés',
+  'Fruitback did not answer. Your sites and notes are safe.':
+    'Fruitback n’a pas répondu. Vos sites et vos notes sont en sécurité.',
+  'No site yet': 'Aucun site pour l’instant',
+  "Paste the address of a site you review. Staging, a preview build or a client's live site: any page of it will do.":
+    'Collez l’adresse d’un site que vous relisez. Un staging, une preview ou le site en ligne d’un client : n’importe laquelle de ses pages convient.',
+  'An owner or an admin of {workspace} adds its first site.':
+    'Un propriétaire ou un admin de {workspace} ajoute son premier site.',
+  'Notes go to': 'Les notes vont vers',
+  Actions: 'Actions',
+  'A site with no tracker keeps its notes in Fruitback.': 'Un site sans tracker garde ses notes dans Fruitback.',
+  'Connect a tracker': 'Connecter un tracker',
+  'Add site': 'Ajouter le site',
+  'Who sees the notes?': 'Qui voit les notes ?',
+  'Members of {workspace}': 'Les membres de {workspace}',
+  "Visitors of the site see nothing. Right for staging and for a client's site.":
+    'Les visiteurs du site ne voient rien. Convient à un staging et au site d’un client.',
+  'Everyone who visits': 'Tous les visiteurs',
+  'A public way to report a problem on a live site.': 'Un moyen public de signaler un problème sur un site en ligne.',
+  'A tracker': 'Un tracker',
+  'Team {team}': 'Équipe {team}',
+  'Kept in Fruitback': 'Gardées dans Fruitback',
+  'No tracker yet': 'Pas encore de tracker',
+  '{place} and {count} more': '{place} et {count} de plus',
+  'Preview builds': 'Previews',
+  'More for {site}': 'Plus pour {site}',
+  'Install on {site}': 'Installer sur {site}',
   'The widget stops on {site}, and the script pasted there no longer works: adding the site again gives it a new script. The notes already in a tracker stay there.':
     'Le widget s’arrête sur {site}, et le script collé là ne marche plus : ajouter le site à nouveau lui donne un nouveau script. Les notes déjà dans un tracker y restent.',
   'Disconnect {source}': 'Déconnecter {source}',

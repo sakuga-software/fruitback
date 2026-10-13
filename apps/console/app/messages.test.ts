@@ -29,11 +29,19 @@ const screens = [
 ];
 const sources = new Map(screens.map((name) => [name, readFileSync(new URL(name, APP), 'utf8')]));
 
-/** The first argument of each `t(` and `msg(`, when it is a literal. */
+/**
+ * The first argument of each `t(` and `msg(`, when it is a literal. A sentence with an apostrophe is
+ * written between double quotes, as the formatter leaves it: « a client's site ».
+ */
 function sentencesOf(source: string): string[] {
-  return [...source.matchAll(/\b(?:t|msg)\(\s*'((?:[^'\\]|\\.)*)'/g)].map((match) =>
+  const single = [...source.matchAll(/\b(?:t|msg)\(\s*'((?:[^'\\]|\\.)*)'/g)].map((match) =>
     (match[1] as string).replaceAll("\\'", "'"),
   );
+  const double = [...source.matchAll(/\b(?:t|msg)\(\s*"((?:[^"\\]|\\.)*)"/g)].map((match) =>
+    (match[1] as string).replaceAll('\\"', '"'),
+  );
+
+  return [...single, ...double];
 }
 
 const shown = new Set([...sources.values()].flatMap(sentencesOf));
@@ -68,6 +76,7 @@ describe('the words of the console (FRU-120)', () => {
         // What `t` and `msg` already hold, and the class names, are not text of ours.
         const rest = line
           .replaceAll(/\b(?:t|msg)\(\s*'(?:[^'\\]|\\.)*'/g, '')
+          .replaceAll(/\b(?:t|msg)\(\s*"(?:[^"\\]|\\.)*"/g, '')
           .replaceAll(/className=(?:"[^"]*"|\{`[^`]*`\})/g, '');
         const text =
           // Words between two tags, or alone on a line of JSX.
@@ -91,6 +100,8 @@ describe('the words of the console (FRU-120)', () => {
 
     assert.ok(/>\s*[A-Za-z][A-Za-z ,.'’]{2,}\s*<\//.test(sample));
     assert.ok(shown.size > 100, `only ${shown.size} sentences were found`);
+    // A sentence between double quotes is found too: one with an apostrophe is written so.
+    assert.deepEqual(sentencesOf(`t("a client's site") msg('a site')`), ['a site', "a client's site"]);
   });
 });
 

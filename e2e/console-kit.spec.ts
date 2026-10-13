@@ -75,7 +75,7 @@ test('the formula answers the two known ratios', () => {
 test('the alert of a problem reads as a problem', async ({ page }) => {
   await openSites(page);
   await page.getByRole('textbox').first().fill('https://staging.acme.dev');
-  await page.getByRole('button', { name: 'Add the site' }).click();
+  await page.getByRole('button', { name: 'Add site' }).click();
 
   const alert = page.getByRole('alert');
   await expect(alert).toBeVisible();
@@ -91,7 +91,7 @@ test('the alert of a problem reads as a problem', async ({ page }) => {
 test('the main button keeps 4.5:1 under the pointer, when pressed and with focus', async ({ page }) => {
   await openSites(page);
   await page.getByRole('textbox').first().fill('https://staging.acme.dev');
-  const button = page.getByRole('button', { name: 'Add the site' });
+  const button = page.getByRole('button', { name: 'Add site' });
   const ratio = async () => contrast(await painted(button, 'color'), await painted(button, 'backgroundColor'));
   const resting = await painted(button, 'backgroundColor');
 

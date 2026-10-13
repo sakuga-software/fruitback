@@ -510,9 +510,13 @@ test('what the root says above a screen stays above the rail, and reads', async 
     answer: (pathname, route) => (down && pathname !== '/console/me' ? route.abort() : undefined),
   });
   await open(page);
+  // The list is read before the worker stops: a read that fails shows no way to add a site.
+  const add = page.getByRole('button', { name: 'Add a site' });
+  await expect(add).toBeVisible();
   down = true;
-  await page.getByRole('textbox').first().fill('https://staging.acme.dev');
-  await page.getByRole('button', { name: 'Add the site' }).click();
+  await add.click();
+  await page.getByRole('textbox', { name: 'Site address' }).fill('https://staging.acme.dev');
+  await page.getByRole('button', { name: 'Add site' }).click();
 
   const banner = page.getByRole('alert').filter({ hasText: 'Fruitback cannot reach its server' });
   await expect(banner).toBeVisible();

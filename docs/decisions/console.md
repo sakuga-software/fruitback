@@ -53,7 +53,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   spec holds both. **Not measured: what VoiceOver and NVDA say**; the spec reads the role, the name
   and where focus is.
   **The console decides nothing about a domain** (FRU-103). The Sites screen shows, to an owner or an
-  admin, the domains of the workspace (`domains.tsx`): the `TXT` record to write, « Check the DNS »,
+  admin, the domains of the workspace (`domains.tsx`), under the row of a site, behind « Preview
+  builds » of its menu (FRU-243): the `TXT` record to write, « Check the DNS »,
   and for a domain the worker says is proven, the site whose previews it covers. `state` is the
   worker's word; a DNS that did not answer is said as such, never as « not found »; a proof that is
   lost shows since when, and its record again. `e2e/console-domains.spec.ts` holds it.
@@ -123,6 +124,26 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the mockup, at 1440 and 390 px, the menu, the keyboard and axe. **Not copied from the mockup**:
   a link of the rail under the pointer is white, where the mockup turns every link `#b91c1c`
   (2.6:1 on the rail); « Help and docs » opens in another tab, so a screen keeps what is typed in it.
+- **The Sites screen is the table of the mockup, with the columns the worker fills** (FRU-243,
+  `routes/sites.tsx`): the site and who sees its notes, and where its notes go, to whoever sees the
+  tracker. The count of notes, the way on the page and the last note wait for the summary of the
+  sites (FRU-237), and the legend of the statuses comes with them: a column with nothing true to
+  show is not drawn. **A row has one menu, and what it opens is under the row**: « Install », for
+  every role; « Preview builds », which is the proof of a domain of FRU-103, and « Remove », for who
+  manages the sites. One thing is open at a time, and what closes gives focus back to the button of
+  the row. « Remove » asks twice: the menu is the first time, and `Confirmation` (`confirm.tsx`) the
+  second. **No item changes who sees the notes of a site**: the worker has no route for it, and a
+  button that does nothing is not drawn; so the form that adds a site asks it, in the card of a
+  workspace with no site too, where the mockup draws the address alone. **The address of a site is
+  no link** until a site has a page. **The table has no minimum width while it has three columns**:
+  it fits a phone, so what opens under a row is on screen; the six columns of the mockup need
+  860 px and a place for it outside the table. The card and the alert are sized by their content
+  (`box-content`), as the mockup sizes them: 640 px and 760 px inside their padding.
+  `e2e/console-sites.spec.ts` holds the three states, the form, the menu, the roles, 390 px and axe.
+- **A box is compared to the mockup in the font of the mockup** (`e2e/console-workspace.ts`,
+  `MOCKUP_FONT`): the mockup sizes its boxes by their text, and the Linux of CI has another font
+  (52 px where the mockup has 49). `expectBox` compares on macOS; the computed styles are read
+  everywhere, and they are what CI holds.
 - **What the kit does not copy from the mockup.** The padding of a button is of its size, where the
   mockup writes 22, 24 or 26 px on the same pill. A switch changes colour in 200 ms everywhere,
   where the mockup does so in the popup only. A disabled switch dims its control and not its words.
