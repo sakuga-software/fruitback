@@ -368,10 +368,18 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     container.replaceChildren();
     // A note has the number of its place among the notes of the page, before any is hidden: hiding a
     // stage must not give « note 3 » to another note. A note kept for later is not counted.
+    // Both marks are written at each draw, and the other one taken away: the two stores outlive a
+    // render, and an object a caller draws first as a draft and then as a sent note must not keep
+    // the look of the draft.
     let count = 0;
     for (const issue of source) {
-      if (options.isDraft?.(issue) === true) DRAFTS.add(issue);
-      else NUMBERS.set(issue, (count += 1));
+      if (options.isDraft?.(issue) === true) {
+        DRAFTS.add(issue);
+        NUMBERS.delete(issue);
+      } else {
+        DRAFTS.delete(issue);
+        NUMBERS.set(issue, (count += 1));
+      }
     }
 
     placed = source

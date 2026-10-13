@@ -108,6 +108,33 @@ describe('createOverlay', () => {
     assert.equal((page.document.querySelector('[data-fruitback-orphans]') as HTMLElement).hidden, false);
   });
 
+  it('draws one object as a draft and then as a sent note, with nothing left of the draft', () => {
+    // The caller says what is a draft at each draw. The marks are kept apart from the pins and
+    // outlive a render: the same object, sent since, must get its number and lose the neutral look.
+    const page = mountWithCta();
+    const note = issueOnCta();
+    let kept = true;
+    overlay = createOverlay({ document: page.document, isDraft: () => kept });
+    const pin = () => page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
+
+    overlay.render([note]);
+    assert.equal(pin().dataset.fruitbackDraft, '');
+    assert.equal(pin().querySelector('.fruitback-pin-glyph')?.textContent, '');
+
+    kept = false;
+    overlay.render([note]);
+    assert.equal(pin().dataset.fruitbackDraft, undefined);
+    assert.equal(pin().querySelector('.fruitback-pin-glyph')?.textContent, '1');
+    assert.match(pin().querySelector('.fruitback-pin-badge')?.getAttribute('aria-label') ?? '', /^Note 1, /);
+
+    // And back: a draft has no number.
+    kept = true;
+    overlay.render([note]);
+    assert.equal(pin().dataset.fruitbackDraft, '');
+    assert.equal(pin().querySelector('.fruitback-pin-glyph')?.textContent, '');
+    assert.equal(overlay.resolutions()[0]?.number, undefined);
+  });
+
   it('numbers the notes of the page, names each pin by its number and status, and says which is open (FRU-252)', () => {
     const page = mountWithCta();
     const hidden = new Set<string>();
