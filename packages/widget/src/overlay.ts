@@ -95,6 +95,8 @@ export type OverlayOptions = {
   isDraft?: (issue: SeedIssue) => boolean;
   /** Called when a pin is clicked, in case the host wants to do more than open the thread. */
   onSelect?: (issue: SeedIssue) => void;
+  /** Called when a thread opens or closes: the list of the page marks the note that is open (FRU-259). */
+  onThread?: () => void;
   /**
    * Called after the overlay re-resolves its pins on its own. The host is told, so it never has to
    * detect the change itself — which a client's app cannot do.
@@ -129,6 +131,13 @@ export type Overlay = {
   }[];
   /** Whether a thread is open. `render` closes it, so a caller that can wait asks first. */
   threadOpen(): boolean;
+  /** The note whose thread is open, if any (FRU-259). */
+  openId(): string | undefined;
+  /**
+   * Whether the element of this note is under the part of the page in sight (FRU-259): the list
+   * then says « further down ». `false` for a note that is not drawn, or whose element is gone.
+   */
+  below(id: string): boolean;
   /**
    * Scrolls to the pin of this note and opens its thread (FRU-129). `false` when the note is not
    * drawn: a stage the reporter hid, or a note that is gone.
@@ -473,11 +482,13 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     // The thread is the last child of the container, far from its badge in the tab order.
     thread.querySelector<HTMLElement>('.fruitback-thread-close')?.focus();
     options.onSelect?.(entry.issue);
+    options.onThread?.();
   }
 
   function closeThread(restoreFocus = true): void {
     const focused = restoreFocus && threadHasFocus();
     const opener = placed.find((entry) => entry.pin.dataset.fruitbackOpen !== undefined);
+    const wasOpen = thread !== null;
     thread?.remove();
     thread = null;
     for (const entry of placed) {
@@ -487,6 +498,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     const badge = opener?.pin.querySelector<HTMLElement>('.fruitback-pin-badge');
     if (focused) (threadOpener?.isConnected === true ? threadOpener : badge)?.focus();
     threadOpener = null;
+    if (wasOpen) options.onThread?.();
   }
 
   function threadHasFocus(): boolean {
@@ -537,6 +549,14 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     refilter,
     resolutions,
     threadOpen: () => thread !== null,
+    openId: () => placed.find((entry) => entry.pin.dataset.fruitbackOpen !== undefined)?.issue.seed.id,
+    below(id) {
+      const entry = placed.find((candidate) => candidate.issue.seed.id === id);
+      if (entry === undefined || entry.resolution.element === null || view === null) return false;
+
+      // The top of its frame, in document coordinates, against the bottom edge of the window.
+      return (Number.parseFloat(entry.pin.style.top) || 0) >= view.scrollY + view.innerHeight;
+    },
     select(id) {
       const entry = placed.find((candidate) => candidate.issue.seed.id === id);
       if (entry === undefined) return false;

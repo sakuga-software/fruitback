@@ -1,11 +1,11 @@
 import { existsSync } from 'node:fs';
 import { workspacesOf } from './clients.ts';
-import { type WorkerEnv, readConfig } from './env.ts';
+import { DATABASE_SCHEMA_REFUSED, type WorkerEnv, readConfig } from './env.ts';
 import { PAIRING_TTL_SECONDS } from './session.ts';
 import { createPairingCommand } from './app.ts';
 import { CACHE_TTL_MS } from './cache.ts';
 import { pairingLink } from './pair-page.ts';
-import { createPgDatabase, readDatabaseUrl } from './postgres.ts';
+import { createPgDatabase, readDatabaseSchema, readDatabaseUrl } from './postgres.ts';
 import { copySeedsFile, copySqliteFiles } from './postgres-stores.ts';
 import type { ForgetSelector, ForgottenSeed, SeedStore } from './store.ts';
 
@@ -450,7 +450,10 @@ export async function runMigrateToPostgres(
   const absent = files.filter((path) => !existsSync(path));
   if (absent.length > 0) return { ok: false, lines: [`no file at ${absent.join(', ')}. Nothing was written.`] };
 
-  const database = createPgDatabase(url, { max: 1 });
+  const schema = readDatabaseSchema(env.FRUITBACK_DATABASE_SCHEMA);
+  if (schema === undefined) return { ok: false, lines: [`${DATABASE_SCHEMA_REFUSED} is required`] };
+
+  const database = createPgDatabase(url, schema, { max: 1 });
   try {
     return args.copy === 'seeds'
       ? await copySeedsFile({ seedsPath: args.seedsPath, clients: args.clients, database, dryRun: args.dryRun })

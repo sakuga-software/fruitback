@@ -89,7 +89,7 @@ export function storeFor(config: WorkerConfig): SeedStore {
  */
 export function sessionStoreFor(config: WorkerConfig): SessionStore | undefined {
   // `readConfig` refuses the two together, so the order here decides nothing.
-  if (config.databaseUrl !== undefined) return postgresSessionStore(config.databaseUrl);
+  if (config.databaseUrl !== undefined) return postgresSessionStore(config.databaseUrl, config.databaseSchema);
 
   return config.sessionPath === undefined ? undefined : createSqliteSessionStore(config.sessionPath);
 }
@@ -121,7 +121,7 @@ export function mailerFor(config: WorkerConfig): Mailer | undefined {
 
 /** The accounts of this worker, or `undefined` when its clients come from the env (FRU-96). */
 export function accountStoreFor(config: WorkerConfig): AccountStore | undefined {
-  return config.databaseUrl === undefined ? undefined : postgresAccountStore(config.databaseUrl);
+  return config.databaseUrl === undefined ? undefined : postgresAccountStore(config.databaseUrl, config.databaseSchema);
 }
 
 /**
@@ -284,8 +284,8 @@ export type RequestContext = {
  * keeps it in the memory of the process, as before. No variable chooses: the database is the one
  * store that replicas share. One instance for the process either way.
  */
-export function kvFor(config: Pick<WorkerConfig, 'databaseUrl'>): Kv {
-  return config.databaseUrl === undefined ? processKv() : postgresKv(config.databaseUrl);
+export function kvFor(config: Pick<WorkerConfig, 'databaseUrl' | 'databaseSchema'>): Kv {
+  return config.databaseUrl === undefined ? processKv() : postgresKv(config.databaseUrl, config.databaseSchema);
 }
 
 export async function handleRequest(request: Request, env: WorkerEnv, context: RequestContext): Promise<Response> {
@@ -707,7 +707,9 @@ async function handleSession(
 
 /** Where this worker keeps the pictures of the notes: its database, or nowhere (FRU-44). */
 export function screenshotStoreFor(config: WorkerConfig): ScreenshotStore | undefined {
-  return config.databaseUrl === undefined ? undefined : postgresScreenshotStore(config.databaseUrl);
+  return config.databaseUrl === undefined
+    ? undefined
+    : postgresScreenshotStore(config.databaseUrl, config.databaseSchema);
 }
 
 /**

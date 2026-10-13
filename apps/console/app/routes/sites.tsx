@@ -71,7 +71,20 @@ export default function Sites() {
     setUnder(undefined);
     // A list that was not read stays what it is (`edited`).
     setSites((current) => edited(current, (items) => items.filter((each) => each.id !== site.id)));
+    setRemoved((count) => count + 1);
   }
+
+  // The row of a site that was removed is gone, and the button that had focus with it. Focus goes to
+  // the table, or to the field of the card when the last site went: a keyboard does not start again
+  // from the top of the page.
+  const [removed, setRemoved] = useState(0);
+  useEffect(() => {
+    if (removed === 0) return;
+    const next =
+      document.querySelector<HTMLElement>('main [role="region"][tabindex="0"]') ??
+      document.querySelector<HTMLElement>('main input');
+    next?.focus();
+  }, [removed]);
 
   const listed = typeof sites !== 'string' && sites.length > 0;
 

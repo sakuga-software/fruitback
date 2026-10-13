@@ -57,12 +57,15 @@ export function Confirmation({
   consequence,
   onConfirm,
   onKeep,
+  keepLabel,
 }: {
   confirmLabel: string;
   consequence: string;
   onConfirm: () => void;
   /** « Keep it », and Escape. */
   onKeep: () => void;
+  /** The words of the way back, when « Keep it » does not say it: « Stay signed in ». */
+  keepLabel?: string;
 }) {
   useLocale();
 
@@ -79,7 +82,7 @@ export function Confirmation({
     >
       <p className="w-full text-sm">{consequence}</p>
       <Button tone="quiet" autoFocus onClick={onKeep}>
-        {t('Keep it')}
+        {keepLabel ?? t('Keep it')}
       </Button>
       <Button tone="danger" onClick={onConfirm}>
         {confirmLabel}

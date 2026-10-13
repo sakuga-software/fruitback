@@ -253,7 +253,7 @@ function migrationsOfTheCopy(into: string): string {
 
 /** Whether the database still has the tables of `COPY_SCHEMA`: no worker moved their rows yet. */
 async function hasTheTablesOfTheCopy(db: Db): Promise<boolean> {
-  const answer = await db.execute(sql`SELECT to_regclass('public.accounts') AS accounts`);
+  const answer = await db.execute(sql`SELECT to_regclass('accounts') AS accounts`);
 
   return (answer as unknown as { rows: Row[] }).rows[0]?.accounts !== null;
 }

@@ -56,9 +56,16 @@ function poolOver(instance: PGlite): PgPool {
   return pool as unknown as PgPool;
 }
 
-/** The database of `instance`, with nothing in `public`. `close` empties it, and leaves the instance open. */
-export async function databaseOn(instance: PGlite): Promise<PgDatabase> {
-  await instance.exec(EMPTY_PUBLIC);
+/**
+ * The database of `instance`, with nothing in `public`. `close` empties it, and leaves the instance open.
+ *
+ * `schema` is the one of the worker (FRU-219): the one connection of the instance has it alone in its
+ * search path, as each connection of a pool of `postgres.ts` has. A schema that is not `public` is
+ * dropped with it, before and after.
+ */
+export async function databaseOn(instance: PGlite, schema = 'public'): Promise<PgDatabase> {
+  const empty = `${EMPTY_PUBLIC}${schema === 'public' ? '' : ` DROP SCHEMA IF EXISTS "${schema}" CASCADE;`}`;
+  await instance.exec(`RESET search_path; ${empty} SET search_path TO "${schema}";`);
   const db = drizzle({ client: instance });
 
   /** The error of PGlite, and not the one of Drizzle around it: a test reads its code. */
@@ -71,12 +78,13 @@ export async function databaseOn(instance: PGlite): Promise<PgDatabase> {
   };
 
   return {
+    schema,
     run: (work) => plain(work(db)),
     transaction: (work) => plain(db.transaction((transaction) => work(transaction))),
     alone: (work) => plain(work(db, (config) => migrateOnPglite(db, config))),
     pool: async () => poolOver(instance),
     async close() {
-      await instance.exec(EMPTY_PUBLIC);
+      await instance.exec(`RESET search_path; ${empty}`);
     },
   };
 }

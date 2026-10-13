@@ -294,3 +294,36 @@ test('it rises from the corner nearest to its element, with no fade', async ({ p
   expect(x).toBe(0);
   expect(Math.abs((y ?? 0) - motion.height)).toBeLessThanOrEqual(1);
 });
+
+test('a second capture while a note is on its way loses nothing, and the failure still says why', async ({ page }) => {
+  // The launch button is in reach of the pointer under the composer. A choice made while the note
+  // is sending is let go: the note in flight is about the element chosen before.
+  await openPlayground(page, 'composer-second-capture');
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route('**/feedback', async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    await held;
+    await route.fulfill({ status: 502, contentType: 'application/json', body: '{"error":"store-unavailable"}' });
+  });
+  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.locator('[data-testid="card-latte"] .add').click();
+  const about = page.locator('.fruitback-composer-about');
+  await expect(about).toHaveText('on Ajouter');
+  const note = 'Written before a second capture';
+  await page.getByPlaceholder('What should change?').fill(note);
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.locator('[data-fruitback-composer]')).toHaveAttribute('data-fruitback-state', 'sending');
+
+  await page.locator('[data-fruitback-host-launch]').click();
+  // Another element, away from the composer, which stands over the card it is about.
+  await page.locator('[data-testid="card-mocha"] .add').click();
+
+  await expect(page.locator('[data-fruitback-composer]')).toHaveAttribute('data-fruitback-state', 'sending');
+  await expect(about).toHaveText('on Ajouter');
+  await expect(page.getByPlaceholder('What should change?')).toHaveValue(note);
+
+  release();
+  await expect(page.locator('[data-fruitback-composer]')).toContainText(/did not go through/);
+  await expect(page.getByPlaceholder('What should change?')).toHaveValue(note);
+});

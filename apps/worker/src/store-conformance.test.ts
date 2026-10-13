@@ -348,11 +348,17 @@ function postgresSubject(on: string, create: () => Promise<PgDatabase>, skip: st
         throw Object.assign(new Error('relation "seeds" does not exist'), { code: '42P01' });
       };
 
-      return createPostgresSeedStore({ run: refuses, transaction: refuses, alone: refuses, close: async () => {} });
+      return createPostgresSeedStore({
+        schema: 'public',
+        run: refuses,
+        transaction: refuses,
+        alone: refuses,
+        close: async () => {},
+      });
     },
     // Nothing listens on port 1: the driver is refused the connection.
     unreachable() {
-      const database = createPgDatabase('postgres://fruitback:not-a-password@127.0.0.1:1/fruitback');
+      const database = createPgDatabase('postgres://fruitback:not-a-password@127.0.0.1:1/fruitback', 'public');
       databases.push(database);
 
       return createPostgresSeedStore(database);

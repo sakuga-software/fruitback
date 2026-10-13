@@ -93,6 +93,68 @@ describe('what the popover looks like (FRU-36)', () => {
     assert.equal(about().querySelector('img'), null);
   });
 
+  it('keeps what was written when the open composer is pointed at another element', async () => {
+    // A second capture over an open composer chooses another element. Losing what somebody just
+    // wrote is the one failure the product cannot afford: the text stays, and the head says the new element.
+    let remembered: string | undefined = 'Ana';
+    mount(async () => true, {
+      memory: {
+        get: () => remembered,
+        set: (name) => {
+          remembered = name;
+        },
+      },
+    });
+    composer?.open(ANCHOR, 'The first element');
+    field().value = 'Half a note';
+    // The name the composer remembered, changed by hand and not sent yet: it is what was written too.
+    const name = composer?.element.querySelector('[data-fruitback-name]') as HTMLInputElement;
+    assert.equal(name.value, 'Ana');
+    name.value = 'Bob';
+
+    composer?.open({ left: 400, top: 500, bottom: 540, right: 600 }, 'The second element');
+
+    assert.equal(field().value, 'Half a note');
+    assert.equal(name.value, 'Bob', 'the name that was typed gave way to the one remembered');
+    assert.equal(composer?.element.querySelector('[data-fruitback-about]')?.textContent, 'on The second element');
+    assert.equal(composer?.element.style.getPropertyValue('--fruitback-composer-left'), '394px');
+
+    // The control: closed and opened again, it is a new note.
+    composer?.close();
+    composer?.open(ANCHOR, 'The first element');
+    assert.equal(field().value, '');
+
+    // And a composer that shows « sent » is not being written in: the next note starts empty.
+    field().value = 'A whole note';
+    sendButton().click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(composer?.state(), 'sent');
+    composer?.open(ANCHOR, 'The first element');
+    assert.equal(field().value, '');
+  });
+
+  it('loses nothing when it is pointed at another element while the note is on its way', async () => {
+    // The launch button is reachable under the composer while a note is sending. A send that then
+    // fails must find its text and say why: it is the one failure the product cannot afford.
+    let answer: (result: boolean) => void = () => {};
+    mount(() => new Promise<boolean>((resolve) => (answer = resolve)));
+    composer?.open(ANCHOR, 'The first element');
+    field().value = 'A note on its way';
+    sendButton().click();
+    await Promise.resolve();
+    assert.equal(composer?.state(), 'sending');
+
+    composer?.open({ left: 400, top: 500, bottom: 540, right: 600 }, 'The second element');
+    assert.equal(field().value, 'A note on its way');
+    assert.equal(composer?.state(), 'sending');
+
+    answer(false);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(composer?.state(), 'failed');
+    assert.equal(field().value, 'A note on its way');
+    assert.match(statusText(), /did not go through/);
+  });
+
   it('closes on the cross like on Cancel, and gives the note up', () => {
     let closed = 0;
     mount(async () => true, { onClose: () => (closed += 1) });

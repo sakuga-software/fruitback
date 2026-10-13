@@ -248,7 +248,7 @@ describe('the store `postgres`, as a worker selects it (FRU-218)', () => {
     const world = await envOf();
     const real = createPostgresSeedStore(world.database);
     // Nothing listens on port 1: these two are read with no call to the database.
-    const lazy = postgresSeedStore('postgres://fruitback:not-a-password@127.0.0.1:1/fruitback');
+    const lazy = postgresSeedStore('postgres://fruitback:not-a-password@127.0.0.1:1/fruitback', 'public');
 
     assert.deepEqual([lazy.name, lazy.scope(undefined), lazy.stages], [real.name, real.scope(undefined), real.stages]);
     assert.deepEqual(

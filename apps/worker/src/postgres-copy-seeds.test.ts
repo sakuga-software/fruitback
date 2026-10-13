@@ -127,7 +127,13 @@ const counts = async (database: PgDatabase) =>
 const NO_RENAME = new Map<string | null, string>();
 const SUBJECTS: { label: string; open: () => Promise<PgDatabase>; skip: string | false }[] = [
   { label: 'PGlite', open: createPgliteDatabase, skip: false },
-  { label: 'a real server', open: createRealDatabase, skip: NO_REAL_POSTGRES },
+  { label: 'a real server', open: () => createRealDatabase(), skip: NO_REAL_POSTGRES },
+  // FRU-219: the notes go to the schema of the worker, and their numbers go on there.
+  {
+    label: 'a real server, in a schema of its own',
+    open: () => createRealDatabase('fruitback_notes'),
+    skip: NO_REAL_POSTGRES,
+  },
 ];
 
 for (const subject of SUBJECTS) {
@@ -578,7 +584,7 @@ describe('the command migrate-to-postgres --seeds, as a process (FRU-220)', () =
         for (const output of [dry, real, again]) {
           assert.ok(!`${output.stdout}${output.stderr}`.includes(password));
         }
-        const database = createPgDatabase(own.url, { max: 1 });
+        const database = createPgDatabase(own.url, 'public', { max: 1 });
         assert.deepEqual(await counts(database), { seeds: 6, comments: 3 });
         assert.deepEqual(await rowsOf(database, `SELECT count(*)::int AS n FROM seeds WHERE client_id = 'site_1'`), [
           { n: 4 },

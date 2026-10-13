@@ -124,8 +124,8 @@ after(async () => {
 });
 
 /** An empty database on PGlite: the one database of the shared instance, with nothing in `public`. */
-export function createPgliteDatabase(): Promise<PgDatabase> {
-  return databaseOn(pglite());
+export function createPgliteDatabase(schema = 'public'): Promise<PgDatabase> {
+  return databaseOn(pglite(), schema);
 }
 
 /** How long `drop` waits for the connections of a database to end, before it drops it all the same. */
@@ -168,7 +168,7 @@ async function noClientLeftOn(admin: Database, name: string, patienceMs: number)
 export async function ownDatabase(): Promise<{ url: string; drop(): Promise<void>; dropAtOnce(): Promise<void> }> {
   if (TEST_DATABASE_URL === undefined) throw new Error('FRUITBACK_TEST_DATABASE_URL is not set');
   const name = databaseName();
-  const admin = createPgDatabase(TEST_DATABASE_URL, { max: 1 });
+  const admin = createPgDatabase(TEST_DATABASE_URL, 'public', { max: 1 });
   // `template0`: a copy of `template1` is refused while another session is on it.
   await rowsOf(admin, `CREATE DATABASE ${name} TEMPLATE template0`);
   const url = new URL(TEST_DATABASE_URL);
@@ -190,9 +190,9 @@ export async function ownDatabase(): Promise<{ url: string; drop(): Promise<void
 }
 
 /** An empty database on the real server: a new one, and a pool on it. `close` drops it. */
-export async function createRealDatabase(): Promise<PgDatabase> {
+export async function createRealDatabase(schema = 'public'): Promise<PgDatabase> {
   const own = await ownDatabase();
-  const database = createPgDatabase(own.url);
+  const database = createPgDatabase(own.url, schema);
 
   return {
     ...database,

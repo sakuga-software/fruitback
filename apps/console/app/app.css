@@ -111,6 +111,7 @@
   /* The heights of a control: of a page, of a panel, of a chip, small. */
   --spacing-control: 44px;
   --spacing-control-panel: 40px;
+  --spacing-control-row: 38px;
   --spacing-control-chip: 36px;
   --spacing-control-small: 32px;
 
@@ -208,9 +209,28 @@ textarea {
   font-size: var(--text-hint);
 }
 
+/* Over its column. Its words can be a name somebody typed: they take the lines they need, and the
+   button grows, where a button of its own width would make the page scroll sideways. */
 .kit-button[data-wide='true'] {
   display: flex;
   width: 100%;
+  height: auto;
+  min-height: var(--spacing-control);
+  padding-top: 10px;
+  padding-bottom: 10px;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.kit-button[data-wide='true'][data-size='panel'] {
+  min-height: var(--spacing-control-panel);
+}
+
+.kit-button[data-wide='true'][data-size='small'] {
+  min-height: var(--spacing-control-small);
+  padding-top: 6px;
+  padding-bottom: 6px;
 }
 
 /* The action of a step: the one pill of a screen. White on it is 4.70:1, 6.47:1 under the pointer. */
@@ -278,6 +298,8 @@ textarea {
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
   white-space: normal;
+  /* The words of a link can be a host: they wrap where they must. */
+  overflow-wrap: anywhere;
   cursor: pointer;
   transform: none;
   transition: none;
@@ -289,6 +311,16 @@ textarea {
 
 .kit-link[data-space='loose'] {
   padding: 12px 0;
+}
+
+/* At the end of a line of text: the target of 8 px each way, and the height of the line it is on. */
+.kit-link[data-space='flush'] {
+  margin: -8px 0;
+}
+
+/* In a row of a table: the line of the table, so that the row keeps the height of its text. */
+.kit-table .kit-link {
+  line-height: inherit;
 }
 
 /* In a sentence: the words of the sentence, and no space of its own. */
@@ -408,6 +440,14 @@ textarea {
   padding: 0 12px;
 }
 
+/* A list that chooses a status: 38 px, the drop 12 px from the edge (its border counted), the word 9 px after. */
+.kit-field[data-status='true'] .select__trigger {
+  gap: 9px;
+  padding-left: 11px;
+  height: var(--spacing-control-row);
+  font-size: var(--text-small);
+}
+
 /* A value the person reads and cannot change: the address of an instance, a name set elsewhere. */
 .kit-field[data-locked='true'] .input {
   border-color: var(--color-line);
@@ -429,8 +469,8 @@ textarea {
   min-width: 0;
 }
 
+/* The question is 8 px over the first card, as the cards are 8 px apart. */
 .kit-pick > .label {
-  margin-bottom: 8px;
   color: var(--color-ink);
   font-size: var(--text-label);
   font-weight: 600;
@@ -451,8 +491,11 @@ textarea {
   border-color: var(--color-ink);
 }
 
+/* 19 px: the 16 px of the radio and the 3 px the mockup puts over it. */
 .kit-pick__card .radio__content {
-  gap: 10px;
+  /* The words start 30 px after the radio starts: its 16 px, and a column of 20 px with 10 px after. */
+  gap: 14px;
+  min-height: 19px;
 }
 
 /* Ink when it is chosen, as the switch: the accent is the red of an alert. */
@@ -468,7 +511,7 @@ textarea {
 }
 
 .kit-pick__card .description {
-  padding-left: 26px;
+  padding-left: 30px;
   color: var(--muted);
   font-size: var(--text-hint);
   line-height: var(--text-hint--line-height);
@@ -818,7 +861,7 @@ textarea {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 4px 24px;
+  gap: 8px 24px;
   /* As the mockup writes it: the padding is outside the 1280 px, so the logo is at 80 px at 1440. */
   box-sizing: content-box;
   max-width: 1280px;
@@ -881,6 +924,246 @@ textarea {
   height: 1px;
   background: var(--color-line);
   content: '';
+}
+
+/* The steps of the setup: a drop with a number, a line down to the next one, the step beside it. */
+.kit-steps {
+  padding: 0;
+  list-style: none;
+}
+
+.kit-step {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  column-gap: 16px;
+}
+
+.kit-step__rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-top: 1px;
+}
+
+.kit-step__mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 26px;
+  height: 26px;
+  background: var(--color-ink);
+  color: var(--surface);
+  font-size: var(--text-tiny);
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* The drop is turned by a quarter: what it holds is turned back. */
+.kit-step__mark > * {
+  transform: rotate(90deg);
+}
+
+.kit-step__mark svg {
+  width: 13px;
+  height: 13px;
+}
+
+.kit-step[data-state='pending'] .kit-step__mark {
+  border: 1.5px solid var(--field-border);
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.kit-step[data-state='done'] .kit-step__mark {
+  background: var(--color-done);
+}
+
+.kit-step__line {
+  flex: 1 1 auto;
+  width: 2px;
+  min-height: 24px;
+  border-radius: 2px;
+  background: var(--color-line);
+}
+
+.kit-step:last-child .kit-step__line {
+  display: none;
+}
+
+.kit-step__body {
+  min-width: 0;
+  padding-bottom: 32px;
+}
+
+.kit-step:last-child .kit-step__body {
+  padding-bottom: 0;
+}
+
+.kit-step__title {
+  font-size: var(--text-step);
+  font-weight: 600;
+  line-height: var(--text-step--line-height);
+}
+
+.kit-step[data-state='pending'] .kit-step__title {
+  color: var(--muted);
+}
+
+/* Something that happened, said in a box: « Check your inbox ». */
+.kit-callout {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  /* An address with no space in it takes the lines it needs, and the page does not scroll. */
+  overflow-wrap: anywhere;
+  padding: 18px 20px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-box);
+  background: var(--color-subtle);
+}
+
+/* One way among a few to do a thing, each in its card: the extension, the script tag. */
+.kit-option {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-box);
+}
+
+.kit-option__title {
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: normal;
+}
+
+/* Cards or buttons side by side while they have room, then one under the other. */
+.kit-auto-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  gap: 10px;
+}
+
+.kit-auto-grid[data-min='230'] {
+  grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
+  gap: 12px;
+}
+
+/* Code to copy. It scrolls in its box, and the page does not. */
+.kit-snippet {
+  overflow-x: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-button);
+  background: var(--color-subtle);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-tiny);
+  line-height: 1.55;
+}
+
+/* The window of a browser, drawn: a bar with an address, and a page under it. */
+.kit-browser {
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-frame);
+  background: var(--surface);
+  box-shadow: var(--shadow-frame);
+}
+
+.kit-browser__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /* 44 px over its rule, as the mockup writes it. */
+  box-sizing: content-box;
+  height: 44px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-subtle);
+}
+
+.kit-browser__dots {
+  display: flex;
+  flex: none;
+  gap: 6px;
+  width: 42px;
+}
+
+.kit-browser__dots > span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-line);
+}
+
+.kit-browser__address {
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  min-width: 0;
+}
+
+.kit-browser__address > span {
+  overflow: hidden;
+  padding: 4px 16px;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: var(--text-hint);
+  line-height: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kit-browser__page {
+  position: relative;
+  height: 620px;
+  overflow: hidden;
+}
+
+.kit-browser__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 24px;
+  background: var(--color-subtle);
+  color: var(--muted);
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  text-align: center;
+}
+
+.kit-browser__empty svg {
+  width: 56px;
+  height: 68px;
+  fill: var(--color-line);
+}
+
+.kit-browser__empty p {
+  max-width: 280px;
+}
+
+/* No sentence: the drop alone, for a page that has nothing to say yet. */
+.kit-browser__empty p:empty {
+  display: none;
+}
+
+.kit-browser__caption {
+  margin: 12px 4px 0;
+  color: var(--muted);
+  font-size: var(--text-hint);
+  line-height: var(--text-hint--line-height);
 }
 
 /* A name and its initial. */

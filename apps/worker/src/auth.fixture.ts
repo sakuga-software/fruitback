@@ -23,6 +23,7 @@ export const AUTH_CONFIG: AuthConfig = {
   publicUrl: PUBLIC_URL,
   consoleUrl: CONSOLE_URL,
   databaseUrl: DATABASE_URL,
+  databaseSchema: 'public',
   trackIp: false,
 };
 
