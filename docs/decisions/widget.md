@@ -1140,3 +1140,30 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   of a single note, and a failed send reads again so the list of places is the one of now.
 - `e2e/drafts.spec.ts` keeps two notes, reloads, sends them from the list in one request and reads
   them back from the worker; a `429` keeps the draft and says why; axe in both schemes.
+
+## A link that opens a note on its page (FRU-253)
+
+### The rules, in short
+
+- **`<page>#fruitback-note=<id>` opens the thread of that note**, as a click on its pin does: the
+  page scrolls to the element and focus goes into the thread. The console writes this link under
+  « Show on the page ». The id is the id of the note, the id of its issue or its identifier.
+- **Only after a read answered** (`openLinked` in `embed.ts`, called at the end of each read). The
+  note is looked for among the notes the worker gave this reader, so the link opens nothing that
+  `GET /feedback` did not answer: a refused read opens nothing and says nothing. `SECURITY.md` has
+  the sentence.
+- **Its part of the fragment is then taken out of the address**, found or not, with
+  `history.replaceState`: a reload does not open the note again. **The fragment of the site
+  stays.** `#pricing` is neither read nor changed, and `#pricing&fruitback-note=sd_1` leaves
+  `#pricing` (`linkedNote` and `withoutLinkedNote` in `page.ts`).
+- **That edit of the address asks for no read.** `watchUrl` hears every `replaceState`, ours too,
+  and a read draws the pins again and closes the thread that just opened: found by the unit test
+  that counts the reads. A fragment that arrives later on the same page is followed with the notes
+  in hand, for the same reason.
+- **Nothing takes focus from somebody who writes** (rule 3 of `CLAUDE.md`). While the composer is
+  open or a capture runs, the link waits in the address. The note opens when the composer closes
+  (`embed.ts` watches its `hidden`), or at the next read.
+- **A note this page does not draw opens nothing**: a note of another page, or of a stage the
+  reporter hid in the settings. No error is shown and none is written to the console.
+- `e2e/deep-link.spec.ts` opens a note by its link on the built widget, with its control (`#formules`
+  is neither read nor erased), an unknown id, and a composer that stays open.
