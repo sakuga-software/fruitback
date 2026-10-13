@@ -303,14 +303,18 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   not read is no list.** **The list keeps the room of one row while it is read, and when it could
   not be**: it arrives above « Sign out », and a press that starts before a button moves and ends
   after is lost, with no request and no message (measured: 53 px, `main` red on 30c62f8). A second
-  browser still adds its row. **No kind of browser is shown**: the worker answers a user agent when its
-  operator switched that on, the type of `api.ts` leaves it out, and what to show of it waits for
-  Q7 of FRU-230. So another browser is « Console · another browser », with when it signed in and
-  when it was last used. **What has no route has no control**: the name is a locked field, a
-  provider says « On this Fruitback » or « Not set up » with no « Link » nor « Unlink », and no
-  extension is listed (FRU-249). The deletion of the workspace stays at the bottom, for its owner:
-  the mockup does not draw it, and it is nowhere else. `e2e/console-account.spec.ts` holds the
-  screen on stubs, and the sessions on a worker with accounts: one browser disconnects the other,
+  browser still adds its row. **A browser is named as the worker names it** (FRU-249, Q7): « Console
+  · Chrome on macOS », a short label of its user agent; one it could not name reads « Console · this
+  browser » or « Console · another browser ». **The name on the notes is changed here**
+  (`POST /console/me/name`), kept when the field is left or by Enter, as the mockup draws no button; a
+  refusal says why and keeps what was typed. **A provider is linked by a navigation** to the worker
+  (`/console/auth/link/<provider>`), which comes back with `?linked=` or `?error=`, said once and
+  taken from the address; « Unlink » asks twice, and the last way to sign in stays and says why
+  (`409 last-sign-in`, `403 sign-in-again`). The three rows of « How you sign in » are drawn before
+  the worker answers, so nothing under them moves. The worker keeps no login of a provider: « Linked »,
+  not « Linked as ». No extension is listed yet: their route comes with FRU-238. The deletion of the
+  workspace stays at the bottom, for its owner: the mockup does not draw it, and it is nowhere else.
+  `e2e/console-account.spec.ts` holds the screen on stubs, and the sessions on a worker with accounts: one browser disconnects the other,
   which learns it at its next call, and « Sign out everywhere » ends every one.
 - **A box is compared to the mockup in the font of the mockup** (`e2e/console-workspace.ts`,
   `MOCKUP_FONT`): the mockup sizes its boxes by their text, and the Linux of CI has another font

@@ -44,8 +44,9 @@ async function signInByLink(page: Page, worker: Worker, email: string): Promise<
  */
 async function openAccount(page: Page): Promise<void> {
   await page.getByRole('link', { name: 'My account' }).click();
+  // The row of this browser: the worker names it by its user agent (FRU-249).
   await expect(
-    page.getByRole('region', { name: 'Where you are signed in' }).getByText('Console · this browser'),
+    page.getByRole('region', { name: 'Where you are signed in' }).getByText('This browser', { exact: true }),
   ).toBeVisible();
 }
 

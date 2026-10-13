@@ -23,7 +23,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Any of these opens the same account, in the console and in the extension.':
     'Chacune ouvre le même compte, dans la console et dans l’extension.',
   'Always on': 'Toujours actif',
-  'On this Fruitback': 'Sur ce Fruitback',
   'Disconnect a browser you no longer use. It stops showing notes at once.':
     'Déconnectez un navigateur que vous n’utilisez plus. Il cesse aussitôt d’afficher les notes.',
   'Fruitback did not answer. The browsers where you are signed in could not be read.':
@@ -640,4 +639,30 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Last seen': 'Vu pour la dernière fois',
   Today: 'Aujourd’hui',
   'Not seen yet': 'Pas encore vu',
+  // My account, FRU-249.
+  Linked: 'Lié',
+  'Not linked': 'Non lié',
+  'That account has another address than yours. Fruitback links only the address of your account.':
+    'Ce compte a une autre adresse que la vôtre. Fruitback ne lie que l’adresse de votre compte.',
+  'That account already opens another Fruitback account.': 'Ce compte ouvre déjà un autre compte Fruitback.',
+  'The provider did not say that this address is verified. Verify it there, then link again.':
+    'Le fournisseur n’a pas dit que cette adresse est vérifiée. Vérifiez-la chez lui, puis liez à nouveau.',
+  'Your session ended before the link. Sign in, then link again.':
+    'Votre session s’est terminée avant le lien. Connectez-vous, puis liez à nouveau.',
+  'The account was not linked. Try again.': 'Le compte n’a pas été lié. Réessayez.',
+  'This is the last way you sign in here: link another one first.':
+    'C’est votre dernière façon de vous connecter ici : liez-en une autre d’abord.',
+  'Sign in again first: a way to sign in changes only in the day after a sign-in.':
+    'Reconnectez-vous d’abord : une façon de se connecter ne change que dans la journée qui suit une connexion.',
+  '{provider} is still linked. Try again.': '{provider} est toujours lié. Réessayez.',
+  'A name is one line of 1 to 80 characters.': 'Un nom tient sur une ligne, de 1 à 80 caractères.',
+  'Your name was not changed. Try again.': 'Votre nom n’a pas été changé. Réessayez.',
+  '{provider} is linked to your account.': '{provider} est lié à votre compte.',
+  'Not sent by this Fruitback': 'Pas envoyé par ce Fruitback',
+  Unlink: 'Délier',
+  'Unlink {provider}': 'Délier {provider}',
+  'You no longer sign in with {provider}. Your account and its notes stay.':
+    'Vous ne vous connectez plus avec {provider}. Votre compte et ses notes restent.',
+  'Link {provider}': 'Lier {provider}',
+  'Console · {browser}': 'Console · {browser}',
 };

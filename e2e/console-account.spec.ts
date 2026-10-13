@@ -51,13 +51,53 @@ type Stubbed = {
   refuses: boolean;
   /** The sessions are ended already: the worker knows no session by these ids. */
   gone: boolean;
+  /** How the person signs in (FRU-249); `undefined`: the worker does not answer. */
+  methods: Record<string, unknown> | undefined;
+  /** What the worker answers to « Unlink », and to a name, when it refuses. */
+  unlinkRefuses?: string;
+  nameRefuses?: string;
   sent: string[];
+  /** The bodies the console sent, by path. */
+  bodies: Record<string, unknown>;
 };
 
 async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' = 'en'): Promise<Stubbed> {
-  const worker: Stubbed = { sessions: SESSIONS, refuses: false, gone: false, sent: [] };
+  const worker: Stubbed = {
+    sessions: SESSIONS,
+    refuses: false,
+    gone: false,
+    methods: { email: true, github: { linked: true }, google: { linked: false } },
+    sent: [],
+    bodies: {},
+  };
   const answer = (pathname: string, route: Route) => {
     const method = route.request().method();
+    if (pathname === '/console/me/sign-in') {
+      return worker.methods === undefined
+        ? route.fulfill({ status: 500, json: { error: 'unknown' } })
+        : route.fulfill({ json: worker.methods });
+    }
+    const provider = /^\/console\/me\/sign-in\/(\w+)$/.exec(pathname)?.[1];
+    if (provider !== undefined) {
+      worker.sent.push(`${method} ${pathname}`);
+      if (worker.unlinkRefuses !== undefined) {
+        return route.fulfill({
+          status: worker.unlinkRefuses === 'last-sign-in' ? 409 : 403,
+          json: { error: worker.unlinkRefuses },
+        });
+      }
+      worker.methods = { ...worker.methods, [provider]: { linked: false } };
+
+      return route.fulfill({ status: 204 });
+    }
+    if (pathname === '/console/me/name') {
+      const body = route.request().postDataJSON() as { name: string };
+      worker.sent.push(`${method} ${pathname}`);
+      worker.bodies[pathname] = body;
+      if (worker.nameRefuses !== undefined) return route.fulfill({ status: 400, json: { error: worker.nameRefuses } });
+
+      return route.fulfill({ json: { account: { id: 'a1', email: 'ana@acme.dev', name: body.name } } });
+    }
     if (pathname === '/console/sessions') {
       return worker.sessions === undefined
         ? route.fulfill({ status: 500, json: { error: 'unknown' } })
@@ -119,13 +159,12 @@ test('the screen is the one of the mockup, with what the worker of today does', 
   expect.soft(await styles(title, ['font-size', 'font-weight'])).toEqual({ 'font-size': '18px', 'font-weight': '700' });
   expectBox(await box(title), { x: 297, y: 142, height: 21 }, 2, '« Profile »');
 
-  // The profile: the name, read and not changed, and the language.
+  // The profile: the name, which the person changes (FRU-249), and the language.
   const profile = section(page, 'Profile');
   expect.soft(await styles(profile, ['row-gap'])).toEqual({ 'row-gap': '14px' });
   const name = profile.getByRole('textbox', { name: 'Name shown on notes' });
   await expect(name).toHaveValue('Ana');
-  // No route changes a name yet: the field says so by its look, and takes no typing.
-  await expect(name).toHaveAttribute('readonly', '');
+  await expect(name).toBeEditable();
   await expect(profile.getByText('ana@acme.dev')).toBeVisible();
   expectBox(await box(name), { x: 297, y: 199, width: 355, height: 44 }, 2, 'the name');
   const language = profile.getByRole('button', { name: /Language/ });
@@ -138,7 +177,7 @@ test('the screen is the one of the mockup, with what the worker of today does', 
       'row-gap': '14px',
     });
 
-  // How the person signs in: read only.
+  // How the person signs in: each way, linked or not, and what to do with it.
   const signIn = section(page, 'How you sign in');
   const help = signIn.getByText('Any of these opens the same account, in the console and in the extension.');
   expect.soft(await styles(help, ['font-size', 'line-height', 'margin-bottom'])).toEqual({
@@ -189,12 +228,26 @@ test('the screen is the one of the mockup, with what the worker of today does', 
   expect.soft(await painted(state, 'color')).toEqual(rgb(MUTED));
   const way = ways.nth(1).getByText('GitHub', { exact: true });
   expect.soft(await styles(way, ['font-weight'])).toEqual({ 'font-weight': '600' });
-  const detail = ways.nth(1).getByText('Not set up', { exact: true });
+  const detail = ways.nth(1).getByText('Linked', { exact: true });
   expect.soft(await styles(detail, ['font-size'])).toEqual({ 'font-size': '13px' });
   expect.soft(await painted(detail, 'color')).toEqual(rgb(MUTED));
-  // No route links or unlinks a provider yet: no button says that it does.
-  await expect(signIn.getByRole('button')).toHaveCount(0);
-  await expect(page.getByText(/Unlink|Link Google|Linked as/)).toHaveCount(0);
+  // A linked provider is unlinked; one that is not is linked, by a navigation to the worker.
+  await expect(ways.nth(1).getByRole('button', { name: 'Unlink', exact: true })).toBeVisible();
+  await expect(ways.nth(2)).toContainText('Not linked');
+  const link = ways.nth(2).getByRole('link', { name: 'Link Google' });
+  await expect(link).toHaveAttribute('href', 'http://localhost:8788/console/auth/link/google?workspace=w1');
+  // An outlined button of 40 px, as the mockup draws « Link Google ».
+  expect
+    .soft(await styles(link, ['height', 'padding-left', 'border-top-left-radius', 'font-size', 'font-weight']))
+    .toEqual({
+      height: '40px',
+      'padding-left': '16px',
+      'border-top-left-radius': '6px',
+      'font-size': '14px',
+      'font-weight': '600',
+    });
+  // The worker keeps no login of GitHub: « Linked », and not « Linked as ».
+  await expect(page.getByText(/Linked as/)).toHaveCount(0);
 
   // Where the console is signed in: this browser, then the others, the one used last first.
   const where = section(page, 'Where you are signed in');
@@ -603,8 +656,11 @@ test.describe('the browsers of a person, on a worker with accounts', () => {
     await first.page.getByRole('link', { name: 'My account' }).click();
     const browsers = first.page.getByRole('region', { name: 'Where you are signed in' }).getByRole('listitem');
     await expect(browsers).toHaveCount(2);
-    await expect(browsers.nth(0)).toContainText('Console · this browser');
-    await expect(browsers.nth(1)).toContainText('Console · another browser');
+    // The worker names each browser by its user agent (FRU-249): the Chromium of the test, which
+    // Playwright presents as « Desktop Chrome » (Windows) or as the machine it runs on.
+    await expect(browsers.nth(0)).toContainText(/Console · Chrome on (Windows|macOS|Linux)/);
+    await expect(browsers.nth(0)).toContainText('This browser');
+    await expect(browsers.nth(1)).toContainText(/Console · Chrome on (Windows|macOS|Linux)/);
 
     // It disconnects the other one: one press, and the row goes.
     await browsers.nth(1).getByRole('button', { name: 'Disconnect', exact: true }).click();
@@ -630,4 +686,94 @@ test.describe('the browsers of a person, on a worker with accounts', () => {
     await nextCall(third.page);
     await expect(third.page.getByRole('alert').filter({ hasText: 'Your session ended' })).toBeVisible();
   });
+});
+
+test('the name is kept when the field is left, and a refusal keeps what was typed', async ({ page }) => {
+  const worker = await workerWith(page);
+  await open(page);
+  const name = section(page, 'Profile').getByRole('textbox', { name: 'Name shown on notes' });
+  // Left with nothing changed: nothing is sent.
+  await name.focus();
+  await page.keyboard.press('Tab');
+  expect(worker.sent.filter((each) => each.endsWith('/me/name'))).toEqual([]);
+
+  worker.nameRefuses = 'invalid-name';
+  await name.fill('Ana Lopez');
+  await page.keyboard.press('Tab');
+  await expect(section(page, 'Profile').getByRole('alert')).toHaveText('A name is one line of 1 to 80 characters.');
+  await expect(name).toHaveValue('Ana Lopez');
+
+  worker.nameRefuses = undefined;
+  await name.focus();
+  await page.keyboard.press('Enter');
+  await expect(section(page, 'Profile').getByRole('alert')).toHaveCount(0);
+  expect(worker.bodies['/console/me/name']).toEqual({ name: 'Ana Lopez' });
+  await expect(name).toHaveValue('Ana Lopez');
+});
+
+test('« Unlink » asks twice, and the last way to sign in stays and says why', async ({ page }) => {
+  const worker = await workerWith(page);
+  await open(page);
+  const github = section(page, 'How you sign in').getByRole('listitem').nth(1);
+  worker.unlinkRefuses = 'last-sign-in';
+  await github.getByRole('button', { name: 'Unlink', exact: true }).click();
+  await github.getByRole('button', { name: 'Unlink GitHub' }).click();
+  await expect(github.getByRole('alert')).toHaveText('This is the last way you sign in here: link another one first.');
+  await expect(github).toContainText('Linked');
+
+  // The second time is still there: pressed again, once the worker takes it.
+  worker.unlinkRefuses = undefined;
+  await github.getByRole('button', { name: 'Unlink GitHub' }).click();
+  await expect(github).toContainText('Not linked');
+  await expect(github.getByRole('link', { name: 'Link GitHub' })).toBeVisible();
+  expect(worker.sent.filter((each) => each.includes('/me/sign-in/'))).toEqual([
+    'DELETE /console/me/sign-in/github',
+    'DELETE /console/me/sign-in/github',
+  ]);
+});
+
+test('the way back of a link says what happened, once', async ({ page }) => {
+  await workerWith(page);
+  await page.goto(`${CONSOLE}/w/w1/account?linked=google`);
+  await expect(page.getByRole('status').filter({ hasText: 'Google is linked to your account.' })).toBeVisible();
+  // Said once: the address loses it, and a reload says nothing.
+  await expect(page).toHaveURL(/\/w\/w1\/account$/);
+  await page.reload();
+  await expect(page.getByText('Console · this browser')).toBeVisible();
+  await expect(page.getByText('Google is linked to your account.')).toHaveCount(0);
+
+  await page.goto(`${CONSOLE}/w/w1/account?error=email_doesn't_match`);
+  await expect(section(page, 'How you sign in').getByRole('alert')).toHaveText(
+    'That account has another address than yours. Fruitback links only the address of your account.',
+  );
+});
+
+test('a provider is « Not set up » when the worker has none, and the three rows are there before it answers', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  worker.methods = { email: false };
+  await open(page);
+  const ways = section(page, 'How you sign in').getByRole('listitem');
+  await expect(ways).toHaveCount(3);
+  await expect(ways.nth(0)).toContainText('Not sent by this Fruitback');
+  await expect(ways.nth(1)).toContainText('Not set up');
+  await expect(ways.nth(2)).toContainText('Not set up');
+  await expect(section(page, 'How you sign in').getByRole('link')).toHaveCount(0);
+});
+
+test('a browser is named as the worker names it', async ({ page }) => {
+  const worker = await workerWith(page);
+  worker.sessions = [
+    { ...SESSIONS[0], browser: 'Firefox on macOS' },
+    { ...SESSIONS[1], browser: 'Chrome on Windows' },
+    { ...SESSIONS[2], browser: 'A browser' },
+  ];
+  await page.goto(`${CONSOLE}/w/w1/account`);
+  const browsers = section(page, 'Where you are signed in').getByRole('listitem');
+  await expect(browsers.nth(0)).toContainText('Console · Firefox on macOS');
+  await expect(browsers.nth(0)).toContainText('This browser');
+  await expect(browsers.nth(1)).toContainText('Console · Chrome on Windows');
+  // One the worker could not name reads as before.
+  await expect(browsers.nth(2)).toContainText('Console · another browser');
 });
