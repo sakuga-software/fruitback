@@ -48,11 +48,13 @@ type Stubbed = {
   sessions: unknown[] | undefined;
   /** The worker ends no session when it is asked to. */
   refuses: boolean;
+  /** The sessions are ended already: the worker knows no session by these ids. */
+  gone: boolean;
   sent: string[];
 };
 
 async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' = 'en'): Promise<Stubbed> {
-  const worker: Stubbed = { sessions: SESSIONS, refuses: false, sent: [] };
+  const worker: Stubbed = { sessions: SESSIONS, refuses: false, gone: false, sent: [] };
   const answer = (pathname: string, route: Route) => {
     const method = route.request().method();
     if (pathname === '/console/sessions') {
@@ -63,7 +65,11 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
     if (method === 'GET') return undefined;
     worker.sent.push(`${method} ${pathname}`);
     if (worker.refuses) return route.fulfill({ status: 502, json: { error: 'auth-unavailable' } });
-    if (pathname.startsWith('/console/sessions/')) return route.fulfill({ status: 204 });
+    if (pathname.startsWith('/console/sessions/')) {
+      return worker.gone
+        ? route.fulfill({ status: 404, json: { error: 'not-found' } })
+        : route.fulfill({ status: 204 });
+    }
     if (pathname.startsWith('/console/auth/')) return route.fulfill({ json: { status: true } });
 
     return undefined;
@@ -248,6 +254,22 @@ test('the screen is the one of the mockup, with what the worker of today does', 
     expect.soft(contrast(await painted(text, 'color'), rgb(WHITE))).toBeGreaterThanOrEqual(4.5);
   }
   await expectNoViolation(page, 'my account');
+});
+
+test('a browser whose session ended elsewhere leaves the list, and is not said to be signed in', async ({ page }) => {
+  const worker = await workerWith(page);
+  await open(page);
+  const browsers = section(page, 'Where you are signed in').getByRole('listitem');
+  await expect(browsers).toHaveCount(3);
+
+  // Signed out from that browser, or from a third one, after this list was read: the worker
+  // knows no session by this id. Nothing is left to end, and nothing to try again.
+  worker.gone = true;
+  await browsers.nth(1).getByRole('button', { name: 'Disconnect', exact: true }).click();
+  await expect(browsers).toHaveCount(2);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  expect(worker.sent).toEqual(['DELETE /console/sessions/x2']);
+  await expect(browsers.nth(1)).toContainText(/Signed in Oct 2, 2026/);
 });
 
 test('another browser is disconnected in one press, and one that is still signed in says so', async ({ page }) => {
