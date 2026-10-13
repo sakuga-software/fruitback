@@ -26,7 +26,7 @@ import { type StoreSpec, defineStore } from './store-config.ts';
  * Keyed by **client id**, not by team (FRU-29). A team is Linear's way of separating tenants and
  * this store has no reason to borrow it — the client id is what both paths already carry.
  */
-type StoredIssue = IssueNode & { labels: string[]; clientId: string | undefined };
+type StoredIssue = IssueNode & { labels: string[]; clientId: string | undefined; page: string };
 
 const issues: StoredIssue[] = [];
 
@@ -57,7 +57,11 @@ const DEV_STATES = [
 
 async function createSeedIssue(seed: Seed, locale?: string): Promise<CreatedIssue> {
   const number = issues.length + 1;
-  const state = DEV_STATES[number % DEV_STATES.length] ?? DEV_STATES[0];
+  // The state and the replies follow the rank of the issue on its page, not in the whole store. The
+  // E2E specs run side by side and each keeps to its own page (FRU-268): five notes on one page get
+  // five states, and the third gets replies, whatever the other specs write at the same moment.
+  const onPage = issues.filter((issue) => issue.page === seed.page.url).length + 1;
+  const state = DEV_STATES[onPage % DEV_STATES.length] ?? DEV_STATES[0];
   const identifier = `DEV-${String(number).padStart(3, '0')}`;
 
   issues.push({
@@ -73,7 +77,7 @@ async function createSeedIssue(seed: Seed, locale?: string): Promise<CreatedIssu
     // and a fake that hands back an already-sorted list would never exercise it.
     comments: {
       nodes:
-        number % 3 === 0
+        onPage % 3 === 0
           ? [...DEV_COMMENTS].reverse().map((comment, index) => ({
               id: `dev_comment_${number}_${index}`,
               body: comment.body,
@@ -84,6 +88,7 @@ async function createSeedIssue(seed: Seed, locale?: string): Promise<CreatedIssu
     },
     labels: buildIssueLabels(seed),
     clientId: seed.client?.id,
+    page: seed.page.url,
   });
 
   return { id: `dev_issue_${number}`, identifier, url: `http://localhost/dev-issue/${identifier}` };

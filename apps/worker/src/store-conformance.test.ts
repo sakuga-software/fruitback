@@ -500,10 +500,12 @@ const SUBJECTS: ConformanceSubject[] = [
     close: () => resetMemoryLinear(),
     unknownState: 'the dev store gives each note a state from its own list',
     async plantReplies(store, seed) {
-      // The dev store writes two replies, newest first, on every third note.
+      // The dev store writes two replies, newest first, on the third note of each page (FRU-268).
+      // The two notes before it are on the same page, for another client, so a read for this one
+      // finds only the seed.
       for (const filler of [1, 2]) {
-        const page = { ...seed.page, url: `${seed.page.url}?filler=${filler}` };
-        await store.create({ ...seed, id: `${seed.id}_${filler}`, page }, undefined, POLICY);
+        const client = { id: `filler_${filler}`, name: `Filler ${filler}` };
+        await store.create({ ...seed, id: `${seed.id}_${filler}`, client }, undefined, POLICY);
       }
       await store.create(seed, undefined, POLICY);
     },

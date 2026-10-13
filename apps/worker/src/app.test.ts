@@ -571,6 +571,29 @@ describe('the in-memory Linear (dev loop)', () => {
     assert.deepEqual(body.issues[0]?.seed, seed);
   });
 
+  it('gives the notes of one page their states and replies by their rank on that page (FRU-268)', async () => {
+    // The E2E specs run side by side, each on its own page: the notes another page receives in
+    // between change nothing on this one.
+    const here = 'https://preview.acme.test/rank-here';
+    const elsewhere = 'https://preview.acme.test/rank-elsewhere';
+    for (let index = 0; index < 5; index += 1) {
+      await post(seedFixture({ id: `sd_here_${index}`, page: { url: here, path: '/rank-here' } }), { env: fakeEnv });
+      await post(seedFixture({ id: `sd_else_${index}`, page: { url: elsewhere, path: '/rank-elsewhere' } }), {
+        env: fakeEnv,
+      });
+    }
+
+    const read = await get(`/feedback?url=${encodeURIComponent(here)}&client=acme`, { env: fakeEnv });
+    const issues = ((await read.json()) as { issues: SeedIssue[] }).issues;
+    const byRank = [0, 1, 2, 3, 4].map((index) => issues.find((issue) => issue.seed.id === `sd_here_${index}`));
+
+    assert.equal(new Set(byRank.map((issue) => issue?.stage)).size, 5);
+    assert.deepEqual(
+      byRank.map((issue) => (issue?.comments ?? []).length > 0),
+      [false, false, true, false, false],
+    );
+  });
+
   it('never reaches the network', async () => {
     const stub = installLinearStub();
 
