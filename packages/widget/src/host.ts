@@ -302,6 +302,9 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   }
 
   function select(element: Element): void {
+    // A choice ends what was held: the frame of the element before must not come back under a
+    // note that is about this one. The caller holds the new element if it wants its frame.
+    chosen = null;
     stop();
     void sourceOf(element).then((source) => options.onSelect({ element, source }));
   }
@@ -413,7 +416,8 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
 
   function start(): void {
     capturing = true;
-    chosen = null;
+    // `chosen` is left as it is: a capture started over an open composer must give the frame back
+    // to the element the composer is about when it stops.
     sources = new WeakMap();
     container.dataset.fruitbackCapturing = '';
     button.setAttribute('aria-pressed', 'true');
@@ -441,11 +445,12 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   function stop(): void {
     capturing = false;
     hovered = null;
-    chosen = null;
     delete container.dataset.fruitbackCapturing;
     button.setAttribute('aria-pressed', 'false');
     banner.replaceChildren();
-    highlight.style.display = 'none';
+    // The frame goes back to the element that is held, if one is: the capture borrowed it.
+    if (chosen === null) highlight.style.display = 'none';
+    else hold(chosen);
     announcer.textContent = '';
   }
 

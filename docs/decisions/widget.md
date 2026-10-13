@@ -315,6 +315,13 @@ amber, where white cannot be read (FRU-233)`.
     the banner, the pressed button and the composer in one picture; a still does not say whether a
     capture goes on after a note, and a banner that says « click the page » over a modal dialog
     would not be true. Asked in FRU-258.
+  - **A second capture over an open composer loses nothing.** A pointer reaches the launch button
+    under the composer, whose focus trap holds the keyboard only. Stopped, the capture gives the
+    frame back to the element the composer is about. With another element chosen, the composer
+    keeps everything the reporter set (the note, a name typed over the one remembered, a place, the
+    sentence of a failed send), its head names the new element, and it moves to it; the frame of
+    the first does not come back. While a note is sending, a choice is let go: the note in flight
+    is about the element before, and a failure must still find its text.
   - **The composer**: 360 px, a head (« New note », « on » and what the element says on one line,
     a cross « Close without sending » that does what « Cancel » does), the note, a foot behind a
     rule. It opens **above** its element, 40 px over its top, on the edge of the frame; below when
