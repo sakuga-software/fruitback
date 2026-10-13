@@ -106,8 +106,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Console · this browser': 'Console · ce navigateur',
   'Active now': 'Actif maintenant',
   'Sign out': 'Se déconnecter',
-  'This Fruitback sends no sign-in link by e-mail. The person who runs it makes one for you: ask them for a sign-in link, then open it in this browser.':
-    'Ce Fruitback n’envoie pas de lien de connexion par e-mail. La personne qui l’exploite en crée un pour vous : demandez-lui un lien de connexion, puis ouvrez-le dans ce navigateur.',
+  'This Fruitback sends no sign-in link by e-mail. Only its owner signs in for now, with a link that the person who runs it makes. Everybody else can sign in once it sends e-mail, or offers GitHub or Google.':
+    'Ce Fruitback n’envoie pas de lien de connexion par e-mail. Seul son propriétaire se connecte pour l’instant, avec un lien que crée la personne qui l’exploite. Les autres pourront se connecter quand il enverra des e-mails, ou proposera GitHub ou Google.',
   'Nobody can sign in to this Fruitback yet: its sign-in is not set up. The person who runs it has one setting to add.':
     'Personne ne peut encore se connecter à ce Fruitback : sa connexion n’est pas configurée. La personne qui l’exploite a un réglage à ajouter.',
   'Another account is signed in in this browser': 'Un autre compte est connecté dans ce navigateur',

@@ -133,7 +133,15 @@ export async function firstAdminLines(links: AdminLinks, email: string, now: num
         'Read the log of that start, wait and start again, or run `node server.mjs admin-link --email <address>`.',
     ];
   }
-  const link = await mintAdminLink(links, { kind: 'first', email, at: now });
+  let link: string;
+  try {
+    link = await mintAdminLink(links, { kind: 'first', email, at: now });
+  } catch (error) {
+    // No link was written: the count goes back, or every start of the window would say that one
+    // was (raised in review). A `Kv` that is the reason of the failure is asked once more, and no more.
+    await links.kv.set(STARTS, '0', 1).catch(() => undefined);
+    throw error;
+  }
 
   return [
     `this Fruitback has no owner yet. Sign-in link for ${email} (FRUITBACK_FIRST_ADMIN):`,

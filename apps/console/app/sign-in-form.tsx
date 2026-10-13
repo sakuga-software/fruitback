@@ -116,8 +116,9 @@ let closedByOperator = false;
 
 /**
  * What a screen says in place of its form: the worker signs nobody in (FRU-217), or it signs in
- * only by a link that whoever runs it makes (FRU-221). A link of that kind is opened like any
- * other: this page, with the link after its `#`.
+ * only by a link that whoever runs it makes (FRU-221). That link is for the first administrator and
+ * for an owner, and for nobody else (raised in review): the sentence does not send a member to ask
+ * for one. It is opened like any other: this page, with the link after its `#`.
  */
 export function SignInClosed() {
   useLocale();
@@ -126,7 +127,7 @@ export function SignInClosed() {
     <Problem>
       {closedByOperator
         ? t(
-            'This Fruitback sends no sign-in link by e-mail. The person who runs it makes one for you: ask them for a sign-in link, then open it in this browser.',
+            'This Fruitback sends no sign-in link by e-mail. Only its owner signs in for now, with a link that the person who runs it makes. Everybody else can sign in once it sends e-mail, or offers GitHub or Google.',
           )
         : t(
             'Nobody can sign in to this Fruitback yet: its sign-in is not set up. The person who runs it has one setting to add.',

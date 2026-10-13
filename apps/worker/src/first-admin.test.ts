@@ -168,6 +168,19 @@ describe('the link of the first administrator, when the worker starts (FRU-221)'
     assert.equal((await open(world, tokenIn(withLink[0] ?? []))).status, 200);
   });
 
+  it('does not say that a link was written when the start that should have written it failed', async () => {
+    const world = await envOf();
+    // better-auth that does not start: a database that is not there yet, at the first start.
+    const failing = { ...linksOf(world), auth: Promise.reject(new Error('better-auth did not start')) };
+
+    await assert.rejects(firstAdminLines(failing, ADMIN), /better-auth did not start/);
+    // The memory `Kv` of a test ends a key at its instant, and not before.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const next = await firstAdminLines(linksOf(world), ADMIN);
+
+    assert.equal((await open(world, tokenIn(next))).status, 200);
+  });
+
   it('is refused once somebody else owns a workspace, however they signed in', async () => {
     const world = await envOf();
     const token = tokenIn(await firstAdminLines(linksOf(world), ADMIN));
