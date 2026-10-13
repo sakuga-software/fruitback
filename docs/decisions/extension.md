@@ -917,7 +917,11 @@ proven)` answers no only when the worker of the rule listed that very wildcard f
   that worker listed and asks it again (`session-previews.ts`), so an account of another workspace
   that pairs with the same worker does not get the wildcard of the first. `session-previews.test.ts`
   drives it with the real sessions over one storage area: a pairing and a logout forget the list, a
-  refresh keeps it. Both raised in review.
+  refresh keeps it. **An answer is kept only for the session that asked**: `listedBy` (`cloud.ts`)
+  reads the epoch of the session before it asks and after the worker answered, and drops the answer
+  of a session that is gone; it reads once more after the write, and takes the list back. Without
+  it, an answer in the air at a logout put back the list that had just been forgotten, and nobody
+  asks a worker again once it is logged out. All three raised in review.
   **Not driven in a browser**:
   the prompt for a wildcard, the alarm and the registration; the predicate, the list and the offer
   are held by `proven-previews.test.ts`, with five planted violations.

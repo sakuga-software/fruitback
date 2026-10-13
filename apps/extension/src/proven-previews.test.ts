@@ -211,6 +211,86 @@ describe('the previews of a site, offered in one click (FRU-103)', () => {
     assert.equal(resolveSite({ [PREVIEWS]: rule }, 'https://pr-12.preview.acme.dev', proven)?.site, rule);
   });
 
+  // An answer is for the session that asked. A logout, or a pairing with another account, can land
+  // while the worker answers: the background forgets the list then, and the answer must not put it back.
+  describe('an answer that arrives after the session that asked is gone', () => {
+    const PAGE = 'https://pr-12.preview.acme.dev';
+    /** The seams of a browser whose session with the worker changes when `during` runs. */
+    function seamsWhere(marks: (string | undefined)[]) {
+      const remembered: [string, ListedPreviews | undefined][] = [];
+      let read = 0;
+
+      return {
+        remembered,
+        seams: {
+          endpoints: async () => [WORKER],
+          ensureAccess: async () => GRANTED,
+          fetcher: workerThatLists([PREVIEWS]),
+          remember: async (endpoint: string, listed: ListedPreviews | undefined) =>
+            void remembered.push([endpoint, listed]),
+          // One mark for each read, in order; the last one stays.
+          sessionOf: async () => marks[Math.min(read++, marks.length - 1)],
+          now: () => NOW,
+        },
+      };
+    }
+
+    it('keeps the answer of the session that is still there: the control', async () => {
+      const { seams, remembered } = seamsWhere(['epoch.1']);
+
+      assert.equal((await offerFor(PAGE, seams))?.pattern, PREVIEWS);
+      assert.deepEqual(remembered, [[WORKER, { at: NOW, previews: { [PREVIEWS]: 'site_1' } }]]);
+    });
+
+    it('keeps nothing, and offers nothing, when a logout landed while the worker answered', async () => {
+      const { seams, remembered } = seamsWhere(['epoch.1', undefined]);
+
+      assert.equal(await offerFor(PAGE, seams), undefined);
+      assert.deepEqual(remembered, []);
+    });
+
+    it('keeps nothing when another pairing took the place of the session that asked', async () => {
+      const { seams, remembered } = seamsWhere(['epoch.1', 'epoch.2']);
+
+      await refreshPreviews(seams);
+      assert.deepEqual(remembered, []);
+    });
+
+    it('takes back what it wrote when the session ended between the read and the write', async () => {
+      const { seams, remembered } = seamsWhere(['epoch.1', 'epoch.1', undefined]);
+
+      assert.equal(await offerFor(PAGE, seams), undefined);
+      assert.deepEqual(
+        remembered.map(([, listed]) => listed === undefined),
+        [false, true],
+        'written, then forgotten',
+      );
+    });
+
+    it('is given the epoch of the session by the background and by the popup, the two that ask', () => {
+      const sources = {
+        'background.ts': readFileSync(new URL('../entrypoints/background.ts', import.meta.url), 'utf8'),
+        'popup/main.ts': readFileSync(new URL('../entrypoints/popup/main.ts', import.meta.url), 'utf8'),
+      };
+      for (const [file, source] of Object.entries(sources)) {
+        assert.match(
+          source,
+          /remember: rememberPreviews,[\s\S]{0,160}sessionOf: async \(endpoint\) => \{\s*const held = \(await sessions\.list\(\)\)\[endpoint\];\s*return held === undefined \? undefined : \(held\.epoch \?\? ''\);/,
+          `${file} does not say which session asks`,
+        );
+      }
+    });
+
+    it('asks nothing of a worker this browser holds no session with', async () => {
+      const { seams, remembered } = seamsWhere([undefined]);
+      let asked = 0;
+
+      await refreshPreviews({ ...seams, fetcher: (async () => ((asked += 1), new Response('{}'))) as typeof fetch });
+      assert.equal(asked, 0);
+      assert.deepEqual(remembered, []);
+    });
+  });
+
   it('offers the site itself for its own origin, and nothing for a page no proven domain covers', async () => {
     const seams = {
       endpoints: async () => [WORKER],
