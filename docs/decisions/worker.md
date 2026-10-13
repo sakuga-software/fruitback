@@ -1793,6 +1793,19 @@ roles, when it is accepted`.
   PGlite (`pool.query is not a function`, measured), and `leave` runs no hook at all. The route reads
   who was removed, and the new role, in the answer of better-auth. A demotion that keeps
   `manage-members` (admin to owner, owner to admin) cancels nothing.
+- **`oneAtATime` runs the calls that change a workspace one after the other, in the process**
+  (FRU-209). Not a transaction: the plugin opens its own and takes none from the caller, and a lock
+  in the database would need a connection held across the call of better-auth, which has the pool.
+  A chain of promises by workspace is what the worker can hold. It is the size of the `Kv`: one
+  process. The race of the last owner was found by reading and did not show on PGlite, which has one
+  connection; on PostgreSQL 17 it showed at every run without the chain.
+- **The end of the extensions is in `beforeRemoveMember`, and again in `afterRemoveMember`**
+  (FRU-209). Before, so that a failure removes nobody; after, for a session opened between the two.
+  A `500` of better-auth, which is how a hook that throws comes back, is answered `502`.
+- **The lists of invitations are rewritten by the route**: an invitation past its end is taken out,
+  since the plugin lists it as `pending` until somebody tries it.
+- **`mailboxOf` (accounts.ts) is what a window of messages counts**: the address without its
+  `+suffix`. Nothing else reads it: the account and the invitation keep the address as written.
 - **A second invitation of an address that waits** is refused (`USER_IS_ALREADY_INVITED…`), unless
   `resend`, which moves its end to 7 days from now and sends the message again.
 - **What the plugin answers on a resend is the invitation as it was**, with the new end.

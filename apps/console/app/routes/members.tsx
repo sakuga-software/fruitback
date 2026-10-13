@@ -119,7 +119,12 @@ export default function Members() {
       organizationId: workspace.id,
       invitationId: invitation.id,
     });
-    if (!cancelled.ok) return setStuck({ row: invitation.id, problem: problemOf(cancelled, {}, NOT_CHANGED) });
+    if (!cancelled.ok) {
+      // It was accepted, declined or cancelled in the meantime: the list is read again.
+      if (cancelled.error === 'INVITATION_NOT_FOUND') return void read();
+
+      return setStuck({ row: invitation.id, problem: problemOf(cancelled, {}, NOT_CHANGED) });
+    }
     setInvitations((current) => edited(current, (items) => items.filter((each) => each.id !== invitation.id)));
   }
 
