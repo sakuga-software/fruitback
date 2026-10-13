@@ -684,6 +684,36 @@ test('a day that the worker did not give, or that is no date, is not drawn', asy
   await expect(cells(page, 'Ana (you)').nth(3)).toHaveText('2 Jun 2026');
 });
 
+test('a read made again keeps the rows on the screen, and a press on one of them is heard', async ({ page }) => {
+  const worker = await workerWith(page);
+  await open(page);
+  await expect(row(page, 'paul@client.fr')).toBeVisible();
+  const shown = await table(page).locator('tbody tr').count();
+  const roleLegend = page.locator('main dl');
+  const before = { table: await box(table(page)), legend: await box(roleLegend) };
+
+  // A message that did not leave makes the screen read its lists again; the worker is slow to answer.
+  const reads = () => worker.read.filter((each) => each === 'list-members').length;
+  const read = reads();
+  worker.members = 'waits';
+  worker.refuses = { status: 503, error: 'mail-unavailable' };
+  await email(page).fill('zoe@client.fr');
+  await invite(page).click();
+  await expect.poll(reads).toBe(read + 1);
+  // The alert of the refusal took its room above the table, once: from here nothing moves.
+  await expect(page.getByRole('alert')).toBeVisible();
+  const during = { table: await box(table(page)), legend: await box(roleLegend) };
+
+  // The rows stay while the lists are read again: no « Loading… » in their place.
+  await expect(page.locator('main').getByText('Loading…')).toHaveCount(0);
+  await expect(table(page).locator('tbody tr')).toHaveCount(shown);
+  expect(during.table.height).toBe(before.table.height);
+  expect(during.legend.y - during.table.y).toBe(before.legend.y - before.table.y);
+  // An action of a row is still there to press.
+  await row(page, 'paul@client.fr').getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.getByRole('group', { name: 'Cancel the invitation of paul@client.fr' })).toBeVisible();
+});
+
 test('while the members are read, the screen says so and draws no table', async ({ page }) => {
   const worker = await workerWith(page);
   worker.members = 'waits';
