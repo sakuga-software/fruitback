@@ -376,13 +376,15 @@ export async function consoleSessions(): Promise<Answer<ConsoleSession[]>> {
 /**
  * Ends one session of the person by its id: its browser is refused at its next call.
  *
- * `true` when the session is ended, by this call or before it: the worker answers `404` for an id
- * that it does not know, and the ids come from the list of the person's own sessions.
+ * `unknown`: the worker answered `404`. Its route says so for an id that the person has no session
+ * by, but a worker with no such route says it too: the caller reads the list again before it says
+ * that the session ended.
  */
-export async function endConsoleSession(id: string): Promise<boolean> {
+export async function endConsoleSession(id: string): Promise<'ended' | 'unknown' | 'failed'> {
   const ended = await call('DELETE', `/console/sessions/${encodeURIComponent(id)}`);
+  if (ended.ok) return 'ended';
 
-  return ended.ok || ended.status === 404;
+  return ended.status === 404 ? 'unknown' : 'failed';
 }
 
 /**

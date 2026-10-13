@@ -86,7 +86,14 @@ export default function Account() {
 
   async function disconnect(session: ConsoleSession) {
     setStuck(undefined);
-    if (!(await endConsoleSession(session.id))) return setStuck(session.id);
+    const ended = await endConsoleSession(session.id);
+    if (ended === 'unknown') {
+      // Ended since the list was read, or a worker with no such route: only the list says which.
+      const listed = await consoleSessions();
+      if (!listed.ok || listed.data.some((each) => each.id === session.id)) return setStuck(session.id);
+      return setSessions(listed.data);
+    }
+    if (ended === 'failed') return setStuck(session.id);
     // A list that was not read stays what it is (`edited`).
     setSessions((current) => edited(current, (items) => items.filter((each) => each.id !== session.id)));
   }

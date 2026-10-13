@@ -265,11 +265,35 @@ test('a browser whose session ended elsewhere leaves the list, and is not said t
   // Signed out from that browser, or from a third one, after this list was read: the worker
   // knows no session by this id. Nothing is left to end, and nothing to try again.
   worker.gone = true;
+  worker.sessions = SESSIONS.filter((each) => each.id !== 'x2');
   await browsers.nth(1).getByRole('button', { name: 'Disconnect', exact: true }).click();
   await expect(browsers).toHaveCount(2);
   await expect(page.getByRole('alert')).toHaveCount(0);
   expect(worker.sent).toEqual(['DELETE /console/sessions/x2']);
   await expect(browsers.nth(1)).toContainText(/Signed in Oct 2, 2026/);
+});
+
+test('a 404 for a browser that the list still names does not say that it is signed out', async ({ page }) => {
+  const worker = await workerWith(page);
+  await open(page);
+  const browsers = section(page, 'Where you are signed in').getByRole('listitem');
+  await expect(browsers).toHaveCount(3);
+
+  // A worker with no such route answers 404 too: the session is still in the list, so it did not end.
+  worker.gone = true;
+  await browsers.nth(1).getByRole('button', { name: 'Disconnect', exact: true }).click();
+  await expect(browsers.nth(1).getByRole('alert')).toHaveText(
+    'This browser is still signed in: Fruitback did not end its session. Try again.',
+  );
+  await expect(browsers).toHaveCount(3);
+
+  // And when the list cannot be read again, nothing is said to have ended either.
+  worker.sessions = undefined;
+  await browsers.nth(1).getByRole('button', { name: 'Disconnect', exact: true }).click();
+  await expect(browsers.nth(1).getByRole('alert')).toHaveText(
+    'This browser is still signed in: Fruitback did not end its session. Try again.',
+  );
+  await expect(browsers).toHaveCount(3);
 });
 
 test('another browser is disconnected in one press, and one that is still signed in says so', async ({ page }) => {
