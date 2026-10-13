@@ -417,11 +417,17 @@ test('with no source, and with a read that failed, the screen says which of the 
     'Fruitback did not answer. The sources and their sites could not be read.',
   );
   await expect(page.getByText('No tracker yet. The notes stay in Fruitback.')).toHaveCount(0);
+  // Nothing to add while the list is not read: the screen does not know how this worker connects
+  // Linear, by the consent at Linear or by a key.
+  await expect(sources(page)).toHaveCount(0);
   worker.down = false;
   worker.connectors = [LINEAR, ADDRESS];
   await page.getByRole('button', { name: 'Try again', exact: true }).click();
   await expect(rows(page)).toHaveCount(2);
   await expect(page.getByRole('alert')).toHaveCount(0);
+  // The control of the count above: once read, the sources to add are there, and Linear is by consent.
+  await expect(sources(page)).toHaveCount(8);
+  await expect(page.getByRole('button', { name: 'Use an API key', exact: true })).toBeVisible();
 });
 
 test('« Add a source » lists what connects, and what does not yet with a button that says when', async ({ page }) => {

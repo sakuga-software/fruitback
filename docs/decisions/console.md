@@ -222,8 +222,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   share). **A source that does not exist connects nothing**: GitHub Issues, Jira, GitLab, Trello,
   Notion and Webhook are listed with the sentence of the mockup and a disabled « After the beta »,
   where the mockup draws « Connect ». Linear and an address stay in « Add a source » when one is
-  connected: a workspace can connect a second one. **« Add a source » waits for the first answer of
-  the list** (FRU-271): the list arrives above it and its buttons went down by the height of the
+  connected: a workspace can connect a second one. **« Add a source » waits for the list to be read**
+  (FRU-271; after a read that failed there is « Try again » and no source to add): the list arrives above it and its buttons went down by the height of the
   list (45 px for one source, 110 for two, measured), so a press that started before and ended
   after was lost; and the same read says what « Connect Linear » does, the consent at Linear or a
   key. **A row says « Connected », « Needs attention »,

@@ -172,11 +172,12 @@ export default function Connectors() {
     );
 
   const cannot = !manages || !available;
-  // WARNING: « Add a source » waits for the first answer of the list. The list arrives above it, and
-  // its buttons went down by the height of the list (45 px for one source, 110 for two, measured): a
-  // press that starts before a button moves and ends after is lost. And the same read says what
-  // « Connect Linear » does: the consent at Linear, or a key.
-  const answered = connectors !== undefined || unread;
+  // WARNING: « Add a source » waits for the list to be read. The list arrives above it, and its
+  // buttons went down by the height of the list (45 px for one source, 110 for two, measured): a
+  // press that starts before a button moves and ends after is lost. And only a list that was read
+  // says what « Connect Linear » does, the consent at Linear or a key: after a read that failed
+  // the screen does not know, so it offers « Try again » and no source to add.
+  const answered = connectors !== undefined;
 
   return (
     <>
