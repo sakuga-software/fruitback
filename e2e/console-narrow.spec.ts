@@ -57,9 +57,12 @@ test('at 390 px, the title follows the sections, and a long host reads in full',
   await stubWorker(page, 'fr');
   await open(page, 'sites');
 
-  const nav = await page.getByRole('navigation').boundingBox();
+  // The sections are in the rail (FRU-234), and the title is under the rail at the padding of the
+  // mockup, 40 px: no more, so nothing takes room between the two.
+  const rail = await page.locator('aside.kit-rail').boundingBox();
   const title = await page.locator('main h1').boundingBox();
-  expect(title!.y - (nav!.y + nav!.height)).toBeLessThan(40);
+  expect(title!.y - (rail!.y + rail!.height)).toBeLessThanOrEqual(40);
+  expect(title!.y - (rail!.y + rail!.height)).toBeGreaterThan(0);
 
   const host = page.getByText(LONG_HOST, { exact: true });
   await expect(host).toBeVisible();
