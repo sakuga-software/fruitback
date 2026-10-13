@@ -276,7 +276,16 @@ export type ClientPolicy = {
    * On a worker that serves one client, `identitySecret` is already the worker key, and a session token
    * verifies through it whatever workspace it names: there is only one site to reach.
    */
-  sessions?: { secret: string; workspace: string };
+  sessions?: {
+    secret: string;
+    workspace: string;
+    /**
+     * Whether an account is a member of `workspace` now (FRU-238), read at each call. A session of an
+     * account names no workspace, and reaches this client only through this answer. Absent: no such
+     * session reaches it.
+     */
+    member?: (account: string) => Promise<boolean>;
+  };
 };
 
 /**
@@ -302,6 +311,8 @@ export type ResolveClientOptions = {
   fallback: ClientPolicy;
   /** The key that signs session tokens, on a worker that opens sessions. */
   sessionSecret?: string;
+  /** Whether an account is a member of a workspace, on a worker that keeps accounts (FRU-238). */
+  sessionMember?: (workspace: string, account: string) => Promise<boolean>;
 };
 
 /**
@@ -326,6 +337,7 @@ export function resolveClient({
   origin,
   fallback,
   sessionSecret,
+  sessionMember,
 }: ResolveClientOptions): ClientResolution {
   // Single-tenant: the map is what turns this worker multi-client, and without it nothing changes.
   // `client: undefined` is what the store reads as "no per-client entry, use your own defaults".
@@ -364,7 +376,15 @@ export function resolveClient({
       read: client.read ?? fallback.read,
       locale: fallback.locale,
       ...(sessionSecret !== undefined && client.workspace !== undefined
-        ? { sessions: { secret: sessionSecret, workspace: client.workspace } }
+        ? {
+            sessions: {
+              secret: sessionSecret,
+              workspace: client.workspace,
+              ...(sessionMember === undefined
+                ? {}
+                : { member: (account: string) => sessionMember(client.workspace as string, account) }),
+            },
+          }
         : {}),
     },
     // `teamId` and `projectId` are not resolved here any more: falling back to the worker's team is

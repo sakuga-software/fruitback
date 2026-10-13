@@ -34,6 +34,13 @@ export type IdentityClaims = {
    * workspace of that client.
    */
   ws?: string;
+  /**
+   * `'account'` on the access token of a session that belongs to an account, and not to one workspace
+   * (FRU-238): the extension that asked and that a person approved in the console. Only this worker
+   * writes it. A mapped client accepts such a token, signed with the worker key, only while the
+   * account is a member of the workspace of that client, read at each request. Never with `ws`.
+   */
+  scope?: 'account';
 };
 
 export type IdentityFailure =
@@ -45,7 +52,7 @@ export type IdentityFailure =
   | 'invalid-claims';
 
 export type IdentityResult =
-  | { ok: true; reporter: SeedReporter; workspace?: string }
+  | { ok: true; reporter: SeedReporter; workspace?: string; account?: true }
   | { ok: false; reason: IdentityFailure };
 
 const encoder = new TextEncoder();
@@ -119,6 +126,11 @@ export async function verifyIdentityToken(
 
   if (typeof claims.sub !== 'string' || claims.sub.length === 0) return { ok: false, reason: 'invalid-claims' };
   if (typeof claims.exp !== 'number' || !Number.isFinite(claims.exp)) return { ok: false, reason: 'invalid-claims' };
+  // A scope this worker does not write, or the scope of an account beside a workspace, is no token of
+  // it: a session is of one workspace or of an account, never both (FRU-238).
+  if (claims.scope !== undefined && (claims.scope !== 'account' || claims.ws !== undefined)) {
+    return { ok: false, reason: 'invalid-claims' };
+  }
 
   const seconds = now / 1000;
   if (claims.exp + CLOCK_SKEW_SECONDS <= seconds) return { ok: false, reason: 'expired' };
@@ -139,6 +151,7 @@ export async function verifyIdentityToken(
     // Beside the reporter and not in it: the reporter is stored in the seed, and the workspace is a
     // routing fact about the token.
     ...(typeof claims.ws === 'string' && claims.ws.length > 0 ? { workspace: claims.ws } : {}),
+    ...(claims.scope === 'account' ? { account: true as const } : {}),
   };
 }
 

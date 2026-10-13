@@ -34,7 +34,15 @@ import { PAIR_PATH, pairPage } from './pair-page.ts';
 import { chargeRateLimit, checkRateLimit, maxBatch } from './rate-limit.ts';
 import { cached, invalidate } from './cache.ts';
 import { type Kv, KvError, processKv } from './kv.ts';
-import { postgresAccountStore, postgresKv, postgresScreenshotStore, postgresSessionStore } from './postgres-stores.ts';
+import {
+  postgresAccountStore,
+  postgresConnectStore,
+  postgresKv,
+  postgresScreenshotStore,
+  postgresSessionStore,
+} from './postgres-stores.ts';
+import type { ConnectStore } from './connect.ts';
+import { handleConsoleConnect, handleExtensionConnect } from './connect-routes.ts';
 import {
   MAX_SCREENSHOT_BYTES,
   SCREENSHOT_PATH,
@@ -114,6 +122,14 @@ export async function announceFirstReviewer(
   }
 }
 
+/**
+ * Where the requests of the extension wait for a person to approve them (FRU-238): the database of
+ * the accounts, or nowhere. A worker with no accounts has nobody to approve.
+ */
+export function connectStoreFor(config: WorkerConfig): ConnectStore | undefined {
+  return config.databaseUrl === undefined ? undefined : postgresConnectStore(config.databaseUrl, config.databaseSchema);
+}
+
 /** What sends the e-mail of this worker, or `undefined` when it sends none (FRU-98). */
 export function mailerFor(config: WorkerConfig): Mailer | undefined {
   return config.mail === undefined ? undefined : createTemMailer(config.mail);
@@ -138,6 +154,7 @@ async function withSites(config: WorkerConfig, accounts: AccountStore): Promise<
     clients,
     allowedOrigins: [...new Set([...config.allowedOrigins, ...originsFromClients(clients)])],
     roleIn: (workspace, account) => accounts.role(workspace, account),
+    accountExists: async (account) => (await accounts.account(account)) !== undefined,
   };
 }
 
@@ -149,6 +166,8 @@ type Served = WorkerConfig & {
   clients?: ClientMap;
   /** Absent on a worker with no accounts: nobody is a member of anything there. */
   roleIn?: (workspace: string, account: string) => Promise<Role | undefined>;
+  /** Whether an account is still there (FRU-238). Absent on a worker with no accounts. */
+  accountExists?: (account: string) => Promise<boolean>;
 };
 
 /** The client as it routes when its notes go to this place, and not to its first one. */
@@ -259,6 +278,8 @@ export type RequestContext = {
   sessionStore?: SessionStore;
   /** Same reason, for the accounts, the workspaces and their sites (FRU-96). */
   accounts?: AccountStore;
+  /** Same reason, for the requests of the extension that the console approves (FRU-238). */
+  connectStore?: ConnectStore;
   /** What sends the sign-in links (FRU-98). A suite hands over one that keeps what it was given. */
   mailer?: Mailer;
   /** What asks the DNS for the proof of a domain (FRU-103). A suite hands over a double. */
@@ -513,6 +534,23 @@ async function routed(
         if (viaLinear !== undefined) return viaLinear;
       }
 
+      // The extension asks, the console approves (FRU-238): a request, and the browsers of the account.
+      const connect = context.connectStore ?? connectStoreFor(served);
+      if (auth !== undefined && served.consoleUrl !== undefined && connect !== undefined) {
+        const connected = await handleConsoleConnect(
+          request,
+          pathname,
+          {
+            connect,
+            accounts,
+            cookieSession: async (each: Request) => (await sessionOfCookie(auth, each))?.userId,
+            consoleUrl: served.consoleUrl,
+          },
+          cors.headers,
+        );
+        if (connected !== undefined) return connected;
+      }
+
       const answer = await handleConsoleApi(
         request,
         pathname,
@@ -573,6 +611,31 @@ async function routed(
       // FRU-101: what the extension may turn on in one click, for a worker that keeps accounts.
       if (pathname === SESSION_SITES_PATH && accounts !== undefined && served.identitySecret !== undefined) {
         return await handleSessionSites(request, accounts, served.identitySecret, cors.headers);
+      }
+
+      // FRU-238: the extension asks to be connected, and comes back for its session. Only where a
+      // person can approve: accounts, a console, and the key that signs the tokens.
+      const connect = context.connectStore ?? connectStoreFor(served);
+      if (
+        accounts !== undefined &&
+        connect !== undefined &&
+        served.identitySecret !== undefined &&
+        served.consoleUrl !== undefined
+      ) {
+        const connected = await handleExtensionConnect(
+          request,
+          pathname,
+          {
+            connect,
+            accounts,
+            kv,
+            clientIp: context.clientIp,
+            secret: served.identitySecret,
+            consoleUrl: served.consoleUrl,
+          },
+          cors.headers,
+        );
+        if (connected !== undefined) return connected;
       }
 
       return await handleSession(request, pathname, served, context, cors.headers);
@@ -721,7 +784,8 @@ export function screenshotStoreFor(config: WorkerConfig): ScreenshotStore | unde
  * that holds the worker key and nothing of a site: no site key may stand for a member.
  */
 async function memberOf(request: Request, config: Served, workspace: string): Promise<string | undefined> {
-  if (config.identitySecret === undefined || config.roleIn === undefined) return undefined;
+  const { roleIn } = config;
+  if (config.identitySecret === undefined || roleIn === undefined) return undefined;
   const token = readBearerToken(request.headers.get('Authorization'));
   if (token === undefined) return undefined;
   const verified = await verifyForClient(token, {
@@ -729,11 +793,15 @@ async function memberOf(request: Request, config: Served, workspace: string): Pr
     identitySecret: undefined,
     read: 'authenticated',
     locale: config.teamLocale,
-    sessions: { secret: config.identitySecret, workspace },
+    sessions: {
+      secret: config.identitySecret,
+      workspace,
+      member: async (account) => (await roleIn(workspace, account)) !== undefined,
+    },
   });
   if (verified?.ok !== true || verified.session !== true || verified.reporter.id === undefined) return undefined;
 
-  return (await config.roleIn(workspace, verified.reporter.id)) === undefined ? undefined : verified.reporter.id;
+  return (await roleIn(workspace, verified.reporter.id)) === undefined ? undefined : verified.reporter.id;
 }
 
 /**
@@ -824,6 +892,10 @@ async function handleScreenshot(
  * of anything there, and the operator named the person with the pairing.
  */
 async function stillOfTheWorkspace(config: Served, identity: SessionIdentity): Promise<boolean> {
+  // A session of an account (FRU-238) lives as long as its account: it reads what the account is a
+  // member of today, and nothing when that is nothing. An account that is gone ends it here.
+  if (identity.account === true)
+    return config.accountExists !== undefined && (await config.accountExists(identity.subject));
   if (config.roleIn === undefined || identity.workspace === undefined) return true;
 
   return (await config.roleIn(identity.workspace, identity.subject)) !== undefined;
@@ -868,7 +940,9 @@ function parseJsonObject(text: string): Record<string, unknown> | undefined {
  * FRU-29: falling back to *the worker's team* is a rule about teams, and this function has no
  * business knowing that a store has any.
  */
-function routeFor(request: Request, config: WorkerConfig, clientId: string | undefined): ClientResolution {
+function routeFor(request: Request, config: Served, clientId: string | undefined): ClientResolution {
+  const { roleIn } = config;
+
   return resolveClient({
     clients: config.clients,
     clientId,
@@ -881,6 +955,12 @@ function routeFor(request: Request, config: WorkerConfig, clientId: string | und
       locale: config.teamLocale,
     },
     ...(hasSessions(config) && config.identitySecret !== undefined ? { sessionSecret: config.identitySecret } : {}),
+    // A session of an account reaches a client of a workspace it is a member of now (FRU-238).
+    ...(roleIn === undefined
+      ? {}
+      : {
+          sessionMember: async (workspace: string, account: string) => (await roleIn(workspace, account)) !== undefined,
+        }),
   });
 }
 
@@ -898,6 +978,18 @@ async function verifyForClient(token: string, policy: ClientPolicy): Promise<Ver
 
   const asSession = await verifyIdentityToken(token, policy.sessions.secret);
   if (!asSession.ok) return asSite ?? asSession;
+
+  // A session of an account (FRU-238) names no workspace: it reaches this client while the account is
+  // a member of the workspace of the client, read now. A worker that cannot say refuses it.
+  if (asSession.account === true) {
+    const account = asSession.reporter.id;
+    const member = policy.sessions.member;
+    if (account === undefined || member === undefined || !(await member(account))) {
+      return { ok: false, reason: 'invalid-claims' };
+    }
+
+    return { ...asSession, session: true };
+  }
 
   return asSession.workspace === policy.sessions.workspace
     ? { ...asSession, session: true }

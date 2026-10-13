@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { type Database, databaseFor, databaseUrlOf, readDatabaseSchema } from './postgres.ts';
 import type { ScreenshotStore } from './screenshots.ts';
 import type { SessionStore } from './session.ts';
+import type { ConnectStore } from './connect.ts';
 import type { SeedStore } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
 
@@ -111,6 +112,24 @@ export function sessionStoreOn(database: Database): SessionStore {
     purge: true,
     holdsSession: true,
   });
+}
+
+/** The requests of the extension that a person approves in the console (FRU-238). */
+export function connectStoreOn(database: Database): ConnectStore {
+  return later(async () => (await import('./session-postgres.ts')).createPostgresConnectStore(database), {
+    createRequest: true,
+    readRequest: true,
+    answer: true,
+    miss: true,
+    claim: true,
+    browsersOf: true,
+    endBrowser: true,
+    purge: true,
+  });
+}
+
+export function postgresConnectStore(url: string, schema: string): ConnectStore {
+  return connectStoreOn(databaseFor(url, schema));
 }
 
 /** The pictures of the notes of this database (FRU-44). */

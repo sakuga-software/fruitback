@@ -20,7 +20,7 @@ import {
 import { BEFORE_THE_MOVE, THEN, withRows } from './postgres-home-made.fixture.ts';
 import { migrate } from './postgres-migrate.ts';
 import * as schema from './postgres-schema.ts';
-import { createPostgresSessionStore } from './session-postgres.ts';
+import { createPostgresConnectStore, createPostgresSessionStore } from './session-postgres.ts';
 
 /**
  * What a `BIGINT` is when a store reads it (FRU-180).
@@ -92,6 +92,12 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
   await rowsOf(database, `INSERT INTO seed_comments (seed_id, body, created_at) VALUES (1, 'a reply', 1)`);
   await rowsOf(database, 'ALTER TABLE seed_comments DROP CONSTRAINT seed_comments_seed_id_fkey');
   await rowsOf(database, `INSERT INTO kv (key, value, expires_at) VALUES ('fruitback:test:count', '1', 1)`);
+  // A request of the extension, answered and claimed (FRU-238).
+  await rowsOf(
+    database,
+    `INSERT INTO connect_requests (request_hash, claim_hash, word, browser, created_at, expires_at, outcome, account_id, answered_at, claimed_at)
+       VALUES ('digest-of-a-request', 'digest-of-a-claim', 'PLUM 47', 'Chrome on macOS', 1, 1, 'approved', 'acc_alice', 1, 1)`,
+  );
 
   return database;
 }
@@ -101,8 +107,12 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the twenty-eight BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the thirty-two BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
+    'connect_requests.answered_at',
+    'connect_requests.claimed_at',
+    'connect_requests.created_at',
+    'connect_requests.expires_at',
     'connectors.attention_at',
     'connectors.created_at',
     'deliveries.created_at',
@@ -173,7 +183,7 @@ for (const { label, open, skip } of [
         }
       }
 
-      assert.equal(nullable.length, 10);
+      assert.equal(nullable.length, 12);
       assert.deepEqual(wrong, []);
     });
 
@@ -240,6 +250,53 @@ for (const { label, open, skip } of [
       // `expires_at` is 2^32 + 10: live one millisecond before, gone at that instant.
       assert.deepEqual(await rotate('digest-of-a-token-3', edge + 9), { outcome: 'rotated', identity });
       assert.deepEqual(await rotate('digest-of-a-token-3', edge + 10), { outcome: 'gone' });
+    });
+
+    it('lists the browsers of an account by their instants, on each side of 2^32', async () => {
+      const database = await withEveryTableFilled(open);
+      const connect = createPostgresConnectStore(database);
+      const sessions = createPostgresSessionStore(database);
+      const edge = 2 ** 32;
+      await connect.createRequest({
+        requestHash: 'digest-of-request-2',
+        claimHash: 'digest-of-claim-2',
+        word: 'PEAR 12',
+        browser: 'Firefox on Linux',
+        now: edge,
+        expiresAt: edge + 100,
+        maxLive: 10,
+      });
+      assert.deepEqual(
+        await connect.answer({
+          requestHash: 'digest-of-request-2',
+          account: 'acc_alice',
+          outcome: 'approved',
+          now: edge + 1,
+        }),
+        { ok: true },
+      );
+      const claimed = await connect.claim({
+        claimHash: 'digest-of-claim-2',
+        now: edge + 2,
+        tokenHash: 'digest-of-a-token-of-alice',
+        connectionId: 'connection-of-alice-0001',
+        expiresAt: edge + 1000,
+        open: async () => ({ name: 'Alice' }),
+      });
+      assert.deepEqual(claimed, { state: 'claimed', account: 'acc_alice', browser: 'Firefox on Linux' });
+      const rotation = await sessions.rotateSession({
+        tokenHash: 'digest-of-a-token-of-alice',
+        successorHash: 'digest-of-its-successor',
+        now: edge + 5,
+        graceMs: 5,
+      });
+      assert.equal(rotation.outcome, 'rotated');
+
+      assert.deepEqual(await connect.browsersOf('acc_alice', edge + 6), [
+        { id: 'connection-of-alice-0001', browser: 'Firefox on Linux', connectedAt: edge + 2, usedAt: edge + 5 },
+      ]);
+      // Past its expiry, no token of it is live: it is not listed.
+      assert.deepEqual(await connect.browsersOf('acc_alice', edge + 1000), []);
     });
   });
 }
@@ -323,12 +380,15 @@ describe('why the type of an instant matters (FRU-180)', () => {
       assert.equal(source.includes('.execute('), false, `${file} sends a raw statement: its BIGINT is a string`);
       assert.match(source, /from '\.\/postgres-schema\.ts'/, `${file} no longer reads the schema`);
     }
-    // A raw fragment is a string too when it is selected. Each one of today is in a `where` or a `set`:
-    // read a new one, then change its count here.
-    const fragments = (source: string): number => source.split('sql`').length - 1;
+    // A raw fragment is a string too when it is selected. Each one of today is in a `where` or a `set`,
+    // but three of the browsers of an account (FRU-238): `max` of a text, and `min` and `max` of an
+    // instant, read through `mapWith` of the column, which test:`lists the browsers of an account by
+    // their instants, on each side of 2^32` holds. Read a new one, then change its count here.
+    // `sql<number>` too: a type between the tag and its text is still a raw fragment (FRU-238).
+    const fragments = (source: string): number => source.match(/\bsql(<[^>`]*>)?`/g)?.length ?? 0;
     assert.deepEqual(
       { accounts: fragments(stores['accounts-postgres.ts']), sessions: fragments(stores['session-postgres.ts']) },
-      { accounts: 5, sessions: 1 },
+      { accounts: 5, sessions: 9 },
     );
   });
 });

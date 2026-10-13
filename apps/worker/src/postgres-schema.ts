@@ -233,8 +233,53 @@ export const sessions = pgTable(
     rotated_at: instant('rotated_at'),
     predecessor_hash: text('predecessor_hash'),
     root_hash: text('root_hash'),
+    // FRU-238. A session that a person approved in the console belongs to their account: `account_id`
+    // names it (it is `subject` too), and `workspace` is NULL. NULL on a session of a pairing code.
+    account_id: text('account_id'),
+    // The short name of the browser the extension gave when it asked (« Chrome on macOS »), for the
+    // list of « My account » (Q7). Free text of the caller: shown, never trusted.
+    browser: text('browser'),
+    // The public name of the session, the same on every token of its chain: « My account » ends one
+    // by it, and never by a token or a digest of one.
+    connection_id: text('connection_id'),
   },
-  (table) => [index('sessions_by_expiry').on(table.expires_at), index('sessions_by_root').on(table.root_hash)],
+  (table) => [
+    index('sessions_by_expiry').on(table.expires_at),
+    index('sessions_by_root').on(table.root_hash),
+    index('sessions_by_account').on(table.account_id),
+  ],
+);
+
+/**
+ * What an extension asked, to be connected by a person in the console (FRU-238).
+ *
+ * `request_hash` is the digest of the public id the console opens, `claim_hash` the digest of the
+ * secret the extension alone keeps: neither is stored as it is. `word` is the word both screens show
+ * (« PLUM 47 »): a comparison for the eye, and not a secret. A request is answered once
+ * (`outcome`), by one account, and claimed once.
+ */
+export const connect_requests = pgTable(
+  'connect_requests',
+  {
+    request_hash: text('request_hash').notNull(),
+    claim_hash: text('claim_hash').notNull(),
+    word: text('word').notNull(),
+    browser: text('browser').notNull(),
+    created_at: instant('created_at').notNull(),
+    expires_at: instant('expires_at').notNull(),
+    // 'approved' or 'refused', and NULL while nobody answered.
+    outcome: text('outcome'),
+    account_id: text('account_id'),
+    answered_at: instant('answered_at'),
+    claimed_at: instant('claimed_at'),
+    // Words that did not match, typed against this request: the fifth refuses it.
+    misses: integer('misses').notNull().default(0),
+  },
+  (table) => [
+    primaryKey({ name: 'connect_requests_pkey', columns: [table.request_hash] }),
+    unique('connect_requests_claim_hash_key').on(table.claim_hash),
+    index('connect_requests_by_expiry').on(table.expires_at),
+  ],
 );
 
 /** The bytes of a file. The driver answers a `Buffer`, and PGlite a `Uint8Array`: both are one here. */

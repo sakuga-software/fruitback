@@ -36,6 +36,10 @@ export async function handleSessionSites(
   if (!verified.ok) return json(401, { error: 'identity-required', reason: verified.reason }, headers);
 
   const subject = verified.reporter.id;
+  // A session of an account (FRU-238): the sites of every workspace it is a member of today.
+  if (verified.account === true && subject !== undefined) {
+    return json(200, await sitesOfAccount(accounts, subject, now ?? Date.now()), headers);
+  }
   const workspaceId = verified.workspace;
   if (subject === undefined || workspaceId === undefined) {
     return json(401, { error: 'identity-required', reason: 'no-workspace' }, headers);
@@ -48,14 +52,7 @@ export async function handleSessionSites(
   const sites = await accounts.sites(workspaceId);
   // The language the person reads (FRU-119), so the extension and its widget speak it too (FRU-131).
   const locale = (await accounts.account(subject))?.locale;
-  // The previews a site covers (FRU-103): the wildcard of each domain of the workspace that is proven
-  // now and names this site. A proof that is lost or that nobody confirmed is not here.
-  const instant = now ?? Date.now();
-  const proven = (await accounts.domains(workspaceId)).filter(
-    (domain) => domain.previewsSite !== undefined && proofState(domain, instant) === 'proven',
-  );
-  const previewsOf = (site: string): string[] =>
-    proven.filter((domain) => domain.previewsSite === site).map((domain) => previewPattern(domain.domain));
+  const previewsOf = await previewsIn(accounts, workspaceId, now ?? Date.now());
 
   return json(
     200,
@@ -75,4 +72,51 @@ export async function handleSessionSites(
     },
     headers,
   );
+}
+
+/**
+ * The previews a site covers (FRU-103): the wildcard of each domain of the workspace that is proven
+ * now and names this site. A proof that is lost or that nobody confirmed is not here.
+ */
+async function previewsIn(accounts: AccountStore, workspace: string, now: number): Promise<(site: string) => string[]> {
+  const proven = (await accounts.domains(workspace)).filter(
+    (domain) => domain.previewsSite !== undefined && proofState(domain, now) === 'proven',
+  );
+
+  return (site) =>
+    proven.filter((domain) => domain.previewsSite === site).map((domain) => previewPattern(domain.domain));
+}
+
+/**
+ * What a session of an account reads (FRU-238): every workspace the account is a member of now, with
+ * the role it has there, and the sites of each, each naming its workspace. The memberships are read
+ * at this call: a workspace the account left is not here, and an account in none reads an empty list.
+ *
+ * No `workspace` in the singular: the extension of before reads this answer as « no list », and asks
+ * nothing of a session it does not know.
+ */
+async function sitesOfAccount(accounts: AccountStore, account: string, now: number) {
+  const memberships = await accounts.memberships(account);
+  const locale = (await accounts.account(account))?.locale;
+  const sites = [];
+  for (const { workspace } of memberships) {
+    const previewsOf = await previewsIn(accounts, workspace.id, now);
+    for (const site of await accounts.sites(workspace.id)) {
+      const previews = previewsOf(site.id);
+      sites.push({
+        id: site.id,
+        origin: site.origin,
+        visibility: site.visibility,
+        workspace: workspace.id,
+        ...(previews.length === 0 ? {} : { previews }),
+      });
+    }
+  }
+
+  return {
+    account: true,
+    ...(locale === undefined ? {} : { locale }),
+    workspaces: memberships.map(({ workspace, role }) => ({ id: workspace.id, name: workspace.name, role })),
+    sites,
+  };
 }

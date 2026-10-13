@@ -37,6 +37,13 @@ export type SessionIdentity = {
    * serves one client.
    */
   workspace?: string;
+  /**
+   * The session belongs to the account `subject`, and not to one workspace (FRU-238): an extension
+   * asked, and that person approved it in the console. It reads every workspace the account is a
+   * member of, with the role read at each request. Never with `workspace`. Its access tokens carry
+   * `scope: 'account'`.
+   */
+  account?: true;
 };
 
 /**
@@ -354,13 +361,18 @@ export async function revokeSession(
 }
 
 /** The same token a client site mints for itself, signed here instead. See `identity.ts`. */
-async function mintAccessToken(identity: SessionIdentity, secret: string, now: number): Promise<string> {
+export async function mintAccessToken(identity: SessionIdentity, secret: string, now: number): Promise<string> {
+  // A session of an account names no workspace: one that said both would be read as either.
+  if (identity.account === true && identity.workspace !== undefined) {
+    throw new Error('a session of an account names no workspace');
+  }
   const seconds = Math.floor(now / 1000);
   const claims: IdentityClaims = {
     sub: identity.subject,
     ...(identity.name === undefined ? {} : { name: identity.name }),
     ...(identity.email === undefined ? {} : { email: identity.email }),
     ...(identity.workspace === undefined ? {} : { ws: identity.workspace }),
+    ...(identity.account === true ? { scope: 'account' as const } : {}),
     iat: seconds,
     exp: seconds + ACCESS_TTL_SECONDS,
   };

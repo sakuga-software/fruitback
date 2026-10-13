@@ -7,7 +7,7 @@ import { createMemoryKv } from './kv.ts';
 import type { MailMessage } from './mail.ts';
 import { databaseOn, newPglite } from './pglite.fixture.ts';
 import { migrate } from './postgres-migrate.ts';
-import { createPostgresSessionStore } from './session-postgres.ts';
+import { createPostgresConnectStore, createPostgresSessionStore } from './session-postgres.ts';
 
 /**
  * A worker of the Cloud for a test that drives the console in a browser (FRU-148): accounts and
@@ -39,6 +39,7 @@ export async function cloudWorker(options: { consoleUrl: string; publicUrl: stri
   const settings = authConfigOf(config.config);
   const accounts = createPostgresAccountStore(database);
   const sessions = createPostgresSessionStore(database);
+  const connectStore = createPostgresConnectStore(database);
   const auth =
     settings === undefined ? undefined : await startAuth(await authOptions(settings, await database.pool(), sessions));
   const kv = createMemoryKv();
@@ -62,6 +63,7 @@ export async function cloudWorker(options: { consoleUrl: string; publicUrl: stri
         clientIp: '127.0.0.1',
         accounts,
         sessionStore: sessions,
+        connectStore,
         mailer: { send: async (message) => void sent.push(message) },
         kv,
         ...(auth === undefined ? {} : { auth }),

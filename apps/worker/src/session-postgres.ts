@@ -1,7 +1,8 @@
-import { and, eq, gt, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, count, eq, gt, isNull, lte, or, sql } from 'drizzle-orm';
+import type { ClaimOutcome, ConnectRow, ConnectStore } from './connect.ts';
 import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
-import { pairings, sessions } from './postgres-schema.ts';
+import { connect_requests, pairings, sessions } from './postgres-schema.ts';
 import { chainOf, identityOf } from './session-rows.ts';
 import { type RotationOutcome, type SessionStore, namedSessionsOf } from './session.ts';
 
@@ -44,6 +45,9 @@ const SESSION = {
   rotated_at: sessions.rotated_at,
   predecessor_hash: sessions.predecessor_hash,
   root_hash: sessions.root_hash,
+  account_id: sessions.account_id,
+  browser: sessions.browser,
+  connection_id: sessions.connection_id,
 };
 
 type SessionRow = {
@@ -56,6 +60,9 @@ type SessionRow = {
   rotated_at: number | null;
   predecessor_hash: string | null;
   root_hash: string | null;
+  account_id: string | null;
+  browser: string | null;
+  connection_id: string | null;
 };
 
 /**
@@ -193,6 +200,10 @@ async function decide(
     expires_at: row.expires_at,
     predecessor_hash: tokenHash,
     root_hash: root,
+    // A session of an account stays one (FRU-238), under its name in « My account ».
+    account_id: row.account_id,
+    browser: row.browser,
+    connection_id: row.connection_id,
   });
 
   // `rotated_at IS NULL` keeps the first rotation, which is what the grace is a ceiling on.
@@ -348,6 +359,203 @@ export function createPostgresSessionStore(database: Database): SessionStore {
       const rows = await run((db) => db.select({ token_hash: sessions.token_hash }).from(sessions).limit(1));
 
       return rows.length > 0;
+    },
+  };
+}
+
+/** A row of `connect_requests`, as `connect.ts` reads it. */
+function connectRowOf(row: typeof connect_requests.$inferSelect): ConnectRow {
+  return {
+    word: row.word,
+    browser: row.browser,
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+    ...(row.outcome === 'approved' || row.outcome === 'refused' ? { outcome: row.outcome } : {}),
+    ...(row.account_id === null ? {} : { account: row.account_id }),
+    ...(row.answered_at === null ? {} : { answeredAt: row.answered_at }),
+    ...(row.claimed_at === null ? {} : { claimedAt: row.claimed_at }),
+    misses: row.misses,
+  };
+}
+
+/**
+ * The requests of the extension, approved in the console (FRU-238), beside the sessions they open.
+ *
+ * Each rule holds in one statement that reads what it changes, as the spend of a pairing code does:
+ *
+ * - **An answer is one `UPDATE … WHERE outcome IS NULL`.** Of two answers at the same instant, the
+ *   second waits for the row, reads `outcome` again, and changes nothing: `already`.
+ * - **A claim is spent by one `UPDATE … WHERE claimed_at IS NULL`, and the session is written in the
+ *   same transaction.** Of two claims, one gets a session. A session that cannot be written leaves
+ *   the request to claim.
+ * - **Expiry is compared in the statement**, with the instant of the worker: an answer or a claim at
+ *   the instant of expiry changes nothing.
+ */
+export function createPostgresConnectStore(database: Database): ConnectStore {
+  const run = async <T>(work: (db: Db) => Promise<T>): Promise<T> => {
+    await migrated(database);
+
+    return database.run(work);
+  };
+  const transaction = async <T>(work: (db: Db) => Promise<T>): Promise<T> => {
+    await migrated(database);
+
+    return database.transaction(work);
+  };
+  const live = (now: number) =>
+    and(isNull(connect_requests.outcome), isNull(connect_requests.claimed_at), gt(connect_requests.expires_at, now));
+
+  return {
+    async createRequest({ requestHash, claimHash, word, browser, now, expiresAt, maxLive }) {
+      return run(async (db) => {
+        // Counted, then written: two requests at the same instant may both pass the last place. The
+        // bound is of a flood, and one more row is no flood.
+        const [waiting] = await db.select({ count: count() }).from(connect_requests).where(live(now));
+        if ((waiting?.count ?? 0) >= maxLive) return 'busy';
+        await db.insert(connect_requests).values({
+          request_hash: requestHash,
+          claim_hash: claimHash,
+          word,
+          browser,
+          created_at: now,
+          expires_at: expiresAt,
+        });
+
+        return 'created';
+      });
+    },
+
+    async readRequest(requestHash) {
+      const rows = await run((db) =>
+        db.select().from(connect_requests).where(eq(connect_requests.request_hash, requestHash)),
+      );
+
+      return rows[0] === undefined ? undefined : connectRowOf(rows[0]);
+    },
+
+    async answer({ requestHash, account, outcome, now }) {
+      return run(async (db) => {
+        const answered = await db
+          .update(connect_requests)
+          .set({ outcome, account_id: account, answered_at: now })
+          .where(and(eq(connect_requests.request_hash, requestHash), live(now)))
+          .returning({ request_hash: connect_requests.request_hash });
+        if (answered.length === 1) return { ok: true };
+
+        const row = (await db.select().from(connect_requests).where(eq(connect_requests.request_hash, requestHash)))[0];
+        if (row === undefined) return { ok: false, reason: 'unknown' };
+        if (row.outcome !== null || row.claimed_at !== null) return { ok: false, reason: 'already' };
+
+        return { ok: false, reason: 'expired' };
+      });
+    },
+
+    async miss(requestHash, now, max) {
+      const missed = await run((db) =>
+        db
+          .update(connect_requests)
+          .set({
+            misses: sql`${connect_requests.misses} + 1`,
+            // The last word allowed refuses the request, in the same statement that counts it.
+            outcome: sql`CASE WHEN ${connect_requests.misses} + 1 >= ${max} THEN 'refused' ELSE NULL END`,
+            answered_at: sql`CASE WHEN ${connect_requests.misses} + 1 >= ${max} THEN ${now}::bigint ELSE NULL END`,
+          })
+          .where(and(eq(connect_requests.request_hash, requestHash), live(now)))
+          .returning({ misses: connect_requests.misses }),
+      );
+
+      return missed[0] === undefined ? undefined : Math.max(0, max - missed[0].misses);
+    },
+
+    async claim({ claimHash, now, tokenHash, connectionId, expiresAt, open }): Promise<ClaimOutcome> {
+      return transaction(async (tx) => {
+        // The outcome and the expiry are read with no lock: neither ever goes back. An answer is given
+        // once, and `now` is the instant of this call.
+        const row = (await tx.select().from(connect_requests).where(eq(connect_requests.claim_hash, claimHash)))[0];
+        if (row === undefined || row.expires_at <= now) return { state: 'gone' };
+        if (row.outcome === 'refused') return { state: 'refused' };
+        if (row.outcome !== 'approved' || row.account_id === null) return { state: 'pending' };
+
+        // Who claims it is the one thing two claims can both read as open: one statement decides. The
+        // second of two claims waits for the row, reads `claimed_at` again, and changes nothing.
+        const spent = await tx
+          .update(connect_requests)
+          .set({ claimed_at: now })
+          .where(and(eq(connect_requests.claim_hash, claimHash), isNull(connect_requests.claimed_at)))
+          .returning({ account_id: connect_requests.account_id, browser: connect_requests.browser });
+        const claimed = spent[0];
+        if (claimed === undefined || claimed.account_id === null) return { state: 'gone' };
+
+        // The account as it is now: one deleted since the approval opens nothing.
+        const person = await open(claimed.account_id);
+        if (person === undefined) return { state: 'gone' };
+
+        // In the same transaction: a session that cannot be written takes the claim back with it.
+        await tx.insert(sessions).values({
+          token_hash: tokenHash,
+          subject: claimed.account_id,
+          name: person.name ?? null,
+          email: person.email ?? null,
+          workspace: null,
+          created_at: now,
+          expires_at: expiresAt,
+          account_id: claimed.account_id,
+          browser: claimed.browser,
+          connection_id: connectionId,
+        });
+
+        return { state: 'claimed', account: claimed.account_id, browser: claimed.browser };
+      });
+    },
+
+    async browsersOf(account, now) {
+      const rows = await run((db) =>
+        db
+          .select({
+            id: sessions.connection_id,
+            browser: sql<string>`max(${sessions.browser})`,
+            // Through the column, so the driver's string is read as the number the column is.
+            connectedAt: sql<number>`min(${sessions.created_at})`.mapWith(sessions.created_at),
+            usedAt: sql<number>`max(${sessions.created_at})`.mapWith(sessions.created_at),
+          })
+          .from(sessions)
+          .where(eq(sessions.account_id, account))
+          .groupBy(sessions.connection_id)
+          // A connection is listed while one token of its chain is live.
+          .having(sql`bool_or(${sessions.revoked_at} IS NULL AND ${sessions.expires_at} > ${now})`)
+          .orderBy(sql`max(${sessions.created_at}) DESC`),
+      );
+
+      return rows.flatMap((row) =>
+        row.id === null
+          ? []
+          : [{ id: row.id, browser: row.browser ?? '', connectedAt: row.connectedAt, usedAt: row.usedAt }],
+      );
+    },
+
+    async endBrowser(account, connectionId, now) {
+      return transaction(async (tx) => {
+        const theirs = and(eq(sessions.account_id, account), eq(sessions.connection_id, connectionId));
+        // Held first, as `endSessionsOf` holds them: a rotation that runs now ends before the update
+        // below starts, and the update then reads the successor it wrote.
+        await tx
+          .select({ token_hash: sessions.token_hash })
+          .from(sessions)
+          .where(theirs)
+          .orderBy(sessions.token_hash)
+          .for('update');
+        const ended = await tx
+          .update(sessions)
+          .set({ revoked_at: now })
+          .where(and(theirs, isNull(sessions.revoked_at), gt(sessions.expires_at, now)))
+          .returning({ token_hash: sessions.token_hash });
+
+        return ended.length > 0;
+      });
+    },
+
+    async purge(now) {
+      await run((db) => db.delete(connect_requests).where(lte(connect_requests.expires_at, now)));
     },
   };
 }
