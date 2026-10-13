@@ -269,6 +269,8 @@ type FieldProps = {
   locked?: boolean;
   /** 40 px and not 44: a field of a panel or of a row of filters. */
   compact?: boolean;
+  /** Takes focus when it appears: the field a press of « Rename » opens. */
+  autoFocus?: boolean;
   onFocus?: (event: FocusEvent<HTMLInputElement>) => void;
 };
 

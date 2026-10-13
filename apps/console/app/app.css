@@ -1111,6 +1111,11 @@ textarea {
   max-width: 280px;
 }
 
+/* No sentence: the drop alone, for a page that has nothing to say yet. */
+.kit-browser__empty p:empty {
+  display: none;
+}
+
 .kit-browser__caption {
   margin: 12px 4px 0;
   color: var(--muted);
