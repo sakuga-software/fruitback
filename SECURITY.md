@@ -538,6 +538,28 @@ client**: an empty map is not the absence of a map, which would answer every pag
 file holds addresses, names and the id each provider gives a person, no password, and no token of a provider
 that signs a person in. Since FRU-121 it also holds the key of each connector, encrypted: see below. `FRUITBACK_CLIENTS` is refused beside it, so one map has one source.
 
+**A visitor with no account leaves a note on a site that everyone reads, and that is the design**
+(FRU-224, a decision of 2026-10-13): no session, no token, no cookie. The page sends the id of the
+site and the browser sends its `Origin`; the worker refuses an origin that is no site of the worker
+(`origin-not-allowed`) and the origin of another site (`origin-not-allowed-for-client`), and keeps
+the name the visitor typed as a claim, never as verified. `visitor.test.ts` holds that path on a
+worker whose site was made in the console, with the notes in PostgreSQL:
+test:`leaves a note and reads it again, with no session, no token and no cookie`,
+test:`refuses a note and a read that name the site from the page of another site`,
+test:`keeps the name the visitor typed, and never says the worker verified it`. In a browser,
+`e2e/visitor.spec.ts` adds what CORS does: test:`a page of another origin reads no note of the site,
+and plants none`. As above, `Origin` binds a claim to a site and authenticates nobody: a request
+that is not from a browser sends the one it wants, or none.
+
+**The visibility of a site decides who reads it, and not who writes on it.** On a site read by
+`members`, a read with no session answers `401`
+(test:`reads no note: the worker asks for a session, and says so`). **A note sent with no session is
+still kept there**, as a claim, as on every site: its sender cannot read it back, and the members
+find it, in the worker or in the tracker of the site
+(test:`still takes a note sent with no session, which its sender cannot read back`). This is what
+the worker did before FRU-224, measured there, and not a choice made there. A team that wants
+notes from its members only has no setting for it today.
+
 **With `FRUITBACK_DATABASE_URL` the same accounts are in a PostgreSQL database** (FRU-141), in place
 of that file, and the worker refuses to start with both. The database holds what the file holds:
 addresses, names, the id each provider gives a person,
