@@ -1163,6 +1163,8 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
 - **Nothing takes focus from somebody who writes** (rule 3 of `CLAUDE.md`). While the composer is
   open or a capture runs, the link waits in the address. The note opens when the composer closes
   (`embed.ts` watches its `hidden`), or at the next read.
+- **A note whose element is gone opens the list too**, on its group « Could not be placed »
+  (FRU-259), and its thread at the place it was planted.
 - **A note this page does not draw opens nothing**: a note of another page, or of a stage the
   reporter hid in the settings. No error is shown and none is written to the console.
 - `e2e/deep-link.spec.ts` opens a note by its link on the built widget, with its control (`#formules`

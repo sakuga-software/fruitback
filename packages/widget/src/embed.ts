@@ -332,8 +332,13 @@ export function init(options: FruitbackOptions): Fruitback {
     } finally {
       droppingFragment = false;
     }
+    if (issue === undefined) return;
+    // A note whose element is gone is in « Could not be placed », in the list of the page (FRU-259):
+    // the list opens on it, and the thread opens beside it, at the place it was planted.
+    const resolution = overlay.resolutions().find((each) => each.issue === issue);
+    if (resolution !== undefined && placementOf(resolution) === 'detached') sidebar.open();
     // `false` for a note this page does not draw: one of another page, or of a stage the reporter hid.
-    if (issue !== undefined) overlay.select(issue.seed.id);
+    overlay.select(issue.seed.id);
   }
 
   composer = createComposer({
