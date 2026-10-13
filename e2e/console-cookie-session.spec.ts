@@ -25,7 +25,7 @@ async function signInByLink(page: Page, worker: Worker, email: string): Promise<
   await expect(page).toHaveURL(/\/w\/ws_[0-9a-f]{20}\/sites$/);
   await expect(page.getByRole('heading', { name: 'Sites', level: 1 })).toBeVisible();
   // The list was read: the title is there before the answer, and a test starts from a screen at rest.
-  await expect(page.getByText('No site yet. Paste the address of the one you review.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No site yet' })).toBeVisible();
 }
 
 test.describe('the console, signed in by the cookie of better-auth (FRU-148)', () => {
@@ -72,8 +72,8 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
 
     // A site added from the list, with the cookie: a change, from the origin of the console.
     await page.getByRole('textbox', { name: 'Site address' }).fill('staging.acme.dev');
-    await page.getByRole('button', { name: 'Add the site', exact: true }).click();
-    await expect(page.getByText('https://staging.acme.dev')).toBeVisible();
+    await page.getByRole('button', { name: 'Add site', exact: true }).click();
+    await expect(page.getByText('staging.acme.dev', { exact: true })).toBeVisible();
   });
 
   test('takes the token of a link out of the address bar, for a link that works and for one that does not (FRU-207)', async ({
@@ -137,7 +137,7 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     });
     expect(ended.status).toBe(200);
 
-    await page.getByRole('button', { name: 'Add the site', exact: true }).click();
+    await page.getByRole('button', { name: 'Add site', exact: true }).click();
     const notice = page.getByRole('alert').filter({ hasText: 'Your session ended' });
     await expect(notice).toBeVisible();
     await expect(field).toHaveValue('staging.acme.dev');
@@ -172,8 +172,8 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     // The notice goes. The sentence of the screen, « the site was not added », stays until the next try.
     await expect(page.getByRole('alert').filter({ hasText: /signed out|session ended/ })).toHaveCount(0);
     await expect(field).toHaveValue('staging.acme.dev');
-    await page.getByRole('button', { name: 'Add the site', exact: true }).click();
-    await expect(page.getByText('https://staging.acme.dev')).toBeVisible();
+    await page.getByRole('button', { name: 'Add site', exact: true }).click();
+    await expect(page.getByText('staging.acme.dev', { exact: true })).toBeVisible();
   });
 
   test('ends the session on the worker when the person signs out', async ({ page, context }) => {
@@ -253,7 +253,7 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     await expect(page.getByRole('alert').getByRole('heading', { name: title })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Sites', level: 1 })).toHaveCount(0);
     await expect(page.getByText('Acme')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Add the site', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Add site', exact: true })).toHaveCount(0);
     const draft = page.getByRole('textbox', { name: 'Site address' });
     await expect(draft).toHaveValue('staging.acme.dev');
     await expect(draft).toHaveAttribute('readonly', '');
@@ -276,7 +276,7 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
       },
       body: '{}',
     });
-    await page.getByRole('button', { name: 'Add the site', exact: true }).click();
+    await page.getByRole('button', { name: 'Add site', exact: true }).click();
     const notice = page.getByRole('alert').filter({ hasText: 'Your session ended' });
     await expect(notice).toBeVisible();
     const written = await sitesWritten(worker);
@@ -290,7 +290,7 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     // The one way on loads the console for whoever is signed in now.
     await page.getByRole('button', { name: 'Load the console again', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Sites', level: 1 })).toBeVisible();
-    await expect(page.getByText('Other')).toBeVisible();
+    await expect(page.getByText('Other', { exact: true })).toBeVisible();
     await expect(page.getByRole('textbox', { name: 'Site address' })).toHaveValue('');
     await other.close();
   });

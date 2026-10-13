@@ -511,8 +511,9 @@ test('what the root says above a screen stays above the rail, and reads', async 
   });
   await open(page);
   down = true;
-  await page.getByRole('textbox').first().fill('https://staging.acme.dev');
-  await page.getByRole('button', { name: 'Add the site' }).click();
+  await page.getByRole('button', { name: 'Add a site' }).click();
+  await page.getByRole('textbox', { name: 'Site address' }).fill('https://staging.acme.dev');
+  await page.getByRole('button', { name: 'Add site' }).click();
 
   const banner = page.getByRole('alert').filter({ hasText: 'Fruitback cannot reach its server' });
   await expect(banner).toBeVisible();
