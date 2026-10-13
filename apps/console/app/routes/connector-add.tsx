@@ -97,10 +97,12 @@ export function AddRest({
     if (!added.ok) {
       return setProblem(ADDRESS_PROBLEMS[added.error] ?? msg('The address could not be kept just now. Try again.'));
     }
-    onAdded(added.data);
+    // The secret stays here: the screen is handed the connector without it, and can keep none.
+    const { secret: fresh, ...connector } = added.data;
+    onAdded(connector);
     // A secret the person gave is theirs already: nothing is left to show.
-    if (added.data.secret === undefined) return onDone();
-    setMade(added.data.secret);
+    if (fresh === undefined) return onDone();
+    setMade(fresh);
   }
 
   if (made !== undefined) {
