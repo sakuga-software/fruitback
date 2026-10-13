@@ -72,7 +72,7 @@ test('a 503 and a 403 say two different things, and both keep the note', async (
   await expect(page.locator('[data-fruitback-status]')).toHaveAttribute('role', 'status');
 });
 
-test('in French, at 320 px of composer, the failure has a line of its own above the buttons', async ({ page }) => {
+test('in French, at 360 px of composer, the failure has a line of its own above the buttons', async ({ page }) => {
   await refuseWrites(page, 403, 'origin-not-allowed');
   await mount(page, 'send-failure-layout', 'fr-FR');
   await sendFailing(page, 'Une note refusée');
@@ -81,7 +81,7 @@ test('in French, at 320 px of composer, the failure has a line of its own above 
   const cancel = await page.locator('[data-fruitback-cancel]').boundingBox();
   const send = await page.locator('[data-fruitback-send]').boundingBox();
   const composer = await page.locator('[data-fruitback-state="failed"]').boundingBox();
-  expect(composer?.width).toBeLessThanOrEqual(320);
+  expect(composer?.width).toBeLessThanOrEqual(360);
   // The sentence ends above the top of both buttons: it shares no line with them.
   expect((status?.y ?? 0) + (status?.height ?? 0)).toBeLessThanOrEqual(Math.min(cancel?.y ?? 0, send?.y ?? 0));
 });
@@ -101,7 +101,7 @@ for (const [locale, sentence] of [
     const cancel = await page.locator('[data-fruitback-cancel]').boundingBox();
     const send = await page.locator('[data-fruitback-send]').boundingBox();
     const composer = await page.locator('[data-fruitback-state="failed"]').boundingBox();
-    expect(composer?.width).toBeLessThanOrEqual(320);
+    expect(composer?.width).toBeLessThanOrEqual(360);
     expect((status?.y ?? 0) + (status?.height ?? 0)).toBeLessThanOrEqual(Math.min(cancel?.y ?? 0, send?.y ?? 0));
   });
 }

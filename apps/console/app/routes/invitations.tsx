@@ -102,7 +102,7 @@ function Body({
           {t('Sign in with the address the invitation was sent to, and it shows here.')}
         </p>
         <Link
-          to="/setup"
+          to="/sign-in"
           className="mt-5 inline-block rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white"
         >
           {t('Sign in')}

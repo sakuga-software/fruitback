@@ -2,8 +2,9 @@
  * Where the rate limiter and the read cache keep their state (FRU-49).
  *
  * Both kept a `Map` of their own. The interface is the smallest one both callers need: a value with an
- * expiry, and a counter with an expiry. This process holds one memory implementation. A store shared
- * between replicas is FRU-67, and it is one more implementation of this type.
+ * expiry, and a counter with an expiry. The memory implementation is here: it is the one of a worker
+ * with no database. A worker with one shares its state between replicas in `kv-postgres.ts`
+ * (FRU-67), and `kvFor` of `app.ts` chooses.
  *
  * **Values are strings, the memory store included.** A store that kept objects would accept a value a
  * remote store cannot hold, and every test would pass against it.

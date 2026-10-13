@@ -33,12 +33,17 @@ const KNOWN = [
 ];
 
 const PAIRS: Pair[] = [
-  { foreground: 'color-on-accent', background: 'color-accent', minimum: 4.5, where: 'the launch and send labels' },
+  {
+    foreground: 'color-on-accent',
+    background: 'color-accent',
+    minimum: 4.5,
+    where: 'the launch and send labels, and the name of the component on the frame of a capture',
+  },
   {
     foreground: 'color-on-chip',
     background: 'color-chip',
     minimum: 4.5,
-    where: 'the gear, and the launch label while capturing',
+    where: 'the gear, and the button that stops a capture',
   },
   {
     foreground: 'color-text',
@@ -146,6 +151,11 @@ const PAIRS: Pair[] = [
   },
   { foreground: 'color-on-ink', background: 'color-ink', minimum: 4.5, where: 'the banner of a capture' },
   { foreground: 'color-on-ink-muted', background: 'color-ink', minimum: 4.5, where: 'the hint of that banner' },
+  // A drawing: 1.4.11 asks for 3:1.
+  { foreground: 'color-accent', background: 'color-ink', minimum: 3, where: 'the focus ring of its button' },
+  // The composer stands on the surface since FRU-258, as the mock-up paints it: its text, its muted
+  // lines and its failed status are the pairs of the surface above. The sent status is this one.
+  { foreground: 'color-success', background: 'color-surface', minimum: 4.5, where: 'the sent status' },
   {
     foreground: 'color-unplaced',
     background: 'color-surface',

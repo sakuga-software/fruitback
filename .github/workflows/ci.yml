@@ -106,8 +106,9 @@ jobs:
       options: --user 1001
     # Node still comes from `.nvmrc` and not from the image: the sources run untranspiled, which
     # needs a newer Node than noble ships.
-    # The suite takes six seconds. If this job ever approaches ten minutes, something is wrong again.
-    timeout-minutes: 10
+    # The suite grew to about 200 tests on one worker: 6 to 9 minutes on 2026-10-13, and runs that
+    # passed every test were stopped at ten. The ceiling still stops a browser that hangs.
+    timeout-minutes: 20
 
     steps:
       - name: Checkout code

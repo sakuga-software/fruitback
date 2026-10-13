@@ -75,7 +75,7 @@ test('the formula answers the two known ratios', () => {
 test('the alert of a problem reads as a problem', async ({ page }) => {
   await openSites(page);
   await page.getByRole('textbox').first().fill('https://staging.acme.dev');
-  await page.getByRole('button', { name: 'Add the site' }).click();
+  await page.getByRole('button', { name: 'Add site' }).click();
 
   const alert = page.getByRole('alert');
   await expect(alert).toBeVisible();
@@ -91,7 +91,7 @@ test('the alert of a problem reads as a problem', async ({ page }) => {
 test('the main button keeps 4.5:1 under the pointer, when pressed and with focus', async ({ page }) => {
   await openSites(page);
   await page.getByRole('textbox').first().fill('https://staging.acme.dev');
-  const button = page.getByRole('button', { name: 'Add the site' });
+  const button = page.getByRole('button', { name: 'Add site' });
   const ratio = async () => contrast(await painted(button, 'color'), await painted(button, 'backgroundColor'));
   const resting = await painted(button, 'backgroundColor');
 
@@ -290,6 +290,19 @@ test('the buttons have the measures of the mockup (FRU-232)', async ({ page }) =
     fontSize: '13px',
   });
   await expectStyle(button('Outline disabled'), 'outline, disabled', { opacity: '0.5', cursor: 'not-allowed' });
+  // The padding the mockup writes on one button: 16 px on « Send again », which is 157.5 px wide there.
+  await expectStyle(button('Send again in 0:41'), 'outline, with its own padding', {
+    height: '44px',
+    paddingLeft: '16px',
+    paddingRight: '16px',
+  });
+  // The width of a text is of its font. The mockup is measured in the system font of macOS, and the
+  // CI draws the system font of Linux: there the padding is measured, and the width is not.
+  if (process.platform === 'darwin') {
+    expect
+      .soft((await button('Send again in 0:41').boundingBox())!.width, 'the width of « Send again »')
+      .toBeCloseTo(157.5, 0);
+  }
   // A link drawn as a control has the same box.
   await expectStyle(buttons.getByRole('link', { name: 'Continue in this tab' }), 'outline, link', {
     ...outline,
@@ -743,6 +756,151 @@ test('the head of a page has the type of the mockup (FRU-232)', async ({ page })
     letterSpacing: '-0.6px',
   });
   await expectStyle(page.locator('body'), 'page', { backgroundColor: WHITE, color: INK });
+});
+
+test("the logo and the frame of a page outside a workspace are the mockup's (FRU-232)", async ({ page }) => {
+  await openKit(page);
+  const logos = page.locator('[data-kit="logos"]');
+
+  // 113 × 22 on a page, in ink and the accent; 82 × 16 on the rail, in white and the accent of the rail.
+  const onPage = logos.getByRole('img', { name: 'Fruitback' }).first();
+  await expectStyle(onPage, 'logo', { width: '113px', height: '22px' });
+  await expectStyle(onPage.locator('path').nth(0), 'logo, name', { fill: INK });
+  await expectStyle(onPage.locator('path').nth(1), 'logo, drop', { fill: ACCENT });
+  const onRail = logos.getByRole('img', { name: 'Fruitback' }).nth(1);
+  await expectStyle(onRail, 'logo of the rail', { width: '82px', height: '16px' });
+  await expectStyle(onRail.locator('path').nth(0), 'logo of the rail, name', { fill: WHITE });
+  await expectStyle(onRail.locator('path').nth(1), 'logo of the rail, drop', { fill: 'rgb(236, 91, 87)' });
+
+  await page.goto(`${CONSOLE}/kit/entry`);
+  const header = page.locator('header');
+  await expectStyle(header, 'header', { borderBottomWidth: '1px', borderBottomColor: LINE, height: '65px' });
+  // clamp(16px, 4vw, 32px) at 1440 px.
+  await expectStyle(header.locator('> div'), 'header, inside', {
+    paddingLeft: '32px',
+    minHeight: '64px',
+    maxWidth: '1280px',
+  });
+  const home = header.getByRole('link', { name: 'Fruitback' });
+  await expect(home).toHaveAttribute('href', 'https://fruitback.com');
+  // The logo of screen 02 of the mockup, at 1440 px: x 80, y 21 (`measures.json`).
+  const logo = await home.getByRole('img').boundingBox();
+  expect.soft(logo).toEqual({ x: 80, y: 21, width: 113, height: 22 });
+
+  // clamp(48px, 10vh, 112px) of a screen of 900 px, and a column of 400 px in the middle.
+  await expectStyle(page.locator('main'), 'main', { paddingTop: '90px', paddingLeft: '16px', paddingBottom: '64px' });
+  const title = await page.getByRole('heading', { level: 1 }).boundingBox();
+  expect.soft({ x: title!.x, y: title!.y, width: title!.width }).toEqual({ x: 520, y: 155, width: 400 });
+  // A screen places a component: a margin it writes on one is not lost under a rule of the kit.
+  await expectStyle(page.locator('.kit-lead'), 'lead, placed by the screen', { marginBottom: '28px' });
+  await expectStyle(page.locator('.kit-divider'), 'divider', {
+    color: MUTED_TONE,
+    fontSize: '13px',
+    columnGap: '12px',
+  });
+  await expect(page.locator('.kit-divider')).toHaveAttribute('aria-hidden', 'true');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  // clamp(16px, 4vw, 32px) at 390 px is 16 px, and 10vh of 844 px is 84.4 px.
+  await expectStyle(header.locator('> div'), 'header, narrow', { paddingLeft: '16px' });
+  await expectStyle(page.locator('main'), 'main, narrow', { paddingTop: '84.4px' });
+  expect.soft(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations.map((violation) => `${violation.id}: ${violation.nodes[0]?.target.join(' ')}`)).toEqual([]);
+});
+
+test('a menu opens from its button, a keyboard walks it, and Escape gives focus back (FRU-232)', async ({ page }) => {
+  await openKit(page);
+  const menus = page.locator('[data-kit="menus"]');
+  const picked = menus.locator('[data-kit="menu-picked"]');
+
+  // A button that is a picture: the box of the « … » of a row of the mockup, named for a screen reader.
+  const more = menus.getByRole('button', { name: 'More for staging.acme.dev' });
+  await expectStyle(more, 'the button of a menu', {
+    height: '36px',
+    width: '36px',
+    borderTopLeftRadius: '8px',
+    color: MUTED_TONE,
+  });
+  await expect(more).toHaveAttribute('aria-haspopup', /^(menu|true)$/);
+  await expect(more).toHaveAttribute('aria-expanded', 'false');
+
+  await more.focus();
+  await page.keyboard.press('Enter');
+  // The menu is named after its button.
+  const menu = page.getByRole('menu', { name: 'More for staging.acme.dev' });
+  await expect(menu).toBeVisible();
+  await expect(more).toHaveAttribute('aria-expanded', 'true');
+  await expect(menu.getByRole('menuitem')).toHaveText(['Install', 'Change who sees the notes', 'Not yet', 'Remove']);
+
+  // The surface of a page with the frame of a card. The menu is not drawn in the mockup.
+  const popover = page.locator('.kit-menu');
+  await expectStyle(popover, 'menu', {
+    backgroundColor: WHITE,
+    borderTopWidth: '1px',
+    borderTopColor: LINE,
+    borderTopLeftRadius: '10px',
+    color: INK,
+  });
+  const install = menu.getByRole('menuitem', { name: 'Install' });
+  await expectStyle(install, 'item', { minHeight: '40px', borderTopLeftRadius: '6px', fontSize: '14px' });
+  // An item that takes something away is the strong accent: 6.47:1 on white, 5.89:1 on the tint of an item.
+  const remove = menu.getByRole('menuitem', { name: 'Remove' });
+  await expectStyle(remove, 'item that removes', { color: ACCENT_STRONG });
+  await expect(menu.getByRole('menuitem', { name: 'Not yet' })).toHaveAttribute('aria-disabled', 'true');
+
+  // The keyboard is on the first item, which shows it; the arrows walk the items, past the disabled one.
+  await expect(install).toBeFocused();
+  await expectStyle(install, 'item with focus', {
+    outlineStyle: 'solid',
+    outlineWidth: '2px',
+    outlineColor: ACCENT,
+    backgroundColor: CHIP,
+  });
+  await page.keyboard.press('ArrowDown');
+  await expect(menu.getByRole('menuitem', { name: 'Change who sees the notes' })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(remove).toBeFocused();
+  expect
+    .soft(contrast(await painted(remove, 'color'), await painted(remove, 'backgroundColor')))
+    .toBeGreaterThanOrEqual(4.5);
+  const open = await new AxeBuilder({ page }).include('.kit-menu').analyze();
+  expect
+    .soft(open.violations.map((violation) => `${violation.id}: ${violation.nodes[0]?.target.join(' ')}`))
+    .toEqual([]);
+
+  // Escape closes the menu with nothing done, and focus is back on the button.
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect(more).toBeFocused();
+  await expect(picked).toHaveText('Picked: nothing, acme');
+
+  // An item pressed says which one it is, and the menu closes.
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(menu).toBeHidden();
+  await expect(picked).toHaveText('Picked: audience, acme');
+  await expect(more).toBeFocused();
+
+  // A menu that is a choice: its items are radios, and the current one is checked.
+  const choice = menus.getByRole('button', { name: 'Workspace' });
+  await choice.click();
+  const radios = page.getByRole('menu', { name: 'Workspace' }).getByRole('menuitemradio');
+  await expect(radios).toHaveCount(2);
+  await expect(radios.nth(0)).toHaveAttribute('aria-checked', 'true');
+  await expect(radios.nth(1)).toHaveAttribute('aria-checked', 'false');
+  await expect(radios.nth(1)).toContainText('Lumen Studio');
+  // The second line of an item is its description, in the muted tone: 5.28:1 on white.
+  await expectStyle(radios.nth(1).getByText('Member'), 'detail of an item', { color: MUTED_TONE, fontSize: '13px' });
+  // The menu of a button of the rail is a page all the same: its ring is the one of a page.
+  await radios.nth(1).hover();
+  await expectStyle(radios.nth(1), 'item under the pointer', { backgroundColor: CHIP });
+  await radios.nth(1).click();
+  await expect(picked).toHaveText('Picked: audience, lumen');
+  await choice.click();
+  await expect(page.getByRole('menuitemradio', { name: /Lumen Studio/ })).toHaveAttribute('aria-checked', 'true');
+  await page.keyboard.press('Escape');
 });
 
 /** Each text of the page with the colour it is painted in and the colour that is behind it. */

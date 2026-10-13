@@ -17,6 +17,7 @@ import {
   feedbackAsText,
   languageOf,
   placementOf,
+  readableName,
 } from '@fruitback/widget';
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
@@ -77,12 +78,18 @@ export function Fruitback() {
       onSelect: (selected) => {
         target.current = selected;
         const rect = selected.element.getBoundingClientRect();
-        widget.current?.composer.open({
-          left: rect.left + window.scrollX,
-          top: rect.top + window.scrollY,
-          bottom: rect.bottom + window.scrollY,
-          right: rect.right + window.scrollX,
-        });
+        // Like `init`: the frame stays on the element while the composer is open, and the head of
+        // the composer says what the element is (FRU-258).
+        widget.current?.host.hold(selected.element);
+        widget.current?.composer.open(
+          {
+            left: rect.left + window.scrollX,
+            top: rect.top + window.scrollY,
+            bottom: rect.bottom + window.scrollY,
+            right: rect.right + window.scrollX,
+          },
+          readableName(selected.element),
+        );
         setStatus(selected.source?.component ? `cible : <${selected.source.component}>` : 'cible sélectionnée');
       },
       // The dev toolbar is the playground's, not the widget's and not the page's.
@@ -107,6 +114,7 @@ export function Fruitback() {
         get: () => config.get().reporterName,
         set: (name) => config.set({ reporterName: name }),
       },
+      onClose: () => host.release(),
       onSubmit: async (note, reporter) => {
         const identifier = await plant(note, target.current, setStatus, reporter);
         if (identifier === null) return false;

@@ -44,9 +44,14 @@ import {
 import { FRUITBACK_RESOURCE, IMPLIED, roleStatements } from './auth-roles.ts';
 import { ORGANIZATION_PATHS } from './organization-paths.ts';
 import { ACCOUNTS_FILE_REFUSED, GITHUB_APP_REFUSED, type WorkerEnv, hasAuth, readConfig } from './env.ts';
+import { createMemoryKv } from './kv.ts';
 import { type Database, closeDatabases, createPgDatabase } from './postgres.ts';
 import { NO_REAL_POSTGRES, appliedDates, createPgliteDatabase, journalDates, ownDatabase } from './postgres.fixture.ts';
 import { closeSessionConnections } from './session-sqlite.ts';
+
+// The database of this environment is at an address where nothing listens: a case hands its stores
+// over, and the `Kv` with them, as the transport does (FRU-67).
+const kv = createMemoryKv();
 
 /**
  * better-auth, built and switched off (FRU-144). No route of it is served: what is tested here is
@@ -463,6 +468,7 @@ describe('the routes of better-auth that the worker serves (FRU-144, FRU-147)', 
       env,
       {
         clientIp: `192.0.2.${ip}`,
+        kv,
         ...(database === undefined ? {} : { accounts: createPostgresAccountStore(database) }),
         ...(auth === undefined ? {} : { auth }),
       },
@@ -495,6 +501,7 @@ describe('the routes of better-auth that the worker serves (FRU-144, FRU-147)', 
     const ask = (path: string): Promise<Response> =>
       handleRequest(new Request(`https://worker.test${path}`, { headers: { Origin: CONSOLE_URL } }), env, {
         clientIp: '192.0.2.210',
+        kv,
         accounts: createPostgresAccountStore(database),
       });
 
@@ -570,7 +577,7 @@ describe('the routes of better-auth that the worker serves (FRU-144, FRU-147)', 
           headers: { Origin: CONSOLE_URL, Cookie: '__Secure-fruitback.session_token=a.b' },
         }),
         envWith(),
-        { clientIp: '192.0.2.200', accounts: createPostgresAccountStore(database), auth: rejecting },
+        { clientIp: '192.0.2.200', kv, accounts: createPostgresAccountStore(database), auth: rejecting },
       );
 
       assert.equal(answer.status, 502);

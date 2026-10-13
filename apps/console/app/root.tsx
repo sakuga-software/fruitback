@@ -135,7 +135,7 @@ function Gone({ why, drafts }: { why: Left; drafts: Draft[] }) {
             ))}
           </>
         )}
-        <Button className="mt-5" onClick={() => window.location.assign(why === 'changed' ? '/' : '/setup')}>
+        <Button className="mt-5" onClick={() => window.location.assign(why === 'changed' ? '/' : '/sign-in')}>
           {why === 'changed' ? t('Load the console again') : t('Sign in')}
         </Button>
       </div>
@@ -195,7 +195,7 @@ function SignedOut() {
           : t('Your session ended. Sign in again in another tab: what you wrote here stays.')}
       </span>
       <a
-        href="/setup"
+        href="/sign-in"
         target="_blank"
         rel="noopener"
         className="rounded-full border border-white px-3 py-1 font-semibold hover:bg-white/10"

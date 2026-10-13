@@ -10,7 +10,7 @@ import { type CapturedPlace, captureSeed, capturePlace } from './capture.ts';
 import { type WidgetConfig, createConfigStore } from './config.ts';
 import { type FeedbackEntry, feedbackAsText, placementOf } from './export.ts';
 import { type ReadState, type Sidebar, createSidebar } from './sidebar.ts';
-import { type CaptureHost, type CaptureTarget, createCaptureHost } from './host.ts';
+import { type CaptureHost, type CaptureTarget, createCaptureHost, readableName } from './host.ts';
 import type { FruitbackTheme } from './theme.ts';
 import { type FruitbackTransport, fetchTransport } from './transport.ts';
 import { type Composer, type SendFailure, createComposer } from './composer.ts';
@@ -233,13 +233,18 @@ export function init(options: FruitbackOptions): Fruitback {
     onSelect: (selected) => {
       target = selected;
       place = placeOf(selected);
+      // The frame stays on the element for as long as the composer is open on it (FRU-258).
+      host.hold(selected.element);
       const rect = selected.element.getBoundingClientRect();
-      composer.open({
-        left: rect.left + view.scrollX,
-        top: rect.top + view.scrollY,
-        bottom: rect.bottom + view.scrollY,
-        right: rect.right + view.scrollX,
-      });
+      composer.open(
+        {
+          left: rect.left + view.scrollX,
+          top: rect.top + view.scrollY,
+          bottom: rect.bottom + view.scrollY,
+          right: rect.right + view.scrollX,
+        },
+        readableName(selected.element),
+      );
     },
   });
 
@@ -314,6 +319,15 @@ export function init(options: FruitbackOptions): Fruitback {
       remembered: () => config.get().destination,
       remember: (id) => config.set({ destination: id }),
     },
+    // The preference of the settings panel, beside the note (FRU-258). Offered when the host can
+    // take a picture, and off until the reporter ticks it: no image leaves the page by default.
+    picture: {
+      offered: () => options.captureScreenshot !== undefined,
+      get: () => config.get().screenshot,
+      set: (attach) => config.set({ screenshot: attach }),
+      subscribe: (listener) => config.subscribe(() => listener()),
+    },
+    onClose: () => host.release(),
     // Offered only while the worker takes several notes in one request (FRU-124).
     keep: {
       offered: () => readerIdentity.batch !== undefined,

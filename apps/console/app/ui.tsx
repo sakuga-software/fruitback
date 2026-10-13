@@ -1,6 +1,7 @@
 import {
   Alert,
   Description,
+  Dropdown,
   Header,
   Button as HeroButton,
   Chip as HeroChip,
@@ -15,6 +16,9 @@ import {
 } from '@heroui/react';
 import type { ChangeEvent, FocusEvent, KeyboardEvent, ReactNode, Ref } from 'react';
 import { Link } from 'react-router';
+import { Logo } from './logo';
+
+export { Logo };
 
 /** The pin of the widget, as the mockup draws it beside the name. */
 export function Mark({ size = 14 }: { size?: number }) {
@@ -64,6 +68,11 @@ type ButtonProps = Destination & {
   size?: ControlSize;
   /** Takes the whole width of its column. */
   wide?: boolean;
+  /**
+   * The padding at each end, in pixels, where the mockup writes another one than the one of the
+   * size: 16 on « Send again », 24 on « Invite », 26 on « Connect Chrome ».
+   */
+  inset?: 14 | 16 | 18 | 22 | 24 | 26;
   type?: 'button' | 'submit';
   disabled?: boolean;
   onClick?: () => void;
@@ -100,6 +109,7 @@ export function Button({
   tone = 'primary',
   size = tone === 'outline' ? 'panel' : 'page',
   wide = false,
+  inset,
   type = 'button',
   disabled = false,
   onClick,
@@ -111,7 +121,11 @@ export function Button({
   children,
 }: ButtonProps) {
   const classes = `${TONE_CLASSES[tone]} ${className}`;
-  const data = { 'data-size': size, 'data-wide': wide };
+  const data = {
+    'data-size': size,
+    'data-wide': wide,
+    ...(inset === undefined ? {} : { style: { paddingInline: inset } }),
+  };
   if (to !== undefined || href !== undefined) return anchor({ to, href, newTab }, classes, data, children);
 
   return (
@@ -653,5 +667,118 @@ export function PageHead({
       </div>
       {action ?? null}
     </header>
+  );
+}
+
+/** The site of the product: where the logo of a page outside a workspace leads. */
+const SITE = 'https://fruitback.com';
+
+type EntryPageProps = {
+  /** The column of the page: 400 px (« narrow »), 440 px (« wide »), or the whole page for the setup. */
+  width?: 'narrow' | 'wide' | 'full';
+  /** At the end of the header: a sentence and a link, as « Running your own server? ». */
+  aside?: ReactNode;
+  children: ReactNode;
+};
+
+/**
+ * A page outside a workspace: the sign-in, an invitation, the setup. A header with the logo, which
+ * leads to the site of the product, and one column under it.
+ */
+export function EntryPage({ width = 'narrow', aside, children }: EntryPageProps) {
+  return (
+    <div className="kit-entry">
+      <header className="kit-entry__header">
+        <div>
+          <a href={SITE} className="kit-entry__logo">
+            <Logo />
+          </a>
+          {aside ?? null}
+        </div>
+      </header>
+      <main className="kit-entry__main" data-width={width}>
+        {width === 'full' ? children : <div className="kit-entry__column">{children}</div>}
+      </main>
+    </div>
+  );
+}
+
+/** A rule with a word in its middle: « or », between two ways to do one thing. A picture only. */
+export function Divider({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return (
+    <div aria-hidden="true" className={`kit-divider ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+export type MenuItem = {
+  id: string;
+  label: string;
+  /** A second line under the label: the role of a person in a workspace. */
+  detail?: string;
+  /** The item takes something away: « Remove ». */
+  danger?: boolean;
+  disabled?: boolean;
+};
+
+type MenuProps = {
+  items: readonly MenuItem[];
+  /** The item that is the current one, when the menu is a choice: it is checked. */
+  chosen?: string;
+  onAction: (id: string) => void;
+  /**
+   * What opens the menu: a button that is a picture (36 px, named by `triggerLabel`), or a button of
+   * the screen, which gives its box with `triggerClassName`.
+   */
+  trigger?: 'icon' | 'plain';
+  triggerLabel?: string;
+  triggerClassName?: string;
+  /** What the button shows. */
+  children: ReactNode;
+};
+
+/**
+ * A button that opens a menu, as the dropdown of HeroUI: the arrows walk the items, Escape closes
+ * the menu and gives focus back to the button. The menu is named after its button, so the button
+ * says what the menu lists. The menu is drawn on the surface of a page, wherever its button is.
+ */
+export function Menu({
+  items,
+  chosen,
+  onAction,
+  trigger = 'plain',
+  triggerLabel,
+  triggerClassName = '',
+  children,
+}: MenuProps) {
+  return (
+    <Dropdown>
+      <Dropdown.Trigger
+        className={`kit-menu-trigger ${trigger === 'icon' ? 'kit-icon-button' : ''} ${triggerClassName}`}
+        {...(triggerLabel === undefined ? {} : { 'aria-label': triggerLabel })}
+      >
+        {children}
+      </Dropdown.Trigger>
+      <Dropdown.Popover className="kit-menu" placement="bottom start">
+        <Dropdown.Menu
+          onAction={(id) => onAction(String(id))}
+          disabledKeys={items.filter((item) => item.disabled === true).map((item) => item.id)}
+          {...(chosen === undefined
+            ? {}
+            : { selectionMode: 'single' as const, selectedKeys: [chosen], disallowEmptySelection: true })}
+        >
+          {items.map((item) => (
+            <Dropdown.Item key={item.id} id={item.id} textValue={item.label} data-danger={item.danger === true}>
+              {chosen === undefined ? null : <Dropdown.ItemIndicator />}
+              <span className="kit-menu__words">
+                <Label>{item.label}</Label>
+                {item.detail === undefined ? null : <Description>{item.detail}</Description>}
+              </span>
+            </Dropdown.Item>
+          ))}
+        </Dropdown.Menu>
+      </Dropdown.Popover>
+    </Dropdown>
   );
 }

@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import {
   Button,
+  EntryPage,
   Chip,
   Choice,
+  Divider,
   DataTable,
   Field,
   FilterChip,
@@ -10,7 +12,9 @@ import {
   Initial,
   KeyValue,
   Lead,
+  Logo,
   LinkButton,
+  Menu,
   PageHead,
   Pick,
   Problem,
@@ -38,6 +42,8 @@ export default function KitGallery() {
   const [who, setWho] = useState<'members' | 'public'>('members');
   const [role, setRole] = useState('guest');
   const [text, setText] = useState('');
+  const [picked, setPicked] = useState('nothing');
+  const [workspace, setWorkspace] = useState('acme');
 
   return (
     <main className="mx-auto flex max-w-[1120px] flex-col gap-10 px-8 py-10">
@@ -61,6 +67,9 @@ export default function KitGallery() {
         </Button>
         <Button tone="outline" disabled>
           Outline disabled
+        </Button>
+        <Button tone="outline" size="page" inset={16}>
+          Send again in 0:41
         </Button>
         <Button tone="outline" size="page" href="https://fruitback.com">
           Continue in this tab
@@ -271,6 +280,63 @@ export default function KitGallery() {
         </p>
         <Initial name="Marie" size="small" />
       </section>
+
+      <section aria-label="Menus" className="flex flex-wrap items-center gap-6" data-kit="menus">
+        <Menu
+          trigger="icon"
+          triggerLabel="More for staging.acme.dev"
+          onAction={setPicked}
+          items={[
+            { id: 'install', label: 'Install' },
+            { id: 'audience', label: 'Change who sees the notes' },
+            { id: 'later', label: 'Not yet', disabled: true },
+            { id: 'remove', label: 'Remove', danger: true },
+          ]}
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <circle cx="5" cy="12" r="1.8" fill="currentColor" />
+            <circle cx="12" cy="12" r="1.8" fill="currentColor" />
+            <circle cx="19" cy="12" r="1.8" fill="currentColor" />
+          </svg>
+        </Menu>
+        <span className="kit-rail bg-rail p-3">
+          <Menu
+            chosen={workspace}
+            onAction={setWorkspace}
+            triggerClassName="flex items-center gap-2 rounded-box p-2 text-white"
+            items={[
+              { id: 'acme', label: 'Acme', detail: 'Owner' },
+              { id: 'lumen', label: 'Lumen Studio', detail: 'Member' },
+            ]}
+          >
+            Workspace
+          </Menu>
+        </span>
+        <p className="text-small text-muted" data-kit="menu-picked">
+          Picked: {picked}, {workspace}
+        </p>
+      </section>
+
+      <section aria-label="Logos" className="flex flex-wrap items-center gap-6" data-kit="logos">
+        <Logo />
+        <span className="kit-rail bg-rail p-3">
+          <Logo on="rail" />
+        </span>
+        <Divider className="w-[400px] max-w-full">or</Divider>
+      </section>
     </main>
+  );
+}
+
+/** The frame of a page outside a workspace, as the sign-in has it: a page of its own, for its `main`. */
+export function KitEntryGallery() {
+  return (
+    <EntryPage aside={<span>Running your own server?</span>}>
+      <div className="mb-2">
+        <Title>Sign in to Fruitback</Title>
+      </div>
+      <Lead className="mb-7">We email you a link that signs you in on this browser.</Lead>
+      <Divider className="my-[22px]">or</Divider>
+    </EntryPage>
   );
 }

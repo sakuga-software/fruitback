@@ -44,8 +44,8 @@ test('a note sent after a navigation goes to the page where it was written', asy
 
   await page.getByRole('button', { name: 'Leave feedback' }).click();
   await page.locator('[data-testid="card-espresso"] .add').click();
-  const composer = page.getByRole('dialog', { name: 'Leave a note' });
-  const field = page.getByPlaceholder('What is wrong here?');
+  const composer = page.getByRole('dialog', { name: 'New note' });
+  const field = page.getByPlaceholder('What should change?');
   await field.fill(note);
 
   await navigateTo(page, `/checkout?widget=off&case=${testCase}`);

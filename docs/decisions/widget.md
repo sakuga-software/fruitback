@@ -295,6 +295,44 @@ amber, where white cannot be read (FRU-233)`.
 
 ### The rules, in short
 
+- **The capture and the composer have the measures of the mock-up** (FRU-258, screen 15). Read in
+  its CSS, held by `e2e/capture.spec.ts` and `e2e/composer.spec.ts` on computed styles.
+  - **A banner says what a capture asks for**: a dark pill at the top of the window, in its middle,
+    with « Click the part of the page your note is about », « Esc to stop » and a button « Stop ».
+    It is 16 px from the top: the mock-up draws it at 88 px, under the header of its example site.
+    It is the one `role="status"` that speaks at a start, always in the tree and empty at rest. How
+    a keyboard moves is in it, read and not drawn. On a touch screen it says « Tap… », names no
+    key, and « Stop » is 44 px. Under 480 px the sentence wraps.
+  - **The launch button keeps its name and says `aria-pressed`.** It said « Esc to cancel » while a
+    capture ran. « Stop » and Escape give focus back to it.
+  - **The frame of a capture stands 6 px off the element**, 2 px of accent, on the accent at 6 %.
+    **The name of the component is written on it** when the engine knows one, 30 px above the
+    element, and nothing otherwise. The engine is asked once for each element of a capture. The
+    label is `aria-hidden`: the note carries the name, and a screen reader hears the element.
+  - **The frame stays on the chosen element while the composer is open**: `init` calls
+    `host.hold(element)` at the choice and `host.release()` at the close. A host that assembles the
+    parts itself and calls neither keeps what it had, a frame that goes at the choice. **The banner does not stay, and one click is still one note.** The mock-up draws
+    the banner, the pressed button and the composer in one picture; a still does not say whether a
+    capture goes on after a note, and a banner that says « click the page » over a modal dialog
+    would not be true. Asked in FRU-258.
+  - **The composer**: 360 px, a head (« New note », « on » and what the element says on one line,
+    a cross « Close without sending » that does what « Cancel » does), the note, a foot behind a
+    rule. It opens **above** its element, 40 px over its top, on the edge of the frame; below when
+    there is no room above. It rises from the corner nearest to its element, with no fade.
+    « Send » is the word alone. The drop that pointed at the element is gone.
+  - **« Attach a picture of this element » is the preference of the settings panel**, shown beside
+    the note (`PictureChoice`, a seam like `NameMemory`). It is there only when the host gave
+    `captureScreenshot`, **the composer never ticks it**, and a tick is kept at once. The mock-up
+    shows it ticked because its person chose it. Nothing new is read, sent or kept: the same
+    setting, the same picture, the same storage. `e2e/screenshot.spec.ts` sends a note with the
+    box never ticked and reads no picture, then ticks it and reads one.
+  - **No « As Mathieu, Sakuga ».** A read says that the worker would sign the note (`identified`),
+    not the name nor the workspace. Saying them is a new field of a public response of the worker.
+    A signed reader sees no line; a visitor keeps « Add my name (optional) ».
+  - **Kept, though the mock-up does not draw it**: « Keep for later », a ghost like « Cancel »; the
+    line of the destination, under the note; the sentences of a failed send, « sending… » and
+    « sent », where the identity line would be; the sheet at the bottom of a phone, with the fields
+    at 16 px; the dark scheme.
 - **One field, the name, and no e-mail** (FRU-91). It is optional, behind a disclosure, and never
   `verified` — that flag is the worker's to set. `reporter.email` stays in the seed contract, because
   an identity token can carry one.
@@ -479,7 +517,8 @@ header when the host mints no token` compared `fetch`'s second argument to `unde
   to live in someone's storage, and html2canvas weighs more than this entire widget — bundling it
   would break `package.test.ts`'s 150 kB tripwire and the promise that tripwire guards.
 - **Off by default, and the toggle is absent unless `captureScreenshot` was given.** A switch that
-  controls nothing is what kept this setting out of FRU-14.
+  controls nothing is what kept this setting out of FRU-14. The composer shows the same preference
+  beside the note since FRU-258, under the same two conditions.
 - **A capture that throws costs the picture and never the note.** A canvas tainted by a cross-origin
   image is the ordinary outcome, not the exotic one; the E2E test for this fails by losing the note
   entirely when the guard is removed.
@@ -745,8 +784,8 @@ with no context and no instruction added.
   three buttons of the dock are 44 px (FRU-157). The rule is `@media (pointer: coarse)` in each
   module, and the glyph keeps its size: the button grows around it. A box or a radio is measured by
   its label, which a tap toggles. The fields are at 16 px there, because iOS Safari zooms the page
-  into a smaller field and stays zoomed. The launch button says `launch.capturingTouch` in the
-  capture mode, because a phone has no Escape key. `e2e/touch.spec.ts` measures every visible control
+  into a smaller field and stays zoomed. The banner of a capture says `capture.bannerTouch` and
+  names no key, because a phone has no Escape key (the launch button said it until FRU-258). `e2e/touch.spec.ts` measures every visible control
   at 390 px, and its control plants a 10 px button.
 - **In the dark scheme the accent and the warning are light fills with dark text on them.** Each one
   is a fill under text and also text on the surface, and no single red does both with white text.
