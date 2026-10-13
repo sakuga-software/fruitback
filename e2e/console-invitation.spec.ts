@@ -233,7 +233,8 @@ type Stub = {
     | 'failed';
   /** What the worker answers to « Join » and to « Decline ». */
   answer?: { status: number; body: unknown };
-  sites?: string[];
+  /** `failed`: the worker refuses the list. `lost`: the request does not arrive. */
+  sites?: string[] | 'failed' | 'lost';
   signsOut?: boolean;
   locale?: 'en' | 'fr';
 };
@@ -281,6 +282,9 @@ async function stubWorker(page: Page, stub: Stub = {}): Promise<string[]> {
       return json(stub.answer?.body ?? {}, stub.answer?.status ?? 200);
     }
     if (pathname === '/console/workspaces/w1/sites') {
+      if (stub.sites === 'failed') return json({ error: 'unavailable' }, 503);
+      if (stub.sites === 'lost') return route.abort('connectionfailed');
+
       return json({
         sites: (stub.sites ?? []).map((origin, index) => ({ id: `s${index}`, origin, visibility: 'members' })),
       });
@@ -412,6 +416,24 @@ test.describe('the screen of an invitation, against the mockup (FRU-241)', () =>
     await expect(page.getByRole('link', { name: /^Open / })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Go to the console' })).toHaveCount(1);
   });
+
+  for (const sites of ['failed', 'lost'] as const) {
+    test(`joined, and the sites cannot be read (${sites}): « You are in » all the same, and nothing stays busy`, async ({
+      page,
+    }) => {
+      const asked = await stubWorker(page, { sites });
+      await page.goto(`${CONSOLE}/invitations`);
+      await page.getByRole('button', { name: 'Join Havane' }).click();
+
+      // The invitation is accepted: the screen says so, and names no site it could not read.
+      await expect(page.getByRole('heading', { name: 'You are in' })).toBeVisible();
+      await expect(page.getByRole('status')).toHaveText(
+        'One more thing: the extension shows the notes on the sites of Havane and lets you leave yours.',
+      );
+      await expect(page.getByRole('link', { name: 'Go to the console' })).toHaveCount(1);
+      expect(asked).toContain('GET /console/workspaces/w1/sites');
+    });
+  }
 
   test('several invitations: the most recent on the screen, the others under it, each to join or decline', async ({
     page,
