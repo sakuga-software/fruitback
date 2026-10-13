@@ -163,6 +163,29 @@ describe('a tab of the console is of one account (FRU-210)', () => {
     assert.deepEqual(told, []);
   });
 
+  it('stops a tab that comes back to an ended session, after a sign-in again in the tab itself', async () => {
+    const api = await tab();
+    let me = () => Response.json(ANA);
+    worker({
+      me: () => me(),
+      routes: {
+        'POST /console/workspaces/ws_1/sites': signedOut,
+        'POST /console/auth/email/redeem': () => Response.json({ account: ANA.account }),
+      },
+    });
+    const told: string[] = [];
+    api.onLeft((why) => told.push(why));
+    await api.call('GET', '/console/me');
+
+    // Her own call is refused, she opens a new link in this very tab, and later her session ends elsewhere.
+    await api.call('POST', '/console/workspaces/ws_1/sites', { url: 'https://a.dev' });
+    assert.equal((await api.redeemLink('a-token')).ok, true);
+    me = signedOut;
+    await api.checkTab();
+
+    assert.deepEqual(told, ['ended']);
+  });
+
   it('says nothing of who is signed in when the worker does not answer, or fails', async () => {
     const api = await tab();
     let me = () => Response.json(ANA);

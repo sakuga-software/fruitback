@@ -309,7 +309,10 @@ export async function redeemLink(code: string): Promise<Answer<{ account: Accoun
     await send('POST', '/console/auth/email/redeem', { token: code, locale: locale() }),
   );
   // A sign-in made in this tab: the tab is of that account from now on (FRU-210).
-  if (redeemed.ok) tabAccount = typeof redeemed.data?.account?.id === 'string' ? redeemed.data.account.id : undefined;
+  if (redeemed.ok) {
+    tabAccount = typeof redeemed.data?.account?.id === 'string' ? redeemed.data.account.id : undefined;
+    endSeen = false;
+  }
 
   return redeemed;
 }
