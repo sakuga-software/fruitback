@@ -334,9 +334,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'You are not signed in yet': 'Vous n’êtes pas encore connecté',
   'Fruitback did not answer. Your link still works.': 'Fruitback n’a pas répondu. Votre lien fonctionne toujours.',
   'This link no longer works': 'Ce lien ne fonctionne plus',
-  'A link works once, for fifteen minutes. Ask for another one.':
-    'Un lien fonctionne une fois, pendant quinze minutes. Demandez-en un autre.',
-  'Send a new link': 'Envoyer un nouveau lien',
   'Signing you in…': 'Connexion en cours…',
 
   'The addresses you review. Adding a site is pasting its URL.':
@@ -438,4 +435,24 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Proven: 'Prouvé',
   'Proof lost': 'Preuve perdue',
   'Not proven yet': 'Pas encore prouvé',
+  // The sign-in page, and the tab that goes on by itself (FRU-235).
+  'Sign in to Fruitback': 'Connectez-vous à Fruitback',
+  'We email you a link that signs you in on this browser.':
+    'Nous vous envoyons par e-mail un lien qui vous connecte dans ce navigateur.',
+  'Email me a link': 'Recevoir un lien par e-mail',
+  or: 'ou',
+  'New to Fruitback?': 'Nouveau sur Fruitback ?',
+  'Set up a workspace': 'Créer un workspace',
+  'A sign-in link is on its way to {email}.': 'Un lien de connexion est en route vers {email}.',
+  'Open it in this browser and this tab signs in by itself. The link works once, for fifteen minutes.':
+    'Ouvrez-le dans ce navigateur, et cet onglet se connecte tout seul. Le lien fonctionne une fois, pendant quinze minutes.',
+  'Send again in {time}': 'Renvoyer dans {time}',
+  'Send again': 'Renvoyer',
+  'You are signed in': 'Vous êtes connecté',
+  'Your other Fruitback tab has carried on without you. You can close this one.':
+    'Votre autre onglet Fruitback a continué sans vous. Vous pouvez fermer celui-ci.',
+  'Continue in this tab': 'Continuer dans cet onglet',
+  'A link works once, for fifteen minutes. This one was already used or ran out of time.':
+    'Un lien fonctionne une fois, pendant quinze minutes. Celui-ci a déjà servi, ou son délai est passé.',
+  'Send me a new link': 'M’envoyer un nouveau lien',
 };

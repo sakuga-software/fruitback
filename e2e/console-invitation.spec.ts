@@ -101,7 +101,7 @@ test.describe('an invited reviewer (FRU-104)', () => {
       paul.getByText('Sign in with the address the invitation was sent to, and it shows here.'),
     ).toBeVisible();
     await paul.getByRole('link', { name: 'Sign in' }).click();
-    await expect(paul).toHaveURL(`${CONSOLE}/setup`);
+    await expect(paul).toHaveURL(`${CONSOLE}/sign-in`);
     // No workspace name: Paul comes to join one.
     await signIn(paul, worker, 'paul@client.dev');
     await expect(paul).toHaveURL(`${CONSOLE}/invitations`);
