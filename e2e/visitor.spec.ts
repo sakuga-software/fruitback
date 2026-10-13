@@ -34,7 +34,8 @@ test('a visitor plants a pin and finds it again, and no request carried a creden
     const headers = await request.allHeaders();
     expect(headers.authorization, `${request.method()} ${request.url()}`).toBeUndefined();
     expect(headers.cookie, `${request.method()} ${request.url()}`).toBeUndefined();
-    expect(headers.origin ?? new URL(page.url()).origin).toBe(new URL(page.url()).origin);
+    // The worker is another origin than the page: the browser sends `Origin` on every request to it.
+    expect(headers.origin, `${request.method()} ${request.url()}`).toBe(new URL(page.url()).origin);
   }
   expect(await page.context().cookies(WORKER_ORIGIN)).toEqual([]);
 });
