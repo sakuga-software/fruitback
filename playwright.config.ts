@@ -22,8 +22,10 @@ export default defineConfig({
   // Runs after the servers are up and before the first spec: see `warm-up.ts` for what it absorbs.
   globalSetup: './e2e/warm-up.ts',
   // The worker's fake Linear is one process-wide store, so the specs share state. They stay apart by
-  // capturing on a different page URL each — the seed's page identity — rather than by locking.
-  workers: 1,
+  // capturing on a different page URL each — the seed's page identity — rather than by locking. So
+  // files run side by side on CI (FRU-268); the tests of one file still run in order, in one worker.
+  // Locally, one: the machine runs other work too.
+  workers: process.env.CI ? 4 : 1,
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
