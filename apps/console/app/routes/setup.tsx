@@ -4,23 +4,28 @@ import {
   API,
   providerStart,
   type Me,
-  type Providers,
   type Site,
   type Visibility,
   type Workspace,
   call,
-  offersSignIn,
   pairingLink,
   rememberWorkspaceName,
   requestLink,
   saveLanguage,
-  signInProviders,
   takeWorkspaceName,
 } from '../api';
 import { NAME_PROBLEMS, SITE_NOT_ADDED, SITE_PROBLEMS, WORKSPACE_NOT_CREATED, copyText, problemOf } from '../problems';
 import { Button, Field, Mark, Pick, Problem, WideButton } from '../ui';
 import { adoptLanguage, locale, msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
+import {
+  LINK_NOT_SENT,
+  SEND_PROBLEMS,
+  SignInClosed,
+  providerProblem,
+  useCarryOn,
+  useSignInWays,
+} from '../sign-in-form';
 import { siteAddress } from '../site-address';
 
 /**
@@ -38,12 +43,6 @@ const STEPS = [
 ] as const;
 
 const DOCS = 'https://fruitback.com';
-
-/**
- * The providers before the worker says which it has (FRU-135). The build argument of FRU-97 still
- * turns GitHub on at once, so its button does not wait for an answer where it was already shown.
- */
-const PROVIDERS_AT_FIRST: Providers = { github: import.meta.env.VITE_FRUITBACK_GITHUB === '1', google: false };
 
 type Stage =
   | { kind: 'loading' }
@@ -181,7 +180,17 @@ function StageCard({ stage, onStage }: { stage: Stage; onStage: (stage: Stage) =
   if (stage.kind === 'loading') return <Frame step={1} title={t('Create your workspace')} />;
   if (stage.kind === 'sign-in') return <SignIn onSent={(email) => onStage({ kind: 'sent', email })} />;
 
-  if (stage.kind === 'sent') return <Sent email={stage.email} onBack={() => onStage({ kind: 'sign-in' })} />;
+  if (stage.kind === 'sent') {
+    return (
+      <Sent
+        email={stage.email}
+        onBack={() => onStage({ kind: 'sign-in' })}
+        // Signed in from another tab: the same resolution as a visit, which makes the workspace
+        // named before the link was sent.
+        onSignedIn={() => void resolveOnce(null).then(onStage)}
+      />
+    );
+  }
   if (stage.kind === 'name') return <NameIt onCreated={(workspace) => onStage({ kind: 'source', workspace })} />;
   if (stage.kind === 'source') return <Source onNext={() => onStage({ kind: 'site', workspace: stage.workspace })} />;
   if (stage.kind === 'site') {
@@ -231,52 +240,6 @@ function Frame({
   );
 }
 
-/** What a refused sign-in link means for the person, and what to do. */
-const SEND_PROBLEMS: Record<string, string> = {
-  'invalid-email': msg('That is not an e-mail address. Check it and send again.'),
-  'too-many-links': msg('Several links went to this address already. Use the last one, or wait fifteen minutes.'),
-};
-
-/** The state of the sign-in is not in this browser: another browser, or a page left open too long. */
-const SIGN_IN_RESTARTED = msg('The sign-in started in another browser, or too long ago. Start it again from here.');
-/** better-auth made no account: the worker refuses an address the provider did not verify (FRU-147). */
-const NO_VERIFIED_ADDRESS = msg(
-  'The provider has no verified address for this account. Verify it there, or use an email link.',
-);
-
-/** What the worker says when a sign-in with a provider comes back without a session (FRU-97, FRU-135). */
-const PROVIDER_PROBLEMS: Record<string, string> = {
-  'google-declined': msg('Google did not sign you in: the access was declined. Try again, or use an email link.'),
-  'google-unverified': msg('Google has no verified address for this account. Use an email link.'),
-  'google-failed': msg('The sign-in with Google did not finish. Try again, or use an email link.'),
-  'github-declined': msg('GitHub did not sign you in: the access was declined. Try again, or use an email link.'),
-  'github-unverified': msg(
-    'GitHub has no verified primary address for this account. Verify it on GitHub, or use an email link.',
-  ),
-  'github-failed': msg('The sign-in with GitHub did not finish. Try again, or use an email link.'),
-  // The codes of better-auth (FRU-148), read in 1.7.7. They do not name the provider.
-  access_denied: msg('The access was declined. Try again, or use an email link.'),
-  state_mismatch: SIGN_IN_RESTARTED,
-  state_not_found: SIGN_IN_RESTARTED,
-  state_invalid: SIGN_IN_RESTARTED,
-  please_restart_the_process: SIGN_IN_RESTARTED,
-  unable_to_create_user: NO_VERIFIED_ADDRESS,
-  account_not_linked: NO_VERIFIED_ADDRESS,
-  email_not_verified: NO_VERIFIED_ADDRESS,
-  email_not_found: msg('The provider gave no address for this account. Use an email link.'),
-  oauth_provider_not_found: msg('This way to sign in is not set up on this Fruitback. Use an email link.'),
-};
-
-/** Any other code that a sign-in sends back: it did not finish, and there is still a way in. */
-const SIGN_IN_FAILED = msg('The sign-in did not finish. Try again, or use an email link.');
-
-/** What a code that comes back after a sign-in means, or nothing when no code came back. */
-function providerProblem(code: string | null): string | undefined {
-  if (code === null || code === '') return undefined;
-
-  return Object.hasOwn(PROVIDER_PROBLEMS, code) ? PROVIDER_PROBLEMS[code] : SIGN_IN_FAILED;
-}
-
 function SignIn({ onSent }: { onSent: (email: string) => void }) {
   useLocale();
   const [search] = useSearchParams();
@@ -284,26 +247,7 @@ function SignIn({ onSent }: { onSent: (email: string) => void }) {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | undefined>(providerProblem(search.get('error')));
-  const [providers, setProviders] = useState(PROVIDERS_AT_FIRST);
-  // The worker said that it signs nobody in (FRU-217): no form is shown, and the screen says why.
-  const [closed, setClosed] = useState(false);
-
-  useEffect(() => {
-    let asked = true;
-    void signInProviders().then((has) => {
-      // A worker that does not answer keeps what the build said: no button is taken away by an outage.
-      if (asked && has !== undefined) {
-        setProviders((before) => ({ github: before.github || has.github, google: has.google }));
-      }
-      void offersSignIn().then((offered) => {
-        if (asked && offered === false) setClosed(true);
-      });
-    });
-
-    return () => {
-      asked = false;
-    };
-  }, []);
+  const { providers, closed } = useSignInWays();
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -314,7 +258,7 @@ function SignIn({ onSent }: { onSent: (email: string) => void }) {
     setBusy(false);
     if (sent.ok) return onSent(email.trim());
 
-    setProblem(SEND_PROBLEMS[sent.error] ?? msg('The link could not be sent just now. Try again in a minute.'));
+    setProblem(SEND_PROBLEMS[sent.error] ?? LINK_NOT_SENT);
   }
 
   if (closed) {
@@ -324,11 +268,7 @@ function SignIn({ onSent }: { onSent: (email: string) => void }) {
         title={t('Create your workspace')}
         lead={t('One workspace for your team, your sites and your sources. Hosted in Europe.')}
       >
-        <Problem>
-          {t(
-            'Nobody can sign in to this Fruitback yet: its sign-in is not set up. The person who runs it has one setting to add.',
-          )}
-        </Problem>
+        <SignInClosed />
       </Frame>
     );
   }
@@ -389,8 +329,11 @@ function SignIn({ onSent }: { onSent: (email: string) => void }) {
   );
 }
 
-function Sent({ email, onBack }: { email: string; onBack: () => void }) {
+function Sent({ email, onBack, onSignedIn }: { email: string; onBack: () => void; onSignedIn: () => void }) {
   useLocale();
+  // The link is opened in another tab: this one goes on to the next step by itself (FRU-235).
+  useCarryOn(onSignedIn);
+
   return (
     <Frame
       step={1}

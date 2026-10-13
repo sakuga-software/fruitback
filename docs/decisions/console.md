@@ -142,6 +142,31 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the console and the worker are not one site (measured in FRU-147: `state_mismatch`).
 - **The token of a link is read after the `#`, sent in the body of a `POST`, and taken out of the
   address bar** (`sign-in.tsx`), as before. It is in no address that the worker receives.
+- **Signing in has its own page, `/sign-in`** (FRU-235, screen 02 of the mockup of 2026-10-13): the
+  form, « Check your inbox », « You are signed in » and « This link no longer works ». A screen that
+  finds nobody signed in sends there (the frame of a workspace, the banner of a session that ended,
+  the tab that stopped, the invitations); `/setup` stays the way in of somebody new. The ways to sign
+  in are in one module, `sign-in-form.tsx`, for this page, the setup and the screens to come: the
+  form of a link, the providers the worker offers (**a provider it does not offer has no button**,
+  and with none there is no « or »), the sentences of a refusal, and « Send again », which waits a
+  minute in the console (the ceiling of the worker, 3 links per address per quarter of an hour, and
+  its sentence stay). **The main button is not dimmed for an empty field**, as on the mockup: the
+  form is `noValidate`, and says « That is not an e-mail address » itself, in its language.
+- **The tab that asked for the link goes on by itself** (FRU-235). The tab of the link, once the
+  token is spent, says « signed-in » on a `BroadcastChannel` (`tab-signal.ts`). A tab that waits says
+  « heard » at once, asks `GET /console/me`, and on a session says « carried-on » and goes on: the
+  sign-in page to the front door, the setup to its next step. The tab of the link then shows « You
+  are signed in »; with no « heard » in 400 ms, or no « carried-on » in 5 s, it is the console, as
+  before. **A message is a hint, never a proof**: it carries no token and no account, and a tab goes
+  on only on the answer of the worker. A browser that tells a tab nothing: the tab asks the worker
+  when it comes back to the front. **A link opened in the tab that asked for it changes the part
+  after the `#` only**, so the page is not loaded again: `sign-in.tsx` reads the code on
+  `hashchange` too (measured: without it the tab stayed on « Check your inbox » with the token in its
+  address bar). **The code is read once**: in development an effect runs twice, and the second run
+  must not take the page for a visit with no link.
+- **Not measured**: two tabs in Firefox and in Safari (the spec runs in Chromium), and a link that
+  the mail application opens in another browser profile, where no tab can hear it: the tab of the
+  link is then the console, and the first tab learns it when it comes back to the front.
 - **A code that a sign-in sends back has a sentence** (`PROVIDER_PROBLEMS` in `setup.tsx`), in French
   too. better-auth names no provider in its code, so the sentences name none. A code this build does
   not know says that the sign-in did not finish: no code shows as a blank screen.

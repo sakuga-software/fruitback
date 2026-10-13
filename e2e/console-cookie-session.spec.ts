@@ -162,8 +162,10 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
       context.waitForEvent('page'),
       page.getByRole('alert').getByRole('link', { name: 'Sign in', exact: true }).click(),
     ]);
+    // The sign-in page (FRU-235): the banner no longer leads to the setup.
+    await expect(tab).toHaveURL(`${CONSOLE}/sign-in`);
     await tab.getByRole('textbox', { name: 'Work email' }).fill('ana@acme.dev');
-    await tab.getByRole('button', { name: 'Continue', exact: true }).click();
+    await tab.getByRole('button', { name: 'Email me a link' }).click();
     await expect.poll(async () => (await worker.sent()).length).toBe(2);
     await tab.goto(await linkIn(worker));
     await expect(tab).toHaveURL(/\/sites$/);
@@ -341,6 +343,6 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
 
     await expectStopped(page, 'You were signed out');
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Create your workspace' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Sign in to Fruitback' })).toBeVisible();
   });
 });

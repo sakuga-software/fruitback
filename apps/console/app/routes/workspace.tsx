@@ -32,7 +32,7 @@ export default function WorkspaceFrame() {
   // No answer is not a signed-out person: the call waits under the banner and asks again.
   useEffect(() => {
     return callUntilAnswered<Me>('GET', '/console/me', (me) => {
-      if (!me.ok) return navigate('/setup', { replace: true });
+      if (!me.ok) return navigate('/sign-in', { replace: true });
       adoptLanguage(me.data.account, saveLanguage);
       const workspace = me.data.workspaces.find((each) => each.id === id);
       if (workspace === undefined) return navigate('/', { replace: true });
