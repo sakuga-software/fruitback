@@ -10,7 +10,8 @@ function dayOf(at: Date): number {
 
 /**
  * How long ago something happened, in the words of the mockup: « 12 min ago », « 2 h ago »,
- * « Yesterday », then the day (« 3 Oct », with its year when it is not this year).
+ * « Yesterday », « 3 days ago » for a week, then the day (« Oct 3 », with its year when it is not this
+ * year).
  *
  * A moment that the browser cannot read is shown as the worker wrote it, and one in the future (a
  * clock of the worker ahead of the browser) reads as now.
@@ -25,6 +26,7 @@ export function ago(iso: string, now: number = Date.now()): string {
   const days = Math.round((dayOf(today) - dayOf(at)) / (24 * HOUR));
   if (days === 0) return t('{count} h ago', { count: Math.floor(past / HOUR) });
   if (days === 1) return t('Yesterday');
+  if (days < 7) return t('{count} days ago', { count: days });
 
   return at.toLocaleDateString(locale(), {
     day: 'numeric',

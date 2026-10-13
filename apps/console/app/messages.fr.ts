@@ -540,6 +540,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   '{count} min ago': 'il y a {count} min',
   '{count} h ago': 'il y a {count} h',
   Yesterday: 'Hier',
+  '{count} days ago': 'il y a {count} jours',
   // Sites, second time (FRU-270).
   'On the page with': 'Sur la page avec',
   'Last note': 'Dernière note',

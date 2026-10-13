@@ -26,7 +26,10 @@ describe('how long ago something happened, in the words of the mockup', () => {
     assert.equal(ago(new Date(2026, 9, 12, 0, 30).toISOString(), NOW), 'Yesterday');
   });
 
-  it('says the day for an older moment, with its year when it is not this year', () => {
+  it('says days for the week, then the day, with its year when it is not this year', () => {
+    assert.equal(ago(new Date(2026, 9, 11, 9, 0).toISOString(), NOW), '2 days ago');
+    assert.equal(ago(new Date(2026, 9, 7, 9, 0).toISOString(), NOW), '6 days ago');
+    assert.equal(ago(new Date(2026, 9, 6, 9, 0).toISOString(), NOW), 'Oct 6');
     assert.equal(ago(new Date(2026, 9, 3, 9, 0).toISOString(), NOW), 'Oct 3');
     assert.equal(ago(new Date(2025, 11, 30, 9, 0).toISOString(), NOW), 'Dec 30, 2025');
   });
@@ -42,6 +45,7 @@ describe('how long ago something happened, in the words of the mockup', () => {
     assert.equal(ago(before(2 * 60 * MIN), NOW), 'il y a 2 h');
     assert.equal(ago(new Date(2026, 9, 12, 23, 0).toISOString(), NOW), 'Hier');
     assert.equal(ago(before(10_000), NOW), 'À l’instant');
+    assert.equal(ago(new Date(2026, 9, 10, 9, 0).toISOString(), NOW), 'il y a 3 jours');
     assert.equal(ago(new Date(2026, 9, 3, 9, 0).toISOString(), NOW), '3 oct.');
   });
 });
