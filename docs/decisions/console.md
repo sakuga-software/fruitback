@@ -81,6 +81,33 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   kept ». What is asked under a row stays in what is seen of a table that scrolls.
   `e2e/console-members.spec.ts` reads the values and the boxes of the mockup at 1440 and 390 px,
   the keyboard, the contrasts and axe.
+- **The setup is one screen, and resumes where the worker says the person is** (FRU-239, screen 01 of
+  the mockup of 2026-10-13). `setup.tsx` shows three steps together: « Your account », « Your site »,
+  « Put it on the site ». The step is read from the worker at each visit: nobody signed in, no
+  workspace, no site, a site. So a visit goes on anywhere, and the address has no `?step=`. **The
+  front door sends a workspace with no site back to the setup**, for who adds a site (an owner, an
+  admin); a list of sites that could not be read is not an empty list, there as everywhere. The step
+  « Source » is gone: a tracker is chosen in Connectors, after.
+- **Nobody names a workspace** (FRU-239). The first one of a person takes its name from their
+  address (`workspace-name.ts`: the label of the domain that names its owner, or what is before the
+  `@` for a public mailbox), and « Rename » changes it in place (`POST /console/workspaces/<id>`,
+  FRU-236). Nothing is kept in `localStorage` any more. **One workspace is made, in whatever tab**:
+  the tab that waited for the link and the tab of the link can both arrive at the setup in the same
+  second. `firstWorkspace` takes a lock of the browser (`navigator.locks`), and the tab that gets it
+  second reads `/console/me` again and finds the workspace of the first.
+  `e2e/console-setup.spec.ts` holds the first request open and lets a second tab arrive: without the
+  lock the worker is asked twice (planted). **Somebody who was invited gets no workspace made behind
+  their back**: with an invitation that waits, the setup sends to `/invitations`.
+- **« Change » never removes a site that may hold notes.** The worker has no route that changes a
+  site, and a site that is removed takes its notes with it. « Change » adds the site again with the
+  new values; it removes the one it replaces only when that one was added in this visit of the
+  setup. A site of a visit before stays, the summary says so, and the Sites screen removes it with
+  its two presses (FRU-165).
+- **What the setup does not say, on purpose.** The hint of « Site address » stops at « Any page of it
+  will do. »: the mockup goes on with a pattern for the previews, which a domain that is proven
+  covers (FRU-103, decided on 2026-10-13), and the worker takes no pattern as an address. So what is
+  under the hint is 19.5 px higher than on the mockup. The last step keeps the script and the
+  browser of `install-options.tsx` until FRU-242 draws it.
 - **The address of a site is read by `site-address.ts`, on every screen that asks for one**
   (FRU-167). A host with no scheme is `https://`, as in the extension. The field is not `type="url"`:
   the browser stopped the form with its own bubble, in its own language, and the sentence of the

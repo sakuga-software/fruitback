@@ -1,468 +1,550 @@
-import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import {
-  API,
-  providerStart,
+  type Account,
   type Me,
   type Site,
   type Visibility,
   type Workspace,
   call,
-  pairingLink,
-  rememberWorkspaceName,
-  requestLink,
+  myInvitations,
+  renameWorkspace,
   saveLanguage,
-  takeWorkspaceName,
 } from '../api';
-import { NAME_PROBLEMS, SITE_NOT_ADDED, SITE_PROBLEMS, WORKSPACE_NOT_CREATED, copyText, problemOf } from '../problems';
-import { Button, Field, Mark, Pick, Problem, WideButton } from '../ui';
-import { adoptLanguage, locale, msg, t } from '../i18n';
-import { useLocale } from '../use-locale';
+import { adoptLanguage, msg, t } from '../i18n';
+import { InstallOptions } from '../install-options';
+import { NAME_PROBLEMS, SITE_NOT_ADDED, SITE_PROBLEMS, WORKSPACE_NOT_CREATED, problemOf } from '../problems';
 import {
-  LINK_NOT_SENT,
-  SEND_PROBLEMS,
+  AnotherAddress,
+  EmailForm,
+  ProviderButtons,
   SignInClosed,
   providerProblem,
   useCarryOn,
+  useSendAgain,
   useSignInWays,
+  withStrong,
 } from '../sign-in-form';
 import { siteAddress } from '../site-address';
+import {
+  BrowserFrame,
+  Button,
+  Callout,
+  EntryPage,
+  Field,
+  Lead,
+  LinkButton,
+  Pick,
+  Problem,
+  Step,
+  type StepState,
+  Steps,
+  Title,
+} from '../ui';
+import { useLocale } from '../use-locale';
+import { workspaceNameFrom } from '../workspace-name';
 
 /**
- * « Create your workspace », the four steps of the setup (design/boards/2-onboarding.png).
+ * The setup, on one screen (FRU-239, screen 01 of the mockup of 2026-10-13): « Your account »,
+ * « Your site », « Put it on the site ». The three steps show together; one that is done is a
+ * summary, and opens again.
  *
- * The steps are the design's. What this beta has not built yet is shown and disabled, with the reason
- * in words: Google sign-in, and the sources other than the workspace's own (FRU-102).
+ * Nobody names a workspace here: it takes its name from the address of the person
+ * (`workspace-name.ts`), and « Rename » changes it. The choice of a tracker is not a step any more:
+ * it is in Connectors, after.
  */
 
-const STEPS = [
-  { title: msg('Workspace'), hint: msg('Sign in, name it') },
-  { title: msg('Source'), hint: msg('Where feedback goes') },
-  { title: msg('Site'), hint: msg('The address you review') },
-  { title: msg('Install'), hint: msg('Script or extension') },
-] as const;
+// `InstallOptions` moved to its own module. The Sites screen still reads it from here.
+export { InstallOptions };
 
-const DOCS = 'https://fruitback.com';
+const SITE = 'https://fruitback.com';
 
 type Stage =
   | { kind: 'loading' }
-  | { kind: 'sign-in' }
+  | { kind: 'email' }
   | { kind: 'sent'; email: string }
-  | { kind: 'name' }
-  | { kind: 'source'; workspace: Workspace }
-  | { kind: 'site'; workspace: Workspace }
-  | { kind: 'install'; workspace: Workspace; site: Site };
+  /** Signed in, and the workspace could not be made: the person tries again, with the name they like. */
+  | { kind: 'unnamed'; account: Account }
+  /** The sites of the workspace could not be read. That is not « no site »: nothing is asked again. */
+  | { kind: 'unread'; account: Account; workspace: Workspace }
+  /** `replaces`: the site that « Change » opened again, with its values in the form. */
+  | { kind: 'site'; account: Account; workspace: Workspace; replaces?: Added }
+  | ({ kind: 'install'; account: Account; workspace: Workspace } & Added)
+  /** An invitation waits for this person: they came to join a workspace, not to make one. */
+  | { kind: 'invited' };
 
-function stepOf(stage: Stage): number {
-  if (stage.kind === 'source') return 2;
-  if (stage.kind === 'site') return 3;
-  if (stage.kind === 'install') return 4;
+/**
+ * The site of the setup. `fresh`: it was added in this visit, so nothing was noted on it yet.
+ * `left`: a site that « Change » replaced and did not remove, which the Sites screen still lists.
+ */
+type Added = { site: Site; fresh?: boolean; left?: Site };
 
-  return 1;
+/** The state of a step whose step before is in `before`: the one to do now, or one to come. */
+function stepAfter(before: StepState): StepState {
+  return before === 'done' ? 'current' : 'pending';
 }
+
+/** Who changes the name of a workspace and adds a site: `can` of the worker says the same. */
+function manages(workspace: Workspace): boolean {
+  return workspace.role === 'owner' || workspace.role === 'admin';
+}
+
+/**
+ * The first workspace of a person, named after their address.
+ *
+ * WARNING: one at a time, in every tab of the browser. The tab that waited for the link and the tab
+ * of the link can both arrive here in the same second, and each would make a workspace. The lock is
+ * of the browser (`navigator.locks`); the tab that gets it second reads `/console/me` again and
+ * finds the workspace of the first.
+ */
+async function firstWorkspace(account: Account, name?: string): Promise<Made> {
+  const make = async (): Promise<Made> => {
+    const again = await call<Me>('GET', '/console/me', undefined, { quiet: true });
+    const made = again.ok ? again.data.workspaces[0] : undefined;
+    if (made !== undefined) return { workspace: made };
+    const created = await call<Workspace>('POST', '/console/workspaces', {
+      name: name ?? workspaceNameFrom(account.email),
+    });
+
+    return created.ok
+      ? { workspace: created.data }
+      : { problem: problemOf(created, NAME_PROBLEMS, WORKSPACE_NOT_CREATED) };
+  };
+  if (typeof navigator === 'undefined' || navigator.locks === undefined) return make();
+
+  return navigator.locks.request('fruitback:first-workspace', make);
+}
+
+type Made = { workspace: Workspace; problem?: undefined } | { workspace?: undefined; problem: string };
 
 let resolving: Promise<Stage> | undefined;
 
 /**
- * WARNING: one resolution at a time. It can create the workspace named before the link was sent, and
- * two resolutions in flight would create it twice, or let the second ask for a name the first took.
+ * WARNING: one resolution at a time in this tab. It can make the first workspace, and two
+ * resolutions in flight would ask for it twice.
  */
-function resolveOnce(step: string | null): Promise<Stage> {
-  resolving ??= resolveStage(step).finally(() => {
+function resolveOnce(): Promise<Stage> {
+  resolving ??= resolveStage().finally(() => {
     resolving = undefined;
   });
 
   return resolving;
 }
 
-async function resolveStage(step: string | null): Promise<Stage> {
-  // Quiet: a person who is not signed in gets the sign-in screen, not the notice of a session that ended.
+/** Where the setup of this person is: read from the worker at each visit, so it resumes anywhere. */
+async function resolveStage(): Promise<Stage> {
+  // Quiet: a person who is not signed in gets the first step, not the notice of a session that ended.
   const me = await call<Me>('GET', '/console/me', undefined, { quiet: true });
-  if (!me.ok) return { kind: 'sign-in' };
+  if (!me.ok) return { kind: 'email' };
   adoptLanguage(me.data.account, saveLanguage);
+  const { account } = me.data;
 
-  const workspace = me.data.workspaces[0];
-  if (workspace !== undefined) return step === 'site' ? { kind: 'site', workspace } : { kind: 'source', workspace };
+  let workspace = me.data.workspaces[0];
+  if (workspace === undefined) {
+    // Somebody who was invited joins a workspace: none is made for them behind their back.
+    const invitations = await myInvitations();
+    if (invitations.ok && invitations.data.length > 0) return { kind: 'invited' };
+    workspace = (await firstWorkspace(account)).workspace;
+    if (workspace === undefined) return { kind: 'unnamed', account };
+  }
 
-  // The name typed before the link was sent: the workspace is made without asking again.
-  const pending = takeWorkspaceName();
-  if (pending === undefined) return { kind: 'name' };
-  const created = await call<Workspace>('POST', '/console/workspaces', { name: pending });
+  return siteStage(account, workspace);
+}
 
-  return created.ok ? { kind: 'source', workspace: created.data } : { kind: 'name' };
+/** The step of a person who has a workspace: its first site, or the form that adds one. */
+async function siteStage(account: Account, workspace: Workspace): Promise<Stage> {
+  const listed = await call<{ sites: Site[] }>('GET', `/console/workspaces/${workspace.id}/sites`);
+  if (!listed.ok) return { kind: 'unread', account, workspace };
+  const site = listed.data.sites[0];
+
+  return site === undefined ? { kind: 'site', account, workspace } : { kind: 'install', account, workspace, site };
 }
 
 export default function Setup() {
   useLocale();
+  const navigate = useNavigate();
   const [stage, setStage] = useState<Stage>({ kind: 'loading' });
-  const [search] = useSearchParams();
+  // Kept above the stages: « Use another address » gives the form back with the address in it.
+  const [email, setEmail] = useState('');
 
   useEffect(() => {
     let live = true;
-    void resolveOnce(search.get('step')).then((resolved) => {
+    void resolveOnce().then((resolved) => {
       if (live) setStage(resolved);
     });
 
     return () => {
       live = false;
     };
-  }, [search]);
+  }, []);
+
+  useEffect(() => {
+    if (stage.kind === 'invited') void navigate('/invitations', { replace: true });
+  }, [stage, navigate]);
+
+  // The title of the tab, as the mockup names it. The cleanup gives back the name of the product.
+  useEffect(() => {
+    const before = document.title;
+    document.title = t('Set up Fruitback');
+
+    return () => {
+      document.title = before;
+    };
+  });
+
+  const account = 'account' in stage ? stage.account : undefined;
+  const workspace = 'workspace' in stage ? stage.workspace : undefined;
+  // The first step is to do until somebody is signed in and has a workspace; the last one is the
+  // current one once a site is there.
+  const signedIn = account !== undefined && stage.kind !== 'unnamed';
+  const installing = stage.kind === 'install';
+  const first: StepState = signedIn ? 'done' : 'current';
+  const second: StepState = installing ? 'done' : stepAfter(first);
+  const third: StepState = installing ? 'current' : 'pending';
+  const prefix = t('Current step:');
 
   return (
-    <div className="min-h-screen bg-setup">
-      <header className="border-b border-line bg-surface">
-        <div className="mx-auto flex h-16 max-w-[1080px] items-center justify-between px-4">
-          {/* On a phone each label stays on one line (FRU-160): « Set up » is left to the screen
-              reader, which the card's title repeats, and the tabs are tighter. Under 360 px the name
-              goes too, and the mark stays. */}
-          <div className="flex items-center gap-2.5 whitespace-nowrap">
-            <Mark />
-            <span className="text-[15px] font-semibold max-[359px]:sr-only">{t('Fruitback')}</span>
-            <span className="ml-3 text-[15px] text-muted max-sm:sr-only">{t('Set up')}</span>
-          </div>
-          <nav
-            aria-label={t('How to run Fruitback')}
-            className="flex rounded-lg bg-chip p-1 text-[13px] font-semibold whitespace-nowrap sm:text-sm"
+    <EntryPage
+      width="full"
+      aside={
+        <p>
+          {t('Running your own server?')}{' '}
+          <a
+            href={`${SITE}/self-hosting.html`}
+            className="text-ink underline decoration-1 underline-offset-3 hover:text-accent-strong"
           >
-            <span aria-current="page" className="rounded-md bg-surface px-2.5 py-1.5 text-ink shadow-sm sm:px-3.5">
-              {t('Fruitback Cloud')}
-            </span>
-            <a
-              href={`${DOCS}/self-hosting.html`}
-              className="rounded-md px-2.5 py-1.5 text-muted hover:text-ink sm:px-3.5"
-            >
-              {t('Self-hosted')}
-            </a>
-          </nav>
+            {t('Self-hosting guide')}
+          </a>
+        </p>
+      }
+    >
+      <section aria-labelledby="setup-title" className="max-w-135 min-w-0 flex-1 basis-100">
+        <div id="setup-title" className="mb-2">
+          <Title size="setup">{t('Set up Fruitback')}</Title>
         </div>
-      </header>
+        <Lead className="mb-9">{t('Three steps to your first note on a live page. Hosted in Europe.')}</Lead>
 
-      {/* Under md the steps are a row of numbers, with the title of the current one, so the card and its
-          action come up the screen (FRU-160). */}
-      <main className="mx-auto grid max-w-[1080px] gap-4 px-4 py-6 md:grid-cols-[220px_1fr] md:gap-8 md:py-10">
-        <ol className="flex items-center gap-2 md:block md:space-y-1.5" aria-label={t('Steps')}>
-          {STEPS.map((step, index) => {
-            const number = index + 1;
-            const current = number === stepOf(stage);
+        <Steps>
+          <Step state={first} number={1} title={t('Your account')} currentPrefix={prefix}>
+            {stage.kind === 'loading' ? <p aria-busy="true" /> : null}
+            {stage.kind === 'email' ? (
+              <Ask email={email} onEmail={setEmail} onSent={(sent) => setStage({ kind: 'sent', email: sent })} />
+            ) : null}
+            {stage.kind === 'sent' ? (
+              <Sent
+                email={stage.email}
+                onBack={() => setStage({ kind: 'email' })}
+                // Signed in from another tab: the same resolution as a visit.
+                onSignedIn={() => void resolveOnce().then(setStage)}
+              />
+            ) : null}
+            {stage.kind === 'unnamed' ? (
+              <Unnamed
+                account={stage.account}
+                onCreated={(made) => void siteStage(stage.account, made).then(setStage)}
+              />
+            ) : null}
+            {account !== undefined && workspace !== undefined ? (
+              <Account
+                account={account}
+                workspace={workspace}
+                onRenamed={(renamed) => setStage((now) => ('workspace' in now ? { ...now, workspace: renamed } : now))}
+              />
+            ) : null}
+          </Step>
 
-            return (
-              <li
-                key={step.title}
-                aria-current={current ? 'step' : undefined}
-                className={`flex items-center gap-3 rounded-xl md:px-3 md:py-2.5 ${
-                  current ? 'min-w-0 flex-1 md:border md:border-line md:bg-surface' : ''
-                }`}
-              >
-                <span
-                  className={`flex h-7 w-7 flex-none items-center justify-center rounded-full text-xs font-semibold ${
-                    current ? 'bg-accent text-white' : 'border border-control text-muted'
-                  }`}
-                >
-                  {number}
-                </span>
-                <span className={current ? 'min-w-0' : 'max-md:sr-only'}>
-                  <span className="block text-sm font-semibold">{t(step.title)}</span>
-                  <span className="block text-xs text-muted max-md:sr-only">{t(step.hint)}</span>
-                </span>
-              </li>
-            );
-          })}
-        </ol>
+          <Step state={second} number={2} title={t('Your site')} currentPrefix={prefix}>
+            {second === 'pending' ? (
+              <p className="mt-0.5 text-small text-muted">{t('The address you review.')}</p>
+            ) : null}
+            {stage.kind === 'unread' ? (
+              <div className="mt-3 flex flex-col items-start gap-3">
+                <p role="alert" className="text-body text-muted">
+                  {t('Fruitback did not answer. Your sites are not lost.')}
+                </p>
+                <Button tone="outline" onClick={() => void siteStage(stage.account, stage.workspace).then(setStage)}>
+                  {t('Try again')}
+                </Button>
+              </div>
+            ) : null}
+            {stage.kind === 'site' ? (
+              <SiteForm
+                workspace={stage.workspace}
+                replaces={stage.replaces}
+                onDone={(added) =>
+                  setStage({ kind: 'install', account: stage.account, workspace: stage.workspace, ...added })
+                }
+              />
+            ) : null}
+            {stage.kind === 'install' ? (
+              <SiteSummary
+                workspace={stage.workspace}
+                site={stage.site}
+                left={stage.left}
+                onChange={() =>
+                  setStage({
+                    kind: 'site',
+                    account: stage.account,
+                    workspace: stage.workspace,
+                    replaces: { site: stage.site, ...(stage.fresh === true ? { fresh: true } : {}) },
+                  })
+                }
+              />
+            ) : null}
+          </Step>
 
-        <StageCard stage={stage} onStage={setStage} />
-      </main>
+          <Step state={third} number={3} title={t('Put it on the site')} currentPrefix={prefix}>
+            {stage.kind === 'install' ? (
+              // No `items-start` here: the script would take the width of its longest line, and the page
+              // would scroll sideways. It scrolls in its own box.
+              <div className="mt-3 flex min-w-0 flex-col gap-5">
+                <InstallOptions workspace={stage.workspace} site={stage.site} />
+                <div>
+                  <Button to={`/w/${stage.workspace.id}/sites`}>{t('Finish')}</Button>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-0.5 text-small text-muted">{t('The extension, or a script tag.')}</p>
+            )}
+          </Step>
+        </Steps>
+      </section>
+
+      <section aria-label={t('Preview of your site')} className="min-w-0 flex-999 basis-130">
+        <BrowserFrame
+          address={stage.kind === 'install' ? new URL(stage.site.origin).host : t('your site')}
+          // Once the site is added the sentence would be false, and the picture of it comes with the
+          // last step (FRU-242): the frame stays, with its drop.
+          empty={stage.kind === 'install' ? '' : t('Your site shows here once you add it, with its pins.')}
+          caption={t('A preview of your site. Pins show the same way on the real page.')}
+        />
+      </section>
+    </EntryPage>
+  );
+}
+
+type AskProps = { email: string; onEmail: (email: string) => void; onSent: (email: string) => void };
+
+/** Step 1, to do: the address a link goes to, or a provider. */
+function Ask({ email, onEmail, onSent }: AskProps) {
+  useLocale();
+  const [search] = useSearchParams();
+  const { providers, closed } = useSignInWays();
+
+  return (
+    <div className="mt-3 flex flex-col gap-4">
+      <p className="text-body text-muted">{t('We send you a sign-in link. No password to make up.')}</p>
+      {closed ? (
+        <SignInClosed />
+      ) : (
+        <>
+          <EmailForm
+            action={msg('Email me a link')}
+            email={email}
+            onEmail={onEmail}
+            onSent={onSent}
+            problem={providerProblem(search.get('error'))}
+            layout="row"
+          />
+          <p className="text-hint text-muted">
+            {t('Your workspace takes the name of your domain. Rename it whenever you like.')}
+          </p>
+          <ProviderButtons providers={providers} layout="grid" />
+        </>
+      )}
     </div>
   );
 }
 
-function StageCard({ stage, onStage }: { stage: Stage; onStage: (stage: Stage) => void }) {
+/** Step 1, the link is on its way: this page goes on by itself when it is opened (FRU-235). */
+function Sent({ email, onBack, onSignedIn }: { email: string; onBack: () => void; onSignedIn: () => void }) {
   useLocale();
-  if (stage.kind === 'loading') return <Frame step={1} title={t('Create your workspace')} />;
-  if (stage.kind === 'sign-in') return <SignIn onSent={(email) => onStage({ kind: 'sent', email })} />;
+  useCarryOn(onSignedIn);
+  const again = useSendAgain(email);
 
-  if (stage.kind === 'sent') {
-    return (
-      <Sent
-        email={stage.email}
-        onBack={() => onStage({ kind: 'sign-in' })}
-        // Signed in from another tab: the same resolution as a visit, which makes the workspace
-        // named before the link was sent.
-        onSignedIn={() => void resolveOnce(null).then(onStage)}
-      />
-    );
-  }
-  if (stage.kind === 'name') return <NameIt onCreated={(workspace) => onStage({ kind: 'source', workspace })} />;
-  if (stage.kind === 'source') return <Source onNext={() => onStage({ kind: 'site', workspace: stage.workspace })} />;
-  if (stage.kind === 'site') {
-    return (
-      <SiteStep
-        workspace={stage.workspace}
-        onAdded={(site) => onStage({ kind: 'install', workspace: stage.workspace, site })}
-      />
-    );
-  }
-
-  return <Install workspace={stage.workspace} site={stage.site} />;
-}
-
-/** The card of a step, with the footer of the board: the step number and the one action. */
-function Frame({
-  step,
-  title,
-  lead,
-  children,
-  action,
-  onSubmit,
-}: {
-  step: number;
-  title: string;
-  lead?: string;
-  children?: ReactNode;
-  action?: ReactNode;
-  onSubmit?: (event: FormEvent) => void;
-}) {
-  useLocale();
   return (
-    <form
-      onSubmit={onSubmit ?? ((event) => event.preventDefault())}
-      className="flex min-w-0 flex-col rounded-[14px] border border-line bg-surface shadow-[0_24px_60px_-30px_rgba(28,25,23,0.25)] md:min-h-[540px]"
-    >
-      <div className="flex-1 px-5 pt-6 pb-6 md:px-7 md:pt-8">
-        <h1 className="text-2xl font-bold tracking-[-0.02em]">{title}</h1>
-        {lead === undefined ? null : <p className="mt-2 text-[15px] text-muted">{lead}</p>}
-        <div className="mt-6 max-w-[420px] space-y-4">{children}</div>
+    <Callout status className="mt-3">
+      <p className="text-body leading-auto font-semibold">{t('Check your inbox')}</p>
+      <p className="text-body">
+        {withStrong(
+          msg('A sign-in link is on its way to {email}. Open it in this browser: this page carries on by itself.'),
+          'email',
+          email,
+        )}
+      </p>
+      <p className="text-hint text-muted">
+        {t('The link works once, for fifteen minutes. Nothing in it asks for a password.')}
+      </p>
+      <div className="mt-1 flex flex-wrap items-center gap-x-5 gap-y-2.5">
+        <Button tone="outline" disabled={again.disabled} onClick={again.send}>
+          {again.label}
+        </Button>
+        <AnotherAddress space="normal" onBack={onBack} />
       </div>
-      <div className="flex items-center justify-end gap-4 border-t border-line px-5 py-4 md:px-7">
-        <span className="text-sm text-muted">{t('Step {step} of {total}', { step, total: 4 })}</span>
-        {action}
-      </div>
-    </form>
+      {again.problem === undefined ? null : <Problem>{t(again.problem)}</Problem>}
+    </Callout>
   );
 }
 
-function SignIn({ onSent }: { onSent: (email: string) => void }) {
+/**
+ * Signed in, and the worker did not make the workspace: the name it would have taken is in a field,
+ * and the person sends it again, as it is or changed.
+ */
+function Unnamed({ account, onCreated }: { account: Account; onCreated: (workspace: Workspace) => void }) {
   useLocale();
-  const [search] = useSearchParams();
-  const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
+  const [name, setName] = useState(workspaceNameFrom(account.email));
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | undefined>(providerProblem(search.get('error')));
-  const { providers, closed } = useSignInWays();
+  const [problem, setProblem] = useState<string | undefined>(WORKSPACE_NOT_CREATED);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
     setProblem(undefined);
-    if (name.trim() !== '') rememberWorkspaceName(name.trim());
-    const sent = await requestLink(email, locale());
+    const made = await firstWorkspace(account, name);
     setBusy(false);
-    if (sent.ok) return onSent(email.trim());
-
-    setProblem(SEND_PROBLEMS[sent.error] ?? LINK_NOT_SENT);
-  }
-
-  if (closed) {
-    return (
-      <Frame
-        step={1}
-        title={t('Create your workspace')}
-        lead={t('One workspace for your team, your sites and your sources. Hosted in Europe.')}
-      >
-        <SignInClosed />
-      </Frame>
-    );
+    if (made.workspace !== undefined) return onCreated(made.workspace);
+    setProblem(made.problem);
   }
 
   return (
-    <Frame
-      step={1}
-      title={t('Create your workspace')}
-      lead={t('One workspace for your team, your sites and your sources. Hosted in Europe.')}
-      onSubmit={submit}
-      action={
-        <Button type="submit" disabled={busy || email.trim() === ''}>
-          {busy ? t('Sending…') : t('Continue')}
-        </Button>
-      }
-    >
-      {providers.google ? (
-        <WideButton onClick={() => (window.location.href = providerStart('google'))}>
-          {t('Continue with Google')}
-        </WideButton>
-      ) : (
-        <WideButton disabled note={t('Google sign-in is not set up on this Fruitback')}>
-          {t('Continue with Google')}
-        </WideButton>
-      )}
-      {providers.github ? (
-        <WideButton onClick={() => (window.location.href = providerStart('github'))}>
-          {t('Continue with GitHub')}
-        </WideButton>
-      ) : (
-        <WideButton disabled note={t('GitHub sign-in is not set up on this Fruitback')}>
-          {t('Continue with GitHub')}
-        </WideButton>
-      )}
-      <div className="flex items-center gap-3 py-1 text-xs text-muted">
-        <span className="h-px flex-1 bg-line" />
-        {t('or with an email link')}
-        <span className="h-px flex-1 bg-line" />
-      </div>
-      <Field
-        label={t('Work email')}
-        type="email"
-        autoComplete="email"
-        placeholder="you@studio.com"
-        value={email}
-        onChange={(event) => setEmail(event.target.value)}
-        required
-      />
+    <form noValidate onSubmit={(event) => void submit(event)} className="mt-3 flex flex-col gap-4">
+      <p className="text-body text-muted">{withStrong(msg('Signed in as {email}'), 'email', account.email)}</p>
       <Field
         label={t('Workspace name')}
-        placeholder="Sakuga"
         value={name}
         onChange={(event) => setName(event.target.value)}
         maxLength={80}
       />
       {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
-    </Frame>
-  );
-}
-
-function Sent({ email, onBack, onSignedIn }: { email: string; onBack: () => void; onSignedIn: () => void }) {
-  useLocale();
-  // The link is opened in another tab: this one goes on to the next step by itself (FRU-235).
-  useCarryOn(onSignedIn);
-
-  return (
-    <Frame
-      step={1}
-      title={t('Check your inbox')}
-      lead={t('A sign-in link is on its way to {email}. It works once, for fifteen minutes.', { email })}
-      action={
-        <Button tone="outline" onClick={onBack}>
-          {t('Use another address')}
+      <div>
+        <Button type="submit" disabled={busy}>
+          {t('Try again')}
         </Button>
-      }
-    >
-      <p className="text-sm text-muted">
-        {t('Open it in this browser. Nothing in it asks for a password, and ignoring it is safe.')}
-      </p>
-    </Frame>
+      </div>
+    </form>
   );
 }
 
-function NameIt({ onCreated }: { onCreated: (workspace: Workspace) => void }) {
+const WORKSPACE_NOT_RENAMED = msg('The workspace was not renamed. Try again.');
+/** What the worker refuses when a workspace is renamed: the rule of its name, and who may. */
+const RENAME_PROBLEMS: Readonly<Record<string, string>> = {
+  ...NAME_PROBLEMS,
+  forbidden: msg('Only an owner or an admin of the workspace renames it.'),
+};
+
+/** Step 1, done: who is signed in, and the workspace, which « Rename » renames in place. */
+function Account({
+  account,
+  workspace,
+  onRenamed,
+}: {
+  account: Account;
+  workspace: Workspace;
+  onRenamed: (workspace: Workspace) => void;
+}) {
   useLocale();
-  const [name, setName] = useState('');
+  const [renaming, setRenaming] = useState(false);
+  const [name, setName] = useState(workspace.name);
+  const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | undefined>();
+  // Set once the form closed: « Rename » then takes focus again, where the keyboard left it.
+  const [back, setBack] = useState(false);
+
+  function close() {
+    setRenaming(false);
+    setProblem(undefined);
+    setBack(true);
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    const created = await call<Workspace>('POST', '/console/workspaces', { name });
-    if (created.ok) return onCreated(created.data);
-    setProblem(problemOf(created, NAME_PROBLEMS, WORKSPACE_NOT_CREATED));
+    if (name.trim() === workspace.name) return close();
+    setBusy(true);
+    setProblem(undefined);
+    const renamed = await renameWorkspace(workspace, name);
+    setBusy(false);
+    // A refusal keeps the form open, with the name as it was typed.
+    if (!renamed.ok) return setProblem(problemOf(renamed, RENAME_PROBLEMS, WORKSPACE_NOT_RENAMED));
+    onRenamed(renamed.data);
+    close();
   }
 
   return (
-    <Frame
-      step={1}
-      title={t('Name your workspace')}
-      lead={t('You are signed in. One more word, and the workspace exists.')}
-      onSubmit={submit}
-      action={
-        <Button type="submit" disabled={name.trim() === ''}>
-          {t('Continue')}
-        </Button>
-      }
-    >
-      <Field
-        label={t('Workspace name')}
-        placeholder="Sakuga"
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-        maxLength={80}
-      />
-      {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
-    </Frame>
+    <div className="mt-1.5 flex flex-col gap-1 text-body">
+      <p className="text-muted wrap-anywhere">
+        {withStrong(msg('Signed in as {email}'), 'email', account.email, 'text-ink')}
+      </p>
+      {renaming ? (
+        <form
+          noValidate
+          onSubmit={(event) => void submit(event)}
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape') return;
+            setName(workspace.name);
+            close();
+          }}
+          className="mt-2 flex flex-col gap-3"
+        >
+          <div className="flex flex-wrap items-end gap-x-5 gap-y-2.5">
+            <div className="min-w-0 flex-1 basis-60">
+              <Field
+                label={t('Workspace name')}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                maxLength={80}
+                autoFocus
+              />
+            </div>
+            <Button type="submit" disabled={busy}>
+              {t('Save')}
+            </Button>
+            <LinkButton
+              space="loose"
+              onClick={() => {
+                setName(workspace.name);
+                close();
+              }}
+            >
+              {t('Cancel')}
+            </LinkButton>
+          </div>
+          {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
+        </form>
+      ) : (
+        <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-muted">
+          {withStrong(msg('Workspace {name}'), 'name', workspace.name, 'text-ink')}
+          {manages(workspace) ? (
+            <LinkButton space="flush" autoFocus={back} onClick={() => setRenaming(true)}>
+              {t('Rename')}
+            </LinkButton>
+          ) : null}
+        </p>
+      )}
+    </div>
   );
 }
+
+type SiteFormProps = {
+  workspace: Workspace;
+  /** The site this form changes: its values are in the form, and « Cancel » keeps it. */
+  replaces?: Added | undefined;
+  onDone: (added: Added) => void;
+};
 
 /**
- * Where the notes go, as it is at the end of the set-up (FRU-166). The step chooses nothing: Fruitback
- * keeps the notes, and the sources that the Connectors screen connects say so, rather than « After the
- * beta ». When the step connects a source itself, it becomes a choice again.
+ * Step 2: the address of the site, and who sees its notes.
+ *
+ * WARNING: the worker has no route that changes a site, and a site that is removed takes its notes
+ * with it. So « Change » adds the site again with the new values, and removes the one it replaces
+ * only when that one was added in this visit: nothing was noted on it yet. A site of a visit before
+ * stays, the summary says so, and the Sites screen removes it with its two presses (FRU-165).
  */
-const SOURCES = [
-  {
-    key: 'fruitback',
-    name: 'Fruitback',
-    detail: msg('Notes stay in this workspace. Nothing to connect.'),
-    state: msg('Selected'),
-  },
-  {
-    key: 'linear',
-    name: 'Linear',
-    detail: msg('An issue per note, in the team you choose.'),
-    state: msg('In Connectors, after the set-up'),
-  },
-  {
-    key: 'rest',
-    name: msg('REST API'),
-    detail: msg('POST each note to your own endpoint.'),
-    state: msg('In Connectors, after the set-up'),
-  },
-  {
-    key: 'github',
-    name: 'GitHub Issues',
-    detail: msg('An issue per note, in one repository.'),
-    state: msg('After the beta'),
-  },
-] as const;
-
-function Source({ onNext }: { onNext: () => void }) {
+function SiteForm({ workspace, replaces, onDone }: SiteFormProps) {
   useLocale();
-  return (
-    <Frame
-      step={2}
-      title={t('Where should feedback go?')}
-      lead={t(
-        'For now the notes stay in this workspace. Linear and a REST API connect after the set-up, in Connectors.',
-      )}
-      action={<Button onClick={onNext}>{t('Continue')}</Button>}
-    >
-      {/* A list to read, not a choice: nothing here is chosen, so it is no radio group (FRU-166). */}
-      <ul aria-label={t('Sources')} className="space-y-2">
-        {SOURCES.map((source) => (
-          <li
-            key={source.key}
-            className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[10px] border px-4 py-3 ${
-              source.key === 'fruitback' ? 'border-ink' : 'border-line text-muted'
-            }`}
-          >
-            <span
-              aria-hidden="true"
-              className="flex h-8 w-8 flex-none items-center justify-center rounded-md bg-chip text-xs font-bold text-ink"
-            >
-              {source.key === 'rest' ? '{}' : source.name.charAt(0)}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold text-ink">{t(source.name)}</span>
-              <span className="block text-xs">{t(source.detail)}</span>
-            </span>
-            {/* On a phone the state has its own line, under the words: beside them it squeezed them (FRU-166). */}
-            <span className="w-full pl-11 text-xs font-semibold sm:w-auto sm:pl-0">{t(source.state)}</span>
-          </li>
-        ))}
-      </ul>
-    </Frame>
-  );
-}
-
-function SiteStep({ workspace, onAdded }: { workspace: Workspace; onAdded: (site: Site) => void }) {
-  useLocale();
-  const [url, setUrl] = useState('');
-  const [visibility, setVisibility] = useState<Visibility>('members');
+  const before = replaces?.site;
+  const [url, setUrl] = useState(before === undefined ? '' : new URL(before.origin).host);
+  const [visibility, setVisibility] = useState<Visibility>(before?.visibility ?? 'members');
+  const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | undefined>();
 
   async function submit(event: FormEvent) {
@@ -471,155 +553,105 @@ function SiteStep({ workspace, onAdded }: { workspace: Workspace; onAdded: (site
     // The same reading as the Sites screen: a host with no scheme is https (FRU-167).
     const address = siteAddress(url);
     if (address === undefined) return setProblem(SITE_PROBLEMS['invalid-url'] ?? SITE_NOT_ADDED);
-    const added = await call<Site>('POST', `/console/workspaces/${workspace.id}/sites`, { url: address, visibility });
-    if (added.ok) return onAdded(added.data);
-    setProblem(problemOf(added, SITE_PROBLEMS, SITE_NOT_ADDED));
+    // Nothing changed: the site stays as it is, and nothing is asked of the worker.
+    if (replaces !== undefined && new URL(address).origin === before?.origin && visibility === before.visibility) {
+      return onDone(replaces);
+    }
+    setBusy(true);
+    const base = `/console/workspaces/${workspace.id}/sites`;
+    const added = await call<Site>('POST', base, { url: address, visibility });
+    if (!added.ok) {
+      setBusy(false);
+
+      // No failure clears the field: the address stays as it was typed.
+      return setProblem(problemOf(added, SITE_PROBLEMS, SITE_NOT_ADDED));
+    }
+    const removed =
+      before !== undefined && replaces?.fresh === true && (await call('DELETE', `${base}/${before.id}`)).ok;
+    setBusy(false);
+    onDone({ site: added.data, fresh: true, ...(before === undefined || removed ? {} : { left: before }) });
   }
 
   return (
-    <Frame
-      step={3}
-      title={t('Which site do you review?')}
-      lead={t('Paste its address. Any page of it will do.')}
-      onSubmit={submit}
-      action={
-        <Button type="submit" disabled={url.trim() === ''}>
-          {t('Continue')}
-        </Button>
-      }
-    >
+    <form noValidate onSubmit={(event) => void submit(event)} className="mt-3 flex flex-col gap-5">
       <Field
         label={t('Site address')}
         inputMode="url"
         autoComplete="url"
-        placeholder="https://staging.acme.dev"
+        placeholder="staging.acme.dev"
+        // A pattern such as *.preview.acme.dev is not said here: a preview is covered by a domain
+        // that is proven (FRU-103), and the worker takes no pattern as an address.
+        hint={t('Any page of it will do.')}
         value={url}
         onChange={(event) => setUrl(event.target.value)}
       />
       <Pick
-        label={t('Who sees the feedback?')}
+        label={t('Who sees the notes?')}
         value={visibility}
         onChange={setVisibility}
         options={[
           {
             value: 'members',
-            label: t('The members of {workspace}', { workspace: workspace.name }),
-            detail: t('Visitors of the site see no note.'),
+            label: t('Members of {workspace}', { workspace: workspace.name }),
+            detail: t("Visitors of the site see nothing. Right for staging and for a client's site."),
           },
           {
             value: 'everyone',
-            label: t('Everyone who visits the site'),
-            detail: t('For a public « report a problem ».'),
+            label: t('Everyone who visits'),
+            detail: t('A public way to report a problem on a live site.'),
           },
         ]}
       />
       {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
-    </Frame>
-  );
-}
-
-/** The script tag a site embeds, pointing at this console's copy of the widget. */
-export function snippetFor(site: Site): string {
-  return [
-    '<script',
-    `  src="${window.location.origin}/fruitback.iife.js"`,
-    `  data-fruitback-endpoint="${API}"`,
-    `  data-fruitback-client="${site.id}"`,
-    '  defer',
-    '></script>',
-  ].join('\n');
-}
-
-function Install({ workspace, site }: { workspace: Workspace; site: Site }) {
-  useLocale();
-  const navigate = useNavigate();
-
-  return (
-    <Frame
-      step={4}
-      title={t('Install it')}
-      lead={t('Two ways to put Fruitback on {site}. Use one, or both.', { site: new URL(site.origin).host })}
-      action={<Button onClick={() => navigate(`/w/${workspace.id}/sites`)}>{t('Finish')}</Button>}
-    >
-      <InstallOptions workspace={workspace} site={site} />
-    </Frame>
-  );
-}
-
-// Every role connects a browser, so no code of the worker has a sentence of its own here.
-const CONNECT_PROBLEMS: Readonly<Record<string, string>> = {};
-const BROWSER_NOT_CONNECTED = msg('This browser was not connected. Try again.');
-
-export function InstallOptions({ workspace, site }: { workspace: Workspace; site: Site }) {
-  useLocale();
-  const [copied, setCopied] = useState<'no' | 'yes' | 'refused'>('no');
-  const [link, setLink] = useState<string | undefined>();
-  const [problem, setProblem] = useState<string | undefined>();
-  const snippet = snippetFor(site);
-
-  async function connect() {
-    // Open the tab in the click, before the await: a browser blocks a window opened after one.
-    // The tab loses its `opener` before it loads the pairing page.
-    const tab = window.open('', '_blank');
-    setProblem(undefined);
-    const minted = await call<{ code: string }>('POST', `/console/workspaces/${workspace.id}/connect`, {});
-    if (!minted.ok) {
-      // The tab that just opened closes: the reason is said under the button (FRU-164).
-      tab?.close();
-      return setProblem(problemOf(minted, CONNECT_PROBLEMS, BROWSER_NOT_CONNECTED));
-    }
-    const target = pairingLink(minted.data.code);
-    setLink(target);
-    if (tab !== null) {
-      tab.opener = null;
-      tab.location.href = target;
-    }
-  }
-
-  return (
-    <div className="space-y-5">
-      <div>
-        <h2 className="text-sm font-semibold">{t('Script')}</h2>
-        <p className="mb-2 text-xs text-muted">{t('Paste it before the closing body tag of the site.')}</p>
-        <pre className="overflow-x-auto rounded-md bg-chip p-3 font-mono text-xs leading-5">{snippet}</pre>
-        <Button
-          tone="outline"
-          className="mt-2"
-          onClick={() => void copyText(snippet).then((taken) => setCopied(taken ? 'yes' : 'refused'))}
-        >
-          {copied === 'yes' ? t('Copied') : t('Copy the script')}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
+        <Button type="submit" disabled={busy}>
+          {replaces === undefined ? t('Add site') : t('Save')}
         </Button>
-        {copied === 'refused' ? (
-          <p role="alert" className="mt-2 text-xs text-muted">
-            {t('The browser refused the copy. Select the script above and copy it by hand.')}
-          </p>
+        {replaces === undefined ? null : (
+          <LinkButton space="loose" onClick={() => onDone(replaces)}>
+            {t('Cancel')}
+          </LinkButton>
+        )}
+      </div>
+    </form>
+  );
+}
+
+/** Step 2, done: the site, who sees its notes, and « Change ». */
+function SiteSummary({
+  workspace,
+  site,
+  left,
+  onChange,
+}: {
+  workspace: Workspace;
+  site: Site;
+  left: Site | undefined;
+  onChange: () => void;
+}) {
+  useLocale();
+
+  return (
+    <div className="mt-1.5 flex flex-col gap-1 text-body">
+      {/* A long host takes the lines it needs: the page does not scroll sideways (FRU-159). */}
+      <p className="font-semibold wrap-anywhere">{new URL(site.origin).host}</p>
+      <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-muted">
+        {site.visibility === 'members'
+          ? t('Members of {workspace} see the notes', { workspace: workspace.name })
+          : t('Everyone who visits sees the notes')}
+        {manages(workspace) ? (
+          <LinkButton space="flush" onClick={onChange}>
+            {t('Change')}
+          </LinkButton>
         ) : null}
-      </div>
-      <div>
-        <h2 className="text-sm font-semibold">{t('Extension')}</h2>
-        <p className="mb-2 text-xs text-muted">
-          {t(
-            'Nothing to change on the site. Connect this browser, then click the Fruitback icon on the page that opens.',
-          )}
+      </p>
+      {left === undefined ? null : (
+        <p role="status" className="text-hint text-muted">
+          {t('{site} is still in your sites, with its notes. Remove it in Sites if you no longer review it.', {
+            site: new URL(left.origin).host,
+          })}
         </p>
-        <Button tone="outline" onClick={() => void connect()}>
-          {t('Connect this browser')}
-        </Button>
-        {problem === undefined ? null : (
-          <div className="mt-2">
-            <Problem>{t(problem)}</Problem>
-          </div>
-        )}
-        {link === undefined ? null : (
-          <p className="mt-2 text-xs text-muted">
-            {t('A page opened in a new tab. If it did not, open')}{' '}
-            <a href={link} target="_blank" rel="noopener noreferrer" className="underline">
-              {t('this link')}
-            </a>
-            {t(': it works once, for fifteen minutes.')}
-          </p>
-        )}
-      </div>
+      )}
     </div>
   );
 }

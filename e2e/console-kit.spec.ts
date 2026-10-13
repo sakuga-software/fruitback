@@ -153,8 +153,9 @@ async function boxOf(locator: Locator): Promise<{ radius: string; border: number
 }
 
 test('the wide buttons and the fields have the shape and the border of the board (FRU-168)', async ({ page }) => {
-  // `design/boards/2-onboarding.png`: four controls of one shape in a column, and the pill kept for
-  // the action of the step. The screen drew the wide buttons as pills too, with a border of 1.26:1.
+  // `design/boards/2-onboarding.png`, then screen 01 of the mockup of 2026-10-13: controls of one
+  // shape, and the pill kept for the action of the step. The screen drew the wide buttons as pills
+  // too, with a border of 1.26:1.
   await openSetup(page);
   const white = [255, 255, 255];
 
@@ -166,17 +167,15 @@ test('the wide buttons and the fields have the shape and the border of the board
     expect.soft(contrast(button.border, white), name).toBeGreaterThanOrEqual(3);
   }
 
-  for (const name of ['Work email', 'Workspace name']) {
-    const field = await boxOf(page.getByRole('textbox', { name }));
-    expect.soft(Number.parseFloat(field.radius), name).toBeGreaterThanOrEqual(8);
-    expect.soft(Number.parseFloat(field.radius), name).toBeLessThanOrEqual(10);
-    expect.soft(contrast(field.border, white), name).toBeGreaterThanOrEqual(3);
-    // Flat: no shadow, or one that paints nothing.
-    expect.soft(field.shadow, name).toMatch(/^none$|^(rgba\(0, 0, 0, 0\) 0px 0px 0px 0px(, )?)+$/);
-  }
+  const field = await boxOf(page.getByRole('textbox', { name: 'Work email' }));
+  expect.soft(Number.parseFloat(field.radius)).toBeGreaterThanOrEqual(8);
+  expect.soft(Number.parseFloat(field.radius)).toBeLessThanOrEqual(10);
+  expect.soft(contrast(field.border, white)).toBeGreaterThanOrEqual(3);
+  // Flat: no shadow, or one that paints nothing.
+  expect.soft(field.shadow).toMatch(/^none$|^(rgba\(0, 0, 0, 0\) 0px 0px 0px 0px(, )?)+$/);
 
-  // The action of the step keeps the pill: its shape is what tells it from the four controls.
-  const action = await boxOf(page.getByRole('button', { name: 'Continue', exact: true }));
+  // The action of the step keeps the pill: its shape is what tells it from the controls.
+  const action = await boxOf(page.getByRole('button', { name: 'Email me a link' }));
   expect.soft(Number.parseFloat(action.radius)).toBeGreaterThanOrEqual(20);
 });
 

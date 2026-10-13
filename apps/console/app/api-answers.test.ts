@@ -148,8 +148,9 @@ describe('what the console keeps of a sign-in (FRU-148, FRU-216)', () => {
     assert.equal(redeemed.ok, true);
     assert.deepEqual(written, []);
     assert.deepEqual(sent, ['POST /console/auth/email/redeem', 'GET /console/me', 'POST /console/auth/sign-out']);
-    // The control: the storage is there and it is the one `api.ts` writes in, for the one thing it keeps.
-    api.rememberWorkspaceName('Acme');
-    assert.deepEqual(written, ['localStorage.setItem(fruitback:pending-workspace, Acme)']);
+    // The control: the storage is there, and a write in it is seen. `api.ts` keeps nothing in it
+    // since the name of a workspace comes from the address of its person (FRU-239).
+    globalThis.localStorage.setItem('a-key', 'a-value');
+    assert.deepEqual(written, ['localStorage.setItem(a-key, a-value)']);
   });
 });

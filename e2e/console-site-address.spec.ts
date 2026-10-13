@@ -3,7 +3,7 @@ import { WORKER_ORIGIN } from './pin.ts';
 
 /**
  * The address of a site, typed in the console (FRU-167): on the Sites screen, in the card of a
- * workspace with no site (FRU-243), and at step 3 of the set-up. A host with no scheme is read as `https://`, and what is not an address gets the sentence
+ * workspace with no site (FRU-243), and at the second step of the set-up (FRU-239). A host with no scheme is read as `https://`, and what is not an address gets the sentence
  * of the console instead of the bubble of the browser.
  *
  * The worker is answered by stubs, which keep what the console sent.
@@ -40,7 +40,7 @@ async function stubWorker(page: Page): Promise<string[]> {
 
 const screens = [
   { name: 'the Sites screen', path: '/w/w1/sites', submit: 'Add site' },
-  { name: 'step 3 of the set-up', path: '/setup?step=site', submit: 'Continue' },
+  { name: 'the second step of the set-up', path: '/setup', submit: 'Add site' },
 ] as const;
 
 for (const screen of screens) {
