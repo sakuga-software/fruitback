@@ -442,7 +442,10 @@ sees the word and the label of the browser while the request waits, and could ap
 own account**: the extension would then be connected to that account. That is not a theft of the
 victim's account, and the claim tells the extension which account it is connected to, for the popup
 to name it (FRU-251). Once answered, a request shows
-nothing to anybody but the account that answered it.
+nothing to anybody but the account that answered it. The same person can also **refuse** it, with `/refuse` or five
+wrong words: the extension hears `410 connect-refused` and asks again, with a new id. Asking for the
+word on a refusal would not stop that: the console shows the word to whoever opens a request that
+waits. It costs the person one more request, and nothing of their account.
 
 **Phishing: an attacker starts a request and makes a victim approve it.** This is the attack of this
 kind of flow, and what stands against it is the person, helped where the worker can:
