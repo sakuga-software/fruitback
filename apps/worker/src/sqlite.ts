@@ -53,6 +53,12 @@ export type SqliteConfig = z.infer<typeof sqliteConfigSchema>;
  * dependency and a build step bought with nothing. Append to this array; never edit an entry that
  * has shipped, or a database in the field is left at a version whose meaning changed underneath it.
  */
+/**
+ * The `user_version` of a file this store wrote: one for each entry of `MIGRATIONS`. The copy into
+ * PostgreSQL takes a file at this version and no other (`postgres-copy.ts`, FRU-220).
+ */
+export const SEEDS_FILE_VERSION = 1;
+
 const MIGRATIONS: readonly string[] = [
   `
   CREATE TABLE seeds (

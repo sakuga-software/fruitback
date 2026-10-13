@@ -229,6 +229,11 @@ page.
   name, with their replies. If one identifier of the list names no note, nothing is deleted. Use
   one of `--email`, `--name` and `--id` in a command.
 
+- **After the notes moved from the SQLite file to PostgreSQL (FRU-220), the file still holds them.**
+  `migrate-to-postgres --seeds` copies and never writes the file, which is the way back. `forget`
+  then deletes in the database only: a note that a person asked you to delete is still in the file
+  and in the archives that hold it. Delete the file when the way back is no longer needed, and
+  record when its archives expire.
 - **Linear and GitHub:** the notes are issues in your own workspace, so you delete them there, and
   the command says so rather than deleting anything. Search the issues for the address, because the
   description states it, read them, and delete the ones that are this reporter's. On GitHub only an

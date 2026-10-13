@@ -12,11 +12,14 @@ import {
   deliveries,
   email_links,
   pairings,
+  seed_comments,
+  seeds,
   sessions,
   site_destinations,
   sites,
 } from './postgres-schema.ts';
 import { SESSIONS_FILE_VERSION } from './session-sqlite.ts';
+import { SEEDS_FILE_VERSION } from './sqlite.ts';
 
 /**
  * The `user_version` of the accounts file of the last worker that kept its accounts in one (until
@@ -366,6 +369,236 @@ export async function copySqliteFiles(input: CopyInput): Promise<CopyOutcome> {
             'copied: the counts are equal. The worker moves the accounts into the tables of better-auth when it starts.',
           );
         }
+
+        return { ok: true, lines };
+      } catch (error) {
+        await db.execute(sql`ROLLBACK`).catch(() => undefined);
+        throw error;
+      }
+    });
+  } catch (error) {
+    if (!(error instanceof Refused)) throw error;
+    lines.push(`refused: ${error.message}. Nothing was written.`);
+
+    return { ok: false, lines };
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+}
+
+/**
+ * The notes of the SQLite file of a worker, copied into PostgreSQL (FRU-220).
+ *
+ * The switch n° 1 bis: `FRUITBACK_STORE=sqlite` kept the notes in one file, and the store of the
+ * database (FRU-218) starts empty. This copies the notes and their replies, and keeps their numbers:
+ * a pin a page already shows is `FB-12`, and must find its note.
+ *
+ * - **The file is never opened**, as for the accounts: its copy is read, with its `-wal`.
+ * - **The target is the database of a worker of this image.** Every migration is applied first, as
+ *   the worker does when it starts. So it runs after the copy of the accounts, never before: that
+ *   one goes into a database that no worker started on.
+ * - **A note keeps its number, its text and its dates.** `seed` is copied as it is, byte for byte.
+ *   The file writes a date as ISO text, and the database as milliseconds: a date that does not come
+ *   back to the same text is refused, with the number of its row.
+ * - **The numbers go on after the largest one the file ever gave**, a note that was deleted since
+ *   included: SQLite keeps that number in `sqlite_sequence`, and never gives it twice.
+ * - **`clients` renames the site of a note.** A worker of `FRUITBACK_CLIENTS` named its sites
+ *   itself, and a site of the console has an id of its own. `null` as a key is the notes that name
+ *   no client, which a worker with one client wrote. A note whose site is no site of the database
+ *   is copied, and said: no page reads it until then.
+ * - **One transaction, a lock, a count and a digest of each table**, as for the accounts. A target
+ *   that holds exactly these rows is a run that went to its end. Any other row in the two tables is
+ *   refused. `dryRun` does everything and rolls back.
+ */
+export type SeedsCopyInput = {
+  seedsPath: string;
+  /** The site of a note, by the client it names in the file. `null`: the notes that name none. */
+  clients: ReadonlyMap<string | null, string>;
+  database: Database;
+  dryRun: boolean;
+};
+
+/** The two tables of the file, with the table of the database each one goes to. */
+const SEED_TABLES = [
+  { name: 'seeds', table: seeds, dates: ['created_at', 'updated_at'] },
+  { name: 'comments', table: seed_comments, dates: ['created_at'] },
+] as const;
+
+/** The date of a row of the file, as the database keeps it. */
+function instantOf(text: unknown, where: string): number {
+  const instant = typeof text === 'string' ? Date.parse(text) : Number.NaN;
+  if (Number.isNaN(instant) || new Date(instant).toISOString() !== text) {
+    throw new Refused(`${where} holds a date that the database would not give back as it is written`);
+  }
+
+  return instant;
+}
+
+/** The rows of the two tables of the file, as the database takes them, and the last number each table gave. */
+function readSeedsFile(
+  copy: string,
+  clients: ReadonlyMap<string | null, string>,
+): { rows: Map<PgTable, Row[]>; last: Map<PgTable, number>; byClient: Map<string | null, number> } {
+  const source = new DatabaseSync(copy);
+  try {
+    const found = (source.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
+    if (found !== SEEDS_FILE_VERSION) {
+      throw new Refused(
+        `the seeds file is at version ${found}, and this worker reads version ${SEEDS_FILE_VERSION}: ` +
+          'it is not a file that the SQLite store of this worker wrote',
+      );
+    }
+
+    const rows = new Map<PgTable, Row[]>();
+    const last = new Map<PgTable, number>();
+    const byClient = new Map<string | null, number>();
+    const given = new Map(
+      (source.prepare('SELECT name, seq FROM sqlite_sequence').all() as { name: string; seq: number }[]).map(
+        (row) => [row.name, row.seq] as const,
+      ),
+    );
+    for (const { name, table, dates } of SEED_TABLES) {
+      const expected = columnsOf(table);
+      const present = (source.prepare(`PRAGMA table_info(${name})`).all() as { name: string }[]).map(
+        (column) => column.name,
+      );
+      const missing = expected.filter((column) => !present.includes(column));
+      const extra = present.filter((column) => !expected.includes(column));
+      if (missing.length > 0 || extra.length > 0) {
+        throw new Refused(
+          `the table ${name} differs: ` +
+            [
+              ...missing.map((column) => `${column} is not in the seeds file`),
+              ...extra.map((column) => `${column} is not in PostgreSQL`),
+            ].join(', '),
+        );
+      }
+      const list = expected.map((column) => `"${column}"`).join(', ');
+      const read = source.prepare(`SELECT ${list} FROM ${name} ORDER BY id`).all() as Row[];
+      const taken = read.map((row) => {
+        const kept: Row = { ...row };
+        for (const date of dates) kept[date] = instantOf(row[date], `the row ${String(row.id)} of ${name}`);
+        if (table === seeds) {
+          const before = (row.client_id ?? null) as string | null;
+          byClient.set(before, (byClient.get(before) ?? 0) + 1);
+          const site = clients.get(before);
+          if (site !== undefined) kept.client_id = site;
+        }
+
+        return kept;
+      });
+      rows.set(table, taken);
+      // Not `Math.max(...ids)`: a file of a hundred thousand notes is that many arguments.
+      last.set(
+        table,
+        taken.reduce((largest, row) => Math.max(largest, Number(row.id)), given.get(name) ?? 0),
+      );
+    }
+    const unknown = [...clients.keys()].filter((before) => !byClient.has(before));
+    if (unknown.length > 0) {
+      throw new Refused(
+        `no note of the file names ${unknown.map((before) => (before === null ? 'no client' : `« ${before} »`)).join(', ')}: ` +
+          `the file names ${[...byClient.keys()].map((before) => (before === null ? 'no client' : `« ${before} »`)).join(', ') || 'nothing'}`,
+      );
+    }
+
+    return { rows, last, byClient };
+  } finally {
+    source.close();
+  }
+}
+
+/** One line for each of the two tables, and whether the two sides are the same. */
+async function compareSeeds(
+  db: Db,
+  source: Map<PgTable, Row[]>,
+): Promise<{ same: boolean; empty: boolean; lines: string[] }> {
+  const lines: string[] = [];
+  let same = true;
+  let empty = true;
+  for (const { table } of SEED_TABLES) {
+    const columns = columnsOf(table);
+    const there = tallyOf(await targetRows(db, table), columns);
+    const here = tallyOf(source.get(table) ?? [], columns);
+    const equal = here.count === there.count && here.digest === there.digest;
+    same &&= equal;
+    empty &&= there.count === 0;
+    lines.push(
+      `  ${getTableName(table).padEnd(18)} ${String(here.count).padStart(7)} ${String(there.count).padStart(7)}  ` +
+        `${equal ? 'same' : 'DIFFERENT'}  ${there.digest.slice(0, 16)}`,
+    );
+  }
+
+  return { same, empty, lines };
+}
+
+export async function copySeedsFile(input: SeedsCopyInput): Promise<CopyOutcome> {
+  const folder = mkdtempSync(join(tmpdir(), 'fruitback-copy-'));
+  const lines: string[] = [];
+  try {
+    const source = readSeedsFile(snapshotOf(input.seedsPath, folder, 'seeds.db'), input.clients);
+
+    // Every migration, as a worker applies them when it starts: the two tables are in the last ones.
+    await migrate(input.database);
+
+    return await input.database.alone(async (db) => {
+      await db.execute(sql`BEGIN`);
+      try {
+        await db.execute(sql`SELECT pg_advisory_xact_lock(${COPY_LOCK})`);
+
+        // What each client of the file becomes, and whether the database has that site.
+        const known = new Set(
+          ((await db.select({ id: sites.id }).from(sites)) as { id: string }[]).map((site) => site.id),
+        );
+        const sitesLines = [...source.byClient].map(([before, count]) => {
+          const site = input.clients.get(before) ?? before;
+          const from = before === null ? 'no client' : `« ${before} »`;
+          const to = site === null ? 'no site' : `« ${site} »`;
+          const read = site !== null && known.has(site);
+
+          return (
+            `  ${String(count).padStart(7)} note(s) of ${from} go to ${to}` +
+            (read ? '' : ': NOT A SITE of this database, so no page reads them')
+          );
+        });
+
+        const before = await compareSeeds(db, source.rows);
+        if (!before.empty) {
+          if (before.same) {
+            lines.push('PostgreSQL already holds exactly these notes: nothing is written.', HEADER, ...before.lines);
+            await db.execute(sql`ROLLBACK`);
+
+            return { ok: true, lines };
+          }
+          throw new Refused(
+            'PostgreSQL already holds notes, and they are not the ones of the file. ' +
+              'The copy goes into a database that holds no note',
+          );
+        }
+
+        for (const { table } of SEED_TABLES) await insertAll(db, table, source.rows.get(table) ?? []);
+
+        const after = await compareSeeds(db, source.rows);
+        lines.push(HEADER, ...after.lines, 'the site of each note:', ...sitesLines);
+        if (!after.same) throw new Refused('a table of PostgreSQL differs from the file after the copy');
+
+        const next = (source.last.get(seeds) ?? 0) + 1;
+        if (input.dryRun) {
+          await db.execute(sql`ROLLBACK`);
+          lines.push(`dry run: the counts are equal, and nothing was kept. The next note would be FB-${next}.`);
+
+          return { ok: true, lines };
+        }
+        // A sequence is outside the transaction: it goes forward for good, which is harmless if the
+        // commit fails. `false` for a table that gave no number: its first one is 1.
+        for (const { table } of SEED_TABLES) {
+          const last = source.last.get(table) ?? 0;
+          await db.execute(
+            sql`SELECT setval(pg_get_serial_sequence(${getTableName(table)}, 'id'), ${Math.max(last, 1)}, ${last > 0})`,
+          );
+        }
+        await db.execute(sql`COMMIT`);
+        lines.push(`copied: the counts are equal. The next note is FB-${next}.`);
 
         return { ok: true, lines };
       } catch (error) {

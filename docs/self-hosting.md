@@ -685,6 +685,39 @@ to the database since is not in them.
 The copy is held by `postgres-copy.test.ts` and `accounts-move.test.ts`, on PGlite and on
 PostgreSQL 17. **Not tried:** these five steps with `docker compose`, as written here.
 
+### Moving the notes of the SQLite file into PostgreSQL
+
+For a worker that keeps its notes itself, with `FRUITBACK_STORE=sqlite`, which is the default of the
+compose file. PostgreSQL becomes required, and that file is going (FRU-184). The notes and their
+replies move with one command, and **a pin keeps its number**.
+
+1. Keep the image that runs, by its digest, and stop the worker. Copy the file of
+   `FRUITBACK_SQLITE_PATH` with its `-wal` out of the volume: it is the way back.
+2. [Start the database](#start-it), start the worker on it once, and stop it. Sign in to the
+   console and add each site: a site has an id of its own, which the console shows.
+3. Try the copy, then run it without `--dry-run`. It reads `FRUITBACK_DATABASE_URL`, and never
+   writes the file:
+
+   ```bash
+   docker compose --profile postgres run --rm --no-deps worker \
+     node server.mjs migrate-to-postgres --seeds /data/fruitback.db --no-client <the id of the site> --dry-run
+   ```
+
+   `--no-client` gives a site the notes of a worker that had one client. A worker that had
+   `FRUITBACK_CLIENTS` takes one `--client <its id of before>=<the id of the site>` for each client.
+   The command says, for each client of the file, how many notes it has and where they go, and
+   whether that is a site of the database: **a note that goes to no site is copied, and no page
+   reads it**. The two lines of counts say `same`, and the last one `dry run`, then `copied`.
+
+4. In `.env`: `FRUITBACK_STORE=postgres`, and remove `FRUITBACK_SQLITE_PATH`, `FRUITBACK_CLIENTS`
+   and `FRUITBACK_SESSION_PATH`. Start the worker.
+5. **Each reviewer pairs the extension again, once**: `pair` writes its code in the database now.
+   A session of a worker that had no accounts names no member of a workspace, and is not copied.
+
+**The way back** is the image of step 1, the `.env` of before and the file. A note sent since is
+not in it. `apps/worker/cloud/README.md`, « Switch 1 bis », is the same switch for the Cloud, with
+what was tried. **Not tried:** these five steps with `docker compose`, as written here.
+
 ### Upgrading a deployment from before FRU-48
 
 The old compose file built the image, kept no volume, read `PORT` for the host port, defaulted
