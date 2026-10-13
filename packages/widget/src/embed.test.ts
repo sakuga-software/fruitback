@@ -1466,6 +1466,39 @@ describe('a link that opens a note on its page (FRU-253)', () => {
     widget.destroy();
   });
 
+  it('opens the list on « Could not be placed » for a note whose element is gone, and its thread', async () => {
+    const gone = note({
+      seed: seedFixture({
+        id: 'sd_linked',
+        note: 'The linked note',
+        anchor: { selector: '#gone', tag: 'input', text: 'Gone', bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 } },
+      }),
+    });
+    const { widget, shadow, thread } = linked('#fruitback-note=sd_linked', [answering([gone])]);
+
+    await widget.refresh();
+
+    const list = shadow.querySelector('[data-fruitback-sidebar]') as HTMLElement;
+    assert.equal(list.hidden, false, 'the list did not open');
+    const unplaced = list.querySelector('[data-fruitback-unplaced]') as HTMLElement;
+    assert.equal(unplaced.hidden, false);
+    assert.match(unplaced.textContent ?? '', /The linked note/);
+    assert.equal(thread() !== null, true);
+
+    widget.destroy();
+  });
+
+  it('leaves the list closed for a note that is on its element: the control', async () => {
+    const { widget, shadow, thread } = linked('#fruitback-note=sd_linked', [answering([note()])]);
+
+    await widget.refresh();
+
+    assert.equal((shadow.querySelector('[data-fruitback-sidebar]') as HTMLElement).hidden, true);
+    assert.equal(thread() !== null, true);
+
+    widget.destroy();
+  });
+
   it('finds the note by its id, by the id of its issue, or by its identifier', async () => {
     for (const id of ['sd_linked', 'issue_linked', 'ACM-142']) {
       const { widget, thread } = linked(`#fruitback-note=${encodeURIComponent(id)}`, [answering([note()])]);
