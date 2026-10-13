@@ -1507,6 +1507,31 @@ describe('a link that opens a note on its page (FRU-253)', () => {
     widget.destroy();
   });
 
+  it('keeps a link that waited for a note through a read that fails, and opens it at the read that answers', async () => {
+    // The composer closes while the page has no read that answered: the link is not followed then,
+    // and it is not lost. Each read that answers looks at the address again.
+    let answers = false;
+    const { page, widget, shadow, thread } = linked('#fruitback-note=sd_linked', [
+      () => (answers ? answering([note()])() : { ok: false, status: 503, body: '{"error":"store-unavailable"}' }),
+    ]);
+    const composer = shadow.querySelector('[data-fruitback-composer]') as HTMLElement;
+    composer.hidden = false;
+    await widget.refresh();
+    composer.hidden = true;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(thread() === null, true);
+    assert.equal(page.view.location.hash, '#fruitback-note=sd_linked');
+
+    await widget.refresh();
+    assert.equal(thread() === null, true, 'a read that failed opened a note');
+    answers = true;
+    await widget.refresh();
+    assert.equal(thread() !== null, true);
+    assert.equal(page.view.location.hash, '');
+
+    widget.destroy();
+  });
+
   it('follows a fragment that arrives later, with no read and no second mount', async () => {
     const { page, widget, shadow, thread, reads } = linked('', [answering([note()])]);
     await widget.refresh();
