@@ -562,6 +562,9 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     await page.goto(`${CONSOLE}/setup`);
 
     await expect(page.getByRole('alert')).toHaveText('Fruitback did not answer. Try again.');
+    // The first step is still the one to do, and the second is to come: a screen reader says so.
+    await expect(page.getByRole('heading', { name: `${CURRENT}Your account` })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Your site', exact: true })).toBeVisible();
     await expect(page.getByRole('textbox', { name: 'Workspace name' })).toHaveCount(0);
     expect(asked.filter((each) => each === 'POST /console/workspaces')).toEqual([]);
 

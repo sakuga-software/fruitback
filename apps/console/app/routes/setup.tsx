@@ -93,9 +93,10 @@ export default function Setup() {
 
   const account = 'account' in stage ? stage.account : undefined;
   const workspace = 'workspace' in stage ? stage.workspace : undefined;
-  // The first step is to do until somebody is signed in and has a workspace; the last one is the
-  // current one once a site is there.
-  const signedIn = account !== undefined && stage.kind !== 'unnamed';
+  // The first step is to do until somebody is signed in and has a workspace: invitations that could
+  // not be read, or a workspace that was not made, keep it current. The last one is the current one
+  // once a site is there.
+  const signedIn = account !== undefined && workspace !== undefined;
   const installing = stage.kind === 'install';
   const first: StepState = signedIn ? 'done' : 'current';
   const second: StepState = installing ? 'done' : stepAfter(first);
