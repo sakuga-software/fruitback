@@ -5,7 +5,7 @@ import { createPairingCommand } from './app.ts';
 import { type WorkerEnv, readConfig } from './env.ts';
 import { pairingLink } from './pair-page.ts';
 import { databaseOn, newPglite } from './pglite.fixture.ts';
-import { DEV_DATABASE, type PgDatabase, provideDevDatabase } from './postgres.ts';
+import { DEFAULT_DATABASE_SCHEMA, DEV_DATABASE, type PgDatabase, provideDevDatabase } from './postgres.ts';
 import { migrate } from './postgres-migrate.ts';
 import { startServer } from './server.ts';
 
@@ -109,7 +109,8 @@ export async function startDevWorker(given: WorkerEnv = process.env): Promise<vo
     return;
   }
 
-  const database = await databaseOn(newPglite());
+  // In the schema the configuration names (FRU-219): `public` unless `FRUITBACK_DATABASE_SCHEMA` says.
+  const database = await databaseOn(newPglite(), config.config.databaseSchema ?? DEFAULT_DATABASE_SCHEMA);
   await migrate(database);
   provideDevDatabase(database);
   const visibility: Visibility = given.FRUITBACK_DEV_VISIBILITY === 'members' ? 'members' : 'everyone';

@@ -385,7 +385,7 @@ describe('the pair command of a worker on a database (FRU-142)', () => {
   it('writes the digest of its code in the database, and ends', { skip: NO_REAL_POSTGRES }, async () => {
     // The worker takes one address: the database of this test, which the command migrates itself.
     const own = await ownDatabase();
-    database = createPgDatabase(own.url, { max: 1 });
+    database = createPgDatabase(own.url, 'public', { max: 1 });
     const opened = database;
     database = { ...opened, close: async () => opened.close().then(own.drop) };
 

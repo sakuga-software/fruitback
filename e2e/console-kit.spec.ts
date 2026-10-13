@@ -316,6 +316,16 @@ test('the buttons have the measures of the mockup (FRU-232)', async ({ page }) =
     width: '400px',
   });
 
+  // A button over its column keeps 44 px with a short name, and grows with a long one: its words
+  // wrap in it, and nothing goes out of the column.
+  const long = page
+    .locator('[data-kit="wide"]')
+    .getByRole('button', { name: /^Join a workspace with a very long name/ });
+  const grown = (await long.boundingBox())!;
+  expect.soft(grown.width, 'a wide button with a long name stays in its column').toBe(400);
+  expect.soft(grown.height, 'a wide button with a long name takes two lines').toBeGreaterThan(44);
+  expect.soft(await long.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+
   // `.b-link`: underlined words, and a target of 33 px at the least (A23 of the mockup's inventory).
   const link = {
     color: INK,
@@ -495,6 +505,30 @@ test('the fields, the lists and the radio cards have the measures of the mockup 
     height: '16px',
     backgroundColor: INK,
   });
+  // The question is 8 px over the first card, the cards are 8 px apart, and a card is 90 px high
+  // with a detail of two lines on the mockup: here one line, 70.5 px.
+  const [question, first, second] = await Promise.all(
+    ['.kit-pick > .label', '.kit-pick__card >> nth=0', '.kit-pick__card >> nth=1'].map(
+      async (selector) => (await fields.locator(selector).boundingBox())!,
+    ),
+  );
+  expect.soft(first!.y - (question!.y + question!.height), 'the question over the cards').toBe(8);
+  expect.soft(second!.y - (first!.y + first!.height), 'between two cards').toBe(8);
+  expect.soft(first!.height, 'a card with a detail of one line').toBe(70.5);
+  // The words of a card start 30 px after its radio starts, the title and the detail alike.
+  const starts = await fields
+    .locator('.kit-pick__card')
+    .first()
+    .evaluate((card) =>
+      ['.radio__control', '.radio__content .label', '.description'].map((selector) => {
+        const element = card.querySelector(selector) as HTMLElement;
+        const range = document.createRange();
+        range.selectNodeContents(element);
+
+        return Math.round((selector === '.radio__control' ? element : range).getBoundingClientRect().left);
+      }),
+    );
+  expect.soft([starts[1]! - starts[0]!, starts[2]! - starts[0]!], 'the words after the radio').toEqual([30, 30]);
   await expect(fields.getByRole('radio', { name: /Members of Acme/ })).toBeChecked();
 });
 
@@ -903,6 +937,114 @@ test('a menu opens from its button, a keyboard walks it, and Escape gives focus 
   await page.keyboard.press('Escape');
 });
 
+test("the steps, a callout, the option cards and the drawn browser are the mockup's (FRU-232)", async ({ page }) => {
+  await openKit(page);
+  const steps = page.locator('[data-kit="steps"]');
+  await expect(steps.locator('ol > li')).toHaveCount(3);
+  const step = (name: string) => steps.locator('li', { hasText: name });
+  const mark = { width: '26px', height: '26px', borderTopLeftRadius: '50%', borderBottomLeftRadius: '0px' };
+
+  // Done: the green drop with a check. Current: ink, its number in white. To come: a white drop.
+  await expectStyle(step('Your account').locator('.kit-step__mark'), 'mark, done', { ...mark, backgroundColor: DONE });
+  await expectStyle(step('Your account').locator('.kit-step__mark svg'), 'check', { width: '13px', height: '13px' });
+  await expectStyle(step('Your site').locator('.kit-step__mark'), 'mark, current', {
+    ...mark,
+    backgroundColor: INK,
+    color: WHITE,
+    fontSize: '12px',
+    fontWeight: '700',
+  });
+  await expectStyle(step('Put it on the site').locator('.kit-step__mark'), 'mark, to come', {
+    ...mark,
+    backgroundColor: WHITE,
+    // 1.5 px in the CSS, as on the mockup. Chromium draws a border on whole device pixels: 1 px here.
+    borderTopWidth: '1px',
+    borderTopColor: CONTROL,
+    color: MUTED_TONE,
+  });
+  await expectStyle(step('Your account'), 'step', { columnGap: '16px', gridTemplateColumns: '32px 352px' });
+  await expectStyle(step('Your account').locator('.kit-step__line'), 'line', { width: '2px', backgroundColor: LINE });
+  await expectStyle(step('Your account').locator('.kit-step__body'), 'body', { paddingBottom: '32px' });
+  await expectStyle(step('Your site').getByRole('heading'), 'title', {
+    fontSize: '17px',
+    lineHeight: '26px',
+    fontWeight: '600',
+    color: INK,
+  });
+  await expectStyle(step('Put it on the site').getByRole('heading'), 'title, to come', { color: MUTED_TONE });
+  // The last step has no line under it, and no space for one.
+  await expect(step('Put it on the site').locator('.kit-step__line')).toBeHidden();
+  await expectStyle(step('Put it on the site').locator('.kit-step__body'), 'body, last', { paddingBottom: '0px' });
+  // The current step is said as such, and the words that say so are not drawn.
+  await expect(steps.getByRole('heading', { name: 'Current step: Your site' })).toBeVisible();
+  await expect(step('Your site')).toHaveAttribute('aria-current', 'step');
+  await expect(steps.getByRole('heading', { name: 'Your account', exact: true })).toBeVisible();
+  // « Rename » keeps the height of its line (22.5 px), and its target is 33 px high.
+  const line = await step('Your account').locator('p').boundingBox();
+  expect.soft(line!.height, 'the line of « Rename »').toBeCloseTo(22.5, 0);
+  expect.soft((await steps.getByRole('button', { name: 'Rename' }).boundingBox())!.height).toBeGreaterThanOrEqual(24);
+
+  await expectStyle(steps.getByRole('status'), 'callout', {
+    paddingTop: '18px',
+    paddingLeft: '20px',
+    borderTopColor: LINE,
+    borderTopLeftRadius: '10px',
+    backgroundColor: SUBTLE,
+    rowGap: '10px',
+  });
+
+  const options = page.locator('[data-kit="options"]');
+  await expectStyle(options.locator('.kit-option').first(), 'option', {
+    paddingTop: '18px',
+    borderTopColor: LINE,
+    borderTopLeftRadius: '10px',
+    rowGap: '8px',
+  });
+  await expectStyle(options.getByRole('heading', { name: 'Browser extension' }), 'option, title', {
+    fontSize: '15px',
+    fontWeight: '600',
+  });
+  // Two cards of 230 px at the least in 520 px, 12 px apart; two buttons 10 px apart.
+  expect.soft((await options.locator('.kit-option').first().boundingBox())!.width).toBe(254);
+  await expectStyle(options.locator('.kit-auto-grid').last(), 'grid of buttons', { columnGap: '10px' });
+  const snippet = options.getByRole('region', { name: 'The script tag of staging.acme.dev' });
+  await expectStyle(snippet, 'snippet', {
+    fontSize: '12px',
+    // 1.55 of 12 px.
+    lineHeight: '18.6px',
+    backgroundColor: SUBTLE,
+    borderTopColor: LINE,
+    borderTopLeftRadius: '6px',
+    paddingLeft: '12px',
+    overflowX: 'auto',
+  });
+  await expect(snippet).toHaveAttribute('tabindex', '0');
+
+  const browser = page.locator('[data-kit="browser"]');
+  await expectStyle(browser.locator('.kit-browser'), 'browser', {
+    borderTopColor: LINE,
+    borderTopLeftRadius: '14px',
+    boxShadow: 'rgba(24, 24, 27, 0.08) 0px 10px 30px 0px',
+  });
+  // 44 px and the rule under it.
+  await expectStyle(browser.locator('.kit-browser__bar'), 'bar', { height: '45px', backgroundColor: SUBTLE });
+  await expectStyle(browser.locator('.kit-browser__page'), 'page', { height: '620px' });
+  await expectStyle(browser.locator('.kit-browser__empty svg'), 'drop', { width: '56px', height: '68px', fill: LINE });
+  await expectStyle(browser.getByText('your site', { exact: true }), 'address', {
+    fontSize: '13px',
+    color: MUTED_TONE,
+    borderTopLeftRadius: '999px',
+  });
+  await expectStyle(browser.locator('.kit-browser__caption'), 'caption', {
+    fontSize: '13px',
+    color: MUTED_TONE,
+    marginTop: '12px',
+  });
+  // One step under the other at 390 px, and the cards too: nothing scrolls sideways.
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect.soft(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+});
+
 /** Each text of the page with the colour it is painted in and the colour that is behind it. */
 function pairs(page: Page): Promise<{ text: string; ratio: number }[]> {
   return page.evaluate(() => {
@@ -962,6 +1104,54 @@ function pairs(page: Page): Promise<{ text: string; ratio: number }[]> {
     return found.map((pair) => ({ ...pair, ratio: pair.ratio < 1 ? 1 / pair.ratio : pair.ratio }));
   });
 }
+
+test('a list of a status, a button with a longer name and a named panel (FRU-232)', async ({ page }) => {
+  await openKit(page);
+
+  // The list of « Status of the pins »: 38 px, the drop 12 px in, the word 30 px in.
+  const row = page.locator('[data-kit="status-choice"]');
+  const list = row.getByRole('button', { name: /Status for In Review/ });
+  await expectStyle(list, 'list of a status', {
+    height: '38px',
+    borderTopColor: CONTROL,
+    borderTopLeftRadius: '8px',
+    fontSize: '14px',
+  });
+  const drop = list.locator('.kit-drop');
+  await expectStyle(drop, 'drop', { width: '9px', height: '9px', backgroundColor: STATUS_COLOURS[2] });
+  await expect(drop).toHaveAttribute('aria-hidden', 'true');
+  const edges = await list.evaluate((element) => {
+    const left = element.getBoundingClientRect().left;
+    const dropBox = element.querySelector('.kit-drop')!.getBoundingClientRect();
+    const word = element.querySelector('.select__value')!.getBoundingClientRect();
+    return { drop: dropBox.left - left, word: word.left - left };
+  });
+  // The border is inside the 12 px of the mockup, whose box is `border-box` too.
+  expect.soft(Math.round(edges.drop), 'drop, from the left edge').toBe(12);
+  expect.soft(Math.round(edges.word), 'word, from the left edge').toBe(30);
+
+  // The drop follows what is chosen, and the keyboard still walks the list.
+  await list.focus();
+  await page.keyboard.press('Enter');
+  await page.getByRole('option', { name: 'To do' }).click();
+  await expect(list).toContainText('To do');
+  await expectStyle(list.locator('.kit-drop'), 'drop, after', { backgroundColor: STATUS_COLOURS[1] });
+
+  // A name longer than the word shown, which starts with that word.
+  const connect = page.locator('[data-kit="fields"]').getByRole('button', { name: 'Connect Jira', exact: true });
+  await expect(connect).toHaveText('Connect');
+
+  // The panel takes an id of its own and a name that is not its title.
+  const panel = page.getByRole('complementary', { name: 'Settings of Linear', exact: true });
+  await expect(panel).toHaveAttribute('id', 'kit-panel');
+  await expect(panel).not.toHaveAttribute('aria-labelledby');
+  await expect(panel.getByRole('heading', { name: 'Linear' })).toHaveAttribute('id', 'kit-panel-title');
+
+  // A link in a row takes the line of the table: 20.3 px and its 8 px each way, the 36.3 px of the mockup.
+  const link = page.getByRole('region', { name: 'Members' }).getByRole('button', { name: 'Resend' });
+  await expectStyle(link, 'link in a row', { lineHeight: '20.3px', paddingTop: '8px' });
+  expect.soft((await link.boundingBox())?.height, 'link in a row, height').toBeCloseTo(36.3, 1);
+});
 
 test('every text of the kit is 4.5:1 on what is behind it, and axe finds nothing (FRU-232)', async ({ page }) => {
   await openKit(page);

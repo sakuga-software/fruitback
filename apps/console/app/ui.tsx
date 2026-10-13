@@ -79,6 +79,12 @@ type ButtonProps = Destination & {
   className?: string;
   /** Takes focus when it appears: the way back of a confirmation, and the button it gives focus back to. */
   autoFocus?: boolean;
+  /**
+   * The name a screen reader says, where the words of the button are not enough alone: seven
+   * « Connect » of one list are « Connect Jira », « Connect GitHub ». It starts with the words the
+   * button shows, so that somebody who speaks to their browser can say what they read.
+   */
+  label?: string;
   children: ReactNode;
 };
 
@@ -118,12 +124,14 @@ export function Button({
   to,
   href,
   newTab,
+  label,
   children,
 }: ButtonProps) {
   const classes = `${TONE_CLASSES[tone]} ${className}`;
   const data = {
     'data-size': size,
     'data-wide': wide,
+    ...(label === undefined ? {} : { 'aria-label': label }),
     ...(inset === undefined ? {} : { style: { paddingInline: inset } }),
   };
   if (to !== undefined || href !== undefined) return anchor({ to, href, newTab }, classes, data, children);
@@ -172,9 +180,10 @@ type LinkButtonProps = Destination & {
   disabled?: boolean;
   /**
    * The space above and under the words, which is the target: 8 px (« tight », in a row), 10 px, or
-   * 12 px (« loose », beside a button of a page). « inline » is a link in a sentence.
+   * 12 px (« loose », beside a button of a page). « flush » is « tight » at the end of a line of
+   * text, which keeps its height: « Rename », « Change ». « inline » is a link in a sentence.
    */
-  space?: 'tight' | 'normal' | 'loose' | 'inline';
+  space?: 'tight' | 'flush' | 'normal' | 'loose' | 'inline';
   autoFocus?: boolean;
   children: ReactNode;
 };
@@ -268,6 +277,8 @@ type FieldProps = {
   locked?: boolean;
   /** 40 px and not 44: a field of a panel or of a row of filters. */
   compact?: boolean;
+  /** Takes focus when it appears: the field a press of « Rename » opens. */
+  autoFocus?: boolean;
   onFocus?: (event: FocusEvent<HTMLInputElement>) => void;
 };
 
@@ -314,6 +325,11 @@ type ChoiceProps = {
   disabled?: boolean;
   /** 40 px and not 44: a list of a panel or of a row of filters. */
   compact?: boolean;
+  /**
+   * The list chooses a status: its drop is drawn before the chosen word, and the list is the 38 px
+   * of a row of « Status of the pins ». The drop is a picture: the word beside it says the status.
+   */
+  status?: Status;
 };
 
 function item(option: Option) {
@@ -335,6 +351,7 @@ export function Choice({
   options,
   disabled = false,
   compact = false,
+  status,
 }: ChoiceProps) {
   return (
     <Select
@@ -342,6 +359,7 @@ export function Choice({
       isDisabled={disabled}
       className="kit-field"
       data-compact={compact}
+      data-status={status !== undefined}
       value={value}
       onChange={(chosen) => {
         if (typeof chosen === 'string') onChange(chosen);
@@ -349,6 +367,7 @@ export function Choice({
     >
       <Label className={labelHidden ? 'sr-only' : ''}>{label}</Label>
       <Select.Trigger>
+        {status === undefined ? null : <StatusDot status={status} />}
         <Select.Value />
         <Select.Indicator />
       </Select.Trigger>
@@ -566,6 +585,10 @@ export function DataTable({ label, minWidth, dense = false, hover = false, child
 type SidePanelProps = {
   /** An id of the page, which ties the panel to its title. */
   id: string;
+  /** An id for the panel itself: what a row of the list names with `aria-controls` (FRU-197). */
+  panelId?: string;
+  /** The name of the panel where its title is not it: « Settings of Linear » over the title « Linear ». */
+  label?: string;
   title: string;
   detail?: string;
   /** Under a rule at the bottom: the action that undoes the panel, and a date. */
@@ -578,11 +601,23 @@ type SidePanelProps = {
 };
 
 /** The panel beside a list: what is chosen in the list, with its settings. */
-export function SidePanel({ id, title, detail, foot, panelRef, onKeyDown, className = '', children }: SidePanelProps) {
+export function SidePanel({
+  id,
+  panelId,
+  label,
+  title,
+  detail,
+  foot,
+  panelRef,
+  onKeyDown,
+  className = '',
+  children,
+}: SidePanelProps) {
   return (
     <aside
       ref={panelRef}
-      aria-labelledby={id}
+      {...(panelId === undefined ? {} : { id: panelId })}
+      {...(label === undefined ? { 'aria-labelledby': id } : { 'aria-label': label })}
       {...(panelRef === undefined ? {} : { tabIndex: -1 })}
       {...(onKeyDown === undefined ? {} : { onKeyDown })}
       className={`kit-panel ${className}`}
@@ -780,5 +815,153 @@ export function Menu({
         </Dropdown.Menu>
       </Dropdown.Popover>
     </Dropdown>
+  );
+}
+
+/** Where a step is: the one to do now, one to come, one that is done. */
+export type StepState = 'current' | 'pending' | 'done';
+
+/** The steps of a path, in order: an `<ol>` of `Step`. */
+export function Steps({ children }: { children: ReactNode }) {
+  return <ol className="kit-steps">{children}</ol>;
+}
+
+type StepProps = {
+  state: StepState;
+  /** The number in the drop. A step that is done shows a check in its place. */
+  number: number;
+  title: string;
+  /** Said before the title of the current step, to a screen reader only: « Current step: ». */
+  currentPrefix: string;
+  children?: ReactNode;
+};
+
+/** One step: its drop, the line down to the next one, its title and what the step holds. */
+export function Step({ state, number, title, currentPrefix, children }: StepProps) {
+  return (
+    <li className="kit-step" data-state={state} {...(state === 'current' ? { 'aria-current': 'step' as const } : {})}>
+      <div className="kit-step__rail">
+        <span aria-hidden="true" className="kit-drop kit-step__mark">
+          {state === 'done' ? (
+            <svg viewBox="0 0 24 24">
+              <path
+                d="M5 12.5l4.5 4.5L19 7.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          ) : (
+            <span>{number}</span>
+          )}
+        </span>
+        <span aria-hidden="true" className="kit-step__line" />
+      </div>
+      <div className="kit-step__body">
+        <h2 className="kit-step__title">
+          {state === 'current' ? <span className="sr-only">{currentPrefix} </span> : null}
+          {title}
+        </h2>
+        {children}
+      </div>
+    </li>
+  );
+}
+
+/** Something that happened, said in a box. `status`: it is said to a screen reader when it appears. */
+export function Callout({
+  status = false,
+  className = '',
+  children,
+}: {
+  status?: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div {...(status ? { role: 'status' as const } : {})} className={`kit-callout ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+/** One way among a few to do a thing, in its card: its name, then what the screen puts in it. */
+export function OptionCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="kit-option">
+      <h3 className="kit-option__title">{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Cards or buttons side by side while each has `min` pixels, then one under the other: no width of
+ * a screen is named.
+ */
+export function AutoGrid({ min = 180, children }: { min?: 180 | 230; children: ReactNode }) {
+  return (
+    <div className="kit-auto-grid" data-min={min}>
+      {children}
+    </div>
+  );
+}
+
+/** Code to copy, as it is typed. Its box takes focus, so a keyboard scrolls a long line. */
+export function Snippet({ label, className = '', children }: { label: string; className?: string; children: string }) {
+  return (
+    <pre role="region" aria-label={label} tabIndex={0} className={`kit-snippet ${className}`}>
+      {children}
+    </pre>
+  );
+}
+
+type BrowserFrameProps = {
+  /** What is in the bar, where a browser shows an address. */
+  address: string;
+  /** In place of a page: why there is none yet. */
+  empty?: string;
+  /** Under the frame: what the picture is. */
+  caption?: string;
+  /** The page, 620 px high. It is a picture: what it draws answers no pointer and no keyboard. */
+  children?: ReactNode;
+};
+
+/** The window of a browser, drawn: the preview of a site. */
+export function BrowserFrame({ address, empty, caption, children }: BrowserFrameProps) {
+  return (
+    <>
+      <div className="kit-browser">
+        <div className="kit-browser__bar">
+          <span aria-hidden="true" className="kit-browser__dots">
+            <span />
+            <span />
+            <span />
+          </span>
+          <span className="kit-browser__address">
+            <span>{address}</span>
+          </span>
+          <span aria-hidden="true" className="kit-browser__dots" />
+        </div>
+        <div className="kit-browser__page">
+          {empty === undefined ? (
+            children
+          ) : (
+            <div className="kit-browser__empty">
+              <svg aria-hidden="true" viewBox="16 6 96 116">
+                <path
+                  d="M 64 121.9 L 30.1 87.9 A 48 48 0 1 1 97.9 87.9 Z M 64 37 A 17 17 0 1 0 64 71 A 17 17 0 1 0 64 37 Z"
+                  fillRule="evenodd"
+                />
+              </svg>
+              <p>{empty}</p>
+            </div>
+          )}
+        </div>
+      </div>
+      {caption === undefined ? null : <p className="kit-browser__caption">{caption}</p>}
+    </>
   );
 }

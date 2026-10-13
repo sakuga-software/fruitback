@@ -27,6 +27,11 @@ export type Db = Drizzle<PgQueryResultHKT>;
 export type Migrator = (config: MigrationConfig) => Promise<void>;
 
 export type Database = {
+  /**
+   * The schema of the tables of the worker and of its journal of migrations (FRU-219): `public`, or
+   * the one of `FRUITBACK_DATABASE_SCHEMA`. Every connection has it alone in its search path.
+   */
+  readonly schema: string;
   /** `work` on the database. Two statements of one `work` may run on two connections. */
   run<T>(work: (db: Db) => Promise<T>): Promise<T>;
   /** `work` on one connection, in one transaction. It is rolled back when `work` rejects. */
@@ -106,6 +111,57 @@ export function readDatabaseUrl(value: string | undefined): string | undefined {
   }
 }
 
+/** The schema of a worker that names none: what every database had before FRU-219. */
+export const DEFAULT_DATABASE_SCHEMA = 'public';
+
+/** The longest name PostgreSQL keeps: a longer one is cut, and two long names could be one. */
+const SCHEMA_NAME_MAX = 63;
+
+/**
+ * The words PostgreSQL writes between quotes when it prints a name: every key word that is not
+ * « unreserved » (`pg_get_keywords()` of PostgreSQL 17, `catcode <> 'U'`), `user`, `order` and
+ * `table` among them. Raised in review of FRU-219: `pg_indexes` prints `ON "user".sites` for a
+ * schema of that name, and the guard that compares a catalogue reads `ON user.sites`. A test reads
+ * the list from a real server, so a word that a later PostgreSQL adds fails there.
+ */
+export const WORDS_POSTGRESQL_QUOTES: ReadonlySet<string> = new Set(
+  `
+  all analyse analyze and any array as asc asymmetric authorization between bigint binary bit
+  boolean both case cast char character check coalesce collate collation column concurrently
+  constraint create cross current_catalog current_date current_role current_schema current_time
+  current_timestamp current_user dec decimal default deferrable desc distinct do else end except
+  exists extract false fetch float for foreign freeze from full grant greatest group grouping
+  having ilike in initially inner inout int integer intersect interval into is isnull join json
+  json_array json_arrayagg json_exists json_object json_objectagg json_query json_scalar
+  json_serialize json_table json_value lateral leading least left like limit localtime
+  localtimestamp merge_action national natural nchar none normalize not notnull null nullif numeric
+  offset on only or order out outer overlaps overlay placing position precision primary real
+  references returning right row select session_user setof similar smallint some substring
+  symmetric system_user table tablesample then time timestamp to trailing treat trim true union
+  unique user using values varchar variadic verbose when where window with xmlattributes xmlconcat
+  xmlelement xmlexists xmlforest xmlnamespaces xmlparse xmlpi xmlroot xmlserialize xmltable
+`
+    .trim()
+    .split(/\s+/),
+);
+
+/**
+ * The schema of `FRUITBACK_DATABASE_SCHEMA` as the worker accepts it, or `undefined` (FRU-219).
+ *
+ * A plain name: a lower-case letter or `_`, then letters, digits and `_`. The name goes into
+ * statements as an identifier, so nothing that needs a quote is taken: no key word that PostgreSQL
+ * quotes, and no name of PostgreSQL's own (`pg_…`, `information_schema`). Absent or empty: `public`.
+ */
+export function readDatabaseSchema(value: string | undefined): string | undefined {
+  const name = value?.trim() ?? '';
+  if (name === '') return DEFAULT_DATABASE_SCHEMA;
+  if (!/^[a-z_][a-z0-9_]*$/.test(name) || name.length > SCHEMA_NAME_MAX) return undefined;
+  if (name.startsWith('pg_') || name === 'information_schema') return undefined;
+  if (WORDS_POSTGRESQL_QUOTES.has(name)) return undefined;
+
+  return name;
+}
+
 type Opened = {
   pool: Pool;
   /** Drizzle on the pool: each statement takes a connection, and gives it back. */
@@ -115,12 +171,25 @@ type Opened = {
 };
 
 /**
- * A database on a `Pool` of `pg`.
+ * A database on a `Pool` of `pg`, in one schema of it.
  *
- * The tables are in the schema `public`: the migrations that `drizzle-kit` writes name it in every
- * foreign key. A test that needs an empty database makes a database, not a schema.
+ * **Every connection has `schema` alone in its search path, set by the worker** (FRU-219): not by
+ * the address, the role or the database, whose search path has no effect. A statement that names no
+ * schema, of a store, of a migration or of better-auth, reads and writes that schema and no other.
+ * `SET` is sent when the pool opens a connection, and the pool waits for its answer before it gives
+ * the connection to whoever asked for it: a connection that did not take it serves nothing.
+ *
+ * WARNING: this is the state of a session. A pooler that hands one session to several clients
+ * (PgBouncer in transaction mode) loses it, as it loses the lock of the migrations.
  */
-export function createPgDatabase(url: string, options: { max?: number } = {}): PgDatabase {
+export function createPgDatabase(
+  url: string,
+  schema: string,
+  /** `opening` is for a test: a statement in place of the `SET`, to see what a connection that fails it does. */
+  options: { max?: number; opening?: string } = {},
+): PgDatabase {
+  if (readDatabaseSchema(schema) !== schema) throw new StoreError('The schema of the database is not a plain name');
+
   let opening: Promise<Opened> | undefined;
 
   const open = (): Promise<Opened> => {
@@ -133,6 +202,16 @@ export function createPgDatabase(url: string, options: { max?: number } = {}): P
         connectionString: url,
         max: options.max ?? 10,
         connectionTimeoutMillis: 5_000,
+        // FRU-219. The pool waits for this before it gives the connection to anyone, and ends a
+        // connection on which it fails: the call that asked for it rejects. It is not sent from a
+        // listener of `connect`, as it first was (raised in review, measured on 17.11): the pool
+        // gives the connection away as soon as that event is out, the statement of the caller
+        // waits behind the `SET`, and when the `SET` fails without ending the session the server
+        // takes that statement next, in the search path of the address, the role or the database.
+        // The name is a plain one (`readDatabaseSchema`), and `SET` takes no parameter.
+        onConnect: async (client: { query(statement: string): Promise<unknown> }) => {
+          await client.query(options.opening ?? `SET search_path TO "${schema}"`);
+        },
       });
       // A connection that the server closes emits `error`. With no listener, the process stops (FRU-187).
       // The pool listens to a connection only while it is idle. A connection that a transaction, a
@@ -200,6 +279,8 @@ export function createPgDatabase(url: string, options: { max?: number } = {}): P
   };
 
   return {
+    schema,
+
     async pool() {
       try {
         return (await open()).pool;
@@ -270,25 +351,30 @@ export function createPgDatabase(url: string, options: { max?: number } = {}): P
 }
 
 /**
- * One pool for each address, for the life of the process.
+ * One pool for each address and schema, for the life of the process.
  *
  * The stores are built for each request wherever the transport did not hand one over, as the SQLite
  * ones are: the pool must not be.
  */
 const databases = new Map<string, PgDatabase>();
 
-export function databaseFor(url: string): PgDatabase {
-  const known = databases.get(url);
+export function databaseFor(url: string, schema: string): PgDatabase {
+  // A schema is a plain name and holds no space: the key cannot be the one of another pair.
+  const key = `${schema} ${url}`;
+  const known = databases.get(key);
   if (known !== undefined) return known;
-  // The address of the switch names no server: `dev-worker.fixture.ts` gives its database before the first call.
+  // The address of the switch names no server: `dev-worker.fixture.ts` gives its database before the
+  // first call, in the schema of `FRUITBACK_DATABASE_SCHEMA`. One database for the process.
   if (url === DEV_DATABASE_URL) {
+    const provided = databases.get(DEV_DATABASE_URL);
+    if (provided !== undefined) return provided;
     throw new StoreError(
       'FRUITBACK_DEV_DATABASE is set, and this process has no database of its own: start the worker with `pnpm dev` (src/dev-worker.fixture.ts)',
     );
   }
 
-  const database = createPgDatabase(url);
-  databases.set(url, database);
+  const database = createPgDatabase(url, schema);
+  databases.set(key, database);
 
   return database;
 }

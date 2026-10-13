@@ -7,7 +7,8 @@ import { seedFixture } from '@fruitback/shared/seed.fixture';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { handleRequest } from './app.ts';
 import { envWith } from './auth-worker.fixture.ts';
-import { DEV_PLAYGROUND, DEV_SITE, devEnvironment } from './dev-worker.fixture.ts';
+import { DEV_PLAYGROUND, DEV_SITE, devEnvironment, seedDevWorkspace } from './dev-worker.fixture.ts';
+import { databaseOn, newPglite } from './pglite.fixture.ts';
 import { type WorkerEnv, hasAccounts, readConfig } from './env.ts';
 import { createMemoryKv } from './kv.ts';
 import { DEV_DATABASE_URL, databaseFor } from './postgres.ts';
@@ -66,6 +67,9 @@ describe('the switch of the database of development (FRU-223)', () => {
       missing({ ...devEnvironment({}), FRUITBACK_DEV_DATABASE: 'true' }).join(' | '),
       /^FRUITBACK_DEV_DATABASE \(« pglite » is its one value\)/,
     );
+    // A schema of its own is taken too (FRU-219): the database of the process is made in it.
+    const named = readConfig(devEnvironment({ FRUITBACK_DATABASE_SCHEMA: 'fruitback' }));
+    assert.ok(named.ok && named.config.databaseSchema === 'fruitback');
     // Empty is absent, as for every variable of the worker.
     assert.deepEqual(
       missing({ FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: 'https://a.test', FRUITBACK_DEV_DATABASE: ' ' }),
@@ -75,7 +79,7 @@ describe('the switch of the database of development (FRU-223)', () => {
 
   it('opens no connection in a process that has the switch and no database', () => {
     assert.throws(
-      () => databaseFor(DEV_DATABASE_URL),
+      () => databaseFor(DEV_DATABASE_URL, 'public'),
       (error: unknown) => error instanceof StoreError && /pnpm dev/.test(error.message),
     );
     // The host of that address is one no DNS answers (RFC 6761).
@@ -185,6 +189,36 @@ describe('the worker of development, as a process (FRU-223)', () => {
       assert.deepEqual(await other.json(), { error: 'unknown-client' });
     });
   }
+
+  it('keeps its tables, its workspace and its notes in a schema of its own when one is named (FRU-219)', async () => {
+    const worker = await start({ FRUITBACK_STORE: 'postgres', FRUITBACK_DATABASE_SCHEMA: 'fruitback' });
+    await ready(worker.origin, worker.said);
+    const seed = seedFixture({ page: { url: PAGE, path: '/pricing', title: 'Pricing' } });
+    const sent = await fetch(`${worker.origin}/feedback`, {
+      method: 'POST',
+      headers: { Origin: DEV_PLAYGROUND, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...seed, client: { id: DEV_SITE } }),
+    });
+    assert.equal(sent.status, 201, await sent.clone().text());
+    assert.equal(((await (await read(worker.origin)).json()) as { issues: unknown[] }).issues.length, 1);
+    // The same fixture, in the same process as this test: the tables are in the schema, none in public.
+    const instance = newPglite();
+    const database = await databaseOn(instance, 'fruitback');
+    try {
+      await migrate(database);
+      await seedDevWorkspace(database, { origin: DEV_PLAYGROUND, visibility: 'everyone' });
+      const where = await rowsOf(
+        database,
+        `SELECT DISTINCT schemaname FROM pg_tables WHERE tablename IN ('sites', 'seeds', 'kv')`,
+      );
+      assert.deepEqual(
+        where.map((row) => row.schemaname),
+        ['fruitback'],
+      );
+    } finally {
+      await instance.close();
+    }
+  });
 
   it('mints a pairing code that opens a session of its workspace, which reads a site for members', async () => {
     const worker = await start({ FRUITBACK_DEV_VISIBILITY: 'members' });

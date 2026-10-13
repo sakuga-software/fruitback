@@ -417,8 +417,8 @@ for (const { label, open, skip } of DATABASES) {
 describe('a database of before that two workers meet at once (FRU-180)', { skip: NO_REAL_POSTGRES }, () => {
   it('is adopted once', async () => {
     const own = await ownDatabase();
-    const first = createPgDatabase(own.url);
-    const second = createPgDatabase(own.url);
+    const first = createPgDatabase(own.url, 'public');
+    const second = createPgDatabase(own.url, 'public');
     try {
       await madeByTheHomeMadeTool(first);
       await withRows(first);

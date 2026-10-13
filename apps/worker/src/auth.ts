@@ -214,6 +214,8 @@ export type AuthConfig = {
   consoleUrl: string;
   /** `FRUITBACK_DATABASE_URL`. Only to take it out of a message: better-auth gets the pool. */
   databaseUrl: string;
+  /** `FRUITBACK_DATABASE_SCHEMA`: the schema of the tables of better-auth, with the others (FRU-219). */
+  databaseSchema: string;
   /** `FRUITBACK_AUTH_GITHUB_OAUTH`: the second GitHub App, the one of better-auth (FRU-147). */
   github?: OAuthClient;
   /** `FRUITBACK_GOOGLE_OAUTH`: the Google client, with the callback of better-auth. */
@@ -236,6 +238,7 @@ export function authConfigOf(config: WorkerConfig): AuthConfig | undefined {
     publicUrl,
     consoleUrl,
     databaseUrl,
+    databaseSchema: config.databaseSchema,
     ...(config.authGithub === undefined ? {} : { github: config.authGithub }),
     ...(config.google === undefined ? {} : { google: config.google }),
     trackIp: config.authTrackIp,
@@ -562,16 +565,16 @@ let started: { key: string; database: PgDatabase; auth: Promise<Auth> } | undefi
  * Off means that this function loads nothing and opens nothing. On, it applies the migrations of the
  * worker, takes the pool of the process, and builds the instance once.
  *
- * `open` is the database of an address. A test gives one on PGlite.
+ * `open` is the database of an address and a schema. A test gives one on PGlite.
  */
 export function authFor(
   config: WorkerConfig,
-  open: (url: string) => PgDatabase = databaseFor,
+  open: (url: string, schema: string) => PgDatabase = databaseFor,
 ): Promise<Auth> | undefined {
   const auth = authConfigOf(config);
   if (auth === undefined) return undefined;
 
-  const database = open(auth.databaseUrl);
+  const database = open(auth.databaseUrl, auth.databaseSchema);
   const key = JSON.stringify(auth);
   // A pool that was closed is another object: the instance that held it is not handed out again.
   if (started !== undefined && started.database === database && started.key === key) return started.auth;
@@ -599,7 +602,7 @@ export function authFor(
 export async function announceAuth(
   config: WorkerConfig,
   log: Pick<Console, 'log' | 'error'> = console,
-  open: (url: string) => PgDatabase = databaseFor,
+  open: (url: string, schema: string) => PgDatabase = databaseFor,
 ): Promise<'off' | 'ready' | 'failed'> {
   try {
     // Inside the `try`: the server calls this and waits for nothing, so nothing here may reject.

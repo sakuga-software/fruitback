@@ -216,6 +216,11 @@ an `endpoint` and a `client-id` it mounts nothing, and it takes the widget away 
 | `includeEnv`    | `true` to send the reporter's user agent, language and platform — off by default     |
 | `transport`     | who carries the calls — the extension's, in team mode below                          |
 
+**One part of the fragment is the widget's**: `fruitback-note=<id>`. A link like
+`https://staging.acme.dev/pricing#fruitback-note=<id>` opens that note on its page, and the widget
+then takes its part out of the address. The rest of the fragment is yours: `#pricing` is neither read
+nor changed, and `#pricing&fruitback-note=<id>` leaves `#pricing`.
+
 ### The feedback of a page, as text
 
 The settings panel has a button, **Copy the feedback as text**. It puts the notes of the page in the

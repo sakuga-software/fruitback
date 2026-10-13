@@ -67,8 +67,20 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   wait to an owner or an admin, with « Resend » and « Cancel ». A guest sees their own row only, as
   the worker answers them nothing more. **The front door looks for an invitation first**
   (`home.tsx`): somebody who signed in from the message of an invitation lands on `/invitations`,
-  not on the setup that makes a workspace of their own. A worker of before has no member list: the
-  screen draws the row of the person and says that invitations come later.
+  not on the setup that makes a workspace of their own.
+  **The screen is screen 12 of the mockup of 2026-10-13, with what the worker of today says**
+  (FRU-247): the invitation on one line, a form named « Invite someone » with each field under its
+  label, the table of the people (760 px at the least, which scrolls in its frame on a phone), and
+  what each role does. **Not copied from the mockup**: « Last seen » (the last column is the day
+  somebody joined, « Joined »), the role « Guest, one site » and the list « Site » of the form, and
+  the one site of a guest in « Sites », which says « Every site », or « Shared ones » for a guest.
+  What a guest does is in the legend only when a guest is on the screen. **Kept, though the mockup
+  draws none of it**: « (you) », « Remove » and « Cancel », which ask twice under their row
+  (`Confirmation`), the day an invitation ends, the block that gives the link of an invitation, and
+  every sentence of a refusal. A worker with no mailer sent nothing, so its rows say « Invitation
+  kept ». What is asked under a row stays in what is seen of a table that scrolls.
+  `e2e/console-members.spec.ts` reads the values and the boxes of the mockup at 1440 and 390 px,
+  the keyboard, the contrasts and axe.
 - **The address of a site is read by `site-address.ts`, on every screen that asks for one**
   (FRU-167). A host with no scheme is `https://`, as in the extension. The field is not `type="url"`:
   the browser stopped the form with its own bubble, in its own language, and the sentence of the
@@ -94,16 +106,20 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **The kit, component by component** (`ui.tsx`):
   `Button` (`tone="primary"`: the pill of the action of a step, 44 px; `tone="outline"`: the
   rectangle of a control, 6 px, at 44, 40 or 32 px with `size`; `to` or `href` makes it a link of
-  the same box), `WideButton` (an outlined button over its column), `LinkButton` (underlined words;
-  its padding is its target, 33 px at the least, where the mockup draws « Rename » at 21 px),
+  the same box; `label` gives a longer name to a screen reader, « Connect Jira » over « Connect »,
+  and starts with the words shown), `WideButton` (an outlined button over its column), `LinkButton` (underlined words;
+  its padding is its target, 33 px at the least, where the mockup draws « Rename » at 21 px; in a row of a table it takes the line of the table),
   `IconButton` (36 px, named by `label`), `Field` and `Choice` (44 px, `compact` 40 px, `locked` for
-  a value set elsewhere), `Pick` (radio cards), `Toggle`, `FilterChip` (`aria-pressed`), `StatusDot`
-  and `StatusBar`, `DataTable`, `SidePanel`, `KeyValue`, `SuccessMark`, `Title`, `Lead`, `PageHead`,
+  a value set elsewhere; `status` on a `Choice` draws the drop of the chosen status in a list of 38 px), `Pick` (radio cards), `Toggle`, `FilterChip` (`aria-pressed`), `StatusDot`
+  and `StatusBar`, `DataTable`, `SidePanel` (named by its title, or by `label`; `panelId` for `aria-controls`), `KeyValue`, `SuccessMark`, `Title`, `Lead`, `PageHead`,
   `Initial`, `Card`, `Chip`, `Problem`, `Logo` (the name as outlines, in tokens: `logo.tsx`), `EntryPage`
-  (the header and the column of a page outside a workspace; `/kit/entry` mounts it), `Divider`, and `Menu`
+  (the header and the column of a page outside a workspace; `/kit/entry` mounts it), `Divider`, `Menu`
   (a button that opens a menu, on the dropdown of HeroUI: the menu is named after its button, a
   `chosen` item makes it a choice of radios, and it is drawn as a page wherever its button is; the
-  mockup draws no open menu). The tones `quiet` and `danger` of `Button` are of before the
+  mockup draws no open menu), and
+  for the setup `Steps` and `Step` (a drop with its number, the current step said to a screen reader),
+  `Callout`, `OptionCard`, `AutoGrid` (side by side while there is room, with no width of a screen
+  named), `Snippet` and `BrowserFrame` (the window of a browser, drawn). The tones `quiet` and `danger` of `Button` are of before the
   mockup: they stay as HeroUI draws them until their screens are drawn again.
 - **`/kit` mounts each component once, on the development server only** (`kit-gallery.tsx`):
   `e2e/console-kit.spec.ts` reads there what the browser computes (colour, border, corner, height,
@@ -140,6 +156,38 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   860 px and a place for it outside the table. The card and the alert are sized by their content
   (`box-content`), as the mockup sizes them: 640 px and 760 px inside their padding.
   `e2e/console-sites.spec.ts` holds the three states, the form, the menu, the roles, 390 px and axe.
+- **The Connectors screen is the one of the mockup, with the sources that exist** (FRU-246):
+  `routes/connectors.tsx` (the list and « Add a source »), `connector-add.tsx` (the two forms),
+  `connector-linear.tsx` and `connector-rest.tsx` (the panels), `connector-parts.tsx` (what they
+  share). **A source that does not exist connects nothing**: GitHub Issues, Jira, GitLab, Trello,
+  Notion and Webhook are listed with the sentence of the mockup and a disabled « After the beta »,
+  where the mockup draws « Connect ». Linear and an address stay in « Add a source » when one is
+  connected: a workspace can connect a second one. **A row says « Connected », « Needs attention »,
+  or how many notes did not reach an address**; the count is read with the list, and an address
+  whose count was not read says « Connected » and no number. On the chosen row the red is the
+  strong accent: the accent is 4.28:1 on its tint. **The panel keeps what the mockup does not
+  draw**: the places of each site (FRU-123), under « Sites sending here » for the sites that send
+  there and under « Other sites » for the others; the notes that did not arrive; « Use an API
+  key ». It does not show « Attach a picture of the element » (FRU-198), a count of notes by site
+  nor « Last issue created » (FRU-237). **The drop of a status is beside its list**, where the
+  mockup draws it inside: the list of the kit has no place for it. « Connect » is written seven
+  times, so each button also holds the name of its source for a screen reader.
+  `e2e/console-connectors.spec.ts` holds the values, the states, the roles, 390 px and axe.
+- **My account shows the sessions of the console, and ends them, with the routes of FRU-181**
+  (FRU-248, `routes/account.tsx`). `GET /console/sessions` lists them by id, with no token: this
+  browser first, then the others, each with « Disconnect » (`DELETE /console/sessions/<id>`, one
+  press: a session ended by mistake is a sign-in away). « Sign out everywhere » is
+  `/console/auth/revoke-sessions`, asks twice, and ends this browser too. **A way out that the
+  worker did not confirm says so and stays** (FRU-204), for the three of them. **A list that was
+  not read is no list.** **No kind of browser is shown**: the worker answers a user agent when its
+  operator switched that on, the type of `api.ts` leaves it out, and what to show of it waits for
+  Q7 of FRU-230. So another browser is « Console · another browser », with when it signed in and
+  when it was last used. **What has no route has no control**: the name is a locked field, a
+  provider says « On this Fruitback » or « Not set up » with no « Link » nor « Unlink », and no
+  extension is listed (FRU-249). The deletion of the workspace stays at the bottom, for its owner:
+  the mockup does not draw it, and it is nowhere else. `e2e/console-account.spec.ts` holds the
+  screen on stubs, and the sessions on a worker with accounts: one browser disconnects the other,
+  which learns it at its next call, and « Sign out everywhere » ends every one.
 - **A box is compared to the mockup in the font of the mockup** (`e2e/console-workspace.ts`,
   `MOCKUP_FONT`): the mockup sizes its boxes by their text, and the Linux of CI has another font
   (52 px where the mockup has 49). `expectBox` compares on macOS; the computed styles are read

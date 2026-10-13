@@ -12,7 +12,7 @@ import {
 } from './auth-routes.ts';
 import { MAX_BODY_BYTES, readBoundedText } from './bounded-body.ts';
 import { ORGANIZATION_PATHS, type OrganizationRule, readOrganizationInput } from './organization-paths.ts';
-import type { Kv } from './kv.ts';
+import { type Kv, KvError } from './kv.ts';
 import { MailError, type Mailer, invitationMessage } from './mail.ts';
 import type { SessionStore } from './session.ts';
 
@@ -385,7 +385,21 @@ async function answerOrganizationCall(
     let mailed = false;
     // The count is taken in one step, after better-auth kept the invitation: a call that it refused
     // spends nothing, and of two calls at the same moment the one that goes over sends nothing.
-    if (context.mailer !== undefined && (await mayMail(context.kv, { workspace, invited, inviter: mine.userId }))) {
+    let may = false;
+    if (context.mailer !== undefined) {
+      try {
+        may = await mayMail(context.kv, { workspace, invited, inviter: mine.userId });
+      } catch (error) {
+        if (!(error instanceof KvError)) throw error;
+        // The counts did not answer (FRU-67), and better-auth has kept the invitation already: a
+        // `503` would say that nothing was done. No message goes out uncounted, and the answer says
+        // so, as it does when a window is full: the person joins from the console.
+        console.error(
+          `[fruitback] the counts of the invitations did not answer, no message was sent: ${error.message}`,
+        );
+      }
+    }
+    if (may && context.mailer !== undefined) {
       try {
         await context.mailer.send(
           await messageOf(context, { to: invited, role: String(read.input.role), workspace, inviter: mine.userId }),

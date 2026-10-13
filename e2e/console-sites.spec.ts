@@ -518,10 +518,22 @@ test('removing a site asks twice, and a site that is still there says so on its 
   await group.getByRole('button', { name: 'Remove staging.acme.dev' }).click();
   await expect(page.getByText('staging.acme.dev', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('alert')).toHaveCount(0);
+  // The row and its button are gone: focus is on the table, and not back at the top of the page.
+  await expect(table(page)).toBeFocused();
   expect(worker.sent.map(({ method, pathname }) => `${method} ${pathname}`)).toEqual([
     'DELETE /console/workspaces/w1/sites/s1',
     'DELETE /console/workspaces/w1/sites/s1',
   ]);
+});
+
+test('when the last site is removed, focus goes to the field of the card', async ({ page }) => {
+  await workerWith(page, 'owner', [SITES[3]]);
+  await open(page);
+  await more(page, 'preview.lumen.studio').click();
+  await page.getByRole('menuitem', { name: 'Remove' }).click();
+  await page.getByRole('button', { name: 'Remove preview.lumen.studio' }).click();
+  await expect(page.getByRole('heading', { level: 2, name: 'No site yet' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Site address' })).toBeFocused();
 });
 
 test('a member installs and changes nothing; a guest does not read where the notes go', async ({ page }) => {

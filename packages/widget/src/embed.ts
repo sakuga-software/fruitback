@@ -8,8 +8,8 @@ import {
 } from '@fruitback/shared';
 import { type CapturedPlace, captureSeed, capturePlace } from './capture.ts';
 import { type WidgetConfig, createConfigStore } from './config.ts';
-import { type FeedbackEntry, feedbackAsText, placementOf } from './export.ts';
-import { type ReadState, type Sidebar, createSidebar } from './sidebar.ts';
+import { feedbackAsText, placementOf } from './export.ts';
+import { type ReadState, type Sidebar, type SidebarEntry, createSidebar } from './sidebar.ts';
 import { type CaptureHost, type CaptureTarget, createCaptureHost, readableName } from './host.ts';
 import type { FruitbackTheme } from './theme.ts';
 import { type FruitbackTransport, fetchTransport } from './transport.ts';
@@ -33,6 +33,7 @@ import {
 import { type FruitbackMessages, createTranslator, languageOf } from './messages.ts';
 import { type Overlay, createOverlay } from './overlay.ts';
 import { type ConfigPanel, type OfferedStages, createConfigPanel, createOfferedStages } from './panel.ts';
+import { linkedNote, withoutLinkedNote } from './page.ts';
 
 /**
  * One call that mounts the whole widget on a page (FRU-16).
@@ -231,6 +232,14 @@ export function init(options: FruitbackOptions): Fruitback {
     onConfigure: () => panel.toggle(),
     onList: () => sidebar.toggle(),
     onSelect: (selected) => {
+      // A note is on its way, about the element chosen before: a choice now would point the
+      // composer at another element under a send it cannot change. The choice is let go, and the
+      // frame goes back to the element of the note in flight.
+      if (composer.state() === 'sending') {
+        if (target !== null) host.hold(target.element);
+
+        return;
+      }
       target = selected;
       place = placeOf(selected);
       // The frame stays on the element for as long as the composer is open on it (FRU-258).
@@ -257,6 +266,9 @@ export function init(options: FruitbackOptions): Fruitback {
     isDraft,
     // The page changed under the pins: the list says what each one resolved to now.
     onResolve: () => sidebar.refresh(),
+    // A thread opened or closed: the list marks the note that is open. It builds no row again, or
+    // the thread would have no row to give focus back to.
+    onThread: () => sidebar.mark(),
   });
 
   const stages = createOfferedStages();
@@ -296,8 +308,46 @@ export function init(options: FruitbackOptions): Fruitback {
         composer.identityChanged();
       } else if (outcome === 'failed' && readState !== 'read') readState = 'failed';
       sidebar.refresh();
+      // A link to a note waits for the notes: this is when they are in hand.
+      openLinked();
     });
   };
+
+  /**
+   * Open the note the address asks for (FRU-253): `#fruitback-note=<id>`.
+   *
+   * Only once a read answered for this page: until then the notes are not known, and a read the
+   * worker refuses opens nothing, which is what keeps this from showing anything to somebody who
+   * cannot read the page. The part of the fragment that is ours is then taken out of the address,
+   * found or not, so a reload does not open the note again and the fragment of the site stays.
+   *
+   * **Nothing takes focus from somebody who writes.** While the composer is open, or a capture
+   * runs, the fragment waits in the address: for the composer to close, or for the next read.
+   */
+  let droppingFragment = false;
+  function openLinked(): void {
+    const id = linkedNote(view.location.hash);
+    if (id === undefined || readState !== 'read') return;
+    if (!composer.element.hidden || host.capturing()) return;
+
+    const issue = readIssues.find((each) => each.seed.id === id || each.id === id || each.identifier === id);
+    droppingFragment = true;
+    try {
+      const { pathname, search, hash } = view.location;
+      view.history.replaceState(view.history.state, '', `${pathname}${search}${withoutLinkedNote(hash)}`);
+    } catch {
+      // A page that forbids `replaceState` (a sandboxed frame) keeps its fragment. The note still opens.
+    } finally {
+      droppingFragment = false;
+    }
+    if (issue === undefined) return;
+    // A note whose element is gone is in « Could not be placed », in the list of the page (FRU-259):
+    // the list opens on it, and the thread opens beside it, at the place it was planted.
+    const resolution = overlay.resolutions().find((each) => each.issue === issue);
+    if (resolution !== undefined && placementOf(resolution) === 'detached') sidebar.open();
+    // `false` for a note this page does not draw: one of another page, or of a stage the reporter hid.
+    overlay.select(issue.seed.id);
+  }
 
   composer = createComposer({
     document,
@@ -361,11 +411,15 @@ export function init(options: FruitbackOptions): Fruitback {
   });
 
   /** The notes the overlay draws now, with how each one was found. The list and the copied text read it. */
-  const entries = (): FeedbackEntry[] =>
+  const entries = (): SidebarEntry[] =>
     overlay
       .resolutions()
       .filter((resolution) => !isDraft(resolution.issue))
-      .map((resolution) => ({ issue: resolution.issue, placement: placementOf(resolution) }));
+      .map((resolution) => ({
+        issue: resolution.issue,
+        placement: placementOf(resolution),
+        ...(resolution.number === undefined ? {} : { number: resolution.number }),
+      }));
 
   /** One request after another, then a read: the pins the reviewer sees next are the worker's. */
   let sending = false;
@@ -400,6 +454,10 @@ export function init(options: FruitbackOptions): Fruitback {
     drafts: () => drafts.list(),
     onSendDrafts: sendKept,
     onSelect: (id) => void overlay.select(id),
+    current: () => overlay.openId(),
+    below: (id) => overlay.below(id),
+    // The dock stands aside while the list is open, so the list holds the way to a new note.
+    leave: { label: options.label ?? translator.text('launch.label'), onLeave: () => host.start() },
     readState: () => readState,
     onRetry: () => {
       readState = 'pending';
@@ -430,10 +488,35 @@ export function init(options: FruitbackOptions): Fruitback {
     sidebar.refresh();
   });
 
+  let page = canonicalizePageUrl(view.location.href);
   const stopWatchingUrl = watchUrl(view, () => {
+    // Our own edit of the address, which takes the link to a note out of it: nothing to read.
+    if (droppingFragment) return;
+    const now = canonicalizePageUrl(view.location.href);
+    // The same page, and a link to a note in its fragment: the notes are in hand, and a read would
+    // only close the thread somebody reads.
+    if (now === page && linkedNote(view.location.hash) !== undefined) {
+      openLinked();
+
+      return;
+    }
+    page = now;
     readState = 'pending';
     void read();
   });
+  // A fragment typed in the address bar, or a link of the page to itself. `popstate` says it too in
+  // the browsers of today; this is the event that is about the fragment.
+  const onHashChange = (): void => openLinked();
+  view.addEventListener('hashchange', onHashChange);
+  // A link that waited for somebody to finish a note is followed when the composer closes. The
+  // composer says so by hiding itself, sent or given up, and that is what this reads.
+  const composerClosed =
+    typeof view.MutationObserver === 'function'
+      ? new view.MutationObserver(() => {
+          if (composer.element.hidden) openLinked();
+        })
+      : undefined;
+  composerClosed?.observe(composer.element, { attributes: true, attributeFilter: ['hidden'] });
 
   // The team changes the state of an issue while the reviewer is in another tab. `render` closes an
   // open thread, and somebody who comes back to a thread is reading it: that return reads nothing,
@@ -452,6 +535,8 @@ export function init(options: FruitbackOptions): Fruitback {
     settings: panel,
     destroy() {
       stopWatchingUrl();
+      view.removeEventListener('hashchange', onHashChange);
+      composerClosed?.disconnect();
       stopFollowingDrafts();
       stopWatchingReturn();
       unsubscribe();

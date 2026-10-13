@@ -111,7 +111,10 @@ the limiter is `503 limiter-unavailable`, with the CORS headers the browser need
 `Kv` that stops below the limit answers the same** (FRU-67): the count of the links of an address,
 the counts of the invitations and the ticket of the way to Linear are below it, and a database can
 answer the first call of a request and not the second. `handleRequest` catches a `KvError` that
-nothing below caught; the cache, the batch and its memory still swallow theirs, as before. Three
+nothing below caught; the cache, the batch and its memory still swallow theirs, as before. **One
+caller answers for itself: the invitation.** better-auth has kept it when the counts are asked, so a
+`503` would say that nothing was done: no message goes out, and the answer says `mailed: false`, as
+when a window is full. Three
 consequences, all deliberate:
 
 - `/health` never touches the `Kv`, so a store that stops answering does not take the container out
@@ -1084,10 +1087,9 @@ nothing`.
   `verification`, `organization`, `member`, `invitation`. They are made in every database of a
   worker, with better-auth on or off, because the database has one list of migrations. Names that
   plain are taken in a database that another application shares: the migration then fails, and
-  every read of the accounts answers `502`. The database of a worker is its own. A schema of its
-  own does the same, with `options=-c search_path=<schema>` in the address: that is how
-  test:`builds better-auth at boot on a real server, and serves its routes` gives each run an empty
-  database, and better-auth reads the search path (read: adapters/postgresql).
+  every read of the accounts answers `502`. The database of a worker is its own, or its schema is
+  (`FRUITBACK_DATABASE_SCHEMA`, FRU-219): better-auth reads the search path of its connection
+  (read: adapters/postgresql), and the worker sets it.
 - **The organization plugin is in the configuration for its tables and its roles.** `getMigrations`
   reads the schema from the plugins, and `member` is a table of that plugin. None of its routes was
   served in this slice. What a guest reads through them, and two roles on one member, are FRU-149,
@@ -1182,12 +1184,12 @@ variable` holds the rest.
   the message names the first line of each kind. The operator changes the database until it is what
   the image of before made, and starts the worker again. A table that the baseline does not make is
   left alone.
-- **The role of `FRUITBACK_DATABASE_URL` owns its database, or has `CREATE` on it.** The tool of
-  before needed `CREATE` on the schema `public` only. A role without it is refused at the first
-  call, with what to grant: see the reasons.
-- **The tables are in `public`, and a search path that puts another schema first is refused.** The
-  tool of before made its tables wherever the search path said. The address, the role and the
-  database give no search path, and no schema has the name of the role.
+- **The role of `FRUITBACK_DATABASE_URL` has `CREATE` on the schema of the worker**, as the tool of
+  before needed (FRU-219; FRU-181 asked for `CREATE` on the database, for Drizzle's own `migrate`).
+  A role without it is refused at the first call, with what to grant.
+- **The tables are in one schema, `public` unless `FRUITBACK_DATABASE_SCHEMA` names another, and
+  the worker sets the search path of each connection to it** (FRU-219). The tool of before made its
+  tables wherever the search path said; the address, the role and the database now have no say.
 - **A store reads a `BIGINT` through the schema, never with a raw statement.** Through the schema it
   is a number. In the answer of a raw statement it is a string, and `account-rows.ts` reads a string
   as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the twenty-eight columns.
@@ -1255,15 +1257,13 @@ the lock` is its control: the same two processes, with the line of the lock remo
   test:`leaves nothing of a run that fails, and keeps what the run before applied`. A database that
   holds more migrations than the build is left alone, as before: that is a roll back, and
   test:`leaves a database alone that holds more migrations than the build` holds it.
-- **`migrate` of Drizzle needs `CREATE` on the database.** It sends `CREATE SCHEMA IF NOT EXISTS
-"public"` before anything else, on every call, and PostgreSQL checks the privilege on the database
-  before it looks for the schema. Measured on 17.11 with a role that can make a table in `public`:
-  « permission denied for database ». `postgres-migrate.ts` asks `has_database_privilege` first and
-  refuses with what to grant, where the worker would say that the database did not answer.
-  test:`is refused before any write, with what to grant, and with no name of the role`, and its
-  control test:`can make a table in public, and is refused by PostgreSQL when Drizzle alone migrates`.
-  The role that owns its database has the privilege, and so has the role that a `postgres` image
-  makes from `POSTGRES_USER`, which is what the job `docker image` boots.
+- **`migrate` of Drizzle needs `CREATE` on the database, so the worker no longer calls it**
+  (FRU-219). It sends `CREATE SCHEMA IF NOT EXISTS "public"` before anything else, on every call,
+  and PostgreSQL checks the privilege on the database before it looks for the schema. Measured on
+  17.11 with a role that can make a table in `public`: « permission denied for database »
+  (test:`can make a table in public, and is refused by PostgreSQL when Drizzle alone migrates`).
+  FRU-181 refused such a role with what to grant. `postgres-migrate.ts` now applies the migrations
+  itself and makes the schema only when it is not there: see « A schema of its own ».
 - **Two migrations of one date are refused when the worker starts**, before anything is applied:
   test:`refuses a folder in which two migrations have one date, before it applies anything`. The
   journal guard refuses the same folder before a merge.
@@ -1299,16 +1299,21 @@ store of the accounts`, test:`decides a pairing and a session by their instants,
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
-- **A search path that is not `public` breaks the migrations of `drizzle-kit`, in two ways**
-  (raised in review, measured on 17.11). On an empty database the tables go in the first schema of
-  the path, and the first foreign key fails: relation `public.…` does not exist
-  (test:`fails in the middle of the baseline when Drizzle alone meets it, on a relation of public`).
-  On a database that the tool of before made in that schema, there is no `public.schema_migrations`
-  to adopt, and the first `CREATE TABLE` fails. `postgres-migrate.ts` reads `current_schema()` first
-  and refuses with what to change: test:`is refused before any write, with what to change`,
-  test:`is refused too on a database that the tool of before made in that schema, which Drizzle
-alone breaks on`. Such a database moves its tables to `public` by hand
-  (`ALTER TABLE … SET SCHEMA public`, `schema_migrations` too), and is then adopted.
+- **A search path that is not `public` broke the migrations of `drizzle-kit`, in two ways**
+  (raised in review, measured on 17.11). On an empty database the tables went in the first schema
+  of the path, and the first foreign key failed: relation `public.…` does not exist. On a database
+  that the tool of before made in that schema, there was no `public.schema_migrations` to adopt, and
+  the first `CREATE TABLE` failed. FRU-181 refused such a path. Since FRU-219 the worker sets the
+  path of each of its connections, so the one of the address has no effect:
+  test:`has no effect: every connection of the worker is in its schema, and the tables go there`. A
+  database that the tool of before made in another schema names that schema in
+  `FRUITBACK_DATABASE_SCHEMA`, and is adopted there. A worker that finds its schema empty while
+  such a database, not adopted yet, is in another schema refuses and names the variable, where it
+  would have started with no account (raised in review):
+  test:`is refused with the schema to name, and nothing is written in the empty one`. It looks only
+  where the role may read: a `schema_migrations` of another application in a schema closed to it is
+  left alone (test:`is enough: no right on public, none on the database, and the worker signs a
+person in` plants one).
 - **The baseline makes the database that the tool of before made, to the last name.** One database
   made by the four migrations of that tool, as they shipped (`postgres-home-made.fixture.ts`, a copy
   compared word for word with `main` at e74be53), one made by the baseline: their catalogues are the
@@ -1358,8 +1363,8 @@ it, and writes no row of its journal` is the control of the adoption. Rows canno
   worker. The message says what to do: start an image from FRU-144 to
   before Drizzle on it once, then this one. test:`refuses a database that the tool of before left at
 an earlier migration, and writes nothing`.
-- **The migrations of `drizzle-kit` name `public` in every foreign key.** A case of a test cannot
-  have a schema of its own, as it had. On a server it has a database. PGlite has one database: a
+- **The migrations of `drizzle-kit` name `public` in every foreign key.** A case of a test does not
+  have a schema of its own, as it had (a worker can: FRU-219). On a server it has a database. PGlite has one database: a
   case empties `public`, so a process holds one PGlite database at a time.
 - **The migrations are files beside the bundle.** `migrationsFolder` finds `drizzle/` beside
   `server.mjs` in the image, and beside `src/` and `dist/` in the repository. The Dockerfile copies
@@ -1389,6 +1394,10 @@ an earlier migration, and writes nothing`.
   process its database under that address. Only `dev-worker.fixture.ts` calls it. A process that
   has the switch and no database opens no connection
   (test:`opens no connection in a process that has the switch and no database`).
+- **The switch takes `FRUITBACK_DATABASE_SCHEMA` as any database does** (FRU-219): the PGlite is
+  made in that schema, and `public` holds nothing
+  (test:`keeps its tables, its workspace and its notes in a schema of its own when one is named
+(FRU-219)`).
 - **`migrate-to-postgres` does not read the switch.** It copies files into a server, and takes
   `FRUITBACK_DATABASE_URL` alone.
 
@@ -2382,6 +2391,100 @@ everything. FRU-95 lifted it, below.
   and a `.env` of eight lines, under `env -i`: the first start writes the code, `POST /session/pair`
   with it answers `200` and a token of the person named, the next start writes nothing. With
   `FRUITBACK_PUBLIC_URL` the line is the link, and `GET /pair` answers `200`.
+
+## A schema of its own, in a database that exists already (FRU-219)
+
+Mathieu decided on 2026-10-13 that PostgreSQL is always there, self-hosted too: « on a new database,
+or on an existing database in a dedicated schema ». Until this ticket the worker wrote in `public`
+and refused anything else, so a database shared with another application was out: `user`, `session`
+and `account` are names that such a database has already.
+
+### The rules, in short
+
+- **`FRUITBACK_DATABASE_SCHEMA` names the schema, and `public` is the default.** A database of
+  today names nothing and changes nothing: a database that Drizzle's own `migrate` made in
+  `public` starts with nothing run again (`postgres-own-schema.test.ts`, on PGlite and on 17.11). The name is a lower-case letter or `_`, then lower-case letters, digits and `_`,
+  63 bytes at most, not one of PostgreSQL itself (`pg_…`, `information_schema`), and not a key
+  word that PostgreSQL prints between quotes (`user`, `order`, `table`: raised in review, since
+  `pg_indexes` then prints `ON "user".sites` and the guard of the catalogue reads another text;
+  test:`refuses every word that this PostgreSQL prints between quotes, and no other word` reads
+  the list from the server). It goes in
+  statements between double quotes and is never a parameter, so anything else is refused when the
+  worker starts, with the rule and not the value:
+  test:`refuses a name that needs a quote, a name of PostgreSQL itself, and one that PostgreSQL
+would cut`. Set with no `FRUITBACK_DATABASE_URL`, it is refused too: it would say nothing.
+- **Everything of the worker is in that schema**: its tables, the ones of better-auth, the indexes,
+  the sequences, and the journal `__drizzle_migrations`. Nothing is written in another schema:
+  test:`signs a person in and keeps a note, in its schema, and changes no table and no row of
+public` compares the catalogue and the rows of `public` before and after, with tables `user`,
+  `session` and `sites` of another application in it.
+- **The worker sets the search path of each connection, to its schema alone.** `SET search_path` in
+  the `onConnect` of the pool (pg-pool 3.14), which the pool waits for before it gives the
+  connection to anyone; a connection on which it fails is ended and the call fails, as an outage.
+  It was first sent from a listener of the event `connect`, and that was wrong (raised in review,
+  measured on 17.11): the pool gives the connection away as soon as the event is out, and when the
+  `SET` failed without ending the session the server took the statement of the caller next, in the
+  search path of the address. A `CREATE TABLE` landed in `public`:
+  test:`serves no statement at all: the one of the caller is refused, and never reaches the server`. What the address (`options=-c search_path=…`), the role
+  (`ALTER ROLE … SET`) and the database (`ALTER DATABASE … SET`) say has no effect:
+  test:`gives every connection of a pool its schema, whatever the role and the database say`.
+  `public` is not in the path, so a name the worker does not have is an error and not a read of
+  another application's table.
+- **The role needs `CREATE` and `USAGE` on its schema, and nothing else.** No right on `public`, none on the
+  database: test:`is enough: no right on public, none on the database, and the worker signs a
+person in`. A schema that is not there is made, which needs `CREATE` on the database; without it
+  the worker refuses with what to grant
+  (test:`is refused a schema that is not there, with what to grant, and with no name of the role
+(FRU-219)`, `is refused, with what to grant, when it has … alone on its schema`, for `USAGE` alone and for
+  `CREATE` alone). Both rights are asked together: with `CREATE` and no `USAGE`, PostgreSQL 17.11
+  leaves the schema out of the search path, and the worker said that a pooler had lost the session
+  (raised in review).
+- **No database is moved by the worker.** A worker in `public` that names a schema finds that
+  schema empty and makes its tables there: the ones of `public` are left as they are, and so is
+  what they hold. Moving is `ALTER TABLE … SET SCHEMA`, by hand, the journal too.
+- **`forget`, the copy from SQLite and the snapshots follow the schema.** `snapshot-pg.sh` takes
+  `PGSCHEMA` and dumps that schema alone; the restore drill does it on a database that holds a
+  table of another application, and checks that the restored database does not.
+
+### The reasons, and what was measured
+
+- **The migrations are not generated again per schema: `"public".` is replaced when a statement is
+  applied.** `drizzle-kit` writes the schema in every foreign key (`REFERENCES "public"."user"`) and
+  nowhere else, and has no option to leave it out. `inSchema` replaces `"public".` by the schema of
+  the worker, in each statement, and does nothing for `public`. Two guards hold what that rests on:
+  test:`names « public » in the migrations only where a statement names a schema` fails the day a
+  migration holds the word elsewhere (a default, a comment, a string), and
+  test:`keeps each foreign key in its schema: a row of public cannot stand for one of its own` reads
+  the catalogue: no constraint of the schema points out of it. Without the replacement, on a shared
+  database, a session of the worker would reference the `user` of the other application.
+- **The journal holds the digest of each file as it is written**, not of what was applied
+  (test:`writes in its journal the digest of each migration as its file is written`). One build then
+  reads the journals of two schemas the same way, and a database made by Drizzle's `migrate` in
+  `public` is read as before.
+- **The worker applies the migrations itself**, as `PgDialect.migrate` of Drizzle 0.45.4 does (read:
+  pg-core/dialect): the journal table, the last row by `created_at`, each migration whose date is
+  later, in one transaction. Two differences: the schema is made only when `pg_namespace` does not
+  hold it, and the journal is in the schema of the worker where Drizzle puts it in `drizzle` unless
+  told. The guards of FRU-181 (the lock, the adoption of what the tool of before made, the refusal
+  of what would be skipped) read the same schema.
+- **The lock of the migrations is on the database, not on the schema.** Two workers in two schemas
+  of one database migrate one after the other. That costs a wait at a first start and no more.
+- **Two workers in one database do not see each other**: test:`do not see each other: each has its
+tables, its journal and its people`. A person of one is not a person of the other, and each
+  journal holds its own rows.
+- **Played backwards.** Without the `SET search_path`, seven tests of `postgres-own-schema.test.ts`
+  fail; without the replacement of `"public".`, ten do.
+
+### What it does not do
+
+- **It does not keep the role from reading the rest of the database.** The worker names no other
+  schema, and PostgreSQL decides what a role may read: `USAGE` on `public` is given to every role
+  by default. `docs/self-hosting.md` says what to revoke; `SECURITY.md` says what it means.
+- **It does not work through a pooler that shares sessions.** The search path and the advisory lock
+  are the state of a session. PgBouncer in transaction mode loses both. Not tried here.
+- **It does not move a database from `public`**, and does not copy from one schema to another.
+- **PGlite holds one schema per case as before.** The tests that need two roles, two schemas of one
+  database or a setting of the database run on a real server (`test:postgres`, 17 in CI).
 
 ## Rotation, and the grace that is not a clock (FRU-61)
 

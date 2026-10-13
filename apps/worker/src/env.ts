@@ -4,7 +4,13 @@ import { type TemSettings, parseTemCredentials } from './mail.ts';
 import { type OAuthClient, parseOAuthClient } from './oauth-client.ts';
 import { type LinearOAuth, parseLinearOAuth } from './linear-oauth.ts';
 import { type ClientMap, originsFromClients, readClientMap, unreadableClients, workspacesOf } from './clients.ts';
-import { DEV_DATABASE, asksForDevDatabase, databaseUrlOf } from './postgres.ts';
+import {
+  DEFAULT_DATABASE_SCHEMA,
+  DEV_DATABASE,
+  asksForDevDatabase,
+  databaseUrlOf,
+  readDatabaseSchema,
+} from './postgres.ts';
 import { DEFAULT_LIMIT } from './rate-limit.ts';
 import type { StoreConfig } from './store-config.ts';
 import { readStoreConfig } from './stores.ts';
@@ -95,6 +101,13 @@ export type WorkerEnv = {
    * `FRUITBACK_DATABASE_URL`. See `DEV_DATABASE` in `postgres.ts`.
    */
   FRUITBACK_DEV_DATABASE?: string;
+  /**
+   * The schema of that database the worker keeps its tables and its journal of migrations in
+   * (FRU-219), for a database that another application uses too. A plain name, `fruitback` for
+   * example. Absent: `public`, as before. The worker makes the schema when it is not there, and
+   * writes nowhere else.
+   */
+  FRUITBACK_DATABASE_SCHEMA?: string;
   /**
    * Where the console answers, for example `https://app.fruitback.com` (FRU-98). A sign-in link opens
    * it, and it is the one origin the console routes answer with a cookie. Required with accounts.
@@ -226,6 +239,8 @@ const configSchema = z.object({
   firstReviewer: z.custom<FirstReviewer | undefined>().optional(),
   /** The PostgreSQL database that holds the accounts (FRU-141). Absent: the clients come from the env. */
   databaseUrl: z.string().min(1).optional(),
+  /** The schema of that database the worker keeps its tables in (FRU-219). `public` when none is named. */
+  databaseSchema: z.string().min(1),
   /** The console's address, with no slash at the end (FRU-98). */
   consoleUrl: z.string().min(1).optional(),
   /** How the worker sends e-mail, or absent when it sends none (FRU-98). */
@@ -315,6 +330,10 @@ function devDatabaseRefusals(env: WorkerEnv): string[] {
   return [];
 }
 
+/** Why a value of `FRUITBACK_DATABASE_SCHEMA` stops the worker (FRU-219). The value is not quoted. */
+export const DATABASE_SCHEMA_REFUSED =
+  'FRUITBACK_DATABASE_SCHEMA (the name of a schema: a lower-case letter or « _ », then lower-case letters, digits and « _ », 63 characters at most, not a schema of PostgreSQL itself, and not a key word of SQL such as « user »)';
+
 export function readConfig(env: WorkerEnv): ConfigResult {
   const clients = readClientMap(env.FRUITBACK_CLIENTS);
   // The selected provider validates its own environment (FRU-33). The in-memory store needs none,
@@ -346,6 +365,8 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     sessionPath: env.FRUITBACK_SESSION_PATH || undefined,
     firstReviewer: readFirstReviewer(env.FRUITBACK_FIRST_REVIEWER),
     databaseUrl: databaseUrlOf(env),
+    // A name that is refused is reported below, with its reason. `public` only lets the rest be read.
+    databaseSchema: readDatabaseSchema(env.FRUITBACK_DATABASE_SCHEMA) ?? DEFAULT_DATABASE_SCHEMA,
     consoleUrl: readConsoleUrl(env.FRUITBACK_CONSOLE_URL),
     mail: readMail(env),
     publicUrl: readConsoleUrl(env.FRUITBACK_PUBLIC_URL),
@@ -357,9 +378,14 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   const result = configSchema.safeParse(candidate);
   // Each source names its own variables, and they are reported together: an operator fixing a boot
   // failure should see everything that is wrong, not the first thing to be checked.
+  // FRU-219. The name goes into statements as an identifier: a plain name, or nothing starts. Said
+  // with the rest (raised in review), and once: the store `postgres` reads the same variable, and
+  // names it without the rule.
+  const schemaRefused = readDatabaseSchema(env.FRUITBACK_DATABASE_SCHEMA) === undefined;
   const missing = [
     ...missingFrom(result),
-    ...(store.ok ? [] : store.missing),
+    ...(store.ok ? [] : store.missing.filter((name) => !(schemaRefused && name === 'FRUITBACK_DATABASE_SCHEMA'))),
+    ...(schemaRefused ? [DATABASE_SCHEMA_REFUSED] : []),
     ...(clients.ok ? [] : [`FRUITBACK_CLIENTS (${clients.reason})`]),
     // Two variables of before (FRU-150): refused, never ignored. A worker that ignored the file would
     // start with no workspace at all, and an operator would read it as the accounts lost. Said with
@@ -382,6 +408,14 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   // The reason never quotes the value: it holds the password of the database.
   if (env.FRUITBACK_DATABASE_URL && result.data.databaseUrl === undefined) {
     return { ok: false, missing: ['FRUITBACK_DATABASE_URL (a postgres:// address with a host)'] };
+  }
+  // A schema with no database names nothing: a line that was left in an `.env`, or a typing error
+  // in the name of the other variable.
+  if (env.FRUITBACK_DATABASE_SCHEMA?.trim() && result.data.databaseUrl === undefined) {
+    return {
+      ok: false,
+      missing: ['FRUITBACK_DATABASE_URL (FRUITBACK_DATABASE_SCHEMA names a schema of that database)'],
+    };
   }
   // The sessions have one source too (FRU-142): with a database they are in it, and a file beside it
   // would be a second place that nothing reads.

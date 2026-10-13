@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import {
+  AutoGrid,
+  BrowserFrame,
   Button,
+  Callout,
   EntryPage,
   Chip,
   Choice,
@@ -13,6 +16,7 @@ import {
   KeyValue,
   Lead,
   Logo,
+  OptionCard,
   LinkButton,
   Menu,
   PageHead,
@@ -20,8 +24,11 @@ import {
   Problem,
   STATUSES,
   SidePanel,
+  Snippet,
   StatusBar,
   StatusDot,
+  Step,
+  Steps,
   SuccessMark,
   Title,
   Toggle,
@@ -41,6 +48,7 @@ export default function KitGallery() {
   const [filter, setFilter] = useState('all');
   const [who, setWho] = useState<'members' | 'public'>('members');
   const [role, setRole] = useState('guest');
+  const [stage, setStage] = useState('progress');
   const [text, setText] = useState('');
   const [picked, setPicked] = useState('nothing');
   const [workspace, setWorkspace] = useState('acme');
@@ -97,6 +105,7 @@ export default function KitGallery() {
 
       <section aria-label="Wide buttons" className="flex w-[400px] max-w-full flex-col gap-2.5" data-kit="wide">
         <WideButton>Continue with Google</WideButton>
+        <Button wide>Join a workspace with a very long name that somebody typed in a hurry one day</Button>
         <WideButton disabled note="GitHub sign-in is not set up on this Fruitback">
           Continue with GitHub
         </WideButton>
@@ -123,6 +132,22 @@ export default function KitGallery() {
             { value: 'member', label: 'Member' },
           ]}
         />
+        <div className="w-[214px]" data-kit="status-choice">
+          <Choice
+            label="Status for In Review"
+            labelHidden
+            status={stage === 'todo' ? 'todo' : 'progress'}
+            value={stage}
+            onChange={setStage}
+            options={[
+              { value: 'todo', label: 'To do' },
+              { value: 'progress', label: 'In progress' },
+            ]}
+          />
+        </div>
+        <Button tone="outline" label="Connect Jira">
+          Connect
+        </Button>
         <Choice
           label="Compact role"
           compact
@@ -239,6 +264,8 @@ export default function KitGallery() {
       <section aria-label="Panel" className="flex flex-wrap items-start gap-7" data-kit="panel">
         <SidePanel
           id="kit-panel-title"
+          panelId="kit-panel"
+          label="Settings of Linear"
           title="Linear"
           detail="Connected by Ana with OAuth"
           className="w-[380px]"
@@ -315,6 +342,52 @@ export default function KitGallery() {
         <p className="text-small text-muted" data-kit="menu-picked">
           Picked: {picked}, {workspace}
         </p>
+      </section>
+
+      <section aria-label="Steps" className="w-[400px] max-w-full" data-kit="steps">
+        <Steps>
+          <Step state="done" number={1} title="Your account" currentPrefix="Current step:">
+            <p className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-body text-muted">
+              Workspace <span className="font-semibold text-ink">Acme</span>
+              <LinkButton space="flush">Rename</LinkButton>
+            </p>
+          </Step>
+          <Step state="current" number={2} title="Your site" currentPrefix="Current step:">
+            <Callout status className="mt-3">
+              <p className="text-body font-semibold leading-auto">Check your inbox</p>
+            </Callout>
+          </Step>
+          <Step state="pending" number={3} title="Put it on the site" currentPrefix="Current step:">
+            <p className="mt-0.5 text-small text-muted">The extension, or a script tag.</p>
+          </Step>
+        </Steps>
+      </section>
+
+      <section aria-label="Options" className="w-[520px] max-w-full" data-kit="options">
+        <AutoGrid min={230}>
+          <OptionCard title="Browser extension">
+            <p className="text-small text-muted">Nothing to deploy.</p>
+          </OptionCard>
+          <OptionCard title="Script tag">
+            <Snippet label="The script tag of staging.acme.dev">
+              {'<script\n  src="https://cloud.fruitback.com/fruitback.iife.js"\n  defer></script>'}
+            </Snippet>
+          </OptionCard>
+        </AutoGrid>
+        <div className="mt-4">
+          <AutoGrid>
+            <WideButton>Continue with Google</WideButton>
+            <WideButton>Continue with GitHub</WideButton>
+          </AutoGrid>
+        </div>
+      </section>
+
+      <section aria-label="Preview of your site" className="w-[760px] max-w-full" data-kit="browser">
+        <BrowserFrame
+          address="your site"
+          empty="Your site shows here once you add it, with its pins."
+          caption="A preview of your site. Pins show the same way on the real page."
+        />
       </section>
 
       <section aria-label="Logos" className="flex flex-wrap items-center gap-6" data-kit="logos">

@@ -306,7 +306,8 @@ describe('every word the widget shows', () => {
     const placedByPosition = seedIssueFixture({
       identifier: 'ID-3',
       stateName: '',
-      comments: [],
+      // One reply, so its row of the list says how many (FRU-259).
+      comments: [{ id: 'c2', body: 'BODY', createdAt: '2026-08-01T12:00:00.000Z' }],
       seed: seedFixture({
         id: 'sd_near',
         note: '',
@@ -467,10 +468,14 @@ describe('every word the widget shows', () => {
       'ID-3',
       'BODY',
       'https://…',
+      // The address under the title of the list (FRU-259). Before « acme », which is a part of it.
+      'preview.acme.test',
       'acme',
       'PLACE ONE',
       // What the element says, after « on » in the head of the composer (FRU-258).
       'ELEMENT',
+      // The word of the store for a state, which the row of a note shows as the thread does (FRU-259).
+      'In Progress',
       // A note kept for later, and the path of its page (FRU-124).
       'NOTE KEPT',
       '/pricing',

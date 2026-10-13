@@ -43,6 +43,11 @@ self-hoster could otherwise be surprised.
 name and address its reporter typed, and the team's replies are readable by any visitor of the
 client's site — and by `curl`. Hiding pins in a browser was never the fix.
 
+A link that opens a note on its page, `<page>#fruitback-note=<id>`, opens nothing to somebody who
+cannot already read that page: the widget opens the note among those `GET /feedback` answered to
+this reader, and a refused read opens nothing. The id in the address is not a secret and gives no
+access.
+
 `FRUITBACK_READ=authenticated`, or `"read": "authenticated"` on a client, requires a signed identity
 token. The default stays `public` for compatibility, so **an upgrade never closes it for you**. The
 boot log names every client whose pins anyone can read, and `/health` counts them.
@@ -538,6 +543,20 @@ of that file, and the worker refuses to start with both. The database holds what
 addresses, names, the id each provider gives a person,
 the roles, the sites, the digest of each sign-in link, the key of each connector encrypted with
 `FRUITBACK_SECRETS_KEY`, and the notes that wait for an address that receives them.
+
+**That database can be one that another application uses, with the worker in a schema of its own**
+(`FRUITBACK_DATABASE_SCHEMA`, FRU-219). The worker writes in that schema and nowhere else, and sets
+the search path of each of its connections to it alone, whatever the address, the role and the
+database say (test:`gives every connection of a pool its schema, whatever the role and the database
+say`). **A schema is a place for names, not a wall.** What the role of the worker may read in the
+rest of the database is what PostgreSQL grants it: every role has `USAGE` on `public` by default,
+and reads what was granted to `PUBLIC`. The worker names no other schema, but whoever holds
+`FRUITBACK_DATABASE_URL` can, and so can the other application for the schema of the worker if its
+role owns the database or is a superuser. Two applications in one database trust the one who runs
+it, and each other as far as their grants say. A role that has its schema and nothing else is
+enough for the worker (test:`is enough: no right on public, none on the database, and the worker
+signs a person in`), and that test reads that such a role is refused a table of `public` once
+`USAGE` on `public` is taken from `PUBLIC`.
 
 **Since FRU-146 the people, their ways to sign in, the workspaces and their members are in four
 tables of better-auth**, `user`, `account`, `organization` and `member`, under the ids they had. The
