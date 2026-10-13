@@ -288,15 +288,22 @@ export function createComposer(options: ComposerOptions): Composer {
       closing = 0;
     }
 
-    // Somebody is writing, and points the open composer at another element: a second capture over
-    // it does that. The note they wrote is still their note, about the element they chose last.
-    // A composer that shows « sent » is not being written in: its text went with the note.
-    const writing = !root.hidden && (state === 'idle' || state === 'failed');
-    session += 1;
-    if (!writing) field.value = '';
     // As text: it is whatever the page wrote in its element.
     about.textContent = subject === '' ? '' : t.text('composer.about', { element: subject });
     about.hidden = subject === '';
+    // Somebody is writing, and points the open composer at another element: a second capture over
+    // it does that. **Nothing they set is set again**: the note, the name they typed, the place
+    // they chose and the sentence of a failed send all stay. Only what the note is about changes,
+    // and where the composer stands. A composer that shows « sent » is not being written in.
+    if (!root.hidden && (state === 'idle' || state === 'failed')) {
+      place(anchor);
+      field.focus();
+
+      return;
+    }
+
+    session += 1;
+    field.value = '';
     showPicture();
     askForNameOrNot();
     keep.hidden = options.keep?.offered() !== true;
