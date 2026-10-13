@@ -172,6 +172,11 @@ export default function Connectors() {
     );
 
   const cannot = !manages || !available;
+  // WARNING: « Add a source » waits for the first answer of the list. The list arrives above it, and
+  // its buttons went down by the height of the list (45 px for one source, 110 for two, measured): a
+  // press that starts before a button moves and ends after is lost. And the same read says what
+  // « Connect Linear » does: the consent at Linear, or a key.
+  const answered = connectors !== undefined || unread;
 
   return (
     <>
@@ -243,83 +248,85 @@ export default function Connectors() {
             )}
           </section>
 
-          <section aria-labelledby="add-title">
-            <h2 id="add-title" className="mb-[10px] text-body leading-auto font-semibold">
-              {t('Add a source')}
-            </h2>
-            {manages ? null : (
-              <p className="mb-[10px] text-hint text-muted">{t('An owner or an admin connects a source')}</p>
-            )}
-            {available ? null : (
-              <p className="mb-[10px] text-hint text-muted">{t(KEY_PROBLEMS['connectors-unavailable'] ?? '')}</p>
-            )}
-            <ul className="border-t border-line">
-              <Source name={t(KINDS.linear.name)} detail={t('An issue per note, in the team you choose.')}>
-                {adding === 'linear' ? null : (
-                  <span className="flex flex-wrap items-center gap-x-[16px]">
-                    {oauth ? (
-                      <LinkButton disabled={cannot} onClick={() => setAdding('linear')}>
-                        {t('Use an API key')}
-                      </LinkButton>
-                    ) : null}
-                    <Button
-                      tone="outline"
-                      inset={16}
-                      disabled={cannot || leaving}
-                      onClick={() => (oauth ? void connectLinear() : setAdding('linear'))}
-                    >
-                      {leaving ? t('Going to Linear…') : <Connect name={t(KINDS.linear.name)} />}
-                    </Button>
-                  </span>
-                )}
-                {adding === 'linear' ? (
-                  <Under>
-                    <AddLinear
-                      base={base}
-                      onDone={(connector) => {
-                        setAdding(undefined);
-                        if (connector !== undefined) {
+          {answered ? (
+            <section aria-labelledby="add-title">
+              <h2 id="add-title" className="mb-[10px] text-body leading-auto font-semibold">
+                {t('Add a source')}
+              </h2>
+              {manages ? null : (
+                <p className="mb-[10px] text-hint text-muted">{t('An owner or an admin connects a source')}</p>
+              )}
+              {available ? null : (
+                <p className="mb-[10px] text-hint text-muted">{t(KEY_PROBLEMS['connectors-unavailable'] ?? '')}</p>
+              )}
+              <ul className="border-t border-line">
+                <Source name={t(KINDS.linear.name)} detail={t('An issue per note, in the team you choose.')}>
+                  {adding === 'linear' ? null : (
+                    <span className="flex flex-wrap items-center gap-x-[16px]">
+                      {oauth ? (
+                        <LinkButton disabled={cannot} onClick={() => setAdding('linear')}>
+                          {t('Use an API key')}
+                        </LinkButton>
+                      ) : null}
+                      <Button
+                        tone="outline"
+                        inset={16}
+                        disabled={cannot || leaving}
+                        onClick={() => (oauth ? void connectLinear() : setAdding('linear'))}
+                      >
+                        {leaving ? t('Going to Linear…') : <Connect name={t(KINDS.linear.name)} />}
+                      </Button>
+                    </span>
+                  )}
+                  {adding === 'linear' ? (
+                    <Under>
+                      <AddLinear
+                        base={base}
+                        onDone={(connector) => {
+                          setAdding(undefined);
+                          if (connector !== undefined) {
+                            setSelected(connector.id);
+                            void load();
+                          }
+                        }}
+                      />
+                    </Under>
+                  ) : null}
+                  {problem === undefined ? null : (
+                    <Under>
+                      <Problem>{t(problem)}</Problem>
+                    </Under>
+                  )}
+                </Source>
+                <Source name={t(KINDS.rest.name)} detail={t('POST each note to your own endpoint.')}>
+                  {adding === 'rest' ? (
+                    <Under>
+                      <AddRest
+                        base={base}
+                        onAdded={(connector) => {
                           setSelected(connector.id);
                           void load();
-                        }
-                      }}
-                    />
-                  </Under>
-                ) : null}
-                {problem === undefined ? null : (
-                  <Under>
-                    <Problem>{t(problem)}</Problem>
-                  </Under>
-                )}
-              </Source>
-              <Source name={t(KINDS.rest.name)} detail={t('POST each note to your own endpoint.')}>
-                {adding === 'rest' ? (
-                  <Under>
-                    <AddRest
-                      base={base}
-                      onAdded={(connector) => {
-                        setSelected(connector.id);
-                        void load();
-                      }}
-                      onDone={() => setAdding(undefined)}
-                    />
-                  </Under>
-                ) : (
-                  <Button tone="outline" inset={16} disabled={cannot} onClick={() => setAdding('rest')}>
-                    <Connect name={t(KINDS.rest.name)} />
-                  </Button>
-                )}
-              </Source>
-              {LATER.map((source) => (
-                <Source key={source.name} name={source.name} detail={t(source.detail)}>
-                  {/* No connector of this kind exists: the button says when, and connects nothing. */}
-                  <Button tone="outline" inset={16} disabled>
-                    {t('After the beta')}
-                  </Button>
+                        }}
+                        onDone={() => setAdding(undefined)}
+                      />
+                    </Under>
+                  ) : (
+                    <Button tone="outline" inset={16} disabled={cannot} onClick={() => setAdding('rest')}>
+                      <Connect name={t(KINDS.rest.name)} />
+                    </Button>
+                  )}
                 </Source>
-              ))}
-            </ul>
-          </section>
+                {LATER.map((source) => (
+                  <Source key={source.name} name={source.name} detail={t(source.detail)}>
+                    {/* No connector of this kind exists: the button says when, and connects nothing. */}
+                    <Button tone="outline" inset={16} disabled>
+                      {t('After the beta')}
+                    </Button>
+                  </Source>
+                ))}
+              </ul>
+            </section>
+          ) : null}
         </div>
 
         {wide ? panel : null}
