@@ -9,57 +9,122 @@
 */
 :root {
   color-scheme: light;
-  --background: #faf9f5;
-  --foreground: #1c1917;
+  --background: #ffffff;
+  --foreground: #18181b;
   --surface: #ffffff;
   --overlay: #ffffff;
-  /* The board says #78716c. On the board's own tinted surfaces that is 4.37:1, under the 4.5 a
-     small text needs, so the tone is five steps darker: 4.7:1 there, and the eye sees no change. */
-  --muted: #736c67;
-  --default: #f5f5f4;
-  --default-foreground: #1c1917;
+  /* 5.28:1 on white, 5.05:1 on --color-subtle, 4.80:1 on --color-chip (design/README.md). */
+  --muted: #6b6b74;
+  --default: #f4f4f5;
+  --default-foreground: #18181b;
   --accent: #dd2c27;
   --accent-foreground: #ffffff;
   /* HeroUI lightens a hovered or pressed button by default: white on that red was 3.9:1 (FRU-163).
-     The strong accent of the boards is darker, and white on it is 6.47:1. */
+     The strong accent of the mockup is darker, and white on it is 6.47:1. */
   --accent-hover: #b91c1c;
   --danger: #b91c1c;
   --danger-foreground: #ffffff;
-  --success: #56802e;
+  --success: #15803d;
   --success-foreground: #ffffff;
-  --border: #e7e5e4;
-  --separator: #e7e5e4;
+  --border: #e4e4e7;
+  --separator: #e4e4e7;
   --focus: #dd2c27;
   --field-background: #ffffff;
-  --field-foreground: #1c1917;
-  --field-placeholder: #a8a29e;
-  /* The boards draw a dark border on a field and on a wide button, and give it no token. This is
-     the strong border of the widget (packages/widget/src/theme.ts): 3.49:1 on white, over the 3:1
-     a border needs when it alone says where a control is (WCAG 1.4.11). #d6d3d1 was 1.49:1. */
-  --field-border: #8f8883;
+  --field-foreground: #18181b;
+  /* The mockup writes a placeholder in the muted tone: 5.28:1, where the tone of before was 2.5:1. */
+  --field-placeholder: #6b6b74;
+  /* The border of a control: 3.42:1 on white, over the 3:1 a border needs when it alone says where
+     a control is (WCAG 1.4.11). */
+  --field-border: #8a8a93;
   --field-border-width: 1px;
   --radius: 0.5rem;
-  /* design/README.md: 8 to 10 px for a field. HeroUI derives 12 px from --radius. */
+  /* HeroUI derives 12 px from --radius. The mockup draws a field at 8 px. */
   --field-radius: 8px;
-  /* The boards draw a field flat. Transparent and not none: the rings of HeroUI are shadows too. */
+  /* The mockup draws a field flat. Transparent and not none: the rings of HeroUI are shadows too. */
   --field-shadow: 0 0 0 0 transparent;
 }
 
 /*
-  The tokens of the design reference (design/README.md), which are the widget's own. Named once here,
-  so a screen writes bg-surface and never a colour.
+  The tokens of the mockup of 2026-10-13 (FRU-232), named once here. A screen writes bg-subtle,
+  text-title or h-control, and never a value. design/README.md has the table.
 */
 @theme {
-  --color-ink: #1c1917;
-  --color-faint: #a8a29e;
-  --color-line: #e7e5e4;
-  --color-page: #faf9f5;
-  --color-setup: #f6f4f1;
+  --color-ink: #18181b;
+  --color-ink-soft: #52525b;
+  --color-line: #e4e4e7;
+  --color-control: #8a8a93;
+  --color-page: #ffffff;
+  --color-setup: #ffffff;
+  --color-subtle: #fafafa;
+  --color-chip: #f4f4f5;
   --color-accent-strong: #b91c1c;
-  --color-done: #56802e;
-  --color-chip: #f5f5f4;
+  --color-done: #15803d;
+  --color-avatar: #3f3f46;
+
+  --color-rail: #18181b;
+  --color-rail-active: #27272a;
+  --color-rail-text: #d4d4d8;
+  --color-rail-muted: #a1a1aa;
+  --color-rail-accent: #ec5b57;
+
+  /* A status is never told by its colour alone: the amber is 2.15:1 on white. */
+  --color-status-new: #dd2c27;
+  --color-status-todo: #2563eb;
+  --color-status-progress: #f59e0b;
+  --color-status-done: #15803d;
+  --color-status-closed: #64748b;
+
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* The scale of the mockup: size, then the line height it writes with it. */
+  --text-title: 28px;
+  --text-title--line-height: 1.15;
+  --text-title-setup: 30px;
+  --text-title-setup--line-height: 1.15;
+  --text-conclusion: 22px;
+  --text-conclusion--line-height: 1.25;
+  --text-section: 18px;
+  --text-section--line-height: normal;
+  --text-step: 17px;
+  --text-step--line-height: 26px;
+  --text-lead: 16px;
+  --text-lead--line-height: 1.5;
+  --text-body: 15px;
+  --text-body--line-height: 1.5;
+  --text-small: 14px;
+  --text-small--line-height: 1.5;
+  --text-table: 14px;
+  --text-table--line-height: 1.45;
+  --text-hint: 13px;
+  --text-hint--line-height: 1.5;
+  --text-label: 13px;
+  --text-label--line-height: normal;
+  --text-tiny: 12px;
+  --text-tiny--line-height: normal;
+  /* The line height of a text the mockup gives none: the one of the font, not the 1.5 of Tailwind. */
+  --leading-auto: normal;
+  --tracking-title: -0.02em;
+  --tracking-conclusion: -0.01em;
+  --tracking-button: -0.006em;
+
+  /* The heights of a control: of a page, of a panel, of a chip, small. */
+  --spacing-control: 44px;
+  --spacing-control-panel: 40px;
+  --spacing-control-row: 38px;
+  --spacing-control-chip: 36px;
+  --spacing-control-small: 32px;
+
+  --radius-button: 6px;
+  --radius-box: 10px;
+  --radius-frame: 14px;
+
+  --shadow-frame: 0 10px 30px rgba(24, 24, 27, 0.08);
+  --shadow-pin: 0 3px 10px rgba(24, 24, 27, 0.28);
+  --shadow-thumb: 0 1px 3px rgba(0, 0, 0, 0.25);
+
+  --ease-settle: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 220ms;
 }
 
 html,
@@ -70,20 +135,1076 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+::selection {
+  background: var(--color-ink);
+  color: var(--color-page);
+}
+
+::placeholder {
+  color: var(--field-placeholder);
+  opacity: 1;
+}
+
+input,
+textarea {
+  caret-color: var(--color-accent);
+}
+
 :focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
+}
+
+/* On the rail the red of the page is 3.9:1. Its lighter tone is 5.23:1 there. */
+.kit-rail :focus-visible {
+  outline-color: var(--color-rail-accent);
+}
+
+/*
+  The kit (ui.tsx). HeroUI writes its components in the cascade layer `components`: a rule here is in
+  no layer, so it wins whatever its selector. Every value is a token of the theme above, or a
+  measure of the mockup that one component alone has.
+
+  WARNING: a rule here wins over a utility of Tailwind too, which is in the layer `utilities`. So the
+  kit sets no margin on a component that a screen places (`Title`, `Lead`, `KeyValue`): `mb-7` on
+  it would do nothing, in silence. The space around a component is the screen's.
+*/
+
+/* The buttons. The mockup changes a colour at once, and moves nothing under a press. */
+.kit-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: var(--spacing-control);
+  border-radius: 999px;
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: normal;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transform: none;
+  transition: none;
+}
+
+.kit-button:active,
+.kit-button[data-pressed='true'] {
+  transform: none;
+}
+
+.kit-button:disabled,
+.kit-button[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.kit-button[data-size='panel'] {
+  height: var(--spacing-control-panel);
+}
+
+.kit-button[data-size='small'] {
+  height: var(--spacing-control-small);
+  font-size: var(--text-hint);
+}
+
+/* Over its column. Its words can be a name somebody typed: they take the lines they need, and the
+   button grows, where a button of its own width would make the page scroll sideways. */
+.kit-button[data-wide='true'] {
+  display: flex;
+  width: 100%;
+  height: auto;
+  min-height: var(--spacing-control);
+  padding-top: 10px;
+  padding-bottom: 10px;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.kit-button[data-wide='true'][data-size='panel'] {
+  min-height: var(--spacing-control-panel);
+}
+
+.kit-button[data-wide='true'][data-size='small'] {
+  min-height: var(--spacing-control-small);
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+/* The action of a step: the one pill of a screen. White on it is 4.70:1, 6.47:1 under the pointer. */
+.kit-button--primary {
+  padding: 0 22px;
+  border: 0;
+  background: var(--accent);
+  color: var(--accent-foreground);
+  letter-spacing: var(--tracking-button);
+}
+
+.kit-button--primary:hover:not(:disabled, [aria-disabled='true']),
+.kit-button--primary[data-hovered='true'],
+.kit-button--primary[data-pressed='true'] {
+  background: var(--accent-hover);
+}
+
+.kit-button--primary[data-size='panel'] {
+  padding: 0 16px;
+}
+
+.kit-button--primary[data-size='small'] {
+  padding: 0 14px;
+}
+
+/* A control of the shape of a field: a provider to sign in with, « Try again », « Connect ». */
+.kit-button--outline {
+  padding: 0 18px;
+  border: 1px solid var(--field-border);
+  border-radius: var(--radius-button);
+  background: var(--surface);
+  color: var(--color-ink);
+}
+
+.kit-button--outline:hover:not(:disabled, [aria-disabled='true']),
+.kit-button--outline[data-hovered='true'],
+.kit-button--outline[data-pressed='true'] {
+  border-color: var(--color-ink);
+  background: var(--color-subtle);
+}
+
+.kit-button--outline[data-size='panel'] {
+  padding: 0 16px;
+}
+
+.kit-button--outline[data-size='small'] {
+  padding: 0 10px;
+}
+
+/* A button that reads as a link. Its padding is its target: 37 px at the least (WCAG 2.5.8). */
+.kit-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: auto;
+  padding: 8px 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--color-ink);
+  font-size: var(--text-small);
+  font-weight: 600;
+  line-height: normal;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  white-space: normal;
+  /* The words of a link can be a host: they wrap where they must. */
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  transform: none;
+  transition: none;
+}
+
+.kit-link[data-space='normal'] {
+  padding: 10px 0;
+}
+
+.kit-link[data-space='loose'] {
+  padding: 12px 0;
+}
+
+/* At the end of a line of text: the target of 8 px each way, and the height of the line it is on. */
+.kit-link[data-space='flush'] {
+  margin: -8px 0;
+}
+
+/* In a row of a table: the line of the table, so that the row keeps the height of its text. */
+.kit-table .kit-link {
+  line-height: inherit;
+}
+
+/* In a sentence: the words of the sentence, and no space of its own. */
+.kit-link[data-space='inline'] {
+  display: inline;
+  padding: 0;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.kit-link:hover:not(:disabled, [aria-disabled='true']),
+.kit-link[data-hovered='true'],
+.kit-link[data-pressed='true'] {
+  background: none;
+  color: var(--color-accent-strong);
+}
+
+.kit-link:disabled,
+.kit-link[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.kit-icon-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--spacing-control-chip);
+  height: var(--spacing-control-chip);
+  padding: 0;
+  border: 0;
+  border-radius: var(--field-radius);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transform: none;
+  transition: none;
+}
+
+.kit-icon-button[data-size='small'] {
+  width: var(--spacing-control-small);
+  height: var(--spacing-control-small);
+}
+
+.kit-icon-button:hover:not(:disabled, [aria-disabled='true']),
+.kit-icon-button[data-hovered='true'],
+.kit-icon-button[data-pressed='true'] {
+  background: var(--color-chip);
+}
+
+.kit-icon-button:disabled,
+.kit-icon-button[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.kit-icon-button svg {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+/* A field and a list: the label, the control, the hint, 6 px apart. */
+.kit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.kit-field .label {
+  color: var(--color-ink);
+  font-size: var(--text-label);
+  font-weight: 600;
+  line-height: var(--text-label--line-height);
+}
+
+.kit-field .description {
+  color: var(--muted);
+  font-size: var(--text-hint);
+  line-height: var(--text-hint--line-height);
+}
+
+.kit-field .input,
+.kit-field .select__trigger {
+  box-sizing: border-box;
+  height: var(--spacing-control);
+  min-height: 0;
+  border: 1px solid var(--field-border);
+  border-radius: var(--field-radius);
+  background: var(--field-background);
+  box-shadow: none;
+  color: var(--field-foreground);
+  font-size: var(--text-body);
+  font-weight: 400;
+  line-height: normal;
+  transition: none;
+}
+
+.kit-field .input {
+  padding: 0 14px;
+}
+
+.kit-field .select__trigger {
+  align-items: center;
+  padding: 0 28px 0 12px;
+}
+
+.kit-field[data-compact='true'] .input,
+.kit-field[data-compact='true'] .select__trigger {
+  height: var(--spacing-control-panel);
+  font-size: var(--text-small);
+}
+
+.kit-field[data-compact='true'] .input {
+  padding: 0 12px;
+}
+
+/* A list that chooses a status: 38 px, the drop 12 px from the edge (its border counted), the word 9 px after. */
+.kit-field[data-status='true'] .select__trigger {
+  gap: 9px;
+  padding-left: 11px;
+  height: var(--spacing-control-row);
+  font-size: var(--text-small);
+}
+
+/* A value the person reads and cannot change: the address of an instance, a name set elsewhere. */
+.kit-field[data-locked='true'] .input {
+  border-color: var(--color-line);
+  background: var(--color-subtle);
+  color: var(--color-ink-soft);
+}
+
+.kit-field .input:disabled,
+.kit-field .select__trigger[data-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* The radio cards of a choice (`Pick`). */
+.kit-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* The question is 8 px over the first card, as the cards are 8 px apart. */
+.kit-pick > .label {
+  color: var(--color-ink);
+  font-size: var(--text-label);
+  font-weight: 600;
+  line-height: var(--text-label--line-height);
+}
+
+.kit-pick__card {
+  width: 100%;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-box);
+  gap: 2px;
+  cursor: pointer;
+}
+
+.kit-pick__card[data-selected] {
+  border-color: var(--color-ink);
+}
+
+/* 19 px: the 16 px of the radio and the 3 px the mockup puts over it. */
+.kit-pick__card .radio__content {
+  /* The words start 30 px after the radio starts: its 16 px, and a column of 20 px with 10 px after. */
+  gap: 14px;
+  min-height: 19px;
+}
+
+/* Ink when it is chosen, as the switch: the accent is the red of an alert. */
+.kit-pick__card[data-selected] .radio__control {
+  background: var(--color-ink);
+}
+
+.kit-pick__card .label {
+  color: var(--color-ink);
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: normal;
+}
+
+.kit-pick__card .description {
+  padding-left: 30px;
+  color: var(--muted);
+  font-size: var(--text-hint);
+  line-height: var(--text-hint--line-height);
+}
+
+/* The switch: ink when on, the border of a control when off, and one movement of 220 ms. */
+.kit-toggle .switch__control {
+  position: relative;
+  width: 40px;
+  height: 24px;
+  overflow: visible;
+  border-radius: 999px;
+  background: var(--field-border);
+  box-shadow: none;
+  transition: background-color 200ms;
+}
+
+.kit-toggle[data-selected='true'] .switch__control {
+  background: var(--color-ink);
+}
+
+.kit-toggle .switch__thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: var(--shadow-thumb);
+  opacity: 1;
+  transition: transform var(--duration-fast) var(--ease-settle);
+}
+
+.kit-toggle[data-selected='true'] .switch__thumb {
+  margin: 0;
+  background: var(--surface);
+  box-shadow: var(--shadow-thumb);
+  transform: translateX(16px);
+}
+
+/* A switch that cannot change: its control is dimmed, and its words stay as they read. */
+.kit-toggle[data-disabled='true'],
+.kit-toggle[data-disabled='true'] .switch__content,
+.kit-toggle[data-disabled='true'] .label {
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.kit-toggle[data-disabled='true'] .switch__control {
+  opacity: 0.5;
+}
+
+.kit-toggle[data-disabled='true'] .switch__thumb {
+  background: var(--surface);
+}
+
+.kit-toggle .label {
+  color: var(--color-ink);
+  font-size: var(--text-small);
+  font-weight: 400;
+  line-height: var(--text-small--line-height);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kit-toggle .switch__control,
+  .kit-toggle .switch__thumb {
+    transition: none;
+  }
+}
+
+/* The drop of a pin: the shape of a status, of the entry of the rail, of a success. */
+.kit-drop {
+  display: inline-block;
+  flex: none;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-90deg);
+}
+
+.kit-drop[data-size='9'] {
+  width: 9px;
+  height: 9px;
+}
+
+.kit-drop[data-size='10'] {
+  width: 10px;
+  height: 10px;
+}
+
+.kit-drop[data-size='11'] {
+  width: 11px;
+  height: 11px;
+}
+
+.kit-success {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: var(--color-done);
+  box-shadow: var(--shadow-pin);
+}
+
+.kit-success svg {
+  width: 18px;
+  height: 18px;
+  transform: rotate(90deg);
+}
+
+.kit-status-bar {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  width: 128px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+}
+
+.kit-status-bar[data-width='full'] {
+  width: 100%;
+}
+
+.kit-status-bar[data-width='short'] {
+  width: 96px;
+  background: var(--color-chip);
+}
+
+/* A filter that is on or off. Its count is said in a lighter weight. */
+.kit-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  height: var(--spacing-control-chip);
+  padding: 0 14px;
+  border: 1px solid var(--field-border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--color-ink);
+  font-size: var(--text-hint);
+  font-weight: 600;
+  line-height: normal;
+  white-space: nowrap;
+  cursor: pointer;
+  transform: none;
+  transition: none;
+}
+
+.kit-chip__count {
+  color: var(--muted);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.kit-chip:hover,
+.kit-chip[data-hovered='true'] {
+  border-color: var(--color-ink);
+  background: var(--surface);
+}
+
+/* An alert on white: the accent is 4.70:1 there. */
+.kit-chip[data-alert='true'],
+.kit-chip[data-alert='true'] .kit-chip__count {
+  color: var(--color-accent);
+}
+
+.kit-chip[aria-pressed='true'] {
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+  color: var(--surface);
+}
+
+.kit-chip[aria-pressed='true'] .kit-chip__count {
+  color: var(--color-rail-text);
+}
+
+/* A table in its frame. A table wider than the frame scrolls in it, and the page does not. */
+.kit-table {
+  overflow-x: auto;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-frame);
+  scrollbar-width: thin;
+  scrollbar-color: var(--field-border) transparent;
+}
+
+.kit-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-table);
+  line-height: var(--text-table--line-height);
+}
+
+.kit-table th {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-line);
+  color: var(--muted);
+  font-size: var(--text-hint);
+  font-weight: 600;
+  text-align: left;
+}
+
+.kit-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.kit-table[data-dense='true'] td {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.kit-table :is(th, td):first-child {
+  padding-left: 20px;
+}
+
+.kit-table :is(th, td):last-child {
+  padding-right: 20px;
+}
+
+.kit-table[data-hover='true'] tbody tr:hover {
+  background: var(--color-subtle);
+}
+
+.kit-table [data-align='end'] {
+  text-align: right;
+}
+
+/* A panel beside a list. */
+.kit-panel {
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-frame);
+  background: var(--color-subtle);
+}
+
+.kit-panel__head {
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.kit-panel__title {
+  font-size: var(--text-section);
+  font-weight: 700;
+  line-height: var(--text-section--line-height);
+}
+
+.kit-panel__detail {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: var(--text-hint);
+  line-height: normal;
+}
+
+.kit-panel__body {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 20px 22px;
+}
+
+.kit-panel__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 14px 22px;
+  border-top: 1px solid var(--color-line);
+  font-size: var(--text-hint);
+}
+
+/* A list of a name and its value. */
+.kit-key-value {
+  border-top: 1px solid var(--color-line);
+  font-size: var(--text-body);
+  line-height: normal;
+}
+
+.kit-key-value > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.kit-key-value dt {
+  color: var(--muted);
+}
+
+.kit-key-value dd {
+  min-width: 0;
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+/* The head of a page. */
+.kit-title {
+  font-size: var(--text-title);
+  font-weight: 700;
+  line-height: var(--text-title--line-height);
+  letter-spacing: var(--tracking-title);
+}
+
+.kit-title[data-size='setup'] {
+  font-size: var(--text-title-setup);
+  text-wrap: balance;
+}
+
+.kit-lead {
+  color: var(--muted);
+  font-size: var(--text-lead);
+  line-height: var(--text-lead--line-height);
+}
+
+.kit-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px 24px;
+}
+
+.kit-page-head .kit-title {
+  margin-bottom: 6px;
+}
+
+/* A page outside a workspace: a header with the logo, and one column. */
+.kit-entry {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.kit-entry__header {
+  border-bottom: 1px solid var(--color-line);
+}
+
+.kit-entry__header > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 24px;
+  /* As the mockup writes it: the padding is outside the 1280 px, so the logo is at 80 px at 1440. */
+  box-sizing: content-box;
+  max-width: 1280px;
+  min-height: 64px;
+  margin: 0 auto;
+  padding: 0 clamp(16px, 4vw, 32px);
+  color: var(--muted);
+  font-size: var(--text-small);
+  line-height: normal;
+}
+
+.kit-entry__logo {
+  display: flex;
+  padding: 8px 0;
+}
+
+.kit-entry__main {
+  display: flex;
+  flex: 1 1 auto;
+  justify-content: center;
+  padding: clamp(48px, 10vh, 112px) 16px 64px;
+}
+
+.kit-entry__column {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 400px;
+}
+
+.kit-entry__main[data-width='wide'] .kit-entry__column {
+  max-width: 440px;
+}
+
+/* The setup: two columns that wrap, laid out by the screen. */
+.kit-entry__main[data-width='full'] {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 56px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 48px clamp(16px, 4vw, 32px) 72px;
+}
+
+.kit-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: var(--text-hint);
+  line-height: normal;
+}
+
+.kit-divider::before,
+.kit-divider::after {
+  flex: 1;
+  height: 1px;
+  background: var(--color-line);
+  content: '';
+}
+
+/* The steps of the setup: a drop with a number, a line down to the next one, the step beside it. */
+.kit-steps {
+  padding: 0;
+  list-style: none;
+}
+
+.kit-step {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  column-gap: 16px;
+}
+
+.kit-step__rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-top: 1px;
+}
+
+.kit-step__mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 26px;
+  height: 26px;
+  background: var(--color-ink);
+  color: var(--surface);
+  font-size: var(--text-tiny);
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* The drop is turned by a quarter: what it holds is turned back. */
+.kit-step__mark > * {
+  transform: rotate(90deg);
+}
+
+.kit-step__mark svg {
+  width: 13px;
+  height: 13px;
+}
+
+.kit-step[data-state='pending'] .kit-step__mark {
+  border: 1.5px solid var(--field-border);
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.kit-step[data-state='done'] .kit-step__mark {
+  background: var(--color-done);
+}
+
+.kit-step__line {
+  flex: 1 1 auto;
+  width: 2px;
+  min-height: 24px;
+  border-radius: 2px;
+  background: var(--color-line);
+}
+
+.kit-step:last-child .kit-step__line {
+  display: none;
+}
+
+.kit-step__body {
+  min-width: 0;
+  padding-bottom: 32px;
+}
+
+.kit-step:last-child .kit-step__body {
+  padding-bottom: 0;
+}
+
+.kit-step__title {
+  font-size: var(--text-step);
+  font-weight: 600;
+  line-height: var(--text-step--line-height);
+}
+
+.kit-step[data-state='pending'] .kit-step__title {
+  color: var(--muted);
+}
+
+/* Something that happened, said in a box: « Check your inbox ». */
+.kit-callout {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  /* An address with no space in it takes the lines it needs, and the page does not scroll. */
+  overflow-wrap: anywhere;
+  padding: 18px 20px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-box);
+  background: var(--color-subtle);
+}
+
+/* One way among a few to do a thing, each in its card: the extension, the script tag. */
+.kit-option {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-box);
+}
+
+.kit-option__title {
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: normal;
+}
+
+/* Cards or buttons side by side while they have room, then one under the other. */
+.kit-auto-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  gap: 10px;
+}
+
+.kit-auto-grid[data-min='230'] {
+  grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
+  gap: 12px;
+}
+
+/* Code to copy. It scrolls in its box, and the page does not. */
+.kit-snippet {
+  overflow-x: auto;
+  padding: 10px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-button);
+  background: var(--color-subtle);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-tiny);
+  line-height: 1.55;
+}
+
+/* The window of a browser, drawn: a bar with an address, and a page under it. */
+.kit-browser {
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-frame);
+  background: var(--surface);
+  box-shadow: var(--shadow-frame);
+}
+
+.kit-browser__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  /* 44 px over its rule, as the mockup writes it. */
+  box-sizing: content-box;
+  height: 44px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-subtle);
+}
+
+.kit-browser__dots {
+  display: flex;
+  flex: none;
+  gap: 6px;
+  width: 42px;
+}
+
+.kit-browser__dots > span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-line);
+}
+
+.kit-browser__address {
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  min-width: 0;
+}
+
+.kit-browser__address > span {
+  overflow: hidden;
+  padding: 4px 16px;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: var(--text-hint);
+  line-height: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kit-browser__page {
+  position: relative;
+  height: 620px;
+  overflow: hidden;
+}
+
+.kit-browser__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 24px;
+  background: var(--color-subtle);
+  color: var(--muted);
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  text-align: center;
+}
+
+.kit-browser__empty svg {
+  width: 56px;
+  height: 68px;
+  fill: var(--color-line);
+}
+
+.kit-browser__empty p {
+  max-width: 280px;
+}
+
+/* No sentence: the drop alone, for a page that has nothing to say yet. */
+.kit-browser__empty p:empty {
+  display: none;
+}
+
+.kit-browser__caption {
+  margin: 12px 4px 0;
+  color: var(--muted);
+  font-size: var(--text-hint);
+  line-height: var(--text-hint--line-height);
+}
+
+/* A name and its initial. */
+.kit-avatar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: var(--color-avatar);
+  color: var(--surface);
+  font-size: var(--text-hint);
+  font-weight: 700;
+  line-height: normal;
+}
+
+.kit-avatar[data-size='small'] {
+  width: 28px;
+  height: 28px;
+}
+
+/* Somebody who was invited and has not come yet. */
+.kit-avatar[data-pending='true'] {
+  background: var(--surface);
+  color: var(--muted);
 }
 
 /*
   The alert of a problem (`Problem` in ui.tsx, FRU-163). HeroUI draws every alert as a white card
   with muted text, and tells its status with an icon and a title that the kit does not use. So the
   danger of the theme is on the text and on the border, and the card is tinted with it. The text on
-  that tint is 5.84:1.
+  that tint is 5.84:1. An alert that is a text alone is the accent on white (4.70:1), and the strong
+  accent on --color-subtle or --color-chip (6.20:1 and 5.89:1): the accent is 4.28:1 on the chip.
 */
 .alert--danger {
   border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--surface));
-  border-radius: 10px;
+  border-radius: var(--radius-box);
   background: color-mix(in srgb, var(--danger) 6%, var(--surface));
   box-shadow: none;
 }
@@ -93,20 +1214,78 @@ body {
 }
 
 /*
-  A wide button (`WideButton` in ui.tsx, FRU-168): a provider to sign in with, on the boards a
-  rectangle of the shape of a field. HeroUI draws every button as a pill, with the faint line as its
-  border. The pill stays for the action of a step, which its shape then tells from the controls.
-*/
-.wide-button {
-  border-radius: 6px;
-  border-color: var(--field-border);
-}
-
-/*
-  No mark on a required field (FRU-168): the boards draw none, and HeroUI adds a red asterisk after
+  No mark on a required field (FRU-168): the mockup draws none, and HeroUI adds a red asterisk after
   the label. The field stays required for the browser and for a screen reader.
 */
 .label--required::after,
 [data-required='true'] > .label::after {
   content: none;
+}
+
+/*
+  A menu (`Menu` in ui.tsx). Its button is drawn by the screen or as a button that is a picture; it
+  moves nothing under a press. The menu is the surface of a page with the frame of a card, wherever
+  its button is: on the rail too.
+*/
+.kit-menu-trigger {
+  cursor: pointer;
+  transform: none;
+  transition: none;
+}
+
+.kit-menu-trigger:active,
+.kit-menu-trigger[data-pressed='true'] {
+  transform: none;
+}
+
+.kit-menu {
+  min-width: 220px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-box);
+  background: var(--surface);
+  color: var(--color-ink);
+  box-shadow: var(--shadow-frame);
+}
+
+.kit-menu .menu-item {
+  min-height: var(--spacing-control-panel);
+  border-radius: var(--radius-button);
+  font-size: var(--text-small);
+  line-height: var(--text-small--line-height);
+  transform: none;
+  transition: none;
+}
+
+.kit-menu .menu-item[data-hovered='true'],
+.kit-menu .menu-item[data-focused='true'] {
+  background: var(--color-chip);
+}
+
+/* The item the keyboard is on: the ring of a page, inside the item so the menu does not clip it. */
+.kit-menu .menu-item[data-focus-visible='true'] {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+  box-shadow: none;
+}
+
+.kit-menu__words {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.kit-menu .menu-item .label {
+  color: inherit;
+  font-weight: 600;
+}
+
+.kit-menu .menu-item .description {
+  color: var(--muted);
+  font-size: var(--text-hint);
+  line-height: var(--text-hint--line-height);
+}
+
+/* The strong accent is 5.89:1 on the tint of an item under the pointer, where the accent is 4.28:1. */
+.kit-menu .menu-item[data-danger='true'] {
+  color: var(--color-accent-strong);
 }

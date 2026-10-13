@@ -1,12 +1,12 @@
-import { type FormEvent, useCallback, useEffect, useState } from 'react';
+import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { type Invitation, type Member, ORGANIZATION, type Role, call, invitationLink, sendsMail } from '../api';
-import { Confirm } from '../confirm';
+import { Confirmation } from '../confirm';
 import { INVITED, type Message, messageOf } from '../invitation-message';
-import { type Listed, edited, listedOf } from '../listed';
+import { type Listed, edited, known, listedOf } from '../listed';
 import { DID_NOT_ANSWER, copyText, problemOf } from '../problems';
-import { Button, Card, Chip, Choice, Field, Initial, Problem } from '../ui';
-import { PageHead, useWorkspace } from './workspace';
-import { msg, t } from '../i18n';
+import { Button, Choice, DataTable, Field, Initial, LinkButton, PageHead, Problem } from '../ui';
+import { useWorkspace } from './workspace';
+import { locale, msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
 
 const ROLE_WORDS: Readonly<Record<Role, string>> = {
@@ -37,11 +37,32 @@ const MEMBER_PROBLEMS: Readonly<Record<string, string>> = {
   forbidden: msg('Only an owner or an admin of the workspace changes its members.'),
 };
 
+/** « 3 Oct », as the mockup writes a day: the day first, in the language of the console. */
+const DAYS = { en: 'en-GB', fr: 'fr' } as const;
+
+/** The day of a date of the worker, with its year when asked. Nothing for a date that is not one. */
+function dayOf(iso: string | undefined, year: boolean): string | undefined {
+  const date = new Date(iso ?? '');
+  if (Number.isNaN(date.getTime())) return undefined;
+
+  return date.toLocaleDateString(DAYS[locale()], {
+    day: 'numeric',
+    month: 'short',
+    ...(year ? { year: 'numeric' as const } : {}),
+  });
+}
+
 /**
- * Who belongs to the workspace, and who is invited (design/boards/5-workspace.png, FRU-104).
+ * Who belongs to the workspace, and who is invited, as screen 12 of the mockup of 2026-10-13 draws
+ * them (FRU-247, on FRU-104): the invitation on one line, the table of the people, and what each
+ * role does.
  *
  * The lists come from the organization plugin of better-auth, through the worker. A guest reads only
  * their own row: the worker refuses them the list (FRU-149).
+ *
+ * Not here, because the worker of today cannot say them: when somebody was last seen (the last
+ * column is the day they joined), and the one site of a guest (an invitation is for a member or an
+ * admin, and « Sites » says every site, or the shared ones for a guest).
  */
 export default function Members() {
   useLocale();
@@ -109,8 +130,18 @@ export default function Members() {
     });
     if (!sent.ok) return setStuck({ row: invitation.id, problem: problemOf(sent, INVITE_PROBLEMS, NOT_INVITED) });
     setSentTo({ email: invitation.email, message: messageOf(sent.data, mailed) });
+    // A message that did not leave this time says nothing of the ones before it: the row keeps what
+    // it knew of them.
     setInvitations((current) =>
-      edited(current, (items) => items.map((each) => (each.id === sent.data.id ? sent.data : each))),
+      edited(current, (items) =>
+        items.map((each) => {
+          if (each.id !== sent.data.id) return each;
+          const { mailed: leftNow, ...rest } = sent.data;
+          const left = leftNow === false ? each.mailed : leftNow;
+
+          return left === undefined ? rest : { ...rest, mailed: left };
+        }),
+      ),
     );
   }
 
@@ -146,16 +177,29 @@ export default function Members() {
     createdAt: '',
     user: { id: me.account.id, email: me.account.email, name: me.account.name ?? '' },
   } satisfies Member;
+  const people: Listed<Member> = reads ? members : [self];
+  const waiting: Listed<Invitation> = manages ? invitations : [];
+  // What a guest does is said only where a guest is on the screen: nobody is invited as one yet.
+  const guests =
+    workspace.role === 'guest' ||
+    [...(known(people) ?? []), ...(known(waiting) ?? [])].some((each) => each.role === 'guest');
 
   return (
     <>
-      <PageHead title={t('Members')} lead={t('Who can see and leave feedback, and who can change the workspace.')} />
+      <PageHead
+        title={t('Members')}
+        lead={t('Who sees and leaves notes, and who changes the workspace.')}
+        className="mb-[24px]"
+      />
       {manages ? (
-        <form onSubmit={invite} className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end">
-          <div className="flex-1">
+        <form
+          onSubmit={invite}
+          aria-label={t('Invite someone')}
+          className="mb-[24px] flex flex-wrap items-end gap-[10px]"
+        >
+          <div className="min-w-0 flex-[999_1_260px]">
             <Field
-              label={t('Address of the person to invite')}
-              labelHidden
+              label={t('Email')}
               type="email"
               autoComplete="off"
               placeholder="name@company.com"
@@ -163,10 +207,9 @@ export default function Members() {
               onChange={(event) => setEmail(event.target.value)}
             />
           </div>
-          <div className="sm:w-44">
+          <div className="min-w-0 flex-[1_1_200px]">
             <Choice
-              label={t('Role of the person to invite')}
-              labelHidden
+              label={t('Role')}
               value={role}
               onChange={(value) => setRole(value as InvitedRole)}
               options={[
@@ -175,55 +218,130 @@ export default function Members() {
               ]}
             />
           </div>
-          <Button type="submit" disabled={busy || email.trim() === ''}>
+          <Button type="submit" inset={24} disabled={busy || email.trim() === ''}>
             {busy ? t('Sending…') : t('Invite')}
           </Button>
         </form>
       ) : null}
-      {manages ? (
-        <p className="mb-4 text-xs text-muted">
-          {t('The person signs in with that address, and joins. Guests, who see one site only, come later.')}
-        </p>
-      ) : null}
       {problem === undefined ? null : (
-        <div className="mb-4">
+        <div className="mb-[24px]">
           <Problem>{t(problem)}</Problem>
         </div>
       )}
       {sentTo === undefined ? null : <Invited email={sentTo.email} message={sentTo.message} />}
 
-      <Card>
-        <div className="grid grid-cols-[1fr_auto] gap-4 border-b border-line px-4 py-3 text-xs text-muted sm:grid-cols-[1fr_110px_90px_200px]">
-          <span>{t('Person')}</span>
-          <span>{t('Role')}</span>
-          <span className="hidden sm:block">{t('Sites')}</span>
-          <span className="hidden sm:block" />
+      {people === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
+
+      {/* The box of a read that failed is the one of the Sites screen: the mockup draws no other. */}
+      {people !== 'loading' && (people === 'failed' || waiting === 'failed') ? (
+        <div className="box-content flex max-w-[760px] flex-wrap items-center justify-between gap-[16px] rounded-frame border border-control px-[32px] py-[28px]">
+          <p role="alert" className="text-body text-muted">
+            {t(DID_NOT_ANSWER)}
+          </p>
+          <Button tone="outline" size="page" inset={18} onClick={() => void read()}>
+            {t('Try again')}
+          </Button>
         </div>
-        <Rows
-          members={reads ? members : [self]}
-          invitations={manages ? invitations : []}
-          me={me.account.id}
-          manages={manages}
-          stuck={stuck}
-          onRetry={() => void read()}
-          onResend={(each) => void resend(each)}
-          onCancel={(each) => void cancel(each)}
-          onRemove={(each) => void remove(each)}
-        />
-      </Card>
-      <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-3">
+      ) : null}
+
+      {typeof people !== 'string' && waiting !== 'failed' ? (
+        <DataTable label={t('Members')} minWidth={760} dense>
+          <thead>
+            <tr>
+              <th scope="col">{t('Person')}</th>
+              <th scope="col">{t('Role')}</th>
+              <th scope="col">{t('Sites')}</th>
+              {/* A guest reads their own row, which the worker gives no day: no column for one. */}
+              {reads ? (
+                <th scope="col" data-align="end">
+                  {t('Joined')}
+                </th>
+              ) : null}
+            </tr>
+          </thead>
+          <tbody>
+            {people.map((member) => {
+              const name = nameOf(member);
+              const removes = manages && member.userId !== me.account.id;
+
+              return (
+                <Row
+                  key={member.id}
+                  initial={name}
+                  name={member.userId === me.account.id ? t('{name} (you)', { name }) : name}
+                  detail={member.user.email}
+                  role={member.role}
+                  when={reads ? (dayOf(member.createdAt, true) ?? '') : undefined}
+                  problem={stuck?.row === member.id ? stuck.problem : undefined}
+                  {...(removes
+                    ? {
+                        asks: {
+                          label: t('Remove'),
+                          confirmLabel: t('Remove {name}', { name }),
+                          consequence: t(
+                            '{name} leaves the workspace, and their extension stops reading its sites. Their notes stay.',
+                            { name },
+                          ),
+                          onConfirm: () => void remove(member),
+                        },
+                      }
+                    : {})}
+                />
+              );
+            })}
+            {typeof waiting === 'string'
+              ? null
+              : waiting.map((invitation) => {
+                  const sent = dayOf(invitation.createdAt, false);
+                  const until = dayOf(invitation.expiresAt, false);
+                  // No message left for this one: the worker has no mailer, or it said so when it kept
+                  // the invitation (FRU-209). The invitation is kept, and its link is given by hand.
+                  const went = messageOf(invitation, mailed) === 'sent';
+
+                  return (
+                    <Row
+                      key={invitation.id}
+                      pending
+                      initial={invitation.email}
+                      name={invitation.email}
+                      detail={went ? t('Invitation sent') : t('Invitation kept')}
+                      role={invitation.role}
+                      when={sent !== undefined && went ? t('Sent {date}', { date: sent }) : (sent ?? '')}
+                      {...(until === undefined ? {} : { until: t('Until {date}', { date: until }) })}
+                      problem={stuck?.row === invitation.id ? stuck.problem : undefined}
+                      onResend={() => void resend(invitation)}
+                      asks={{
+                        label: t('Cancel'),
+                        confirmLabel: t('Cancel the invitation of {email}', { email: invitation.email }),
+                        consequence: t('The message already sent no longer lets {email} join.', {
+                          email: invitation.email,
+                        }),
+                        onConfirm: () => void cancel(invitation),
+                      }}
+                    />
+                  );
+                })}
+          </tbody>
+        </DataTable>
+      ) : null}
+
+      <dl className="mt-[28px] grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] gap-x-[32px] gap-y-[16px] text-small">
         <div>
           <dt className="font-semibold">{t('Admin')}</dt>
-          <dd className="text-muted">{t('Sites, connectors, members.')}</dd>
+          <dd className="mt-[2px] text-muted">{t('Sites, connectors and members.')}</dd>
         </div>
         <div>
           <dt className="font-semibold">{t('Member')}</dt>
-          <dd className="text-muted">{t('Every site. Sees the tracker links.')}</dd>
+          <dd className="mt-[2px] text-muted">{t('Every site. Sees the links to the tracker.')}</dd>
         </div>
-        <div>
-          <dt className="font-semibold">{t('Guest')}</dt>
-          <dd className="text-muted">{t('Only the sites shared with them. Free, never sees the tracker.')}</dd>
-        </div>
+        {guests ? (
+          <div>
+            <dt className="font-semibold">{t('Guest')}</dt>
+            <dd className="mt-[2px] text-muted">
+              {t('Only the sites shared with them. Free, and never sees the tracker.')}
+            </dd>
+          </div>
+        ) : null}
       </dl>
     </>
   );
@@ -232,6 +350,7 @@ export default function Members() {
 /**
  * What an invitation became, and the link to send by hand (FRU-104, decided on FRU-107): the link
  * opens nothing by itself, so a chat is as good as a message. With a mailer, the message went too.
+ * The mockup draws none: it is a block of its « Check your inbox ».
  */
 function Invited({ email, message }: { email: string; message: Message }) {
   useLocale();
@@ -239,21 +358,24 @@ function Invited({ email, message }: { email: string; message: Message }) {
   const link = invitationLink();
 
   return (
-    <div role="status" className="mb-4 rounded-[10px] border border-line bg-surface p-4 text-sm">
+    <div role="status" className="mb-[24px] rounded-frame border border-line bg-subtle px-[22px] py-[20px] text-small">
       <p>{t(INVITED[message], { email })}</p>
-      <p className="mt-2 break-all rounded-md bg-chip px-3 py-2 font-mono text-xs">{link}</p>
-      <p className="mt-2 text-xs text-muted">
+      <p className="mt-[10px] rounded-button border border-line bg-surface px-[12px] py-[8px] font-mono text-hint break-all">
+        {link}
+      </p>
+      <p className="mt-[10px] text-hint text-muted">
         {t('They open it, sign in with {email}, and join. The link alone opens nothing.', { email })}
       </p>
-      <Button
-        tone="outline"
-        className="mt-3"
-        onClick={() => void copyText(link).then((taken) => setCopied(taken ? 'yes' : 'refused'))}
-      >
-        {copied === 'yes' ? t('Copied') : t('Copy the link')}
-      </Button>
+      <div className="mt-[14px]">
+        <Button
+          tone="outline"
+          onClick={() => void copyText(link).then((taken) => setCopied(taken ? 'yes' : 'refused'))}
+        >
+          {copied === 'yes' ? t('Copied') : t('Copy the link')}
+        </Button>
+      </div>
       {copied === 'refused' ? (
-        <p role="alert" className="mt-2 text-xs text-muted">
+        <p role="alert" className="mt-[10px] text-hint text-muted">
           {t('The browser refused the copy. Select the link above and copy it by hand.')}
         </p>
       ) : null}
@@ -265,123 +387,85 @@ function nameOf(member: Member): string {
   return member.user.name.trim() || member.user.email.split('@')[0] || member.user.email;
 }
 
-function Rows({
-  members,
-  invitations,
-  me,
-  manages,
-  stuck,
-  onRetry,
-  onResend,
-  onCancel,
-  onRemove,
-}: {
-  members: Listed<Member>;
-  invitations: Listed<Invitation>;
-  me: string;
-  manages: boolean;
-  stuck: { row: string; problem: string } | undefined;
-  onRetry: () => void;
-  onResend: (invitation: Invitation) => void;
-  onCancel: (invitation: Invitation) => void;
-  onRemove: (member: Member) => void;
-}) {
+type RowProps = {
+  /** What the initial of the round chip is read from. */
+  initial: string;
+  /** Somebody invited who has not come: the chip is empty of colour. */
+  pending?: boolean;
+  name: string;
+  /** The second line: an address, or « Invitation sent ». */
+  detail: string;
+  role: Role;
+  /** The last column: the day somebody joined, or the day an invitation was sent. No column: `undefined`. */
+  when: string | undefined;
+  /** Under the day of an invitation: the day it ends. */
+  until?: string;
+  onResend?: () => void;
+  /** The gesture of the row that asks twice: « Remove », or « Cancel ». */
+  asks?: { label: string; confirmLabel: string; consequence: string; onConfirm: () => void };
+  /** Why the gesture of the row did not go through. */
+  problem: string | undefined;
+};
+
+/** The row of a person or of an invitation, and under it the second time of its gesture. */
+function Row({ initial, pending = false, name, detail, role, when, until, onResend, asks, problem }: RowProps) {
   useLocale();
-  if (members === 'loading') return <p className="p-5 text-sm text-muted">{t('Loading…')}</p>;
-  if (members === 'failed' || invitations === 'failed')
-    return (
-      <div className="flex flex-wrap items-center gap-3 p-5">
-        <p role="alert" className="flex-1 text-sm text-muted">
-          {t(DID_NOT_ANSWER)}
-        </p>
-        <Button tone="outline" onClick={onRetry}>
-          {t('Try again')}
-        </Button>
-      </div>
+  const [asking, setAsking] = useState(false);
+  const actions = useRef<HTMLSpanElement>(null);
+  // « Keep it » and Escape give focus back to the button that asked, the last one of the row.
+  const keep = () => {
+    setAsking(false);
+    [...(actions.current?.querySelectorAll('button') ?? [])].at(-1)?.focus();
+  };
+  const last: ReactNode =
+    when === undefined ? null : (
+      <td data-align="end" className="whitespace-nowrap text-muted tabular-nums">
+        <span ref={actions} className="inline-flex items-center gap-[16px]">
+          <span>
+            <span className="block">{when}</span>
+            {until === undefined ? null : <span className="block text-hint leading-[inherit]">{until}</span>}
+          </span>
+          {onResend === undefined ? null : <LinkButton onClick={onResend}>{t('Resend')}</LinkButton>}
+          {asks === undefined ? null : <LinkButton onClick={() => setAsking(true)}>{asks.label}</LinkButton>}
+        </span>
+      </td>
     );
-  const row = 'grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2 px-4 py-3 sm:grid-cols-[1fr_110px_90px_200px]';
 
   return (
-    <ul>
-      {members.map((member) => (
-        <li key={member.id} className="border-b border-line last:border-b-0">
-          <div className={row}>
-            <span className="flex min-w-0 items-center gap-3">
-              <Initial name={nameOf(member)} />
-              <span className="min-w-0">
-                <span className="block truncate text-[15px] font-semibold">
-                  {member.userId === me ? t('{name} (you)', { name: nameOf(member) }) : nameOf(member)}
-                </span>
-                <span className="block truncate text-xs text-muted">{member.user.email}</span>
-              </span>
+    <>
+      <tr>
+        <td>
+          <span className="flex items-center gap-[12px]">
+            <Initial name={initial} pending={pending} />
+            <span className="min-w-0">
+              <span className="block font-semibold [overflow-wrap:anywhere]">{name}</span>
+              <span className="block text-hint leading-[inherit] text-muted [overflow-wrap:anywhere]">{detail}</span>
             </span>
-            <span>
-              <Chip tone={member.role === 'owner' ? 'accent' : 'neutral'}>{t(ROLE_WORDS[member.role])}</Chip>
-            </span>
-            <span className="hidden text-sm sm:block">{member.role === 'guest' ? t('Shared ones') : t('All')}</span>
-            {manages && member.userId !== me && member.id !== 'self' ? (
-              <span className="col-span-full flex justify-end sm:col-span-1">
-                <Confirm
-                  label={t('Remove')}
-                  confirmLabel={t('Remove {name}', { name: nameOf(member) })}
-                  consequence={t(
-                    '{name} leaves the workspace, and their extension stops reading its sites. Their notes stay.',
-                    { name: nameOf(member) },
-                  )}
-                  onConfirm={() => onRemove(member)}
+          </span>
+        </td>
+        <td>{t(ROLE_WORDS[role])}</td>
+        <td>{role === 'guest' ? t('Shared ones') : t('Every site')}</td>
+        {last}
+      </tr>
+      {(asking && asks !== undefined) || problem !== undefined ? (
+        <tr className="bg-subtle">
+          <td colSpan={when === undefined ? 3 : 4}>
+            {/* The table is wider than a phone and scrolls in its frame: what the gesture costs stays
+                in what is seen of it, at the padding of a cell, and as wide as the frame at most. */}
+            <div className="sticky left-[20px] flex max-w-[calc(100vw-72px)] flex-col gap-[12px] py-[6px]">
+              {asking && asks !== undefined ? (
+                <Confirmation
+                  confirmLabel={asks.confirmLabel}
+                  consequence={asks.consequence}
+                  onConfirm={asks.onConfirm}
+                  onKeep={keep}
                 />
-              </span>
-            ) : null}
-          </div>
-          {stuck?.row === member.id ? (
-            <div className="px-4 pb-3">
-              <Problem>{t(stuck.problem)}</Problem>
-            </div>
-          ) : null}
-        </li>
-      ))}
-      {invitations === 'loading'
-        ? null
-        : invitations.map((invitation) => (
-            <li key={invitation.id} className="border-b border-line last:border-b-0">
-              <div className={row}>
-                <span className="flex min-w-0 items-center gap-3">
-                  <Initial name={invitation.email} />
-                  <span className="min-w-0">
-                    <span className="block truncate text-[15px] font-semibold">{invitation.email}</span>
-                    <span className="block truncate text-xs text-muted">
-                      {t('Invited as {role}, until {date}', {
-                        role: t(ROLE_WORDS[invitation.role]).toLowerCase(),
-                        date: new Date(invitation.expiresAt).toLocaleDateString(),
-                      })}
-                    </span>
-                  </span>
-                </span>
-                <span>
-                  <Chip tone="done">{t('Invited')}</Chip>
-                </span>
-                <span className="hidden text-sm sm:block">{t('All')}</span>
-                <span className="col-span-full flex flex-wrap justify-end gap-2 sm:col-span-1">
-                  <Button tone="quiet" onClick={() => onResend(invitation)}>
-                    {t('Resend')}
-                  </Button>
-                  <Confirm
-                    label={t('Cancel')}
-                    confirmLabel={t('Cancel the invitation of {email}', { email: invitation.email })}
-                    consequence={t('The message already sent no longer lets {email} join.', {
-                      email: invitation.email,
-                    })}
-                    onConfirm={() => onCancel(invitation)}
-                  />
-                </span>
-              </div>
-              {stuck?.row === invitation.id ? (
-                <div className="px-4 pb-3">
-                  <Problem>{t(stuck.problem)}</Problem>
-                </div>
               ) : null}
-            </li>
-          ))}
-    </ul>
+              {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
+            </div>
+          </td>
+        </tr>
+      ) : null}
+    </>
   );
 }

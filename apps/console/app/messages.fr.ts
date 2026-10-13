@@ -31,7 +31,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'La langue de la console, et des e-mails que Fruitback vous envoie.',
   'Your account did not take this language yet. It is kept in this browser, and sent again the next time you open the console.':
     'Votre compte n’a pas encore pris cette langue. Elle est gardée dans ce navigateur, et renvoyée la prochaine fois que vous ouvrez la console.',
-  'Address of the person to invite': 'Adresse de la personne à inviter',
   'Fruitback cannot send to this address. Use a full https:// address that the internet can reach.':
     'Fruitback ne peut pas envoyer à cette adresse. Utilisez une adresse https:// complète, joignable depuis internet.',
   'A secret is 16 to 256 characters, with no space. Leave it empty and Fruitback makes one.':
@@ -54,7 +53,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Not sent yet': 'Pas encore envoyée',
   'The new attempt was not started. Try again.': 'La nouvelle tentative n’a pas démarré. Réessayez.',
   'Sends to {host}': 'Envoie à {host}',
-  'Which sites send their notes there': 'Quels sites y envoient leurs notes',
   'Fruitback only': 'Fruitback seulement',
   'Fruitback, and this address': 'Fruitback, et cette adresse',
   'The request, and how to check its signature': 'La requête, et comment vérifier sa signature',
@@ -72,12 +70,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Linear n’a pas répondu pour cette connexion. Déconnectez-la, puis connectez Linear de nouveau.',
   'Linear was not connected: the consent was refused there.':
     'Linear n’a pas été connecté : le consentement y a été refusé.',
-  'Linear was not connected. Start again from « Connect with Linear ».':
-    'Linear n’a pas été connecté. Recommencez depuis « Connecter avec Linear ».',
   'Fruitback could not start the connection to Linear. Try again.':
     'Fruitback n’a pas pu démarrer la connexion à Linear. Réessayez.',
   'Going to Linear…': 'Direction Linear…',
-  'Connect with Linear': 'Connecter avec Linear',
   'Use an API key': 'Utiliser une clé d’API',
   'Workspace {name}': 'Workspace {name}',
   'Connected to the workspace {name}': 'Connecté au workspace {name}',
@@ -115,9 +110,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Delete {workspace}': 'Supprimer {workspace}',
 
   'An issue per note, in one repository.': 'Un ticket par note, dans un dépôt.',
-  'Issues in a Jira Cloud project.': 'Des tickets dans un projet Jira Cloud.',
-  'A card per note, in the list you choose.': 'Une carte par note, dans la liste que vous choisissez.',
-  'A row per note in a database.': 'Une ligne par note dans une base.',
   'POST each note to your own endpoint.': 'Chaque note envoyée en POST à votre propre adresse.',
   'Linear refused this key. Copy it again from Linear, in Settings, then Security and access.':
     'Linear a refusé cette clé. Copiez-la de nouveau depuis Linear, dans Settings, puis Security and access.',
@@ -131,10 +123,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Linear did not answer just now. Your key is not kept: try again in a minute.':
     'Linear n’a pas répondu. Votre clé n’est pas gardée : réessayez dans une minute.',
   Connectors: 'Connecteurs',
-  'Connect a source once. Every site of the workspace can then send its feedback there.':
-    'Connectez une source une fois. Chaque site du workspace peut ensuite y envoyer ses retours.',
   Connected: 'Connectées',
-  'The notes stay in this workspace': 'Les notes restent dans ce workspace',
   'Key of {person}': 'Clé de {person}',
   'Add a source': 'Ajouter une source',
   'An issue per note, in the team you choose.': 'Un ticket par note, dans l’équipe que vous choisissez.',
@@ -146,7 +135,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Checking…': 'Vérification…',
   Connect: 'Connecter',
   Cancel: 'Annuler',
-  Working: 'En service',
   'Needs attention': 'Action requise',
   'Linear refuses this connection since {when}, and the notes of its sites do not reach Linear. Disconnect it, then connect Linear again.':
     'Linear refuse cette connexion depuis {when}, et les notes de ses sites n’arrivent pas dans Linear. Déconnectez-la, puis connectez Linear de nouveau.',
@@ -159,23 +147,20 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The destination of this site did not change. Try again.': 'La destination de ce site n’a pas changé. Réessayez.',
   'This source is still connected. Try again.': 'Cette source est toujours connectée. Réessayez.',
   'Connected with the key of {person}': 'Connectée avec la clé de {person}',
-  'Where each site sends its notes': 'Où chaque site envoie ses notes',
   'This workspace has no site yet.': 'Ce workspace n’a pas encore de site.',
   'Another source': 'Une autre source',
   '{team}, no project': '{team}, sans projet',
-  Disconnect: 'Déconnecter',
 
   Owner: 'Propriétaire',
   Admin: 'Administrateur',
   Member: 'Membre',
   Guest: 'Invité',
   Members: 'Membres',
-  'Who can see and leave feedback, and who can change the workspace.':
-    'Qui peut voir et laisser des retours, et qui peut modifier le workspace.',
+  'Who sees and leaves notes, and who changes the workspace.':
+    'Qui voit et laisse des notes, et qui modifie le workspace.',
+  'Invite someone': 'Inviter quelqu’un',
+  Email: 'E-mail',
   Invite: 'Inviter',
-  'Role of the person to invite': 'Rôle de la personne à inviter',
-  'The person signs in with that address, and joins. Guests, who see one site only, come later.':
-    'La personne se connecte avec cette adresse, et rejoint l’espace. Les invités, qui ne voient qu’un site, viendront plus tard.',
   'Invitation sent to {email}. You can also send them this link:':
     'Invitation envoyée à {email}. Vous pouvez aussi lui envoyer ce lien :',
   'Invitation kept for {email}. Send them this link:': 'Invitation gardée pour {email}. Envoyez-lui ce lien :',
@@ -189,8 +174,10 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Remove {name}': 'Retirer {name}',
   '{name} leaves the workspace, and their extension stops reading its sites. Their notes stay.':
     '{name} quitte l’espace de travail, et son extension cesse de lire ses sites. Ses notes restent.',
-  'Invited as {role}, until {date}': 'Invité comme {role}, jusqu’au {date}',
-  Invited: 'Invité',
+  'Invitation sent': 'Invitation envoyée',
+  'Invitation kept': 'Invitation gardée',
+  'Sent {date}': 'Envoyée le {date}',
+  Joined: 'Arrivée',
   Resend: 'Renvoyer',
   'Cancel the invitation of {email}': 'Annuler l’invitation de {email}',
   'The message already sent no longer lets {email} join.':
@@ -234,11 +221,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Person: 'Personne',
   Role: 'Rôle',
   Sites: 'Sites',
-  All: 'Tous',
-  'Sites, connectors, members.': 'Sites, connecteurs, membres.',
-  'Every site. Sees the tracker links.': 'Tous les sites. Voit les liens du tracker.',
-  'Only the sites shared with them. Free, never sees the tracker.':
-    'Seulement les sites partagés avec lui. Gratuit, ne voit jamais le tracker.',
+  'Every site': 'Tous les sites',
+  'Sites, connectors and members.': 'Sites, connecteurs et membres.',
+  'Every site. Sees the links to the tracker.': 'Tous les sites. Voit les liens vers le tracker.',
+  'Only the sites shared with them. Free, and never sees the tracker.':
+    'Seulement les sites partagés avec lui. Gratuit, et ne voit jamais le tracker.',
 
   Workspace: 'Workspace',
   'Sign in, name it': 'Se connecter, le nommer',
@@ -334,19 +321,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'You are not signed in yet': 'Vous n’êtes pas encore connecté',
   'Fruitback did not answer. Your link still works.': 'Fruitback n’a pas répondu. Votre lien fonctionne toujours.',
   'This link no longer works': 'Ce lien ne fonctionne plus',
-  'A link works once, for fifteen minutes. Ask for another one.':
-    'Un lien fonctionne une fois, pendant quinze minutes. Demandez-en un autre.',
-  'Send a new link': 'Envoyer un nouveau lien',
   'Signing you in…': 'Connexion en cours…',
 
-  'The addresses you review. Adding a site is pasting its URL.':
-    'Les adresses que vous relisez. Ajouter un site, c’est coller son URL.',
-  'Who sees the feedback': 'Qui voit les retours',
-  Everyone: 'Tout le monde',
-  'Add the site': 'Ajouter le site',
-  'No site yet. Paste the address of the one you review.':
-    'Pas encore de site. Collez l’adresse de celui que vous relisez.',
-  'Fruitback did not answer. Your sites are not lost.': 'Fruitback n’a pas répondu. Vos sites ne sont pas perdus.',
   'Fruitback did not answer. The sources and their sites could not be read.':
     'Fruitback n’a pas répondu. Les sources et leurs sites n’ont pas pu être lus.',
   Close: 'Fermer',
@@ -366,12 +342,64 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Only the owner of the workspace deletes it.': 'Seul le propriétaire du workspace le supprime.',
   'The workspace was not deleted. Try again.': 'Le workspace n’a pas été supprimé. Réessayez.',
   'Remove {site}': 'Retirer {site}',
+  'Where {workspace} collects notes, and where they stand.':
+    'Là où {workspace} recueille des notes, et où elles en sont.',
+  'Add a site': 'Ajouter un site',
+  'The sites did not load': 'Les sites ne se sont pas chargés',
+  'Fruitback did not answer. Your sites and notes are safe.':
+    'Fruitback n’a pas répondu. Vos sites et vos notes sont en sécurité.',
+  'No site yet': 'Aucun site pour l’instant',
+  "Paste the address of a site you review. Staging, a preview build or a client's live site: any page of it will do.":
+    'Collez l’adresse d’un site que vous relisez. Un staging, une preview ou le site en ligne d’un client : n’importe laquelle de ses pages convient.',
+  'An owner or an admin of {workspace} adds its first site.':
+    'Un propriétaire ou un admin de {workspace} ajoute son premier site.',
+  'Notes go to': 'Les notes vont vers',
+  Actions: 'Actions',
+  'A site with no tracker keeps its notes in Fruitback.': 'Un site sans tracker garde ses notes dans Fruitback.',
+  'Connect a tracker': 'Connecter un tracker',
+  'Add site': 'Ajouter le site',
+  'Who sees the notes?': 'Qui voit les notes ?',
+  'Members of {workspace}': 'Les membres de {workspace}',
+  "Visitors of the site see nothing. Right for staging and for a client's site.":
+    'Les visiteurs du site ne voient rien. Convient à un staging et au site d’un client.',
+  'Everyone who visits': 'Tous les visiteurs',
+  'A public way to report a problem on a live site.': 'Un moyen public de signaler un problème sur un site en ligne.',
+  'A tracker': 'Un tracker',
+  'Team {team}': 'Équipe {team}',
+  'Kept in Fruitback': 'Gardées dans Fruitback',
+  'No tracker yet': 'Pas encore de tracker',
+  '{place} and {count} more': '{place} et {count} de plus',
+  'Preview builds': 'Previews',
+  'More for {site}': 'Plus pour {site}',
+  'Install on {site}': 'Installer sur {site}',
   'The widget stops on {site}, and the script pasted there no longer works: adding the site again gives it a new script. The notes already in a tracker stay there.':
     'Le widget s’arrête sur {site}, et le script collé là ne marche plus : ajouter le site à nouveau lui donne un nouveau script. Les notes déjà dans un tracker y restent.',
   'Disconnect {source}': 'Déconnecter {source}',
+  'Connect a tracker once. Every site of {workspace} can then send its notes there.':
+    'Connectez un tracker une fois. Chaque site de {workspace} peut alors y envoyer ses notes.',
+  'No tracker yet. The notes stay in Fruitback.': 'Pas encore de tracker. Les notes restent dans Fruitback.',
+  '1 note did not arrive': '1 note n’est pas arrivée',
+  '{count} notes did not arrive': '{count} notes ne sont pas arrivées',
+  'An issue in a Jira Cloud project.': 'Une issue dans un projet Jira Cloud.',
+  'An issue in a project, cloud or self-managed.': 'Une issue dans un projet, cloud ou auto-hébergé.',
+  'A card in the list you choose.': 'Une carte dans la liste que vous choisissez.',
+  'A row in a database.': 'Une ligne dans une base de données.',
+  'Tells Slack or any address when a note arrives.':
+    'Prévient Slack ou n’importe quelle adresse quand une note arrive.',
+  'Linear was not connected. Start again from « Connect ».':
+    'Linear n’a pas été connecté. Recommencez depuis « Connecter ».',
+  'Sites sending here': 'Sites qui envoient ici',
+  'No site sends its notes here yet.': 'Aucun site n’envoie encore ses notes ici.',
+  'Other sites': 'Autres sites',
+  'Which Linear state gives each pin its status.': 'Quel état Linear donne son statut à chaque pin.',
+  'Status for {state}': 'Statut pour {state}',
+  'Fruitback could not read the states of Linear. The statuses you set are not lost.':
+    'Fruitback n’a pas pu lire les états de Linear. Les statuts que vous avez réglés ne sont pas perdus.',
   'Its sites keep their notes in the workspace again. The issues already in Linear stay there.':
     'Ses sites gardent de nouveau leurs notes dans le workspace. Les issues déjà dans Linear y restent.',
-  'Cloud workspace · beta': 'Workspace Cloud · bêta',
+  'Cloud workspace': 'Workspace Cloud',
+  Notes: 'Notes',
+  'Help and docs': 'Aide et documentation',
 
   New: 'Nouveau',
   'To do': 'À faire',
@@ -380,12 +408,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Closed: 'Fermé',
   'This setting did not change. Try again.': 'Ce réglage n’a pas changé. Réessayez.',
   'Status of the pins': 'État des pins',
-  'Which Linear state gives which colour on the page.': 'Quel état de Linear donne quelle couleur sur la page.',
   'The states appear here once a site sends its notes to a team.':
     'Les états apparaissent ici dès qu’un site envoie ses notes à une équipe.',
   'Show Linear comments as replies': 'Montrer les commentaires de Linear comme réponses',
-  'Fruitback could not read the states of Linear. The colours you set are not lost.':
-    'Fruitback n’a pas pu lire les états de Linear. Les couleurs que vous avez réglées ne sont pas perdues.',
   'The destinations of this site did not change. Try again.':
     'Les destinations de ce site n’ont pas changé. Réessayez.',
   'Its notes stay in Fruitback, in this workspace.': 'Ses notes restent dans Fruitback, dans ce workspace.',
@@ -436,4 +461,24 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Proven: 'Prouvé',
   'Proof lost': 'Preuve perdue',
   'Not proven yet': 'Pas encore prouvé',
+  // The sign-in page, and the tab that goes on by itself (FRU-235).
+  'Sign in to Fruitback': 'Connectez-vous à Fruitback',
+  'We email you a link that signs you in on this browser.':
+    'Nous vous envoyons par e-mail un lien qui vous connecte dans ce navigateur.',
+  'Email me a link': 'Recevoir un lien par e-mail',
+  or: 'ou',
+  'New to Fruitback?': 'Nouveau sur Fruitback ?',
+  'Set up a workspace': 'Créer un workspace',
+  'A sign-in link is on its way to {email}.': 'Un lien de connexion est en route vers {email}.',
+  'Open it in this browser and this tab signs in by itself. The link works once, for fifteen minutes.':
+    'Ouvrez-le dans ce navigateur, et cet onglet se connecte tout seul. Le lien fonctionne une fois, pendant quinze minutes.',
+  'Send again in {time}': 'Renvoyer dans {time}',
+  'Send again': 'Renvoyer',
+  'You are signed in': 'Vous êtes connecté',
+  'Your other Fruitback tab has carried on without you. You can close this one.':
+    'Votre autre onglet Fruitback a continué sans vous. Vous pouvez fermer celui-ci.',
+  'Continue in this tab': 'Continuer dans cet onglet',
+  'A link works once, for fifteen minutes. This one was already used or ran out of time.':
+    'Un lien fonctionne une fois, pendant quinze minutes. Celui-ci a déjà servi, ou son délai est passé.',
+  'Send me a new link': 'M’envoyer un nouveau lien',
 };

@@ -5,16 +5,16 @@ import { WORKER_ORIGIN } from './pin.ts';
  * `Confirm` (FRU-165), the gesture that asks twice, measured where the console uses it (FRU-191):
  * « Remove » a site, and « Disconnect » a source.
  *
- * The first press sends nothing and gives focus to « Keep it ». « Keep it » and Escape put the first
- * button back, with focus on it. Only the second button sends the `DELETE`.
+ * The first press sends nothing and gives focus to « Keep it ». « Keep it » and Escape put the row
+ * back as it was, with focus on what asked. Only the second button sends the `DELETE`.
  *
  * The worker is answered by stubs, which keep the `DELETE`s the console sent.
  */
 const CONSOLE = 'http://localhost:5178';
 
 const WORDS = {
-  en: { keep: 'Keep it', remove: 'Remove', disconnect: 'Disconnect' },
-  fr: { keep: 'Le garder', remove: 'Retirer', disconnect: 'Déconnecter' },
+  en: { keep: 'Keep it', remove: 'Remove', disconnect: 'Disconnect Linear' },
+  fr: { keep: 'Le garder', remove: 'Retirer', disconnect: 'Déconnecter Linear' },
 } as const;
 type Locale = keyof typeof WORDS;
 
@@ -48,12 +48,36 @@ async function stubWorker(page: Page, locale: Locale): Promise<string[]> {
   return deleted;
 }
 
-/** What a screen needs to show its `Confirm`, and the `DELETE` its second button sends. */
+const MORE = { en: 'More for staging.acme.dev', fr: 'Plus pour staging.acme.dev' } as const;
+
+/**
+ * What a screen needs to ask the first time, and the `DELETE` its second button sends.
+ *
+ * A source asks with a button of its panel. A site asks from the menu of its row (FRU-243): the
+ * button of the menu is what has focus before, and what takes it back.
+ */
 const screens = [
   {
     name: 'a site',
     path: '/w/w1/sites',
-    first: (locale: Locale) => WORDS[locale].remove,
+    back: (page: Page, locale: Locale) => page.getByRole('button', { name: MORE[locale], exact: true }),
+    ask: async (page: Page, locale: Locale) => {
+      await page.getByRole('button', { name: MORE[locale], exact: true }).click();
+      await page.getByRole('menuitem', { name: WORDS[locale].remove, exact: true }).click();
+    },
+    // From the button of the menu, with the keyboard alone: the menu, its third and last item, Enter.
+    askWithKeys: async (page: Page) => {
+      // Measured: a menu opened less than 100 ms after « Keep it » opens with focus on nothing. A
+      // person does not press twice that fast; the test waits as a person does.
+      await page.waitForTimeout(250);
+      await page.keyboard.press('Enter');
+      await expect(page.getByRole('menu')).toBeVisible();
+      await expect(page.getByRole('menuitem').first()).toBeFocused();
+      await page.keyboard.press('ArrowDown');
+      await page.keyboard.press('ArrowDown');
+      await expect(page.getByRole('menuitem').last()).toBeFocused();
+      await page.keyboard.press('Enter');
+    },
     second: (locale: Locale) => (locale === 'en' ? 'Remove staging.acme.dev' : 'Retirer staging.acme.dev'),
     open: async (_page: Page) => {},
     deletes: '/console/workspaces/w1/sites/s1',
@@ -61,7 +85,10 @@ const screens = [
   {
     name: 'a source',
     path: '/w/w1/connectors',
-    first: (locale: Locale) => WORDS[locale].disconnect,
+    back: (page: Page, locale: Locale) => page.getByRole('button', { name: WORDS[locale].disconnect, exact: true }),
+    ask: (page: Page, locale: Locale) =>
+      page.getByRole('button', { name: WORDS[locale].disconnect, exact: true }).click(),
+    askWithKeys: (page: Page) => page.keyboard.press('Enter'),
     second: (locale: Locale) => (locale === 'en' ? 'Disconnect Key of Ana' : 'Déconnecter Clé de Ana'),
     // The panel of the source opens from its row.
     open: (page: Page) => page.locator('button[aria-pressed]').first().click(),
@@ -83,31 +110,31 @@ for (const screen of screens) {
       await expect(page.locator('main h1')).toBeVisible();
       await screen.open(page);
 
-      const first = page.getByRole('button', { name: screen.first(locale), exact: true });
+      const back = screen.back(page, locale);
       const keep = page.getByRole('button', { name: WORDS[locale].keep, exact: true });
       const second = page.getByRole('button', { name: screen.second(locale), exact: true });
 
       // The first press asks, sends nothing, and puts the keyboard on the way back.
-      await first.click();
+      await screen.ask(page, locale);
       await expect(second).toBeVisible();
       await expect(keep).toBeFocused();
       expect(deleted).toEqual([]);
 
-      // « Keep it » puts the first button back, with focus on it.
+      // « Keep it » puts the row back as it was, with focus on what asked.
       await keep.click();
       await expect(second).toHaveCount(0);
-      await expect(first).toBeFocused();
+      await expect(back).toBeFocused();
 
       // Escape does the same, from the keyboard alone.
-      await page.keyboard.press('Enter');
+      await screen.askWithKeys(page);
       await expect(keep).toBeFocused();
       await page.keyboard.press('Escape');
       await expect(second).toHaveCount(0);
-      await expect(first).toBeFocused();
+      await expect(back).toBeFocused();
       expect(deleted).toEqual([]);
 
       // Only the second button acts, once.
-      await first.click();
+      await screen.ask(page, locale);
       await second.click();
       await expect.poll(() => deleted).toEqual([screen.deletes]);
     });

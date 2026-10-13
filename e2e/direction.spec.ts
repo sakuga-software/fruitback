@@ -53,8 +53,8 @@ test('in Arabic the dock and the popover move, and the pin stays on its element'
 
   await expect(page.getByPlaceholder(ARABIC['composer.placeholder']), 'the popover did not open').toBeVisible();
 
-  // Polled: the popover is placed after it opens. The popover's right edge meets the element's, unless
-  // the viewport clamps it. Two pixels absorb rounding; a left-to-right placement would miss by the
+  // Polled: the popover is placed after it opens. The popover's right edge meets the frame's, which
+  // stands 6 px off the element (FRU-258), unless the viewport clamps it. Two pixels absorb rounding; a left-to-right placement would miss by the
   // popover's width less the element's.
   await expect
     .poll(
@@ -64,7 +64,10 @@ test('in Arabic the dock and the popover move, and the pin stays on its element'
           page.locator('[data-fruitback-composer]').boundingBox(),
         ]);
         if (element === null || composer === null) return Number.POSITIVE_INFINITY;
-        const expectedRight = Math.max(10 + composer.width, Math.min(element.x + element.width, viewport!.width - 10));
+        const expectedRight = Math.max(
+          10 + composer.width,
+          Math.min(element.x + element.width + 6, viewport!.width - 10),
+        );
 
         return Math.abs(composer.x + composer.width - expectedRight);
       },

@@ -139,7 +139,7 @@ for (const { width, height, locale, name } of [
     await page.keyboard.press('Escape');
     await expect(page.getByRole('listbox')).toHaveCount(0);
     await expect(region).toBeVisible();
-    const disconnect = region.getByRole('button', { name: /^(Disconnect|Déconnecter)$/ });
+    const disconnect = region.getByRole('button', { name: /^(Disconnect|Déconnecter) Linear$/ });
     await disconnect.click();
     await page.keyboard.press('Escape');
     await expect(disconnect).toBeFocused();

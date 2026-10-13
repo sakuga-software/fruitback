@@ -17,7 +17,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   loses what somebody typed and runs its effects twice. **`HydrateFallback` holds no word**: it is rendered when the console
   is built, and a word in another language is a hydration error in the browser.
 - `apps/console` (`@fruitback/console`) — the console of the Cloud (FRU-99): React Router in SPA mode,
-  Tailwind on the tokens of `design/`, served as static files by nginx. **It holds no secret, and no
+  Tailwind on the tokens of `design/README.md`, served as static files by nginx. **It holds no secret, and no
   token at all** (FRU-148): the session is a cookie of the worker that no script reads, and
   `transport.ts` sends it with every call (`credentials: 'include'`). There is nothing to refresh.
   See _The session of the console_ below for the worker of before, the `401` and the providers.
@@ -53,7 +53,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   spec holds both. **Not measured: what VoiceOver and NVDA say**; the spec reads the role, the name
   and where focus is.
   **The console decides nothing about a domain** (FRU-103). The Sites screen shows, to an owner or an
-  admin, the domains of the workspace (`domains.tsx`): the `TXT` record to write, « Check the DNS »,
+  admin, the domains of the workspace (`domains.tsx`), under the row of a site, behind « Preview
+  builds » of its menu (FRU-243): the `TXT` record to write, « Check the DNS »,
   and for a domain the worker says is proven, the site whose previews it covers. `state` is the
   worker's word; a DNS that did not answer is said as such, never as « not found »; a proof that is
   lost shows since when, and its record again. `e2e/console-domains.spec.ts` holds it.
@@ -66,28 +67,122 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   wait to an owner or an admin, with « Resend » and « Cancel ». A guest sees their own row only, as
   the worker answers them nothing more. **The front door looks for an invitation first**
   (`home.tsx`): somebody who signed in from the message of an invitation lands on `/invitations`,
-  not on the setup that makes a workspace of their own. A worker of before has no member list: the
-  screen draws the row of the person and says that invitations come later.
+  not on the setup that makes a workspace of their own.
+  **The screen is screen 12 of the mockup of 2026-10-13, with what the worker of today says**
+  (FRU-247): the invitation on one line, a form named « Invite someone » with each field under its
+  label, the table of the people (760 px at the least, which scrolls in its frame on a phone), and
+  what each role does. **Not copied from the mockup**: « Last seen » (the last column is the day
+  somebody joined, « Joined »), the role « Guest, one site » and the list « Site » of the form, and
+  the one site of a guest in « Sites », which says « Every site », or « Shared ones » for a guest.
+  What a guest does is in the legend only when a guest is on the screen. **Kept, though the mockup
+  draws none of it**: « (you) », « Remove » and « Cancel », which ask twice under their row
+  (`Confirmation`), the day an invitation ends, the block that gives the link of an invitation, and
+  every sentence of a refusal. A worker with no mailer sent nothing, so its rows say « Invitation
+  kept ». What is asked under a row stays in what is seen of a table that scrolls.
+  `e2e/console-members.spec.ts` reads the values and the boxes of the mockup at 1440 and 390 px,
+  the keyboard, the contrasts and axe.
 - **The address of a site is read by `site-address.ts`, on every screen that asks for one**
   (FRU-167). A host with no scheme is `https://`, as in the extension. The field is not `type="url"`:
   the browser stopped the form with its own bubble, in its own language, and the sentence of the
   console never showed. The worker still decides what a site is.
 - **The console draws its controls with HeroUI v3, through its own kit** (FRU-125). `ui.tsx` is the
-  one file that imports `@heroui/react`: `Button`, `Field`, `Choice` (a select), `Pick` (radios),
-  `Chip` and `Problem`. A screen uses the kit, and `messages.test.ts` fails on a native control in a
-  screen. **HeroUI takes the theme**: `app.css` gives its variables the tokens of `design/README.md`,
-  and HeroUI names `--color-accent`, `--color-muted` and `--color-surface` from them, so those three
-  are no longer in our `@theme`. **A state that HeroUI derives is measured, and given in `app.css` when
-  it fails** (FRU-163): it lightens a hovered button, and white on that red was 3.9:1, so
-  `--accent-hover` is the strong accent (6.47:1). It draws an alert as a white card with muted text, so
-  `.alert--danger` puts the danger of the theme on the text and the border (5.84:1 on its tint).
-  `e2e/console-kit.spec.ts` measures both. **The shapes are the boards', not HeroUI's** (FRU-168):
-  HeroUI draws every button as a pill and a field at 12 px with a shadow and a border of 1.49:1.
-  `app.css` gives `--field-radius` 8 px, `--field-shadow` nothing to paint and `--field-border`
-  `#8f8883` (3.49:1); `.wide-button` is 6 px with that border, and the pill stays for the action of
-  a step; the asterisk of a required label is taken off, as on the boards. The same spec measures them. **A button takes no `title`**: a tooltip does not open on a disabled
+  one file that imports `@heroui/react`. A screen uses the kit, and `messages.test.ts` fails on a
+  native control in a screen. **A button takes no `title`**: a tooltip does not open on a disabled
   control, so the reason is written beside it. The overlays of React Aria position with inline
   styles, which the console's CSP allows (`style-src 'unsafe-inline'`); its scripts stay hashed.
+- **The values are the mockup's of 2026-10-13, named once in `app.css`** (FRU-232, on the palette:
+  read as Mathieu's answer by the orchestrator on 2026-10-13, and he may come back on it).
+  `design/README.md` has the table. **A screen writes the name of a token and never a value**:
+  `tokens.test.ts` fails on a colour written in a screen or in the kit, and on a colour of the
+  palette of before anywhere in the console. A token that a screen needs and that is not there is
+  added to `app.css` in a pull request of the kit, not in the screen.
+- **HeroUI takes the theme, and the kit takes the shapes.** `app.css` gives the variables of HeroUI
+  the tokens, so a button of HeroUI and `bg-accent` paint the same red. HeroUI writes its
+  components in the cascade layer `components`; the rules of the kit (`.kit-*`) are in no layer, so
+  they win whatever their selector, and each one is a measure read in the code of the mockup.
+  **A state that HeroUI derives is measured** (FRU-163): it lightens a hovered button, moves it
+  under a press, tints a hovered field and draws an alert as a white card with muted text. The kit
+  gives each of these the value of the mockup, which changes a colour at once and moves nothing.
+- **The kit, component by component** (`ui.tsx`):
+  `Button` (`tone="primary"`: the pill of the action of a step, 44 px; `tone="outline"`: the
+  rectangle of a control, 6 px, at 44, 40 or 32 px with `size`; `to` or `href` makes it a link of
+  the same box; `label` gives a longer name to a screen reader, « Connect Jira » over « Connect »,
+  and starts with the words shown), `WideButton` (an outlined button over its column), `LinkButton` (underlined words;
+  its padding is its target, 33 px at the least, where the mockup draws « Rename » at 21 px; in a row of a table it takes the line of the table),
+  `IconButton` (36 px, named by `label`), `Field` and `Choice` (44 px, `compact` 40 px, `locked` for
+  a value set elsewhere; `status` on a `Choice` draws the drop of the chosen status in a list of 38 px), `Pick` (radio cards), `Toggle`, `FilterChip` (`aria-pressed`), `StatusDot`
+  and `StatusBar`, `DataTable`, `SidePanel` (named by its title, or by `label`; `panelId` for `aria-controls`), `KeyValue`, `SuccessMark`, `Title`, `Lead`, `PageHead`,
+  `Initial`, `Card`, `Chip`, `Problem`, `Logo` (the name as outlines, in tokens: `logo.tsx`), `EntryPage`
+  (the header and the column of a page outside a workspace; `/kit/entry` mounts it), `Divider`, `Menu`
+  (a button that opens a menu, on the dropdown of HeroUI: the menu is named after its button, a
+  `chosen` item makes it a choice of radios, and it is drawn as a page wherever its button is; the
+  mockup draws no open menu), and
+  for the setup `Steps` and `Step` (a drop with its number, the current step said to a screen reader),
+  `Callout`, `OptionCard`, `AutoGrid` (side by side while there is room, with no width of a screen
+  named), `Snippet` and `BrowserFrame` (the window of a browser, drawn). The tones `quiet` and `danger` of `Button` are of before the
+  mockup: they stay as HeroUI draws them until their screens are drawn again.
+- **`/kit` mounts each component once, on the development server only** (`kit-gallery.tsx`):
+  `e2e/console-kit.spec.ts` reads there what the browser computes (colour, border, corner, height,
+  type) against the mockup, each state under the pointer, under a press and with focus, 4.5:1 for
+  every text on what is behind it, and axe. A build has no `/kit` (`kit-route.test.ts`).
+- **The frame of a workspace is the rail of the mockup** (FRU-234, `routes/workspace.tsx`): the
+  workspace, its sections as links with `aria-current="page"` on the one on screen, and the way to
+  the documentation. **The rail shows a section only when its screen exists**: `SECTIONS` lists the
+  five of the mockup in its order, each with `built` and the widest its screen is drawn, and
+  `frame.test.ts` holds `built` to the routes of a build, so no entry leads nowhere. « Notes » is
+  there with `built: false`; `/kit/frame`, a page of the development server, mounts the rail with
+  the five. **The name of the workspace opens a menu only when the person has several workspaces**:
+  with one it is no button, and draws no chevrons. **At 900 px and under the sections are one row
+  that scrolls in the rail, and the page never scrolls sideways**: the mockup does at 390 px (its
+  document is 547 px wide). An edge of the row that hides a section fades, and the section on
+  screen or with focus is scrolled into view: measured in Chromium, focus alone does not scroll a
+  row to a link that is half hidden. `e2e/console-frame.spec.ts` reads the values and the boxes of
+  the mockup, at 1440 and 390 px, the menu, the keyboard and axe. **Not copied from the mockup**:
+  a link of the rail under the pointer is white, where the mockup turns every link `#b91c1c`
+  (2.6:1 on the rail); « Help and docs » opens in another tab, so a screen keeps what is typed in it.
+- **The Sites screen is the table of the mockup, with the columns the worker fills** (FRU-243,
+  `routes/sites.tsx`): the site and who sees its notes, and where its notes go, to whoever sees the
+  tracker. The count of notes, the way on the page and the last note wait for the summary of the
+  sites (FRU-237), and the legend of the statuses comes with them: a column with nothing true to
+  show is not drawn. **A row has one menu, and what it opens is under the row**: « Install », for
+  every role; « Preview builds », which is the proof of a domain of FRU-103, and « Remove », for who
+  manages the sites. One thing is open at a time, and what closes gives focus back to the button of
+  the row. « Remove » asks twice: the menu is the first time, and `Confirmation` (`confirm.tsx`) the
+  second. **No item changes who sees the notes of a site**: the worker has no route for it, and a
+  button that does nothing is not drawn; so the form that adds a site asks it, in the card of a
+  workspace with no site too, where the mockup draws the address alone. **The address of a site is
+  no link** until a site has a page. **The table has no minimum width while it has three columns**:
+  it fits a phone, so what opens under a row is on screen; the six columns of the mockup need
+  860 px and a place for it outside the table. The card and the alert are sized by their content
+  (`box-content`), as the mockup sizes them: 640 px and 760 px inside their padding.
+  `e2e/console-sites.spec.ts` holds the three states, the form, the menu, the roles, 390 px and axe.
+- **The Connectors screen is the one of the mockup, with the sources that exist** (FRU-246):
+  `routes/connectors.tsx` (the list and « Add a source »), `connector-add.tsx` (the two forms),
+  `connector-linear.tsx` and `connector-rest.tsx` (the panels), `connector-parts.tsx` (what they
+  share). **A source that does not exist connects nothing**: GitHub Issues, Jira, GitLab, Trello,
+  Notion and Webhook are listed with the sentence of the mockup and a disabled « After the beta »,
+  where the mockup draws « Connect ». Linear and an address stay in « Add a source » when one is
+  connected: a workspace can connect a second one. **A row says « Connected », « Needs attention »,
+  or how many notes did not reach an address**; the count is read with the list, and an address
+  whose count was not read says « Connected » and no number. On the chosen row the red is the
+  strong accent: the accent is 4.28:1 on its tint. **The panel keeps what the mockup does not
+  draw**: the places of each site (FRU-123), under « Sites sending here » for the sites that send
+  there and under « Other sites » for the others; the notes that did not arrive; « Use an API
+  key ». It does not show « Attach a picture of the element » (FRU-198), a count of notes by site
+  nor « Last issue created » (FRU-237). **The drop of a status is beside its list**, where the
+  mockup draws it inside: the list of the kit has no place for it. « Connect » is written seven
+  times, so each button also holds the name of its source for a screen reader.
+  `e2e/console-connectors.spec.ts` holds the values, the states, the roles, 390 px and axe.
+- **A box is compared to the mockup in the font of the mockup** (`e2e/console-workspace.ts`,
+  `MOCKUP_FONT`): the mockup sizes its boxes by their text, and the Linux of CI has another font
+  (52 px where the mockup has 49). `expectBox` compares on macOS; the computed styles are read
+  everywhere, and they are what CI holds.
+- **What the kit does not copy from the mockup.** The padding of a button is of its size, where the
+  mockup writes 22, 24 or 26 px on the same pill. A switch changes colour in 200 ms everywhere,
+  where the mockup does so in the popup only. A disabled switch dims its control and not its words.
+  The frame of a table takes focus, so a keyboard scrolls a table wider than its screen.
+- **Not measured**: what VoiceOver and NVDA say of the kit; the kit in Firefox and in Safari (the
+  spec runs in Chromium).
 
 ## The session of the console (FRU-148)
 
@@ -119,7 +214,32 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the console and the worker are not one site (measured in FRU-147: `state_mismatch`).
 - **The token of a link is read after the `#`, sent in the body of a `POST`, and taken out of the
   address bar** (`sign-in.tsx`), as before. It is in no address that the worker receives.
-- **A code that a sign-in sends back has a sentence** (`PROVIDER_PROBLEMS` in `setup.tsx`), in French
+- **Signing in has its own page, `/sign-in`** (FRU-235, screen 02 of the mockup of 2026-10-13): the
+  form, « Check your inbox », « You are signed in » and « This link no longer works ». A screen that
+  finds nobody signed in sends there (the frame of a workspace, the banner of a session that ended,
+  the tab that stopped, the invitations); `/setup` stays the way in of somebody new. The ways to sign
+  in are in one module, `sign-in-form.tsx`, for this page, the setup and the screens to come: the
+  form of a link, the providers the worker offers (**a provider it does not offer has no button**,
+  and with none there is no « or »), the sentences of a refusal, and « Send again », which waits a
+  minute in the console (the ceiling of the worker, 3 links per address per quarter of an hour, and
+  its sentence stay). **The main button is not dimmed for an empty field**, as on the mockup: the
+  form is `noValidate`, and says « That is not an e-mail address » itself, in its language.
+- **The tab that asked for the link goes on by itself** (FRU-235). The tab of the link, once the
+  token is spent, says « signed-in » on a `BroadcastChannel` (`tab-signal.ts`). A tab that waits says
+  « heard » at once, asks `GET /console/me`, and on a session says « carried-on » and goes on: the
+  sign-in page to the front door, the setup to its next step. The tab of the link then shows « You
+  are signed in »; with no « heard » in 400 ms, or no « carried-on » in 5 s, it is the console, as
+  before. **A message is a hint, never a proof**: it carries no token and no account, and a tab goes
+  on only on the answer of the worker. A browser that tells a tab nothing: the tab asks the worker
+  when it comes back to the front. **A link opened in the tab that asked for it changes the part
+  after the `#` only**, so the page is not loaded again: `sign-in.tsx` reads the code on
+  `hashchange` too (measured: without it the tab stayed on « Check your inbox » with the token in its
+  address bar). **The code is read once**: in development an effect runs twice, and the second run
+  must not take the page for a visit with no link.
+- **Not measured**: two tabs in Firefox and in Safari (the spec runs in Chromium), and a link that
+  the mail application opens in another browser profile, where no tab can hear it: the tab of the
+  link is then the console, and the first tab learns it when it comes back to the front.
+- **A code that a sign-in sends back has a sentence** (`PROVIDER_PROBLEMS` in `sign-in-form.tsx`), in French
   too. better-auth names no provider in its code, so the sentences name none. A code this build does
   not know says that the sign-in did not finish: no code shows as a blank screen.
 - **A `401` keeps what the person typed.** `call` tells `onSignedOut`, and the root says so above

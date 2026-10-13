@@ -69,7 +69,7 @@ test('notes kept for later outlive a reload, and go in one request from the list
   await expect(drafts).toHaveCount(2);
 
   await page.getByRole('button', { name: 'Show every note of this page' }).click();
-  const list = page.getByRole('dialog', { name: 'Every note of this page' });
+  const list = page.getByRole('dialog', { name: 'Notes on this page' });
   await expect(list.getByText('Kept for later, not sent yet')).toBeVisible();
   await list.getByRole('button', { name: 'Send the 2 notes' }).click();
   await expect(list.getByText('2 notes sent')).toBeVisible();
@@ -108,7 +108,7 @@ test('a failed send of the drafts says why, and keeps them', async ({ page }) =>
   );
 
   await page.getByRole('button', { name: 'Show every note of this page' }).click();
-  const list = page.getByRole('dialog', { name: 'Every note of this page' });
+  const list = page.getByRole('dialog', { name: 'Notes on this page' });
   await list.getByRole('button', { name: 'Send 1 note' }).click();
   await expect(list.locator('[data-fruitback-drafts-sent]')).toHaveText(/^Too many notes just now/);
   await expect(list.getByRole('button', { name: 'Send 1 note' })).toBeFocused();

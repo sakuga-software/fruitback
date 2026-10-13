@@ -20,7 +20,9 @@ import { type SiteConfig, type SiteMutation, parseSite } from './sites.ts';
  *
  * - **a change made here** goes to `sync` as that change: the entries written, or the key removed;
  * - **a change that arrives** from another browser is applied to the map here, by the one writer of
- *   the map (`createSiteOwner`), and is not sent back;
+ *   the map (`createSiteOwner`), and is not sent back. What is applied is what the account holds
+ *   when the change is read: this browser hears of its own writes too, and an old one must not undo
+ *   a later change made here;
  * - **`merge`**, when the reviewer turns it on and when the browser starts: each side takes the rules
  *   it does not have, **except a rule that this browser knew in the account** (`KnownRules`, in
  *   `local`): that one was removed on one side while the other was closed, and the removal is carried
@@ -199,14 +201,23 @@ export function createSiteSync({ enabled, known, readLocal, area, apply }: SiteS
 
   async function takeChanges(changes: Record<string, { newValue?: unknown }>): Promise<void> {
     if (!(await enabled())) return;
-    const local = await readLocal();
+    // A browser hears of its own writes too, and a change says what the account held when it was
+    // made, not what it holds now. A change made here since then may be stored, with its copy still
+    // on its way: the map is then ahead of what the change says, and the change would put the map
+    // back (raised in review: a rule switched off then on went off again, and lost its access). So
+    // the changes made here end first, as for a merge, and what is applied is what the account holds
+    // now. The change only names the rules to look at.
+    const settled: SiteMutation = { kind: 'write', entries: {} };
+    arrived.add(settled);
+    await apply(settled);
+    const [local, held] = [await readLocal(), await area.get()];
     const entries: Record<string, SiteConfig> = {};
 
-    for (const [key, change] of Object.entries(changes)) {
+    for (const key of Object.keys(changes)) {
       const pattern = patternOf(key);
       if (pattern === undefined) continue;
 
-      if (change.newValue === undefined) {
+      if (held[key] === undefined) {
         await remember([], [pattern]);
         if (local[pattern] === undefined) continue;
         const mutation: SiteMutation = { kind: 'remove', pattern };
@@ -214,7 +225,7 @@ export function createSiteSync({ enabled, known, readLocal, area, apply }: SiteS
         await apply(mutation);
         continue;
       }
-      const site = parseSite(change.newValue);
+      const site = parseSite(held[key]);
       // The same rule is here already: nothing to write, and nothing that would echo.
       if (site !== undefined && !same(local[pattern], site)) entries[pattern] = site;
     }

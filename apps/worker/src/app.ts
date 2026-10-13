@@ -34,7 +34,7 @@ import { PAIR_PATH, pairPage } from './pair-page.ts';
 import { chargeRateLimit, checkRateLimit, maxBatch } from './rate-limit.ts';
 import { cached, invalidate } from './cache.ts';
 import { type Kv, KvError, processKv } from './kv.ts';
-import { postgresAccountStore, postgresScreenshotStore, postgresSessionStore } from './postgres-stores.ts';
+import { postgresAccountStore, postgresKv, postgresScreenshotStore, postgresSessionStore } from './postgres-stores.ts';
 import {
   MAX_SCREENSHOT_BYTES,
   SCREENSHOT_PATH,
@@ -272,17 +272,48 @@ export type RequestContext = {
   screenshots?: ScreenshotStore;
   /**
    * Where the rate limiter and the read cache keep their state (FRU-49). When it is absent, the
-   * handler uses `processKv`, which gives the one instance of this process and never a new empty one.
+   * handler uses `kvFor`, which gives the one instance of this process and never a new empty one.
    */
   kv?: Kv;
 };
 
-export async function handleRequest(request: Request, env: WorkerEnv, context: RequestContext): Promise<Response> {
-  // FRU-208: a reading of the cookie of the console that renewed its session renews the cookie too.
-  return withRenewedCookie(request, await routed(request, env, context));
+/**
+ * Where this worker keeps the state of its rate limiter and of its read cache (FRU-67).
+ *
+ * **A worker with a database keeps it there**, so its replicas share one limit; a worker without one
+ * keeps it in the memory of the process, as before. No variable chooses: the database is the one
+ * store that replicas share. One instance for the process either way.
+ */
+export function kvFor(config: Pick<WorkerConfig, 'databaseUrl' | 'databaseSchema'>): Kv {
+  return config.databaseUrl === undefined ? processKv() : postgresKv(config.databaseUrl, config.databaseSchema);
 }
 
-async function routed(request: Request, env: WorkerEnv, context: RequestContext): Promise<Response> {
+export async function handleRequest(request: Request, env: WorkerEnv, context: RequestContext): Promise<Response> {
+  const seen: { cors?: Record<string, string> } = {};
+  let answer: Response;
+  try {
+    answer = await routed(request, env, context, seen);
+  } catch (error) {
+    if (!(error instanceof KvError)) throw error;
+    // FRU-67. The `Kv` answered the rate limit and then stopped: a route below it counts a message,
+    // or keeps a ticket, and nothing there catches this. On memory a `Kv` never throws, so this is
+    // the answer of a database that went away between two calls of one request: the same `503` as
+    // the limiter's, with the CORS headers of the route, and never a `500` with no header.
+    console.error(`[fruitback] the Kv did not answer: ${error.message}`);
+    answer = json(503, { error: 'limiter-unavailable' }, seen.cors ?? {});
+  }
+
+  // FRU-208: a reading of the cookie of the console that renewed its session renews the cookie too.
+  return withRenewedCookie(request, answer);
+}
+
+async function routed(
+  request: Request,
+  env: WorkerEnv,
+  context: RequestContext,
+  /** The CORS headers of this request, once they are known, for an answer made above. */
+  seen: { cors?: Record<string, string> },
+): Promise<Response> {
   // FRU-133: a delivery of the REST connector that came back to a worker. Before everything, the
   // readiness probe included: `/health` would answer 200, and the sender would count the note as
   // arrived.
@@ -367,6 +398,7 @@ async function routed(request: Request, env: WorkerEnv, context: RequestContext)
   if (!cors.allowed) {
     return json(403, { error: 'origin-not-allowed' });
   }
+  seen.cors = cors.headers;
 
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: cors.headers });
@@ -382,7 +414,7 @@ async function routed(request: Request, env: WorkerEnv, context: RequestContext)
   // burn the same provider quota, and `/session/pair` is a code-guessing oracle without a limit —
   // this check used to sit *below* the `404`, so a new route would have been unmetered by default.
   // An unknown path costs quota too now, which is the right answer for something being probed.
-  const kv = context.kv ?? processKv();
+  const kv = context.kv ?? kvFor(served);
   let allowed: boolean;
 
   try {
@@ -450,7 +482,8 @@ async function routed(request: Request, env: WorkerEnv, context: RequestContext)
             (await handleAuthRoutes(request, pathname, routes, cors.headers));
           if (answer !== undefined) return answer;
         } catch (error) {
-          if (error instanceof StoreError) throw error;
+          // A `Kv` that stopped is not better-auth: it is answered above, as the limiter's outage.
+          if (error instanceof StoreError || error instanceof KvError) throw error;
           // better-auth rejects, and does not answer, on a schema that is not the one it expects, or
           // a database that does not answer (FRU-144). Said in the log, with no address and no token.
           const said = error instanceof Error ? error.message : String(error);

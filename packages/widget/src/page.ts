@@ -20,6 +20,45 @@ export function capturePage(view: Window): SeedPage {
 }
 
 /**
+ * A link that opens a note on its page (FRU-253): `<page>#fruitback-note=<id>`.
+ *
+ * The fragment is the site's, and the widget reads one part of it: `fruitback-note=<id>`, alone or
+ * after an `&`. So `#pricing` is not ours, and `#pricing&fruitback-note=sd_1` is the site's
+ * `#pricing` with our part after it. The id is what the note is called anywhere: its own id, the
+ * id of its issue, or its identifier.
+ */
+const LINK_KEY = 'fruitback-note=';
+
+/** The id a fragment asks for, or `undefined` when the fragment does not ask for a note. */
+export function linkedNote(hash: string): string | undefined {
+  const part = hash
+    .replace(/^#/, '')
+    .split('&')
+    .find((each) => each.startsWith(LINK_KEY));
+  if (part === undefined) return undefined;
+
+  let id = part.slice(LINK_KEY.length);
+  try {
+    id = decodeURIComponent(id);
+  } catch {
+    // A fragment anybody can type: one that does not decode is read as it is written.
+  }
+
+  return id === '' ? undefined : id;
+}
+
+/** The same fragment without our part: `''` when nothing of the site is left, a `#…` otherwise. */
+export function withoutLinkedNote(hash: string): string {
+  const rest = hash
+    .replace(/^#/, '')
+    .split('&')
+    .filter((each) => !each.startsWith(LINK_KEY))
+    .join('&');
+
+  return rest === '' ? '' : `#${rest}`;
+}
+
+/**
  * `innerWidth`/`innerHeight`, not `screen`: what matters when re-reading a note is how much of the
  * page the reporter could actually see.
  */

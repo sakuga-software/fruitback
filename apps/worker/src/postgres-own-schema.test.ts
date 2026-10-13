@@ -232,6 +232,8 @@ describe('two workers in two schemas of one database (FRU-219)', { skip: NO_REAL
 
       // The same tables in each, the journal of each with every migration, and nothing in public.
       assert.deepEqual(await tablesOf(admin, 'tenant_a'), await tablesOf(admin, 'tenant_b'));
+      // The Kv of FRU-67 too: the tickets and the cached answers of one worker are not the other's.
+      assert.ok((await tablesOf(admin, 'tenant_a')).includes('kv'));
       const journals = await rowsOf(
         admin,
         `SELECT (SELECT count(*)::int FROM tenant_a."${APPLIED.migrationsTable}") AS a,

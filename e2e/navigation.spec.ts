@@ -44,8 +44,8 @@ test('a note sent after a navigation goes to the page where it was written', asy
 
   await page.getByRole('button', { name: 'Leave feedback' }).click();
   await page.locator('[data-testid="card-espresso"] .add').click();
-  const composer = page.getByRole('dialog', { name: 'Leave a note' });
-  const field = page.getByPlaceholder('What is wrong here?');
+  const composer = page.getByRole('dialog', { name: 'New note' });
+  const field = page.getByPlaceholder('What should change?');
   await field.fill(note);
 
   await navigateTo(page, `/checkout?widget=off&case=${testCase}`);
@@ -67,7 +67,7 @@ test('a note sent after a navigation goes to the page where it was written', asy
 
   // Not on the page the reporter went to.
   const open = page.getByRole('button', { name: 'Show every note of this page' });
-  const list = page.getByRole('dialog', { name: 'Every note of this page' });
+  const list = page.getByRole('dialog', { name: 'Notes on this page' });
   await open.click();
   await expect(list.getByText('No note on this page yet.')).toBeVisible();
   await page.keyboard.press('Escape');
@@ -76,10 +76,14 @@ test('a note sent after a navigation goes to the page where it was written', asy
   await page.goBack();
   await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
   await open.click();
+  // « All »: whether the store in memory made it an open note or a done one is not this test's.
+  await list.getByRole('tab', { name: 'All 1' }).click();
   const entry = list.locator('[data-fruitback-note]');
   await expect(entry).toHaveCount(1);
   await expect(entry).toContainText(note);
-  await expect(entry).not.toContainText('Element not found on this page');
+  // Among the notes of the page, not among those that could not be placed.
+  await expect(list.locator('.fruitback-sidebar-list [data-fruitback-note]')).toHaveCount(1);
+  await expect(list.locator('[data-fruitback-unplaced]')).toBeHidden();
   await expect(entry).not.toContainText('approximate');
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 });

@@ -25,12 +25,15 @@ export type PluralMessage = { readonly [Category in Intl.LDMLPluralRule]?: strin
 
 export const ENGLISH = {
   'launch.label': 'Leave feedback',
-  'launch.capturing': 'Esc to cancel',
-  // The same button on a touch screen, which has no Escape key (FRU-157).
-  'launch.capturingTouch': 'Cancel',
   'widget.label': 'Fruitback feedback',
-  'capture.instructions': 'Point at an element, or move with the arrow keys and press Enter.',
-  'capture.instructionsTouch': 'Tap an element.',
+  // The banner of a capture (FRU-258). `capture.bannerTouch` is the same sentence on a touch screen,
+  // which has no Escape key and no arrows (FRU-157): it then stands alone beside `capture.stop`.
+  'capture.banner': 'Click the part of the page your note is about',
+  'capture.bannerTouch': 'Tap the part of the page your note is about',
+  'capture.escape': 'Esc to stop',
+  'capture.stop': 'Stop',
+  // Read after the banner by a screen reader, and not drawn: it follows `capture.escape`.
+  'capture.instructions': 'Or move with the arrow keys and press Enter.',
   'capture.element': '{tag}: {text}',
   'capture.elementEmpty': '{tag}, no text',
 
@@ -45,9 +48,15 @@ export const ENGLISH = {
   'settings.copied': 'Copied',
   'settings.copyManually': 'Copy the text from here',
 
-  'composer.placeholder': 'What is wrong here?',
-  'composer.label': 'Your comment',
-  'composer.dialog': 'Leave a note',
+  'composer.placeholder': 'What should change?',
+  'composer.label': 'What should change?',
+  // The name of the dialog, and the title its head shows.
+  'composer.dialog': 'New note',
+  // `{element}` is the text of the element the note is about, or the name the page gave it.
+  'composer.about': 'on {element}',
+  'composer.close': 'Close without sending',
+  // The same preference as `settings.screenshot`, said beside the note it applies to.
+  'composer.picture': 'Attach a picture of this element',
   'composer.identify': 'Add my name (optional)',
   'composer.namePlaceholder': 'Your name',
   'composer.nameLabel': 'Your name (optional)',
@@ -82,8 +91,8 @@ export const ENGLISH = {
   'pin.labelUncertain': 'Note {number}, {stage}, approximate position: {note}',
   'pin.labelDraft': 'Not sent yet · {note}',
 
-  'thread.close': 'Close',
-  'thread.dialog': 'Feedback {identifier}',
+  'thread.close': 'Close the note',
+  'thread.dialog': 'Note {number}',
   'thread.draft': 'Not sent yet',
   // Must not start like `sidebar.dialog`: both can be open at once.
   'thread.draftDialog': 'Note not sent yet',
@@ -94,8 +103,9 @@ export const ENGLISH = {
   'thread.anonymous': 'Anonymous',
   'thread.orphan': 'Element not found — approximate position.',
   'thread.uncertain': 'Element found by its position, not by its identity — the page may have changed under the pin.',
-  // The arrow is in the message because a right-to-left catalog points it the other way.
-  'thread.link': '{identifier} →',
+  // The identifier alone (FRU-256): the widget does not know the name of the store behind the worker.
+  // A message all the same, so that a language can put a word around it.
+  'thread.link': '{identifier}',
 
   'orphans.count': { one: '{count} detached note', other: '{count} detached notes' },
   'orphans.entry': '{stage} · {note}',
@@ -103,18 +113,28 @@ export const ENGLISH = {
   // The list of every note of the page (FRU-129). `sidebar.open` and `sidebar.dialog` must stay
   // different: they name the button and its dialog.
   // And `sidebar.dialog` must not start like `thread.dialog`: both are open at once, and a reader
-  // or a test that looks for « Feedback … » must find one.
+  // or a test that looks for « Note … » must find one.
   'sidebar.open': 'Show every note of this page',
-  'sidebar.dialog': 'Every note of this page',
-  'sidebar.title': 'Notes',
-  'sidebar.close': 'Close the list',
+  // The name of the dialog, and the title its head shows (FRU-259).
+  'sidebar.dialog': 'Notes on this page',
+  'sidebar.close': 'Close the notes',
+  // The three tabs. `sidebar.tabs` names their group; a number follows each word.
+  'sidebar.tabs': 'Which notes',
+  'sidebar.tabOpen': 'Open',
+  'sidebar.tabDone': 'Done',
+  'sidebar.tabAll': 'All',
+  // A tab that shows nothing, on a page that has notes.
+  'sidebar.emptyTab': 'No note here.',
+  'sidebar.replies': { one: '{count} reply', other: '{count} replies' },
+  // After the date of a note whose element is under the part of the page in sight.
+  'sidebar.below': 'further down',
+  'sidebar.unplaced': 'Could not be placed · {count}',
+  'sidebar.unplacedWhy': 'Its element is no longer on this page. The note stays here.',
   'sidebar.empty': 'No note on this page yet.',
   'sidebar.loading': 'Reading the notes of this page…',
   'sidebar.failed': 'The notes of this page could not be read. They are not lost.',
   'sidebar.retry': 'Try again',
-  'sidebar.count': { one: '{count} note', other: '{count} notes' },
   'sidebar.approximate': 'Approximate position',
-  'sidebar.detached': 'Element not found on this page',
   // The notes kept for later in this tab, on every page, and the button that sends them (FRU-124).
   'sidebar.drafts': 'Kept for later, not sent yet',
   'sidebar.sendDrafts': { one: 'Send {count} note', other: 'Send the {count} notes' },

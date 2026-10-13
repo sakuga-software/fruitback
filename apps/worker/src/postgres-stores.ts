@@ -1,4 +1,5 @@
 import type { AccountStore } from './accounts.ts';
+import type { Kv } from './kv.ts';
 import { z } from 'zod';
 import { type Database, databaseFor, readDatabaseSchema, readDatabaseUrl } from './postgres.ts';
 import type { ScreenshotStore } from './screenshots.ts';
@@ -120,6 +121,30 @@ export function postgresScreenshotStore(url: string, schema: string): Screenshot
     put: true,
     get: true,
   });
+}
+
+const kvs = new Map<string, Kv>();
+
+/**
+ * The `Kv` of this database (FRU-67), one for each address for the whole process: it paces its own
+ * sweep, and a new one for each request would sweep at each request.
+ */
+export function postgresKv(url: string, schema: string): Kv {
+  // Keyed as `databaseFor` keys its databases (FRU-219): two schemas of one database are two Kvs.
+  const key = `${schema} ${url}`;
+  let kv = kvs.get(key);
+  if (kv === undefined) {
+    const database = databaseFor(url, schema);
+    kv = later(async () => (await import('./kv-postgres.ts')).createPostgresKv(database), {
+      get: true,
+      set: true,
+      incr: true,
+      close: true,
+    });
+    kvs.set(key, kv);
+  }
+
+  return kv;
 }
 
 /**

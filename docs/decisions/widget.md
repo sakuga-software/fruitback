@@ -263,10 +263,76 @@ amber, where white cannot be read (FRU-233)`.
     settings »: the mock-up names it « Fruitback settings », which is the name of the dialog it
     opens, and two controls with one name cannot be told apart (`docs/translating.md`).
 
+- **The bubble of a note has the measures of the mock-up** (FRU-256, screen 14). Read in its CSS,
+  held by `e2e/thread.spec.ts` on computed styles.
+  - **Three parts, each behind a rule**: a head (the drop and the word of the status, the way out
+    to the store, the cross), the note (its text, who and when, the component), the replies. 360 px
+    wide, 14 px of corner, no border and no coloured top: the shadow is the edge, and the colour of
+    the status is the drop beside its word.
+  - **It opens beside the frame**: 26 px past its end edge and 32 px above its top (30 and 36 px
+    from the element), which is where the mock-up puts it. When the window has no room there, it opens under the pin as before, or
+    above it. That is every phone: the mock-up draws no phone, and the bubble keeps the place it
+    had, at the width the window leaves.
+  - **The component and the file are shown**, « HeroBanner · src/components/Hero.tsx:42 », from the
+    `source` the note already carries. Only the copied text said it before. A note with none has no
+    line.
+  - **The dialog is named « Note 2 »**, the number of its drop, and the cross « Close the note ».
+  - **The link is the identifier alone, « ACM-142 »**, where the mock-up writes « ACM-142 in
+    Linear ». The widget does not know which store is behind the worker (FRU-31), and the worker
+    does not say its name: saying it is a new field of a public response, which is not this
+    change. The arrow went with the move to the head.
+  - **« Camille Durand · 2 days ago », not « · guest »**, and « Léa · yesterday », not
+    « · Sakuga »: a read gives the name of who wrote, not the role nor the workspace. Same reason.
+  - **Nothing to answer with.** The field « Reply to Camille » of the mock-up waits for a
+    decision (who may answer from a page, and as whom).
+  - **Kept, though the mock-up does not draw it**: « No reply yet. », which is not the same as
+    saying nothing; the two sentences about an approximate place, under the byline; the replies
+    capped at 180 px with a scroll a keyboard can reach (FRU-154), 10 px apart; a note kept for
+    later, whose head says « Not sent yet » behind a grey drop, with no link; the dark scheme; and
+    an outline in forced colours, where a shadow is not drawn.
+
 ## The popover
 
 ### The rules, in short
 
+- **The capture and the composer have the measures of the mock-up** (FRU-258, screen 15). Read in
+  its CSS, held by `e2e/capture.spec.ts` and `e2e/composer.spec.ts` on computed styles.
+  - **A banner says what a capture asks for**: a dark pill at the top of the window, in its middle,
+    with « Click the part of the page your note is about », « Esc to stop » and a button « Stop ».
+    It is 16 px from the top: the mock-up draws it at 88 px, under the header of its example site.
+    It is the one `role="status"` that speaks at a start, always in the tree and empty at rest. How
+    a keyboard moves is in it, read and not drawn. On a touch screen it says « Tap… », names no
+    key, and « Stop » is 44 px. Under 480 px the sentence wraps.
+  - **The launch button keeps its name and says `aria-pressed`.** It said « Esc to cancel » while a
+    capture ran. « Stop » and Escape give focus back to it.
+  - **The frame of a capture stands 6 px off the element**, 2 px of accent, on the accent at 6 %.
+    **The name of the component is written on it** when the engine knows one, 30 px above the
+    element, and nothing otherwise. The engine is asked once for each element of a capture. The
+    label is `aria-hidden`: the note carries the name, and a screen reader hears the element.
+  - **The frame stays on the chosen element while the composer is open**: `init` calls
+    `host.hold(element)` at the choice and `host.release()` at the close. A host that assembles the
+    parts itself and calls neither keeps what it had, a frame that goes at the choice. **The banner does not stay, and one click is still one note.** The mock-up draws
+    the banner, the pressed button and the composer in one picture; a still does not say whether a
+    capture goes on after a note, and a banner that says « click the page » over a modal dialog
+    would not be true. Asked in FRU-258.
+  - **The composer**: 360 px, a head (« New note », « on » and what the element says on one line,
+    a cross « Close without sending » that does what « Cancel » does), the note, a foot behind a
+    rule. It opens **above** its element, 40 px over its top, on the edge of the frame; below when
+    there is no room above. It rises from the corner nearest to its element, with no fade.
+    « Send » is the word alone. The drop that pointed at the element is gone.
+  - **« Attach a picture of this element » is the preference of the settings panel**, shown beside
+    the note (`PictureChoice`, a seam like `NameMemory`). It is there only when the host gave
+    `captureScreenshot`, **the composer never ticks it**, and a tick is kept at once. The mock-up
+    shows it ticked because its person chose it. Nothing new is read, sent or kept: the same
+    setting, the same picture, the same storage. `e2e/screenshot.spec.ts` sends a note with the
+    box never ticked and reads no picture, then ticks it and reads one.
+  - **No « As Mathieu, Sakuga ».** A read says that the worker would sign the note (`identified`),
+    not the name nor the workspace. Saying them is a new field of a public response of the worker.
+    A signed reader sees no line; a visitor keeps « Add my name (optional) ».
+  - **Kept, though the mock-up does not draw it**: « Keep for later », a ghost like « Cancel »; the
+    line of the destination, under the note; the sentences of a failed send, « sending… » and
+    « sent », where the identity line would be; the sheet at the bottom of a phone, with the fields
+    at 16 px; the dark scheme.
 - **One field, the name, and no e-mail** (FRU-91). It is optional, behind a disclosure, and never
   `verified` — that flag is the worker's to set. `reporter.email` stays in the seed contract, because
   an identity token can carry one.
@@ -451,7 +517,8 @@ header when the host mints no token` compared `fetch`'s second argument to `unde
   to live in someone's storage, and html2canvas weighs more than this entire widget — bundling it
   would break `package.test.ts`'s 150 kB tripwire and the promise that tripwire guards.
 - **Off by default, and the toggle is absent unless `captureScreenshot` was given.** A switch that
-  controls nothing is what kept this setting out of FRU-14.
+  controls nothing is what kept this setting out of FRU-14. The composer shows the same preference
+  beside the note since FRU-258, under the same two conditions.
 - **A capture that throws costs the picture and never the note.** A canvas tainted by a cross-origin
   image is the ordinary outcome, not the exotic one; the E2E test for this fails by losing the note
   entirely when the guard is removed.
@@ -673,8 +740,9 @@ with no context and no instruction added.
   the dock, the panel and the drawer must be at the inline end. `e2e/direction.spec.ts` mounts the
   built widget in Arabic and checks in a browser that the dock and the popover move and the pin stays
   on its element.
-- **The link's arrow is a message** (`thread.link`), because a right-to-left catalog points it the
-  other way.
+- **The link of a thread is a message** (`thread.link`), though it is the identifier alone since
+  FRU-256: a language may need a word around it. It held an arrow before, which a right-to-left
+  catalog pointed the other way.
 - **Each bundled catalog weighs on the size guard.** If the list grows, catalogs load on demand; the
   guard is not widened.
 
@@ -716,8 +784,8 @@ with no context and no instruction added.
   three buttons of the dock are 44 px (FRU-157). The rule is `@media (pointer: coarse)` in each
   module, and the glyph keeps its size: the button grows around it. A box or a radio is measured by
   its label, which a tap toggles. The fields are at 16 px there, because iOS Safari zooms the page
-  into a smaller field and stays zoomed. The launch button says `launch.capturingTouch` in the
-  capture mode, because a phone has no Escape key. `e2e/touch.spec.ts` measures every visible control
+  into a smaller field and stays zoomed. The banner of a capture says `capture.bannerTouch` and
+  names no key, because a phone has no Escape key (the launch button said it until FRU-258). `e2e/touch.spec.ts` measures every visible control
   at 390 px, and its control plants a 10 px button.
 - **In the dark scheme the accent and the warning are light fills with dark text on them.** Each one
   is a fill under text and also text on the surface, and no single red does both with white text.
@@ -810,13 +878,13 @@ nothing for the frame around the element.
 
 **Contrast**, measured with the WCAG 2.2 formula on the default tokens:
 
-| Pair                                        | Where                          | Light        | Dark |
-| ------------------------------------------- | ------------------------------ | ------------ | ---- |
-| `on-accent` on `accent`                     | launch and send labels         | 4.23         | 4.23 |
-| `accent` on `surface-raised`                | failed status                  | 4.16         | 3.73 |
-| `accent` on `surface`                       | thread and detached-note links | 4.23         | 4.14 |
-| `warning` on `surface`                      | approximate-position warning   | 4.62         | 3.78 |
-| `on-stage` on seeded, green, ripening, ripe | the `≈` on an approximate pin  | 2.28 to 4.23 | same |
+| Pair                                        | Where                         | Light        | Dark |
+| ------------------------------------------- | ----------------------------- | ------------ | ---- |
+| `on-accent` on `accent`                     | launch and send labels        | 4.23         | 4.23 |
+| `accent` on `surface-raised`                | failed status                 | 4.16         | 3.73 |
+| `accent` on `surface`                       | detached-note links           | 4.23         | 4.14 |
+| `warning` on `surface`                      | approximate-position warning  | 4.62         | 3.78 |
+| `on-stage` on seeded, green, ripening, ripe | the `≈` on an approximate pin | 2.28 to 4.23 | same |
 
 Text needs 4.5:1. Three values changed, because the old ones failed and nothing else paints with them:
 
@@ -882,8 +950,8 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   `#1c1917` on it: 5.68 as a label, 5.12 as a link on the raised surface. The warning has the same
   two roles and takes `#a88a7e` with dark text, 5.50 both ways.
 - **The stage colours do not change in the dark scheme, but one.** A pin sits on the page of the host, whose
-  colour follows nothing here. The stage colour is also the mark of a detached note and the top
-  border of a thread, on the surface: a drawing, which needs 3:1, and measures 3.27 at least on the
+  colour follows nothing here. The stage colour is also the mark of a detached note and the drop in
+  the head of a thread (its top border until FRU-256), on the surface: a drawing, which needs 3:1, and measures 3.27 at least on the
   dark surface. `contrast.test.ts` holds that pair now; it did not before.
 - **Axe found a defect in this very change.** While capturing, the launch button takes the chip as
   its background and kept the foreground of the accent. Both were white, so nothing showed. With a
@@ -1002,6 +1070,38 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   focus does not leave it and a second failure finds it. A failed read after a good one changes nothing, so the pins stay.
 - **The playground does not have it**: it assembles the widget part by part. `e2e/sidebar.spec.ts`
   loads the built script, like `package.spec.ts`, and runs axe in both schemes with its own control.
+- **It is the list of the mock-up of 2026-10-13** (FRU-259, screen 16). Read in its CSS, held by
+  `e2e/sidebar.spec.ts` on computed styles.
+  - **It lies over the page and does not push it.** The mock-up narrows its example site by
+    428 px. A margin on the page of somebody else breaks a layout nobody here read, so the panel is
+    `position: fixed`, 380 px on the end edge, as before at 340 px. The spec measures the page
+    before and after, and its control is the margin of the mock-up.
+  - **Three tabs: « Open », « Done », « All »**, each with its number. Open is what is left to do:
+    new, to do, in progress. Done is the rest: done and closed. A note is in one or the other, so
+    « All » is their sum. `role="tablist"`, one stop for the three, the arrows, Home and End; the
+    arrows swap in a right-to-left language. The tab chosen is kept while the widget lives.
+  - **The tabs count what the overlay draws**: a stage the reporter hid in the settings is in no
+    tab and in no number, like the copied text. A tab shows no number until a read answered.
+  - **A row**: the drop of the pin with its number (`overlay.resolutions()`), the note cut at two
+    lines, and one line: the word of the store for the state (the stage when it has none), who,
+    when, how many replies, « Approximate position » when it is the case.
+  - **« further down »** when the top of the frame of the note is under the bottom of the window
+    (`overlay.below`). The list follows the page while it scrolls, a frame behind at most, and
+    listens to nothing while it is closed.
+  - **The row of the note whose thread is open** says `aria-current` (`overlay.openId`, and
+    `onThread` to draw again).
+  - **« Could not be placed · 1 »** holds the notes whose element is gone, under the tabs, which do
+    not count them: the mock-up counts 6 and 2 beside one such note. Each is a button, not a
+    paragraph as drawn: it still opens its thread, which holds the replies and the way to the
+    store. Its second line is « Its element is no longer on this page. The note stays here. » The
+    mock-up adds « and in Linear »: the widget does not know the name of the store (FRU-31).
+    The chip of `orphans.ts` on the page is unchanged.
+  - **The dock stands aside while the list is open** (`data-fruitback-listing` on the host of the
+    widget), as drawn: the panel covers its corner. So the list holds « Leave feedback », with the
+    label of the host, which closes the list and starts a capture; the gear is back at the close.
+  - **Kept, though the mock-up does not draw it**: the three states of a read; the notes kept for
+    later, at the head of « Open » and nowhere else; « No note here. » for a tab that holds
+    nothing; the sheet at the bottom of a phone, 70 % of its height at most; the dark scheme.
 
 ## Notes kept for later, and sent together (FRU-124)
 
@@ -1040,3 +1140,30 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   of a single note, and a failed send reads again so the list of places is the one of now.
 - `e2e/drafts.spec.ts` keeps two notes, reloads, sends them from the list in one request and reads
   them back from the worker; a `429` keeps the draft and says why; axe in both schemes.
+
+## A link that opens a note on its page (FRU-253)
+
+### The rules, in short
+
+- **`<page>#fruitback-note=<id>` opens the thread of that note**, as a click on its pin does: the
+  page scrolls to the element and focus goes into the thread. The console writes this link under
+  « Show on the page ». The id is the id of the note, the id of its issue or its identifier.
+- **Only after a read answered** (`openLinked` in `embed.ts`, called at the end of each read). The
+  note is looked for among the notes the worker gave this reader, so the link opens nothing that
+  `GET /feedback` did not answer: a refused read opens nothing and says nothing. `SECURITY.md` has
+  the sentence.
+- **Its part of the fragment is then taken out of the address**, found or not, with
+  `history.replaceState`: a reload does not open the note again. **The fragment of the site
+  stays.** `#pricing` is neither read nor changed, and `#pricing&fruitback-note=sd_1` leaves
+  `#pricing` (`linkedNote` and `withoutLinkedNote` in `page.ts`).
+- **That edit of the address asks for no read.** `watchUrl` hears every `replaceState`, ours too,
+  and a read draws the pins again and closes the thread that just opened: found by the unit test
+  that counts the reads. A fragment that arrives later on the same page is followed with the notes
+  in hand, for the same reason.
+- **Nothing takes focus from somebody who writes** (rule 3 of `CLAUDE.md`). While the composer is
+  open or a capture runs, the link waits in the address. The note opens when the composer closes
+  (`embed.ts` watches its `hidden`), or at the next read.
+- **A note this page does not draw opens nothing**: a note of another page, or of a stage the
+  reporter hid in the settings. No error is shown and none is written to the console.
+- `e2e/deep-link.spec.ts` opens a note by its link on the built widget, with its control (`#formules`
+  is neither read nor erased), an unknown id, and a composer that stays open.

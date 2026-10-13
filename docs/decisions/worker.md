@@ -14,11 +14,14 @@ connector's environment, and what a second connector with no markdown body actua
 - **Both paths canonicalize the page URL** — `POST /feedback` re-does `seed.page.url` server-side and
   `GET /feedback` its `url` parameter. A client that skipped normalization would plant a pin nobody
   can find again.
-- **The rate limiter and the read cache keep their state in a `Kv`** (FRU-49), and this process
-  holds one, in memory. Two replicas are therefore two ceilings — the configured limit multiplied by
-  the container count — and the deployment is one container. A Redis implementation was built,
-  reviewed and removed before merging: it is FRU-67, with what it learned. `kv.ts` is the seam and
-  the memory store. **Values are strings**, so a value a remote store cannot hold fails here too.
+- **The rate limiter and the read cache keep their state in a `Kv`** (FRU-49). **A worker with a
+  database keeps it there** (`kv-postgres.ts`, FRU-67), so its replicas share one ceiling; a worker
+  without one holds it in memory, and two replicas are then two ceilings. `kvFor` chooses, and no
+  variable does. `kv.ts` is the seam and the memory store. **Values are strings**, so a value a
+  remote store cannot hold fails here too.
+- **A statement of `kv-postgres.ts` never names its table as a string, and the store never opens a
+  transaction.** The schema of the tables is to be a setting (FRU-219), and a write of the `Kv`
+  commits without waiting for the disk: inside a transaction, the whole transaction would.
 - The read cache is two layers. **The in-flight promise stays in this process**, so a burst on one
   replica costs one call and N replicas cost at most N. The settled answer goes in the `Kv` for
   `CACHE_TTL_MS`. A failure is never written: an outage must not be served for the whole TTL.
@@ -104,7 +107,14 @@ also why the boundary is not a reset: a test that crosses one is not a test that
 ### An outage refuses, and says so in one place only
 
 A limiter that opens when its store is unreachable is a limiter anybody can open. So a `KvError` from
-the limiter is `503 limiter-unavailable`, with the CORS headers the browser needs to read it. Three
+the limiter is `503 limiter-unavailable`, with the CORS headers the browser needs to read it. **A
+`Kv` that stops below the limit answers the same** (FRU-67): the count of the links of an address,
+the counts of the invitations and the ticket of the way to Linear are below it, and a database can
+answer the first call of a request and not the second. `handleRequest` catches a `KvError` that
+nothing below caught; the cache, the batch and its memory still swallow theirs, as before. **One
+caller answers for itself: the invitation.** better-auth has kept it when the counts are asked, so a
+`503` would say that nothing was done: no message goes out, and the answer says `mailed: false`, as
+when a window is full. Three
 consequences, all deliberate:
 
 - `/health` never touches the `Kv`, so a store that stops answering does not take the container out
@@ -130,6 +140,47 @@ What it learned is written up in FRU-67: the atomic `INCR` and `PEXPIRE` script,
 destroys a pipelined connection, one URL parser for the boot check and the client, `AUTH` for a
 named user with no password, the 2^53 ceiling, and TLS as the maintainer's call. So is the option to
 measure first, Traefik's `RateLimit` middleware. The removed code is in the history of PR #46.
+A second Redis client (PR #235) was closed unmerged on 2026-10-13, for the PostgreSQL store below.
+
+### The Kv in PostgreSQL (FRU-67)
+
+Decided on 2026-10-13: no Redis. PostgreSQL is required for the Cloud and is to be for every worker,
+so it is the one store that replicas share, and a second system for a few counts is one more thing
+to run. `kv-postgres.ts` is the store, `kv` its table (migration `0006_kv`, generated after `0005_seeds`), and `kvFor`
+gives it to a worker that has `FRUITBACK_DATABASE_URL`.
+
+**Hand-made, after the libraries were read.** None covers the uses of the `Kv`: Keyv, unstorage and
+`@fedify/postgres` keep strings and have no `incr` (counting with Keyv is a `get` then a `set`:
+2001 of 4000 counts kept, measured); `rate-limiter-flexible` has the atomic `incr` and keeps
+integers only, and its statement is the one written here; better-auth limits its own routes; pg-boss
+and graphile-worker are job queues. Two libraries and two tables outside Drizzle, for eighty lines.
+The comparison, with its versions and its sources, is a comment of FRU-67.
+
+- **`incr` is one `INSERT … ON CONFLICT DO UPDATE … RETURNING`**: PostgreSQL locks the row, so no
+  transaction and no advisory lock, and one round trip. A row whose instant is past starts again in
+  the same statement. A live row that holds no canonical integer, or one past 2^53, is left as it is
+  and the call rejects: the `WHERE` of the update is a `CASE`, because the two sides of an `AND` may
+  be evaluated in any order and the cast of a word is an error.
+- **The clock is the one of the database** (`clock_timestamp()`), one for every replica.
+- **A write does not wait for the disk**: `quietly` sets `synchronous_commit` to `off` for the
+  transaction of its statement, with `set_config(…, true)` in a common table expression that the
+  statement reads. Measured on PostgreSQL 17.11 in a local container, two connections, 2000 counts
+  each on one key, three runs: 700 to 2000 counts a second on an ordinary table, 6800 to 15600 on
+  an `UNLOGGED` one, 8600 to 16100 with this. `UNLOGGED` was not taken: Drizzle 0.45.4 cannot
+  declare it, so the migration would be edited by hand, and the table would be absent from a
+  replica. What is lost is the last few hundred milliseconds of counts when the server crashes.
+  For one request, the limiter (`incr` and `get`) costs 0.35 ms at the median here, 1.55 ms when it
+  waits. **The numbers are of a laptop disk under Docker: the ratios hold, not the values.**
+- **Expired rows go as calls come**: at most `SWEEP_BATCH` at a time, at most once in
+  `SWEEP_INTERVAL_MS` for a process, and again at the next call when a batch came back full. No
+  task and no timer. A row that another statement holds is skipped (`SKIP LOCKED`).
+- **What is not done: the read cache still goes through the `Kv`.** When the notes of a page are read
+  in PostgreSQL (a site whose notes stay in Fruitback), a cache in PostgreSQL saves nothing: a miss
+  is one read of the `Kv`, the read of the notes, and one write, where the read alone was enough.
+  Measured: 0.42 ms for a miss, 0.17 ms for a hit, against a read of the notes that is one
+  statement too. It still saves the quota of a tracker (Linear, GitHub) for every replica at once,
+  which is what it is for. To do next, in a ticket of its own: do not cache what is read in the
+  database of the worker.
 
 ### What this does not do
 
@@ -447,8 +498,9 @@ any store` asks it of every spec rather than of Linear.
   checkable against the browser's own header — the trust level CORS gives, and strictly more than
   nothing. Do not describe it as authentication.
 - A malformed `FRUITBACK_CLIENTS` is refused at boot rather than ignored, and named on `/health`.
-- The rate limiter counts in the `Kv`, which lives in the process: **per replica**, so N containers
-  multiply the ceiling by N. A store the replicas share is FRU-67.
+- The rate limiter counts in the `Kv`: in the database of a worker that has one, shared by its
+  replicas (FRU-67), and in the process otherwise, **per replica**, so N containers multiply the
+  ceiling by N.
 - Tests drive `handleRequest` with plain `Request` objects against a stubbed Linear
   (`linear-stub.ts`); no container needed. The assertion that matters most is that the stored
   description parses back into the exact seed that was posted.
@@ -1140,7 +1192,7 @@ variable` holds the rest.
   tables wherever the search path said; the address, the role and the database now have no say.
 - **A store reads a `BIGINT` through the schema, never with a raw statement.** Through the schema it
   is a number. In the answer of a raw statement it is a string, and `account-rows.ts` reads a string
-  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the twenty-seven columns.
+  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the twenty-eight columns.
 - **A transaction is the one of `postgres.ts`, never `db.transaction` of Drizzle on the pool.** A
   store takes `database.transaction`, which gives it Drizzle on one connection.
 - **The words of an error of Drizzle reach no log.** They quote the statement and its values: an
@@ -1230,7 +1282,7 @@ the lock` is its control: the same two processes, with the line of the lock remo
   That is why the `BIGINT` is a number by the schema.
   test:`answers a BIGINT of the schema as a number, on the driver that ships`.
 - **What the parser that is gone changes, measured on a server** (raised in review). For each of the
-  `BIGINT` columns (twenty then, sixteen since FRU-146, twenty since FRU-103, twenty-one since FRU-44, twenty-seven since FRU-218), a pool built as `postgres.ts` built it before answers a number for a raw
+  `BIGINT` columns (twenty then, sixteen since FRU-146, twenty since FRU-103, twenty-one since FRU-44, twenty-seven since FRU-218, twenty-eight since FRU-67), a pool built as `postgres.ts` built it before answers a number for a raw
   statement, the pool that ships answers a string for the same statement, and the schema answers
   the number: test:`answered a number for a raw statement, and now answers a string for it and a
 number through the schema`. No store sends a raw statement
@@ -1243,7 +1295,7 @@ exact integer`, test:`is null when the column holds no instant, and never 0`. Th
 store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
 2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the twenty-seven BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the twenty-eight BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).

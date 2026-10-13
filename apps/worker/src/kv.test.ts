@@ -2,18 +2,21 @@ import { after, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { type Kv, KvError, createMemoryKv } from './kv.ts';
+import { createPostgresKv } from './kv-postgres.ts';
+import type { Database } from './postgres.ts';
+import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase } from './postgres.fixture.ts';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * What every `Kv` must answer. It runs against the memory store here, and a shared store (FRU-67)
- * must pass it too.
+ * What every `Kv` must answer: one suite, played on each implementation (FRU-67).
  *
- * Every other test runs on the memory store, so it answers the way Redis answers: its integer rules
- * were measured against redis:7. A fake that answers differently passes whatever is written next.
+ * Every other test runs on the memory store, so it must answer the way the shared store answers. A
+ * fake that answers differently passes whatever is written next. The rules of a count are the
+ * strictest ones measured: a canonical integer only, and nothing past 2^53.
  */
-function contract(name: string, connect: () => Kv) {
-  describe(`the ${name} Kv`, () => {
+function contract(name: string, connect: () => Kv, more: { skip?: string | false; closed?: () => Promise<void> } = {}) {
+  describe(`the ${name} Kv`, { skip: more.skip ?? false }, () => {
     const opened: Kv[] = [];
     const open = () => {
       const kv = connect();
@@ -25,6 +28,7 @@ function contract(name: string, connect: () => Kv) {
 
     after(async () => {
       await Promise.all(opened.map((kv) => kv.close()));
+      await more.closed?.();
     });
 
     it('answers undefined for a key nobody wrote', async () => {
@@ -59,6 +63,37 @@ function contract(name: string, connect: () => Kv) {
       assert.equal(await kv.incr(k, 60), 1);
     });
 
+    it('counts a batch by its size, from nothing and from a count', async () => {
+      const kv = open();
+      const k = key();
+
+      assert.equal(await kv.incr(k, 60, 4), 4);
+      assert.equal(await kv.incr(k, 60), 5);
+      assert.equal(await kv.incr(k, 60, 3), 8);
+      await sleep(120);
+      assert.equal(await kv.incr(k, 60, 2), 2, 'a count that starts above one has its expiry too');
+    });
+
+    it('refuses an increment that is not a positive integer, and counts nothing', async () => {
+      const kv = open();
+      const k = key();
+
+      for (const by of [0, -1, 1.5, Number.NaN]) await assert.rejects(kv.incr(k, 10_000, by), KvError, String(by));
+      assert.equal(await kv.get(k), undefined);
+    });
+
+    it('gives an expiry to a count that starts from a stored zero, and keeps the one of a stored value', async () => {
+      // « The count equals the increment » is not « the key is new »: a key that held `0` would get
+      // a second expiry, and one that held `-1` and counts 2 would get none.
+      const kv = open();
+      const k = key();
+
+      await kv.set(k, '0', 150);
+      assert.equal(await kv.incr(k, 10_000), 1);
+      await sleep(250);
+      assert.equal(await kv.get(k), undefined, 'the count outlived the expiry of the value it started from');
+    });
+
     it('keeps the first expiry when it counts again', async () => {
       // A counter whose expiry moved on every request would never expire for a steady caller, and
       // the address it counts would be refused for ever.
@@ -88,7 +123,7 @@ function contract(name: string, connect: () => Kv) {
       await assert.rejects(kv.incr(k, 10_000), KvError);
     });
 
-    it('refuses every value Redis refuses to count, and counts a negative one', async () => {
+    it('refuses every value that is not a canonical integer, and counts a negative one', async () => {
       // Measured against redis:7. `Number()` accepts every one of these, which is how the memory
       // store answered differently from Redis. Raised in review.
       const kv = open();
@@ -128,6 +163,38 @@ function contract(name: string, connect: () => Kv) {
 
 const memory = createMemoryKv();
 contract('memory', () => ({ ...memory, close: async () => {} }));
+
+/**
+ * The store of `kv-postgres.ts` on one database, opened at the first call: each `connect` is one
+ * more store on it, as each replica is.
+ */
+function onPostgres(open: () => Promise<Database>) {
+  let database: Promise<Database> | undefined;
+
+  return {
+    connect(): Kv {
+      const store = (database ??= open()).then((opened) => createPostgresKv(opened));
+
+      return {
+        get: async (key) => (await store).get(key),
+        set: async (key, value, ttlMs) => (await store).set(key, value, ttlMs),
+        incr: async (key, ttlMs, by) => (await store).incr(key, ttlMs, by),
+        close: async () => {},
+      };
+    },
+    async closed() {
+      await (await database)?.close();
+      database = undefined;
+    },
+  };
+}
+
+// PGlite is PostgreSQL in the process, and runs with every `pnpm test`. The real server is the job
+// « postgres » of CI: `test:postgres` fails when its address is missing.
+const pglite = onPostgres(createPgliteDatabase);
+contract('PostgreSQL (PGlite)', pglite.connect, { closed: pglite.closed });
+const real = onPostgres(createRealDatabase);
+contract('PostgreSQL (a real server)', real.connect, { skip: NO_REAL_POSTGRES, closed: real.closed });
 
 describe('the memory Kv, bounded', () => {
   /** A hundred entries that expire after one second, and a counter that does not. */

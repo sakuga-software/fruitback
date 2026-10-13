@@ -7,6 +7,7 @@ import { sql } from 'drizzle-orm';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { handleRequest, sessionStoreFor } from './app.ts';
 import { type WorkerEnv, hasSessions, readConfig } from './env.ts';
+import { createMemoryKv } from './kv.ts';
 import { type Database, closeDatabases, createPgDatabase } from './postgres.ts';
 import {
   NO_REAL_POSTGRES,
@@ -27,6 +28,10 @@ import {
   refreshSession,
   revokeSession,
 } from './session.ts';
+
+// The database of this environment is at an address where nothing listens: a case hands its stores
+// over, and the `Kv` with them, as the transport does (FRU-67).
+const kv = createMemoryKv();
 
 /**
  * What is true of the PostgreSQL session store alone (FRU-142). The rules of every `SessionStore`
@@ -108,7 +113,7 @@ describe('a worker whose sessions are in PostgreSQL (FRU-142)', () => {
         }),
         // The address of the sessions is one where nothing listens.
         envWith(),
-        { clientIp: `192.0.2.${ip}`, accounts },
+        { clientIp: `192.0.2.${ip}`, kv, accounts },
       );
     };
 

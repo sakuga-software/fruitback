@@ -43,6 +43,11 @@ self-hoster could otherwise be surprised.
 name and address its reporter typed, and the team's replies are readable by any visitor of the
 client's site — and by `curl`. Hiding pins in a browser was never the fix.
 
+A link that opens a note on its page, `<page>#fruitback-note=<id>`, opens nothing to somebody who
+cannot already read that page: the widget opens the note among those `GET /feedback` answered to
+this reader, and a refused read opens nothing. The id in the address is not a secret and gives no
+access.
+
 `FRUITBACK_READ=authenticated`, or `"read": "authenticated"` on a client, requires a signed identity
 token. The default stays `public` for compatibility, so **an upgrade never closes it for you**. The
 boot log names every client whose pins anyone can read, and `/health` counts them.
@@ -147,11 +152,32 @@ token to one repository and one hour, but the key itself does not expire. So:
 - If the key leaks, generate a new one, delete the old one under **Private keys** in the settings of
   the App, and restart the worker with the new key.
 
-### The rate limit is per process
+### The rate limit is per process, unless the worker has a database
 
-`RATE_LIMIT_PER_MINUTE` (20 by default) is held in memory, per container. **Run N replicas and the
-effective ceiling is N times what you configured**, with nothing to see anywhere. One container is the
-ordinary deployment and the whole story; a store the replicas share is tracked as FRU-67.
+`RATE_LIMIT_PER_MINUTE` (20 by default) is held in memory, per container, on a worker with no
+`FRUITBACK_DATABASE_URL`. **Run N replicas of such a worker and the effective ceiling is N times what
+you configured**, with nothing to see anywhere.
+
+**A worker with a database counts there** (FRU-67), in the table `kv`: its replicas share one limit,
+one count of the sign-in links and of the invitations of an address, and one read cache. No variable
+turns it on. What follows from it:
+
+- **Two replicas that count at the same moment get two different counts.** One statement counts, and
+  PostgreSQL locks the row of the key. It runs on a real server, in CI:
+  test:`gives each of 400 counts of one key to one caller, from two connections`.
+- **A database that does not answer refuses the metered call**, with `503 limiter-unavailable`,
+  rather than letting it through: a limiter that opens when its store stops is a limiter anybody can
+  open. That holds below the limiter too: the count of the links and the ticket of the way to Linear
+  answer the same `503`. `/health` reads no count.
+- **A write of that table does not wait for the disk.** The limiter writes once for each request of
+  the widget, and the wait was the whole cost of a count. If the server of the database crashes, the
+  writes of its last few hundred milliseconds can be lost: a caller gets a few requests more in that
+  minute. Nothing else is written that way: an account, a site and a session wait for the disk as
+  before. On a real server:
+  test:`commits without waiting in its own statement, and leaves the connection as the server set it`.
+- **Whoever can write to that table can plant pins and clear limits.** A cached answer holds the
+  notes of a page, their authors and the replies for 15 seconds, and a row of the limiter holds the
+  address of a caller for two minutes. It is the database of the accounts, behind the same password.
 
 The window slides, estimated from the current minute and the one before it. A caller who sends a full
 burst at the end of a window and spaces the next ones out gets **at most 39 requests in any 60
@@ -640,6 +666,14 @@ the worker in no address`. A link works once, for 15 minutes, and two calls at t
   request with no `Origin`: another page that spent a link of its own in this browser would sign the
   person in to its account (test:`spends a link for the console only, and not for a request with no
 Origin`).
+- **A tab that waited for the link goes on by itself, on the answer of the worker and never on the
+  word of another tab** (FRU-235). The tab that opened the link tells the other tabs of the console,
+  on a `BroadcastChannel` of its origin, that the browser is signed in. The message is one word: it
+  carries no token, no account and no address. A tab that hears it asks `GET /console/me` with the
+  cookie, and goes on only if the worker answers a session: `e2e/console-sign-in.spec.ts` has a page
+  of the console say the word while nobody is signed in, and the tab that waits does not move.
+  **What this does not hold**: a script that runs in the origin of the console can say the word, as
+  it can do everything else there; all it gets is one question to the worker.
 - **The database keeps the link as a digest of a digest of a digest**, and a copy of the row opens
   nothing: test:`keeps the link as a digest of a digest, which opens nothing when a copy presents
 it`. The value of the row is the address it was sent to.
@@ -1060,8 +1094,8 @@ when it is accepted`. An invitation waits 7 days; one address gets one invitatio
   the other for that workspace:
   test:`keeps one owner when two owners go at the same moment (FRU-209)`,
   test:`writes one invitation for one address when two people invite it at the same moment`.
-  **This holds for one process of the worker.** Two replicas do not share it, as they do not share
-  the rate limit.
+  **This holds for one process of the worker.** Two replicas do not share it: the rate limit is
+  shared through the database (FRU-67), this is not.
   **The rename and the deletion of a workspace are outside it**: `POST` and `DELETE` on
   `/console/workspaces/<id>`. Neither counts the owners or looks for an invitation before it
   writes. Two renames at the same moment leave the last one written. Not measured: a rename at the

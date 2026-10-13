@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { type CaptureEngine } from './engine.ts';
 import { type CaptureHost, type CaptureTarget, createCaptureHost } from './host.ts';
 import { type MountedPage, keyboardEventCtor, mouseEventCtor, mountPage, pressKey } from './dom.fixture.ts';
+import { deepActiveElement } from './focus.ts';
 import { createTranslator } from './messages.ts';
 
 /**
@@ -94,15 +95,59 @@ describe('the chrome the reporter sees (FRU-36)', () => {
     assert.ok(button.querySelector('svg.fruitback-icon'), 'a custom label removed the mark');
   });
 
-  it('restores the label after a capture, mark included', () => {
+  it('keeps its name while a capture runs, and says it is pressed (FRU-258)', () => {
+    // It said « Esc to cancel » while a capture ran. A switch that changes its name says two things
+    // at once to a screen reader: the banner holds those words now, and the button holds a state.
     mount(() => null);
+    assert.equal(launchButton().getAttribute('aria-pressed'), 'false');
 
     host?.start();
-    assert.equal(launchButton().textContent, 'Esc to cancel');
+    assert.equal(launchButton().textContent, 'Leave feedback');
+    assert.equal(launchButton().getAttribute('aria-pressed'), 'true');
 
     host?.stop();
     assert.equal(launchButton().textContent, 'Leave feedback');
+    assert.equal(launchButton().getAttribute('aria-pressed'), 'false');
     assert.ok(launchButton().querySelector('svg.fruitback-icon'), 'stopping a capture removed the mark');
+  });
+
+  it('says what a capture asks for in a banner, with the key and the button that stop it (FRU-258)', () => {
+    mount(() => null);
+    const banner = host?.root.querySelector('[data-fruitback-host-banner]') as HTMLElement;
+    const parts = () => [...banner.children].map((part) => `${part.tagName.toLowerCase()}: ${part.textContent}`);
+
+    // In the tree and empty at rest: a live region that was hidden announces nothing when it comes back.
+    assert.equal(banner.getAttribute('role'), 'status');
+    assert.deepEqual(parts(), []);
+
+    host?.start();
+    assert.deepEqual(parts(), [
+      'span: Click the part of the page your note is about',
+      'span: Esc to stop',
+      // Read and not drawn: how a keyboard moves.
+      'span: Or move with the arrow keys and press Enter.',
+      'button: Stop',
+    ]);
+
+    host?.stop();
+    assert.deepEqual(parts(), []);
+  });
+
+  it('stops on the button of the banner, and gives focus back to the launch button (FRU-258)', () => {
+    const selected: CaptureTarget[] = [];
+    const { page } = mount(
+      () => page.query('#cta'),
+      (target) => selected.push(target),
+    );
+    host?.start();
+    const stopButton = host?.root.querySelector('.fruitback-banner-stop') as HTMLElement;
+
+    stopButton.click();
+
+    assert.equal(host?.capturing(), false);
+    assert.ok(deepActiveElement(page.document) === launchButton(), 'focus did not go back to the launch button');
+    // The click was on the widget: it chose nothing.
+    assert.equal(selected.length, 0);
   });
 
   it('says what a tap does on a touch screen, which has no Escape key (FRU-157)', () => {
@@ -115,16 +160,22 @@ describe('the chrome the reporter sees (FRU-36)', () => {
     host = createCaptureHost({ document: page.document, engine: fakeEngine(page, () => null), onSelect: () => {} });
     const announcer = host.root.querySelector('[data-fruitback-announcer]');
 
+    const banner = host.root.querySelector('[data-fruitback-host-banner]') as HTMLElement;
+    const said = () => [...banner.children].map((part) => part.textContent);
+
     host.start();
-    assert.equal(launchButton().textContent, 'Cancel');
-    assert.equal(announcer?.textContent, 'Tap an element.');
+    // No key to name, and no arrows: the sentence and the button, which is the only way out.
+    assert.deepEqual(said(), ['Tap the part of the page your note is about', 'Stop']);
+    assert.equal(launchButton().textContent, 'Leave feedback');
+    assert.equal(announcer?.textContent, '');
     host.stop();
 
     // The same device with a mouse plugged in: read again at the next start.
     coarse.value = false;
     host.start();
-    assert.equal(launchButton().textContent, 'Esc to cancel');
-    assert.match(announcer?.textContent ?? '', /arrow keys/);
+    assert.equal(said()[0], 'Click the part of the page your note is about');
+    assert.equal(said()[1], 'Esc to stop');
+    assert.match(said()[2] ?? '', /arrow keys/);
   });
 
   it('keeps the host label over a translated one, before and after a capture (FRU-37)', () => {
@@ -135,14 +186,15 @@ describe('the chrome the reporter sees (FRU-36)', () => {
         label: 'Feedback, please',
         translator: createTranslator({
           locale: 'fr',
-          messages: { fr: { 'launch.label': 'Laisser un feedback', 'launch.capturing': 'Échap pour annuler' } },
+          messages: { fr: { 'launch.label': 'Laisser un feedback', 'capture.stop': 'Arrêter' } },
         }),
       },
     );
 
     assert.equal(launchButton().textContent, 'Feedback, please');
     host?.start();
-    assert.equal(launchButton().textContent, 'Échap pour annuler');
+    assert.equal(launchButton().textContent, 'Feedback, please');
+    assert.equal(host?.root.querySelector('.fruitback-banner-stop')?.textContent, 'Arrêter');
     host?.stop();
     assert.equal(launchButton().textContent, 'Feedback, please');
   });
@@ -234,9 +286,98 @@ describe('createCaptureHost', () => {
 
     const highlight = host?.root.querySelector('[data-fruitback-host-highlight]') as HTMLElement;
     assert.equal(highlight.style.display, 'block');
-    assert.equal(highlight.style.left, '10px');
-    assert.equal(highlight.style.top, '20px');
-    assert.equal(highlight.style.width, '100px');
+    // The frame stands 6 px off the element on every side, as the mock-up draws it (FRU-258).
+    assert.equal(highlight.style.left, '4px');
+    assert.equal(highlight.style.top, '14px');
+    assert.equal(highlight.style.width, '112px');
+    assert.equal(highlight.style.height, '42px');
+  });
+
+  it('writes the name of the component on the frame, and nothing when the page gives none (FRU-258)', async () => {
+    const names: (string | undefined)[] = ['CheckoutCta', undefined, '<b>Bold</b>'];
+    const page = mountPage(PAGE, { width: 1_000, height: 1_000 });
+    let asked = 0;
+    const engine: CaptureEngine = {
+      ...fakeEngine(page, () => page.query('#cta')),
+      sourceOf: async () => {
+        asked += 1;
+        const component = names.shift();
+
+        return component === undefined ? undefined : { component };
+      },
+    };
+    host = createCaptureHost({ document: page.document, engine, onSelect: () => {} });
+    const tag = host.root.querySelector('.fruitback-highlight-tag') as HTMLElement;
+    const settle = async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    };
+
+    host.start();
+    moveOver(page);
+    await settle();
+    assert.equal(tag.hidden, false);
+    assert.equal(tag.textContent, 'CheckoutCta');
+    // For the eye: the note carries the name, and a screen reader hears the element.
+    assert.equal(tag.getAttribute('aria-hidden'), 'true');
+    // The pointer moves on the same element: the engine is asked once.
+    moveOver(page);
+    moveOver(page);
+    await settle();
+    assert.equal(asked, 1);
+
+    // A new capture asks again, and a page with no component shows no label.
+    host.stop();
+    host.start();
+    moveOver(page);
+    await settle();
+    assert.equal(tag.hidden, true);
+
+    host.stop();
+    host.start();
+    moveOver(page);
+    await settle();
+    // As text: a name is whatever the page called its component.
+    assert.equal(tag.textContent, '<b>Bold</b>');
+    assert.equal(tag.querySelector('b'), null);
+  });
+
+  it('holds the frame on the element that was chosen, for a caller that asks, until it lets go (FRU-258)', async () => {
+    const { page } = mount(
+      () => page.query('#cta'),
+      (target) => host?.hold(target.element),
+    );
+    host?.start();
+    const highlight = host?.root.querySelector('[data-fruitback-host-highlight]') as HTMLElement;
+
+    clickAt(page, page.query('#cta'));
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    assert.equal(host?.capturing(), false);
+    assert.equal(highlight.style.display, 'block');
+    assert.equal(highlight.style.left, '4px');
+    assert.equal(highlight.querySelector('.fruitback-highlight-tag')?.textContent, 'CheckoutCta');
+
+    host?.release();
+    assert.equal(highlight.style.display, 'none');
+  });
+
+  it('takes the frame away at the choice for a caller that holds nothing', async () => {
+    // A host that assembles the parts itself, and was written before `hold`: nothing stays on its page.
+    const { page } = mount(() => page.query('#cta'));
+    host?.start();
+    moveOver(page);
+    const highlight = host?.root.querySelector('[data-fruitback-host-highlight]') as HTMLElement;
+    assert.equal(highlight.style.display, 'block');
+
+    clickAt(page, page.query('#cta'));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    assert.equal(highlight.style.display, 'none');
   });
 
   it('refuses to point at its own UI', async () => {
@@ -300,6 +441,8 @@ describe('createCaptureHost', () => {
     pressKey(page, 'Escape');
 
     assert.equal(host?.capturing(), false);
+    // The key that stops gives focus back to the button that started (FRU-258).
+    assert.ok(deepActiveElement(page.document) === launchButton(), 'focus did not go back to the launch button');
   });
 
   it('takes its host element and its listeners with it when destroyed', () => {
@@ -440,7 +583,9 @@ describe('selecting an element without a pointer (FRU-51)', () => {
     page.query('p').textContent = '';
 
     host?.start();
-    assert.match(announced(), /arrow keys/);
+    // The banner says how to use the mode (FRU-258): this region only names the element reached.
+    assert.equal(announced(), '');
+    assert.match(host?.root.querySelector('[data-fruitback-host-banner]')?.textContent ?? '', /arrow keys/);
     press(page, 'ArrowDown');
     press(page, 'ArrowDown');
     press(page, 'ArrowDown');

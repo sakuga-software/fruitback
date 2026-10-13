@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it, mock } from 'node:test';
+import { KvError } from './kv.ts';
 import { ROLES, type Role, can, mailboxOf } from './accounts.ts';
 import { handleRequest } from './app.ts';
 import { type Auth, INVITATION_SECONDS, INVITER_GONE, ROLE_REFUSED, startAuth } from './auth.ts';
@@ -1134,6 +1135,37 @@ for (const { label, open, skip } of DATABASES) {
           assert.deepEqual([...new Set(body.match(/https?:\/\/[^\s"<]+/g) ?? [])], [`${CONSOLE_URL}/invitations`]);
           assert.doesNotMatch(body, /www\.evil|evil\.example|owner@acme\.dev/);
         }
+      }
+    });
+
+    // FRU-67. The counts are in the database of a worker that has one, and can stop answering after
+    // better-auth kept the invitation. A `503` there said that nothing was done.
+    it('keeps the invitation, sends no message and says so, when the counts do not answer', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const before = worker.mail.sent.length;
+      const down = async (): Promise<never> => {
+        throw new KvError('the Kv of the database did not answer');
+      };
+      const { get, incr } = worker.kv;
+      worker.kv.get = (key) => (key.startsWith('fruitback:invitation') ? down() : get.call(worker.kv, key));
+      worker.kv.incr = (key, ttlMs, by) =>
+        key.startsWith('fruitback:invitation') ? down() : incr.call(worker.kv, key, ttlMs, by);
+      const logged = mock.method(console, 'error', () => {});
+
+      try {
+        const answer = await invite(worker, acme.owner, acme.workspace, { email: 'late@client.dev' });
+
+        assert.equal(answer.status, 200, await answer.clone().text());
+        assert.equal(((await answer.json()) as { mailed: boolean }).mailed, false);
+        assert.equal(worker.mail.sent.length, before, 'a message went out that no count held');
+        assert.equal(
+          (await rowsOf(worker.database, `SELECT id FROM invitation WHERE email = 'late@client.dev'`)).length,
+          1,
+        );
+        assert.match(String(logged.mock.calls.at(-1)?.arguments[0]), /no message was sent/);
+      } finally {
+        logged.mock.restore();
       }
     });
 
