@@ -1,7 +1,7 @@
 import { type SeedBounds, type SeedIssue } from '@fruitback/shared';
 import { type Direction, type Translator, createTranslator, languageOf } from './messages.ts';
 import { createIcon } from './icons.ts';
-import { stageToken } from './theme.ts';
+import { onStageToken, stageToken } from './theme.ts';
 import { isElement } from './dom.ts';
 import { deepActiveElement } from './focus.ts';
 import { createOrphanList, type OrphanList } from './orphans.ts';
@@ -538,6 +538,8 @@ function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolu
   // dark theme, the host override and, once FRU-24 lands, a contract that stops shipping colours at
   // all — a widget's palette has no business travelling in the payload both ends must agree on.
   pin.style.setProperty('--fruitback-pin-color', pinColor(issue));
+  // What is written on the drop: dark on the amber of « in progress », white on the others (FRU-233).
+  if (!DRAFTS.has(issue)) pin.style.setProperty('--fruitback-pin-on-color', onStageToken(issue.stage));
   pin.dataset.fruitbackPin = issue.seed.id;
   if (DRAFTS.has(issue)) pin.dataset.fruitbackDraft = '';
   pin.dataset.fruitbackStage = issue.stage;
@@ -885,7 +887,7 @@ const STYLES = `
   border-radius: 50% 50% 50% 0;
   transform: rotate(-90deg);
   background: var(--fruitback-pin-color);
-  color: var(--fruitback-color-on-stage);
+  color: var(--fruitback-pin-on-color, var(--fruitback-color-on-stage));
   font: 13px/1 var(--fruitback-font-sans);
   cursor: pointer;
   box-shadow: var(--fruitback-shadow-sm);

@@ -26,6 +26,19 @@ const COPIES = {
   'line-strong': 'color-border-strong',
   accent: 'color-accent',
   'on-accent': 'color-on-accent',
+  // The mock-up of 2026-10-13 (FRU-233): what the screens of the popup need beside the seven above.
+  'surface-raised': 'color-surface-raised',
+  'surface-sunken': 'color-surface-sunken',
+  subtle: 'color-text-subtle',
+  'accent-strong': 'color-accent-strong',
+  chip: 'color-chip',
+  'on-chip': 'color-on-chip',
+  success: 'color-success',
+  'stage-seeded': 'stage-seeded',
+  'stage-green': 'stage-green',
+  'stage-ripening': 'stage-ripening',
+  'stage-ripe': 'stage-ripe',
+  'stage-composted': 'stage-composted',
 } as const;
 
 type Scheme = Record<string, string>;
@@ -82,6 +95,15 @@ const PAIRS = [
   { foreground: 'on-accent', background: 'accent', minimum: 4.5, where: 'the label of an action' },
   { foreground: 'accent', background: 'surface', minimum: 4.5, where: 'the words of a problem, and its remedy' },
   { foreground: 'line-strong', background: 'surface', minimum: 3, where: 'the edge of a field' },
+  // The pairs the screens of the mock-up paint (FRU-233), held here before a screen uses them.
+  { foreground: 'text', background: 'surface-raised', minimum: 4.5, where: 'text on a quiet block' },
+  { foreground: 'muted', background: 'surface-raised', minimum: 4.5, where: 'a hint on a quiet block' },
+  { foreground: 'text', background: 'surface-sunken', minimum: 4.5, where: 'a thing that is chosen' },
+  { foreground: 'muted', background: 'surface-sunken', minimum: 4.5, where: 'a hint on a thing that is chosen' },
+  { foreground: 'subtle', background: 'surface', minimum: 4.5, where: 'a count of zero' },
+  { foreground: 'on-accent', background: 'accent-strong', minimum: 4.5, where: 'an action under the pointer' },
+  { foreground: 'on-chip', background: 'chip', minimum: 4.5, where: 'the initial of the account' },
+  { foreground: 'success', background: 'surface', minimum: 4.5, where: 'a word that says it worked' },
 ] as const;
 
 describe('the tokens of the popup and of the options page (FRU-170)', () => {

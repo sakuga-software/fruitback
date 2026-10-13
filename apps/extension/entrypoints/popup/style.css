@@ -1,5 +1,5 @@
 /*
-  The tokens of the design (design/README.md), which are the tokens of the widget
+  The tokens of the design (the mock-up of 2026-10-13, FRU-233), which are the tokens of the widget
   (packages/widget/src/theme.ts). A stylesheet of an extension page cannot import them, so they are
   copied here, and src/design-tokens.test.ts compares each one with the widget and measures each pair
   of text and background (FRU-170). The options page loads this file first.
@@ -7,28 +7,49 @@
 :root {
   color-scheme: light dark;
   --surface: #fff;
-  --text: #1c1917;
-  --muted: #78716c;
-  --line: #e7e5e4;
-  --line-strong: #8f8883;
+  --surface-raised: #fafafa;
+  --surface-sunken: #f4f4f5;
+  --text: #18181b;
+  --muted: #6b6b74;
+  --subtle: #52525b;
+  --line: #e4e4e7;
+  --line-strong: #8a8a93;
   --accent: #dd2c27;
+  --accent-strong: #b91c1c;
   --on-accent: #fff;
+  --chip: #3f3f46;
+  --on-chip: #fff;
+  --success: #15803d;
+  /* The five statuses of a note, as the widget draws them on the page (FRU-233). */
+  --stage-seeded: #dd2c27;
+  --stage-green: #2563eb;
+  --stage-ripening: #f59e0b;
+  --stage-ripe: #15803d;
+  --stage-composted: #64748b;
   --radius-control: 6px;
-  --radius-field: 10px;
+  --radius-field: 8px;
+  /* A main action of the popup in the mock-up of 2026-10-13. The screens of the popup take it (FRU-251). */
+  --radius-action: 10px;
   --radius-pill: 999px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --surface: #1c1917;
-    --text: #f5f5f4;
-    --muted: #a8a29e;
-    --line: #3a3532;
-    --line-strong: #7a736e;
+    --surface: #18181b;
+    --surface-raised: #27272a;
+    --surface-sunken: #2e2e33;
+    --text: #f4f4f5;
+    --muted: #a1a1aa;
+    --subtle: #d4d4d8;
+    --line: #3f3f46;
+    --line-strong: #71717a;
     /* No red holds white text at 4.5:1 and is also readable on a dark surface: the dark scheme has
        a lighter fill with dark text on it, as the widget has (FRU-93). */
     --accent: #ec6a65;
-    --on-accent: #1c1917;
+    --accent-strong: #f28b87;
+    --on-accent: #18181b;
+    --chip: #52525b;
+    --success: #4ade80;
   }
 }
 

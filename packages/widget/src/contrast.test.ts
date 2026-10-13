@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { SEED_STAGES } from '@fruitback/shared';
-import { THEME_STYLES } from './theme.ts';
+import { THEME_STYLES, onStageToken } from './theme.ts';
 
 /**
  * WCAG 2.2 contrast of the default tokens, in the light scheme and in the dark scheme (FRU-51).
@@ -15,6 +15,22 @@ import { THEME_STYLES } from './theme.ts';
  */
 
 type Pair = { foreground: string; background: string; minimum: number; where: string };
+
+/** The stages whose drop is not written in the shared foreground. */
+const ON_STAGE: Partial<Record<string, string>> = { ripening: 'color-on-stage-ripening' };
+
+/**
+ * The one pair under its ratio, and it is the mock-up's own (FRU-233): the amber of « in progress »
+ * is 2.15:1 on white, where a drawing needs 3:1. It is the colour Mathieu's mock-up gives that status.
+ *
+ * What makes it hold is that the colour never speaks alone: the list writes the stage in words beside
+ * its mark, a thread writes the state under its border, and a pin carries its number in the ink.
+ * `messages.test.ts` and the specs of the list hold those words. The test fails if this pair starts
+ * to pass, so the line cannot outlive its reason, and if any other pair fails.
+ */
+const KNOWN = [
+  'light: stage-ripening on color-surface, the stage mark of a detached note, and the top border of a thread (2.15)',
+];
 
 const PAIRS: Pair[] = [
   { foreground: 'color-on-accent', background: 'color-accent', minimum: 4.5, where: 'the launch and send labels' },
@@ -77,12 +93,46 @@ const PAIRS: Pair[] = [
     where: 'the border of a field in the composer',
   },
   { foreground: 'color-accent', background: 'color-surface-raised', minimum: 3, where: 'the focus ring' },
+  // What a pin writes on its drop. One stage has a foreground of its own (FRU-233): `onStageToken`.
   ...SEED_STAGES.map((stage) => ({
-    foreground: 'color-on-stage',
+    foreground: ON_STAGE[stage] ?? 'color-on-stage',
     background: `stage-${stage}`,
     minimum: 4.5,
-    where: 'the approximate mark on a pin',
+    where: 'the number of a pin, and its approximate mark',
   })),
+  // The mock-up of 2026-10-13 (FRU-233). Held here before a module paints them.
+  {
+    foreground: 'color-on-accent',
+    background: 'color-accent-strong',
+    minimum: 4.5,
+    where: 'a main button under the pointer, and the launch button while it is pressed',
+  },
+  {
+    foreground: 'color-text',
+    background: 'color-surface-sunken',
+    minimum: 4.5,
+    where: 'the note that is open, in the list',
+  },
+  {
+    foreground: 'color-text-muted',
+    background: 'color-surface-sunken',
+    minimum: 4.5,
+    where: 'the byline of the note that is open, in the list',
+  },
+  {
+    foreground: 'color-text-subtle',
+    background: 'color-surface-sunken',
+    minimum: 4.5,
+    where: 'a tab that is not chosen',
+  },
+  { foreground: 'color-on-ink', background: 'color-ink', minimum: 4.5, where: 'the banner of a capture' },
+  { foreground: 'color-on-ink-muted', background: 'color-ink', minimum: 4.5, where: 'the hint of that banner' },
+  {
+    foreground: 'color-unplaced',
+    background: 'color-surface',
+    minimum: 3,
+    where: 'the outline of a note with no place',
+  },
   // A drawing and a border, not text: 1.4.11 asks for 3:1. The list names the stage in words too.
   ...SEED_STAGES.map((stage) => ({
     foreground: `stage-${stage}`,
@@ -138,6 +188,27 @@ describe('the contrast of the default tokens (FRU-51)', () => {
     }
   });
 
+  it('writes « in progress » dark on its amber, where white cannot be read (FRU-233)', () => {
+    // The mock-up draws the 2 of that pin in the ink. White on the amber is 2.15:1.
+    for (const tokens of [light, dark]) {
+      const amber = tokens['stage-ripening'] ?? '';
+      assert.ok(ratio('#ffffff', amber) < 3, 'white reads on this stage now: the token of its own is not needed');
+      assert.ok(ratio(tokens['color-on-stage-ripening'] ?? '', amber) >= 4.5);
+      assert.ok(
+        luminance(tokens['color-on-stage-ripening'] ?? '#fff') < 0.05,
+        'the foreground of the amber is not dark',
+      );
+    }
+    assert.equal(onStageToken('ripening'), 'var(--fruitback-color-on-stage-ripening, var(--fruitback-color-on-stage))');
+  });
+
+  it('holds the five statuses of the mock-up, in both schemes (FRU-233)', () => {
+    const drawn = { seeded: '#dd2c27', green: '#2563eb', ripening: '#f59e0b', ripe: '#15803d', composted: '#64748b' };
+    for (const tokens of [light, dark]) {
+      assert.deepEqual(Object.fromEntries(SEED_STAGES.map((stage) => [stage, tokens[`stage-${stage}`]])), drawn);
+    }
+  });
+
   it('passes for every pair, in both schemes', () => {
     const failures: string[] = [];
     for (const [scheme, tokens] of [
@@ -152,6 +223,6 @@ describe('the contrast of the default tokens (FRU-51)', () => {
       }
     }
 
-    assert.deepEqual(failures, []);
+    assert.deepEqual(failures, KNOWN);
   });
 });

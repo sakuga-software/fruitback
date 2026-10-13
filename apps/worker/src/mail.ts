@@ -88,11 +88,11 @@ export function signInMessage(to: string, link: string, minutes: number, locale 
   const words = locale.toLowerCase().startsWith('fr') ? SIGN_IN_WORDS.fr : SIGN_IN_WORDS.en;
   const text = [words.lead, '', link, '', words.once(minutes), words.ignore].join('\n');
   const href = escapeHtml(link);
-  const html = `<!doctype html><html><body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#1c1917;background:#faf9f5;padding:32px">
+  const html = `<!doctype html><html><body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#18181b;background:#ffffff;padding:32px">
 <p style="font-size:16px;font-weight:600">${escapeHtml(words.title)}</p>
 <p><a href="${href}" style="display:inline-block;background:#dd2c27;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none;font-weight:600">${escapeHtml(words.button)}</a></p>
-<p style="color:#78716c;font-size:13px">${escapeHtml(words.once(minutes))} ${escapeHtml(words.ignore)}</p>
-<p style="color:#a8a29e;font-size:12px;word-break:break-all">${href}</p>
+<p style="color:#6b6b74;font-size:13px">${escapeHtml(words.once(minutes))} ${escapeHtml(words.ignore)}</p>
+<p style="color:#6b6b74;font-size:12px;word-break:break-all">${href}</p>
 </body></html>`;
 
   return { to, subject: words.subject, text, html };
@@ -146,12 +146,12 @@ export function invitationMessage(
     '\n',
   );
   const href = escapeHtml(invitation.link);
-  const html = `<!doctype html><html><body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#1c1917;background:#faf9f5;padding:32px">
+  const html = `<!doctype html><html><body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#18181b;background:#ffffff;padding:32px">
 <p style="font-size:16px;font-weight:600">${escapeHtml(lead)}</p>
 <p>${escapeHtml(words.how(to))}</p>
 <p><a href="${href}" style="display:inline-block;background:#dd2c27;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none;font-weight:600">${escapeHtml(words.button)}</a></p>
-<p style="color:#78716c;font-size:13px">${escapeHtml(words.lasts(invitation.days))} ${escapeHtml(words.ignore)}</p>
-<p style="color:#a8a29e;font-size:12px;word-break:break-all">${href}</p>
+<p style="color:#6b6b74;font-size:13px">${escapeHtml(words.lasts(invitation.days))} ${escapeHtml(words.ignore)}</p>
+<p style="color:#6b6b74;font-size:12px;word-break:break-all">${href}</p>
 </body></html>`;
 
   return { to, subject: words.subject, text, html };

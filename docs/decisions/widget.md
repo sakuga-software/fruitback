@@ -184,6 +184,55 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
 - FRU-35 changed **no colour**: every token holds the hexadecimal that was already there, and
   `e2e/overlay.spec.ts`'s computed-colour read is the proof. One shadow moved 4px, because the thread
   and the panel spelled the same intention two ways.
+- **FRU-233 changes most of them, on purpose.** FRU-35 moved the colours into tokens and changed
+  none. The mock-up of 2026-10-13 (« simpler flow », FRU-230) changes the palette: the warm stone
+  greys become a neutral zinc scale, and the five « fruit » colours of the stages become five plain
+  status colours. A site that already has the widget sees it at its next load: **every pin changes
+  colour**, and the greys of the popover, the thread, the list and the settings turn neutral. The
+  names of the stages (`seeded`, `green`, `ripening`, `ripe`, `composted`) are the contract and do
+  not change. The values are read in the CSS of the mock-up, never by eye:
+
+  | Token                         | Before              | After                     |
+  | ----------------------------- | ------------------- | ------------------------- |
+  | `color-text`                  | `#1c1917`           | `#18181b`                 |
+  | `color-text-muted`            | `#78716c`           | `#6b6b74`                 |
+  | `color-text-subtle`           | `#7a736e`           | `#52525b`                 |
+  | `color-surface-raised`        | `#fffdf9`           | `#fafafa`                 |
+  | `color-border`                | `#e7e5e4`           | `#e4e4e7`                 |
+  | `color-border-strong`         | `#8f8883`           | `#8a8a93`                 |
+  | `color-chip`                  | `#44403c`           | `#3f3f46`                 |
+  | `color-success`               | `#4e7d2a`           | `#15803d`                 |
+  | `color-warning`               | `#8d6e63`           | `#b45309` (not drawn)     |
+  | `stage-seeded`, new           | `#6a7950`           | `#dd2c27`                 |
+  | `stage-green`, to do          | `#56802e`           | `#2563eb`                 |
+  | `stage-ripening`, in progress | `#ac5f00`           | `#f59e0b`, written in ink |
+  | `stage-ripe`, done            | `#8c1d40`           | `#15803d`                 |
+  | `stage-composted`, closed     | `#8d6e63`           | `#64748b`                 |
+  | `shadow-sm`, `shadow-xl`      | tinted `28, 25, 23` | tinted `24, 24, 27`       |
+
+  New tokens, each a value of the mock-up that a screen of FRU-252 to FRU-259 paints:
+  `color-accent-strong` (`#b91c1c`), `color-surface-sunken` (`#f4f4f5`), `color-on-stage-ripening`
+  (`#18181b`), `color-ink`, `color-on-ink`, `color-on-ink-muted` (the banner of a capture),
+  `color-unplaced` (`#d97706`), `shadow-xs`, `radius-field` (8 px), `font-mono` and `ease-out`
+  (`cubic-bezier(0.16, 1, 0.3, 1)`). The popover arrives on that curve in 420 ms, where it had an
+  overshoot in 220 ms. A screen takes a value from a token, and no token is defined outside
+  `theme.ts`.
+  - **« In progress » is written dark.** White on the amber is 2.15:1, the ink is 8.25:1.
+    `onStageToken` gives a stage its foreground, and `color-on-stage` stays the white of the four
+    others, so a host that set that one token keeps it. test:`writes « in progress » dark on its
+amber, where white cannot be read (FRU-233)`.
+  - **The amber is 2.15:1 on white, under the 3:1 of a drawing, and it stays**: it is the colour
+    the mock-up gives that status. A status is never said by its colour alone: the list names it,
+    a thread names it, a pin carries a number. `contrast.test.ts` names that one pair, and fails
+    when it passes or when another one fails.
+  - **The mock-up draws no dark scheme. It is kept, and derived**: the same zinc scale from its
+    other end (`#18181b` surface, `#27272a` raised, `#f4f4f5` text, `#a1a1aa` muted), every pair
+    measured. The five stages keep their values there: each is 3.43:1 or more on the dark surface.
+    The red of the dark accent stays `#ec6a65`: the `#ec5b57` of the mock-up's dark rail is 4.40:1
+    on the raised surface, under what text needs. `prefers-contrast: more` is unchanged.
+  - **`color-warning` is not in the mock-up.** Its brown belonged to the stone palette. It is the
+    amber of the mock-up darkened until it holds as text, 5.02:1.
+  - `e2e/overlay.spec.ts` reads the five colours on five real pins, and the ink on the amber one.
 
 ## The popover
 
