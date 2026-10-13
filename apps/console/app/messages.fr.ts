@@ -99,8 +99,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'You were signed out': 'Vous avez été déconnecté',
   'This tab was open for another account, so it stopped: nothing was sent from it. Load it again to go on.':
     'Cet onglet était ouvert pour un autre compte, il s’est donc arrêté : rien n’en est parti. Rechargez-le pour continuer.',
-  'The session ended in another tab, so this tab stopped: nothing was sent from it.':
-    'La session s’est terminée dans un autre onglet, cet onglet s’est donc arrêté : rien n’en est parti.',
+  'Your session ended while this tab was away, so it stopped: nothing was sent from it.':
+    'Votre session s’est terminée pendant que cet onglet était de côté, il s’est donc arrêté : rien n’en est parti.',
   'What you were writing, to copy:': 'Ce que vous étiez en train d’écrire, à copier :',
   'Load the console again': 'Recharger la console',
   'You are still signed in: Fruitback did not confirm the sign-out. Try again.':

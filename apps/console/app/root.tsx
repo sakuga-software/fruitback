@@ -118,7 +118,7 @@ function Gone({ why, drafts }: { why: Left; drafts: Draft[] }) {
             ? t(
                 'This tab was open for another account, so it stopped: nothing was sent from it. Load it again to go on.',
               )
-            : t('The session ended in another tab, so this tab stopped: nothing was sent from it.')}
+            : t('Your session ended while this tab was away, so it stopped: nothing was sent from it.')}
         </p>
         {drafts.length === 0 ? null : (
           <>
