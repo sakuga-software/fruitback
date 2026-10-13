@@ -308,6 +308,9 @@ test('the name of the workspace opens the menu of the workspaces of the person',
   expect
     .soft(contrast(await painted(items.nth(1).getByText('Member'), 'color'), rgb(WHITE)))
     .toBeGreaterThanOrEqual(4.5);
+  // The menu fades in: axe reads a contrast on words that are half there as too low.
+  await expect(popover).not.toHaveAttribute('data-entering', 'true');
+  await page.waitForTimeout(200);
   const results = await new AxeBuilder({ page }).include('.kit-menu').analyze();
   expect
     .soft(results.violations.map((violation) => `${violation.id}: ${violation.nodes[0]?.target.join(' ')}`))
@@ -329,6 +332,47 @@ test('the name of the workspace opens the menu of the workspaces of the person',
   await expect(page.getByRole('menu')).toBeHidden();
   await expect(rail(page).getByRole('button', { name: /Lumen Studio/ })).toBeVisible();
   await expect(sections(page).locator('[aria-current="page"]')).toHaveText('Sites');
+});
+
+test('a change of workspace shows nothing of the workspace of before while the new one is read', async ({ page }) => {
+  // The worker answers who is signed in at once, until the test holds its answers.
+  const asked: string[] = [];
+  let holding = false;
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const me = { account: { id: 'a1', email: 'ana@acme.dev', name: 'Ana', locale: 'en' }, workspaces: [ACME, LUMEN] };
+  await stubWorker(page, {
+    answer: (pathname, route) => {
+      asked.push(pathname);
+      if (pathname !== '/console/me' || !holding) return undefined;
+
+      return held.then(() => route.fulfill({ json: me }));
+    },
+  });
+  await open(page);
+  await expect(page.getByText('staging.acme.dev').first()).toBeVisible();
+
+  await switcher(page).click();
+  asked.length = 0;
+  holding = true;
+  await page.getByRole('menuitemradio', { name: /Lumen Studio/ }).click();
+  await expect(page).toHaveURL(`${CONSOLE}/w/w2/sites`);
+
+  // The address names the new workspace, and the worker has not answered: no screen, and no rail.
+  await expect(page.getByText('Loading…')).toBeVisible();
+  await expect(page.locator('main')).toHaveCount(0);
+  await expect(rail(page)).toHaveCount(0);
+  // Nothing was read in the workspace of before under the address of the new one.
+  expect(asked.filter((pathname) => pathname.includes('/workspaces/w1/'))).toEqual([]);
+
+  release();
+  await expect(rail(page).getByRole('button', { name: /Lumen Studio/ })).toBeVisible();
+  await expect(page.locator('main h1')).toBeVisible();
+  expect(asked.filter((pathname) => pathname.includes('/workspaces/w1/'))).toEqual([]);
+  // The control: the screen of the new workspace did read its own lists.
+  expect(asked.some((pathname) => pathname.includes('/workspaces/w2/'))).toBe(true);
 });
 
 test('a person with one workspace has its name, and no menu', async ({ page }) => {
@@ -429,6 +473,22 @@ test('at 390 px the row of sections is where the mockup draws it', async ({ page
     expectBox(await box(links.nth(index)), { ...entry, y: 85, height: 40 }, 4, `entry ${index + 1}`);
   }
   expect(await sideScroll(page)).toBe(0);
+});
+
+test('at 390 px a short screen leaves the rail at its own height', async ({ page }) => {
+  // A window higher than the screen it shows, as a short screen is on a phone.
+  await page.setViewportSize({ width: 390, height: 1800 });
+  await stubWorker(page);
+  await open(page);
+  const main = await box(page.locator('main'));
+  expect(main.y + main.height).toBeLessThan(1800);
+  // The mockup gives the rest of the window to the rail: 286 px of rail at 390 px.
+  expectBox(await box(rail(page)), { x: 0, y: 0, width: 390, height: 141 }, 4, 'the rail');
+  expectBox(await box(page.locator('main h1')), { x: 16, y: 181 }, 4, 'the title');
+
+  // At 1440 px the rail is beside the screen, and as high as the window.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  expectBox(await box(rail(page)), { x: 0, y: 0, width: 248.5, height: 900 }, 2, 'the rail at 1440 px');
 });
 
 for (const width of [1440, 390]) {
