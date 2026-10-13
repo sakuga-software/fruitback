@@ -91,6 +91,19 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   for the time of the read, so what is under it jumped and no action of a row was there to press.
   `e2e/console-members.spec.ts` reads the values and the boxes of the mockup at 1440 and 390 px,
   the keyboard, the contrasts and axe.
+- **« Connect this browser » answers the extension, and only on a press** (FRU-240, screen 04 of the
+  mockup of 2026-10-13, routes of FRU-238). The extension opens `/connect/<request>`; the page reads
+  `GET /console/connect/<request>` and shows the word, the browser, the account and its workspaces
+  as the worker says them, never as the address says them. « Connect » sends the word and the
+  account it showed (`POST …/approve`), « Not now » refuses (`POST …/refuse`). A sign-in on the page,
+  by a link (`useCarryOn`) or a provider (`connect-return.ts`), leads back to the question, never to
+  the answer: the mockup says « it connects in the same move », and the page says « Sign in, then
+  check the word and connect it ». A request that expired, is unknown, or was answered by another
+  account says « This request no longer works »; one answered in another tab is read again. An
+  account with no workspace can connect: its browser reads nothing until it has one, and the page
+  sends it to the setup. « Use another address » under the question signs out, for a browser that
+  holds the session of somebody else. `e2e/console-connect.spec.ts` holds each state on a worker of
+  stubs; `e2e/console-connect-worker.spec.ts` the whole path on a worker with accounts.
 - **The setup is one screen, and resumes where the worker says the person is** (FRU-239, screen 01 of
   the mockup of 2026-10-13). `setup.tsx` shows three steps together (step 1 in `setup-account.tsx`,
   step 2 in `setup-site.tsx`, step 3 in `setup-install.tsx`; where the person is, decided from the answers of the worker, in
@@ -310,8 +323,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 
 - **The console holds no token.** A call is a `fetch` with the cookie of the worker and no
   `Authorization` (FRU-147, and no other way since FRU-150). The cookie is `HttpOnly`,
-  `SameSite=Strict`, `Path=/console`: `document.cookie` does not show it, and nothing is in
-  `localStorage` or `sessionStorage`. `e2e/console-cookie-session.spec.ts` reads all three, after it
+  `SameSite=Strict`, `Path=/console`: `document.cookie` does not show it, and no token is in
+  `localStorage` or `sessionStorage` (the one thing there is the id of a request of the extension,
+  `connect-return.ts`, FRU-240). `e2e/console-cookie-session.spec.ts` reads all three, after it
   checked that the browser does hold the cookie.
 - **No client of better-auth.** The console calls the routes of the worker with `fetch`
   (`/console/auth/email`, `/console/auth/email/redeem`, `/console/auth/sign-out`). The bundle and the

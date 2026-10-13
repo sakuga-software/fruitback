@@ -654,6 +654,19 @@ export function SidePanel({
   );
 }
 
+/**
+ * The word a person compares with the one of another screen (FRU-240): white on ink, in a monospace
+ * of 22 px, with what to do beside it. The word is text a screen reader reads, in its own element.
+ */
+export function VerifyWord({ word, children }: { word: string; children: ReactNode }) {
+  return (
+    <div className="kit-verify">
+      <span className="kit-verify__ask">{children}</span>
+      <span className="kit-verify__word">{word}</span>
+    </div>
+  );
+}
+
 /** A list of a name and its value: « Signed in as », « Role », « Site ». */
 export function KeyValue({ rows }: { rows: readonly { term: string; value: ReactNode }[] }) {
   return (
