@@ -479,6 +479,78 @@ test.describe('the browsers of a person, on a worker with accounts', () => {
     await page.getByRole('button', { name: 'Add site', exact: true }).click();
   }
 
+  /** The cookie of a browser, as the header of a call that the test makes for it. */
+  async function cookieOf(context: BrowserContext): Promise<string> {
+    const cookie = (await context.cookies(`${worker.origin}/console/me`)).find((each) => each.name === SESSION_COOKIE);
+
+    return `${SESSION_COOKIE}=${cookie?.value}`;
+  }
+
+  /** What the worker answers the extension: its sites, and a new token for its refresh token. */
+  async function extensionReads(session: { accessToken: string; refreshToken: string }) {
+    const sites = await fetch(`${worker.origin}/session/sites`, {
+      headers: { Authorization: `Bearer ${session.accessToken}` },
+    });
+    const refreshed = await fetch(`${worker.origin}/session/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: session.refreshToken }),
+    });
+    const next = (await refreshed.json()) as { accessToken?: string; refreshToken?: string };
+
+    return { sites: sites.status, refresh: refreshed.status, next };
+  }
+
+  test('the extension stays connected when My account disconnects a browser, and when it signs out everywhere', async ({
+    browser,
+  }) => {
+    const first = await browserOf(browser, 'ana@acme.dev', 'Acme');
+    const second = await browserOf(browser, 'ana@acme.dev');
+    const workspace = /\/w\/(ws_[0-9a-f]{20})\//.exec(first.page.url())?.[1];
+    expect(workspace).toBeDefined();
+
+    // The extension is paired as the console pairs it: a code for this person in this workspace,
+    // spent by the extension on `/session/pair` (FRU-100, FRU-92).
+    const minted = await fetch(`${worker.origin}/console/workspaces/${workspace}/connect`, {
+      method: 'POST',
+      headers: { Origin: WORKER_CONSOLE, Cookie: await cookieOf(first.context), 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    expect(minted.status).toBe(201);
+    const { code } = (await minted.json()) as { code: string };
+    const paired = await fetch(`${worker.origin}/session/pair`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    expect(paired.status).toBe(200);
+    let session = (await paired.json()) as { accessToken: string; refreshToken: string };
+    const before = await extensionReads(session);
+    expect([before.sites, before.refresh]).toEqual([200, 200]);
+    session = before.next as typeof session;
+
+    // My account lists the browsers of the console only: the extension is no row of it.
+    await first.page.getByRole('link', { name: 'My account' }).click();
+    const browsers = first.page.getByRole('region', { name: 'Where you are signed in' }).getByRole('listitem');
+    await expect(browsers).toHaveCount(2);
+
+    // One browser disconnected: the extension reads its sites, and its session goes on.
+    await browsers.nth(1).getByRole('button', { name: 'Disconnect', exact: true }).click();
+    await expect(browsers).toHaveCount(1);
+    expect(await accepted(second.context)).toBe(401);
+    const after = await extensionReads(session);
+    expect([after.sites, after.refresh]).toEqual([200, 200]);
+    session = after.next as typeof session;
+
+    // Every browser signed out, this one too: the same.
+    await first.page.getByRole('button', { name: 'Sign out everywhere', exact: true }).click();
+    await first.page.getByRole('button', { name: 'Sign out of every browser', exact: true }).click();
+    await expect(first.page).toHaveURL(/\/setup$/);
+    expect(await accepted(first.context)).toBe(401);
+    const last = await extensionReads(session);
+    expect([last.sites, last.refresh]).toEqual([200, 200]);
+  });
+
   test('one browser disconnects the other, which learns it at its next call; « Sign out everywhere » ends both', async ({
     browser,
   }) => {
