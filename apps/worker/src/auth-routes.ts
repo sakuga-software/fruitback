@@ -1,4 +1,4 @@
-import { type AccountStore, normalizeEmail, readLocaleTag } from './accounts.ts';
+import { type AccountStore, mailboxOf, normalizeEmail, readLocaleTag } from './accounts.ts';
 import {
   AUTH_BASE_PATH,
   type Auth,
@@ -250,8 +250,8 @@ async function sendLink(
     readLocaleTag(request.headers.get('Accept-Language')?.split(',')[0]?.split(';')[0]) ??
     'en';
 
-  // Three links to one address in the window.
-  const sent = await context.kv.incr(`fruitback:mail:${email}`, EMAIL_LINK_WINDOW_MS);
+  // Three links to one mailbox in the window: the address without its `+suffix` (FRU-209).
+  const sent = await context.kv.incr(`fruitback:mail:${mailboxOf(email)}`, EMAIL_LINK_WINDOW_MS);
   if (sent > EMAIL_LINKS_PER_WINDOW) return json(429, { error: 'too-many-links' }, headers);
 
   const mailer = context.mailer;

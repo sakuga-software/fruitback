@@ -1,4 +1,4 @@
-import { type AccountStore, type Workspace, can } from './accounts.ts';
+import { type AccountStore, type Workspace, can, mailboxOf } from './accounts.ts';
 import { newId, roleOf } from './account-rows.ts';
 import { AUTH_BASE_PATH, type Auth, INVITATION_SECONDS, INVITER_GONE } from './auth.ts';
 import {
@@ -61,12 +61,24 @@ export const INVITATION_DAYS = INVITATION_SECONDS / 86_400;
  */
 export const INVITATIONS_PER_WINDOW = EMAIL_LINKS_PER_WINDOW;
 
+/**
+ * How many invitation messages one account sends, in every workspace together, and how many one
+ * workspace sends, whoever invites (FRU-209). The window of an address bounds neither: one account
+ * made 12 workspaces and sent 60 messages to 60 addresses (measured), and anybody makes a
+ * workspace. Past either, the invitation is kept and no message goes, as for the address.
+ *
+ * The numbers are for a team that invites its people in one sitting; they are not measured.
+ */
+export const INVITATIONS_PER_INVITER = 20;
+export const INVITATIONS_PER_WORKSPACE = 40;
+export const INVITER_WINDOW_MS = 60 * 60 * 1000;
+
 /** The adapter of better-auth, to read which workspace an invitation is of, and who made it. */
 type InvitationAdapter = {
   findOne(input: {
     model: 'invitation' | 'member';
     where: { field: string; value: string }[];
-  }): Promise<{ organizationId?: unknown; inviterId?: unknown; role?: unknown } | null>;
+  }): Promise<{ organizationId?: unknown; inviterId?: unknown; role?: unknown; status?: unknown } | null>;
   updateMany(input: {
     model: 'invitation';
     where: { field: string; value: string }[];
@@ -97,9 +109,18 @@ async function cancelInvitationsOf(adapter: InvitationAdapter, workspace: string
  * and the first failure is thrown when both are done. A cancellation that failed must not leave
  * the extensions of the person alive, nor the other way round.
  */
-async function afterSomebodyWent(...steps: Promise<unknown>[]): Promise<void> {
-  const failed = (await Promise.allSettled(steps)).find((step) => step.status === 'rejected');
-  if (failed !== undefined) throw failed.reason;
+async function afterSomebodyWent(
+  context: Pick<OrganizationRouteContext, 'sessions'>,
+  adapter: InvitationAdapter,
+  workspace: string,
+  person: string,
+): Promise<void> {
+  const steps = await Promise.allSettled([
+    context.sessions.endSessionsOf({ subject: person, workspace }, Date.now()),
+    cancelInvitationsOf(adapter, workspace, person),
+  ]);
+  const failed = steps.find((step) => step.status === 'rejected');
+  if (failed !== undefined) throw new AuthUnavailable(String(failed.reason), { cause: failed.reason });
 }
 
 /**
@@ -200,13 +221,71 @@ export async function handleOrganizationRoutes(
   if (!read.ok) return json(400, { error: 'invalid-request', field: read.field }, headers);
   // A route of the person names no workspace: better-auth reads the address of the session.
   const workspace = rule.scope === 'person' ? undefined : String(read.input.organizationId);
+  const call: Call = { request, path, rule, input: read.input, workspace, auth, mine };
+
+  // A call that changes a workspace runs alone in it (FRU-209): see `oneAtATime`.
+  return workspace !== undefined && rule.method === 'POST'
+    ? oneAtATime(workspace, () => answerOrganizationCall(call, context, headers))
+    : answerOrganizationCall(call, context, headers);
+}
+
+/** A call that passed what needs no workspace: its route, what it sent, and who sent it. */
+type Call = {
+  request: Request;
+  path: string;
+  rule: OrganizationRule;
+  input: Record<string, string | number | boolean>;
+  workspace: string | undefined;
+  auth: Auth;
+  mine: { userId: string };
+};
+
+const waiting = new Map<string, Promise<unknown>>();
+
+/**
+ * One call at a time for a workspace, in this process (FRU-209).
+ *
+ * better-auth reads, then writes, in no transaction: it counts the owners and then removes one, it
+ * looks for an invitation of an address and then writes one. Two calls at the same moment both read
+ * before either writes. On a real PostgreSQL, two owners who demoted themselves at once left a
+ * workspace with no owner, which nobody can repair or delete; and four invitations of one address
+ * wrote two or three rows (both measured). PGlite has one connection and hid it.
+ *
+ * WARNING: this holds for one process. Two replicas of the worker do not share it, as they do not
+ * share the `Kv`.
+ */
+async function oneAtATime<T>(workspace: string, run: () => Promise<T>): Promise<T> {
+  const before = waiting.get(workspace) ?? Promise.resolve();
+  const mine = before.then(run, run);
+  const settled = mine.catch(() => undefined);
+  waiting.set(workspace, settled);
+  try {
+    return await mine;
+  } finally {
+    if (waiting.get(workspace) === settled) waiting.delete(workspace);
+  }
+}
+
+async function answerOrganizationCall(
+  call: Call,
+  context: OrganizationRouteContext,
+  headers: Record<string, string>,
+): Promise<Response> {
+  const { request, path, rule, workspace, auth, mine } = call;
+  const read = { input: call.input };
   const adapter = (await auth.$context).adapter as unknown as InvitationAdapter;
 
   if (workspace !== undefined) {
     // Read by the store of the worker, which takes one role of the four and nothing else. Not a
     // member answers like a workspace that does not exist, as on the routes of the console.
     const role = await context.accounts.role(workspace, mine.userId);
-    if (role === undefined) return json(404, { error: 'not-found' }, headers);
+    if (role === undefined) {
+      // Somebody who left, and whose call failed after better-auth wrote it, asks again: what
+      // follows a departure runs now. For anybody else it finds nothing to end.
+      if (path === '/organization/leave') await afterSomebodyWent(context, adapter, workspace, mine.userId);
+
+      return json(404, { error: 'not-found' }, headers);
+    }
     if (rule.needs !== undefined && !can(role, rule.needs)) return json(403, { error: 'forbidden', role }, headers);
 
     // better-auth finds the workspace of an invitation from the invitation. The role was read in the
@@ -217,6 +296,26 @@ export async function handleOrganizationRoutes(
         where: [{ field: 'id', value: String(read.input.invitationId) }],
       });
       if (invitation?.organizationId !== workspace) return json(404, { error: 'not-found' }, headers);
+      // better-auth cancels an invitation whatever its state (1.7.7): one that was accepted read
+      // « cancelled » to the admin, and its person stayed a member.
+      if (invitation.status !== 'pending') {
+        return json(400, { code: 'INVITATION_NOT_FOUND', message: 'This invitation no longer waits' }, headers);
+      }
+    }
+    // A « Resend » sends the invitation that waits, as it is: better-auth keeps its role, and the
+    // message would name the role of the call.
+    if (path === '/organization/invite-member' && read.input.resend === true) {
+      const waits = await adapter.findOne({
+        model: 'invitation',
+        where: [
+          { field: 'organizationId', value: workspace },
+          { field: 'email', value: String(read.input.email) },
+          { field: 'status', value: 'pending' },
+        ],
+      });
+      if (waits !== null && waits.role !== read.input.role) {
+        return json(400, { error: 'invalid-request', field: 'role' }, headers);
+      }
     }
   }
 
@@ -250,11 +349,11 @@ export async function handleOrganizationRoutes(
   // Somebody who left keeps no extension for the workspace. `remove-member` does the same in a hook
   // of the plugin (`auth.ts`); `leave` runs none in 1.7.7, so it is here.
   if (path === '/organization/leave' && answer.ok && workspace !== undefined) {
-    await afterSomebodyWent(
-      context.sessions.endSessionsOf({ subject: mine.userId, workspace }, Date.now()),
-      cancelInvitationsOf(adapter, workspace, mine.userId),
-    );
+    await afterSomebodyWent(context, adapter, workspace, mine.userId);
   }
+  // A hook of the worker that fails inside the plugin comes back as a `500` of better-auth, with
+  // its own body. The caller answers `502`, as for any failure of better-auth.
+  if (answer.status >= 500) throw new AuthUnavailable(`better-auth answered ${answer.status} on ${path}`);
   // Somebody who is removed, or whose new role does not invite, keeps no invitation that waits.
   if (
     (path === '/organization/remove-member' || path === '/organization/update-member-role') &&
@@ -286,11 +385,7 @@ export async function handleOrganizationRoutes(
     let mailed = false;
     // The count is taken in one step, after better-auth kept the invitation: a call that it refused
     // spends nothing, and of two calls at the same moment the one that goes over sends nothing.
-    const window = `fruitback:invitation:${workspace}:${invited}`;
-    if (
-      context.mailer !== undefined &&
-      (await context.kv.incr(window, EMAIL_LINK_WINDOW_MS)) <= INVITATIONS_PER_WINDOW
-    ) {
+    if (context.mailer !== undefined && (await mayMail(context.kv, { workspace, invited, inviter: mine.userId }))) {
       try {
         await context.mailer.send(
           await messageOf(context, { to: invited, role: String(read.input.role), workspace, inviter: mine.userId }),
@@ -307,11 +402,52 @@ export async function handleOrganizationRoutes(
     told = JSON.stringify({ ...kept, mailed });
   }
 
+  // An invitation past its end waits no more: better-auth refuses it at the acceptance, and still
+  // lists it as `pending` (1.7.7). The screens showed it, and « Join » failed.
+  if ((path === '/organization/list-invitations' || path === '/organization/list-user-invitations') && answer.ok) {
+    const listed: unknown = await answer
+      .clone()
+      .json()
+      .catch(() => undefined);
+    if (!Array.isArray(listed)) throw new AuthUnavailable(`better-auth answered no list on ${path}`);
+    const now = Date.now();
+    told = JSON.stringify(
+      (listed as { status?: unknown; expiresAt?: unknown }[]).filter(
+        (each) => each.status !== 'pending' || new Date(String(each.expiresAt)).getTime() > now,
+      ),
+    );
+  }
+
   const merged = new Headers(answer.headers);
   for (const [name, value] of Object.entries(headers)) merged.set(name, value);
   if (told !== undefined) merged.delete('Content-Length');
 
   return new Response(told ?? answer.body, { status: answer.status, statusText: answer.statusText, headers: merged });
+}
+
+/**
+ * Whether one more invitation message may go: under the window of the address in this workspace,
+ * of the account that invites, and of the workspace.
+ *
+ * The three are read first, and nothing is counted when one is full: a workspace past its count
+ * would otherwise spend the count of each admin who tries, in every workspace of theirs, and an
+ * account past its own would spend the window of each address it tries. Then each is counted in one
+ * step, and the message goes only when none came back over: of two calls at the same moment, the
+ * one that goes over sends nothing. Only that call, in a race, spends a count for no message.
+ */
+async function mayMail(kv: Kv, sent: { workspace: string; invited: string; inviter: string }): Promise<boolean> {
+  const windows: [string, number, number][] = [
+    // By mailbox: `carol+1@…` and `carol+2@…` are one, and six of them were six messages in it.
+    [`fruitback:invitation:${sent.workspace}:${mailboxOf(sent.invited)}`, EMAIL_LINK_WINDOW_MS, INVITATIONS_PER_WINDOW],
+    [`fruitback:invitations-of:${sent.inviter}`, INVITER_WINDOW_MS, INVITATIONS_PER_INVITER],
+    [`fruitback:invitations-in:${sent.workspace}`, INVITER_WINDOW_MS, INVITATIONS_PER_WORKSPACE],
+  ];
+  for (const [key, , most] of windows) {
+    if (Number((await kv.get(key)) ?? 0) >= most) return false;
+  }
+  const counts = await Promise.all(windows.map(([key, ttl]) => kv.incr(key, ttl)));
+
+  return counts.every((count, index) => count <= (windows[index] as [string, number, number])[2]);
 }
 
 /**

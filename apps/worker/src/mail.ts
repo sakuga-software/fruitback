@@ -101,7 +101,7 @@ export function signInMessage(to: string, link: string, minutes: number, locale 
 /** The languages of an invitation. Any other tag falls back to English. */
 const INVITATION_WORDS = {
   en: {
-    subject: (workspace: string) => `You are invited to ${workspace} on Fruitback`,
+    subject: 'You are invited to a workspace on Fruitback',
     lead: (inviter: string, workspace: string, role: string) =>
       `${inviter} invites you to the workspace « ${workspace} » on Fruitback, as ${role === 'admin' ? 'an admin' : 'a member'}.`,
     how: (address: string) => `Sign in with ${address}, and you will see the invitation:`,
@@ -111,7 +111,7 @@ const INVITATION_WORDS = {
       'This link opens nothing by itself: to join, you sign in with this address. If you expected no invitation, ignore this message.',
   },
   fr: {
-    subject: (workspace: string) => `Vous êtes invité dans ${workspace} sur Fruitback`,
+    subject: 'Vous êtes invité dans un espace de travail sur Fruitback',
     lead: (inviter: string, workspace: string, role: string) =>
       `${inviter} vous invite dans l'espace de travail « ${workspace} » sur Fruitback, comme ${role === 'admin' ? 'administrateur' : 'membre'}.`,
     how: (address: string) => `Connectez-vous avec ${address}, et vous verrez l'invitation :`,
@@ -129,8 +129,11 @@ const INVITATION_WORDS = {
  * message, or a copy of it, opens nothing with it: the invitation is shown to a session of the
  * address it was sent to, and to nobody else.
  *
- * The name of the workspace and of the inviter are written by people. They are escaped in the HTML,
- * and they are one line each: the caller reads them from the accounts, which keep them so.
+ * **The name of the workspace and of the inviter are written by people, and anybody makes a
+ * workspace** (FRU-209). So the subject is the same for every invitation and holds neither: a subject
+ * « You are invited to Your invoice is ready: https://… » went out under the name of Fruitback. In
+ * the body they are escaped in the HTML, one line each (the accounts keep them so), and written so
+ * that no mail client makes a link of them (`unlinked`): the one link of the message is the console's.
  */
 export function invitationMessage(
   to: string,
@@ -138,7 +141,7 @@ export function invitationMessage(
   locale = 'en',
 ): MailMessage {
   const words = locale.toLowerCase().startsWith('fr') ? INVITATION_WORDS.fr : INVITATION_WORDS.en;
-  const lead = words.lead(invitation.inviter, invitation.workspace, invitation.role);
+  const lead = words.lead(unlinked(invitation.inviter), unlinked(invitation.workspace), invitation.role);
   const text = [lead, '', words.how(to), '', invitation.link, '', words.lasts(invitation.days), words.ignore].join(
     '\n',
   );
@@ -151,7 +154,16 @@ export function invitationMessage(
 <p style="color:#a8a29e;font-size:12px;word-break:break-all">${href}</p>
 </body></html>`;
 
-  return { to, subject: words.subject(invitation.workspace), text, html };
+  return { to, subject: words.subject, text, html };
+}
+
+/**
+ * A text that a person wrote, as a mail client shows it without a link: a zero-width space after each
+ * `.`, `:`, `/` and `@` breaks what a client would read as an address (`https://…`, `www.…`,
+ * `a@b.c`). The text reads the same.
+ */
+export function unlinked(value: string): string {
+  return value.replaceAll(/[.:/@]/g, (mark) => `${mark}\u200B`);
 }
 
 function escapeHtml(value: string): string {
