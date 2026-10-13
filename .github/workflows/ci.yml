@@ -140,7 +140,8 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run the E2E suite
-        # No LINEAR_API_KEY anywhere: the worker runs on its in-memory store (FRUITBACK_STORE=memory).
+        # No key and no service: each worker of the suite has a PostgreSQL in its process (PGlite,
+        # `dev-worker.fixture.ts`, FRU-223).
         run: pnpm e2e
 
       - name: Keep the traces of a failed run
@@ -281,6 +282,42 @@ jobs:
           echo "the container never became ready:"
           docker logs worker
           exit 1
+
+      - name: Boot it with the switch of the database of development, and find it refused
+        # FRU-223. `pnpm dev` and the E2E suite run on a PostgreSQL in the process, behind
+        # FRUITBACK_DEV_DATABASE. The image must refuse the switch, and never ignore it: a worker
+        # that ignored it would start with no database, or on another one than its operator thinks.
+        # Matched on the 503 and on the name of the variable, as for FRUITBACK_STORE=memory in
+        # release-image.yml. The second half checks what makes the refusal true whatever the code
+        # says: the image holds neither the file that makes that database nor PGlite.
+        run: |
+          docker run -d --name dev-database -p 8084:8080 \
+            -e ALLOWED_ORIGINS=http://localhost:5173 \
+            -e FRUITBACK_STORE=postgres \
+            -e FRUITBACK_DEV_DATABASE=pglite \
+            -e FRUITBACK_IDENTITY_SECRET=ci-not-a-real-secret-of-32-characters \
+            -e FRUITBACK_CONSOLE_URL=https://app.fruitback.example \
+            fruitback-worker:ci
+          code=000
+          for attempt in $(seq 1 30); do
+            code=$(curl -s -o /tmp/dev-database-body -w '%{http_code}' http://127.0.0.1:8084/health || true)
+            if [ "$code" != "000" ]; then break; fi
+            sleep 1
+          done
+          body=$(cat /tmp/dev-database-body)
+          case "$code:$body" in
+            503:*FRUITBACK_DEV_DATABASE*) echo "refused as it should: $body" ;;
+            *)
+              echo "the image did not refuse FRUITBACK_DEV_DATABASE (HTTP $code, body: $body)"
+              docker logs dev-database
+              exit 1
+              ;;
+          esac
+          if docker exec dev-database sh -c 'ls -R / 2>/dev/null | grep -i -E "pglite|dev-worker"'; then
+            echo "the image holds PGlite or the worker of development"
+            exit 1
+          fi
+          docker rm -f dev-database
 
       - name: Boot it with its accounts in PostgreSQL, and read the sites from the database
         # FRU-141. The driver of PostgreSQL is CommonJS inside an ESM bundle: without the banner of the

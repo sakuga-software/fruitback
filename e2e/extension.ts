@@ -1,10 +1,9 @@
-import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { type BrowserContext, type Page, type Worker, test as base, chromium, expect } from '@playwright/test';
 import { WORKER_ORIGIN, caseOf } from './pin.ts';
-import { AUTHENTICATED_WORKER_ORIGIN, WORKER_SESSION_ENV } from './worker-sessions.ts';
+import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 /**
  * The extension, loaded into a real Chromium, against the playground as an ordinary site (FRU-45).
@@ -176,33 +175,31 @@ export async function openPopup(extension: LoadedExtension, site: Page, origin =
   return popup;
 }
 
-/** A pairing code, minted the way an operator mints one: the worker's own `pair` command. */
-export function mintPairingCode(name: string): string {
-  return mintPairing(name).code;
+/** A pairing code for the workspace of the worker of the suite: see `mintPairing`. */
+export async function mintPairingCode(name: string): Promise<string> {
+  return (await mintPairing(name)).code;
 }
 
 /**
- * A code and the link that carries it, from one run of the `pair` command (FRU-92).
+ * A code and the link that carries it (FRU-92), from the worker that will take the code.
  *
- * One source for both, so the spec that pairs by the link and the spec that pairs by the field use a
- * code the same command minted.
+ * The worker of the suite keeps its sessions in a database that lives in its process (FRU-223), so
+ * the `pair` command, which is another process, cannot write there. `dev-worker.fixture.ts` answers
+ * `POST /__dev/pair` with what the command prints: the code, and the link of `pairingLink`. The
+ * command itself is tested in `cli.test.ts`.
  */
-export function mintPairing(name: string, endpoint = AUTHENTICATED_WORKER_ORIGIN): { code: string; link: string } {
-  const output = execFileSync(
-    process.execPath,
-    ['src/main.ts', 'pair', '--subject', 'e2e-reviewer', '--name', name, '--endpoint', endpoint],
-    {
-      cwd: 'apps/worker',
-      encoding: 'utf8',
-      env: { ...process.env, FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: PLAYGROUND_ORIGIN, ...WORKER_SESSION_ENV },
-    },
-  );
-  const code = /^ {4}([0-9A-Z-]+)$/m.exec(output)?.[1];
-  const link = /^ {4}(https?:\/\/\S+)$/m.exec(output)?.[1];
-  if (code === undefined || link === undefined)
-    throw new Error(`the pair command printed no code or no link:\n${output}`);
+export async function mintPairing(
+  name: string,
+  endpoint = AUTHENTICATED_WORKER_ORIGIN,
+): Promise<{ code: string; link: string }> {
+  const answer = await fetch(`${endpoint}/__dev/pair`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, endpoint }),
+  });
+  if (!answer.ok) throw new Error(`the worker minted no pairing code: ${answer.status} ${await answer.text()}`);
 
-  return { code, link };
+  return (await answer.json()) as { code: string; link: string };
 }
 
 /** Pair from the popup, for the site in `site`. */

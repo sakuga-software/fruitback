@@ -19,7 +19,7 @@ Package manager is `pnpm@11.16.0` (pinned). Nx runs multi-project targets.
 
 ```bash
 pnpm install
-pnpm dev                                    # worker (in-memory Linear) + playground, see below
+pnpm dev                                    # worker (a database in its process) + playground, see below
 pnpm test                                   # nx run-many -t test → node --test
 pnpm e2e                                    # playwright, starts both servers itself
 pnpm typecheck
@@ -35,7 +35,7 @@ node --test src/seed.test.ts                 # one file, from the package direct
 |                         |                                                 |
 | ----------------------- | ----------------------------------------------- |
 | `http://localhost:5177` | the playground page, the dev server `/tf` opens |
-| `http://localhost:8788` | the worker, on its in-memory Linear             |
+| `http://localhost:8788` | the worker, on a PostgreSQL in its process      |
 
 `/tf` and `/tfp` read these numbers from here rather than probing.
 

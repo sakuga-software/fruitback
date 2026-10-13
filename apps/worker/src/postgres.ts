@@ -280,11 +280,56 @@ const databases = new Map<string, PgDatabase>();
 export function databaseFor(url: string): PgDatabase {
   const known = databases.get(url);
   if (known !== undefined) return known;
+  // The address of the switch names no server: `dev-worker.fixture.ts` gives its database before the first call.
+  if (url === DEV_DATABASE_URL) {
+    throw new StoreError(
+      'FRUITBACK_DEV_DATABASE is set, and this process has no database of its own: start the worker with `pnpm dev` (src/dev-worker.fixture.ts)',
+    );
+  }
 
   const database = createPgDatabase(url);
   databases.set(url, database);
 
   return database;
+}
+
+/**
+ * The database of development, in the process (FRU-223).
+ *
+ * `FRUITBACK_DEV_DATABASE=pglite` is the switch: the worker then has the database that `dev-worker.fixture.ts`
+ * made, a PGlite, in place of the one of `FRUITBACK_DATABASE_URL`. `pnpm dev` and the E2E suite
+ * start that way, with no server to install. **Refused under `NODE_ENV=production`** (`readConfig`),
+ * as the store `memory` is: the image sets it, and holds neither `dev-worker.fixture.ts` nor PGlite.
+ *
+ * `DEV_DATABASE_URL` is what the configuration holds in place of an address. Its host is a name
+ * that no DNS answers (RFC 6761), so a process that has the switch and no database gets an error,
+ * and never a connection to somebody's server.
+ */
+export const DEV_DATABASE = 'pglite';
+export const DEV_DATABASE_URL = 'postgres://fruitback@pglite.invalid/dev';
+
+/** Whether the environment asks for the database of development. */
+export function asksForDevDatabase(env: { FRUITBACK_DEV_DATABASE?: string }): boolean {
+  return (env.FRUITBACK_DEV_DATABASE ?? '').trim() !== '';
+}
+
+/**
+ * The address of the database of a worker, as its environment gives it: the one of the switch, or
+ * `FRUITBACK_DATABASE_URL`. `readConfig` refuses the switch in production before anything reads this.
+ */
+export function databaseUrlOf(env: {
+  FRUITBACK_DEV_DATABASE?: string;
+  FRUITBACK_DATABASE_URL?: string;
+  NODE_ENV?: string;
+}): string | undefined {
+  if (asksForDevDatabase(env) && env.NODE_ENV !== 'production') return DEV_DATABASE_URL;
+
+  return readDatabaseUrl(env.FRUITBACK_DATABASE_URL);
+}
+
+/** Gives the process the database that `databaseFor(DEV_DATABASE_URL)` answers. For `dev-worker.fixture.ts` alone. */
+export function provideDevDatabase(database: PgDatabase): void {
+  databases.set(DEV_DATABASE_URL, database);
 }
 
 export async function closeDatabases(): Promise<void> {
