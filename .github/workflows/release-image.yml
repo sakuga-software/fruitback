@@ -322,7 +322,11 @@ jobs:
           echo "$policy"
           echo "$policy" | grep -q "connect-src 'self' https://api.acme.example;"
           echo "$policy" | grep -q "'sha256-"
-          ! echo "$policy" | grep -q "script-src[^;]*unsafe-inline"
+          # Never `! grep`: under `bash -e` a command that `!` inverts does not stop the script.
+          if echo "$policy" | grep -q "script-src[^;]*unsafe-inline"; then
+            echo "the policy allows inline scripts"
+            exit 1
+          fi
           test "$(curl -s http://127.0.0.1:8082/config.js)" = 'globalThis.__FRUITBACK__ = { api: "https://api.acme.example" };'
           test "$(docker exec serves id -u)" = 101
           docker rm -f serves

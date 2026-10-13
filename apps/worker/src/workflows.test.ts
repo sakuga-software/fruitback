@@ -438,6 +438,23 @@ describe('the GitHub workflows', () => {
     );
   });
 
+  /**
+   * A check that looks for an absence must be able to fail (FRU-222). GitHub runs a step with
+   * `bash -e`, and bash does not stop on a command that `!` inverts: `! grep -q unsafe-inline` left
+   * the step green with `unsafe-inline` in the policy. The form that stops is
+   * `if grep …; then exit 1; fi`. Raised in review.
+   */
+  it('negate no command with `!` in a step: under `bash -e` it never fails the step', () => {
+    const negated = /^\s+! \S.*$/gm;
+    // The control: the form that was there is found.
+    assert.deepEqual('        run: |\n          ! grep -q unsafe-inline /tmp/policy\n'.match(negated)?.length, 1);
+
+    assert.deepEqual(
+      workflows().flatMap(({ file, source }) => (source.match(negated) ?? []).map((line) => `${file}: ${line.trim()}`)),
+      [],
+    );
+  });
+
   it('publish nothing from a commit that did not pass CI', () => {
     const files = workflows();
     const writers = files.flatMap(({ source }) => [...source.matchAll(/^ {6}\w[\w-]*: write$/gm)]);
