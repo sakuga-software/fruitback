@@ -826,7 +826,7 @@ textarea {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 4px 24px;
+  gap: 8px 24px;
   /* As the mockup writes it: the padding is outside the 1280 px, so the logo is at 80 px at 1440. */
   box-sizing: content-box;
   max-width: 1280px;
@@ -981,6 +981,9 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
+  /* An address with no space in it takes the lines it needs, and the page does not scroll. */
+  overflow-wrap: anywhere;
   padding: 18px 20px;
   border: 1px solid var(--color-line);
   border-radius: var(--radius-box);
