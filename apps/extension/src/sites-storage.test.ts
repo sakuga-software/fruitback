@@ -28,7 +28,8 @@ let answer: 'apply' | 'refuse' = 'apply';
   },
   storage: { local: fake.area },
 };
-const { findSite, readAll, readSite, removeSite, replaceAll, writeSite, writeSites } = await import('./sites.ts');
+const { findSite, readAll, readSite, rememberPreviews, removeSite, replaceAll, writeSite, writeSites } =
+  await import('./sites.ts');
 const { createSiteOwner, parseSiteMutation } = await import('./site-writes.ts');
 const own = createSiteOwner({ read: readAll, replace: replaceAll });
 
@@ -51,6 +52,32 @@ describe('sites.ts over storage', () => {
     assert.deepEqual(await readSite('https://pr-12.staging.acme.dev'), acme);
     assert.deepEqual(await findSite('https://staging.acme.dev'), { pattern: 'https://*.staging.acme.dev', site: acme });
     assert.equal(await readSite('https://acme.dev'), undefined);
+  });
+
+  // FRU-103. The bridge of the page and the relay of the background call `readSite`, and the popup
+  // `findSite`: one reader that left the list of the worker out would mount no widget on a preview.
+  it('reads a team wildcard for a preview once the worker listed it, and not before', async () => {
+    const worker = 'https://worker.test';
+    const previews = 'https://*.preview.acme.dev';
+    const rule = { mode: 'team', endpoint: worker, enabled: true, mount: { clientId: 'site_1' } } as const;
+    const page = 'https://pr-12.preview.acme.dev';
+    await writeSite(previews, rule);
+
+    try {
+      // Nothing listed: the rule of FRU-75 holds, for the page as for the popup.
+      assert.equal(await readSite(page), undefined);
+      assert.equal(await findSite(page), undefined);
+
+      await rememberPreviews(worker, { at: Date.now(), previews: { [previews]: 'site_1' } });
+      assert.deepEqual(await readSite(page), rule);
+      assert.deepEqual(await findSite(page), { pattern: previews, site: rule });
+
+      // Another site of the same worker under that wildcard grants nothing to this rule.
+      await rememberPreviews(worker, { at: Date.now(), previews: { [previews]: 'site_2' } });
+      assert.equal(await readSite(page), undefined);
+    } finally {
+      await rememberPreviews(worker, undefined);
+    }
   });
 
   it('reads an entry stored before FRU-43, by its origin', async () => {
