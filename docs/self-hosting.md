@@ -514,6 +514,9 @@ that schema alone, so a search path in the address, on the role or on the databa
   `PUBLIC`. The worker names no other schema; a person with the password of the role can. Take from
   the role what it does not need: `REVOKE ALL ON SCHEMA public FROM fruitback` does nothing while
   `PUBLIC` still has the right, so that one is revoked from `PUBLIC`, by whoever owns the database.
+  **While the role may use `public`, the worker says so in its log** when it migrates, once for each
+  start: « the role of FRUITBACK_DATABASE_URL may use the schema « public » … ». It starts all the
+  same: a database may be shared on purpose.
 - **A pooler must keep a session.** The search path and the lock of the migrations are the state of
   a session: PgBouncer in transaction mode loses both, and the worker then refuses to migrate.
 - **Two workers can share one database**, each in its schema: they do not see each other.
