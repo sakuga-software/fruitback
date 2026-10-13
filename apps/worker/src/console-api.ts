@@ -1,3 +1,4 @@
+import { type NoteIndex, noNotes } from './notes-index.ts';
 import {
   type AccountStore,
   type Action,
@@ -56,6 +57,8 @@ export type ConsoleApiContext = {
   secretsKey?: string;
   /** Where a ticket for the way to Linear is kept (FRU-134). */
   kv?: Kv;
+  /** The index of the notes (FRU-237). Absent: the sites are answered with no count. */
+  noteIndex?: NoteIndex;
   /** The Linear application, when this worker has one: a workspace then connects Linear with no key. */
   linearOAuth?: LinearOAuth;
   publicUrl?: string;
@@ -171,6 +174,19 @@ function siteView(site: Site, seesTracker: boolean): SiteView {
     visibility: site.visibility,
     ...(seesTracker && first !== undefined ? { destination: first, destinations: site.destinations } : {}),
   };
+}
+
+/** What the index answers, or nothing when it does not answer (FRU-237): said in the log. */
+async function counted<T>(read: () => Promise<T> | undefined): Promise<T | undefined> {
+  try {
+    return await read();
+  } catch (error) {
+    console.error(
+      `[fruitback] the index of the notes did not answer: ${error instanceof Error ? error.message : String(error)}`,
+    );
+
+    return undefined;
+  }
 }
 
 /** What the worker calls each kind of source in the label of a destination. */
@@ -402,8 +418,24 @@ export async function handleConsoleApi(
 
       const seesTracker = allowed('see-tracker');
       const sites = await context.accounts.sites(workspaceId as string);
+      // FRU-237: the notes of each site, from the index. What did not arrive is about the tracker.
+      // An index that does not answer costs the counts, never the list of the sites.
+      const [notes, undelivered] = await Promise.all([
+        counted(() => context.noteIndex?.summary(workspaceId as string)),
+        seesTracker ? counted(() => context.noteIndex?.undelivered(workspaceId as string)) : undefined,
+      ]);
 
-      return json(200, { sites: sites.map((site) => siteView(site, seesTracker)) }, headers);
+      return json(
+        200,
+        {
+          sites: sites.map((site) => ({
+            ...siteView(site, seesTracker),
+            ...(notes === undefined ? {} : (notes.get(site.id) ?? noNotes())),
+            ...(undelivered === undefined ? {} : { undelivered: undelivered.get(site.id) ?? 0 }),
+          })),
+        },
+        headers,
+      );
     }
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
     if (!allowed('manage-sites')) return forbidden();
@@ -416,7 +448,16 @@ export async function handleConsoleApi(
 
     const site = await context.accounts.addSite(workspaceId as string, { origin, visibility });
 
-    return json(201, siteView(site, allowed('see-tracker')), headers);
+    // A new site, as the list answers it (FRU-237): no note yet, and nothing waiting.
+    return json(
+      201,
+      {
+        ...siteView(site, allowed('see-tracker')),
+        ...(context.noteIndex === undefined ? {} : noNotes()),
+        ...(context.noteIndex !== undefined && allowed('see-tracker') ? { undelivered: 0 } : {}),
+      },
+      headers,
+    );
   }
 
   const removal = /^\/sites\/([A-Za-z0-9_-]+)$/.exec(rest);
