@@ -9,6 +9,7 @@ import {
   type Visibility,
   type Workspace,
   call,
+  offersSignIn,
   pairingLink,
   rememberWorkspaceName,
   requestLink,
@@ -284,6 +285,8 @@ function SignIn({ onSent }: { onSent: (email: string) => void }) {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | undefined>(providerProblem(search.get('error')));
   const [providers, setProviders] = useState(PROVIDERS_AT_FIRST);
+  // The worker said that it signs nobody in (FRU-217): no form is shown, and the screen says why.
+  const [closed, setClosed] = useState(false);
 
   useEffect(() => {
     let asked = true;
@@ -292,6 +295,9 @@ function SignIn({ onSent }: { onSent: (email: string) => void }) {
       if (asked && has !== undefined) {
         setProviders((before) => ({ github: before.github || has.github, google: has.google }));
       }
+      void offersSignIn().then((offered) => {
+        if (asked && offered === false) setClosed(true);
+      });
     });
 
     return () => {
@@ -309,6 +315,22 @@ function SignIn({ onSent }: { onSent: (email: string) => void }) {
     if (sent.ok) return onSent(email.trim());
 
     setProblem(SEND_PROBLEMS[sent.error] ?? msg('The link could not be sent just now. Try again in a minute.'));
+  }
+
+  if (closed) {
+    return (
+      <Frame
+        step={1}
+        title={t('Create your workspace')}
+        lead={t('One workspace for your team, your sites and your sources. Hosted in Europe.')}
+      >
+        <Problem>
+          {t(
+            'Nobody can sign in to this Fruitback yet: its sign-in is not set up. The person who runs it has one setting to add.',
+          )}
+        </Problem>
+      </Frame>
+    );
   }
 
   return (

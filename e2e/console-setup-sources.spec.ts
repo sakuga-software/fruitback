@@ -19,7 +19,8 @@ async function stubWorker(page: Page): Promise<void> {
     const { pathname } = new URL(route.request().url());
     const json = (body: unknown) => route.fulfill({ json: body });
     if (pathname === '/console/me') return json(me);
-    if (pathname === '/auth/providers') return json({});
+    // A worker that signs people in by a link: one that says nothing there shows no form (FRU-217).
+    if (pathname === '/auth/providers') return json({ betterAuth: { email: true, github: false, google: false } });
 
     return route.fulfill({ status: 204 });
   });

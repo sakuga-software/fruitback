@@ -1,9 +1,8 @@
 /**
  * The way to the worker (FRU-99): its address, a bound on each call, and whether it answers.
  *
- * Every request of the console goes through `reach`, with the cookies of the worker
- * (`credentials: 'include'`): the cookie of a session of better-auth (FRU-148), and the refresh
- * cookie of a session.
+ * Every request of the console goes through `reach`, with the cookie of the worker
+ * (`credentials: 'include'`): the cookie of a session of better-auth (FRU-148).
  */
 
 export const API =

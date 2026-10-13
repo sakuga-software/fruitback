@@ -261,8 +261,6 @@ export type RequestContext = {
   accounts?: AccountStore;
   /** What sends the sign-in links (FRU-98). A suite hands over one that keeps what it was given. */
   mailer?: Mailer;
-  /** What reaches GitHub on a sign-in (FRU-97). A suite hands over a double of GitHub. */
-  fetcher?: typeof fetch;
   /** What asks the DNS for the proof of a domain (FRU-103). A suite hands over a double. */
   resolveTxt?: TxtResolver;
   /**

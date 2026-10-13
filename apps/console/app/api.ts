@@ -106,6 +106,8 @@ export type Answer<T> = { ok: true; data: T } | { ok: false; status: number; err
 
 /** Whether the worker sends mail: `email` in what it says of better-auth. `undefined`: not asked yet. */
 let mails: boolean | undefined;
+/** Whether the worker signs anybody in: it said `betterAuth`. `undefined` until it said. */
+let signsIn: boolean | undefined;
 
 function send(method: string, to: string, body?: unknown): Promise<Response | undefined> {
   const headers: Record<string, string> = {};
@@ -294,6 +296,10 @@ export async function signInProviders(): Promise<Providers | undefined> {
   const asked = await answer<Announced>(await reach('/auth/providers', { method: 'GET' }));
   if (!asked.ok) return undefined;
   const said: Announced = typeof asked.data === 'object' && asked.data !== null ? asked.data : {};
+  // An answer with no body said nothing: only a worker that answers its ways, and has none, is closed.
+  if (typeof asked.data === 'object' && asked.data !== null) {
+    signsIn = typeof said.betterAuth === 'object' && said.betterAuth !== null;
+  }
   const served = typeof said.betterAuth === 'object' && said.betterAuth !== null ? said.betterAuth : {};
   mails = served.email === true;
 
@@ -354,6 +360,18 @@ export async function signOut(): Promise<boolean> {
  * Whether the worker sends the message of an invitation (FRU-104). Without a mailer it keeps the
  * invitation all the same, and the person who invites sends `invitationLink()` by hand.
  */
+/**
+ * Whether the worker signs anybody in (FRU-217). `false`: it answered, and offers no way at all,
+ * which is a worker with accounts and no `FRUITBACK_AUTH_SECRET`. The sign-in screen then says so,
+ * and shows no form: a link asked for there is never sent. `undefined`: the worker did not say, and
+ * the screen keeps its form.
+ */
+export async function offersSignIn(): Promise<boolean | undefined> {
+  if (signsIn === undefined) await signInProviders();
+
+  return signsIn;
+}
+
 export async function sendsMail(): Promise<boolean> {
   if (mails === undefined) await signInProviders();
 

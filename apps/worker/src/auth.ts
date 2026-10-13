@@ -604,7 +604,17 @@ export async function announceAuth(
   try {
     // Inside the `try`: the server calls this and waits for nothing, so nothing here may reject.
     const starting = authFor(config, open);
-    if (starting === undefined) return 'off';
+    if (starting === undefined) {
+      // FRU-217: a worker with accounts and no secret for the session of the console starts, and
+      // nobody signs in to it. It said nothing, and the console showed a form that could not work.
+      if (config.databaseUrl !== undefined) {
+        log.error(
+          '[fruitback] nobody can sign in to the console: FRUITBACK_DATABASE_URL is set and FRUITBACK_AUTH_SECRET is not. Set FRUITBACK_AUTH_SECRET (32 characters or more) to turn the sign-in on.',
+        );
+      }
+
+      return 'off';
+    }
 
     await starting;
     log.log('[fruitback] better-auth is ready, under /console/auth');

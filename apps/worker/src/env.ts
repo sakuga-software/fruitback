@@ -263,6 +263,29 @@ export const ACCOUNTS_FILE_REFUSED =
 export const GITHUB_APP_REFUSED =
   'FRUITBACK_GITHUB_OAUTH (the sign-in of before is gone since FRU-150: better-auth signs in with FRUITBACK_AUTH_GITHUB_OAUTH; remove this variable, and its GitHub App)';
 
+/** The three secrets of the worker, each a value of the environment that nothing else reads. */
+const SECRETS = ['FRUITBACK_IDENTITY_SECRET', 'FRUITBACK_SECRETS_KEY', 'FRUITBACK_AUTH_SECRET'] as const;
+
+/** What the worker says of a secret with white space around it. It never quotes the value. */
+const EDGED =
+  'no white space at its start or at its end: a value of spaces, or a line of a file that kept one, is not the secret that was meant';
+
+/**
+ * Whether a secret has white space around it (FRU-217). The length was the one thing checked, so 32
+ * spaces were a secret, and so was a secret copied with the space that followed it.
+ */
+function edged(value: string | undefined): boolean {
+  return value !== undefined && value !== '' && value !== value.trim();
+}
+
+/**
+ * Whether two secrets are one secret. White space does not tell two secrets apart: a key and the
+ * same key with a space in it are one leak for both of their jobs.
+ */
+function sameSecret(one: string | undefined, other: string | undefined): boolean {
+  return one !== undefined && other !== undefined && one.replaceAll(/\s/g, '') === other.replaceAll(/\s/g, '');
+}
+
 export function readConfig(env: WorkerEnv): ConfigResult {
   const clients = readClientMap(env.FRUITBACK_CLIENTS);
   // The selected provider validates its own environment (FRU-33). The in-memory store needs none,
@@ -309,6 +332,12 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     ...missingFrom(result),
     ...(store.ok ? [] : store.missing),
     ...(clients.ok ? [] : [`FRUITBACK_CLIENTS (${clients.reason})`]),
+    // Two variables of before (FRU-150): refused, never ignored. A worker that ignored the file would
+    // start with no workspace at all, and an operator would read it as the accounts lost. Said with
+    // the rest (FRU-217): each one alone cost the operator one more start to read the next.
+    ...(env.FRUITBACK_ACCOUNTS_PATH ? [ACCOUNTS_FILE_REFUSED] : []),
+    ...(env.FRUITBACK_GITHUB_OAUTH ? [GITHUB_APP_REFUSED] : []),
+    ...SECRETS.filter((name) => edged(env[name])).map((name) => `${name} (${EDGED})`),
   ];
 
   // The `!result.success` half is a backstop, not decoration: a field that fails validation and has
@@ -323,14 +352,6 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   // The reason never quotes the value: it holds the password of the database.
   if (env.FRUITBACK_DATABASE_URL && result.data.databaseUrl === undefined) {
     return { ok: false, missing: ['FRUITBACK_DATABASE_URL (a postgres:// address with a host)'] };
-  }
-  // Two variables of before (FRU-150): refused, never ignored. A worker that ignored the file would
-  // start with no workspace at all, and an operator would read it as the accounts lost.
-  if (env.FRUITBACK_ACCOUNTS_PATH) {
-    return { ok: false, missing: [ACCOUNTS_FILE_REFUSED] };
-  }
-  if (env.FRUITBACK_GITHUB_OAUTH) {
-    return { ok: false, missing: [GITHUB_APP_REFUSED] };
   }
   // The sessions have one source too (FRU-142): with a database they are in it, and a file beside it
   // would be a second place that nothing reads.
@@ -361,7 +382,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   }
 
   // One key that signs identities and opens the connector keys is one leak for both.
-  if (result.data.secretsKey !== undefined && result.data.secretsKey === result.data.identitySecret) {
+  if (sameSecret(result.data.secretsKey, result.data.identitySecret)) {
     return { ok: false, missing: ['FRUITBACK_SECRETS_KEY (it must differ from FRUITBACK_IDENTITY_SECRET)'] };
   }
   if (result.data.secretsKey !== undefined && !accounts) {
@@ -473,7 +494,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   // signed with the key that signs an identity, or with the key that opens the connectors.
   const authSecret = result.data.authSecret;
   if (authSecret !== undefined) {
-    if (authSecret === result.data.identitySecret || authSecret === result.data.secretsKey) {
+    if (sameSecret(authSecret, result.data.identitySecret) || sameSecret(authSecret, result.data.secretsKey)) {
       return {
         ok: false,
         missing: [
