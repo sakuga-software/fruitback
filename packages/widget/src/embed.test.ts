@@ -1368,3 +1368,188 @@ describe('sending the drafts', () => {
     });
   });
 });
+
+describe('a link that opens a note on its page (FRU-253)', () => {
+  const PAGE_URL = 'https://preview.acme.test/pricing';
+
+  function linked(hash: string, answers: (() => TransportResponse)[]) {
+    const page = mountPage('<main><button data-testid="checkout-cta">Commander</button></main>', {
+      url: `${PAGE_URL}${hash}`,
+      width: 1_000,
+      height: 1_000,
+    });
+    setDocumentSize(page.document, 1_000, 1_000);
+    setRect(page.query('button'), { left: 100, top: 200, width: 200, height: 40 });
+    mock.method(globalThis, 'fetch', () => {
+      throw new Error('this test goes through the transport');
+    });
+    let reads = 0;
+    const widget = init({
+      document: page.document,
+      endpoint: 'https://worker.test',
+      clientId: 'acme',
+      locale: 'en',
+      transport: async () => {
+        const answer = answers[Math.min(reads, answers.length - 1)] as () => TransportResponse;
+        reads += 1;
+
+        return answer();
+      },
+    });
+    const shadow = page.document.querySelector('[data-fruitback-host]')?.shadowRoot as ShadowRoot;
+    const thread = () => shadow.querySelector('[data-fruitback-thread]');
+
+    return { page, widget, shadow, thread, reads: () => reads };
+  }
+
+  const note = (overrides: Parameters<typeof seedIssueFixture>[0] = {}) =>
+    seedIssueFixture({
+      id: 'issue_linked',
+      identifier: 'ACM-142',
+      seed: seedFixture({
+        id: 'sd_linked',
+        note: 'The linked note',
+        anchor: {
+          selector: '[data-testid="checkout-cta"]',
+          tag: 'button',
+          text: 'Commander',
+          bounds: { xPct: 10, yPct: 20, wPct: 20, hPct: 4 },
+        },
+      }),
+      ...overrides,
+    });
+  const answering = (issues: unknown[]) => (): TransportResponse => ({
+    ok: true,
+    status: 200,
+    body: JSON.stringify({ issues }),
+  });
+
+  it('opens the thread of the note once the notes are read, and takes its part out of the address', async () => {
+    const { page, widget, thread, reads } = linked('#fruitback-note=sd_linked', [answering([note()])]);
+    // Not before the read: the notes are not in hand, and nothing says the reader may see them.
+    assert.equal(thread() === null, true);
+
+    await widget.refresh();
+
+    assert.match(thread()?.textContent ?? '', /The linked note/);
+    assert.equal(page.view.location.href, PAGE_URL);
+    // Taking the fragment out is our own edit of the address: it asks for no read, which would
+    // draw the pins again and close the thread that just opened.
+    const before = reads();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(reads(), before);
+    assert.equal(thread() !== null, true);
+
+    widget.destroy();
+  });
+
+  it('keeps the fragment of the site, before and after its own part', async () => {
+    const { page, widget, thread } = linked('#pricing&fruitback-note=sd_linked&tab=2', [answering([note()])]);
+
+    await widget.refresh();
+
+    assert.equal(thread() !== null, true);
+    assert.equal(page.view.location.hash, '#pricing&tab=2');
+
+    widget.destroy();
+  });
+
+  it('neither reads nor erases a fragment that is the site’s: the control', async () => {
+    const { page, widget, thread } = linked('#pricing', [answering([note()])]);
+
+    await widget.refresh();
+
+    assert.equal(thread() === null, true);
+    assert.equal(page.view.location.hash, '#pricing');
+
+    widget.destroy();
+  });
+
+  it('finds the note by its id, by the id of its issue, or by its identifier', async () => {
+    for (const id of ['sd_linked', 'issue_linked', 'ACM-142']) {
+      const { widget, thread } = linked(`#fruitback-note=${encodeURIComponent(id)}`, [answering([note()])]);
+      await widget.refresh();
+
+      assert.equal(thread() !== null, true, `${id} opened nothing`);
+      widget.destroy();
+    }
+  });
+
+  it('opens nothing for a note this page does not have, says nothing, and still clears the address', async () => {
+    const errors = mock.method(console, 'error', () => {});
+    const warnings = mock.method(console, 'warn', () => {});
+    const { page, widget, thread } = linked('#fruitback-note=sd_elsewhere', [answering([note()])]);
+
+    await widget.refresh();
+
+    assert.equal(thread() === null, true);
+    assert.equal(page.view.location.href, PAGE_URL);
+    assert.equal(errors.mock.callCount() + warnings.mock.callCount(), 0);
+
+    widget.destroy();
+  });
+
+  it('opens nothing when the worker refuses the read, and opens the note once a read answers', async () => {
+    const { page, widget, thread } = linked('#fruitback-note=sd_linked', [
+      () => ({ ok: false, status: 401, body: '{"error":"unauthorized"}' }),
+      answering([note()]),
+    ]);
+
+    await widget.refresh();
+    // Refused: nothing is shown to somebody the worker does not answer, and the link waits.
+    assert.equal(thread() === null, true);
+    assert.equal(page.view.location.hash, '#fruitback-note=sd_linked');
+
+    await widget.refresh();
+    assert.equal(thread() !== null, true);
+    assert.equal(page.view.location.hash, '');
+
+    widget.destroy();
+  });
+
+  it('follows a fragment that arrives later, with no read and no second mount', async () => {
+    const { page, widget, shadow, thread, reads } = linked('', [answering([note()])]);
+    await widget.refresh();
+    const host = page.document.querySelector('[data-fruitback-host]');
+    const before = reads();
+
+    page.view.location.hash = '#fruitback-note=sd_linked';
+    page.view.dispatchEvent(new (page.view as unknown as { Event: typeof Event }).Event('hashchange'));
+
+    assert.equal(thread() !== null, true);
+    assert.equal(page.view.location.hash, '');
+    assert.equal(reads(), before, 'the notes were in hand: a read would only close the thread');
+    assert.ok(page.document.querySelector('[data-fruitback-host]') === host, 'the widget was mounted again');
+    // Focus is in the thread, as after a click on the pin.
+    assert.ok(shadow.activeElement?.classList.contains('fruitback-thread-close'), 'focus is not in the thread');
+
+    widget.destroy();
+  });
+
+  it('takes nothing from somebody who writes: an open composer stays, with its text, and the link waits', async () => {
+    const { page, widget, shadow, thread } = linked('', [answering([note()])]);
+    await widget.refresh();
+    // The composer as it is while somebody writes in it.
+    const composer = shadow.querySelector('[data-fruitback-composer]') as HTMLElement;
+    const field = composer.querySelector('textarea') as HTMLTextAreaElement;
+    composer.hidden = false;
+    field.value = 'Half a note';
+    field.focus();
+
+    page.view.location.hash = '#fruitback-note=sd_linked';
+    page.view.dispatchEvent(new (page.view as unknown as { Event: typeof Event }).Event('hashchange'));
+
+    assert.equal(composer.hidden, false, 'the link closed the composer');
+    assert.equal(field.value, 'Half a note');
+    assert.ok(shadow.activeElement === field, 'the link took focus from the note');
+    assert.equal(thread() === null, true);
+    // Not lost: the note opens when the composer closes, sent or given up.
+    assert.equal(page.view.location.hash, '#fruitback-note=sd_linked');
+    composer.hidden = true;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(thread() !== null, true);
+    assert.equal(page.view.location.hash, '');
+
+    widget.destroy();
+  });
+});

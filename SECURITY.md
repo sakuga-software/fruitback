@@ -43,6 +43,11 @@ self-hoster could otherwise be surprised.
 name and address its reporter typed, and the team's replies are readable by any visitor of the
 client's site — and by `curl`. Hiding pins in a browser was never the fix.
 
+A link that opens a note on its page, `<page>#fruitback-note=<id>`, opens nothing to somebody who
+cannot already read that page: the widget opens the note among those `GET /feedback` answered to
+this reader, and a refused read opens nothing. The id in the address is not a secret and gives no
+access.
+
 `FRUITBACK_READ=authenticated`, or `"read": "authenticated"` on a client, requires a signed identity
 token. The default stays `public` for compatibility, so **an upgrade never closes it for you**. The
 boot log names every client whose pins anyone can read, and `/health` counts them.

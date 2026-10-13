@@ -33,6 +33,7 @@ import {
 import { type FruitbackMessages, createTranslator, languageOf } from './messages.ts';
 import { type Overlay, createOverlay } from './overlay.ts';
 import { type ConfigPanel, type OfferedStages, createConfigPanel, createOfferedStages } from './panel.ts';
+import { linkedNote, withoutLinkedNote } from './page.ts';
 
 /**
  * One call that mounts the whole widget on a page (FRU-16).
@@ -296,8 +297,41 @@ export function init(options: FruitbackOptions): Fruitback {
         composer.identityChanged();
       } else if (outcome === 'failed' && readState !== 'read') readState = 'failed';
       sidebar.refresh();
+      // A link to a note waits for the notes: this is when they are in hand.
+      openLinked();
     });
   };
+
+  /**
+   * Open the note the address asks for (FRU-253): `#fruitback-note=<id>`.
+   *
+   * Only once a read answered for this page: until then the notes are not known, and a read the
+   * worker refuses opens nothing, which is what keeps this from showing anything to somebody who
+   * cannot read the page. The part of the fragment that is ours is then taken out of the address,
+   * found or not, so a reload does not open the note again and the fragment of the site stays.
+   *
+   * **Nothing takes focus from somebody who writes.** While the composer is open, or a capture
+   * runs, the fragment waits in the address: for the composer to close, or for the next read.
+   */
+  let droppingFragment = false;
+  function openLinked(): void {
+    const id = linkedNote(view.location.hash);
+    if (id === undefined || readState !== 'read') return;
+    if (!composer.element.hidden || host.capturing()) return;
+
+    const issue = readIssues.find((each) => each.seed.id === id || each.id === id || each.identifier === id);
+    droppingFragment = true;
+    try {
+      const { pathname, search, hash } = view.location;
+      view.history.replaceState(view.history.state, '', `${pathname}${search}${withoutLinkedNote(hash)}`);
+    } catch {
+      // A page that forbids `replaceState` (a sandboxed frame) keeps its fragment. The note still opens.
+    } finally {
+      droppingFragment = false;
+    }
+    // `false` for a note this page does not draw: one of another page, or of a stage the reporter hid.
+    if (issue !== undefined) overlay.select(issue.seed.id);
+  }
 
   composer = createComposer({
     document,
@@ -430,10 +464,35 @@ export function init(options: FruitbackOptions): Fruitback {
     sidebar.refresh();
   });
 
+  let page = canonicalizePageUrl(view.location.href);
   const stopWatchingUrl = watchUrl(view, () => {
+    // Our own edit of the address, which takes the link to a note out of it: nothing to read.
+    if (droppingFragment) return;
+    const now = canonicalizePageUrl(view.location.href);
+    // The same page, and a link to a note in its fragment: the notes are in hand, and a read would
+    // only close the thread somebody reads.
+    if (now === page && linkedNote(view.location.hash) !== undefined) {
+      openLinked();
+
+      return;
+    }
+    page = now;
     readState = 'pending';
     void read();
   });
+  // A fragment typed in the address bar, or a link of the page to itself. `popstate` says it too in
+  // the browsers of today; this is the event that is about the fragment.
+  const onHashChange = (): void => openLinked();
+  view.addEventListener('hashchange', onHashChange);
+  // A link that waited for somebody to finish a note is followed when the composer closes. The
+  // composer says so by hiding itself, sent or given up, and that is what this reads.
+  const composerClosed =
+    typeof view.MutationObserver === 'function'
+      ? new view.MutationObserver(() => {
+          if (composer.element.hidden) openLinked();
+        })
+      : undefined;
+  composerClosed?.observe(composer.element, { attributes: true, attributeFilter: ['hidden'] });
 
   // The team changes the state of an issue while the reviewer is in another tab. `render` closes an
   // open thread, and somebody who comes back to a thread is reading it: that return reads nothing,
@@ -452,6 +511,8 @@ export function init(options: FruitbackOptions): Fruitback {
     settings: panel,
     destroy() {
       stopWatchingUrl();
+      view.removeEventListener('hashchange', onHashChange);
+      composerClosed?.disconnect();
       stopFollowingDrafts();
       stopWatchingReturn();
       unsubscribe();
