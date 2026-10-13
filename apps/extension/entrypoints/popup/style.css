@@ -404,3 +404,198 @@ body.popup-page {
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
 }
+
+/* 06 and 07 (FRU-254): a site of a workspace. */
+.popup .site-heading h1 + .subtitle {
+  margin: 2px 0 0;
+  color: var(--muted);
+}
+
+.popup .site-counts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.popup .site-counts p {
+  margin: 0;
+}
+
+.popup .site-total {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.popup .stage-bar {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+}
+
+.popup .site-detail {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.popup .stage-seeded {
+  background: var(--stage-seeded);
+}
+
+.popup .stage-green {
+  background: var(--stage-green);
+}
+
+.popup .stage-ripening {
+  background: var(--stage-ripening);
+}
+
+.popup .stage-ripe {
+  background: var(--stage-ripe);
+}
+
+.popup .stage-composted {
+  background: var(--stage-composted);
+}
+
+/* The action, at the foot of the body: the screen reads top down, and the button waits at the end. */
+.popup .action-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.popup .action-block .action {
+  margin-top: 0;
+}
+
+.popup .action-block .note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.popup-site-on {
+  min-height: 540px;
+}
+
+.popup-site-on .popup-body {
+  gap: 18px;
+  padding-top: 18px;
+}
+
+.popup .site-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* A switch, as the mock-up draws it: 40 × 24, the knob slides 16 px. */
+.popup button.switch {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 24px;
+  padding: 0;
+  border-radius: var(--radius-pill);
+  background: var(--line-strong);
+  transition: background 0.2s;
+}
+
+.popup button.switch[aria-checked='true'] {
+  background: var(--text);
+}
+
+.popup .switch .knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--surface);
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.popup .switch[aria-checked='true'] .knob {
+  transform: translateX(16px);
+}
+
+.popup .page-notes h2 {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.popup .page-total {
+  color: var(--muted);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.popup .page-notes ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.popup .page-notes li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+}
+
+.popup .page-notes li:not(:last-child) {
+  border-bottom: 1px solid var(--line);
+}
+
+/* The pin of the widget, small: a drop that points down and to the left. */
+.popup .drop {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-90deg);
+}
+
+.popup .stage-word {
+  flex: 1;
+}
+
+.popup .count {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.popup .count.zero {
+  color: var(--muted);
+}
+
+.popup button.secondary-action {
+  height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-action);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.popup button.secondary-action:hover {
+  border-color: var(--text);
+  background: var(--surface-raised);
+}
+
+/* A line that says nothing takes no gap of the column: the boxes stay where the mock-up has them. */
+.popup-body > .problem:empty,
+.popup .action-block > .problem:empty {
+  display: none;
+}

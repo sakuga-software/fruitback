@@ -13,12 +13,34 @@ import type { SiteConfig } from './sites.ts';
  * its refusals apply, and `mount` says the extension mounts the widget because the site embeds none.
  */
 
-/** `previews`: the wildcards the workspace proved for this site (FRU-103), as the worker lists them now. */
-export type WorkspaceSite = { id: string; origin: string; visibility: 'members' | 'everyone'; previews?: string[] };
-/** `locale` is the language of the account behind the session, when it holds one (FRU-131). */
-export type WorkspaceSites = { workspace: { id: string; name: string }; sites: WorkspaceSite[]; locale?: string };
+/** The notes of a site by stage (FRU-237), as the worker counts them. Absent when its index did not answer. */
+export type StageCounts = { seeded: number; green: number; ripening: number; ripe: number; composted: number };
+
+export const STAGES = ['seeded', 'green', 'ripening', 'ripe', 'composted'] as const;
+
+/** A workspace of the session, and the role the person holds there (an account's session only). */
+export type Workspace = { id: string; name: string; role?: string };
+
+/**
+ * `previews`: the wildcards the workspace proved for this site (FRU-103), as the worker lists them now.
+ * `workspace`: the one it is a site of. `notes`: its counts (FRU-237), when the worker gave them.
+ */
+export type WorkspaceSite = {
+  id: string;
+  origin: string;
+  visibility: 'members' | 'everyone';
+  workspace: Workspace;
+  previews?: string[];
+  notes?: StageCounts;
+};
+/**
+ * What `GET /session/sites` lists, in either of its two shapes: a pairing's session names one
+ * `workspace`; an account's (FRU-238) names its `workspaces`, and each site says which it is of.
+ * `locale` is the language of the account behind the session, when it holds one (FRU-131).
+ */
+export type WorkspaceSites = { workspaces: Workspace[]; sites: WorkspaceSite[]; locale?: string; account: boolean };
 /** `pattern` is the rule the click stores: the origin of the site, or the wildcard of its previews. */
-export type Offer = { endpoint: string; workspace: { id: string; name: string }; site: WorkspaceSite; pattern: string };
+export type Offer = { endpoint: string; workspace: Workspace; site: WorkspaceSite; pattern: string };
 
 export type CloudSeams = {
   endpoints: () => Promise<string[]>;
@@ -48,27 +70,76 @@ async function sessionMark(endpoint: string, seams: CloudSeams): Promise<string 
 /** The answer of `GET /session/sites`, parsed field by field: a bad entry costs that site. */
 export function parseWorkspaceSites(body: unknown): WorkspaceSites | undefined {
   if (typeof body !== 'object' || body === null) return undefined;
-  const { workspace, sites, locale } = body as { workspace?: unknown; sites?: unknown; locale?: unknown };
-  if (typeof workspace !== 'object' || workspace === null || !Array.isArray(sites)) return undefined;
-  const { id, name } = workspace as { id?: unknown; name?: unknown };
-  if (typeof id !== 'string' || id === '') return undefined;
+  const { workspace, workspaces, sites, locale, account } = body as Record<string, unknown>;
+  if (!Array.isArray(sites)) return undefined;
+
+  const accountShape = account === true;
+  const known = accountShape
+    ? (Array.isArray(workspaces) ? workspaces : []).flatMap((entry: unknown) => workspaceOf(entry) ?? [])
+    : [workspaceOf(workspace)].flatMap((entry) => entry ?? []);
+  // A pairing's session with no workspace answers nothing: it is not a list of nothing.
+  if (!accountShape && known.length === 0) return undefined;
+  const byId = new Map(known.map((each) => [each.id, each]));
 
   return {
     ...(typeof locale === 'string' && locale !== '' && locale.length <= 35 ? { locale } : {}),
-    workspace: { id, name: typeof name === 'string' ? name : '' },
+    account: accountShape,
+    workspaces: known,
     sites: sites.flatMap((site: unknown) => {
       if (typeof site !== 'object' || site === null) return [];
-      const entry = site as { id?: unknown; origin?: unknown; visibility?: unknown; previews?: unknown };
+      const entry = site as Record<string, unknown>;
       if (typeof entry.id !== 'string' || typeof entry.origin !== 'string') return [];
+      // An account's site names its workspace; one the list does not hold costs the site.
+      const named = typeof entry.workspace === 'string' ? byId.get(entry.workspace) : undefined;
+      const of = accountShape ? named : known[0];
+      if (of === undefined) return [];
       const visibility = entry.visibility === 'everyone' ? 'everyone' : 'members';
       // A wildcard in another spelling than the one a rule is keyed on is dropped: it would match no rule.
       const previews = Array.isArray(entry.previews)
         ? entry.previews.flatMap((pattern: unknown) => readPreviewPattern(pattern) ?? [])
         : [];
+      const notes = countsOf(entry.notes);
 
-      return [{ id: entry.id, origin: entry.origin, visibility, ...(previews.length === 0 ? {} : { previews }) }];
+      return [
+        {
+          id: entry.id,
+          origin: entry.origin,
+          visibility,
+          workspace: of,
+          ...(previews.length === 0 ? {} : { previews }),
+          ...(notes === undefined ? {} : { notes }),
+        },
+      ];
     }),
   };
+}
+
+function workspaceOf(value: unknown): Workspace | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const { id, name, role } = value as Record<string, unknown>;
+  if (typeof id !== 'string' || id === '') return undefined;
+
+  return {
+    id,
+    name: typeof name === 'string' ? name : '',
+    ...(typeof role === 'string' && role !== '' ? { role } : {}),
+  };
+}
+
+/** Five whole numbers or nothing: a count that is not one would draw a bar that lies. */
+function countsOf(value: unknown): StageCounts | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const counts = value as Record<string, unknown>;
+  const whole = (stage: string): number | undefined => {
+    const count = counts[stage];
+
+    return typeof count === 'number' && Number.isSafeInteger(count) && count >= 0 ? count : undefined;
+  };
+  const [seeded, green, ripening, ripe, composted] = STAGES.map(whole);
+  if (seeded === undefined || green === undefined || ripening === undefined || ripe === undefined) return undefined;
+  if (composted === undefined) return undefined;
+
+  return { seeded, green, ripening, ripe, composted };
 }
 
 /** Bounded, like every call the extension makes: a worker that never answers must not hold the popup. */
@@ -86,11 +157,11 @@ export async function offerFor(origin: string, seams: CloudSeams): Promise<Offer
     if (listed === undefined) continue;
     // The site itself first: a page that is a site of the workspace is that site, whatever covers it.
     const site = listed.sites.find((each) => each.origin === origin);
-    if (site !== undefined) return { endpoint, workspace: listed.workspace, site, pattern: origin };
+    if (site !== undefined) return { endpoint, workspace: site.workspace, site, pattern: origin };
     // FRU-103: a page under a domain the workspace proved is a preview of the site the worker named.
     for (const each of listed.sites) {
       const pattern = each.previews?.find((wildcard) => coversOrigin(wildcard, origin));
-      if (pattern !== undefined) return { endpoint, workspace: listed.workspace, site: each, pattern };
+      if (pattern !== undefined) return { endpoint, workspace: each.workspace, site: each, pattern };
     }
   }
 

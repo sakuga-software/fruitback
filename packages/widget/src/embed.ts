@@ -5,6 +5,7 @@ import {
   type SeedIssue,
   type SeedReporter,
   type SeedScreenshot,
+  type SeedStage,
 } from '@fruitback/shared';
 import { type CapturedPlace, captureSeed, capturePlace } from './capture.ts';
 import { type WidgetConfig, createConfigStore } from './config.ts';
@@ -170,8 +171,26 @@ export type Fruitback = {
    * a host we could never change them under.
    */
   settings: ConfigPanel;
+  /**
+   * Starts choosing an element, as the launch button does (FRU-254): the extension's popup offers
+   * « Leave feedback ». Nothing happens while a note is being written or an element is being chosen:
+   * nothing takes the place of what somebody types. A composer that only says « sent » closes. Says
+   * whether it started.
+   */
+  leaveFeedback(): boolean;
+  /** Opens the list of every note of the page, as its button does (FRU-254). */
+  showEveryNote(): void;
+  /**
+   * How many notes of each stage the page shows now (FRU-254), from the last read: no request. The
+   * notes of a stage the reporter hid are not shown, so they are not counted. Nothing until a read of
+   * this page answered: a count of zero would then say there are no notes.
+   */
+  pageCounts(): PageCounts | undefined;
   destroy(): void;
 };
+
+/** The notes the page shows, by stage. */
+export type PageCounts = Record<SeedStage, number>;
 
 /**
  * The transport this mount uses.
@@ -533,6 +552,30 @@ export function init(options: FruitbackOptions): Fruitback {
     refresh: () => read(),
     feedbackAsText: asText,
     settings: panel,
+    leaveFeedback() {
+      if (host.capturing()) return false;
+      // A composer that shows « sent » or « kept » is not being written in: it closes. Any other
+      // open composer holds somebody's typing.
+      if (!composer.element.hidden) {
+        if (composer.state() !== 'sent' && composer.state() !== 'kept') return false;
+        composer.close();
+      }
+      sidebar.close();
+      host.start();
+
+      return true;
+    },
+    showEveryNote: () => sidebar.open(),
+    pageCounts() {
+      if (readState !== 'read') return undefined;
+      const counts: PageCounts = { seeded: 0, green: 0, ripening: 0, ripe: 0, composted: 0 };
+      for (const { issue } of entries()) {
+        if (config.get().hiddenStages.includes(issue.stage)) continue;
+        counts[issue.stage] += 1;
+      }
+
+      return counts;
+    },
     destroy() {
       stopWatchingUrl();
       view.removeEventListener('hashchange', onHashChange);

@@ -183,7 +183,9 @@ import { Fruitback } from '@fruitback/react';
 It renders nothing, mounts the widget in an effect and destroys it when it unmounts. Its props are
 the options of `init`. A parent that renders again does not mount the widget again: an object such as
 `theme` is compared by its value, and a function such as `identityToken` is always the one of the
-last render. `onMount` hands you the widget, for `refresh()` or `feedbackAsText()`.
+last render. `onMount` hands you the widget, for `refresh()` or `feedbackAsText()`, and for a way in of your own:
+`leaveFeedback()` starts choosing an element, `showEveryNote()` opens the list, and `pageCounts()` says
+how many notes of each stage the page shows (FRU-254).
 
 ### A custom element
 

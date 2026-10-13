@@ -23,14 +23,19 @@ import {
   type ConnectState,
   type PendingConnect,
   type StartFailure,
+  browserLabel,
   forgetConnect,
   pollConnect,
   startConnect,
 } from '../../src/connect.ts';
 import { consoleOf, createBrowserConnect, rememberConsole } from '../../src/connect-browser.ts';
 import { type AccountState, type PopupState, cloudEndpoint, decide } from '../../src/popup-state.ts';
+import { type TabCommand } from '../../src/protocol.ts';
+import { type TabCommandAnswer, parseAnswer, tabCommand } from '../../src/tab-command.ts';
 import {
   type Account,
+  siteInWorkspace,
+  siteOn,
   connecting,
   hostOf,
   loading,
@@ -172,7 +177,7 @@ async function render(editing = false, claimedNow?: ConnectState): Promise<void>
 
 type Found = {
   origin: string;
-  tab: { url?: string } | undefined;
+  tab: PopupTab | undefined;
   link: PairLink | undefined;
   found: ResolvedSite | undefined;
   offer: Offer | undefined;
@@ -237,11 +242,15 @@ async function draw(state: PopupState, facts: Found): Promise<HTMLElement> {
       });
 
     case 'offer':
-      return frame(title(origin), oneClick(facts.offer as Offer));
+      return offered(origin, facts.offer as Offer, account);
 
     case 'rule':
     case 'form': {
       const found = facts.found;
+      // 07 (FRU-254): a site of a workspace this extension mounts the widget on, by its own origin.
+      if (state.kind === 'rule' && found !== undefined && isWorkspaceSite(found)) {
+        return siteOfWorkspaceOn(origin, found, facts.tab, account);
+      }
       const open = state.kind === 'form';
       // What somebody typed before a prompt they refused, or that closed this popup (FRU-117).
       const draft = found === undefined ? await pending.draft(origin).catch(() => undefined) : undefined;
@@ -391,25 +400,89 @@ function cloudSeams(): CloudSeams {
   };
 }
 
-const IN_WORKSPACE = (name: string): string =>
-  name === '' ? t('This site is in your workspace.') : t('This site is in the workspace {name}.', { name });
-const TURN_ON_HERE = msg('Turn on Fruitback here');
-
 /**
- * The one click (FRU-101). The browser asks for this site only, and the click is the gesture that
- * permission needs: nothing is awaited before `turnOn` asks.
+ * 06 (FRU-254): the one click (FRU-101). The browser asks for this site only, and the click is the
+ * gesture that permission needs: nothing is awaited before `turnOn` asks.
  */
-function oneClick(offer: Offer): HTMLElement {
-  const wrapper = document.createElement('div');
-  const button = element('button', t(TURN_ON_HERE));
+function offered(origin: string, offer: Offer, account: Account | undefined): HTMLElement {
   const problem = element('p', '', 'problem');
   const turn = (): void => void turnOn(offer.pattern, cloudEntry(offer)).then(refused(problem, turn), failed(problem));
-  button.addEventListener('click', turn);
-  const byHand = element('button', t('Set up by hand'), 'secondary');
-  byHand.addEventListener('click', () => void render(true));
-  wrapper.append(element('p', IN_WORKSPACE(offer.workspace.name), 'rule'), button, problem, byHand);
+  const screen = siteInWorkspace(document, {
+    origin,
+    workspace: offer.workspace.name,
+    visibility: offer.site.visibility,
+    ...(offer.site.notes === undefined ? {} : { counts: offer.site.notes }),
+    browserName: browserName(navigator.userAgent),
+    ...(account === undefined ? {} : { account }),
+    onTurnOn: turn,
+    onSettings: openSettings,
+  });
+  screen.querySelector('.action-block')?.append(problem);
 
-  return wrapper;
+  return screen;
+}
+
+/** « Chrome asks for access… »: the browser of this popup, by the name its person knows. */
+function browserName(userAgent: string): string {
+  const name = browserLabel(userAgent).split(' on ')[0] ?? '';
+
+  return name === 'A browser' || name === '' ? t('Your browser') : name;
+}
+
+/**
+ * A rule this extension stored for a site of a workspace, on its own origin: the screen of the
+ * switch (07). A wildcard of previews keeps the screen of before, whose words say that it switches
+ * every site the rule covers: the switch of 07 is about this tab only.
+ */
+function isWorkspaceSite({ pattern, site }: ResolvedSite): boolean {
+  return site.mode === 'team' && site.mount !== undefined && !isWildcardPattern(pattern);
+}
+
+async function siteOfWorkspaceOn(
+  origin: string,
+  { pattern, site }: ResolvedSite,
+  tab: PopupTab | undefined,
+  account: Account | undefined,
+): Promise<HTMLElement> {
+  const workspace = site.mode === 'team' ? (site.mount?.workspace ?? '') : '';
+  // A session of a pairing with that worker is the person here too: the head names them.
+  const paired = account === undefined ? (await sessions.list())[site.endpoint] : undefined;
+  const person = account ?? (paired === undefined ? undefined : { name: describeIdentity(paired.identity) });
+  // What the widget of the tab shows now. Nothing when it is not there yet or did not answer: the
+  // section is left out rather than drawn with zeros.
+  const counts = site.enabled ? (await askTab(tab, 'counts')).counts : undefined;
+  const problem = element('p', '', 'problem');
+  const screen = siteOn(document, {
+    origin,
+    workspace,
+    on: site.enabled,
+    ...(counts === undefined ? {} : { pageCounts: counts }),
+    ...(person === undefined ? {} : { account: person }),
+    onToggle: (on) => {
+      if (!on) {
+        void writeSite(pattern, { ...site, enabled: false }).then(() => render(), failed(problem));
+
+        return;
+      }
+      const turn = (): void =>
+        void turnOn(pattern, { ...site, enabled: true }).then(refused(problem, turn), failed(problem));
+      turn();
+    },
+    // The widget takes over the tab: the popup would stand over the page somebody is about to click.
+    onLeaveFeedback: () => void askTab(tab, 'leave-feedback').then(() => window.close()),
+    onShowEveryNote: () => void askTab(tab, 'show-notes').then(() => window.close()),
+    onSettings: openSettings,
+  });
+  screen.querySelector('.popup-body')?.append(problem);
+
+  return screen;
+}
+
+/** A command to the widget of the tab the popup was opened on (FRU-254). See `tab-command.ts`. */
+async function askTab(tab: PopupTab | undefined, command: TabCommand): Promise<TabCommandAnswer> {
+  if (tab?.id === undefined) return { done: false };
+
+  return parseAnswer(await browser.tabs.sendMessage(tab.id, tabCommand(command)).catch(() => undefined));
 }
 
 /**
@@ -881,7 +954,9 @@ function element<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-async function currentTab(): Promise<{ url?: string } | undefined> {
+type PopupTab = { id?: number; url?: string };
+
+async function currentTab(): Promise<PopupTab | undefined> {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
 
   return tab;
