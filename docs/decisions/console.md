@@ -115,6 +115,20 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   covers (FRU-103, decided on 2026-10-13), and the worker takes no pattern as an address. So what is
   under the hint is 19.5 px higher than on the mockup. The last step keeps the script and the
   browser of `install-options.tsx` until FRU-242 draws it.
+- **An invitation has a screen, and joining says what comes next** (FRU-241, screen 03 of the mockup
+  of 2026-10-13). `/invitations` shows the most recent invitation of the address that is signed in:
+  the workspace that invites, the role and what it lets its person do, « Join », and « Decline »
+  beside it. Others that wait are listed under it. Joined, the screen stays (« You are in »), names
+  the first site of the workspace when it has one, and leads to the console. **The link of an
+  invitation still signs nobody in** (`SECURITY.md`), so the line under the button is « Not
+  {email}? Use another address », which ends the session and leads to the sign-in; the mockup's
+  « The link in the invitation signed you in. » is not said. **Three things the mockup has and this
+  screen does not, each for a decision that is open** (FRU-230): the name of who invites (the worker
+  lists the workspace of an invitation, not its sender: the line says « {workspace} invited you »);
+  the guest of one site, with its title and its row « Site » (Q3); « It signs in with this
+  account. » about the extension, which a browser still joins with a code from the console (Q8).
+  **The extension is in no store yet** (FRU-130): « Add to Chrome » and « Get the Firefox add-on »
+  lead to the page of the documentation that says how to install it.
 - **The address of a site is read by `site-address.ts`, on every screen that asks for one**
   (FRU-167). A host with no scheme is `https://`, as in the extension. The field is not `type="url"`:
   the browser stopped the form with its own bubble, in its own language, and the sentence of the
