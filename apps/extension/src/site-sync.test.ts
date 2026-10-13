@@ -340,7 +340,9 @@ describe('the rules of a reviewer in two browsers (FRU-72)', () => {
       known: { read: async () => here.self.known, write: async (patterns) => void (here.self.known = patterns) },
       readLocal: async () => here.self.map,
       area: { ...area, set: async (items) => (await held, order.push('the merge sent'), area.set(items)) },
-      apply: async () => void order.push('the change was applied'),
+      apply: async (mutation) => {
+        if (mutation.kind === 'write' && Object.keys(mutation.entries).length > 0) order.push('the change was applied');
+      },
     });
 
     const merging = slow.merge();
@@ -351,6 +353,41 @@ describe('the rules of a reviewer in two browsers (FRU-72)', () => {
     await Promise.all([merging, arriving]);
 
     assert.deepEqual(order, ['the merge sent', 'the change was applied']);
+  });
+
+  // Raised in review: the reviewer removes a rule here, and a merge starts before the copy of that
+  // removal has ended. The account still held the rule, this browser did not know it there, and the
+  // merge took it back.
+  it('does not take back a rule whose removal here is not copied yet when the merge starts', async () => {
+    const shared = account();
+    const self = { map: { 'https://acme.dev': ACME } as Record<string, SiteConfig>, known: [] as string[] };
+    shared.items['site:https://acme.dev'] = ACME;
+    const area = shared.areaOf(self);
+    let release = (): void => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const sync = createSiteSync({
+      enabled: async () => true,
+      known: { read: async () => self.known, write: async (patterns) => void (self.known = patterns) },
+      readLocal: async () => self.map,
+      area: { ...area, remove: async (keys) => (await held, area.remove(keys)) },
+      apply: (mutation) => own(mutation),
+    });
+    const own = createSiteOwner(
+      { read: async () => self.map, replace: async (sites) => void (self.map = sites) },
+      async (_before, mutation) => sync.stored(mutation),
+    );
+
+    await own({ kind: 'remove', pattern: 'https://acme.dev' });
+    assert.deepEqual(self.map, {});
+    assert.deepEqual(Object.keys(shared.items), ['site:https://acme.dev']);
+    const merging = sync.merge();
+    for (let turn = 0; turn < 20; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+    release();
+    await merging;
+    await own({ kind: 'write', entries: {} });
+
+    assert.deepEqual(self.map, {});
+    assert.deepEqual(shared.items, {});
   });
 
   it('sends nothing and takes nothing while the reviewer has not turned it on', async () => {

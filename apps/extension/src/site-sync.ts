@@ -133,7 +133,8 @@ export function createSiteSync({ enabled, known, readLocal, area, apply }: SiteS
    * A merge and a change that arrives run one after the other: each one decides on what it read, and
    * the other would write between its reading and its writes (raised in review). `stored` is not in
    * this line: it runs inside the one writer of the map, which a merge waits on, so the two would
-   * wait on each other. A merge reads again before it removes or sends, for that reason.
+   * wait on each other. A merge waits for the changes made here to end, then reads again before it
+   * takes, removes or sends, for that reason.
    */
   let line: Promise<void> = Promise.resolve();
   const inLine = (work: () => Promise<void>): Promise<void> => {
@@ -247,14 +248,24 @@ export function createSiteSync({ enabled, known, readLocal, area, apply }: SiteS
       else sendThere[pattern] = site;
     }
 
-    if (Object.keys(takeHere).length > 0) {
-      const mutation: SiteMutation = { kind: 'write', entries: takeHere };
+    // The reviewer may have changed a rule here since the reading above. An empty change waits in
+    // the one writer of the map until each change before it is stored and its copy has ended: a rule
+    // that is removed here is then out of the account too, and is not taken back (raised in review).
+    // What takes, removes or sends is decided again on what both sides hold after that.
+    const settled: SiteMutation = { kind: 'write', entries: {} };
+    arrived.add(settled);
+    await apply(settled);
+    const [localNow, remoteNow] = [await readLocal(), rulesIn(await area.get())];
+    const taken: Record<string, SiteConfig> = {};
+    for (const pattern of Object.keys(takeHere)) {
+      const site = remoteNow[pattern];
+      if (site !== undefined && localNow[pattern] === undefined) taken[pattern] = site;
+    }
+    if (Object.keys(taken).length > 0) {
+      const mutation: SiteMutation = { kind: 'write', entries: taken };
       arrived.add(mutation);
       await apply(mutation);
     }
-    // The reviewer may have changed a rule here since the reading above, and its copy is in the
-    // account already. What removes or sends is decided again on what both sides hold now.
-    const [localNow, remoteNow] = [await readLocal(), rulesIn(await area.get())];
     const goneHere = removeHere.filter(
       (pattern) => localNow[pattern] !== undefined && remoteNow[pattern] === undefined,
     );
