@@ -439,6 +439,31 @@ test('an invitation that was kept gives its link, whatever became of its message
     call: 'invite-member',
     body: { organizationId: 'w1', email: 'zoe@client.fr', role: 'member', resend: true },
   });
+  // A message did leave before this one: the row still says so.
+  await expect(cells(page, 'zoe@client.fr').nth(0)).toContainText('Invitation sent');
+
+  // An invitation whose first message did not leave says « kept » on its row, until one leaves.
+  await email(page).fill('lou@client.fr');
+  await invite(page).click();
+  await expect(notice).toContainText('Invitation kept for lou@client.fr, but no message was sent');
+  await expect(cells(page, 'lou@client.fr')).toHaveText([
+    'Llou@client.frInvitation kept',
+    'Member',
+    'Every site',
+    /^13 OctUntil 20 Oct/,
+  ]);
+  await row(page, 'lou@client.fr').getByRole('button', { name: 'Resend', exact: true }).click();
+  await expect(notice).toContainText('Invitation kept for lou@client.fr, but no message was sent');
+  await expect(cells(page, 'lou@client.fr').nth(0)).toContainText('Invitation kept');
+  worker.held = false;
+  await row(page, 'lou@client.fr').getByRole('button', { name: 'Resend', exact: true }).click();
+  await expect(notice).toContainText('Invitation sent to lou@client.fr.');
+  await expect(cells(page, 'lou@client.fr')).toHaveText([
+    'Llou@client.frInvitation sent',
+    'Member',
+    'Every site',
+    /^Sent 13 OctUntil 20 Oct/,
+  ]);
 
   // A worker with no mailer sent nothing, and the row does not say « sent ».
   await page.unrouteAll();
@@ -642,6 +667,21 @@ test('a read that failed says so with « Try again », and is never a table with
   await expect(row(page, 'Tom')).toBeVisible();
   await expect(alert).toHaveCount(0);
   await expect(email(page)).toHaveValue('zoe@client.fr');
+});
+
+test('a day that the worker did not give, or that is no date, is not drawn', async ({ page }) => {
+  const { createdAt: _none, ...undated } = PAUL;
+  await workerWith(page, {
+    members: [ANA, { ...TOM, createdAt: 'yesterday' }],
+    invitations: [{ ...undated, expiresAt: 'soon' }],
+  });
+  await open(page);
+  // The cell is there with its gestures, and reads no « Invalid Date ».
+  await expect(cells(page, 'Tom').nth(3)).toHaveText('Remove');
+  await expect(cells(page, 'paul@client.fr').nth(3)).toHaveText('ResendCancel');
+  await expect(page.getByText('Invalid Date')).toHaveCount(0);
+  // The control: a day that is one is drawn.
+  await expect(cells(page, 'Ana (you)').nth(3)).toHaveText('2 Jun 2026');
 });
 
 test('while the members are read, the screen says so and draws no table', async ({ page }) => {

@@ -130,8 +130,18 @@ export default function Members() {
     });
     if (!sent.ok) return setStuck({ row: invitation.id, problem: problemOf(sent, INVITE_PROBLEMS, NOT_INVITED) });
     setSentTo({ email: invitation.email, message: messageOf(sent.data, mailed) });
+    // A message that did not leave this time says nothing of the ones before it: the row keeps what
+    // it knew of them.
     setInvitations((current) =>
-      edited(current, (items) => items.map((each) => (each.id === sent.data.id ? sent.data : each))),
+      edited(current, (items) =>
+        items.map((each) => {
+          if (each.id !== sent.data.id) return each;
+          const { mailed: leftNow, ...rest } = sent.data;
+          const left = leftNow === false ? each.mailed : leftNow;
+
+          return left === undefined ? rest : { ...rest, mailed: left };
+        }),
+      ),
     );
   }
 
@@ -284,6 +294,9 @@ export default function Members() {
               : waiting.map((invitation) => {
                   const sent = dayOf(invitation.createdAt, false);
                   const until = dayOf(invitation.expiresAt, false);
+                  // No message left for this one: the worker has no mailer, or it said so when it kept
+                  // the invitation (FRU-209). The invitation is kept, and its link is given by hand.
+                  const went = messageOf(invitation, mailed) === 'sent';
 
                   return (
                     <Row
@@ -291,10 +304,9 @@ export default function Members() {
                       pending
                       initial={invitation.email}
                       name={invitation.email}
-                      // A worker with no mailer sent nothing: the invitation is kept, and its link is given by hand.
-                      detail={mailed ? t('Invitation sent') : t('Invitation kept')}
+                      detail={went ? t('Invitation sent') : t('Invitation kept')}
                       role={invitation.role}
-                      when={sent !== undefined && mailed ? t('Sent {date}', { date: sent }) : (sent ?? '')}
+                      when={sent !== undefined && went ? t('Sent {date}', { date: sent }) : (sent ?? '')}
                       {...(until === undefined ? {} : { until: t('Until {date}', { date: until }) })}
                       problem={stuck?.row === invitation.id ? stuck.problem : undefined}
                       onResend={() => void resend(invitation)}
