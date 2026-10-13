@@ -121,6 +121,21 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the screen, which stays mounted: « Sign in » opens the sign-in in another tab, « Continue » asks
   the worker again. A screen that draws nothing without `/console/me` asks with `quiet` and goes to
   the sign-in itself: it has nothing typed to keep.
+- **A tab is of one account, and stops when the browser is of another** (FRU-210, decided for
+  Mathieu on 2026-10-12). The cookie of a session is of the browser: somebody who signs in in
+  another tab changes who every tab speaks for. `api.ts` keeps the id of the first account that
+  `/console/me` answered in the tab. When `/console/me` answers another one (on « Continue », or
+  when the tab comes back: `focus` and `visibilitychange` ask it), the tab stops: `call` answers
+  `409 tab-left` with no request, the root takes the screen away with everything it showed, and
+  shows what was typed in its text fields, read-only, to copy. The one way on loads the console
+  again. A call made in the moment the tab comes back waits for that question: a change would be made in the name of the other account, and a read would bring its data to this screen. A tab that comes
+  back to a session that ended elsewhere stops the same way, with « Sign in ».
+- **The screen of somebody whose own call was refused stays** (FRU-148, unchanged): they are there,
+  typing, and « Continue » goes on, for the same account only.
+- **What this does not hold**: a browser that tells the page nothing when a tab is shown again. The
+  tab then learns the change at its next `/console/me`, and a change it sends before that leaves
+  with the cookie of the other account. The worker could refuse it (the console would name the
+  account it believes it is, and the worker would compare): not done.
 - **« Sign out » ends the session on the worker** (`/console/auth/sign-out`): the cookie is refused
   at the next call, in every tab and for whoever copied it.
 - **« Sign out » says when it failed.** `signOut` answers `false` unless the worker said that the
