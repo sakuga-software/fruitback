@@ -14,9 +14,16 @@ export const MAX_BODY_BYTES = 64 * 1_024;
  * defeats the point of having a cap.
  */
 export async function readBoundedText(request: Request): Promise<string | null> {
+  const body = await readBoundedBytes(request, MAX_BODY_BYTES);
+
+  return body === null ? null : new TextDecoder().decode(body);
+}
+
+/** The bytes of the body, or `null` over `maxBytes`. The cap of a picture is not the cap of a seed (FRU-44). */
+export async function readBoundedBytes(request: Request, maxBytes: number): Promise<Uint8Array | null> {
   const declared = Number(request.headers.get('Content-Length') ?? '');
-  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) return null;
-  if (request.body === null) return '';
+  if (Number.isFinite(declared) && declared > maxBytes) return null;
+  if (request.body === null) return new Uint8Array(0);
 
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -27,7 +34,7 @@ export async function readBoundedText(request: Request): Promise<string | null> 
     if (done) break;
 
     size += value.byteLength;
-    if (size > MAX_BODY_BYTES) {
+    if (size > maxBytes) {
       // Stop pulling instead of draining the rest of the upload.
       await reader.cancel();
       return null;
@@ -36,7 +43,7 @@ export async function readBoundedText(request: Request): Promise<string | null> 
     chunks.push(value);
   }
 
-  return new TextDecoder().decode(concat(chunks, size));
+  return concat(chunks, size);
 }
 
 function concat(chunks: Uint8Array[], size: number): Uint8Array {

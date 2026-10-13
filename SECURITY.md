@@ -412,6 +412,18 @@ that reviewer signs a note with it, and not before. test:`tells a reader it woul
 identified, and tells nobody who (FRU-112)` holds the worker's half, and
 test:`names nothing of who the session is in code the page can read` holds the extension's.
 
+**`FRUITBACK_FIRST_REVIEWER` writes a pairing code in the log** (FRU-108). It is off unless the
+operator sets it. A worker that holds no session yet then mints a code for the person the variable
+names each time it starts, and writes it in the log of the container, in the clear: as a code, or as
+a link when `FRUITBACK_PUBLIC_URL` is set. **Whoever reads that log while the code is valid pairs as
+that person**, and gets their session: reading the log is then enough to become the first reviewer.
+A log that is shipped elsewhere keeps the line after the code is dead. The code is an ordinary one:
+valid 15 minutes, usable once, kept as a digest. Once the store holds a session, live or ended, the
+worker mints nothing, so the variable left in place opens nothing later; a worker whose sessions
+were all purged after their 30 days is a worker with no session again, so empty the variable once
+paired. The worker refuses the variable with accounts or with a client that declares a workspace: a
+session there names a workspace, and the variable names none. The browser never names the person.
+
 **`FRUITBACK_SESSION_PATH` is a credentials file.** Give it the same care as a key: a copy of it is
 not a set of working logins, but it is a list of who holds a session and until when. Back it up with
 `sqlite3 … ".backup"` rather than `cp`, which loses the write-ahead log. With
@@ -608,9 +620,23 @@ it`. The value of the row is the address it was sent to.
   does not keep out a page of the same site, and `demo.fruitback.com` is one. The routes under
   `/console/` refuse a request with the cookie from another origin (`403`), and a request with the
   cookie and no `Origin` that is not a read (`403 origin-not-allowed`): test:`refuses a change with
-the cookie from another origin, or from none, and takes it from the console`. better-auth refuses
-  the same two requests on its own routes. No call opens these routes with a token in
+the cookie from another origin, or from none, and takes it from the console`. **The routes of
+  better-auth are under the same rule, applied by the worker before better-auth reads the request**
+  (FRU-212): a call that is not a read answers `403 origin-not-allowed` unless its `Origin` is the
+  console. better-auth 1.7.7 alone takes a `Referer` in place of an `Origin` that is missing, and
+  checks nothing when the request has no cookie. No route is excepted: GitHub and Google come
+  back by a `GET`, and a provider that comes back by a form would need its route named.
+  test:`lists every served route that is not only read` names those routes, and one case for each
+  refuses it with no `Origin`, with the `Referer` of the console, and with the `Referer` of the
+  worker. No call opens these routes with a token in
   `Authorization` (FRU-150).
+- **A tab of the console sends nothing for another account than the one it was drawn for**
+  (FRU-210). The cookie is of the browser, so a second person who signs in in another tab changes
+  who a tab left open speaks for. The tab asks who is signed in when it is shown again and when
+  somebody presses « Continue » after a session ended; on another account it stops, shows nothing
+  of the person before but the text they were typing, and sends nothing until it is loaded again.
+  **The condition: the browser tells the page that the tab is shown again** (`focus`,
+  `visibilitychange`); the worker does not check which account a tab believes it is.
 - **« Sign out » ends the session, or says that it did not** (FRU-204). The console stays on « My
   account » with « You are still signed in » when the worker did not confirm. The refresh cookie
   of the path of before, which a browser could hold for 30 days, opens nothing since FRU-150: no
@@ -775,6 +801,38 @@ destination-not-allowed`, and nothing is written, in the first place either.
 - **A read asks each place.** The cost of a page that opens is the number of places, which is why the
   list is short. A place that cannot be read answers `502` for the page, like one connector that
   cannot be used.
+
+### A domain a workspace proves it owns, to cover its previews (FRU-103)
+
+A wildcard in team mode lends the reviewer's session to every page it covers, and nothing in a
+pattern tells `*.preview.acme.dev` from `*.vercel.app`. The DNS can: only who holds the zone of a
+domain writes a record under it. So the worker takes the subdomains of a domain as the previews of a
+site only while the workspace of that site proves the domain.
+
+- **The proof is a `TXT` record**, `_fruitback.<domain>`, whose value is a digest of the workspace id
+  and the domain (`proofRecord` in `domain-proof.ts`). It is public in the DNS and grants nothing to
+  whoever reads it: writing it is the proof. **The record of one workspace proves nothing for
+  another**, and the record of `preview.acme.dev` proves nothing for `acme.dev`.
+- **A domain under a shared host cannot be proven by its tenants.** A tenant of `vercel.app` writes
+  no record under `vercel.app` or under the names of the other tenants. **Limit:** a host that lets a
+  tenant write `TXT` records under its own subdomain (`_fruitback.myapp.example-host.com`) lets that
+  tenant prove that subdomain, and so cover what is under it, which is its own.
+- **Only an owner or an admin** adds a domain, asks the DNS, names the site whose previews it covers
+  (`manage-sites`). A site of another workspace and a domain of another workspace answer `404`. A
+  domain that is not proven cannot name a site (`409 domain-not-proven`).
+- **The proof is asked again** every six hours (`RECHECK_MS`). An answer of the DNS without the record
+  ends it at once: `GET /session/sites` stops listing the previews of the site, the console shows the
+  domain as lost with the moment, and the log says it once. A DNS that does not answer changes
+  nothing, **for 72 hours at most** (`PROOF_GRACE_MS`): after that a proof nobody confirmed is lost
+  in the same way, the console says that the DNS did not confirm it, with no moment, and the log says
+  it once, at the pass that finds it.
+  **Limit:** between two checks, a record that was removed still proves the domain, six hours at most.
+- **The worker asks the DNS of its host**, with no DNSSEC check of its own. Who can answer the
+  resolver of the worker in place of the zone can prove any domain. Tests never ask a real DNS: the
+  resolver is a seam, and every case hands over a double.
+- **What this does not open yet:** the worker lists the previews of a site in `GET /session/sites`
+  (`previews`), and nothing else reads them. The extension still refuses every wildcard in team mode
+  (`lendsSession`). Letting it take one that the worker lists is a separate change.
 
 ### Linear, connected with OAuth (FRU-134)
 
@@ -1010,6 +1068,39 @@ when it is accepted`. An invitation waits 7 days; one address gets one invitatio
 - **A workspace is made by the plugin for somebody of the cookie**: `POST /console/workspaces`
   reads the name, then calls it in the process. Its route stays closed to a request: it takes a
   slug, a logo and metadata that nothing reads.
+
+### The picture of a note, taken by the extension (FRU-44)
+
+The extension can attach a picture of the element to a note: `tabs.captureVisibleTab`, cut to the
+element in the background, sent to `POST /screenshot` of the worker of the site's entry. The widget
+writes the address it gets back in the seed. The setting is off until the reviewer turns it on.
+
+- **No new permission.** The capture needs `activeTab`, which the manifest already declares and the
+  browser grants when the reviewer opens the popup on the page, until the page navigates. Without
+  it the browser refuses the capture, and the note goes without a picture.
+- **Only a session of a member sends a picture, and only a member reads it.** `POST /screenshot`
+  takes the session token of the extension, a `client` (the site of the note), and keeps the
+  picture for the workspace of that site when the token is a session of that workspace and its
+  person is a member of it now. `GET /screenshot/<id>` answers the same members, and `404` to
+  anybody else with a token, as for a picture that does not exist; `401` with no token. The address
+  is no secret: 128 random bits, but the route asks who reads. **A picture is never readable like
+  the pins of a site at `read: 'public'`**: what a public site may show is still open (FRU-84).
+- **The guards of the write path.** The rate limit, the CORS of the sites and of the extension,
+  `413` over 1 MB (`MAX_SCREENSHOT_BYTES`), `400` for bytes that do not start like a PNG, or declare
+  a side over 8,192 pixels. A picture is answered with `Content-Type: image/png`, `nosniff`, a
+  `Content-Security-Policy` of `default-src 'none'` and `Cache-Control: private, no-store`.
+- **What the page decides is the area, and nothing else.** The capture request travels on the page
+  bridge, which the page can forge: it buys a picture of its own tab, sent to the worker of its own
+  entry, with a session it never sees, and only when `activeTab` was granted. The background refuses
+  a request from a tab that is not the active one, and the endpoint, the client and the token come
+  from the stored entry and the session, never from the message.
+- **A worker with no database keeps no picture**: both routes answer `404`.
+- **A picture is kept when its note is written, not when it is sent.** A note kept for later
+  (FRU-124) holds the address of its picture in the seed that waits in the tab. A note that is never
+  sent leaves a picture that no note names; it goes with its workspace, and nothing else removes it.
+
+What the picture shows is whatever the element showed on the screen, the open composer of the
+widget included when it covers the element.
 
 ### Personal data
 

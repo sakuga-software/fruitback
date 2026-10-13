@@ -1110,8 +1110,8 @@ PostgreSQL. Porting them to Drizzle first would be work on code that leaves.
   Remove its SQL file, its snapshot and its entry, then run `db:generate`. Do not merge the journal
   by hand: see the first defect below.
 - **Drizzle is named by the files of the database only**: `postgres-schema.ts`, `auth-schema.ts`,
-  `postgres-migrate.ts`, `accounts-postgres.ts` and `session-postgres.ts`, and `postgres.ts` as
-  types. No file that every worker loads imports one of them: `app.ts` takes a store, and `auth.ts`
+  `postgres-migrate.ts`, `accounts-postgres.ts`, `session-postgres.ts` and `screenshots-postgres.ts`,
+  and `postgres.ts` as types. No file that every worker loads imports one of them: `app.ts` takes a store, and `auth.ts`
   takes `migrated`, from `postgres-stores.ts`, which loads them at their first call. A lint rule
   holds both, and test:`loads no file of Drizzle and no file of the driver for a worker without the
 variable` holds the rest.
@@ -1141,7 +1141,7 @@ variable` holds the rest.
   database give no search path, and no schema has the name of the role.
 - **A store reads a `BIGINT` through the schema, never with a raw statement.** Through the schema it
   is a number. In the answer of a raw statement it is a string, and `account-rows.ts` reads a string
-  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the sixteen columns.
+  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the twenty-one columns.
 - **A transaction is the one of `postgres.ts`, never `db.transaction` of Drizzle on the pool.** A
   store takes `database.transaction`, which gives it Drizzle on one connection.
 - **The words of an error of Drizzle reach no log.** They quote the statement and its values: an
@@ -1233,7 +1233,7 @@ the lock` is its control: the same two processes, with the line of the lock remo
   That is why the `BIGINT` is a number by the schema.
   test:`answers a BIGINT of the schema as a number, on the driver that ships`.
 - **What the parser that is gone changes, measured on a server** (raised in review). For each of the
-  `BIGINT` columns (twenty then, sixteen since FRU-146), a pool built as `postgres.ts` built it before answers a number for a raw
+  `BIGINT` columns (twenty then, sixteen since FRU-146, twenty since FRU-103, twenty-one since FRU-44), a pool built as `postgres.ts` built it before answers a number for a raw
   statement, the pool that ships answers a string for the same statement, and the schema answers
   the number: test:`answered a number for a raw statement, and now answers a string for it and a
 number through the schema`. No store sends a raw statement
@@ -1246,7 +1246,7 @@ exact integer`, test:`is null when the column holds no instant, and never 0`. Th
 store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
 2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the sixteen BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the twenty-one BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -1527,6 +1527,15 @@ path of before » is how the two lived together until then.
   answer had no `Set-Cookie`; the same reading with `returnHeaders` hands back the cookie of the
   sign-in, token and attributes, with `Max-Age=604800`. A new route that reads the cookie through
   `sessionOfCookie` gets this with nothing to write.
+- **A change on a route of better-auth carries the `Origin` of the console** (FRU-212, decided for
+  Mathieu on 2026-10-12): `handleAuthRoutes` applies `mutationAllowed` to every call that is not a
+  read, before it hands the request over. Read in `api/middlewares/origin-check.mjs` of 1.7.7:
+  `validateOrigin` takes `origin || referer`, has no option that asks for the `Origin`, and returns
+  at once for a request with no cookie. `trustedOrigins` as a function of the request was tried and
+  left: it refuses the `Referer` of the console, but better-auth always adds its own address to the
+  list, so the `Referer` of the worker still passed. **A provider that comes back by a `POST`**
+  (`response_mode=form_post`: Apple) posts from its own origin, and is refused here: adding one
+  means naming its callback as an exception, with a test.
 - **A rejection of better-auth is a `502`**, with its reason in the log and no address of the
   database: `auth.handler` rejects on a schema that is wrong.
 - **The link of the e-mail is the worker's own two routes.** `POST /console/auth/email` calls
@@ -2222,6 +2231,25 @@ signed with the worker-wide key, and a worker with `FRUITBACK_CLIENTS` ignored t
 refused at boot instead of shipping a feature that paired successfully and then answered `401` to
 everything. FRU-95 lifted it, below.
 
+## The first reviewer, named in the environment (FRU-108)
+
+- **`FRUITBACK_FIRST_REVIEWER` names the person, and the worker mints their code when it starts**,
+  only while `SessionStore.holdsSession()` is false: no session, live or ended. A code that nobody
+  spent is not a session, so each start mints another one until somebody pairs.
+- **`first-reviewer.ts` holds it, `announceFirstReviewer` in `app.ts` writes the lines, and
+  `server.ts` calls it after the boot lines.** It never rejects: a store that does not open is one
+  line of error, and the worker serves.
+- **The code is in the log in the clear.** That is the price of not entering the container, and why
+  the variable is off by default: `SECURITY.md` says who can then pair.
+- **`readConfig` refuses the variable where it would do nothing**: with no sessions, with a value
+  that names nobody, and on a worker with accounts or workspaces, where a session names a workspace.
+- **The link needs `FRUITBACK_PUBLIC_URL`**: the container does not know its address. Without it
+  the code is written alone.
+- **Measured on the image built from this branch**, from an empty folder with `docker-compose.yml`
+  and a `.env` of eight lines, under `env -i`: the first start writes the code, `POST /session/pair`
+  with it answers `200` and a token of the person named, the next start writes nothing. With
+  `FRUITBACK_PUBLIC_URL` the line is the link, and `GET /pair` answers `200`.
+
 ## Rotation, and the grace that is not a clock (FRU-61)
 
 A refresh token that never changes is a thirty-day password. A copy taken from a browser profile
@@ -2406,6 +2434,30 @@ client map were refused together at boot.
   not verify is not refused, as before: the read answers, without the field. **One bit**: the name,
   the address and the account id of the token are not in the answer, because the page reads it in
   team mode.
+
+## A domain a workspace proves, for the previews of a site (FRU-103)
+
+### The rules, in short
+
+- **`domain-proof.ts` holds the proof, and asks the DNS through a `TxtResolver` it is given.** The
+  routes take `RequestContext.resolveTxt`, the timer takes `systemResolver`. **No test asks a real
+  DNS**: `domain-proof.test.ts` hands a double to every call, and the default of its harness throws.
+- **The value of the record is computed** from the workspace id and the domain, never kept: a domain
+  removed and added again is proven by the record still in the zone.
+- **Three answers, not two.** `missing` is the DNS answering without the record (`ENOTFOUND`,
+  `ENODATA`, or other records); `unknown` is a DNS that did not answer, and it changes nothing but
+  `checked_at`. A proof is lost at the first `missing` after it was proven, or after
+  `PROOF_GRACE_MS` with no `found`. The first moment of a loss stays.
+- **Only a proven domain is asked again by the timer** (`server.ts`, every ten minutes, twenty
+  domains a pass, each one every `RECHECK_MS`). A pending domain is asked when an admin presses
+  « Check » in the console, at most once in `CHECK_AGAIN_MS`.
+- **`previews_site_id` says what an admin asked, and holds only while the proof does.** It survives a
+  loss, so a record that comes back covers the previews again with nothing to do. `GET /session/sites`
+  lists `previews` for a site only from a domain that is proven at that moment.
+- **The domains are a table of their own**, not a column of `sites`: the tables that
+  `migrate-to-postgres` copies stay the ones of `COPY_SCHEMA`. A SQLite file that holds a domain is
+  refused by the copy, with what to do, rather than copied without it.
+- **The PostgreSQL migration is `0003_domains`**, generated.
 
 ## Several client sites
 

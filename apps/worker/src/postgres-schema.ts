@@ -1,4 +1,4 @@
-import { bigint, foreignKey, index, integer, pgTable, primaryKey, text, unique } from 'drizzle-orm/pg-core';
+import { bigint, customType, foreignKey, index, integer, pgTable, primaryKey, text, unique } from 'drizzle-orm/pg-core';
 import { organization } from './auth-schema.ts';
 
 /**
@@ -121,6 +121,40 @@ export const deliveries = pgTable(
   ],
 );
 
+/**
+ * The domains a workspace says it owns, and what the DNS said of each (FRU-103): `domain-proof.ts`.
+ * `verified_at` NULL: never proven. `lost_at` is the first answer of the DNS without the record.
+ * `previews_site_id` names the one site whose previews the domain covers.
+ */
+export const domains = pgTable(
+  'domains',
+  {
+    id: text('id').primaryKey(),
+    workspace_id: text('workspace_id').notNull(),
+    domain: text('domain').notNull(),
+    created_at: instant('created_at').notNull(),
+    verified_at: instant('verified_at'),
+    lost_at: instant('lost_at'),
+    checked_at: instant('checked_at'),
+    previews_site_id: text('previews_site_id'),
+  },
+  (table) => [
+    foreignKey({
+      name: 'domains_workspace_id_fkey',
+      columns: [table.workspace_id],
+      foreignColumns: [organization.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'domains_previews_site_id_fkey',
+      columns: [table.previews_site_id],
+      foreignColumns: [sites.id],
+    }).onDelete('set null'),
+    unique('domains_workspace_id_domain_key').on(table.workspace_id, table.domain),
+    index('domains_by_check').on(table.checked_at),
+    index('domains_by_site').on(table.previews_site_id),
+  ],
+);
+
 /** `code_hash` is a digest, like a pairing code: a copy of the database is not a way in. */
 export const email_links = pgTable('email_links', {
   code_hash: text('code_hash').primaryKey(),
@@ -201,4 +235,37 @@ export const sessions = pgTable(
     root_hash: text('root_hash'),
   },
   (table) => [index('sessions_by_expiry').on(table.expires_at), index('sessions_by_root').on(table.root_hash)],
+);
+
+/** The bytes of a file. The driver answers a `Buffer`, and PGlite a `Uint8Array`: both are one here. */
+const bytes = customType<{ data: Uint8Array; driverData: Uint8Array }>({
+  dataType: () => 'bytea',
+  toDriver: (value) => value,
+  fromDriver: (value) => new Uint8Array(value),
+});
+
+/**
+ * The picture of an element, taken by the extension with a note (FRU-44). `content` is a PNG of
+ * `MAX_SCREENSHOT_BYTES` at most. It is of a workspace and goes with it: only a member reads it.
+ * `account_id` is who sent it, and holds no foreign key: the picture stays when the person leaves.
+ */
+export const screenshots = pgTable(
+  'screenshots',
+  {
+    id: text('id').primaryKey(),
+    workspace_id: text('workspace_id').notNull(),
+    account_id: text('account_id').notNull(),
+    content: bytes('content').notNull(),
+    width: integer('width').notNull(),
+    height: integer('height').notNull(),
+    created_at: instant('created_at').notNull(),
+  },
+  (table) => [
+    foreignKey({
+      name: 'screenshots_workspace_id_fkey',
+      columns: [table.workspace_id],
+      foreignColumns: [organization.id],
+    }).onDelete('cascade'),
+    index('screenshots_by_workspace').on(table.workspace_id),
+  ],
 );
