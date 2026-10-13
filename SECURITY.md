@@ -451,6 +451,47 @@ that reviewer signs a note with it, and not before. test:`tells a reader it woul
 identified, and tells nobody who (FRU-112)` holds the worker's half, and
 test:`names nothing of who the session is in code the page can read` holds the extension's.
 
+**The first administrator signs in by a link that the worker writes, with no e-mail and no
+provider** (FRU-221). An instance that sends no e-mail and has no GitHub or Google sign-in could make
+no account at all. With `FRUITBACK_FIRST_ADMIN=<address>`, a worker whose instance has no owner yet
+writes a sign-in link for that address in its log when it starts; `node server.mjs admin-link --email
+<address>` writes one on the terminal instead. It is the link of the e-mail, made by better-auth and
+kept as a digest. **Nothing proves that the person who opens it holds that address: the operator
+names it.** What bounds this way in:
+
+- **Whoever reads the link in its ten minutes signs in as that address, and on an instance with no
+  owner makes its first workspace and owns it.** The link is in the log of the container in the
+  clear, or on a terminal, and a log that is shipped elsewhere keeps the line after the link is
+  dead. Ten minutes (`ADMIN_LINK_TTL_SECONDS`), where the link of an e-mail lives fifteen; spent
+  once; and when it is spent the worker writes who signed in, so an operator who did not open it
+  reads that somebody did: test:`is refused after ten minutes, where the link of an e-mail lives
+fifteen`, test:`is spent once: the same link opened again is refused`.
+- **No request makes one.** Only the start of the worker and the command call the function that
+  does: test:`whatever the path, the method and the body, on a worker that names a first
+administrator` sends every path the routes spell, and reads that no mark of a link was written.
+- **The log writes one only while no workspace has an owner**, and a link kept from before is
+  refused once one has, however that owner signed in: test:`writes nothing once a workspace has an
+owner: the variable left in the environment opens nothing`, test:`is refused once somebody else owns
+a workspace, however they signed in`. A link that was refused stays refused.
+- **One link at a time.** Two replicas that start together write one link (test:`is one link when
+two replicas start together, and the other one says that it was written`), and a new link ends the
+  one before (test:`cancels the link before with each new one, whoever asked for each`).
+- **The command makes a link for an instance with no owner, or for an owner who lost their
+  session, and for nobody else**: no second owner, and no admin or member made one
+  (test:`refuses every other address once there is an owner: no second owner, and nobody
+promoted`). It ends no session (test:`gives an owner who lost their session a link, and ends no
+session that is open`). It needs a shell in the container, which already reads the database. Each
+  link it makes leaves a line in the log of the worker: the address and the time, and never the link.
+- **The token is on one line, and nowhere else.** It is after the `#` of the link, which a browser
+  sends to no server: no access log, no proxy and no error line of the worker holds it, and the
+  database holds a digest (test:`writes its token on one line of the log, and nothing else of the
+worker ever writes it`).
+- **The secret of the sign-in is asked for, and never made by the worker**: with
+  `FRUITBACK_FIRST_ADMIN` and no `FRUITBACK_AUTH_SECRET`, the worker refuses to start.
+
+Empty the variable once the first workspace is made. Left in place it opens nothing while a
+workspace has an owner; on an instance whose last owner left, it would write a link again.
+
 **`FRUITBACK_FIRST_REVIEWER` writes a pairing code in the log** (FRU-108). It is off unless the
 operator sets it. A worker that holds no session yet then mints a code for the person the variable
 names each time it starts, and writes it in the log of the container, in the clear: as a code, or as

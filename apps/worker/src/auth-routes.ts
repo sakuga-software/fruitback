@@ -7,6 +7,7 @@ import {
   SERVED_PATHS,
   sendLinkThrough,
 } from './auth.ts';
+import { adminLinkAt, endAdminLink } from './first-admin.ts';
 import type { Kv } from './kv.ts';
 import { MailError, type Mailer, signInMessage } from './mail.ts';
 
@@ -288,6 +289,18 @@ async function redeemLink(
   const token = typeof body?.token === 'string' ? body.token.trim() : '';
   if (!LINK_TOKEN.test(token)) return json(400, { error: 'invalid-code' }, headers);
 
+  // FRU-221. A link that the operator made for an administrator is checked again here: an instance
+  // that got an owner since, or a link that another one replaced, is refused as a link that is
+  // spent. A `Kv` that does not answer rejects, and nothing is spent: see `adminLinkAt`.
+  const links = { kv: context.kv, owners: () => context.accounts.owners() };
+  const made = await adminLinkAt(links, token);
+  if (made.is === 'refuse') {
+    await endAdminLink(context.kv, token);
+    console.warn(`[fruitback] a sign-in link made for an administrator was refused: ${made.why}`);
+
+    return json(401, { error: 'link-spent-or-expired' }, headers);
+  }
+
   const auth = await context.auth;
   // No `callbackURL`: better-auth then answers JSON and does not redirect. A link that is spent or
   // that never was answers a redirect to an error, which is read as a refusal.
@@ -302,6 +315,13 @@ async function redeemLink(
   const id = typeof opened.user?.id === 'string' ? opened.user.id : undefined;
   const account = id === undefined ? undefined : await context.accounts.account(id);
   if (account === undefined) return json(401, { error: 'link-spent-or-expired' }, headers);
+  if (made.is === 'spend') {
+    await endAdminLink(context.kv, token);
+    // Who, and never the link: an operator who did not open it reads here that somebody did.
+    console.log(
+      `[fruitback] the sign-in link made for ${made.email} was used: that person is signed in to the console`,
+    );
+  }
 
   // The language of the browser that opened the link, kept if the account has none yet.
   const locale = readLocaleTag(body?.locale);

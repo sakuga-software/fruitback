@@ -263,6 +263,20 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       });
     },
 
+    async owners() {
+      const rows = await run((db) =>
+        db
+          .selectDistinct({ email: user.email })
+          .from(member)
+          .innerJoin(user, eq(user.id, member.userId))
+          // Strict, as `roleOf`: « owner,admin », which better-auth reads as two roles, is no owner.
+          .where(eq(member.role, 'owner'))
+          .orderBy(user.email),
+      );
+
+      return rows.map((row) => row.email.toLowerCase());
+    },
+
     async role(workspace, person) {
       const rows = await run((db) =>
         db

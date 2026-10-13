@@ -61,3 +61,33 @@ test('keeps its form when the worker signs people in, and when it did not say', 
   await expect(page.getByRole('textbox', { name: 'Work email' })).toBeVisible();
   await expect(page.getByRole('alert').filter({ hasText: CLOSED })).toHaveCount(0);
 });
+
+test('says to ask for a link, with no form, when the worker has no mail and no provider (FRU-221)', async ({
+  page,
+}) => {
+  // A worker with its sign-in on, that sends no e-mail and has no GitHub and no Google: its first
+  // administrator gets a link from its log, or from the command `admin-link`.
+  const asked = await stubWorker(page, () => ({
+    status: 200,
+    body: { betterAuth: { email: false, github: false, google: false } },
+  }));
+  const BY_OPERATOR = 'This Fruitback sends no sign-in link by e-mail';
+
+  for (const path of ['/sign-in', '/setup']) {
+    await page.goto(`${CONSOLE}${path}`);
+    await expect(page.getByRole('alert').filter({ hasText: BY_OPERATOR })).toBeVisible();
+    await expect(page.getByRole('alert').filter({ hasText: CLOSED })).toHaveCount(0);
+    await expect(page.getByRole('textbox')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Email me a link|Continue with/ })).toHaveCount(0);
+  }
+  expect(asked.filter((each) => each.startsWith('POST'))).toEqual([]);
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+  // The control: with a provider, the screen keeps its form and its button.
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+  await stubWorker(page, () => ({ status: 200, body: { betterAuth: { email: false, github: true, google: false } } }));
+  await page.goto(`${CONSOLE}/sign-in`);
+  await expect(page.getByRole('button', { name: 'Continue with GitHub' })).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: BY_OPERATOR })).toHaveCount(0);
+});

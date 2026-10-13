@@ -359,6 +359,16 @@ export function createSqliteAccountStore(path: string): AccountStore {
       return workspace;
     },
 
+    async owners() {
+      const rows = connect(path)
+        .prepare(
+          "SELECT DISTINCT a.email FROM members m JOIN accounts a ON a.id = m.account_id WHERE m.role = 'owner' ORDER BY a.email",
+        )
+        .all() as { email: string }[];
+
+      return rows.map((row) => row.email.toLowerCase());
+    },
+
     async memberships(account) {
       const rows = connect(path)
         .prepare(

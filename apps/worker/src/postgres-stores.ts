@@ -66,6 +66,7 @@ export function postgresAccountStore(url: string, schema: string): AccountStore 
     localeOf: true,
     createWorkspace: true,
     memberships: true,
+    owners: true,
     role: true,
     addSite: true,
     sites: true,

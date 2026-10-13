@@ -131,6 +131,18 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.deepEqual(await store.memberships(bob.id), []);
   });
 
+  it('names the owners of the instance by their address, each once, and nobody before the first workspace (FRU-221)', async (store) => {
+    const alice = await store.signIn(ALICE);
+    await store.signIn(BOB);
+    // Two accounts, and no workspace: the instance has no owner yet.
+    assert.deepEqual(await store.owners(), []);
+
+    await store.createWorkspace('Sakuga', alice.id);
+    await store.createWorkspace('Another one', alice.id);
+
+    assert.deepEqual(await store.owners(), [alice.email]);
+  });
+
   it('lists the workspaces of an account oldest first', async (store) => {
     const alice = await store.signIn(ALICE);
     const names = ['First', 'Second', 'Third'];

@@ -1,7 +1,15 @@
 import { type IncomingMessage, type Server, type ServerResponse, createServer } from 'node:http';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { announceFirstReviewer, handleRequest, kvFor, storeFor, deliverPending, recheckPending } from './app.ts';
+import {
+  announceFirstAdmin,
+  announceFirstReviewer,
+  handleRequest,
+  kvFor,
+  storeFor,
+  deliverPending,
+  recheckPending,
+} from './app.ts';
 import { systemResolver } from './domain-proof.ts';
 import { announceAuth } from './auth.ts';
 import type { SeedStore } from './store.ts';
@@ -213,6 +221,8 @@ export function startServer(env: WorkerEnv = process.env): Server {
 
       // FRU-108: after the lines above, so the code is the last thing a person reads in `docker logs`.
       void announceFirstReviewer(config.config);
+      // FRU-221: the same for the first administrator, on an instance that has no owner yet.
+      void announceFirstAdmin(config.config);
     } else {
       // Loud, but still serving: /health reports 503 with the same list, so the platform can see it.
       console.error(`[fruitback] misconfigured, missing: ${config.missing.join(', ')} — /health will report 503`);
