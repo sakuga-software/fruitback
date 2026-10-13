@@ -35,6 +35,20 @@ async function signInByLink(page: Page, worker: Worker, email: string): Promise<
   return workspace;
 }
 
+/**
+ * My account, at rest: the list of the browsers is read.
+ *
+ * WARNING: the list arrives after the screen is drawn, and « Sign out » is under it: the button goes
+ * down 53 px when it does. A press that starts before and ends after is lost: the button has focus,
+ * nothing is sent, and the page stays. Measured on `main` at 30c62f8, where this spec failed for it.
+ */
+async function openAccount(page: Page): Promise<void> {
+  await page.getByRole('link', { name: 'My account' }).click();
+  await expect(
+    page.getByRole('region', { name: 'Where you are signed in' }).getByText('Console · this browser'),
+  ).toBeVisible();
+}
+
 /** The id of the workspace the console last read the sites of, as the worker received it. */
 async function workspaceOf(worker: Worker): Promise<string> {
   const read = (await worker.received())
@@ -203,7 +217,7 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     );
     expect(before).toHaveLength(1);
 
-    await page.getByRole('link', { name: 'My account' }).click();
+    await openAccount(page);
     await page.getByRole('button', { name: 'Sign out', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Set up Fruitback' })).toBeVisible();
 
@@ -225,7 +239,7 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
       fetch(`${worker.origin}/console/me`, {
         headers: { Origin: CONSOLE, Cookie: `${SESSION_COOKIE}=${session?.value}` },
       });
-    await page.getByRole('link', { name: 'My account' }).click();
+    await openAccount(page);
 
     // better-auth does not answer: what the worker says then (`auth-unavailable`), as the console reads it.
     const refused = `${WORKER_ORIGIN}/console/auth/sign-out`;
@@ -333,7 +347,7 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     // In a second tab Ana signs out, and Bob signs in.
     const second = await context.newPage();
     await second.goto(`${CONSOLE}/w/${workspace}/sites`);
-    await second.getByRole('link', { name: 'My account' }).click();
+    await openAccount(second);
     await second.getByRole('button', { name: 'Sign out', exact: true }).click();
     await expect(second.getByRole('heading', { name: 'Set up Fruitback' })).toBeVisible();
     await second.close();
@@ -353,7 +367,7 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     await page.getByRole('textbox', { name: 'Site address' }).fill('staging.acme.dev');
     const second = await context.newPage();
     await second.goto(`${CONSOLE}/w/${workspace}/sites`);
-    await second.getByRole('link', { name: 'My account' }).click();
+    await openAccount(second);
     await second.getByRole('button', { name: 'Sign out', exact: true }).click();
     await expect(second.getByRole('heading', { name: 'Set up Fruitback' })).toBeVisible();
     await second.close();
