@@ -31,7 +31,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'La langue de la console, et des e-mails que Fruitback vous envoie.',
   'Your account did not take this language yet. It is kept in this browser, and sent again the next time you open the console.':
     'Votre compte n’a pas encore pris cette langue. Elle est gardée dans ce navigateur, et renvoyée la prochaine fois que vous ouvrez la console.',
-  'Address of the person to invite': 'Adresse de la personne à inviter',
   'Fruitback cannot send to this address. Use a full https:// address that the internet can reach.':
     'Fruitback ne peut pas envoyer à cette adresse. Utilisez une adresse https:// complète, joignable depuis internet.',
   'A secret is 16 to 256 characters, with no space. Leave it empty and Fruitback makes one.':
@@ -170,12 +169,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Member: 'Membre',
   Guest: 'Invité',
   Members: 'Membres',
-  'Who can see and leave feedback, and who can change the workspace.':
-    'Qui peut voir et laisser des retours, et qui peut modifier le workspace.',
+  'Who sees and leaves notes, and who changes the workspace.':
+    'Qui voit et laisse des notes, et qui modifie le workspace.',
+  'Invite someone': 'Inviter quelqu’un',
+  Email: 'E-mail',
   Invite: 'Inviter',
-  'Role of the person to invite': 'Rôle de la personne à inviter',
-  'The person signs in with that address, and joins. Guests, who see one site only, come later.':
-    'La personne se connecte avec cette adresse, et rejoint l’espace. Les invités, qui ne voient qu’un site, viendront plus tard.',
   'Invitation sent to {email}. You can also send them this link:':
     'Invitation envoyée à {email}. Vous pouvez aussi lui envoyer ce lien :',
   'Invitation kept for {email}. Send them this link:': 'Invitation gardée pour {email}. Envoyez-lui ce lien :',
@@ -189,8 +187,10 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Remove {name}': 'Retirer {name}',
   '{name} leaves the workspace, and their extension stops reading its sites. Their notes stay.':
     '{name} quitte l’espace de travail, et son extension cesse de lire ses sites. Ses notes restent.',
-  'Invited as {role}, until {date}': 'Invité comme {role}, jusqu’au {date}',
-  Invited: 'Invité',
+  'Invitation sent': 'Invitation envoyée',
+  'Invitation kept': 'Invitation gardée',
+  'Sent {date}': 'Envoyée le {date}',
+  Joined: 'Arrivée',
   Resend: 'Renvoyer',
   'Cancel the invitation of {email}': 'Annuler l’invitation de {email}',
   'The message already sent no longer lets {email} join.':
@@ -234,11 +234,11 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Person: 'Personne',
   Role: 'Rôle',
   Sites: 'Sites',
-  All: 'Tous',
-  'Sites, connectors, members.': 'Sites, connecteurs, membres.',
-  'Every site. Sees the tracker links.': 'Tous les sites. Voit les liens du tracker.',
-  'Only the sites shared with them. Free, never sees the tracker.':
-    'Seulement les sites partagés avec lui. Gratuit, ne voit jamais le tracker.',
+  'Every site': 'Tous les sites',
+  'Sites, connectors and members.': 'Sites, connecteurs et membres.',
+  'Every site. Sees the links to the tracker.': 'Tous les sites. Voit les liens vers le tracker.',
+  'Only the sites shared with them. Free, and never sees the tracker.':
+    'Seulement les sites partagés avec lui. Gratuit, et ne voit jamais le tracker.',
 
   Workspace: 'Workspace',
   'Sign in, name it': 'Se connecter, le nommer',

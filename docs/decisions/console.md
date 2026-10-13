@@ -67,8 +67,20 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   wait to an owner or an admin, with « Resend » and « Cancel ». A guest sees their own row only, as
   the worker answers them nothing more. **The front door looks for an invitation first**
   (`home.tsx`): somebody who signed in from the message of an invitation lands on `/invitations`,
-  not on the setup that makes a workspace of their own. A worker of before has no member list: the
-  screen draws the row of the person and says that invitations come later.
+  not on the setup that makes a workspace of their own.
+  **The screen is screen 12 of the mockup of 2026-10-13, with what the worker of today says**
+  (FRU-247): the invitation on one line, a form named « Invite someone » with each field under its
+  label, the table of the people (760 px at the least, which scrolls in its frame on a phone), and
+  what each role does. **Not copied from the mockup**: « Last seen » (the last column is the day
+  somebody joined, « Joined »), the role « Guest, one site » and the list « Site » of the form, and
+  the one site of a guest in « Sites », which says « Every site », or « Shared ones » for a guest.
+  What a guest does is in the legend only when a guest is on the screen. **Kept, though the mockup
+  draws none of it**: « (you) », « Remove » and « Cancel », which ask twice under their row
+  (`Confirmation`), the day an invitation ends, the block that gives the link of an invitation, and
+  every sentence of a refusal. A worker with no mailer sent nothing, so its rows say « Invitation
+  kept ». What is asked under a row stays in what is seen of a table that scrolls.
+  `e2e/console-members.spec.ts` reads the values and the boxes of the mockup at 1440 and 390 px,
+  the keyboard, the contrasts and axe.
 - **The address of a site is read by `site-address.ts`, on every screen that asks for one**
   (FRU-167). A host with no scheme is `https://`, as in the extension. The field is not `type="url"`:
   the browser stopped the form with its own bubble, in its own language, and the sentence of the
