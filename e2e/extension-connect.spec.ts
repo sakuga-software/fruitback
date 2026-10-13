@@ -15,7 +15,7 @@ import { WORKER_ORIGIN } from './pin.ts';
  * will. The spec of the whole way, from the popup to a note, is theirs.
  */
 
-type Answer = { status: number; body: Record<string, unknown> };
+type Answer = { status: number | 'cors'; body: Record<string, unknown> };
 
 /** A call from the service worker of the extension: its origin, its CORS, no cookie of a page. */
 async function fromExtension(
@@ -28,27 +28,36 @@ async function fromExtension(
       const headers: Record<string, string> = {};
       if (body !== undefined) headers['Content-Type'] = 'application/json';
       if (token !== undefined) headers.Authorization = `Bearer ${token}`;
-      const answer = await fetch(url, {
-        method: method ?? (body === undefined ? 'GET' : 'POST'),
-        headers,
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      });
-      const text = await answer.text();
+      try {
+        const answer = await fetch(url, {
+          method: method ?? (body === undefined ? 'GET' : 'POST'),
+          headers,
+          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        });
+        const text = await answer.text();
 
-      return { status: answer.status, body: text === '' ? {} : (JSON.parse(text) as Record<string, unknown>) };
+        return { status: answer.status, body: (text === '' ? {} : JSON.parse(text)) as Record<string, unknown> };
+      } catch {
+        // The browser refused the answer, or the preflight: CORS.
+        return { status: 'cors' as const, body: {} as Record<string, unknown> };
+      }
     },
     { url, method: init.method, body: init.body, token: init.token },
   );
 }
 
 /** A call from a page, with its cookies: the status, or `cors` when the browser hides the answer. */
-async function fromPage(page: Page, url: string, init: { method?: string; body?: unknown } = {}) {
+async function fromPage(
+  page: Page,
+  url: string,
+  init: { method?: string; body?: unknown; credentials?: 'include' | 'omit' } = {},
+) {
   return page.evaluate(
-    async ({ url, method, body }) => {
+    async ({ url, method, body, credentials }) => {
       try {
         const answer = await fetch(url, {
           method: method ?? (body === undefined ? 'GET' : 'POST'),
-          credentials: 'include',
+          credentials,
           headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
           ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         });
@@ -62,7 +71,7 @@ async function fromPage(page: Page, url: string, init: { method?: string; body?:
         return { status: 'cors' as const, body: {} as Record<string, unknown> };
       }
     },
-    { url, method: init.method, body: init.body },
+    { url, method: init.method, body: init.body, credentials: init.credentials ?? 'include' },
   );
 }
 
@@ -99,7 +108,7 @@ test.describe('the extension asks, the console approves, in a browser (FRU-238)'
     // A page of a site cannot start a request: the browser sends its origin, and the worker refuses it.
     const page = await extension.context.newPage();
     await page.goto(`${PLAYGROUND_ORIGIN}/?widget=off`);
-    expect((await fromPage(page, `${api}/session/connect`, { body: {} })).status).toBe(403);
+    expect((await fromPage(page, `${api}/session/connect`, { body: {}, credentials: 'omit' })).status).toBe(403);
 
     // The extension asks, from its service worker: a preflight, then the request.
     const asked = await fromExtension(extension.worker, `${api}/session/connect`, {
@@ -128,7 +137,8 @@ test.describe('the extension asks, the console approves, in a browser (FRU-238)'
     const itself = await fromExtension(extension.worker, `${api}/console/connect/${request}/approve`, {
       body: { word, account },
     });
-    expect(itself.status).toBe(403);
+    expect(itself.status).toBe('cors');
+    expect((await fromPage(consolePage, `${WORKER_ORIGIN}/console/connect/${request}`)).body.state).toBe('pending');
 
     const approved = await fromPage(consolePage, `${WORKER_ORIGIN}/console/connect/${request}/approve`, {
       body: { word, account },
