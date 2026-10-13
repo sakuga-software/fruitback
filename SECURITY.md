@@ -1031,12 +1031,17 @@ when it is accepted`. An invitation waits 7 days; one address gets one invitatio
   transaction: it counts the owners and then removes one, it looks for an invitation of an address
   and then writes one. On a real PostgreSQL, two owners who left, demoted themselves or removed
   each other at the same moment left a workspace with no owner, which nobody can repair or delete
-  (measured, 3 runs of 3), and four invitations of one address wrote two or three rows. The routes
-  of the worker that change a workspace now run one after the other for that workspace:
+  (measured, 3 runs of 3), and four invitations of one address wrote two or three rows. The
+  `POST /console/auth/organization/*` routes of the worker that name a workspace now run one after
+  the other for that workspace:
   test:`keeps one owner when two owners go at the same moment (FRU-209)`,
   test:`writes one invitation for one address when two people invite it at the same moment`.
   **This holds for one process of the worker.** Two replicas do not share it, as they do not share
   the rate limit.
+  **The rename and the deletion of a workspace are outside it** (`POST` and `DELETE
+/console/workspaces/<id>`). Neither counts the owners or looks for an invitation before it
+  writes. Two renames at the same moment leave the last one written. Not measured: a rename at the
+  moment its author loses the right, or at the moment the workspace is deleted.
 - **Nobody is removed while their extension lives** (FRU-209). The sessions of the extensions of a
   member end before better-auth deletes the member; when that fails, nothing is deleted, the call
   answers `502`, and it is made again:
