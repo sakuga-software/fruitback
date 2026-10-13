@@ -18,6 +18,7 @@ import {
   siteOrigin,
   readConnectorSettings,
   readLocaleTag,
+  readPersonName,
 } from './accounts.ts';
 import {
   type ProofState,
@@ -344,6 +345,7 @@ export async function handleConsoleApi(
   const isApi =
     pathname === '/console/me' ||
     pathname === '/console/me/locale' ||
+    pathname === '/console/me/name' ||
     pathname === '/console/workspaces' ||
     WORKSPACE_PATH.test(pathname);
   if (!isApi) return undefined;
@@ -374,6 +376,17 @@ export async function handleConsoleApi(
     await context.accounts.setLocale(account.id, locale);
 
     return json(200, { account: { ...account, locale } }, headers);
+  }
+
+  // The name on the notes of the person (FRU-249). Their own account only. The notes already sent
+  // keep the name they were sent with; an extension signs the new one from its next access token.
+  if (pathname === '/console/me/name') {
+    if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
+    const name = readPersonName((await readBody(request))?.name);
+    if (name === undefined) return json(400, { error: 'invalid-name' }, headers);
+    await context.accounts.setName(account.id, name);
+
+    return json(200, { account: { ...account, name } }, headers);
   }
 
   if (pathname === '/console/workspaces') {

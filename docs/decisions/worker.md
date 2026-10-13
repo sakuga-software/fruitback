@@ -2715,3 +2715,28 @@ client map were refused together at boot.
   one header. **Do not write that each proxy appends**: nginx with `$proxy_add_x_forwarded_for`
   appends, while nginx with `$remote_addr`, Traefik and Caddy replace the header (measured, FRU-50).
   The self-hosting guide depends on the difference.
+
+## « My account »: the name and the ways to sign in (FRU-249)
+
+### The rules, in short
+
+- `POST /console/me/name {name}` names the person of the cookie, and nobody else. `readPersonName`
+  of `accounts.ts` is the one rule: one line, 1 to 80 characters, NFC, no control, format, private
+  or unassigned character.
+- The name an extension signs is read again at each refresh (`currentIdentity` of `app.ts`): the
+  session keeps the identity of its pairing, and only the access token carries the new name.
+- `GET /console/me/sign-in` lists the ways; `GET /console/auth/link/<provider>` links one by a
+  navigation, because WebKit keeps no cookie of the state from the answer of a `fetch` (FRU-147);
+  `DELETE /console/me/sign-in/<provider>` unlinks one.
+- The worker decides whether a provider may go, not better-auth: its count of rows does not see the
+  link of the e-mail, which has none. So better-auth is set to `allowUnlinkingAll`, its own
+  `/unlink-account` stays closed, and `signInMethods` of `auth-routes.ts` refuses the last way.
+
+### Why a navigation, and why no ticket for it
+
+A `GET` that starts a link changes something. A page of another site does not start one
+(`Sec-Fetch-Site`), and sends no cookie of the session anyway (`SameSite=Strict`). A page of the same
+site sends the cookie, and can make the browser link **the provider account that the browser is
+signed in to**, for the address of the account only: what a sign-in with that provider does already,
+since one verified address is one account (FRU-97). A one-time ticket asked for by a `POST` would
+close that too, for a second round trip and a store of tickets; it was not worth it.

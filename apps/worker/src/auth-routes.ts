@@ -61,9 +61,28 @@ export const SESSIONS_PATH = '/console/sessions';
 const START_PATH = new RegExp(`^${AUTH_BASE_PATH}/start/(github|google)$`);
 const SESSION_PATH = /^\/console\/sessions\/([A-Za-z0-9_-]{1,80})$/;
 
+/**
+ * The ways a person signs in (FRU-249). `GET /console/me/sign-in` says which providers are linked to
+ * their account; `DELETE /console/me/sign-in/<provider>` takes one away. `GET /console/auth/link/<provider>`
+ * links one, by a navigation, for the reason of `START_PATH`.
+ */
+export const SIGN_IN_PATH = '/console/me/sign-in';
+const SIGN_IN_ONE = /^\/console\/me\/sign-in\/(github|google)$/;
+const LINK_PATH = new RegExp(`^${AUTH_BASE_PATH}/link/(github|google)$`);
+/** The providers a person links and unlinks. The link of the e-mail is not one: it has no row. */
+const LINKABLE = ['github', 'google'] as const;
+/** A workspace id, as the console puts it in the address of « My account ». */
+const WORKSPACE_ID = /^[A-Za-z0-9_-]{1,80}$/;
+
 /** Whether this path is one that `handleAuthRoutes` answers. */
 export function isAuthRoute(pathname: string): boolean {
-  return pathname.startsWith(`${AUTH_BASE_PATH}/`) || pathname === SESSIONS_PATH || SESSION_PATH.test(pathname);
+  return (
+    pathname.startsWith(`${AUTH_BASE_PATH}/`) ||
+    pathname === SESSIONS_PATH ||
+    SESSION_PATH.test(pathname) ||
+    pathname === SIGN_IN_PATH ||
+    SIGN_IN_ONE.test(pathname)
+  );
 }
 
 /** A token of better-auth: 32 letters (1.7.7). Bounded, so a body cannot make the worker digest a megabyte. */
@@ -385,6 +404,148 @@ async function sessions(
   return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store', ...headers } });
 }
 
+/** The rows of `account` of a person, through the adapter of better-auth: which providers they linked. */
+type AccountAdapter = {
+  findMany(input: {
+    model: 'account';
+    where: { field: string; value: string }[];
+  }): Promise<{ id: string; providerId: string }[]>;
+};
+
+/**
+ * One change of the ways to sign in at a time for a person, in this process (FRU-249). Two unlinks
+ * at the same moment each counted the other provider as left, and took both: a person on a worker
+ * that sends no e-mail could no longer sign in. Two replicas do not share it, as for `oneAtATime`
+ * of `auth-organization.ts`.
+ */
+const unlinking = new Map<string, Promise<unknown>>();
+
+async function onePersonAtATime<T>(person: string, run: () => Promise<T>): Promise<T> {
+  const before = unlinking.get(person) ?? Promise.resolve();
+  const mine = before.then(run, run);
+  const settled = mine.catch(() => undefined);
+  unlinking.set(person, settled);
+  try {
+    return await mine;
+  } finally {
+    if (unlinking.get(person) === settled) unlinking.delete(person);
+  }
+}
+
+/**
+ * `GET /console/me/sign-in` and `DELETE /console/me/sign-in/<provider>` (FRU-249).
+ *
+ * The list: `email` says whether this worker sends the link of the e-mail, which signs in every
+ * account; a provider is there when this worker has it, or when the account has it linked.
+ *
+ * **A provider goes only when another way to sign in stays**: the link of the e-mail on a worker that
+ * sends it, or the other provider, linked and set up on this worker. Otherwise `409 last-sign-in`.
+ * better-auth asks for a session opened in the last day (`SESSION_FRESH_SECONDS`): an older one
+ * answers `403 sign-in-again`.
+ */
+async function signInMethods(
+  request: Request,
+  pathname: string,
+  context: AuthRouteContext,
+  headers: Record<string, string>,
+): Promise<Response> {
+  const auth = await context.auth;
+  const mine = await sessionOfCookie(auth, request);
+  if (mine === undefined) return json(401, { error: 'identity-required' }, headers);
+  if (!mutationAllowed(request, context.consoleUrl)) return json(403, { error: 'origin-not-allowed' }, headers);
+  const adapter = (await auth.$context).adapter as unknown as AccountAdapter;
+  const configured = (auth.options.socialProviders ?? {}) as Record<string, unknown>;
+  const rowsOf = () => adapter.findMany({ model: 'account', where: [{ field: 'userId', value: mine.userId }] });
+
+  if (pathname === SIGN_IN_PATH) {
+    if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
+    const rows = await rowsOf();
+    const methods: Record<string, unknown> = { email: context.mailer !== undefined };
+    for (const provider of LINKABLE) {
+      const linked = rows.some((row) => row.providerId === provider);
+      if (linked || Object.hasOwn(configured, provider)) methods[provider] = { linked };
+    }
+
+    return json(200, methods, headers);
+  }
+
+  if (request.method !== 'DELETE') return json(405, { error: 'method-not-allowed' }, headers);
+  const provider = SIGN_IN_ONE.exec(pathname)?.[1] ?? '';
+
+  return onePersonAtATime(mine.userId, async () => {
+    const rows = await rowsOf();
+    const row = rows.find((each) => each.providerId === provider);
+    if (row === undefined) return json(404, { error: 'not-linked' }, headers);
+    const another = LINKABLE.some(
+      (other) =>
+        other !== provider && Object.hasOwn(configured, other) && rows.some((each) => each.providerId === other),
+    );
+    if (context.mailer === undefined && !another) return json(409, { error: 'last-sign-in' }, headers);
+
+    const answer = await (auth.api as unknown as { unlinkAccount(input: object): Promise<Response> }).unlinkAccount({
+      body: { accountId: row.id },
+      headers: headersFor(request, context),
+      asResponse: true,
+    });
+    if (answer.status === 403) return json(403, { error: 'sign-in-again' }, headers);
+    if (!answer.ok) throw new AuthUnavailable(`better-auth answered ${answer.status} to an unlink`);
+
+    return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store', ...headers } });
+  });
+}
+
+/**
+ * `GET /console/auth/link/<provider>?workspace=<id>` (FRU-249): links a provider to the account of the
+ * cookie, by a navigation, as `START_PATH` starts a sign-in. The person comes back to « My account »
+ * of that workspace, with `?linked=<provider>`, or with `?error=<code>` when better-auth refused.
+ *
+ * better-auth links only an address that the provider verified, and **only the address of the
+ * account**: another one answers `email_doesn't_match`, and two accounts are never joined here
+ * (read in `oauth2/link-account.mjs` of 1.7.7, and tested). A page of another site does not start
+ * one; a page of the same site sends the cookie, and can link to the account its own provider
+ * account at most, which a sign-in with that provider does too.
+ */
+async function linkProvider(request: Request, provider: string, context: AuthRouteContext): Promise<Response> {
+  if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, {});
+  const consoleOrigin = new URL(context.consoleUrl).origin;
+  const workspace = new URL(request.url).searchParams.get('workspace') ?? '';
+  const page = WORKSPACE_ID.test(workspace) ? `/w/${workspace}/account` : '/';
+  const back = (code: string): Response => {
+    const to = new URL(page, consoleOrigin);
+    to.searchParams.set('error', code);
+
+    return new Response(null, { status: 302, headers: { Location: to.href, 'Cache-Control': 'no-store' } });
+  };
+  if (request.headers.get('Sec-Fetch-Site') === 'cross-site') return back('started_from_another_site');
+  const auth = await context.auth;
+  const configured = (auth.options.socialProviders ?? {}) as Record<string, unknown>;
+  if (!Object.hasOwn(configured, provider)) return back('oauth_provider_not_found');
+  if ((await sessionOfCookie(auth, request)) === undefined) return back('identity_required');
+
+  const answer = await (
+    auth.api as unknown as { linkSocialAccount(input: object): Promise<Response> }
+  ).linkSocialAccount({
+    body: {
+      provider,
+      callbackURL: `${consoleOrigin}${page}?linked=${provider}`,
+      errorCallbackURL: `${consoleOrigin}${page}`,
+      disableRedirect: true,
+    },
+    headers: headersFor(request, context),
+    asResponse: true,
+  });
+  const body = answer.ok ? ((await answer.json()) as { url?: unknown }) : undefined;
+  if (typeof body?.url !== 'string') {
+    console.error(`[fruitback] better-auth answered ${answer.status} to the start of a link with ${provider}`);
+
+    return back('internal_server_error');
+  }
+  const headers = new Headers({ Location: body.url, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
+  for (const cookie of answer.headers.getSetCookie()) headers.append('Set-Cookie', cookie);
+
+  return new Response(null, { status: 302, headers });
+}
+
 /**
  * The answer for a path of `isAuthRoute`, or `undefined` for another path.
  *
@@ -404,6 +565,10 @@ export async function handleAuthRoutes(
   const started = START_PATH.exec(pathname);
   if (started !== null) return startWithProvider(request, started[1] ?? '', context);
   if (pathname === SESSIONS_PATH || SESSION_PATH.test(pathname)) return sessions(request, pathname, context, headers);
+  if (pathname === SIGN_IN_PATH || SIGN_IN_ONE.test(pathname))
+    return signInMethods(request, pathname, context, headers);
+  const linking = LINK_PATH.exec(pathname);
+  if (linking !== null) return linkProvider(request, linking[1] ?? '', context);
 
   const path = pathname.slice(AUTH_BASE_PATH.length);
   if (!Object.hasOwn(SERVED_PATHS, path)) return json(404, { error: 'not-found' }, headers);

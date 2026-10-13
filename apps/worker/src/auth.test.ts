@@ -18,6 +18,7 @@ import {
   CLIENT_IP_HEADER,
   REFUSED_PLUGINS,
   SERVED_PATHS,
+  SESSION_FRESH_SECONDS,
   SESSION_RENEWAL_SECONDS,
   SESSION_TTL_SECONDS,
   announceAuth,
@@ -605,6 +606,7 @@ describe('the options of better-auth, as they are written (FRU-144)', () => {
       cookieCache: { enabled: false },
       expiresIn: SESSION_TTL_SECONDS,
       updateAge: SESSION_RENEWAL_SECONDS,
+      freshAge: SESSION_FRESH_SECONDS,
     });
     assert.deepEqual(options.advanced?.ipAddress, { disableIpTracking: true });
     assert.deepEqual(options.advanced?.cookies, {
@@ -613,7 +615,8 @@ describe('the options of better-auth, as they are written (FRU-144)', () => {
     });
     assert.deepEqual(options.socialProviders, {});
     assert.deepEqual(options.onAPIError, { errorURL: `${CONSOLE_URL}/setup` });
-    assert.equal((options.account as { accountLinking?: { trustedProviders?: unknown } }).accountLinking, undefined);
+    // No provider is trusted, and the worker rules on unlinking (FRU-249): nothing else of linking is set.
+    assert.deepEqual((options.account as { accountLinking?: unknown }).accountLinking, { allowUnlinkingAll: true });
     assert.deepEqual(options.disabledPaths?.slice(0, 7), [
       '/revoke-session',
       '/revoke-other-sessions',

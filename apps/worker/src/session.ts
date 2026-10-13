@@ -313,6 +313,11 @@ export async function refreshSession(
   refreshToken: string,
   secret: string,
   now: number = Date.now(),
+  /**
+   * The identity as it is now (FRU-249): a person who changed their name signs the next access token
+   * with it. The session keeps the identity of its pairing; only the token carries the new name.
+   */
+  current: (identity: SessionIdentity) => Promise<SessionIdentity> = async (identity) => identity,
 ): Promise<
   | { ok: true; accessToken: string; refreshToken: string; expiresIn: number; identity: SessionIdentity }
   | { ok: false; reason: SessionFailure }
@@ -329,13 +334,14 @@ export async function refreshSession(
   // caller that the token they replayed was a real one that had been rotated is telling them their
   // copy was genuine.
   if (rotation.outcome !== 'rotated') return { ok: false, reason: 'session-revoked-or-expired' };
+  const identity = await current(rotation.identity);
 
   return {
     ok: true,
-    accessToken: await mintAccessToken(rotation.identity, secret, now),
+    accessToken: await mintAccessToken(identity, secret, now),
     refreshToken: successor,
     expiresIn: ACCESS_TTL_SECONDS,
-    identity: rotation.identity,
+    identity,
   };
 }
 

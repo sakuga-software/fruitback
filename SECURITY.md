@@ -1005,6 +1005,39 @@ verify`.
   (`betterAuth`), and no client id. A worker with no accounts, or with no `FRUITBACK_AUTH_SECRET`,
   answers `{}`.
 
+### A person's name and the ways they sign in, from « My account » (FRU-249)
+
+- **A person names themself, and nobody else.** `POST /console/me/name` sets the name of the
+  account of the cookie, from the console (its `Origin`), and no route takes an id: test:`sets the
+name of the person of the cookie only, by a POST of the console`. The token of an extension opens
+  no route of the console. A name is one line of 1 to 80 characters, in NFC, and **holds no control
+  character, no format character (a direction mark, a character of no width), no character of
+  private use and none that is unassigned**: such a name would draw one name and hold another, as
+  the author of a note in a tracker. test:`refuses what is not a name of one line, and keeps the name
+the account had`. A later sign-in with a provider does not write over it. There is no list of
+  reserved names: a name is a claim of the person, as the name in a note always was, and the
+  address beside it is the one the worker proved.
+- **An extension signs the new name from its next access token**, at its next refresh, within ten
+  minutes: test:`signs the next access token of an extension with the new name, and keeps the pairing
+as it was`. The notes already in a tracker keep the name they were sent with.
+- **A provider is linked only for the address of the account, verified by the provider.**
+  `GET /console/auth/link/<provider>` starts it by a navigation, as a sign-in starts, with the same
+  refusal of a page of another site and of a provider this worker does not have. better-auth
+  refuses another address, an address the provider did not verify, and a provider account that is
+  another person's: no account is joined to another, and the person comes back to « My account »
+  with an error (read in `oauth2/link-account.mjs` of 1.7.7): test:`refuses a provider whose address
+is another one, or is not verified, and joins no account`. No token of the provider is kept, as for
+  a sign-in. better-auth's own `/link-social`, `/unlink-account` and `/list-accounts` stay closed.
+- **A provider goes only while another way to sign in stays** (`DELETE /console/me/sign-in/<provider>`):
+  the link of the e-mail on a worker that sends it, or the other provider, linked and set up on this
+  worker. Otherwise `409 last-sign-in`: test:`keeps the last way to sign in on a worker that sends no
+link`. **The session must be of the last day** (`freshAge`, the default of better-auth, written):
+  an older one answers `403 sign-in-again`, so a cookie copied a week ago takes no way to sign in
+  away: test:`asks a session older than a day to sign in again before a provider goes`. Two unlinks
+  of one person run one after the other, so two at the same moment cannot take both providers:
+  test:`takes one of two providers, and not both, when two unlinks come at the same moment`. **This
+  holds for one process of the worker**, as the lock of a workspace does.
+
 ### The image of the console (FRU-222)
 
 The console is static files behind nginx, in an image of its own. **It holds no secret**: nothing

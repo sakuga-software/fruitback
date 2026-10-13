@@ -138,6 +138,7 @@ async function withSites(config: WorkerConfig, accounts: AccountStore): Promise<
     clients,
     allowedOrigins: [...new Set([...config.allowedOrigins, ...originsFromClients(clients)])],
     roleIn: (workspace, account) => accounts.role(workspace, account),
+    nameOf: async (account) => (await accounts.account(account))?.name,
   };
 }
 
@@ -149,6 +150,8 @@ type Served = WorkerConfig & {
   clients?: ClientMap;
   /** Absent on a worker with no accounts: nobody is a member of anything there. */
   roleIn?: (workspace: string, account: string) => Promise<Role | undefined>;
+  /** The name a person chose (FRU-249). Absent on a worker with no accounts. */
+  nameOf?: (account: string) => Promise<string | undefined>;
 };
 
 /** The client as it routes when its notes go to this place, and not to its first one. */
@@ -667,7 +670,9 @@ async function handleSession(
   if (refreshToken === undefined) return json(400, { error: 'invalid-body' }, headers);
 
   if (pathname === '/session/refresh') {
-    const refreshed = await refreshSession(store, refreshToken, config.identitySecret);
+    const refreshed = await refreshSession(store, refreshToken, config.identitySecret, Date.now(), (identity) =>
+      currentIdentity(config, identity),
+    );
     // The session of somebody who is no longer of the workspace ends here (FRU-149), whatever
     // removed them. The answer is the one of a session that ended: it says nothing of the workspace.
     if (refreshed.ok && !(await stillOfTheWorkspace(config, refreshed.identity))) {
@@ -823,6 +828,17 @@ async function handleScreenshot(
  * `true` on a worker with no accounts, and for a session that names no workspace: nobody is a member
  * of anything there, and the operator named the person with the pairing.
  */
+/**
+ * The identity of a session of a workspace with the name its person has now (FRU-249). A session of
+ * a worker with no accounts, or of a person with no name, keeps the one of its pairing.
+ */
+async function currentIdentity(config: Served, identity: SessionIdentity): Promise<SessionIdentity> {
+  if (config.nameOf === undefined || identity.workspace === undefined) return identity;
+  const name = await config.nameOf(identity.subject);
+
+  return name === undefined || name === '' ? identity : { ...identity, name };
+}
+
 async function stillOfTheWorkspace(config: Served, identity: SessionIdentity): Promise<boolean> {
   if (config.roleIn === undefined || identity.workspace === undefined) return true;
 

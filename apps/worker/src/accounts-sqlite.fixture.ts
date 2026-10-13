@@ -319,6 +319,10 @@ export function createSqliteAccountStore(path: string): AccountStore {
         .run(locale ?? null, account);
     },
 
+    async setName(account, name) {
+      connect(path).prepare('UPDATE accounts SET name = ? WHERE id = ?').run(name, account);
+    },
+
     async localeOf(email) {
       const address = normalizeEmail(email);
       if (address === undefined) return undefined;
