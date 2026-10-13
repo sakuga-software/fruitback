@@ -371,7 +371,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Disconnect {source}': 'Déconnecter {source}',
   'Its sites keep their notes in the workspace again. The issues already in Linear stay there.':
     'Ses sites gardent de nouveau leurs notes dans le workspace. Les issues déjà dans Linear y restent.',
-  'Cloud workspace · beta': 'Workspace Cloud · bêta',
+  'Cloud workspace': 'Workspace Cloud',
+  Notes: 'Notes',
+  'Help and docs': 'Aide et documentation',
 
   New: 'Nouveau',
   'To do': 'À faire',
