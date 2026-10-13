@@ -269,3 +269,61 @@ export const screenshots = pgTable(
     index('screenshots_by_workspace').on(table.workspace_id),
   ],
 );
+
+/**
+ * A note that the worker keeps itself (FRU-218): the notes of a site with no destination, on a worker
+ * whose store is `postgres`. Until then they were in a SQLite file, `sqlite.ts`, and the columns are
+ * the same.
+ *
+ * - `id` is the number of the note, `FB-<id>`. An identity that takes a value when one is given: the
+ *   copy of a SQLite file (FRU-220) keeps the numbers that people already quoted.
+ * - `client_id` is the id of the site. **It holds no foreign key**: what becomes of the notes of a
+ *   site that is removed is not decided (FRU-194), and a key would decide it.
+ * - `seed` is the note as JSON, in a `TEXT`: the reader parses a row and never trusts it, as for a
+ *   file. `JSONB` refuses the `\u0000` that a note may hold, and `TEXT` holds its six characters.
+ * - **It holds what a person wrote, in the clear**: a name, sometimes an address, the note.
+ *   `forget` of `seeds-postgres.ts` deletes them.
+ *
+ * **The page is under a hash index, not a B-tree.** An address has no bound but the 64 KiB of a
+ * request, and a B-tree refuses a row over 2704 bytes once compressed (« index row size 6432 exceeds
+ * btree version 4 maximum 2704 », measured on 17.11 with 6 400 characters that do not compress): the
+ * note of such a page would not be kept at all. A hash index takes any length, and the read is an
+ * equality. The site is then read in the rows of the page, which are few.
+ */
+export const seeds = pgTable(
+  'seeds',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedByDefaultAsIdentity({ name: 'seeds_id_seq' }),
+    client_id: text('client_id'),
+    page_url: text('page_url').notNull(),
+    stage: text('stage').notNull(),
+    seed: text('seed').notNull(),
+    created_at: instant('created_at').notNull(),
+    updated_at: instant('updated_at').notNull(),
+  },
+  (table) => [
+    index('seeds_by_page').using('hash', table.page_url),
+    // Every note of one site: what FRU-194 will delete or keep, and the read by site.
+    index('seeds_by_client').on(table.client_id),
+  ],
+);
+
+/** A reply of the team to a note the worker keeps (FRU-218). It goes with its note. */
+export const seed_comments = pgTable(
+  'seed_comments',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedByDefaultAsIdentity({ name: 'seed_comments_id_seq' }),
+    seed_id: bigint('seed_id', { mode: 'number' }).notNull(),
+    author: text('author'),
+    body: text('body').notNull(),
+    created_at: instant('created_at').notNull(),
+  },
+  (table) => [
+    foreignKey({
+      name: 'seed_comments_seed_id_fkey',
+      columns: [table.seed_id],
+      foreignColumns: [seeds.id],
+    }).onDelete('cascade'),
+    index('seed_comments_by_seed').on(table.seed_id, table.created_at),
+  ],
+);

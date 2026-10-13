@@ -56,6 +56,11 @@ tables() {
     docker exec "$1" psql -U fruitback -d fruitback -At -F ' ' -c \
       "SELECT '$table', count(*), coalesce(md5(string_agg(t::text, ',' ORDER BY t::text)), '-') FROM public.\"$table\" t"
   done
+  # And one line for each sequence: its name and the last number it gave (FRU-218). The number of a
+  # note is `FB-<n>`: a restore that left a sequence at its start would give a new note the number
+  # of one that exists.
+  docker exec "$1" psql -U fruitback -d fruitback -At -F ' ' -c \
+    "SELECT 'sequence:' || sequencename, coalesce(last_value, 0), '-' FROM pg_sequences WHERE schemaname = 'public' ORDER BY sequencename"
 }
 
 snapshot() {
@@ -80,7 +85,7 @@ docker exec "$P-worker" node server.mjs pair --subject drill >/dev/null
 docker exec -i "$P-source" psql -U fruitback -d fruitback -q -v ON_ERROR_STOP=1 <"$HERE/drill-seed.sql"
 tables "$P-source" >"$WORK/source.txt"
 EMPTY=$(awk '$2 == 0 { printf "%s ", $1 }' "$WORK/source.txt")
-[ -z "$EMPTY" ] || fail "no row in: $EMPTY. A table with no row proves nothing: add its rows to drill-seed.sql."
+[ -z "$EMPTY" ] || fail "no row in: $EMPTY. A table with no row, or a sequence that gave no number, proves nothing: add its rows to drill-seed.sql."
 
 echo "restore-drill: 2. the snapshot, as the host takes it"
 snapshot
