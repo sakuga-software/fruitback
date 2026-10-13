@@ -435,6 +435,11 @@ A claim answered by the loop of the popup used to be claimed again by the drawin
 request was settled and forgotten by then, so the second claim found nothing, and « It was refused
 in the console. » was never shown: the drawing now takes what the loop learned.
 
+The popup and the background can claim at the same instant, and the worker gives the session once:
+the context answered second is told the request is spent while the first still writes the session.
+That context looks for the session four times, half a second apart, before it says « expired »
+(raised in review); a refusal is never a spent request, so it is said at once.
+
 The polling is the worker's pace (`interval`, 5 s, believed between 2 and 60), and a `429`
 `slow-down` reads as « still waiting ». Only `410 connect-refused` reads as a refusal; any other
 `410`, a `400` and a `404` end the request as expired. An outage keeps it.

@@ -47,6 +47,8 @@ export type ConnectSeams = {
   /** « Chrome on macOS »: what the console shows of the browser that asks (Q7). */
   browser: string;
   now?: () => number;
+  /** Waits, for `pollConnect` to give the other context time to store its session. */
+  wait?: (ms: number) => Promise<void>;
 };
 
 export type StartFailure = 'unavailable' | 'insecure-endpoint' | 'untrusted-console';
@@ -60,6 +62,10 @@ export type StartResult = { ok: true; pending: PendingConnect } | { ok: false; r
  * time, and the request is still kept.
  */
 export type ConnectState = 'none' | 'waiting' | 'signed-in' | 'refused' | 'expired' | 'unavailable';
+
+/** How many times, and how far apart, a spent request looks for the session the other context stores. */
+const SPENT_LOOKS = 4;
+const SPENT_LOOK_MS = 500;
 
 /** Longer than this is not believed: a worker that says a day keeps a secret a day. */
 const MAX_LIFETIME_MS = 30 * 60 * 1000;
@@ -150,12 +156,20 @@ export async function pollConnect(seams: ConnectSeams): Promise<ConnectState> {
   if (result.reason === 'waiting') return 'waiting';
   if (result.reason === 'unavailable') return 'unavailable';
 
-  // Refused, expired or spent. Spent by the other context is a sign-in: its session is there now.
+  // Refused, expired or spent. Spent by the other context is a sign-in: its session is there now,
+  // or will be in a moment. The other context was answered first and stores the session in three
+  // writes, so a claim answered just after can find nothing yet: it looks again before it says
+  // « expired ». A refusal is never a spent request, so it is said at once.
   await forgetIf(seams.pending, pending);
-  const held = (await seams.sessions.list())[pending.endpoint];
-  if (held !== undefined && runOf(held) !== pending.before) return 'signed-in';
+  if (result.reason === 'refused') return 'refused';
+  const wait = seams.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  for (let look = 0; look < SPENT_LOOKS; look += 1) {
+    if (look > 0) await wait(SPENT_LOOK_MS);
+    const held = (await seams.sessions.list())[pending.endpoint];
+    if (held !== undefined && runOf(held) !== pending.before) return 'signed-in';
+  }
 
-  return result.reason === 'refused' ? 'refused' : 'expired';
+  return 'expired';
 }
 
 /** « Start again »: the request is forgotten here. The worker lets it expire. */

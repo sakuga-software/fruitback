@@ -52,11 +52,16 @@ function seams({
 } = {}) {
   const posted: { url: string; body: Record<string, unknown> }[] = [];
   const claimed: { endpoint: string; claim: string }[] = [];
-  const state = { held, now };
+  const waited: number[] = [];
+  const state: { held: Record<string, StoredSession>; now: number; onWait?: () => void } = { held, now };
   const connect: ConnectSeams = {
     pending,
     browser: 'Chrome on macOS',
     now: () => state.now,
+    wait: async (ms) => {
+      waited.push(ms);
+      state.onWait?.();
+    },
     post: async (url, body) => {
       posted.push({ url, body });
       if (answer instanceof Error) throw answer;
@@ -75,7 +80,7 @@ function seams({
     },
   };
 
-  return { connect, posted, claimed, pending, state };
+  return { connect, posted, claimed, pending, state, waited };
 }
 
 const session = (epoch: string): StoredSession => ({
@@ -357,13 +362,38 @@ describe('claiming a request', () => {
   });
 
   it('does not read a session that was there before the request as its sign-in: the control', async () => {
-    const { connect } = seams({
+    const { connect, waited } = seams({
       pending: pendingArea({ ...waiting(), before: 'epoch-1' }),
       claims: [{ ok: false, reason: 'expired' }],
       held: { [ENDPOINT]: session('epoch-1') },
     });
 
     assert.equal(await pollConnect(connect), 'expired');
+    // It looked four times, half a second apart, before it said so.
+    assert.deepEqual(waited, [500, 500, 500]);
+  });
+
+  it('waits for the session the other context is still storing, rather than saying expired', async () => {
+    // Raised in review: the other context was answered first and writes the session in three steps,
+    // so this claim, answered just after, can find nothing yet.
+    const { connect, state } = seams({
+      pending: pendingArea(waiting()),
+      claims: [{ ok: false, reason: 'expired' }],
+    });
+    let looks = 0;
+    state.onWait = () => {
+      looks += 1;
+      if (looks === 2) state.held = { [ENDPOINT]: session('epoch-2') };
+    };
+
+    assert.equal(await pollConnect(connect), 'signed-in');
+  });
+
+  it('says a refusal at once: a refused request was never spent', async () => {
+    const { connect, waited } = seams({ pending: pendingArea(waiting()), claims: [{ ok: false, reason: 'refused' }] });
+
+    assert.equal(await pollConnect(connect), 'refused');
+    assert.deepEqual(waited, []);
   });
 
   it('leaves alone a request that took the place of the one it claimed', async () => {
