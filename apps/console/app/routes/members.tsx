@@ -83,8 +83,8 @@ function whileRead<T>(current: Listed<T>): Listed<T> {
  * their own row: the worker refuses them the list (FRU-149).
  *
  * The last column is « Last seen » for an owner or an admin, who alone read it (FRU-249), and the
- * day somebody joined for the others. It is read with the members, so the table is drawn once with
- * it: a column that filled in after the rows would widen and move « Remove » under a press.
+ * day somebody joined for the others. It is read beside the members, and the table does not wait
+ * for it: its place in a row is kept, so a day that arrives moves nothing under a press.
  *
  * Not here: the one site of a guest (Q3, after the rest).
  */
@@ -95,9 +95,11 @@ export default function Members() {
   const reads = workspace.role !== 'guest';
   const [mailed, setMailed] = useState(false);
   const [members, setMembers] = useState<Listed<Member>>('loading');
-  // The day each account was last seen, by its id. `undefined`: not read, or refused; the column is
-  // then the day somebody joined.
-  const [seen, setSeen] = useState<Readonly<Record<string, string>> | undefined>();
+  // The day each account was last seen, by its id. `asking`: on its way. `undefined`: not for this
+  // role, or refused; the column is then the day somebody joined.
+  const [seen, setSeen] = useState<Readonly<Record<string, string>> | 'asking' | undefined>(
+    manages ? 'asking' : undefined,
+  );
   const [invitations, setInvitations] = useState<Listed<Invitation>>('loading');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<InvitedRole>('member');
@@ -115,13 +117,14 @@ export default function Members() {
     // table away for the time of the read: what is under it went up, then down again, and an
     // action of a row was not there to press. Only a list that is not shown says that it is read.
     setMembers(whileRead);
-    const [listed, days] = await Promise.all([
-      call<{ members: Member[] }>('GET', `${base}/list-members?${query}`),
-      manages
-        ? call<{ seen: Record<string, string> }>('GET', `/console/workspaces/${workspace.id}/members/seen`)
-        : undefined,
-    ]);
-    setSeen(days?.ok && typeof days.data?.seen === 'object' ? days.data.seen : undefined);
+    // The days come on their own: the table does not wait for them. Their place in a row is kept
+    // (`min-w` of the cell), so a day that arrives moves nothing of the row.
+    if (manages) {
+      void call<{ seen: Record<string, string> }>('GET', `/console/workspaces/${workspace.id}/members/seen`).then(
+        (days) => setSeen(days.ok && typeof days.data?.seen === 'object' ? days.data.seen : undefined),
+      );
+    }
+    const listed = await call<{ members: Member[] }>('GET', `${base}/list-members?${query}`);
     setMembers(listedOf(listed, (data) => data.members));
     if (!manages) return;
     setInvitations(whileRead);
@@ -298,8 +301,12 @@ export default function Members() {
           <tbody>
             {people.map((member) => {
               // « Last seen » for who reads it, else the day somebody joined.
-              const lastOf = (one: Member) =>
-                seen === undefined ? (dayOf(one.createdAt, true) ?? '') : seenOn(seen[one.userId]);
+              const lastOf = (one: Member) => {
+                if (seen === 'asking') return '';
+                if (seen === undefined) return dayOf(one.createdAt, true) ?? '';
+
+                return seenOn(seen[one.userId]);
+              };
               const name = nameOf(member);
               const removes = manages && member.userId !== me.account.id;
 
@@ -460,7 +467,8 @@ function Row({ initial, pending = false, name, detail, role, when, until, onRese
     when === undefined ? null : (
       <td data-align="end" className="whitespace-nowrap text-muted tabular-nums">
         <span ref={actions} className="inline-flex items-center gap-[16px]">
-          <span>
+          {/* As wide as « Not seen yet » at the least: a day that arrives after the row moves nothing. */}
+          <span className="min-w-[96px]">
             <span className="block">{when}</span>
             {until === undefined ? null : <span className="block text-hint leading-[inherit]">{until}</span>}
           </span>

@@ -59,6 +59,8 @@ const PAUL = {
 
 type Sent = { call: string; body: Record<string, unknown> };
 type Worker = {
+  /** Releases a held `…/members/seen`. */
+  release: () => void;
   /** What the console sent that changes something. */
   sent: Sent[];
   /** What the console read. */
@@ -81,11 +83,22 @@ type World = {
   invitations?: readonly unknown[];
   /** The answer of `…/members/seen`: the day of each account, refused, or held. Absent: no route. */
   seen?: Record<string, string> | 'refused' | 'waits';
+  /** The days that a held answer gives when it is released. */
+  released?: Record<string, string>;
 };
 
 /** A workspace with the people above, for a role. The stub keeps what the console sent. */
 async function workerWith(page: Page, world: World = {}): Promise<Worker> {
-  const worker: Worker = { sent: [], read: [], members: 'list', mails: true, held: false, slow: false };
+  let release: () => void = () => {};
+  const worker: Worker = {
+    release: () => release(),
+    sent: [],
+    read: [],
+    members: 'list',
+    mails: true,
+    held: false,
+    slow: false,
+  };
   const members = [...(world.members ?? MEMBERS)];
   const invitations = [...(world.invitations ?? [PAUL])] as (typeof PAUL)[];
   const answer = (pathname: string, route: Route) => {
@@ -103,7 +116,11 @@ async function workerWith(page: Page, world: World = {}): Promise<Worker> {
     }
     if (pathname === '/console/workspaces/w1/members/seen' && world.seen !== undefined) {
       worker.read.push('seen');
-      if (world.seen === 'waits') return new Promise<void>(() => {});
+      if (world.seen === 'waits') {
+        return new Promise<void>((resolve) => {
+          release = () => void json({ seen: world.released ?? {} }).then(resolve);
+        });
+      }
       if (world.seen === 'refused') return json({ error: 'forbidden' }, 403);
 
       return json({ seen: world.seen });
@@ -888,14 +905,25 @@ test('an owner reads « Last seen »: a day, never an hour, and « Not seen yet 
   expect(worker.read).toContain('seen');
 });
 
-test('the table comes once, with « Last seen »: nothing of a row moves when the day arrives', async ({ page }) => {
+test('the table does not wait for « Last seen », and nothing of a row moves when the days arrive', async ({ page }) => {
   await page.clock.setFixedTime(NOON_UTC);
-  await workerWith(page, { seen: 'waits' });
+  const worker = await workerWith(page, { seen: 'waits', released: SEEN });
   await open(page);
-  // The members are read, the days are not: the table waits for both.
-  await expect(page.locator('main').getByText('Loading…')).toBeVisible();
-  await page.waitForTimeout(300);
-  await expect(page.getByRole('region', { name: 'Members' })).toHaveCount(0);
+  const table = page.getByRole('region', { name: 'Members' });
+  // The members are there while the days are on their way.
+  await expect(table.locator('tbody tr')).toHaveCount(5);
+  await expect(table.locator('thead th').last()).toHaveText('Last seen');
+  const remove = table.locator('tbody tr').filter({ hasText: 'nora@acme.dev' }).getByRole('button', { name: 'Remove' });
+  const cancel = table
+    .locator('tbody tr')
+    .filter({ hasText: 'paul@client.fr' })
+    .getByRole('button', { name: 'Cancel' });
+  const before = [await box(remove), await box(cancel)];
+
+  worker.release();
+  await expect(table.locator('tbody tr').filter({ hasText: 'nora@acme.dev' })).toContainText('3 days ago');
+  await expect(table.locator('tbody tr').filter({ hasText: 'ines@client.fr' })).toContainText('Not seen yet');
+  expect([await box(remove), await box(cancel)]).toEqual(before);
 });
 
 test('a member reads the day somebody joined, and does not ask « Last seen »', async ({ page }) => {
