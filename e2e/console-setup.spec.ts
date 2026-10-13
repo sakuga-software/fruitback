@@ -239,7 +239,7 @@ type Stub = {
   as: 'nobody' | 'named' | 'sited';
   role?: 'owner' | 'member';
   /** What the worker answers when a workspace is made or a site is added. */
-  refuses?: { workspace?: boolean | 'invalid-name'; site?: number; sites?: boolean };
+  refuses?: { workspace?: boolean | 'invalid-name'; site?: number; sites?: boolean; invitations?: 503 | 404 };
   locale?: 'en' | 'fr';
 };
 
@@ -270,7 +270,11 @@ async function stubWorker(page: Page, stub: Stub): Promise<string[]> {
       return json({ account, workspaces: made && stub.refuses?.workspace === undefined ? [workspace] : [] });
     }
     if (pathname === '/console/auth/email') return json({ sent: true });
-    if (pathname.endsWith('/list-user-invitations')) return json([]);
+    if (pathname.endsWith('/list-user-invitations')) {
+      const refused = stub.refuses?.invitations;
+
+      return refused === undefined ? json([]) : json({ error: 'unavailable' }, refused);
+    }
     if (pathname === '/console/workspaces') {
       if (stub.refuses?.workspace === 'invalid-name') return json({ error: 'invalid-name' }, 400);
       if (stub.refuses?.workspace === true) return json({ error: 'unavailable' }, 503);
@@ -542,6 +546,36 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     await expect(page.getByRole('alert')).toHaveText('Paste the full address of the site, starting with https://.');
     await expect(address).toHaveValue('pas une adresse');
     expect(asked.filter((each) => each.startsWith('POST')).length).toBe(before);
+  });
+
+  test('no workspace is made while the invitations cannot be read, and one is once they can', async ({ page }) => {
+    let refused: 503 | undefined = 503;
+    const asked = await stubWorker(page, {
+      as: 'named',
+      refuses: {
+        workspace: true,
+        get invitations() {
+          return refused;
+        },
+      },
+    });
+    await page.goto(`${CONSOLE}/setup`);
+
+    await expect(page.getByRole('alert')).toHaveText('Fruitback did not answer. Try again.');
+    await expect(page.getByRole('textbox', { name: 'Workspace name' })).toHaveCount(0);
+    expect(asked.filter((each) => each === 'POST /console/workspaces')).toEqual([]);
+
+    // The control: the same person, once the worker answers, gets a workspace made.
+    refused = undefined;
+    await page.getByRole('button', { name: 'Try again' }).click();
+    await expect.poll(() => asked.filter((each) => each === 'POST /console/workspaces').length).toBe(1);
+  });
+
+  test('a worker with no invitations at all (404) does not stop the setup', async ({ page }) => {
+    const asked = await stubWorker(page, { as: 'named', refuses: { workspace: true, invitations: 404 } });
+    await page.goto(`${CONSOLE}/setup`);
+
+    await expect.poll(() => asked.filter((each) => each === 'POST /console/workspaces').length).toBe(1);
   });
 
   test('the form of a workspace that was not made opens on what the worker said of the try', async ({ page }) => {

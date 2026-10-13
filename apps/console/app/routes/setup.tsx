@@ -76,6 +76,11 @@ type Stage =
   /** An invitation waits for this person: they came to join a workspace, not to make one. */
   | { kind: 'invited' }
   /**
+   * Signed in, with no workspace, and the invitations could not be read: none is made until they
+   * are, as this person may have come to join one.
+   */
+  | { kind: 'unchecked'; account: Account }
+  /**
    * A member or a guest of a workspace with no site: only an owner or an admin adds one. The Sites
    * screen says so, as the front door sends them there too.
    */
@@ -152,7 +157,9 @@ async function resolveStage(): Promise<Stage> {
   let workspace = me.data.workspaces[0];
   if (workspace === undefined) {
     // Somebody who was invited joins a workspace: none is made for them behind their back.
+    // A worker with no invitations at all answers 404: nobody can have been invited there.
     const invitations = await myInvitations();
+    if (!invitations.ok && invitations.status !== 404) return { kind: 'unchecked', account };
     if (invitations.ok && invitations.data.length > 0) return { kind: 'invited' };
     const made = await firstWorkspace(account);
     if (made.workspace === undefined) return { kind: 'unnamed', account, problem: made.problem };
@@ -250,6 +257,16 @@ export default function Setup() {
                 // Signed in from another tab: the same resolution as a visit.
                 onSignedIn={() => void resolveOnce().then(setStage)}
               />
+            ) : null}
+            {stage.kind === 'unchecked' ? (
+              <div className="mt-3 flex flex-col items-start gap-3">
+                <p role="alert" className="text-body text-muted">
+                  {t('Fruitback did not answer. Try again.')}
+                </p>
+                <Button tone="outline" onClick={() => void resolveOnce().then(setStage)}>
+                  {t('Try again')}
+                </Button>
+              </div>
             ) : null}
             {stage.kind === 'unnamed' ? (
               <Unnamed

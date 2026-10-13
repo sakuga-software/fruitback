@@ -100,7 +100,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   one: that would be a rule of the worker (one first workspace per account), not of the console.
   `e2e/console-setup.spec.ts` holds the first request open and lets a second tab arrive: without the
   lock the worker is asked twice (planted). **Somebody who was invited gets no workspace made behind
-  their back**: with an invitation that waits, the setup sends to `/invitations`.
+  their back**: with an invitation that waits, the setup sends to `/invitations`, and while the
+  invitations cannot be read it makes nothing and offers « Try again » (a worker that has no
+  invitations at all answers 404, and the setup goes on).
 - **« Change » never removes a site that may hold notes.** The worker has no route that changes a
   site, and a site that is removed takes its notes with it. « Change » adds the site again with the
   new values; it removes the one it replaces only when that one was added in this visit of the
