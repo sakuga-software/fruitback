@@ -189,6 +189,24 @@ function useMore(row: { current: HTMLElement | null }): { start: boolean; end: b
   return more;
 }
 
+/** The width of the fade at an edge of the row, and a little more: what a section must be clear of. */
+const CLEAR = 44;
+
+/**
+ * Scrolls the row of sections so that one of them is whole, and clear of the fade of an edge.
+ *
+ * WARNING: not `scrollIntoView`. Measured in Chromium: it makes the section the place the next Tab
+ * starts from, so the first Tab of a page skipped the workspace and the section on screen.
+ */
+function reveal(link: HTMLElement): void {
+  const row = link.parentElement;
+  if (row === null || row.scrollWidth <= row.clientWidth) return;
+  const frame = row.getBoundingClientRect();
+  const box = link.getBoundingClientRect();
+  if (box.left < frame.left + CLEAR) row.scrollLeft -= frame.left + CLEAR - box.left;
+  else if (box.right > frame.right - CLEAR) row.scrollLeft += box.right - (frame.right - CLEAR);
+}
+
 /**
  * The sections of the rail. At 900 px and under they are one row, which scrolls in the rail when it
  * is wider than the screen: the page never scrolls sideways (the mockup does, at 390 px). An edge of
@@ -203,7 +221,8 @@ function Sections({ workspace, sections, current }: Pick<RailProps, 'sections' |
   const row = useRef<HTMLElement>(null);
   const more = useMore(row);
   useEffect(() => {
-    row.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    const link = row.current?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (link !== null && link !== undefined) reveal(link);
   }, [current]);
 
   return (
@@ -211,10 +230,10 @@ function Sections({ workspace, sections, current }: Pick<RailProps, 'sections' |
       ref={row}
       aria-label={t('Workspace')}
       // Measured in Chromium: focus alone does not scroll the row to a section that is half hidden.
-      onFocus={(event) => event.target.scrollIntoView({ block: 'nearest', inline: 'nearest' })}
+      onFocus={(event) => reveal(event.target)}
       data-more-start={more.start}
       data-more-end={more.end}
-      className="flex min-w-0 flex-col gap-[2px] [--fade-end:0px] [--fade-start:0px] [scrollbar-width:none] max-[900px]:-m-[4px] max-[900px]:flex-row max-[900px]:scroll-px-[44px] max-[900px]:overflow-x-auto max-[900px]:p-[4px] max-[900px]:[mask-image:linear-gradient(to_right,transparent,black_var(--fade-start),black_calc(100%_-_var(--fade-end)),transparent)] max-[900px]:data-[more-end=true]:[--fade-end:40px] max-[900px]:data-[more-start=true]:[--fade-start:40px]"
+      className="flex min-w-0 flex-col gap-[2px] [--fade-end:0px] [--fade-start:0px] [scrollbar-width:none] max-[900px]:-m-[4px] max-[900px]:flex-row max-[900px]:overflow-x-auto max-[900px]:p-[4px] max-[900px]:[mask-image:linear-gradient(to_right,transparent,black_var(--fade-start),black_calc(100%_-_var(--fade-end)),transparent)] max-[900px]:data-[more-end=true]:[--fade-end:40px] max-[900px]:data-[more-start=true]:[--fade-start:40px]"
     >
       {sections.map((section) => {
         const active = section.path === current;
