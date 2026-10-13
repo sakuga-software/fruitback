@@ -10,7 +10,7 @@ import { injectIntoOpenTabs } from '../../src/tab-injection.ts';
 import { browserTabScripting } from '../../src/tab-scripting-browser.ts';
 import { createBrowserSessions } from '../../src/session-browser.ts';
 import { createBrowserAccessReturn } from '../../src/access-return-browser.ts';
-import { describeIdentity } from '../../src/session.ts';
+import { type StoredSession, describeIdentity } from '../../src/session.ts';
 import { showProblem } from '../../src/problem-view.ts';
 import { PAIRING_CODE_REQUIRED, PAIRING_NEEDS_HTTPS, PAIRING_PROBLEM } from '../../src/remedy.ts';
 import { type PairLink, parsePairLink } from '../../src/pair-link.ts';
@@ -19,13 +19,35 @@ import { type CloudSeams, type Offer, cloudEntry, offerFor } from '../../src/clo
 import { language, msg, setLanguage, t } from '../../src/i18n.ts';
 import { storedLanguage } from '../../src/language.ts';
 import { rememberLanguage } from '../../src/language-sync.ts';
+import {
+  type ConnectState,
+  type PendingConnect,
+  type StartFailure,
+  forgetConnect,
+  pollConnect,
+  startConnect,
+} from '../../src/connect.ts';
+import { consoleOf, createBrowserConnect, rememberConsole } from '../../src/connect-browser.ts';
+import { type AccountState, type PopupState, cloudEndpoint, decide } from '../../src/popup-state.ts';
+import {
+  type Account,
+  connecting,
+  hostOf,
+  loading,
+  notAWebPage,
+  shell,
+  signInProblem,
+  signedOut,
+} from '../../src/popup-view.ts';
 
 /**
- * The switch for the tab you are looking at, and the two fields that make it work (FRU-41).
+ * The switch for the tab you are looking at (FRU-41), in the shell of the mock-up of 2026-10-13
+ * (FRU-251): the logo, the account and the gear above; « Sign in to Fruitback » for a browser that
+ * holds nothing.
  *
- * Deliberately not the editor for every site: that is the options page (FRU-43). This is the one
- * question a reviewer asks from the toolbar: is Fruitback on here, which rule says so, and against
- * which worker.
+ * Deliberately not the editor for every site: that is the options page (FRU-43), behind the gear.
+ * Which screen is drawn is decided in `popup-state.ts`, and the screens of the sign-in are drawn in
+ * `popup-view.ts`, both under `node --test`. What is here gathers the facts and wires the clicks.
  *
  * There is no framework in this popup on purpose. It is four elements, it opens and closes in under
  * a second, and a bundle for it would be larger than everything it renders.
@@ -48,13 +70,39 @@ const pending = createBrowserPending(writeSite);
 
 const app = document.querySelector('#app');
 
+/**
+ * The tab the popup was opened on, read once. Every screen is about that page, including the ones
+ * drawn after « Sign in to Fruitback » opened the console in another tab: asked again, the active
+ * tab would be the console's.
+ */
+const tabUnderThePopup = currentTab();
+
+/**
+ * The Fruitback « Sign in to Fruitback » signs in to, fixed at build (`WXT_FRUITBACK_CLOUD`). None in
+ * a build for a self-hosted instance: the popup then sends to the settings alone.
+ */
+const CLOUD = cloudEndpoint(import.meta.env.WXT_FRUITBACK_CLOUD);
+
+/** The sign-in that waits for the console, kept in `storage.session` (see `connect-browser.ts`). */
+const connect = createBrowserConnect(sessions);
+
+/** The next claim while the popup shows the word. One at a time: every draw clears it. */
+let nextClaim: ReturnType<typeof setTimeout> | undefined;
+
+const openSettings = (): void => void browser.runtime.openOptionsPage();
+
 /** The language of the account when the extension knows it, the browser's own otherwise. */
 const spoken = storedLanguage(browser.storage.local).then((kept) => {
   setLanguage(kept ?? navigator.language);
   document.documentElement.lang = language();
 });
 
-void spoken.then(() => render());
+void spoken.then(() => {
+  // Before anything is read: the popup never opens on an empty window.
+  app?.replaceChildren(loading(document, { onSettings: openSettings }));
+
+  return render();
+});
 // Not awaited, and no draw after it: a draw would lose what somebody types in the form. The next
 // popup reads what this one learned.
 void rememberLanguage(browser.storage.local, cloudSeams()).catch(() => undefined);
@@ -67,64 +115,244 @@ void rememberLanguage(browser.storage.local, cloudSeams()).catch(() => undefined
  * origin a reviewer already uses. The options page edits every entry; this is the path from the
  * toolbar.
  */
-async function render(editing = false): Promise<void> {
+/**
+ * @param claimedNow What a claim just answered, when the caller made it: claiming again would find
+ * the request already settled and forgotten, and the screen that says why would never be drawn.
+ */
+async function render(editing = false, claimedNow?: ConnectState): Promise<void> {
   if (app === null) return;
+  clearTimeout(nextClaim);
 
-  const tab = await currentTab();
+  const tab = await tabUnderThePopup;
   const origin = originOf(tab?.url);
-
-  if (origin === undefined) {
-    // A `chrome://` page, the store, a PDF viewer. Nothing is wrong, and saying so is better than an
-    // enabled-looking switch that silently does nothing.
-    app.textContent = t('Fruitback works on http and https pages.');
-
-    return;
-  }
-
-  // A pairing link is about a worker, not about a site to review, so it gets a screen of its own:
-  // the form to switch this origin on would be the wrong question on a worker's own page.
   const link = parsePairLink(tab?.url);
-  if (link !== undefined && !editing) {
-    app.replaceChildren(element('h1', 'Fruitback'), element('p', origin, 'origin'), ...(await linked(link)));
-    // An address of this shape is not proof of a worker: a page of a site to review can end in
-    // `/pair` with a fragment that looks like a code. The way to the site's own screen stays open.
-    const site = element('button', t(NOT_A_LINK), 'secondary');
-    site.addEventListener('click', () => void render(true));
-    app.append(actions(site, optionsButton()));
 
-    return;
-  }
+  // Claimed once now: the console may have approved while the popup was closed.
+  const claimed = claimedNow ?? (await pollConnect(connect).catch(() => 'unavailable' as const));
+  const pendingNow = await connect.pending.read().catch(() => undefined);
+  // A request that another context settled in the meantime is not waiting any more.
+  const stillWaiting = claimed === 'waiting' || claimed === 'unavailable';
 
   // The prompt closed the popup before it could store the site: finish it now if the background did not.
   await pending.settle().catch(() => undefined);
 
-  const found = await findSite(origin);
-  const open = found === undefined || editing;
-  // What somebody typed before a prompt they refused, or that closed this popup (FRU-117).
-  const draft = found === undefined ? await pending.draft(origin).catch(() => undefined) : undefined;
+  const held = await sessions.list();
+  const accountState = await accountOf(held);
+  const account = await accountShown(held);
 
+  const found = origin === undefined ? undefined : await findSite(origin);
   // FRU-101: a site of the reviewer's workspace needs no form. One click, and nothing typed.
-  const offer = found === undefined && !editing ? await offerFor(origin, cloudSeams()) : undefined;
-  if (offer !== undefined) {
-    app.replaceChildren(element('h1', 'Fruitback'), element('p', origin, 'origin'), oneClick(offer), optionsButton());
+  const offer =
+    origin !== undefined && found === undefined && !editing && !(link !== undefined && !editing)
+      ? await offerFor(origin, cloudSeams())
+      : undefined;
 
-    return;
-  }
+  const state = decide({
+    ...(origin === undefined ? {} : { origin }),
+    pairLink: link !== undefined,
+    editing,
+    canSignIn: CLOUD !== undefined,
+    connect: stillWaiting && pendingNow === undefined ? 'none' : claimed,
+    rule: found !== undefined,
+    offer: offer !== undefined,
+    account: accountState,
+    sessions: Object.keys(held).length,
+  });
 
   app.replaceChildren(
-    element('h1', 'Fruitback'),
-    element('p', origin, 'origin'),
-    // FRU-43: why the widget does or does not appear here must be answerable from the toolbar.
-    element('p', found === undefined ? t(NO_RULE) : t('Rule: {pattern}', { pattern: found.pattern }), 'rule'),
-    open || found === undefined ? form(origin, found, draft) : status(found),
+    await draw(state, { origin: origin ?? '', tab, link, found, offer, account, pending: pendingNow }),
   );
+  if (state.kind === 'connecting' && pendingNow !== undefined) waitForTheConsole(pendingNow, state.unanswered);
+}
 
-  // Pairing is against the **worker**, not the site, so there is nothing to ask for until one is
-  // named. A reviewer holds one session per worker however many of its sites they have turned on.
-  if (found !== undefined && !open) app.append(...(await session(found.site)));
-  if (found !== undefined && !open && tab?.url !== undefined) app.append(readability(found.site, tab.url));
+type Found = {
+  origin: string;
+  tab: { url?: string } | undefined;
+  link: PairLink | undefined;
+  found: ResolvedSite | undefined;
+  offer: Offer | undefined;
+  account: Account | undefined;
+  pending: PendingConnect | undefined;
+};
 
-  app.append(optionsButton());
+async function draw(state: PopupState, facts: Found): Promise<HTMLElement> {
+  const { origin, account } = facts;
+  const frame = (...body: Node[]): HTMLElement =>
+    shell(document, { onSettings: openSettings, ...(account === undefined ? {} : { account }) }, ...body);
+
+  switch (state.kind) {
+    case 'not-web':
+      // A `chrome://` page, the store, a PDF viewer. Nothing is wrong, and saying so is better than an
+      // enabled-looking switch that silently does nothing.
+      return notAWebPage(document, { onSettings: openSettings, ...(account === undefined ? {} : { account }) });
+
+    case 'pair-link': {
+      // A pairing link is about a worker, not about a site to review, so it gets a screen of its own:
+      // the form to switch this origin on would be the wrong question on a worker's own page.
+      // An address of this shape is not proof of a worker: a page of a site to review can end in
+      // `/pair` with a fragment that looks like a code. The way to the site's own screen stays open.
+      const site = element('button', t(NOT_A_LINK), 'secondary');
+      site.addEventListener('click', () => void render(true));
+
+      return frame(title(origin), ...(await linked(facts.link as PairLink)), actions(site));
+    }
+
+    case 'connecting':
+      return connecting(document, {
+        origin,
+        word: facts.pending?.word ?? '',
+        unanswered: state.unanswered,
+        onStartAgain: () => signIn(origin, true),
+        onSettings: openSettings,
+      });
+
+    case 'sign-in-problem':
+      return signInProblem(document, {
+        origin,
+        problem: state.problem,
+        onSignIn: () => signIn(origin, true),
+        onSettings: openSettings,
+      });
+
+    case 'unreachable':
+      return signInProblem(document, {
+        origin,
+        problem: 'unavailable',
+        onSignIn: () => void render(),
+        onSettings: openSettings,
+      });
+
+    case 'signed-out':
+      return signedOut(document, {
+        origin,
+        canSignIn: state.canSignIn,
+        ended: state.ended,
+        onSignIn: () => signIn(origin, false),
+        onSettings: openSettings,
+      });
+
+    case 'offer':
+      return frame(title(origin), oneClick(facts.offer as Offer));
+
+    case 'rule':
+    case 'form': {
+      const found = facts.found;
+      const open = state.kind === 'form';
+      // What somebody typed before a prompt they refused, or that closed this popup (FRU-117).
+      const draft = found === undefined ? await pending.draft(origin).catch(() => undefined) : undefined;
+      const body: Node[] = [
+        title(origin),
+        // FRU-43: why the widget does or does not appear here must be answerable from the toolbar.
+        element('p', found === undefined ? t(NO_RULE) : t('Rule: {pattern}', { pattern: found.pattern }), 'rule'),
+        open || found === undefined ? form(origin, found, draft) : status(found),
+      ];
+      // Pairing is against the **worker**, not the site, so there is nothing to ask for until one is
+      // named. A reviewer holds one session per worker however many of its sites they have turned on.
+      if (found !== undefined && !open) body.push(...(await session(found.site)));
+      if (found !== undefined && !open && facts.tab?.url !== undefined)
+        body.push(readability(found.site, facts.tab.url));
+
+      return frame(...body);
+    }
+  }
+}
+
+/** The title of a screen about a site: its host, as the mock-up writes it (06, 07, 08). */
+function title(origin: string): HTMLElement {
+  return element('h1', hostOf(origin));
+}
+
+/**
+ * The session of the account of this build's Fruitback, as the popup found it.
+ *
+ * Asked only when there is one: `ensureAccess` answers from the grant it holds while that is fresh,
+ * and refreshes it otherwise. A refusal forgets the session (`session.ts`), so `ended` is said once.
+ */
+async function accountOf(held: Record<string, StoredSession>): Promise<AccountState> {
+  if (CLOUD === undefined || held[CLOUD]?.account !== true) return 'none';
+  const access = await sessions.ensureAccess(CLOUD).catch(() => undefined);
+  if (access === undefined || (!access.ok && access.reason === 'unavailable')) return 'unreachable';
+  if (!access.ok) return access.reason === 'session-revoked-or-expired' ? 'ended' : 'none';
+
+  return 'ok';
+}
+
+/** The person in the head and the foot: the account of this build's Fruitback, when it is held. */
+async function accountShown(held: Record<string, StoredSession>): Promise<Account | undefined> {
+  const session = CLOUD === undefined ? undefined : held[CLOUD];
+  if (CLOUD === undefined || session?.account !== true) return undefined;
+  const consoleAt = await consoleOf(CLOUD).catch(() => undefined);
+
+  return {
+    name: describeIdentity(session.identity),
+    ...(session.identity.email === undefined ? {} : { email: session.identity.email }),
+    ...(consoleAt === undefined ? {} : { console: consoleAt }),
+  };
+}
+
+/**
+ * « Sign in to Fruitback » (FRU-251): the extension asks, the console approves.
+ *
+ * **The access to Fruitback is asked for first, and nothing is awaited before it**, for the reason
+ * `pairing` gives: a host permission may only be asked for while the click is handled. It is the
+ * optional access the manifest already declares for every origin, asked for this Fruitback only.
+ * Then the request, the screen with the word, and the tab of the console, last: opening a tab can
+ * close this popup, and the background keeps claiming (`background.ts`).
+ *
+ * `fresh`: « Start again », or a sign-in after one that did not finish. The request kept is forgotten
+ * rather than given back.
+ */
+function signIn(origin: string, fresh: boolean): void {
+  if (CLOUD === undefined || app === null) return;
+  const endpoint = CLOUD;
+  for (const button of app.querySelectorAll('button')) button.disabled = true;
+
+  void (async () => {
+    const granted = await grantWorkerOrigin(endpoint).catch(() => false);
+    if (!granted) {
+      app.replaceChildren(problemScreen(origin, 'blocked'));
+
+      return;
+    }
+    if (fresh) await forgetConnect(connect).catch(() => undefined);
+
+    const started = await startConnect(endpoint, connect).catch(() => ({ ok: false, reason: 'unavailable' }) as const);
+    if (!started.ok) {
+      app.replaceChildren(problemScreen(origin, PROBLEM_OF_START[started.reason]));
+
+      return;
+    }
+    await rememberConsole(endpoint, started.pending.consoleAt).catch(() => undefined);
+    await render();
+    await browser.tabs.create({ url: started.pending.approveAt });
+  })();
+}
+
+const PROBLEM_OF_START: Record<StartFailure, 'unavailable' | 'untrusted'> = {
+  unavailable: 'unavailable',
+  'insecure-endpoint': 'unavailable',
+  'untrusted-console': 'untrusted',
+};
+
+function problemScreen(origin: string, problem: 'unavailable' | 'untrusted' | 'blocked'): HTMLElement {
+  return signInProblem(document, { origin, problem, onSignIn: () => signIn(origin, true), onSettings: openSettings });
+}
+
+/**
+ * Claim again at the pace the worker asked, while the word is on the screen.
+ *
+ * The screen is drawn again only when the answer changes: the same screen drawn every few seconds
+ * would take the focus off « Start again » and read the status out again each time.
+ */
+function waitForTheConsole(waiting: PendingConnect, unanswered: boolean): void {
+  nextClaim = setTimeout(() => {
+    void pollConnect(connect)
+      .catch(() => 'unavailable' as const)
+      .then((now) => {
+        if (now === (unanswered ? 'unavailable' : 'waiting')) waitForTheConsole(waiting, unanswered);
+        else void render(false, now);
+      });
+  }, waiting.interval * 1000);
 }
 
 const NO_RULE = msg('No rule covers this origin, so Fruitback does nothing here.');
@@ -187,14 +415,6 @@ function readability(site: SiteConfig, pageUrl: string): HTMLElement {
   });
 
   return line;
-}
-
-/** Every entry, wildcards and the rules file included, on the options page (FRU-43). */
-function optionsButton(): HTMLElement {
-  const button = element('button', t('All sites and rules'), 'secondary');
-  button.addEventListener('click', () => void browser.runtime.openOptionsPage());
-
-  return button;
 }
 
 /**

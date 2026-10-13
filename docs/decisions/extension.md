@@ -388,6 +388,61 @@ access in this browser » with **Grant access** beside it.
 - **The pairing failures moved out of `popup/main.ts`**, into a module `node --test` can import. The
   guide's guard read them out of the popup source with a regular expression; it imports them now.
 
+## The shell of the popup, and « Sign in to Fruitback » (FRU-251)
+
+### The rules, in short
+
+- **Every screen of the popup is drawn in one shell**, the mock-up of 2026-10-13 (screens 05 to 08):
+  the logo, the person of the account and the gear (« Settings and every site », the options page)
+  above, a body, a foot. 360 px wide and 420 px tall at least, so the window does not jump between
+  screens. Which screen is drawn is decided in `popup-state.ts`, with nothing to await, and the
+  screens of the sign-in are drawn in `popup-view.ts`: both run under `node --test`, state by state.
+  `main.ts` gathers the facts and wires the clicks.
+- **The extension asks, the console approves** (Q8 of FRU-230, the routes of FRU-238).
+  `POST /session/connect` gives a public `request`, a `word` and a secret `claim`. The popup shows
+  the word and opens `verificationUri` in a tab; the person checks the word there and approves; the
+  popup, or the background on an alarm while it is closed, spends the claim on
+  `POST /session/connect/claim` and keeps the session as a pairing keeps it. The session is marked
+  as an account's (`StoredSession.account`), and every refresh keeps the mark.
+- **The claim lives in `storage.session`, and only there**: never in an address, a page or
+  `storage.local`. `e2e/popup-sign-in.spec.ts` reads every address, the page of the site and of the
+  console, and both areas, with the claim in `storage.session` while it waits as the control.
+- **The console the worker names is checked before a tab opens** (`approvalPage`): https (loopback
+  for the dev loop), the host of the worker or a host under the domain it is under (not under a
+  shared suffix such as `co.uk` or `workers.dev`), and the path `<console>/connect/<request>` with no
+  query and no fragment. Otherwise a hostile or wrong worker would open any page it likes.
+- **One request at a time**, given back while it lives, at most 30 minutes whatever the worker says.
+  « Start again » forgets it and asks for another one.
+- **The Fruitback to sign in to is fixed at build**: `WXT_FRUITBACK_CLOUD`, `https://api.fruitback.com`
+  when absent, none when empty (the popup then offers « Connect it in settings » alone). `pnpm e2e`
+  builds with the second worker of the suite.
+- **The click asks for the optional host access to that Fruitback first**, nothing awaited before it,
+  as a pairing does. No permission is added to the manifest.
+- **The popup reads the tab it was opened on once.** Asked again after the console tab opened, the
+  active tab is the console's.
+- **The pairing link and the « Paired as » row stay** for a self-hosted worker, inside the shell: they
+  are the only places where « worker » and « pair » remain.
+
+### The reasons, and what was measured
+
+The first run of the spec signed in and lost the session at once. `adopt` wrote the session, then
+its access token; the background read both the moment the session landed, found no token, refreshed
+and spent the refresh token the popup had just stored. A worker that knows the token rotates it, so
+the defect cost one useless refresh on every pairing; the worker of the spec did not know it and
+ended the session. The access token is now written first.
+
+A claim answered by the loop of the popup used to be claimed again by the drawing that followed. The
+request was settled and forgotten by then, so the second claim found nothing, and « It was refused
+in the console. » was never shown: the drawing now takes what the loop learned.
+
+The polling is the worker's pace (`interval`, 5 s, believed between 2 and 60), and a `429`
+`slow-down` reads as « still waiting ». Only `410 connect-refused` reads as a refusal; any other
+`410`, a `400` and a `404` end the request as expired. An outage keeps it.
+
+What is not done here: the account's own shape of `GET /session/sites` (several workspaces), its
+counts and the switch of screen 07 are FRU-254; adding a site from the popup is FRU-255. Until then a
+person signed in on a site of no rule gets the fields of before.
+
 ## A pairing code that arrives as a link (FRU-92)
 
 ### The rules, in short

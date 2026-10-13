@@ -170,7 +170,8 @@ export async function openPopup(extension: LoadedExtension, site: Page, origin =
   await expect.poll(() => (popup = extension.context.pages().find((page) => page.url() === url))).toBeDefined();
   if (popup === undefined) throw new Error('the popup did not open');
 
-  await expect(popup.getByText(origin, { exact: true })).toBeVisible();
+  // Every screen of a page names its host, as the mock-up writes it (FRU-251): `localhost:5177`.
+  await expect(popup.getByText(new URL(origin).host, { exact: true })).toBeVisible();
 
   return popup;
 }

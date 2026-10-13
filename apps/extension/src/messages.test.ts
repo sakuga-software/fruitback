@@ -28,10 +28,13 @@ function code(source: string): string {
 }
 
 const PAGES = ['../entrypoints/popup/main.ts', '../entrypoints/options/main.ts'] as const;
+/** The modules that draw a screen of the popup: their words go through `t` like a page's (FRU-251). */
+const VIEWS = ['./popup-view.ts'] as const;
 /** The modules whose constants are sentences a page shows through `showProblem` or `t`. */
 const CONSTANTS = ['./remedy.ts', './site-form.ts', './site-editor.ts', './read-probe.ts'] as const;
 
 const pages = new Map(PAGES.map((path) => [path, code(read(path))]));
+const views = new Map(VIEWS.map((path) => [path, code(read(path))]));
 
 const LITERAL = /'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)"|`((?:[^`\\]|\\.)*)`/g;
 const unescape = (text: string): string => text.replace(/\\(.)/g, '$1');
@@ -67,6 +70,7 @@ function modeLabels(source: string): string[] {
 
 const shown = new Set([
   ...[...pages.values()].flatMap((source) => [...translated(source), ...modeLabels(source)]),
+  ...[...views.values()].flatMap(translated),
   ...CONSTANTS.flatMap(constants),
 ]);
 
@@ -107,7 +111,7 @@ describe('a word on a page of the extension', () => {
 
   it('goes through the catalog', () => {
     const loose: string[] = [];
-    for (const [path, source] of pages) {
+    for (const [path, source] of [...pages, ...views]) {
       const body = source
         .split('\n')
         .filter((line) => !/^\s*import /.test(line) && !/^\} from '/.test(line))

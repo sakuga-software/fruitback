@@ -6,6 +6,32 @@
  */
 export const FRENCH: Readonly<Record<string, string>> = {
   // The popup.
+  // The shell and the sign-in (FRU-251).
+  'Signed in as {name}': 'Connecté en tant que {name}',
+  'Settings and every site': 'Réglages et tous les sites',
+  'Open the console': 'Ouvrir la console',
+  'Running your own Fruitback?': 'Vous hébergez votre propre Fruitback ?',
+  'Connect it in settings': 'Connectez-le dans les réglages',
+  'Sign in to see and leave notes here': 'Connectez-vous pour voir et laisser des notes ici',
+  'One account for the console and this extension. The sign-in opens in a tab, and this popup picks it up by itself.':
+    'Un seul compte pour la console et cette extension. La connexion s’ouvre dans un onglet, et ce popup la reprend tout seul.',
+  'Sign in to Fruitback': 'Se connecter à Fruitback',
+  'Check that the tab shows the same word': 'Vérifiez que l’onglet affiche le même mot',
+  'Waiting for you to connect in the tab…': 'En attente de votre connexion dans l’onglet…',
+  'Start again': 'Recommencer',
+  'The sign-in did not finish.': 'La connexion n’a pas abouti.',
+  'It was refused in the console.': 'Elle a été refusée dans la console.',
+  'The tab was not approved in time.': 'L’onglet n’a pas été approuvé à temps.',
+  'Fruitback did not answer.': 'Fruitback n’a pas répondu.',
+  'Check the connection, then try again.': 'Vérifiez la connexion, puis réessayez.',
+  'The sign-in did not start.': 'La connexion n’a pas commencé.',
+  'Fruitback named a console that is not its own.': 'Fruitback a indiqué une console qui n’est pas la sienne.',
+  'Loading…': 'Chargement…',
+  'Your sign-in ended': 'Votre connexion a pris fin',
+  'Sign in again to see and leave notes here.': 'Reconnectez-vous pour voir et laisser des notes ici.',
+  'Fruitback did not answer. The popup asks again.': 'Fruitback n’a pas répondu. Le popup redemande.',
+  'The browser did not give the extension access to Fruitback.':
+    'Le navigateur n’a pas donné à l’extension l’accès à Fruitback.',
   'Fruitback works on http and https pages.': 'Fruitback fonctionne sur les pages http et https.',
   'No rule covers this origin, so Fruitback does nothing here.':
     'Aucune règle ne couvre cette origine, donc Fruitback ne fait rien ici.',
@@ -15,7 +41,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Turn on Fruitback here': 'Activer Fruitback ici',
   'Set up by hand': 'Configurer à la main',
   'Which mode can read it': 'Quel mode peut les lire',
-  'All sites and rules': 'Tous les sites et les règles',
   'Pair with this worker': 'Appairer avec ce worker',
   'This page is a pairing link for {worker}.': 'Cette page est un lien d’appairage pour {worker}.',
   'This is a site to review': 'C’est un site à relire',

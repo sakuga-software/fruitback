@@ -5,16 +5,16 @@ import { WORKER_ORIGIN } from './pin.ts';
 import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
 
 /**
- * The layout of the popup in its five states (FRU-169): no rule, a pairing link, paired, a site of
+ * The layout of the popup in its five states (FRU-169): signed out, a pairing link, paired, a site of
  * the workspace, a site turned on.
  *
  * The popup is opened in a tab, like every spec of the extension. Its real window follows its
- * content from 280 px, so the tab is measured at 280 and at 340 px.
+ * content, which is 360 px wide since the shell of FRU-251, so the tab is measured at 360 px.
  */
 
 /** A name as long as an address: forty characters. */
 const NAME = 'qa+popup-layout-reviewer-01@example.test';
-const WIDTHS = [280, 340];
+const WIDTHS = [360];
 /** Two buttons that touch read as one control. */
 const SPACE = 8;
 
@@ -91,11 +91,13 @@ for (const language of ['en', 'fr'] as const) {
     const page = await extension.context.newPage();
     await openBareSite(page, `popup-layout-${language}`);
 
-    // 1. No rule: the form.
+    // 1. Nothing held: sign in (FRU-251). The gear, the sign-in, and the way to a self-hosted instance.
     const empty = await openPopup(extension, page);
-    await expect(empty.getByRole('button', { name: /^(Turn on for this site|Activer pour ce site)$/ })).toBeVisible();
+    await expect(
+      empty.getByRole('button', { name: /^(Sign in to Fruitback|Se connecter à Fruitback)$/ }),
+    ).toBeVisible();
     expect(await empty.evaluate(() => document.documentElement.lang)).toBe(language);
-    await expectLaidOut(empty, 'no rule', 2);
+    await expectLaidOut(empty, 'signed out', 3);
     await empty.close();
 
     // 2. A pairing link.
@@ -156,8 +158,8 @@ test('axe finds nothing on the popup and on the options page, in both schemes', 
   await openBareSite(page, 'popup-axe');
 
   const empty = await openPopup(extension, page);
-  await expect(empty.getByRole('button', { name: 'Turn on for this site' })).toBeVisible();
-  await clean(empty, 'the popup with no rule');
+  await expect(empty.getByRole('button', { name: 'Sign in to Fruitback' })).toBeVisible();
+  await clean(empty, 'the popup signed out');
   // One popup at a time: `openPopup` finds the popup by its address.
   await empty.close();
 
