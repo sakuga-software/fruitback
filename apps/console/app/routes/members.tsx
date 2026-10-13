@@ -52,6 +52,11 @@ function dayOf(iso: string | undefined, year: boolean): string | undefined {
   });
 }
 
+/** What a list is while it is read again: itself when it is shown, « loading » when it is not. */
+function whileRead<T>(current: Listed<T>): Listed<T> {
+  return typeof current === 'string' ? 'loading' : current;
+}
+
 /**
  * Who belongs to the workspace, and who is invited, as screen 12 of the mockup of 2026-10-13 draws
  * them (FRU-247, on FRU-104): the invitation on one line, the table of the people, and what each
@@ -64,11 +69,6 @@ function dayOf(iso: string | undefined, year: boolean): string | undefined {
  * column is the day they joined), and the one site of a guest (an invitation is for a member or an
  * admin, and « Sites » says every site, or the shared ones for a guest).
  */
-/** What a list is while it is read again: itself when it is shown, « loading » when it is not. */
-function whileRead<T>(current: Listed<T>): Listed<T> {
-  return typeof current === 'string' ? 'loading' : current;
-}
-
 export default function Members() {
   useLocale();
   const { me, workspace } = useWorkspace();
