@@ -325,37 +325,41 @@ describe('a role that has its schema and nothing else (FRU-219)', { skip: NO_REA
     }
   });
 
-  it('is refused, with what to grant, when it may not create in its schema', async () => {
-    const own = await ownDatabase();
-    const admin = createPgDatabase(own.url, 'public', { max: 1 });
-    const role = `r_${new URL(own.url).pathname.slice(1)}`;
-    const lesser = new URL(own.url);
-    lesser.username = role;
-    lesser.password = 'not-a-secret-of-a-test';
-    const database = createPgDatabase(lesser.href, SCHEMA, { max: 2 });
-    try {
-      await rowsOf(admin, `CREATE ROLE ${role} LOGIN PASSWORD 'not-a-secret-of-a-test'`);
-      await rowsOf(admin, `CREATE SCHEMA ${SCHEMA}`);
-      await rowsOf(admin, `GRANT USAGE ON SCHEMA ${SCHEMA} TO ${role}`);
+  // `CREATE` without `USAGE` (raised in review): PostgreSQL leaves such a schema out of the search
+  // path, `current_schema()` is NULL, and the worker said that a pooler had lost the session.
+  for (const granted of ['USAGE', 'CREATE']) {
+    it(`is refused, with what to grant, when it has ${granted} alone on its schema`, async () => {
+      const own = await ownDatabase();
+      const admin = createPgDatabase(own.url, 'public', { max: 1 });
+      const role = `r_${new URL(own.url).pathname.slice(1)}`;
+      const lesser = new URL(own.url);
+      lesser.username = role;
+      lesser.password = 'not-a-secret-of-a-test';
+      const database = createPgDatabase(lesser.href, SCHEMA, { max: 2 });
+      try {
+        await rowsOf(admin, `CREATE ROLE ${role} LOGIN PASSWORD 'not-a-secret-of-a-test'`);
+        await rowsOf(admin, `CREATE SCHEMA ${SCHEMA}`);
+        await rowsOf(admin, `GRANT ${granted} ON SCHEMA ${SCHEMA} TO ${role}`);
 
-      await assert.rejects(migrate(database), (error: unknown) => {
-        assert.ok(error instanceof StoreError);
-        assert.match(error.message, /cannot create in the schema « fruitback »/);
-        assert.match(error.message, /grant that role CREATE and USAGE on the schema/);
-        assert.doesNotMatch(error.message, /r_t_/);
+        await assert.rejects(migrate(database), (error: unknown) => {
+          assert.ok(error instanceof StoreError);
+          assert.match(error.message, /cannot create in the schema « fruitback », or cannot use it/);
+          assert.match(error.message, /grant that role CREATE and USAGE on the schema/);
+          assert.doesNotMatch(error.message, /r_t_/);
 
-        return true;
-      });
-      assert.deepEqual(await tablesOf(admin, SCHEMA), []);
-    } finally {
-      await database.close();
-      await admin.close();
-      await own.drop();
-      const server = createPgDatabase(TEST_DATABASE_URL ?? '', 'public', { max: 1 });
-      await rowsOf(server, `DROP ROLE IF EXISTS ${role}`);
-      await server.close();
-    }
-  });
+          return true;
+        });
+        assert.deepEqual(await tablesOf(admin, SCHEMA), []);
+      } finally {
+        await database.close();
+        await admin.close();
+        await own.drop();
+        const server = createPgDatabase(TEST_DATABASE_URL ?? '', 'public', { max: 1 });
+        await rowsOf(server, `DROP ROLE IF EXISTS ${role}`);
+        await server.close();
+      }
+    });
+  }
 });
 
 describe('the name of the schema (FRU-219)', () => {

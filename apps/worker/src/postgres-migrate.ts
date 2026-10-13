@@ -301,7 +301,8 @@ async function ensureTheSchema(db: Db, schema: string): Promise<void> {
       sql`SELECT to_regnamespace(${schema}) IS NOT NULL AS there,
                  has_database_privilege(current_user, current_database(), 'CREATE') AS in_database,
                  CASE WHEN to_regnamespace(${schema}) IS NULL THEN NULL
-                      ELSE has_schema_privilege(current_user, ${schema}, 'CREATE') END AS in_schema`,
+                      ELSE has_schema_privilege(current_user, ${schema}, 'CREATE')
+                       AND has_schema_privilege(current_user, ${schema}, 'USAGE') END AS in_schema`,
     ),
   );
 
@@ -320,9 +321,12 @@ async function ensureTheSchema(db: Db, schema: string): Promise<void> {
   }
   if (row.in_schema === true) return;
 
+  // Both rights, asked together (raised in review). With `CREATE` and no `USAGE`, PostgreSQL leaves
+  // the schema out of the search path and `current_schema()` is NULL: the guard that comes next
+  // would say that a pooler lost the session, which sends an operator to the wrong place.
   throw new StoreError(
-    `The role of FRUITBACK_DATABASE_URL cannot create in the schema « ${schema} », and the migrations of the ` +
-      'worker need it: grant that role CREATE and USAGE on the schema, or make it the owner of the database ' +
+    `The role of FRUITBACK_DATABASE_URL cannot create in the schema « ${schema} », or cannot use it, and the ` +
+      'worker needs both: grant that role CREATE and USAGE on the schema, or make it the owner of the database ' +
       '(docs/self-hosting.md)',
   );
 }

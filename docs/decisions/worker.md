@@ -2347,12 +2347,15 @@ public` compares the catalogue and the rows of `public` before and after, with t
   test:`gives every connection of a pool its schema, whatever the role and the database say`.
   `public` is not in the path, so a name the worker does not have is an error and not a read of
   another application's table.
-- **The role needs `CREATE` on its schema, and nothing else.** No right on `public`, none on the
+- **The role needs `CREATE` and `USAGE` on its schema, and nothing else.** No right on `public`, none on the
   database: test:`is enough: no right on public, none on the database, and the worker signs a
 person in`. A schema that is not there is made, which needs `CREATE` on the database; without it
   the worker refuses with what to grant
   (test:`is refused a schema that is not there, with what to grant, and with no name of the role
-(FRU-219)`, test:`is refused, with what to grant, when it may not create in its schema`).
+(FRU-219)`, `is refused, with what to grant, when it has … alone on its schema`, for `USAGE` alone and for
+  `CREATE` alone). Both rights are asked together: with `CREATE` and no `USAGE`, PostgreSQL 17.11
+  leaves the schema out of the search path, and the worker said that a pooler had lost the session
+  (raised in review).
 - **No database is moved by the worker.** A worker in `public` that names a schema finds that
   schema empty and makes its tables there: the ones of `public` are left as they are, and so is
   what they hold. Moving is `ALTER TABLE … SET SCHEMA`, by hand, the journal too.
