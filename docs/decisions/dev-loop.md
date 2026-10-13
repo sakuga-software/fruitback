@@ -43,7 +43,8 @@ on a developer's machine. `/tf` and `/tfp` read these numbers from here rather t
   validates it_ ([worker.md](worker.md)).
 - **`POST /__dev/pair` answers a pairing code for the workspace**, with its link. The `pair`
   command is another process, and cannot write in a database that lives in the worker. The route is
-  in the fixture, not in the worker. `FRUITBACK_DEV_VISIBILITY=members` makes the site one that
+  in the fixture, not in the worker. **The fixture listens on `127.0.0.1`** unless `HOST` says
+  otherwise: that route gives a session to whoever can reach it (raised in review). `FRUITBACK_DEV_VISIBILITY=members` makes the site one that
   only a session of the workspace reads.
 - **The playground is a React app on purpose, and it is the only place three things are true.** The
   widget mounts in an effect, so it arrives _after_ hydration. A client-side navigation changes the

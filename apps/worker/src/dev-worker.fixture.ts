@@ -47,6 +47,9 @@ export function devEnvironment(given: WorkerEnv): WorkerEnv {
     // shows every colour of a pin. `FRUITBACK_STORE=postgres` keeps them in the database instead.
     FRUITBACK_STORE: 'memory',
     PORT: '8788',
+    // This machine only (raised in review). The worker listens on every interface by default, and
+    // `/__dev/pair` gives a session of the workspace to whoever asks: not to the network.
+    HOST: '127.0.0.1',
     ALLOWED_ORIGINS: DEV_PLAYGROUND,
     FRUITBACK_CONSOLE_URL: DEV_CONSOLE,
     // A value of development, in a public repository: it signs nothing outside this machine.

@@ -35,6 +35,9 @@ describe('the switch of the database of development (FRU-223)', () => {
     const config = readConfig(devEnvironment({}));
     assert.ok(config.ok, config.ok ? '' : config.missing.join(', '));
     assert.equal(config.config.databaseUrl, DEV_DATABASE_URL);
+    // It listens on this machine alone: `/__dev/pair` gives a session to whoever can reach it.
+    assert.equal(devEnvironment({}).HOST, '127.0.0.1');
+    assert.equal(devEnvironment({ HOST: '0.0.0.0' }).HOST, '0.0.0.0');
     // The notes stay on the Linear in memory, unless the environment names a store.
     assert.equal(config.config.store.provider, 'memory');
     const inDatabase = readConfig(devEnvironment({ FRUITBACK_STORE: 'postgres' }));
@@ -120,7 +123,7 @@ describe('the worker of development, as a process (FRU-223)', () => {
     const port = await freePort();
     const child = spawn(process.execPath, ['dev-worker.fixture.ts'], {
       cwd: import.meta.dirname,
-      env: { PATH: process.env.PATH ?? '', PORT: String(port), HOST: '127.0.0.1', ...env },
+      env: { PATH: process.env.PATH ?? '', PORT: String(port), ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     started.push(child);
@@ -159,6 +162,8 @@ describe('the worker of development, as a process (FRU-223)', () => {
       const worker = await start(store === 'memory' ? {} : { FRUITBACK_STORE: store });
       await ready(worker.origin, worker.said);
       assert.deepEqual(await (await fetch(`${worker.origin}/health`)).json(), { ok: true, store });
+      // With no HOST in its environment, the process says where it listens.
+      assert.match(worker.said(), /listening on 127\.0\.0\.1:\d+ /);
 
       const seed = seedFixture({ page: { url: PAGE, path: '/pricing', title: 'Pricing' } });
       const sent = await fetch(`${worker.origin}/feedback`, {
