@@ -79,6 +79,12 @@ type ButtonProps = Destination & {
   className?: string;
   /** Takes focus when it appears: the way back of a confirmation, and the button it gives focus back to. */
   autoFocus?: boolean;
+  /**
+   * The name a screen reader says, where the words of the button are not enough alone: seven
+   * « Connect » of one list are « Connect Jira », « Connect GitHub ». It starts with the words the
+   * button shows, so that somebody who speaks to their browser can say what they read.
+   */
+  label?: string;
   children: ReactNode;
 };
 
@@ -118,12 +124,14 @@ export function Button({
   to,
   href,
   newTab,
+  label,
   children,
 }: ButtonProps) {
   const classes = `${TONE_CLASSES[tone]} ${className}`;
   const data = {
     'data-size': size,
     'data-wide': wide,
+    ...(label === undefined ? {} : { 'aria-label': label }),
     ...(inset === undefined ? {} : { style: { paddingInline: inset } }),
   };
   if (to !== undefined || href !== undefined) return anchor({ to, href, newTab }, classes, data, children);
@@ -317,6 +325,11 @@ type ChoiceProps = {
   disabled?: boolean;
   /** 40 px and not 44: a list of a panel or of a row of filters. */
   compact?: boolean;
+  /**
+   * The list chooses a status: its drop is drawn before the chosen word, and the list is the 38 px
+   * of a row of « Status of the pins ». The drop is a picture: the word beside it says the status.
+   */
+  status?: Status;
 };
 
 function item(option: Option) {
@@ -338,6 +351,7 @@ export function Choice({
   options,
   disabled = false,
   compact = false,
+  status,
 }: ChoiceProps) {
   return (
     <Select
@@ -345,6 +359,7 @@ export function Choice({
       isDisabled={disabled}
       className="kit-field"
       data-compact={compact}
+      data-status={status !== undefined}
       value={value}
       onChange={(chosen) => {
         if (typeof chosen === 'string') onChange(chosen);
@@ -352,6 +367,7 @@ export function Choice({
     >
       <Label className={labelHidden ? 'sr-only' : ''}>{label}</Label>
       <Select.Trigger>
+        {status === undefined ? null : <StatusDot status={status} />}
         <Select.Value />
         <Select.Indicator />
       </Select.Trigger>
@@ -569,6 +585,10 @@ export function DataTable({ label, minWidth, dense = false, hover = false, child
 type SidePanelProps = {
   /** An id of the page, which ties the panel to its title. */
   id: string;
+  /** An id for the panel itself: what a row of the list names with `aria-controls` (FRU-197). */
+  panelId?: string;
+  /** The name of the panel where its title is not it: « Settings of Linear » over the title « Linear ». */
+  label?: string;
   title: string;
   detail?: string;
   /** Under a rule at the bottom: the action that undoes the panel, and a date. */
@@ -581,11 +601,23 @@ type SidePanelProps = {
 };
 
 /** The panel beside a list: what is chosen in the list, with its settings. */
-export function SidePanel({ id, title, detail, foot, panelRef, onKeyDown, className = '', children }: SidePanelProps) {
+export function SidePanel({
+  id,
+  panelId,
+  label,
+  title,
+  detail,
+  foot,
+  panelRef,
+  onKeyDown,
+  className = '',
+  children,
+}: SidePanelProps) {
   return (
     <aside
       ref={panelRef}
-      aria-labelledby={id}
+      {...(panelId === undefined ? {} : { id: panelId })}
+      {...(label === undefined ? { 'aria-labelledby': id } : { 'aria-label': label })}
       {...(panelRef === undefined ? {} : { tabIndex: -1 })}
       {...(onKeyDown === undefined ? {} : { onKeyDown })}
       className={`kit-panel ${className}`}

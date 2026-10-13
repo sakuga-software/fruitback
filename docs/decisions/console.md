@@ -106,11 +106,12 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **The kit, component by component** (`ui.tsx`):
   `Button` (`tone="primary"`: the pill of the action of a step, 44 px; `tone="outline"`: the
   rectangle of a control, 6 px, at 44, 40 or 32 px with `size`; `to` or `href` makes it a link of
-  the same box), `WideButton` (an outlined button over its column), `LinkButton` (underlined words;
-  its padding is its target, 33 px at the least, where the mockup draws « Rename » at 21 px),
+  the same box; `label` gives a longer name to a screen reader, « Connect Jira » over « Connect »,
+  and starts with the words shown), `WideButton` (an outlined button over its column), `LinkButton` (underlined words;
+  its padding is its target, 33 px at the least, where the mockup draws « Rename » at 21 px; in a row of a table it takes the line of the table),
   `IconButton` (36 px, named by `label`), `Field` and `Choice` (44 px, `compact` 40 px, `locked` for
-  a value set elsewhere), `Pick` (radio cards), `Toggle`, `FilterChip` (`aria-pressed`), `StatusDot`
-  and `StatusBar`, `DataTable`, `SidePanel`, `KeyValue`, `SuccessMark`, `Title`, `Lead`, `PageHead`,
+  a value set elsewhere; `status` on a `Choice` draws the drop of the chosen status in a list of 38 px), `Pick` (radio cards), `Toggle`, `FilterChip` (`aria-pressed`), `StatusDot`
+  and `StatusBar`, `DataTable`, `SidePanel` (named by its title, or by `label`; `panelId` for `aria-controls`), `KeyValue`, `SuccessMark`, `Title`, `Lead`, `PageHead`,
   `Initial`, `Card`, `Chip`, `Problem`, `Logo` (the name as outlines, in tokens: `logo.tsx`), `EntryPage`
   (the header and the column of a page outside a workspace; `/kit/entry` mounts it), `Divider`, `Menu`
   (a button that opens a menu, on the dropdown of HeroUI: the menu is named after its button, a

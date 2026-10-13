@@ -48,6 +48,7 @@ export default function KitGallery() {
   const [filter, setFilter] = useState('all');
   const [who, setWho] = useState<'members' | 'public'>('members');
   const [role, setRole] = useState('guest');
+  const [stage, setStage] = useState('progress');
   const [text, setText] = useState('');
   const [picked, setPicked] = useState('nothing');
   const [workspace, setWorkspace] = useState('acme');
@@ -131,6 +132,22 @@ export default function KitGallery() {
             { value: 'member', label: 'Member' },
           ]}
         />
+        <div className="w-[214px]" data-kit="status-choice">
+          <Choice
+            label="Status for In Review"
+            labelHidden
+            status={stage === 'todo' ? 'todo' : 'progress'}
+            value={stage}
+            onChange={setStage}
+            options={[
+              { value: 'todo', label: 'To do' },
+              { value: 'progress', label: 'In progress' },
+            ]}
+          />
+        </div>
+        <Button tone="outline" label="Connect Jira">
+          Connect
+        </Button>
         <Choice
           label="Compact role"
           compact
@@ -247,6 +264,8 @@ export default function KitGallery() {
       <section aria-label="Panel" className="flex flex-wrap items-start gap-7" data-kit="panel">
         <SidePanel
           id="kit-panel-title"
+          panelId="kit-panel"
+          label="Settings of Linear"
           title="Linear"
           detail="Connected by Ana with OAuth"
           className="w-[380px]"
