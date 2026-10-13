@@ -343,9 +343,14 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   const result = configSchema.safeParse(candidate);
   // Each source names its own variables, and they are reported together: an operator fixing a boot
   // failure should see everything that is wrong, not the first thing to be checked.
+  // FRU-219. The name goes into statements as an identifier: a plain name, or nothing starts. Said
+  // with the rest (raised in review), and once: the store `postgres` reads the same variable, and
+  // names it without the rule.
+  const schemaRefused = readDatabaseSchema(env.FRUITBACK_DATABASE_SCHEMA) === undefined;
   const missing = [
     ...missingFrom(result),
-    ...(store.ok ? [] : store.missing),
+    ...(store.ok ? [] : store.missing.filter((name) => !(schemaRefused && name === 'FRUITBACK_DATABASE_SCHEMA'))),
+    ...(schemaRefused ? [DATABASE_SCHEMA_REFUSED] : []),
     ...(clients.ok ? [] : [`FRUITBACK_CLIENTS (${clients.reason})`]),
     // Two variables of before (FRU-150): refused, never ignored. A worker that ignored the file would
     // start with no workspace at all, and an operator would read it as the accounts lost. Said with
@@ -367,10 +372,6 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   // The reason never quotes the value: it holds the password of the database.
   if (env.FRUITBACK_DATABASE_URL && result.data.databaseUrl === undefined) {
     return { ok: false, missing: ['FRUITBACK_DATABASE_URL (a postgres:// address with a host)'] };
-  }
-  // FRU-219. The name goes into statements as an identifier: a plain name, or nothing starts.
-  if (readDatabaseSchema(env.FRUITBACK_DATABASE_SCHEMA) === undefined) {
-    return { ok: false, missing: [DATABASE_SCHEMA_REFUSED] };
   }
   // A schema with no database names nothing: a line that was left in an `.env`, or a typing error
   // in the name of the other variable.

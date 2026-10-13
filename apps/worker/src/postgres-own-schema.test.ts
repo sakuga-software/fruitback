@@ -431,6 +431,21 @@ describe('the name of the schema (FRU-219)', () => {
     assert.deepEqual(refused.ok ? [] : refused.missing, [DATABASE_SCHEMA_REFUSED]);
     assert.doesNotMatch(DATABASE_SCHEMA_REFUSED, /Fruit Back/);
 
+    // Said with whatever else is wrong, and once (raised in review): the store `postgres` reads the
+    // same variable.
+    const two = readConfig(
+      envWith({ FRUITBACK_DATABASE_SCHEMA: 'Fruit Back', FRUITBACK_STORE: 'postgres', ALLOWED_ORIGINS: '' }),
+    );
+    const said = two.ok ? [] : two.missing;
+    assert.deepEqual(
+      said.filter((name) => name.startsWith('FRUITBACK_DATABASE_SCHEMA')),
+      [DATABASE_SCHEMA_REFUSED],
+    );
+    assert.ok(
+      said.some((name) => name.startsWith('ALLOWED_ORIGINS')),
+      said.join(' | '),
+    );
+
     const alone = readConfig({
       FRUITBACK_STORE: 'memory',
       ALLOWED_ORIGINS: 'https://acme.test',
