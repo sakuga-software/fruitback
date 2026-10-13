@@ -320,7 +320,8 @@ amber, where white cannot be read (FRU-233)`.
     frame back to the element the composer is about. With another element chosen, the composer
     keeps everything the reporter set (the note, a name typed over the one remembered, a place, the
     sentence of a failed send), its head names the new element, and it moves to it; the frame of
-    the first does not come back.
+    the first does not come back. While a note is sending, a choice is let go: the note in flight
+    is about the element before, and a failure must still find its text.
   - **The composer**: 360 px, a head (« New note », « on » and what the element says on one line,
     a cross « Close without sending » that does what « Cancel » does), the note, a foot behind a
     rule. It opens **above** its element, 40 px over its top, on the edge of the frame; below when

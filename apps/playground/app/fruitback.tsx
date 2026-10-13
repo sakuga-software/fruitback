@@ -76,6 +76,13 @@ export function Fruitback() {
 
     const host = createCaptureHost({
       onSelect: (selected) => {
+        // Like \`init\`: a choice made while a note is on its way is let go, and the frame goes
+        // back to the element of that note (FRU-258).
+        if (widget.current?.composer.state() === 'sending') {
+          if (target.current !== null) widget.current.host.hold(target.current.element);
+
+          return;
+        }
         target.current = selected;
         const rect = selected.element.getBoundingClientRect();
         // Like `init`: the frame stays on the element while the composer is open, and the head of

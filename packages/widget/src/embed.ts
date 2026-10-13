@@ -231,6 +231,14 @@ export function init(options: FruitbackOptions): Fruitback {
     onConfigure: () => panel.toggle(),
     onList: () => sidebar.toggle(),
     onSelect: (selected) => {
+      // A note is on its way, about the element chosen before: a choice now would point the
+      // composer at another element under a send it cannot change. The choice is let go, and the
+      // frame goes back to the element of the note in flight.
+      if (composer.state() === 'sending') {
+        if (target !== null) host.hold(target.element);
+
+        return;
+      }
       target = selected;
       place = placeOf(selected);
       // The frame stays on the element for as long as the composer is open on it (FRU-258).
