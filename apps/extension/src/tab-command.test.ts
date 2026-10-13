@@ -40,6 +40,10 @@ describe('a command of the popup to the widget of its tab (FRU-254)', () => {
     assert.deepEqual(parseAnswer({ done: true, counts }), { done: true, counts });
     assert.deepEqual(parseAnswer({ done: true, counts: { ...counts, ripe: -1 } }), { done: true });
     assert.deepEqual(parseAnswer({ done: 'yes' }), { done: false });
+    // Busy: the widget is there and said no. Never with a done.
+    assert.deepEqual(parseAnswer({ done: false, busy: true }), { done: false, busy: true });
+    assert.deepEqual(parseAnswer({ done: true, busy: true }), { done: true });
+    assert.deepEqual(parseAnswer({ done: false, busy: 'yes' }), { done: false });
     assert.deepEqual(parseAnswer(undefined), { done: false });
   });
 });

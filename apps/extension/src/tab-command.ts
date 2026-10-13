@@ -12,7 +12,8 @@ import { type PageCounts, TAB_COMMANDS, type TabCommand, parsePageCounts } from 
 export const TAB_COMMAND_TYPE = 'fruitback-tab-command';
 
 export type TabCommandRequest = { type: typeof TAB_COMMAND_TYPE; command: TabCommand };
-export type TabCommandAnswer = { done: boolean; counts?: PageCounts };
+/** `busy`: the widget is there and said no. Not done and not busy: no widget answered. */
+export type TabCommandAnswer = { done: boolean; busy?: true; counts?: PageCounts };
 
 /** What the popup sends. */
 export function tabCommand(command: TabCommand): TabCommandRequest {
@@ -47,8 +48,12 @@ export function acceptedCommand(
 /** The answer, read back: an unknown shape is « not done ». */
 export function parseAnswer(value: unknown): TabCommandAnswer {
   if (typeof value !== 'object' || value === null) return { done: false };
-  const { done, counts } = value as Record<string, unknown>;
+  const { done, busy, counts } = value as Record<string, unknown>;
   const parsed = parsePageCounts(counts);
 
-  return { done: done === true, ...(parsed === undefined ? {} : { counts: parsed }) };
+  return {
+    done: done === true,
+    ...(busy === true && done !== true ? { busy: true as const } : {}),
+    ...(parsed === undefined ? {} : { counts: parsed }),
+  };
 }

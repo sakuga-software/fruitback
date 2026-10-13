@@ -174,6 +174,8 @@ export default defineContentScript({
             kind: 'command-response',
             id: message.id,
             done,
+            // The widget is ours and said no to a choice: somebody writes, or chooses already.
+            ...(!done && widget !== undefined && message.command === 'leave-feedback' ? { busy: true } : {}),
             ...(counts === undefined ? {} : { counts }),
           },
           '*',

@@ -92,6 +92,7 @@ export default defineContentScript({
       if (message?.kind === 'command-response') {
         commands.get(message.id)?.({
           done: message.done,
+          ...(message.busy === true ? { busy: true as const } : {}),
           ...(message.counts === undefined ? {} : { counts: message.counts }),
         });
         commands.delete(message.id);

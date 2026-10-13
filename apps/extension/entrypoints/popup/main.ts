@@ -471,9 +471,11 @@ async function siteOfWorkspaceOn(
     // The widget takes over the tab: the popup would stand over the page somebody is about to click.
     // It goes only when the widget did it: otherwise it stays, and says why.
     onLeaveFeedback: () =>
-      void askTab(tab, 'leave-feedback').then(({ done }) =>
-        done ? window.close() : showProblem(problem, t(NOT_NOW_WRITING)),
-      ),
+      void askTab(tab, 'leave-feedback').then(({ done, busy }) => {
+        if (done) window.close();
+        // Said only when the widget is there and said no: no answer is a page that is not ready.
+        else showProblem(problem, t(busy === true ? NOT_NOW_WRITING : NOT_THERE));
+      }),
     onShowEveryNote: () =>
       void askTab(tab, 'show-notes').then(({ done }) => (done ? window.close() : showProblem(problem, t(NOT_THERE)))),
     onSettings: openSettings,
