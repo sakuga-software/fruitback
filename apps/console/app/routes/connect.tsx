@@ -90,7 +90,11 @@ async function resolve(request: string): Promise<Stage> {
     (read.data.state === 'approved' || read.data.state === 'claimed')
   ) {
     const me = await call<Me>('GET', '/console/me', undefined, { quiet: true });
-    return stageOf({ ...read.data, workspaces: me.ok ? me.data.workspaces : [] });
+    // Workspaces that could not be read are not « none »: the page reads again rather than send the
+    // person to the setup.
+    if (!me.ok) return me.status === 401 ? { kind: 'signed-out' } : { kind: 'silent' };
+
+    return stageOf({ ...read.data, workspaces: me.data.workspaces });
   }
   if (read.ok) return stageOf(read.data);
   if (read.status === 401) return { kind: 'signed-out' };

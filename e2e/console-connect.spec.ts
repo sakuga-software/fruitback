@@ -340,6 +340,25 @@ test.describe('Connect this browser (FRU-240)', () => {
     expect(await page.evaluate(() => sessionStorage.getItem('fruitback:connect'))).toBeNull();
   });
 
+  test('a connected request whose workspaces cannot be read says « Try again », and sends nobody to the setup', async ({
+    page,
+  }) => {
+    const worker = await workerWith(page);
+    worker.requests.r1 = { word: 'PEAR 31', browser: 'Chrome on macOS', state: 'approved', by: 'a1' };
+    await page.route(`${WORKER_ORIGIN}/console/me`, (route) =>
+      route.fulfill({ status: 503, json: { error: 'unavailable' } }),
+    );
+    await open(page);
+    await expect(page.getByRole('alert')).toHaveText('Fruitback did not answer. Try again.');
+    await expect(page.getByRole('link', { name: 'Set up a workspace' })).toHaveCount(0);
+    // The control: once the account is read, the page says where the extension reads.
+    await page.unroute(`${WORKER_ORIGIN}/console/me`);
+    await page.getByRole('button', { name: 'Try again', exact: true }).click();
+    await expect(page.getByRole('status')).toHaveText(
+      'Open the popup on any site of Acme or Lumen Studio. You can close this tab.',
+    );
+  });
+
   test('« Use another address » signs out and asks for the other address, or says that it did not', async ({
     page,
   }) => {
