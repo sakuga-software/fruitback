@@ -1038,8 +1038,8 @@ when it is accepted`. An invitation waits 7 days; one address gets one invitatio
   test:`writes one invitation for one address when two people invite it at the same moment`.
   **This holds for one process of the worker.** Two replicas do not share it, as they do not share
   the rate limit.
-  **The rename and the deletion of a workspace are outside it** (`POST` and `DELETE
-/console/workspaces/<id>`). Neither counts the owners or looks for an invitation before it
+  **The rename and the deletion of a workspace are outside it**: `POST` and `DELETE` on
+  `/console/workspaces/<id>`. Neither counts the owners or looks for an invitation before it
   writes. Two renames at the same moment leave the last one written. Not measured: a rename at the
   moment its author loses the right, or at the moment the workspace is deleted.
 - **Nobody is removed while their extension lives** (FRU-209). The sessions of the extensions of a
