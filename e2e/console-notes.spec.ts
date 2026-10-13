@@ -39,8 +39,8 @@ const CONNECTORS = [
   { id: 'c1', kind: 'linear', label: 'Acme', createdAt: '2026-10-01T08:00:00.000Z' },
   { id: 'c2', kind: 'rest', label: 'hooks.acme.dev/feedback', createdAt: '2026-10-01T08:00:00.000Z' },
 ];
-const LINEAR = { kind: 'linear', connector: 'c1', label: 'Linear · Acme web' };
-const REST = { kind: 'rest', connector: 'c2', label: 'REST API · hooks.acme.dev/feedback' };
+const LINEAR = { kind: 'linear', connector: 'c1', label: 'Acme' };
+const REST = { kind: 'rest', connector: 'c2', label: 'hooks.acme.dev/feedback' };
 
 type Note = {
   id: string;
@@ -49,7 +49,10 @@ type Note = {
   site: { id: string };
   stage: string;
   author: { kind: string; name?: string };
-  place: Record<string, string>;
+  seed?: string;
+  place?: Record<string, string>;
+  ref?: string;
+  url?: string;
   delivery?: { id: string; state: string };
   createdAt: string;
 };
@@ -80,7 +83,10 @@ const FIRST: Note[] = [
     site: { id: 's1' },
     stage: 'seeded',
     author: { kind: 'you', name: 'Ana' },
-    place: { ...LINEAR, ref: 'ACM-151', url: 'https://linear.app/acme/issue/ACM-151' },
+    seed: 'seed-n2',
+    place: LINEAR,
+    ref: 'ACM-151',
+    url: 'https://linear.app/acme/issue/ACM-151',
     createdAt: since(65),
   },
   {
@@ -90,7 +96,9 @@ const FIRST: Note[] = [
     site: { id: 's2' },
     stage: 'green',
     author: { kind: 'anonymous' },
-    place: { ...LINEAR, ref: 'ACM-149', url: 'https://linear.app/acme/issue/ACM-149' },
+    place: LINEAR,
+    ref: 'ACM-149',
+    url: 'https://linear.app/acme/issue/ACM-149',
     createdAt: since(185),
   },
   {
@@ -110,7 +118,9 @@ const FIRST: Note[] = [
     site: { id: 's1' },
     stage: 'ripening',
     author: { kind: 'guest', name: 'Camille Durand' },
-    place: { ...LINEAR, ref: 'ACM-142', url: 'https://linear.app/acme/issue/ACM-142' },
+    place: LINEAR,
+    ref: 'ACM-142',
+    url: 'https://linear.app/acme/issue/ACM-142',
     createdAt: since(2 * 24 * 60 + 60),
   },
   {
@@ -120,7 +130,9 @@ const FIRST: Note[] = [
     site: { id: 's1' },
     stage: 'green',
     author: { kind: 'admin', name: 'Marc Petit' },
-    place: { ...LINEAR, ref: 'ACM-139', url: 'https://linear.app/acme/issue/ACM-139' },
+    place: LINEAR,
+    ref: 'ACM-139',
+    url: 'https://linear.app/acme/issue/ACM-139',
     createdAt: since(3 * 24 * 60 + 60),
   },
   {
@@ -140,7 +152,9 @@ const FIRST: Note[] = [
     site: { id: 's1' },
     stage: 'ripe',
     author: { kind: 'member', name: 'Léa Martin' },
-    place: { ...LINEAR, ref: 'ACM-120', url: 'https://linear.app/acme/issue/ACM-120' },
+    place: LINEAR,
+    ref: 'ACM-120',
+    url: 'https://linear.app/acme/issue/ACM-120',
     createdAt: since(6 * 24 * 60 + 60),
   },
 ];
@@ -204,7 +218,10 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
       }
       const all = [...FIRST, ...SECOND]
         .map((note) => (delivered.has(note.id) ? { ...note, delivery: undefined } : note))
-        .map((note) => (role === 'guest' ? { ...note, place: { kind: note.place.kind }, delivery: undefined } : note));
+        // A guest gets no place, no reference and no delivery (FRU-244).
+        .map((note) =>
+          role === 'guest' ? { ...note, place: undefined, ref: undefined, url: undefined, delivery: undefined } : note,
+        );
       const kept = all.filter(
         (note) =>
           (asked.site === undefined || note.site.id === asked.site) &&
@@ -215,13 +232,13 @@ async function workerWith(page: Page, role: Role = 'owner', locale: 'en' | 'fr' 
       const placed = kept.filter((note) => {
         if (asked.place === undefined) return true;
 
-        return (note.place.connector ?? note.place.kind) === asked.place;
+        return (note.place?.connector ?? note.place?.kind) === asked.place;
       });
       const start = asked.cursor === 'p2' ? 8 : 0;
       const notes = placed.slice(start, start + 8);
       const byPlace: Record<string, number> = {};
       for (const note of kept) {
-        const id = note.place.connector ?? note.place.kind;
+        const id = (note.place?.connector ?? note.place?.kind) as string;
         byPlace[id] = (byPlace[id] ?? 0) + 1;
       }
 
@@ -373,7 +390,17 @@ test('the page is the one of the mockup: chips, filters, the table and its pages
   });
   await expect(first.locator('td').first()).toContainText('staging.acme.dev/');
   const show = first.getByRole('link', { name: 'Show on the page' });
-  await expect(show).toHaveAttribute('href', 'https://staging.acme.dev/#fruitback-note=n2');
+  // The link of the widget (FRU-253) opens the note by the id the widget gave it, by its issue when
+  // the worker does not send that id, and opens the page alone with neither.
+  await expect(show).toHaveAttribute('href', 'https://staging.acme.dev/#fruitback-note=seed-n2');
+  await expect(row(page, 'returns policy').getByRole('link', { name: 'Show on the page' })).toHaveAttribute(
+    'href',
+    'https://acme.dev/help/returns#fruitback-note=ACM-149',
+  );
+  await expect(row(page, 'checkout button').getByRole('link', { name: 'Show on the page' })).toHaveAttribute(
+    'href',
+    'https://acme.dev/checkout',
+  );
   await expect(show).toHaveAttribute('target', '_blank');
 
   // Its status: a drop of 10 px, and the word.
@@ -664,14 +691,16 @@ test('the first read says « Loading… », and draws no state before its answer
   await expect(rows(page)).toHaveCount(8);
 });
 
-test('a guest reads where a note went with no link, no chip and no « Send again »', async ({ page }) => {
+test('a guest reads no place, no reference, no chip and no « Send again »', async ({ page }) => {
   await workerWith(page, 'guest');
   await open(page);
   await expect(rows(page)).toHaveCount(8);
   await expect(page.getByRole('group', { name: 'Where the notes went' })).toHaveCount(0);
   await expect(table(page).getByRole('link', { name: /ACM-/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Send again' })).toHaveCount(0);
-  await expect(row(page, 'The headline runs').locator('td').nth(3)).toHaveText('Linear');
+  // The worker tells a guest nothing of where a note went: no column for it.
+  await expect(table(page).locator('thead th')).toHaveText(['Note', 'Status', 'Left by', 'When']);
+  await expect(page.getByText('Not delivered yet')).toHaveCount(0);
 });
 
 test('a member reads « Not delivered yet » and sends nothing again', async ({ page }) => {

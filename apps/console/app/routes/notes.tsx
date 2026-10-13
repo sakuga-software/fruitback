@@ -26,13 +26,11 @@ export type NoteAuthor = {
   name?: string;
 };
 
-/** Where a note went. A guest reads the kind alone: no label, no reference, no address. */
+/** Where a note went: Fruitback, a connector (its id and its name), or a connector removed since. */
 export type NotePlace = {
   kind: 'fruitback' | 'linear' | 'rest' | 'removed';
   connector?: string;
   label?: string;
-  ref?: string;
-  url?: string;
 };
 
 /** A note of the index (FRU-237, FRU-244): its first 64 characters, never its text (Q6). */
@@ -43,7 +41,15 @@ export type IndexedNote = {
   site: { id: string };
   stage: Stage;
   author: NoteAuthor;
-  place: NotePlace;
+  /**
+   * The id the widget gave the note, which its link opens (`#fruitback-note=`, FRU-253). Absent from a
+   * worker that does not send it: the link then names the issue, or opens the page alone.
+   */
+  seed?: string;
+  /** Where it went, its reference in the tracker and the address of the issue: not for a guest. */
+  place?: NotePlace;
+  ref?: string;
+  url?: string;
   /** A note that an address did not take yet: `gave-up` when the worker stopped trying. */
   delivery?: { id: string; state: 'waiting' | 'gave-up' };
   createdAt: string;
@@ -308,7 +314,8 @@ export default function Notes() {
                       <th scope="col">{t('Note')}</th>
                       <th scope="col">{t('Status')}</th>
                       <th scope="col">{t('Left by')}</th>
-                      <th scope="col">{t('Went to')}</th>
+                      {/* The worker tells a guest nothing of where a note went (FRU-244). */}
+                      {seesTracker ? <th scope="col">{t('Went to')}</th> : null}
                       <th scope="col" data-align="end">
                         {t('When')}
                       </th>
@@ -424,12 +431,15 @@ export function excerptOf(excerpt: string): string {
   return [...excerpt].length >= EXCERPT ? `${excerpt.trimEnd()}…` : excerpt;
 }
 
-/** The host of an address that a REST connector names: « REST API · hooks.acme.dev/feedback ». */
+/** The host of the address of a REST connector, from its name: « hooks.acme.dev/feedback ». */
 function hostOfLabel(label: string | undefined): string | undefined {
-  const address = label?.split(' · ').at(-1);
-  if (address === undefined || address === label) return undefined;
+  const address = label
+    ?.split(' · ')
+    .at(-1)
+    ?.replace(/^https?:\/\//, '');
+  const host = address?.split('/')[0];
 
-  return address.split('/')[0];
+  return host === undefined || host === '' ? undefined : host;
 }
 
 function NoteRow({
@@ -450,6 +460,9 @@ function NoteRow({
   const [sending, setSending] = useState(false);
   const [refused, setRefused] = useState(false);
   const { author, place } = note;
+  // The link of the widget opens the note by the id it gave it, or by its issue (FRU-253).
+  const opened = note.seed ?? note.ref;
+  const show = opened === undefined ? note.page.url : `${note.page.url}#fruitback-note=${encodeURIComponent(opened)}`;
   const visitor = author.kind === 'verified' || author.kind === 'anonymous';
   const who = visitor ? t('Visitor') : (author.name ?? t('Somebody of the workspace'));
   const detail =
@@ -472,7 +485,7 @@ function NoteRow({
         <span className="line-clamp-2 [overflow-wrap:anywhere]">{excerptOf(note.excerpt)}</span>
         <span className="mt-[2px] flex flex-wrap gap-x-[12px] gap-y-[2px] text-hint text-muted">
           <span className="[overflow-wrap:anywhere]">{`${note.page.host}${note.page.path}`}</span>
-          <LinkButton space="inline" href={`${note.page.url}#fruitback-note=${encodeURIComponent(note.id)}`} newTab>
+          <LinkButton space="inline" href={show} newTab>
             {t('Show on the page')}
           </LinkButton>
         </span>
@@ -487,20 +500,22 @@ function NoteRow({
         <span className="block [overflow-wrap:anywhere]">{who}</span>
         <span className="block text-hint leading-[inherit] text-muted">{detail}</span>
       </td>
-      <td>
-        <Place place={place} late={note.delivery !== undefined} />
-        {note.delivery === undefined ? null : (
-          <span className="flex flex-wrap items-center gap-x-[12px] gap-y-[4px] text-hint">
-            <span className="font-semibold text-accent">{t('Not delivered yet')}</span>
-            {manages ? (
-              <Button tone="outline" size="small" disabled={sending} onClick={() => void send()}>
-                {t('Send again')}
-              </Button>
-            ) : null}
-          </span>
-        )}
-        {refused ? <Problem>{t('Fruitback did not answer. Try again.')}</Problem> : null}
-      </td>
+      {place === undefined ? null : (
+        <td>
+          <Place place={place} reference={note.ref} address={note.url} late={note.delivery !== undefined} />
+          {note.delivery === undefined ? null : (
+            <span className="flex flex-wrap items-center gap-x-[12px] gap-y-[4px] text-hint">
+              <span className="font-semibold text-accent">{t('Not delivered yet')}</span>
+              {manages ? (
+                <Button tone="outline" size="small" disabled={sending} onClick={() => void send()}>
+                  {t('Send again')}
+                </Button>
+              ) : null}
+            </span>
+          )}
+          {refused ? <Problem>{t('Fruitback did not answer. Try again.')}</Problem> : null}
+        </td>
+      )}
       <td data-align="end" className="whitespace-nowrap text-muted tabular-nums">
         {ago(note.createdAt)}
       </td>
@@ -509,7 +524,17 @@ function NoteRow({
 }
 
 /** Where a note went: the tracker and its reference, an address, Fruitback, or a source that is gone. */
-function Place({ place, late }: { place: NotePlace; late: boolean }) {
+function Place({
+  place,
+  reference,
+  address,
+  late,
+}: {
+  place: NotePlace;
+  reference: string | undefined;
+  address: string | undefined;
+  late: boolean;
+}) {
   useLocale();
   if (place.kind === 'fruitback') return <span className="block font-semibold">{t('Kept in Fruitback')}</span>;
   if (place.kind === 'removed') return <span className="block font-semibold">{t('A source that was removed')}</span>;
@@ -520,15 +545,15 @@ function Place({ place, late }: { place: NotePlace; late: boolean }) {
   return (
     <>
       <span className="block font-semibold">{name}</span>
-      {place.ref !== undefined && place.url !== undefined ? (
+      {reference !== undefined && address !== undefined ? (
         // The reference reads at 400, as the mockup draws it: a link of the kit is at 600, for an action.
         <a
-          href={place.url}
+          href={address}
           target="_blank"
           rel="noreferrer"
           className="inline-flex items-center gap-[4px] text-hint text-ink underline decoration-1 underline-offset-[3px] hover:text-accent-strong"
         >
-          {place.ref}
+          {reference}
           <svg aria-hidden="true" viewBox="0 0 24 24" className="h-[12px] w-[12px]">
             <path
               d="M8 16L16 8M9.5 8H16v6.5"
@@ -541,8 +566,8 @@ function Place({ place, late }: { place: NotePlace; late: boolean }) {
           </svg>
         </a>
       ) : null}
-      {place.ref !== undefined && place.url === undefined ? (
-        <span className="block text-hint text-muted">{place.ref}</span>
+      {reference !== undefined && address === undefined ? (
+        <span className="block text-hint text-muted">{reference}</span>
       ) : null}
       {host === undefined ? null : (
         <span className="block text-hint text-muted">{t('Delivered to {host}', { host })}</span>
