@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>Workspaces, instance admin</title>
+<script src="../assets/654b7f6201e7e08c.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#fff}
+::selection{background:#18181b;color:#fff}
+::placeholder{color:#6b6b74;opacity:1}
+input{caret-color:#dd2c27}
+:focus-visible{outline:2px solid #dd2c27;outline-offset:2px}
+.rail :focus-visible{outline-color:#ec5b57}
+a{color:#18181b;text-decoration-thickness:1px;text-underline-offset:3px}
+a:hover{color:#b91c1c}
+button,select{cursor:pointer}
+.num{font-variant-numeric:tabular-nums}
+.b-accent:hover{background:#b91c1c !important}
+.b-wide:hover{background:#fafafa !important;border-color:#18181b !important}
+.b-link:hover{color:#b91c1c !important}
+.nav-link:hover{background:#27272a !important;color:#ffffff !important}
+.row:hover{background:#fafafa}
+.rail-nav{display:flex;flex-direction:column;gap:2px}
+@media (max-width: 900px){.rail-nav{flex-direction:row;overflow-x:auto}.rail-foot{display:none !important}}
+.scroll{scrollbar-width:thin;scrollbar-color:#8a8a93 transparent}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #ffffff; color: #18181b; font-family: -apple-system, system-ui, sans-serif; -webkit-font-smoothing: antialiased">
+
+  <aside class="rail" style="flex: 1 1 248px; box-sizing: border-box; padding: 16px 12px; background: #18181b; color: #ffffff; display: flex; flex-direction: column; gap: 20px">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 8px">
+      <span aria-hidden="true" style="width: 32px; height: 32px; flex: none; border-radius: 8px; border: 1px solid #52525b; box-sizing: border-box; display: flex; align-items: center; justify-content: center"><svg sc-camel-view-box="16 6 96 116" style="width: 13px; height: 16px"><path d="M 64 121.9 L 30.1 87.9 A 48 48 0 1 1 97.9 87.9 Z M 64 37 A 17 17 0 1 0 64 71 A 17 17 0 1 0 64 37 Z" fill="#ec5b57" fill-rule="evenodd"></path></svg></span>
+      <span style="min-width: 0">
+        <span style="display: block; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">feedback.acme.dev</span>
+        <span style="display: block; font-size: 12px; color: #a1a1aa">Self-hosted instance</span>
+      </span>
+    </div>
+    <nav aria-label="Instance" class="rail-nav">
+      <a href="Admin.dc.html" class="nav-link" style="display: flex; align-items: center; min-height: 40px; padding: 0 12px 0 31px; border-radius: 10px; color: #d4d4d8; font-size: 15px; text-decoration: none; white-space: nowrap">Instance</a>
+      <a href="Admin-workspaces.dc.html" aria-current="page" style="display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px; border-radius: 10px; background: #27272a; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; white-space: nowrap"><span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #ec5b57"></span>Workspaces</a>
+      <a href="Admin-users.dc.html" class="nav-link" style="display: flex; align-items: center; min-height: 40px; padding: 0 12px 0 31px; border-radius: 10px; color: #d4d4d8; font-size: 15px; text-decoration: none; white-space: nowrap">Users</a>
+      <a href="Admin-notes.dc.html" class="nav-link" style="display: flex; align-items: center; min-height: 40px; padding: 0 12px 0 31px; border-radius: 10px; color: #d4d4d8; font-size: 15px; text-decoration: none; white-space: nowrap">Notes</a>
+      <a href="Sites.dc.html" class="nav-link" style="display: flex; align-items: center; min-height: 40px; padding: 0 12px 0 31px; border-radius: 10px; color: #d4d4d8; font-size: 15px; text-decoration: none; white-space: nowrap">My workspaces</a>
+    </nav>
+    <div class="rail-foot" style="margin-top: auto; padding: 8px; display: flex; flex-direction: column; gap: 14px">
+      <a href="https://fruitback.com/self-hosting.html" style="color: #d4d4d8; font-size: 14px">Self-hosting guide</a>
+      <img src="../assets/7878e337d78a3a6d.svg" alt="Fruitback" style="height: 16px; width: 82px; display: block">
+    </div>
+  </aside>
+
+  <div style="flex: 999 1 640px; min-width: 0">
+    <main style="max-width: 1240px; box-sizing: border-box; padding: 40px clamp(16px, 4vw, 48px) 72px">
+      <header style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 24px; margin-bottom: 24px">
+        <div style="min-width: 0">
+          <h1 style="margin: 0 0 6px; font-size: 28px; line-height: 1.15; font-weight: 700; letter-spacing: -0.02em">Workspaces</h1>
+          <p style="margin: 0; font-size: 16px; line-height: 1.5; color: #6b6b74">Every workspace on this instance, who owns it and where its notes go.</p>
+        </div>
+        <button type="button" class="b-accent" style="height: 44px; padding: 0 22px; border: 0; border-radius: 999px; background: #dd2c27; color: #ffffff; font: inherit; font-size: 14px; font-weight: 600">New workspace</button>
+      </header>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px">
+        <label style="flex: 999 1 260px; display: flex"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search workspaces</span>
+          <input type="search" placeholder="Search by name or owner" style="flex: 1; height: 40px; box-sizing: border-box; border: 1px solid #8a8a93; border-radius: 8px; padding: 0 12px; font: inherit; font-size: 14px; color: #18181b; background: #ffffff">
+        </label>
+        <label style="flex: 1 1 200px; display: flex"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Show</span>
+          <sc-raw-select style="flex: 1; height: 40px; box-sizing: border-box; border: 1px solid #8a8a93; border-radius: 8px; padding: 0 10px; font: inherit; font-size: 14px; color: #18181b; background: #ffffff">
+            <option>All workspaces</option>
+            <option>Needs a look</option>
+            <option>Suspended</option>
+          </sc-raw-select>
+        </label>
+      </div>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start">
+        <div class="scroll" style="flex: 999 1 560px; min-width: 0; border: 1px solid #e4e4e7; border-radius: 14px; overflow-x: auto">
+          <sc-raw-table style="width: 100%; min-width: 680px; border-collapse: collapse; font-size: 14px; line-height: 1.45">
+            <sc-raw-thead>
+              <sc-raw-tr style="text-align: left; font-size: 13px; color: #6b6b74">
+                <sc-raw-th scope="col" style="padding: 12px 20px; font-weight: 600; border-bottom: 1px solid #e4e4e7">Workspace</sc-raw-th>
+                <sc-raw-th scope="col" style="padding: 12px 16px; font-weight: 600; border-bottom: 1px solid #e4e4e7">Owner</sc-raw-th>
+                <sc-raw-th scope="col" style="padding: 12px 16px; font-weight: 600; border-bottom: 1px solid #e4e4e7">Notes</sc-raw-th>
+                <sc-raw-th scope="col" style="padding: 12px 20px 12px 16px; font-weight: 600; border-bottom: 1px solid #e4e4e7">Notes go to</sc-raw-th>
+              </sc-raw-tr>
+            </sc-raw-thead>
+            <sc-raw-tbody>
+              <sc-for list="{{ workspaces }}" as="w" hint-placeholder-count="3">
+                <sc-raw-tr class="row" style="background: {{ w.bg }}">
+                  <sc-raw-td style="padding: 14px 20px; border-bottom: 1px solid #e4e4e7">
+                    <a href="#" aria-current="{{ w.current }}" style="display: block; font-weight: 600; text-decoration: none">{{ w.name }}</a>
+                    <span class="num" style="display: block; font-size: 13px; color: #6b6b74">{{ w.size }}</span>
+                  </sc-raw-td>
+                  <sc-raw-td style="padding: 14px 16px; border-bottom: 1px solid #e4e4e7">{{ w.owner }}</sc-raw-td>
+                  <sc-raw-td style="padding: 14px 16px; border-bottom: 1px solid #e4e4e7">
+                    <span style="display: flex; align-items: center; gap: 10px">
+                      <span class="num" style="width: 28px; text-align: right; font-weight: 600">{{ w.total }}</span>
+                      <span role="img" aria-label="{{ w.label }}" style="display: flex; gap: 2px; width: 96px; height: 8px; border-radius: 999px; overflow: hidden; background: #f4f4f5">
+                        <span style="flex: {{ w.n0 }}; background: #dd2c27"></span><span style="flex: {{ w.n1 }}; background: #2563eb"></span><span style="flex: {{ w.n2 }}; background: #f59e0b"></span><span style="flex: {{ w.n3 }}; background: #15803d"></span><span style="flex: {{ w.n4 }}; background: #64748b"></span>
+                      </span>
+                    </span>
+                  </sc-raw-td>
+                  <sc-raw-td style="padding: 14px 20px 14px 16px; border-bottom: 1px solid #e4e4e7">
+                    <span style="display: block">{{ w.dest }}</span>
+                    <sc-if value="{{ w.problem }}" hint-placeholder-val="{{ false }}"><span style="display: block; font-size: 13px; font-weight: 600; color: #dd2c27">{{ w.problemText }}</span></sc-if>
+                  </sc-raw-td>
+                </sc-raw-tr>
+              </sc-for>
+            </sc-raw-tbody>
+          </sc-raw-table>
+        </div>
+
+        <aside aria-labelledby="ws-panel" style="flex: 1 1 340px; min-width: 0; max-width: 100%; border: 1px solid #e4e4e7; border-radius: 14px; background: #fafafa">
+          <div style="padding: 20px 22px; border-bottom: 1px solid #e4e4e7">
+            <h2 id="ws-panel" style="margin: 0; font-size: 18px; font-weight: 700">Acme support</h2>
+            <p style="margin: 2px 0 0; font-size: 13px; color: #6b6b74">Owned by tom@acme.dev · created 18 Sep</p>
+          </div>
+          <div style="padding: 20px 22px; display: flex; flex-direction: column; gap: 22px">
+            <section>
+              <h3 style="margin: 0 0 8px; font-size: 14px; font-weight: 600">Where notes go</h3>
+              <div style="display: flex; flex-direction: column; gap: 8px; font-size: 14px">
+                <p style="margin: 0"><span style="font-weight: 600">REST API</span> <span style="color: #6b6b74">hooks.acme.dev/fruitback</span></p>
+                <p role="alert" style="margin: 0; font-size: 13px; line-height: 1.5"><span style="font-weight: 600; color: #dd2c27">2 notes not delivered.</span> The address answered 503 at 09:12 and 09:40.</p>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center">
+                  <button type="button" class="b-wide" style="height: 40px; padding: 0 14px; border: 1px solid #8a8a93; border-radius: 6px; background: #ffffff; color: #18181b; font: inherit; font-size: 14px; font-weight: 600">Send them again</button>
+                  <a href="Admin-notes.dc.html" style="font-size: 14px; font-weight: 600">See the notes</a>
+                </div>
+              </div>
+            </section>
+            <section>
+              <h3 style="margin: 0 0 6px; font-size: 14px; font-weight: 600">People · 2</h3>
+              <ul style="list-style: none; margin: 0; padding: 0; font-size: 14px">
+                <li style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #e4e4e7"><span>Tom Marchal</span><span style="color: #6b6b74">Owner</span></li>
+                <li style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #e4e4e7"><span>Nadia Benali</span><span style="color: #6b6b74">Member</span></li>
+              </ul>
+              <a href="Admin-users.dc.html" style="display: inline-block; margin-top: 8px; font-size: 14px; font-weight: 600">Manage in Users</a>
+            </section>
+            <section>
+              <h3 style="margin: 0 0 6px; font-size: 14px; font-weight: 600">Sites · 1</h3>
+              <ul style="list-style: none; margin: 0; padding: 0; font-size: 14px">
+                <li style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #e4e4e7"><span style="font-weight: 600">support.acme.dev</span><span style="color: #6b6b74">Everyone who visits</span></li>
+              </ul>
+            </section>
+            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600">Owner
+              <sc-raw-select style="height: 40px; box-sizing: border-box; border: 1px solid #8a8a93; border-radius: 8px; padding: 0 10px; font: inherit; font-size: 14px; font-weight: 400; color: #18181b; background: #ffffff">
+                <option>Tom Marchal, tom@acme.dev</option>
+                <option>Nadia Benali, nadia@acme.dev</option>
+              </sc-raw-select>
+            </label>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; padding: 14px 22px; border-top: 1px solid #e4e4e7">
+            <button type="button" class="b-wide" style="height: 40px; padding: 0 14px; border: 1px solid #8a8a93; border-radius: 6px; background: #ffffff; color: #18181b; font: inherit; font-size: 14px; font-weight: 600">Suspend</button>
+            <button type="button" class="b-link" style="border: 0; background: none; padding: 10px 0; font: inherit; font-size: 14px; font-weight: 600; color: #18181b; text-decoration: underline; text-underline-offset: 3px">Delete the workspace</button>
+          </div>
+        </aside>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:1000}}">
+class Component extends DCLogic {
+  renderVals() {
+    const raw = [
+      { name: 'Acme web', size: '6 people · 3 sites', owner: 'nadia@acme.dev', n: [14, 22, 18, 49, 9], dest: 'Linear, GitHub Issues', problem: '' },
+      { name: 'Acme support', size: '2 people · 1 site', owner: 'tom@acme.dev', n: [5, 6, 4, 7, 1], dest: 'REST API', problem: '2 notes not delivered', current: true },
+      { name: 'Lumen', size: '1 person · 1 site', owner: 'paul@lumen.studio', n: [1, 0, 0, 0, 0], dest: 'Kept in Fruitback', problem: '' }
+    ];
+    const workspaces = raw.map((w) => {
+      const total = w.n.reduce((a, b) => a + b, 0);
+      return {
+        name: w.name, size: w.size, owner: w.owner, dest: w.dest, total: total,
+        n0: w.n[0], n1: w.n[1], n2: w.n[2], n3: w.n[3], n4: w.n[4],
+        label: total + ' notes: ' + w.n[0] + ' new, ' + w.n[1] + ' to do, ' + w.n[2] + ' in progress, ' + w.n[3] + ' done, ' + w.n[4] + ' closed',
+        problem: w.problem !== '', problemText: w.problem,
+        bg: w.current ? '#f4f4f5' : 'transparent',
+        current: w.current ? 'true' : 'false'
+      };
+    });
+    return { workspaces: workspaces };
+  }
+}
+</script>
+
+
+</body></html>
