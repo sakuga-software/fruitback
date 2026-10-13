@@ -63,8 +63,11 @@ type Stage =
   | { kind: 'loading' }
   | { kind: 'email' }
   | { kind: 'sent'; email: string }
-  /** Signed in, and the workspace could not be made: the person tries again, with the name they like. */
-  | { kind: 'unnamed'; account: Account }
+  /**
+   * Signed in, and the workspace could not be made: the person tries again, with the name they like.
+   * `problem`: what the worker said of the try that was made for them.
+   */
+  | { kind: 'unnamed'; account: Account; problem: string }
   /** The sites of the workspace could not be read. That is not « no site »: nothing is asked again. */
   | { kind: 'unread'; account: Account; workspace: Workspace }
   /** `replaces`: the site that « Change » opened again, with its values in the form. */
@@ -149,8 +152,9 @@ async function resolveStage(): Promise<Stage> {
     // Somebody who was invited joins a workspace: none is made for them behind their back.
     const invitations = await myInvitations();
     if (invitations.ok && invitations.data.length > 0) return { kind: 'invited' };
-    workspace = (await firstWorkspace(account)).workspace;
-    if (workspace === undefined) return { kind: 'unnamed', account };
+    const made = await firstWorkspace(account);
+    if (made.workspace === undefined) return { kind: 'unnamed', account, problem: made.problem };
+    workspace = made.workspace;
   }
 
   return siteStage(account, workspace);
@@ -248,6 +252,7 @@ export default function Setup() {
             {stage.kind === 'unnamed' ? (
               <Unnamed
                 account={stage.account}
+                tried={stage.problem}
                 onCreated={(made) => void siteStage(stage.account, made).then(setStage)}
               />
             ) : null}
@@ -397,11 +402,23 @@ function Sent({ email, onBack, onSignedIn }: { email: string; onBack: () => void
  * Signed in, and the worker did not make the workspace: the name it would have taken is in a field,
  * and the person sends it again, as it is or changed.
  */
-function Unnamed({ account, onCreated }: { account: Account; onCreated: (workspace: Workspace) => void }) {
+/**
+ * The workspace of a person who signed in, made again by hand. A try was made for them already, so
+ * the form opens on what the worker answered to it (`tried`), and the button says « Try again ».
+ */
+function Unnamed({
+  account,
+  tried,
+  onCreated,
+}: {
+  account: Account;
+  tried: string;
+  onCreated: (workspace: Workspace) => void;
+}) {
   useLocale();
   const [name, setName] = useState(workspaceNameFrom(account.email));
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | undefined>(WORKSPACE_NOT_CREATED);
+  const [problem, setProblem] = useState<string | undefined>(tried);
 
   async function submit(event: FormEvent) {
     event.preventDefault();

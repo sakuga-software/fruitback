@@ -239,7 +239,7 @@ type Stub = {
   as: 'nobody' | 'named' | 'sited';
   role?: 'owner' | 'member';
   /** What the worker answers when a workspace is made or a site is added. */
-  refuses?: { workspace?: boolean; site?: number; sites?: boolean };
+  refuses?: { workspace?: boolean | 'invalid-name'; site?: number; sites?: boolean };
   locale?: 'en' | 'fr';
 };
 
@@ -267,11 +267,12 @@ async function stubWorker(page: Page, stub: Stub): Promise<string[]> {
     if (pathname === '/console/me') {
       if (stub.as === 'nobody') return json({ error: 'identity-required' }, 401);
 
-      return json({ account, workspaces: made && stub.refuses?.workspace !== true ? [workspace] : [] });
+      return json({ account, workspaces: made && stub.refuses?.workspace === undefined ? [workspace] : [] });
     }
     if (pathname === '/console/auth/email') return json({ sent: true });
     if (pathname.endsWith('/list-user-invitations')) return json([]);
     if (pathname === '/console/workspaces') {
+      if (stub.refuses?.workspace === 'invalid-name') return json({ error: 'invalid-name' }, 400);
       if (stub.refuses?.workspace === true) return json({ error: 'unavailable' }, 503);
       made = true;
 
@@ -543,13 +544,22 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     expect(asked.filter((each) => each.startsWith('POST')).length).toBe(before);
   });
 
+  test('the form of a workspace that was not made opens on what the worker said of the try', async ({ page }) => {
+    await stubWorker(page, { as: 'named', refuses: { workspace: 'invalid-name' } });
+    await page.goto(`${CONSOLE}/setup`);
+
+    await expect(page.getByRole('alert')).toHaveText('A workspace needs a name of one line, up to 80 characters.');
+    await expect(page.getByRole('textbox', { name: 'Workspace name' })).toHaveValue('Acme');
+  });
+
   test('a workspace the worker did not make is asked for again, with the name in a field', async ({ page }) => {
     const asked = await stubWorker(page, { as: 'named', refuses: { workspace: true } });
     await page.goto(`${CONSOLE}/setup`);
 
-    // Signed in, and no workspace: the first step is still the current one, and says what failed.
+    // Signed in, and no workspace: the first step is still the current one, and says what failed: the
+    // worker did not answer the try that was made for the person.
     await expect(page.getByRole('heading', { name: `${CURRENT}Your account` })).toBeVisible();
-    await expect(page.getByRole('alert')).toHaveText('The workspace was not created. Try again.');
+    await expect(page.getByRole('alert')).toHaveText('Fruitback did not answer. Try again.');
     const name = page.getByRole('textbox', { name: 'Workspace name' });
     // The name the workspace would have taken: the domain of the address.
     await expect(name).toHaveValue('Acme');
