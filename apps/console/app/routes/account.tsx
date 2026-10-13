@@ -189,9 +189,13 @@ export default function Account() {
         <section aria-labelledby="where-title">
           <SectionTitle id="where-title">{t('Where you are signed in')}</SectionTitle>
           <SectionHelp>{t('Disconnect a browser you no longer use. It stops showing notes at once.')}</SectionHelp>
-          {sessions === 'loading' ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
+          {sessions === 'loading' ? (
+            <div className={ONE_ROW}>
+              <p className="text-small text-muted">{t('Loading…')}</p>
+            </div>
+          ) : null}
           {sessions === 'failed' ? (
-            <div className="flex flex-wrap items-center gap-[12px]">
+            <div className={`${ONE_ROW} gap-[12px]`}>
               <p role="alert" className="min-w-0 flex-1 text-small text-muted">
                 {t('Fruitback did not answer. The browsers where you are signed in could not be read.')}
               </p>
@@ -306,6 +310,17 @@ function SectionTitle({ id, children }: { id: string; children: string }) {
 function SectionHelp({ children }: { children: string }) {
   return <p className="mt-[4px] mb-[12px] text-small text-muted">{children}</p>;
 }
+
+/**
+ * The box of a list of one row, where there is no list yet: its two rules, and the height of a row.
+ *
+ * WARNING: the list of the browsers arrives after the screen is drawn, and « Sign out » is under it.
+ * While the list is read, and when it could not be, its place is the one of the row of this browser,
+ * which every list has. So the buttons do not move under a press: a press that starts before a
+ * button moves and ends after is lost. `e2e/console-account.spec.ts` holds the list back to see it.
+ * A second browser still adds its row under the first.
+ */
+const ONE_ROW = 'box-content flex min-h-[56px] flex-wrap items-center border-y border-line py-[8px]';
 
 /**
  * A row of a list of the account: a name, a line under it, and at its end a state or one action. The
