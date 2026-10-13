@@ -149,6 +149,47 @@ describe('the PostgreSQL of docker-compose.yml (FRU-143)', () => {
   });
 });
 
+/** The `console` service, as written, with the comments inside it. */
+function composeConsole(): string {
+  return /^ {2}console:\n((?: {4}.*\n| *#.*\n)*)/m.exec(COMPOSE)?.[1] ?? '';
+}
+
+describe('the console of docker-compose.yml (FRU-222)', () => {
+  it('starts only with its profile, so `docker compose up` stays one container', () => {
+    assert.match(composeConsole(), /^ {4}profiles: \[console\]$/m);
+  });
+
+  it('pulls the published image of the console, as a complete reference, and builds nothing', () => {
+    assert.match(
+      composeConsole(),
+      /^ {4}image: \$\{FRUITBACK_CONSOLE_IMAGE:-ghcr\.io\/sakuga-software\/fruitback-console:edge\}$/m,
+    );
+  });
+
+  it('is given the address of the worker and a port, and nothing else: no secret reaches static files', () => {
+    const block = /^ {4}environment:\n((?: {6}.*\n| *#.*\n)*)/m.exec(composeConsole())?.[1] ?? '';
+    const given = [...block.matchAll(/^ {6}([A-Z][A-Z0-9_]*): (.*)$/gm)].map((match) => [match[1], match[2]]);
+
+    assert.deepEqual(given, [
+      // Not `:?`: Compose reads every service, and a worker with no console would then not start.
+      ['FRUITBACK_API', '${FRUITBACK_PUBLIC_URL:-}'],
+      ['FRUITBACK_CONSOLE_LISTEN', '8080'],
+    ]);
+    assert.doesNotMatch(composeConsole(), /^ {4}(volumes|env_file|depends_on):/m);
+  });
+
+  it('publishes its one port from FRUITBACK_CONSOLE_PORT, on the port the container is told to listen on', () => {
+    assert.deepEqual(composeConsole().match(/^ {6}- '.*'$/gm), ["      - '${FRUITBACK_CONSOLE_PORT:-8081}:8080'"]);
+  });
+
+  it('runs with a root that is read-only, no capability and no new privilege', () => {
+    assert.match(composeConsole(), /^ {4}read_only: true\n {4}tmpfs:\n {6}- \/tmp$/m);
+    assert.match(composeConsole(), /^ {4}cap_drop:\n {6}- ALL$/m);
+    assert.match(composeConsole(), /^ {4}security_opt:\n {6}- no-new-privileges:true$/m);
+    assert.doesNotMatch(composeConsole(), /^ {4}(user|privileged|network_mode):/m);
+  });
+});
+
 describe('.env.example', () => {
   it('lists each variable docker-compose.yml reads, once, and no other', () => {
     const assigned = [...ENV_EXAMPLE.matchAll(/^([A-Z][A-Z0-9_]*)=/gm)].map((match) => match[1] ?? '');

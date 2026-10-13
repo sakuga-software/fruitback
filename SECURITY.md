@@ -1005,6 +1005,28 @@ verify`.
   (`betterAuth`), and no client id. A worker with no accounts, or with no `FRUITBACK_AUTH_SECRET`,
   answers `{}`.
 
+### The image of the console (FRU-222)
+
+The console is static files behind nginx, in an image of its own. **It holds no secret**: nothing
+of the repository but the built files, no variable but the address of the worker, and the session
+is a cookie of the worker that no script reads.
+
+- **Its `Content-Security-Policy` lets the page call one worker and run no other script**:
+  `script-src 'self'` and the hashes of the inline scripts of the build, never `'unsafe-inline'`;
+  `connect-src 'self'` and the origin of the worker; `frame-ancestors 'none'`; `base-uri 'none'`.
+- **The address of the worker is given when the container starts**, as `FRUITBACK_API`, and goes
+  into that policy and into `/config.js`. It is held to the letters of an address first: a scheme,
+  a host, a port, a path. Anything else stops the container before a file is written, so a value
+  cannot add a source to the policy or a statement to the script. **Whoever sets the variables of
+  the container chooses the worker the console calls**: that is the operator, as for every variable.
+- **`/config.js` is public.** It holds the address of the worker and nothing else.
+- **It runs as a user that is not root**, writes under `/tmp` only, and starts with a read-only root
+  and no capability, which is how the compose file runs it.
+- **The console and the worker are two origins of one site.** The worker answers the origin of
+  `FRUITBACK_CONSOLE_URL` and no other, with credentials, and the cookie of the session is
+  `SameSite=Strict`: two names of one domain. Not measured: one name with two paths, and the cookie
+  on `http://localhost`, where a browser must accept a `Secure` cookie without TLS.
+
 ### What the console may change, and who (FRU-99)
 
 The console's routes under `/console/` take the cookie of a console session, and read the role

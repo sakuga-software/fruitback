@@ -22,6 +22,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>{PRODUCT}</title>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        {/* The address of the worker of this instance, before the bundle reads it (FRU-222): `instance.ts`. */}
+        <script src="/config.js"></script>
         <Meta />
         <Links />
       </head>

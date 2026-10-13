@@ -23,6 +23,12 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   See _The session of the console_ below for the worker of before, the `401` and the providers.
   The image hashes the inline scripts of `index.html` into its policy (`csp.mjs`), never
   `'unsafe-inline'`, and serves the widget's script at `/fruitback.iife.js` until it has a CDN.
+  **The address of the worker is read when the page loads, not when it is built** (FRU-222):
+  `/config.js`, which the container writes, sets `globalThis.__FRUITBACK__` before the bundle, and
+  `apiFrom` of `instance.ts` reads it once. The file of the repository sets nothing, so `pnpm dev`
+  and a console built with `VITE_FRUITBACK_API` keep the address of their build. The script tag is
+  in `<head>` with neither `async` nor `defer`: a module starts after it. Nothing secret goes in
+  that file. See [image.md](image.md).
 - `design/` — the reference mockups of the Cloud and the simplified extension (a Claude Design
   export, 2026-10-07), with a picture of each board. **Build a screen that has a board to its board**:
   layout, words and tokens. `design/README.md` says which board belongs to which ticket.
