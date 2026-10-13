@@ -23,7 +23,7 @@ const TEAM: SiteConfig = {
 
 type Change = Record<string, { newValue?: unknown }>;
 
-/** One `sync` area, and what each browser hears of the writes of the other. */
+/** One `sync` area, and what each browser hears of its writes. */
 function account() {
   const items: Record<string, unknown> = {};
   const listeners: { of: object; hear: (changes: Change) => Promise<void> }[] = [];
@@ -34,12 +34,12 @@ function account() {
   const idle = async (): Promise<void> => {
     while (heard.length > 0) await heard.shift();
   };
-  const areaOf = (browser: object): SyncArea => {
+  const areaOf = (_browser: object): SyncArea => {
     // An event, as `storage.onChanged` is one: the write does not wait for those who hear of it.
     const tell = (changes: Change): void => {
       if (Object.keys(changes).length === 0) return;
+      // Every browser hears of a write, the one that wrote too: `storage.onChanged` fires there as well.
       for (const listener of listeners) {
-        if (listener.of === browser) continue;
         heard.push(new Promise<void>((resolve) => setImmediate(resolve)).then(() => listener.hear(changes)));
       }
     };
@@ -346,6 +346,9 @@ describe('the rules of a reviewer in two browsers (FRU-72)', () => {
     });
 
     const merging = slow.merge();
+    // The merge has read both sides, and waits on its write, when another browser adds a rule.
+    for (let turn = 0; turn < 20; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+    shared.items['site:https://globex.dev'] = GLOBEX;
     const arriving = slow.changed({ 'site:https://globex.dev': { newValue: GLOBEX } });
     for (let turn = 0; turn < 20; turn += 1) await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual(order, []);
@@ -390,6 +393,89 @@ describe('the rules of a reviewer in two browsers (FRU-72)', () => {
     assert.deepEqual(shared.items, {});
   });
 
+  // Raised in review: a browser hears of its own writes to the account. The reviewer switches a rule
+  // off, then on at once: the echo of « off » arrived when the map said « on » already, and was applied
+  // as a change of another browser. The rule went off again for a moment, and its access was given back.
+  it('does not apply the echo of its own write over a later change made here', async () => {
+    const shared = account();
+    const self = { map: {} as Record<string, SiteConfig>, known: [] as string[] };
+    const states: boolean[] = [];
+    const sync = createSiteSync({
+      enabled: async () => true,
+      known: { read: async () => self.known, write: async (patterns) => void (self.known = patterns) },
+      readLocal: async () => self.map,
+      area: shared.areaOf(self),
+      apply: (mutation) => own(mutation),
+    });
+    const own = createSiteOwner(
+      {
+        read: async () => self.map,
+        replace: async (sites) => {
+          const rule = sites['https://acme.dev'];
+          if (rule !== undefined && states.at(-1) !== rule.enabled) states.push(rule.enabled);
+          self.map = sites;
+        },
+      },
+      async (_before, mutation) => sync.stored(mutation),
+    );
+    shared.listeners.push({ of: self, hear: (changes) => sync.changed(changes) });
+
+    const off = own({ kind: 'write', entries: { 'https://acme.dev': { ...ACME, enabled: false } } });
+    const on = own({ kind: 'write', entries: { 'https://acme.dev': ACME } });
+    await Promise.all([off, on]);
+    await own({ kind: 'write', entries: {} });
+    await shared.idle();
+    await own({ kind: 'write', entries: {} });
+
+    assert.deepEqual(states, [false, true]);
+    assert.deepEqual(self.map, { 'https://acme.dev': ACME });
+    assert.deepEqual(shared.items, { 'site:https://acme.dev': ACME });
+  });
+
+  // The same echo, when the copy of the later change has not reached the account yet: the account
+  // still says « off », and the map says « on ». The echo waits for that copy to end.
+  it('does not apply the echo of its own write while the copy of a later change is on its way', async () => {
+    const shared = account();
+    const self = { map: {} as Record<string, SiteConfig>, known: [] as string[] };
+    const states: boolean[] = [];
+    const area = shared.areaOf(self);
+    let release = (): void => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let sets = 0;
+    const sync = createSiteSync({
+      enabled: async () => true,
+      known: { read: async () => self.known, write: async (patterns) => void (self.known = patterns) },
+      readLocal: async () => self.map,
+      // The first copy goes at once, the second one waits.
+      area: { ...area, set: async (items) => ((sets += 1) > 1 ? (await held, area.set(items)) : area.set(items)) },
+      apply: (mutation) => own(mutation),
+    });
+    const own = createSiteOwner(
+      {
+        read: async () => self.map,
+        replace: async (sites) => {
+          const rule = sites['https://acme.dev'];
+          if (rule !== undefined && states.at(-1) !== rule.enabled) states.push(rule.enabled);
+          self.map = sites;
+        },
+      },
+      async (_before, mutation) => sync.stored(mutation),
+    );
+    shared.listeners.push({ of: self, hear: (changes) => sync.changed(changes) });
+
+    await own({ kind: 'write', entries: { 'https://acme.dev': { ...ACME, enabled: false } } });
+    await own({ kind: 'write', entries: { 'https://acme.dev': ACME } });
+    for (let turn = 0; turn < 20; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(states, [false, true]);
+    release();
+    await own({ kind: 'write', entries: {} });
+    await shared.idle();
+    await own({ kind: 'write', entries: {} });
+
+    assert.deepEqual(states, [false, true]);
+    assert.deepEqual(shared.items, { 'site:https://acme.dev': ACME });
+  });
+
   it('sends nothing and takes nothing while the reviewer has not turned it on', async () => {
     const shared = account();
     const here = browserOn(shared);
@@ -409,6 +495,13 @@ describe('the rules of a reviewer in two browsers (FRU-72)', () => {
     const shared = account();
     const here = browserOn(shared);
 
+    // What another browser, or anything else, left in the account.
+    Object.assign(shared.items, {
+      'site:https://acme.dev': ACME,
+      'site:not a pattern': ACME,
+      'site:https://broken.dev': { endpoint: '' },
+      'something-else': ACME,
+    });
     await here.sync.changed({
       'site:https://acme.dev': { newValue: ACME },
       'site:not a pattern': { newValue: ACME },
