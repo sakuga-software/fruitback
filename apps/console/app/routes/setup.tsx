@@ -71,7 +71,12 @@ type Stage =
   | { kind: 'site'; account: Account; workspace: Workspace; replaces?: Added }
   | ({ kind: 'install'; account: Account; workspace: Workspace } & Added)
   /** An invitation waits for this person: they came to join a workspace, not to make one. */
-  | { kind: 'invited' };
+  | { kind: 'invited' }
+  /**
+   * A member or a guest of a workspace with no site: only an owner or an admin adds one. The Sites
+   * screen says so, as the front door sends them there too.
+   */
+  | { kind: 'waiting'; workspace: Workspace };
 
 /**
  * The site of the setup. `fresh`: it was added in this visit, so nothing was noted on it yet.
@@ -156,8 +161,9 @@ async function siteStage(account: Account, workspace: Workspace): Promise<Stage>
   const listed = await call<{ sites: Site[] }>('GET', `/console/workspaces/${workspace.id}/sites`);
   if (!listed.ok) return { kind: 'unread', account, workspace };
   const site = listed.data.sites[0];
+  if (site !== undefined) return { kind: 'install', account, workspace, site };
 
-  return site === undefined ? { kind: 'site', account, workspace } : { kind: 'install', account, workspace, site };
+  return manages(workspace) ? { kind: 'site', account, workspace } : { kind: 'waiting', workspace };
 }
 
 export default function Setup() {
@@ -180,6 +186,7 @@ export default function Setup() {
 
   useEffect(() => {
     if (stage.kind === 'invited') void navigate('/invitations', { replace: true });
+    if (stage.kind === 'waiting') void navigate(`/w/${stage.workspace.id}/sites`, { replace: true });
   }, [stage, navigate]);
 
   // The title of the tab, as the mockup names it. The cleanup gives back the name of the product.

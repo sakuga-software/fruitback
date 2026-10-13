@@ -579,6 +579,23 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     await expect(page.getByRole('button', { name: /Rename|Change/ })).toHaveCount(0);
   });
 
+  test('a member of a workspace with no site is sent to its Sites screen, with no form that cannot work', async ({
+    page,
+  }) => {
+    const asked = await stubWorker(page, { as: 'named', role: 'member' });
+    await page.goto(`${CONSOLE}/setup`);
+
+    await expect(page).toHaveURL(`${CONSOLE}/w/w1/sites`);
+    await expect(page.getByRole('textbox', { name: 'Site address' })).toHaveCount(0);
+    expect(asked.filter((each) => each === 'POST /console/workspaces/w1/sites')).toEqual([]);
+    // The control: the owner of the same workspace stays on the setup, at the form.
+    await page.context().unrouteAll({ behavior: 'ignoreErrors' });
+    await stubWorker(page, { as: 'named', role: 'owner' });
+    await page.goto(`${CONSOLE}/setup`);
+    await expect(page.getByRole('textbox', { name: 'Site address' })).toBeVisible();
+    await expect(page).toHaveURL(`${CONSOLE}/setup`);
+  });
+
   for (const locale of ['en', 'fr'] as const) {
     test(`no state of the setup scrolls sideways on a phone, in ${locale}`, async ({ browser }) => {
       const context = await browser.newContext({
