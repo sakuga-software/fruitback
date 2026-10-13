@@ -25,6 +25,7 @@ import {
   ownDatabase,
   rowsOf,
 } from './postgres.fixture.ts';
+import { madeByTheHomeMadeTool } from './postgres-home-made.fixture.ts';
 import { APPLIED, inSchema, migrate, migrationsFolder } from './postgres-migrate.ts';
 import { createPostgresSeedStore } from './seeds-postgres.ts';
 import { StoreError } from './store.ts';
@@ -290,6 +291,49 @@ describe('a connection that does not take its schema (FRU-219)', { skip: NO_REAL
       assert.deepEqual(await tablesOf(admin, 'public'), []);
     } finally {
       await database.close();
+      await admin.close();
+      await own.drop();
+    }
+  });
+});
+
+describe('a database that the tool of before left in another schema (FRU-219)', { skip: NO_REAL_POSTGRES }, () => {
+  // Raised in review. That tool followed the search path of the address. FRU-181 refused such a path;
+  // the worker sets its own now, and would find `public` empty and make a worker with no account.
+  it('is refused with the schema to name, and nothing is written in the empty one', async () => {
+    const own = await ownDatabase();
+    const before = createPgDatabase(own.url, 'other_tool', { max: 1 });
+    const admin = createPgDatabase(own.url, 'public', { max: 1 });
+    const worker = createPgDatabase(own.url, 'public', { max: 1 });
+    try {
+      await rowsOf(admin, 'CREATE SCHEMA other_tool');
+      await madeByTheHomeMadeTool(before);
+
+      await assert.rejects(migrate(worker), (error: unknown) => {
+        assert.ok(error instanceof StoreError);
+        assert.match(error.message, /left this database in the schema « other_tool »/);
+        assert.match(error.message, /Set FRUITBACK_DATABASE_SCHEMA=other_tool/);
+
+        return true;
+      });
+      assert.deepEqual(await tablesOf(admin, 'public'), []);
+
+      // And named, it is adopted there, as in public.
+      await migrate(before);
+      assert.ok((await tablesOf(admin, 'other_tool')).includes(APPLIED.migrationsTable));
+      // The control: a `schema_migrations` of another application, in another schema, is not one.
+      const third = createPgDatabase(own.url, 'third', { max: 1 });
+      await rowsOf(admin, 'CREATE SCHEMA another_app');
+      await rowsOf(admin, 'CREATE TABLE another_app.schema_migrations (version text PRIMARY KEY)');
+      await rowsOf(admin, `INSERT INTO another_app.schema_migrations VALUES ('20240101')`);
+      await rowsOf(admin, 'CREATE SCHEMA third');
+      // `other_tool` is under Drizzle now, and the third worker starts: neither is in its way.
+      await migrate(third);
+      assert.ok((await tablesOf(admin, 'third')).includes(APPLIED.migrationsTable));
+      await third.close();
+    } finally {
+      await worker.close();
+      await before.close();
       await admin.close();
       await own.drop();
     }

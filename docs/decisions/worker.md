@@ -1307,7 +1307,10 @@ store of the accounts`, test:`decides a pairing and a session by their instants,
   path of each of its connections, so the one of the address has no effect:
   test:`has no effect: every connection of the worker is in its schema, and the tables go there`. A
   database that the tool of before made in another schema names that schema in
-  `FRUITBACK_DATABASE_SCHEMA`, and is adopted there.
+  `FRUITBACK_DATABASE_SCHEMA`, and is adopted there. A worker that finds its schema empty while
+  such a database, not adopted yet, is in another schema refuses and names the variable, where it
+  would have started with no account (raised in review):
+  test:`is refused with the schema to name, and nothing is written in the empty one`.
 - **The baseline makes the database that the tool of before made, to the last name.** One database
   made by the four migrations of that tool, as they shipped (`postgres-home-made.fixture.ts`, a copy
   compared word for word with `main` at e74be53), one made by the baseline: their catalogues are the

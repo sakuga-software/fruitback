@@ -442,6 +442,54 @@ async function refuseWhatDrizzleWouldSkip(db: Db, folder: string, schema: string
 }
 
 /** Applies the migrations of `folder` that the database does not have yet, in order. */
+/**
+ * Refuses an empty schema when the tool of before left its database in another one (FRU-219).
+ *
+ * That tool made its tables wherever the search path said, and the worker sets the search path
+ * itself now: such a database, reached with `options=-c search_path=<schema>`, would get the baseline
+ * in `public`, and a worker with no account. FRU-181 refused that path with an explanation; this says
+ * what replaced it. Raised in review. Only an empty schema is concerned: a schema that holds a
+ * journal is a worker that started there already, and so is a schema of the tool that a worker
+ * adopted. A `schema_migrations` of another application
+ * is not taken for one of the tool: its first row must be the first migration of that tool.
+ */
+async function refuseTheToolOfBeforeInAnotherSchema(db: Db, schema: string): Promise<void> {
+  const [mine] = rowsOf(
+    await db.execute(
+      sql`SELECT to_regclass(${`${schema}.${APPLIED.migrationsTable}`}) AS drizzle,
+                 to_regclass(${`${schema}.schema_migrations`}) AS home_made`,
+    ),
+  );
+  if (mine?.drizzle !== null || mine?.home_made !== null) return;
+
+  const elsewhere = rowsOf(
+    await db.execute(
+      sql`SELECT schemaname FROM pg_tables
+           WHERE tablename = 'schema_migrations' AND schemaname <> ${schema}
+             AND schemaname NOT IN ('pg_catalog', 'information_schema')
+             -- Adopted already: a worker of this build runs there, and this one is a second worker.
+             AND to_regclass(quote_ident(schemaname) || '.' || ${APPLIED.migrationsTable}) IS NULL
+           ORDER BY schemaname`,
+    ),
+  ).map((row) => String(row.schemaname));
+  for (const other of elsewhere) {
+    const [first] = rowsOf(
+      await db
+        .execute(sql`SELECT name FROM ${sql.identifier(other)}.schema_migrations ORDER BY version LIMIT 1`)
+        // A table of that name with other columns is not one of the tool.
+        .catch(() => ({ rows: [] })),
+    );
+    if (first?.name === HOME_MADE[0]) {
+      throw new StoreError(
+        `The schema « ${schema} » is empty, and the migration tool of before left this database in the schema ` +
+          `« ${other} »: the worker sets its search path itself now, and the one of the address has no effect. ` +
+          `Set FRUITBACK_DATABASE_SCHEMA=${other} to keep it there, or move its tables to « ${schema} » by hand ` +
+          '(docs/self-hosting.md). Nothing was written',
+      );
+    }
+  }
+}
+
 export async function migrate(database: Database, folder: string = migrationsFolder()): Promise<void> {
   refuseTwoMigrationsOfOneDate(folder);
   const { schema } = database;
@@ -451,6 +499,7 @@ export async function migrate(database: Database, folder: string = migrationsFol
     try {
       await ensureTheSchema(db, schema);
       await refuseASearchPathThatIsNotTheSchema(db, schema);
+      await refuseTheToolOfBeforeInAnotherSchema(db, schema);
       await adoptWhatTheHomeMadeToolMade(db, folder, schema);
       await refuseWhatDrizzleWouldSkip(db, folder, schema);
       await applyWhatIsNotApplied(db, folder, schema);
