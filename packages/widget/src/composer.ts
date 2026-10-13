@@ -533,7 +533,8 @@ const STYLES = `
   color: var(--fruitback-color-text);
   font: 14px/1.5 var(--fruitback-font-sans);
   box-shadow: var(--fruitback-shadow-xl);
-  animation: fruitback-composer-in var(--fruitback-duration-fast) cubic-bezier(0.22, 1.2, 0.36, 1);
+  /* The curve and the time of the mock-up (FRU-233): it arrives fast and settles, with no overshoot. */
+  animation: fruitback-composer-in var(--fruitback-duration-slow) var(--fruitback-ease-out);
 }
 .fruitback-composer[hidden] { display: none; }
 .fruitback-composer-drop {

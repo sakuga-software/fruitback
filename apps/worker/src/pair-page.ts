@@ -28,13 +28,13 @@ const PAGE = `<!doctype html>
 <meta name="robots" content="noindex">
 <title>Pair Fruitback</title>
 <style>
-body { margin: 0; padding: 48px 20px; background: #fffdf9; color: #1c1917; font: 16px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif; }
+body { margin: 0; padding: 48px 20px; background: #ffffff; color: #18181b; font: 16px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif; }
 main { max-width: 34rem; margin: 0 auto; }
 h1 { margin: 0 0 16px; font-size: 1.5rem; line-height: 1.2; }
 ol { margin: 0 0 20px; padding-left: 1.4rem; }
 li { margin: 6px 0; }
-p { margin: 0; color: #57534e; font-size: 0.875rem; }
-@media (prefers-color-scheme: dark) { body { background: #1c1917; color: #f5f5f4; } p { color: #a8a29e; } }
+p { margin: 0; color: #6b6b74; font-size: 0.875rem; }
+@media (prefers-color-scheme: dark) { body { background: #18181b; color: #f4f4f5; } p { color: #a1a1aa; } }
 </style>
 </head>
 <body>

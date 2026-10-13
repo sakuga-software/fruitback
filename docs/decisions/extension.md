@@ -229,6 +229,11 @@ open composer and its note` fails without the check, 3 runs out of 3.
 - **The two pages wear the tokens of the design**, which are the tokens of the widget
   (`design/README.md`, `packages/widget/src/theme.ts`): the accent `#dd2c27`, and in the dark scheme
   the pair of the widget, a lighter red (`#ec6a65`) under dark text.
+- **The tokens are those of the mock-up of 2026-10-13** (FRU-233): the neutral greys, and the five
+  status colours for the counts a screen of the popup will draw. `--radius-field` is 8 px, where it
+  was 10, and `--radius-action` (10 px) waits for the screens of the popup (FRU-251): this change
+  moves no layout, and an action is still a pill. The dark scheme is kept and derived, like the
+  widget's.
 - **`entrypoints/popup/style.css` holds the tokens, and the options page loads it first.** A
   stylesheet of an extension page cannot import the widget, so the values are copied.
   `src/design-tokens.test.ts` compares each one with the widget in both schemes, and measures each

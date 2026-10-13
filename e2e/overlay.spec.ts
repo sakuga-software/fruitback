@@ -81,6 +81,46 @@ test('the colour of a pin is the Linear state, and nothing the widget decided', 
   assertDistinct(stages);
 });
 
+test('each of the five statuses has the colour of the mock-up, and the amber is written dark (FRU-233)', async ({
+  page,
+}) => {
+  // The in-memory Linear gives five notes in a row the five states of its workflow.
+  await openPlayground(page, 'status-colours');
+  const targets = [
+    '[data-testid="card-espresso"] .add',
+    '[data-testid="card-latte"] .add',
+    '[data-testid="card-mocha"] .add',
+    '#checkout-cta',
+    'main header button',
+  ];
+  for (const [index, target] of targets.entries()) await plantPin(page, page.locator(target), `Statut ${index + 1}`);
+
+  const drawn = await page.locator('[data-fruitback-pin]').evaluateAll((pins) =>
+    Object.fromEntries(
+      pins.map((pin) => {
+        const badge = pin.querySelector('.fruitback-pin-badge') as HTMLElement;
+        const style = getComputedStyle(badge);
+
+        return [
+          (pin as HTMLElement).dataset.fruitbackStage,
+          { fill: style.backgroundColor, text: style.color, frame: getComputedStyle(pin).borderTopColor },
+        ];
+      }),
+    ),
+  );
+
+  const white = 'rgb(255, 255, 255)';
+  const status = (fill: string, text = white) => ({ fill, text, frame: fill });
+  expect(drawn).toEqual({
+    seeded: status('rgb(221, 44, 39)'),
+    green: status('rgb(37, 99, 235)'),
+    // White on this amber is 2.15:1. The ink is 8.25:1.
+    ripening: status('rgb(245, 158, 11)', 'rgb(24, 24, 27)'),
+    ripe: status('rgb(21, 128, 61)'),
+    composted: status('rgb(100, 116, 139)'),
+  });
+});
+
 function assertDistinct(stages: (string | undefined)[]): void {
   expect(stages).toHaveLength(3);
   expect(new Set(stages).size, `expected three different stages, got ${stages.join(', ')}`).toBe(3);
