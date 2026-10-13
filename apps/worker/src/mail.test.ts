@@ -7,6 +7,7 @@ import {
   invitationMessage,
   parseTemCredentials,
   signInMessage,
+  unlinked,
 } from './mail.ts';
 
 /**
@@ -135,6 +136,11 @@ function tagsOf(html: string): string[] {
 const HOSTILE = `"><img src=x onerror=alert(1)><script>alert('x')</script>&lt;b&gt; & 'q'`;
 const ESCAPED = `&quot;&gt;&lt;img src=x onerror=alert(1)&gt;&lt;script&gt;alert('x')&lt;/script&gt;&amp;lt;b&amp;gt; &amp; 'q'`;
 
+/** The four characters that open markup, an attribute or an entity, written as text. Not the code of `mail.ts`. */
+function asText(value: string): string {
+  return value.replace(/[&<>"]/g, (mark) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[mark] ?? mark);
+}
+
 describe('what a message is made of (FRU-98, FRU-104, FRU-215)', () => {
   const invitation = {
     inviter: 'Alice Martin',
@@ -147,24 +153,39 @@ describe('what a message is made of (FRU-98, FRU-104, FRU-215)', () => {
   for (const locale of ['en', 'fr']) {
     it(`writes each thing a person typed as text in the HTML of an invitation, never as markup, in ${locale}`, () => {
       const plain = invitationMessage('bob@acme.dev', invitation, locale);
-      // Each field alone, so that one field left as it is cannot hide behind another.
-      const fields: [string, MailMessage][] = [
-        ['the name of the workspace', invitationMessage('bob@acme.dev', { ...invitation, workspace: HOSTILE }, locale)],
-        ['the name of the inviter', invitationMessage('bob@acme.dev', { ...invitation, inviter: HOSTILE }, locale)],
-        ['the address', invitationMessage(HOSTILE, invitation, locale)],
-        ['the link', invitationMessage('bob@acme.dev', { ...invitation, link: `https://x.test/?${HOSTILE}` }, locale)],
+      // Each field alone, so that one field left as it is cannot hide behind another. A name is
+      // also written so that no mail client makes a link of it (FRU-209, `unlinked`): what the
+      // message holds of a name is that form, as text.
+      const fields: [name: string, typed: string, message: MailMessage][] = [
+        [
+          'the name of the workspace',
+          unlinked(HOSTILE),
+          invitationMessage('bob@acme.dev', { ...invitation, workspace: HOSTILE }, locale),
+        ],
+        [
+          'the name of the inviter',
+          unlinked(HOSTILE),
+          invitationMessage('bob@acme.dev', { ...invitation, inviter: HOSTILE }, locale),
+        ],
+        ['the address', HOSTILE, invitationMessage(HOSTILE, invitation, locale)],
+        [
+          'the link',
+          `https://x.test/?${HOSTILE}`,
+          invitationMessage('bob@acme.dev', { ...invitation, link: `https://x.test/?${HOSTILE}` }, locale),
+        ],
       ];
 
-      for (const [name, message] of fields) {
-        assert.equal(message.html.includes(HOSTILE), false, name);
-        assert.ok(message.html.includes(ESCAPED), name);
+      for (const [name, typed, message] of fields) {
+        assert.equal(message.html.includes(typed), false, name);
+        assert.ok(message.html.includes(asText(typed)), name);
+        assert.doesNotMatch(message.html, /<img|<script|onerror=alert\(1\)>/, name);
         // The same elements as a message with nothing hostile in it: no tag was added, none closed.
         assert.deepEqual(tagsOf(message.html), tagsOf(plain.html), name);
         // The text is text: it is sent as it was typed.
-        assert.ok(message.text.includes(HOSTILE), name);
+        assert.ok(message.text.includes(typed), name);
       }
       // The link is in an attribute and in the text of the message: both hold its escaped form only.
-      const linked = fields[3]?.[1].html ?? '';
+      const linked = fields[3]?.[2].html ?? '';
       assert.equal(linked.split(ESCAPED).length - 1, 2);
     });
 
@@ -196,7 +217,12 @@ describe('what a message is made of (FRU-98, FRU-104, FRU-215)', () => {
     assert.match(signInMessage('a@b.dev', 'https://x.test/#t', 15, 'fr-FR').subject, /Votre lien/);
     assert.match(signInMessage('a@b.dev', 'https://x.test/#t', 15, 'de').subject, /Your Fruitback sign-in link/);
     assert.match(signInMessage('a@b.dev', 'https://x.test/#t', 15).text, /It works once, for 15 minutes\./);
-    assert.equal(invitationMessage('b@b.dev', invitation, 'fr').subject, 'Vous êtes invité dans Acme sur Fruitback');
+    // The subject of an invitation is fixed (FRU-209): it holds nothing a person wrote.
+    assert.equal(
+      invitationMessage('b@b.dev', { ...invitation, workspace: HOSTILE, inviter: HOSTILE }, 'fr').subject,
+      'Vous êtes invité dans un espace de travail sur Fruitback',
+    );
+    assert.equal(invitationMessage('b@b.dev', invitation).subject, 'You are invited to a workspace on Fruitback');
     assert.match(invitationMessage('b@b.dev', { ...invitation, role: 'admin' }).text, /as an admin\./);
     assert.match(invitationMessage('b@b.dev', invitation).text, /as a member\.[\s\S]*It waits for 7 days\./);
   });
