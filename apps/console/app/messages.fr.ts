@@ -19,12 +19,32 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Loading…': 'Chargement…',
 
   'My account': 'Mon compte',
-  'How you sign in, and the workspace you are in.': 'Votre façon de vous connecter, et le workspace où vous êtes.',
+  'Your name on notes, how you sign in, and where.': 'Votre nom sur les notes, comment vous vous connectez, et où.',
+  'Name shown on notes': 'Nom affiché sur les notes',
+  'How you sign in': 'Comment vous vous connectez',
+  'Any of these opens the same account, in the console and in the extension.':
+    'Chacune ouvre le même compte, dans la console et dans l’extension.',
+  'Always on': 'Toujours actif',
+  'On this Fruitback': 'Sur ce Fruitback',
+  'Disconnect a browser you no longer use. It stops showing notes at once.':
+    'Déconnectez un navigateur que vous n’utilisez plus. Il cesse aussitôt d’afficher les notes.',
+  'Fruitback did not answer. The browsers where you are signed in could not be read.':
+    'Fruitback n’a pas répondu. Les navigateurs où vous êtes connecté n’ont pas pu être lus.',
+  'This browser': 'Ce navigateur',
+  'Console · another browser': 'Console · un autre navigateur',
+  'Signed in {since} · used {last}': 'Connecté le {since} · utilisé le {last}',
+  'This browser is still signed in: Fruitback did not end its session. Try again.':
+    'Ce navigateur est toujours connecté : Fruitback n’a pas fermé sa session. Réessayez.',
+  Disconnect: 'Déconnecter',
+  'Sign out everywhere': 'Se déconnecter partout',
+  'Sign out of every browser': 'Se déconnecter de tous les navigateurs',
+  'Stay signed in': 'Rester connecté',
+  'Every browser where the console is signed in to your account is signed out, this one too. The extension stays connected.':
+    'Chaque navigateur où la console est connectée à votre compte est déconnecté, celui-ci aussi. L’extension reste connectée.',
+  'You may still be signed in: Fruitback did not confirm the sign-out of every browser. Try again.':
+    'Vous êtes peut-être encore connecté : Fruitback n’a pas confirmé la déconnexion de tous les navigateurs. Réessayez.',
   Profile: 'Profil',
-  Address: 'Adresse',
-  'Sign-in': 'Connexion',
   'Email link': 'Lien par e-mail',
-  On: 'Activé',
   'After the beta': 'Après la bêta',
   Language: 'Langue',
   'The language of the console, and of the e-mails Fruitback sends you.':
