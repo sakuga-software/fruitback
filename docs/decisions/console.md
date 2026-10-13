@@ -29,9 +29,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   and a console built with `VITE_FRUITBACK_API` keep the address of their build. The script tag is
   in `<head>` with neither `async` nor `defer`: a module starts after it. Nothing secret goes in
   that file. See [image.md](image.md).
-- `design/` — the reference mockups of the Cloud and the simplified extension (a Claude Design
-  export, 2026-10-07), with a picture of each board. **Build a screen that has a board to its board**:
-  layout, words and tokens. `design/README.md` says which board belongs to which ticket.
+- `design/` — the reference mockups of the Cloud and the simplified extension: the simpler flow of
+  2026-10-13 (`design/simpler-flow/`, its `SPEC.md` and the texts of every state word for word) and
+  the Claude Design export of 2026-10-07. **Build a screen that has a board to its board**: layout,
+  words and tokens, and **the simpler flow wins** for each screen it draws. `design/README.md` says
+  which screen belongs to which ticket.
 - **The console connects an address, and shows the notes that did not arrive** (FRU-132). A source is
   drawn by its `kind`: a tracker has teams to choose, an address has none, so a site sends there or
   does not. **A secret that the worker made is on the screen once**, in the form that made the
