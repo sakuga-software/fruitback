@@ -349,15 +349,16 @@ test('the dock has the measures of the mock-up: three controls of 44 px, 24 px f
     });
   }
 
-  // Under the pointer, and pressed while a capture runs: the strong accent, and the state said.
-  await expect(launch).toHaveAttribute('aria-pressed', 'false');
+  // Under the pointer, and while a capture runs: the strong accent. The button changes its words
+  // then, so it is not yet a switch with a state: that comes with the banner of FRU-258.
   await launch.hover();
   await expect.poll(async () => (await painted(launch)).fill).toBe('rgb(185, 28, 28)');
   await launch.click();
   await page.mouse.move(0, 0);
   const pressed = page.locator('[data-fruitback-host-launch]');
-  await expect(pressed).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-fruitback-host][data-fruitback-capturing]')).toHaveCount(1);
   expect((await painted(pressed)).fill).toBe('rgb(185, 28, 28)');
+  expect(await pressed.getAttribute('aria-pressed')).toBeNull();
   await page.keyboard.press('Escape');
-  await expect(pressed).toHaveAttribute('aria-pressed', 'false');
+  await expect.poll(async () => (await painted(pressed)).fill).toBe('rgb(221, 44, 39)');
 });

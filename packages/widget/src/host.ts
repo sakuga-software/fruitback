@@ -115,8 +115,9 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   const launchLabel = document.createElement('span');
   launchLabel.textContent = restingLabel;
   button.append(createIcon(document, 'mark'), launchLabel);
-  // A switch: it starts a capture and stops it, and says which (FRU-252).
-  button.setAttribute('aria-pressed', 'false');
+  // No `aria-pressed` yet, though the mock-up has it: while a capture runs this button changes its
+  // words (« Esc to cancel »), and a switch that also changes its name says two things at once to a
+  // screen reader. FRU-258 moves those words to a banner; the name then stays, and the state comes.
 
   // Beside the launch button rather than inside the settings panel, because the panel is what it
   // opens. Only built when there is something to open.
@@ -328,7 +329,6 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   function start(): void {
     capturing = true;
     container.dataset.fruitbackCapturing = '';
-    button.setAttribute('aria-pressed', 'true');
     // A phone has no Escape key and no arrows (FRU-157). Read at each start: a tablet gains a
     // keyboard and a mouse, and loses them.
     const touch = view?.matchMedia?.('(pointer: coarse)').matches === true;
@@ -340,7 +340,6 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     capturing = false;
     hovered = null;
     delete container.dataset.fruitbackCapturing;
-    button.setAttribute('aria-pressed', 'false');
     launchLabel.textContent = restingLabel;
     highlight.style.display = 'none';
     announcer.textContent = '';

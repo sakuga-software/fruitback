@@ -252,8 +252,10 @@ amber, where white cannot be read (FRU-233)`.
     point on the inner corner of the frame. Open, the frame takes its colour at 12 %. The tint
     under the pointer of FRU-158 is kept; the mock-up draws the open one only.
   - **The dock**: 24 px from the corner, 10 px between two controls, each 44 px high, on every
-    screen and not on a touch screen only. The launch button is pressed while a capture runs
-    (`aria-pressed`, the strong accent), and takes the strong accent under the pointer. Its drop is
+    screen and not on a touch screen only. The launch button takes the strong accent under the
+    pointer and while a capture runs. It has no `aria-pressed` yet: it changes its words then, and
+    a switch that changes its name says two things at once. The state comes with the banner of
+    FRU-258, when the name stays. Its drop is
     the mark, 12 by 15 px (`mark` in `icons.ts`), not the pin.
   - **Kept, though the mock-up does not draw it**: the button of the list, left of the gear, in
     its shape (the script alone has no other way to the list); the gear of Phosphor, at the 18 px
