@@ -538,7 +538,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   // The first note of the setup (FRU-242).
   'Waiting for your first note.': 'En attente de votre première note.',
   'Extension on': 'Extension activée',
-  'Extension on in {browser}': 'Extension activée dans {browser}',
   'Script on the site': 'Script sur le site',
   'Fruitback on the site': 'Fruitback sur le site',
   'First note received': 'Première note reçue',

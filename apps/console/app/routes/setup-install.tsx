@@ -87,24 +87,12 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
 }
 
 /**
- * The browser this page runs in, from its user agent: the one where the person most likely turned
- * the extension on. Only for « Extension on in Chrome »; `undefined` when it cannot be told.
+ * How the first note came: the extension, the script, or the worker does not say. The mockup says
+ * « Extension on in Chrome »; the worker does not say which browser sent the note, and this page may
+ * be in another one, so no browser is named.
  */
-function thisBrowser(): string | undefined {
-  if (typeof navigator === 'undefined') return undefined;
-  const agent = navigator.userAgent;
-  if (agent.includes('Edg/')) return 'Edge';
-  if (agent.includes('Firefox/')) return 'Firefox';
-  if (agent.includes('Chrome/')) return 'Chrome';
-  if (agent.includes('Safari/')) return 'Safari';
-
-  return undefined;
-}
-
-/** How the first note came: the extension, the script, or the worker does not say. */
-function howItCame(via: readonly ('script' | 'extension')[], browser: string | undefined): string {
-  if (via.includes('extension'))
-    return browser === undefined ? t('Extension on') : t('Extension on in {browser}', { browser });
+function howItCame(via: readonly ('script' | 'extension')[]): string {
+  if (via.includes('extension')) return t('Extension on');
   if (via.includes('script')) return t('Script on the site');
 
   return t('Fruitback on the site');
@@ -113,8 +101,7 @@ function howItCame(via: readonly ('script' | 'extension')[], browser: string | u
 /** Step 3, done: how the first note came, and when (the state `first-note` of the mockup). */
 export function PutDone({ site }: { site: Site }) {
   useLocale();
-  const browser = thisBrowser();
-  const how = howItCame(site.via ?? [], browser);
+  const how = howItCame(site.via ?? []);
   return (
     <div className="mt-1.5 flex flex-col gap-1 text-body">
       <p className="font-semibold">{how}</p>

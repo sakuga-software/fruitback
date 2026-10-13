@@ -672,7 +672,8 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
 
     // The last step is done, by itself, and says how the note came.
     await expect(page.getByRole('heading', { name: 'Put it on the site', exact: true })).toBeVisible();
-    await expect(page.getByText('Extension on in Chrome')).toBeVisible();
+    // The worker does not say which browser sent the note: none is named.
+    await expect(page.getByText('Extension on', { exact: true })).toBeVisible();
     await expect(page.getByText('First note received just now')).toBeVisible();
     await expect(page.getByText('Waiting for your first note.')).toHaveCount(0);
     // The conclusion is said, and takes no focus: the person may be on their site, in another tab.
