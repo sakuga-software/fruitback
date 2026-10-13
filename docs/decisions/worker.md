@@ -1401,6 +1401,28 @@ an earlier migration, and writes nothing`.
 - **`migrate-to-postgres` does not read the switch.** It copies files into a server, and takes
   `FRUITBACK_DATABASE_URL` alone.
 
+## A visitor with no account (FRU-224)
+
+- **A visitor leaves a note with no account on a site that everyone reads.** Mathieu, 2026-10-13:
+  an account is always possible for whoever administers, and is not needed to leave a note. The
+  code did it already. `visitor.test.ts` now holds the whole path on a worker whose sites come from
+  the console: the tests that did ran on `FRUITBACK_CLIENTS`, which is going (FRU-184).
+  `e2e/visitor.spec.ts` holds it in a browser, where CORS is what stops a page of another origin.
+- **Played backwards.** With the origin of the site not checked (`resolveClient`), one test of
+  `visitor.test.ts` fails. With the visibility not read (`clientOf`), two fail.
+- **Two checks refuse an origin, and the test names both.** An origin that is no site of the worker
+  is refused before the site is looked for (`origin-not-allowed`). The origin of another site, of
+  any workspace, is refused for this site (`origin-not-allowed-for-client`).
+- **Measured, and not decided here: a site for members takes a note that has no session.** The
+  visibility is the rule of the reads. The ticket said that such a site « asks for a session »:
+  that is true of a read. test:`still takes a note sent with no session, which its sender cannot
+read back` holds what the worker does, and `SECURITY.md` says it. Refusing that note is a change of
+  `attributionFor`, and a question for Mathieu.
+- **Not decided: the token signed by the site.** A site that has its own login signs a token with
+  the `identitySecret` of its client, in `FRUITBACK_CLIENTS`. A site of the console has no secret.
+  A secret for each site, or the end of that way of working: FRU-184 asks, and nothing here
+  changes it. `docs/modes.md` says what holds today.
+
 ## The notes in PostgreSQL (FRU-218)
 
 Mathieu decided on 2026-10-13 that a worker always has PostgreSQL, self-hosted too. Nothing can take
