@@ -69,6 +69,28 @@ test.describe('the sign-in page, against a worker with accounts (FRU-235)', () =
     await expect(other).toHaveURL(`${CONSOLE}/setup`);
   });
 
+  test('the setup goes on to its next step by itself when its link is opened in another tab', async ({
+    page,
+    context,
+  }) => {
+    // The link is asked for from the setup, which is still the way in of somebody new.
+    await page.goto(`${CONSOLE}/setup`);
+    await page.getByRole('textbox', { name: 'Work email' }).fill('ana@acme.dev');
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await expect(page.getByRole('heading', { name: INBOX })).toBeVisible();
+    await expect.poll(async () => (await worker.sent()).length).toBe(1);
+
+    const other = await context.newPage();
+    await other.goto(await linkIn(worker));
+
+    // The setup read the worker again: a resolution is kept only while it is in flight, so the
+    // answer of the first visit, « nobody signed in », is not the one it shows.
+    await expect(page.getByRole('heading', { name: 'Name your workspace' })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Work email' })).toHaveCount(0);
+    expect(page.url()).toBe(`${CONSOLE}/setup`);
+    await expect(other.getByRole('heading', { name: 'You are signed in' })).toBeVisible();
+  });
+
   test('the tab of the link is the console when no tab waits for it', async ({ page }) => {
     const link = await askForLink(page, worker, 'ana@acme.dev');
 

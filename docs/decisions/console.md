@@ -167,7 +167,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
 - **Not measured**: two tabs in Firefox and in Safari (the spec runs in Chromium), and a link that
   the mail application opens in another browser profile, where no tab can hear it: the tab of the
   link is then the console, and the first tab learns it when it comes back to the front.
-- **A code that a sign-in sends back has a sentence** (`PROVIDER_PROBLEMS` in `setup.tsx`), in French
+- **A code that a sign-in sends back has a sentence** (`PROVIDER_PROBLEMS` in `sign-in-form.tsx`), in French
   too. better-auth names no provider in its code, so the sentences name none. A code this build does
   not know says that the sign-in did not finish: no code shows as a blank screen.
 - **A `401` keeps what the person typed.** `call` tells `onSignedOut`, and the root says so above
