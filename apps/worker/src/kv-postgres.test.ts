@@ -121,10 +121,12 @@ describe(
   'a write of the Kv that does not wait for the disk, on a real server (FRU-67)',
   { skip: NO_REAL_POSTGRES },
   () => {
-    it('commits without waiting in its own statement, and leaves the connection as the server set it', async () => {
+    // `public`, and a schema of its own (FRU-219): the Kv writes in the schema of its worker, and its
+    // `SET LOCAL` leaves the search path that the pool set as it was.
+    const writesWithoutWaiting = async (schema: string): Promise<void> => {
       const own = await ownDatabase();
       // One connection: every statement below runs on it, and the pids say so.
-      const pool = createPgDatabase(own.url, 'public', { max: 1 });
+      const pool = createPgDatabase(own.url, schema, { max: 1 });
       const { database, answers } = watched(pool);
       const setting = async () => (await rowsOf(pool, 'SHOW synchronous_commit'))[0]?.synchronous_commit;
       const pid = async () => (await rowsOf(pool, 'SELECT pg_backend_pid() AS pid'))[0]?.pid;
@@ -156,11 +158,26 @@ describe(
         assert.equal(written?.commits, ofTheServer);
         assert.equal(written?.pid, connection, 'the account was not written on the connection of the Kv');
         assert.equal(await pid(), connection);
+        // Where the rows are: the table of the schema, and no other.
+        assert.deepEqual(await rowsOf(pool, "SELECT array_to_string(current_schemas(false), ',') AS path"), [
+          { path: schema },
+        ]);
+        assert.deepEqual(
+          (await rowsOf(pool, `SELECT schemaname FROM pg_tables WHERE tablename = 'kv'`)).map((row) => row.schemaname),
+          [schema],
+        );
+        assert.deepEqual(await rowsOf(pool, `SELECT count(*)::int AS n FROM "${schema}".kv`), [{ n: 2 }]);
       } finally {
         await pool.close();
         await own.drop();
       }
-    });
+    };
+
+    it('commits without waiting in its own statement, and leaves the connection as the server set it', () =>
+      writesWithoutWaiting('public'));
+
+    it('does the same in a schema of its own, and writes in its table (FRU-219)', () =>
+      writesWithoutWaiting('fruitback'));
   },
 );
 
