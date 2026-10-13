@@ -767,12 +767,15 @@ The database held 2 020 pins in 4.8 MB. Read these numbers with three limits in 
 - **Another machine gives other numbers.** A small VPS core is slower than this one. The shape holds:
   memory stays under 200 MiB, and a page with thousands of pins is the expensive case.
 
-**Run one container.** The rate limiter and the read cache keep their state inside each container.
-Two are two rate limits: `RATE_LIMIT_PER_MINUTE=20` lets 40 a minute through — and up to 78 in a
-burst at a window edge, twice the bound `SECURITY.md` gives for one — with nothing said anywhere, and
-a cold page costs one store call per replica. SQLite adds its own reason: one file on one volume
-belongs to one container. A state the replicas share is not built: it is FRU-67, written up with what
-a first implementation learned.
+**Run one container, unless the worker has a database.** With no `FRUITBACK_DATABASE_URL`, the rate
+limiter and the read cache keep their state inside each container. Two are two rate limits:
+`RATE_LIMIT_PER_MINUTE=20` lets 40 a minute through — and up to 78 in a burst at a window edge, twice
+the bound `SECURITY.md` gives for one — with nothing said anywhere, and a cold page costs one store
+call per replica. SQLite adds its own reason: one file on one volume belongs to one container.
+
+**A worker with a database keeps that state there** (FRU-67), in a table of its own, with nothing to
+set: its replicas share one limit and one cache. The limiter then writes one row for each request of
+the widget, without waiting for the disk; `SECURITY.md` says what that costs.
 
 ## Deploying with Dokploy
 
