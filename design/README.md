@@ -1,9 +1,42 @@
 # The design reference
 
+Two mockups are here. **Build a screen to the newest one that draws it**: the simpler flow of
+2026-10-13 for the twenty screens it draws, and the export of 2026-10-07 for a screen it does not.
+
+## The simpler flow (2026-10-13)
+
+`simpler-flow/` is the mockup « Fruitback, simpler flow » that Mathieu drew on 2026-10-13 (FRU-230,
+FRU-231). `source/simpler-flow.html` is the file itself: open it in a browser. `SPEC.md` reads it
+screen by screen and state by state, from its code and from measures in Chromium; the values it
+gives are not estimated by eye. `SPEC-annexe-textes.md` holds every text of every state word for
+word: a screen takes its English from there. `screens/` is the readable template of each screen,
+`measures.json` the contrasts and the boxes measured, `shots/` a picture of each state (`INDEX.md`
+lists them), and `tools/` the scripts that unpack the file and take the pictures again. Its tokens
+are those of the console (below) and `SPEC.md` § 1 and § 3. The mockup is in English only, and
+draws no dark theme.
+
+| Screens                              | What they show                                       | Tickets                                    |
+| ------------------------------------ | ---------------------------------------------------- | ------------------------------------------ |
+| 01 Setup, one screen                 | « Your account », « Your site », « Put it on the site » | FRU-239, FRU-242                           |
+| 02 Sign in                           | The sign-in page, the link on its way                | FRU-235                                    |
+| 03 Invitation                        | « Join », then « You are in »                        | FRU-241                                    |
+| 04 Connect this browser              | The console approves the extension                   | FRU-240, FRU-238                           |
+| 05 to 08 the popup                   | Signed out, a site of the workspace, on, a new site  | FRU-251, FRU-254, FRU-255                  |
+| 09 Sites                             | The table of the sites, the menu of a row            | FRU-243, FRU-270                           |
+| 10 Notes                             | Every note of the workspace, and where it went       | FRU-245, FRU-244                           |
+| 11 Connectors                        | The sources, and the panel of a source               | FRU-246                                    |
+| 12 Members                           | The invitation on one line, the table of the people  | FRU-247                                    |
+| 13 My account                        | The profile, the ways to sign in, the browsers       | FRU-248, FRU-249                           |
+| 14 to 16 the widget                  | A note, leaving a note, every note of the page       | FRU-252, FRU-253, FRU-256, FRU-258, FRU-259 |
+| 17 to 20 the instance of a self-host | Instance, workspaces, users, notes                   | FRU-260 to FRU-263                         |
+| The frame of a workspace             | The dark rail, the workspace switcher                | FRU-234                                    |
+
+## The export of 2026-10-07
+
 `fruitback-design-export.html` is the export of the Claude Design project « Application overlay
-redesign » (2026-10-07). Open it in a browser: it is one self-contained file. It is the reference
-for the Cloud, the console and the simplified extension (FRU-94 to FRU-106). **Build to it**: the
-layout, the words and the tokens of a screen that has a board come from that board.
+redesign » (2026-10-07). Open it in a browser: it is one self-contained file. It was the reference
+for the Cloud, the console and the simplified extension (FRU-94 to FRU-106), and stays the
+reference of a screen that the simpler flow does not draw.
 
 The export holds five boards. `boards/` holds a picture of each, rendered at 1600 px wide.
 

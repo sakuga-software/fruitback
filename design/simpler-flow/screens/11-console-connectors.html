@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>Connectors, Sakuga</title>
+<script src="../assets/654b7f6201e7e08c.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#fff}
+::selection{background:#18181b;color:#fff}
+:focus-visible{outline:2px solid #dd2c27;outline-offset:2px}
+.rail :focus-visible{outline-color:#ec5b57}
+a{color:#18181b;text-decoration-thickness:1px;text-underline-offset:3px}
+a:hover{color:#b91c1c}
+button,select{cursor:pointer}
+.num{font-variant-numeric:tabular-nums}
+.b-wide:hover{background:#fafafa !important;border-color:#18181b !important}
+.b-danger:hover{color:#b91c1c !important}
+.nav-link:hover{background:#27272a !important;color:#ffffff !important}
+.pick:hover{background:#fafafa}
+.rail-nav{display:flex;flex-direction:column;gap:2px}
+@media (max-width: 900px){.rail-nav{flex-direction:row;overflow-x:auto}.rail-foot{display:none !important}}
+.switch{appearance:none;-webkit-appearance:none;width:40px;height:24px;border-radius:999px;background:#8a8a93;position:relative;margin:0;cursor:pointer;flex:none}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .22s cubic-bezier(.16,1,.3,1)}
+.switch:checked{background:#18181b}
+.switch:checked::after{transform:translateX(16px)}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #ffffff; color: #18181b; font-family: -apple-system, system-ui, sans-serif; -webkit-font-smoothing: antialiased">
+
+  <aside class="rail" style="flex: 1 1 248px; box-sizing: border-box; padding: 16px 12px; background: #18181b; color: #ffffff; display: flex; flex-direction: column; gap: 20px">
+    <button type="button" aria-haspopup="menu" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border: 0; border-radius: 10px; background: transparent; color: #ffffff; text-align: left; font: inherit">
+      <span aria-hidden="true" style="width: 32px; height: 32px; flex: none; border-radius: 8px; background: #ffffff; color: #18181b; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700">S</span>
+      <span style="flex: 1; min-width: 0">
+        <span style="display: block; font-size: 15px; font-weight: 600">Sakuga</span>
+        <span style="display: block; font-size: 12px; color: #a1a1aa">Cloud workspace</span>
+      </span>
+      <svg aria-hidden="true" sc-camel-view-box="0 0 24 24" style="width: 16px; height: 16px; color: #a1a1aa"><path d="M8 10l4-4 4 4M8 14l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+    </button>
+    <nav aria-label="Workspace" class="rail-nav">
+      <a href="Sites.dc.html" class="nav-link" style="display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px 0 31px; border-radius: 10px; color: #d4d4d8; font-size: 15px; text-decoration: none; white-space: nowrap">Sites</a>
+      <a href="Notes.dc.html" class="nav-link" style="display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px 0 31px; border-radius: 10px; color: #d4d4d8; font-size: 15px; text-decoration: none; white-space: nowrap">Notes</a>
+      <a href="Connectors.dc.html" aria-current="page" style="display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px; border-radius: 10px; background: #27272a; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; white-space: nowrap"><span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #ec5b57"></span>Connectors</a>
+      <a href="Members.dc.html" class="nav-link" style="display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px 0 31px; border-radius: 10px; color: #d4d4d8; font-size: 15px; text-decoration: none; white-space: nowrap">Members</a>
+      <a href="Account.dc.html" class="nav-link" style="display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px 0 31px; border-radius: 10px; color: #d4d4d8; font-size: 15px; text-decoration: none; white-space: nowrap">My account</a>
+    </nav>
+    <div class="rail-foot" style="margin-top: auto; padding: 8px; display: flex; flex-direction: column; gap: 14px">
+      <a href="https://fruitback.com" style="color: #d4d4d8; font-size: 14px">Help and docs</a>
+      <img src="../assets/7878e337d78a3a6d.svg" alt="Fruitback" style="height: 16px; width: 82px; display: block">
+    </div>
+  </aside>
+
+  <div style="flex: 999 1 640px; min-width: 0">
+    <main style="max-width: 1180px; box-sizing: border-box; padding: 40px clamp(16px, 4vw, 48px) 72px">
+      <header style="margin-bottom: 28px">
+        <h1 style="margin: 0 0 6px; font-size: 28px; line-height: 1.15; font-weight: 700; letter-spacing: -0.02em">Connectors</h1>
+        <p style="margin: 0; font-size: 16px; line-height: 1.5; color: #6b6b74">Connect a tracker once. Every site of Sakuga can then send its notes there.</p>
+      </header>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start">
+        <div style="flex: 999 1 440px; min-width: 0; display: flex; flex-direction: column; gap: 32px">
+
+          <section aria-labelledby="connected-title">
+            <h2 id="connected-title" style="margin: 0 0 10px; font-size: 15px; font-weight: 600">Connected</h2>
+            <ul style="list-style: none; margin: 0; padding: 0; border: 1px solid #e4e4e7; border-radius: 14px; overflow: hidden">
+              <li>
+                <button type="button" aria-pressed="true" style="width: 100%; display: flex; align-items: center; gap: 14px; padding: 14px 18px; border: 0; border-bottom: 1px solid #e4e4e7; background: #f4f4f5; color: #18181b; font: inherit; text-align: left">
+                  <span aria-hidden="true" style="width: 34px; height: 34px; flex: none; border: 1px solid #e4e4e7; border-radius: 8px; background: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700">L</span>
+                  <span style="flex: 1; min-width: 0"><span style="display: block; font-size: 15px; font-weight: 600">Linear</span><span style="display: block; font-size: 13px; color: #6b6b74">Team Acme web · 2 sites</span></span>
+                  <span style="font-size: 13px; font-weight: 600; color: #15803d">Connected</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" aria-pressed="false" class="pick" style="width: 100%; display: flex; align-items: center; gap: 14px; padding: 14px 18px; border: 0; border-bottom: 1px solid #e4e4e7; background: transparent; color: #18181b; font: inherit; text-align: left">
+                  <span aria-hidden="true" style="width: 34px; height: 34px; flex: none; border: 1px solid #e4e4e7; border-radius: 8px; background: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700">G</span>
+                  <span style="flex: 1; min-width: 0"><span style="display: block; font-size: 15px; font-weight: 600">GitHub Issues</span><span style="display: block; font-size: 13px; color: #6b6b74">acme/website · 1 site</span></span>
+                  <span style="font-size: 13px; font-weight: 600; color: #15803d">Connected</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" aria-pressed="false" class="pick" style="width: 100%; display: flex; align-items: center; gap: 14px; padding: 14px 18px; border: 0; background: transparent; color: #18181b; font: inherit; text-align: left">
+                  <span aria-hidden="true" style="width: 34px; height: 34px; flex: none; border: 1px solid #e4e4e7; border-radius: 8px; background: #ffffff; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 700">{ }</span>
+                  <span style="flex: 1; min-width: 0"><span style="display: block; font-size: 15px; font-weight: 600">REST API</span><span style="display: block; font-size: 13px; color: #6b6b74">hooks.acme.dev/feedback · 1 site</span></span>
+                  <span style="font-size: 13px; font-weight: 600; color: #dd2c27">2 notes did not arrive</span>
+                </button>
+              </li>
+            </ul>
+          </section>
+
+          <section aria-labelledby="add-title">
+            <h2 id="add-title" style="margin: 0 0 10px; font-size: 15px; font-weight: 600">Add a source</h2>
+            <ul style="list-style: none; margin: 0; padding: 0; border-top: 1px solid #e4e4e7">
+              <sc-for list="{{ sources }}" as="src" hint-placeholder-count="5">
+                <li style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 0; border-bottom: 1px solid #e4e4e7">
+                  <span style="flex: 1 1 260px; min-width: 0"><span style="display: block; font-size: 15px; font-weight: 600">{{ src.name }}</span><span style="display: block; font-size: 13px; color: #6b6b74">{{ src.detail }}</span></span>
+                  <button type="button" class="b-wide" aria-label="{{ src.action }}" style="height: 40px; padding: 0 16px; border: 1px solid #8a8a93; border-radius: 6px; background: #ffffff; color: #18181b; font: inherit; font-size: 14px; font-weight: 600">Connect</button>
+                </li>
+              </sc-for>
+            </ul>
+          </section>
+        </div>
+
+        <aside aria-labelledby="panel-title" style="flex: 1 1 340px; min-width: 0; max-width: 100%; border: 1px solid #e4e4e7; border-radius: 14px; background: #fafafa">
+          <div style="padding: 20px 22px; border-bottom: 1px solid #e4e4e7">
+            <h2 id="panel-title" style="margin: 0; font-size: 18px; font-weight: 700">Linear</h2>
+            <p style="margin: 2px 0 0; font-size: 13px; color: #6b6b74">Connected by Mathieu with OAuth · Team Acme web</p>
+          </div>
+
+          <div style="padding: 20px 22px; display: flex; flex-direction: column; gap: 24px">
+            <section>
+              <h3 style="margin: 0 0 8px; font-size: 14px; font-weight: 600">Sites sending here</h3>
+              <ul style="list-style: none; margin: 0; padding: 0; font-size: 14px">
+                <li style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #e4e4e7"><span style="font-weight: 600">staging.acme.dev</span><span class="num" style="color: #6b6b74">12 notes</span></li>
+                <li style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #e4e4e7"><span style="font-weight: 600">*.preview.acme.dev</span><span class="num" style="color: #6b6b74">5 notes</span></li>
+              </ul>
+            </section>
+
+            <section>
+              <h3 style="margin: 0 0 2px; font-size: 14px; font-weight: 600">Status of the pins</h3>
+              <p style="margin: 0 0 10px; font-size: 13px; line-height: 1.5; color: #6b6b74">Which Linear state gives each pin its status.</p>
+              <div style="display: grid; grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr); gap: 8px 8px; align-items: center; font-size: 14px">
+                <sc-for list="{{ stages }}" as="st" hint-placeholder-count="5">
+                  <span style="padding: 9px 12px; border: 1px solid #e4e4e7; border-radius: 8px; background: #ffffff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ st.linear }}</span>
+                  <svg aria-hidden="true" sc-camel-view-box="0 0 16 16" style="width: 14px; height: 14px; color: #6b6b74"><path d="M3 8h9M9 5l3 3-3 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                  <label style="position: relative; display: flex; align-items: center">
+                    <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">{{ st.fieldLabel }}</span>
+                    <span aria-hidden="true" style="position: absolute; left: 12px; width: 9px; height: 9px; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: {{ st.color }}"></span>
+                    <sc-raw-select style="width: 100%; height: 38px; box-sizing: border-box; padding: 0 10px 0 30px; border: 1px solid #8a8a93; border-radius: 8px; background: #ffffff; color: #18181b; font: inherit; font-size: 14px">
+                      <option>{{ st.fruit }}</option>
+                    </sc-raw-select>
+                  </label>
+                </sc-for>
+              </div>
+            </section>
+
+            <section style="display: flex; flex-direction: column; gap: 12px">
+              <label style="display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 14px; cursor: pointer">Show Linear comments as replies<input type="checkbox" role="switch" checked="" class="switch"></label>
+              <label style="display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 14px; cursor: pointer">Attach a picture of the element<input type="checkbox" role="switch" checked="" class="switch"></label>
+            </section>
+          </div>
+
+          <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; padding: 14px 22px; border-top: 1px solid #e4e4e7; font-size: 13px">
+            <button type="button" class="b-danger" style="border: 0; background: none; padding: 10px 0; font: inherit; font-size: 14px; font-weight: 600; color: #18181b; text-decoration: underline; text-underline-offset: 3px">Disconnect Linear</button>
+            <span class="num" style="color: #6b6b74">Last issue created 12 min ago</span>
+          </div>
+        </aside>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:1000}}">
+class Component extends DCLogic {
+  renderVals() {
+    const sources = [
+      { name: 'Jira', detail: 'An issue in a Jira Cloud project.' },
+      { name: 'GitLab', detail: 'An issue in a project, cloud or self-managed.' },
+      { name: 'Trello', detail: 'A card in the list you choose.' },
+      { name: 'Notion', detail: 'A row in a database.' },
+      { name: 'Webhook', detail: 'Tells Slack or any address when a note arrives.' }
+    ].map((s) => ({ ...s, action: 'Connect ' + s.name }));
+    const stages = [
+      { linear: 'Triage', fruit: 'New', color: '#dd2c27' },
+      { linear: 'Todo', fruit: 'To do', color: '#2563eb' },
+      { linear: 'In Progress', fruit: 'In progress', color: '#f59e0b' },
+      { linear: 'Done', fruit: 'Done', color: '#15803d' },
+      { linear: 'Canceled', fruit: 'Closed', color: '#64748b' }
+    ].map((s) => ({ ...s, fieldLabel: 'Status for ' + s.linear }));
+    return { sources: sources, stages: stages };
+  }
+}
+</script>
+
+
+</body></html>
