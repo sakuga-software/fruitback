@@ -1,10 +1,21 @@
 import type { SeedIssue, SeedStage } from '@fruitback/shared';
 import { SEED_STAGES } from '@fruitback/shared';
-import { and, count, eq, max, min, or, sql } from 'drizzle-orm';
-import { type NoteEntry, type NoteIndex, type Place, type SiteNotes, excerptOf, noNotes } from './notes-index.ts';
+import { and, count, eq, ilike, inArray, isNull, max, min, or, sql } from 'drizzle-orm';
+import { member, user } from './auth-schema.ts';
+import {
+  type AuthorKind,
+  type ListedNote,
+  type NoteEntry,
+  type NoteIndex,
+  type NoteQuery,
+  type Place,
+  type SiteNotes,
+  excerptOf,
+  noNotes,
+} from './notes-index.ts';
 import type { Database } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
-import { connectors, deliveries, note_index } from './postgres-schema.ts';
+import { connectors, deliveries, note_index, sites } from './postgres-schema.ts';
 
 /** The index of the notes in the database of the worker (FRU-237). See `notes-index.ts`. */
 export function createPostgresNoteIndex(database: Database): NoteIndex {
@@ -154,6 +165,257 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
 
       return removed.length;
     },
+
+    async list(workspace, query) {
+      const keyOf = placeKey();
+      return run(async (db) => {
+        // The deliveries first: a few rows, read once, then matched to the notes by their key.
+        const pending = await pendingOf(db, workspace);
+        const narrowed = filtered(workspace, query);
+        const placed = query.place === undefined ? narrowed : and(narrowed, placeIs(query.place));
+        const after =
+          query.after === undefined
+            ? placed
+            : and(
+                placed,
+                sql`(${note_index.created_at}, ${note_index.site_id} COLLATE "C", ${note_index.seed_id} COLLATE "C") < (${query.after.at}, ${query.after.site} COLLATE "C", ${query.after.seed} COLLATE "C")`,
+              );
+        const keys = [...pending.values()].map((delivery) => delivery.key);
+
+        const [page, counted, undelivered] = await Promise.all([
+          db
+            .select({
+              row: note_index,
+              connector: { id: connectors.id, kind: connectors.kind, label: connectors.label },
+              memberName: user.name,
+              memberRole: member.role,
+            })
+            .from(note_index)
+            .innerJoin(sites, eq(sites.id, note_index.site_id))
+            .leftJoin(connectors, eq(connectors.id, note_index.connector_id))
+            .leftJoin(
+              member,
+              and(eq(member.organizationId, note_index.workspace_id), eq(member.userId, note_index.author_account_id)),
+            )
+            .leftJoin(user, eq(user.id, member.userId))
+            .where(after)
+            // The order of `note_index_by_date`, so that a page reads its rows from it and stops.
+            .orderBy(
+              sql`${note_index.created_at} DESC NULLS LAST`,
+              sql`${note_index.site_id} COLLATE "C" DESC`,
+              sql`${note_index.seed_id} COLLATE "C" DESC`,
+            )
+            .limit(query.limit + 1),
+          db
+            .select({ key: keyOf, notes: count() })
+            .from(note_index)
+            .innerJoin(sites, eq(sites.id, note_index.site_id))
+            .where(narrowed)
+            .groupBy(keyOf),
+          // The notes of the filter that have a delivery: those of its references, matched to their
+          // key here. A list of tuples given to PostgreSQL was planned as a loop: 298 ms, measured.
+          keys.length === 0
+            ? Promise.resolve([])
+            : db
+                .select({
+                  connector: note_index.connector_id,
+                  site: note_index.site_id,
+                  reference: note_index.reference,
+                })
+                .from(note_index)
+                .innerJoin(sites, eq(sites.id, note_index.site_id))
+                .where(
+                  and(narrowed, sql`${note_index.reference} = ANY(${sql.param(keys.map((key) => key[2]))}::text[])`),
+                ),
+        ]);
+
+        const byPlace = new Map(counted.map((row) => [row.key, Number(row.notes)] as const));
+        const shown = page.slice(0, query.limit);
+        const last = shown.at(-1);
+
+        return {
+          notes: shown.map((row) => listedOf({ ...row, delivery: pending.get(keyOfNote(row.row)) })),
+          total:
+            query.place === undefined
+              ? [...byPlace.values()].reduce((sum, notes) => sum + notes, 0)
+              : (byPlace.get(query.place) ?? 0),
+          byPlace,
+          undelivered: undelivered.filter((row) =>
+            pending.has(JSON.stringify([row.connector, row.site, row.reference])),
+          ).length,
+          ...(page.length > query.limit && last !== undefined
+            ? { next: { at: Number(last.row.created_at), site: last.row.site_id, seed: last.row.seed_id } }
+            : {}),
+        };
+      });
+    },
+
+    async deliveryOf(workspace, site, seed) {
+      return run(async (db) => {
+        const [row] = await db
+          .select()
+          .from(note_index)
+          .where(
+            and(eq(note_index.workspace_id, workspace), eq(note_index.site_id, site), eq(note_index.seed_id, seed)),
+          )
+          .limit(1);
+        if (row === undefined) return undefined;
+        const delivery = (await pendingOf(db, workspace)).get(keyOfNote(row));
+
+        return delivery === undefined ? undefined : { id: delivery.id, connector: delivery.connector };
+      });
+    },
+  };
+}
+
+type Db = Parameters<Parameters<Database['run']>[0]>[0];
+
+type Pending = {
+  id: string;
+  connector: string;
+  attempts: number;
+  nextAt: number | null;
+  lastStatus: number | null;
+  key: [string, string, string];
+};
+
+/** The key that ties a note to its delivery: its connector, its site, its reference. */
+function keyOfNote(row: typeof note_index.$inferSelect): string {
+  return JSON.stringify([row.connector_id, row.site_id, row.reference]);
+}
+
+/**
+ * The deliveries of the connectors of a workspace that did not arrive, by the key of their note.
+ *
+ * A delivery holds no column for its note: its body, the JSON that was sent, names the site and the
+ * reference the worker's store gave the note (`rest-connector.ts`). They are read here, from the
+ * deliveries of one workspace only, which are few: one that arrived is removed. A body that is not
+ * JSON names no note. One note has one delivery; should it have two, the newest is its own.
+ *
+ * Read in a statement of its own and matched in the worker: joined to the notes in SQL, the planner
+ * read the bodies again for each note (528 ms for a page of 50 000 notes of one connector, measured).
+ */
+async function pendingOf(db: Db, workspace: string): Promise<Map<string, Pending>> {
+  const body = sql`CASE WHEN pg_input_is_valid(${deliveries.body}, 'jsonb') THEN ${deliveries.body}::jsonb END`;
+  const rows = await db
+    .select({
+      id: deliveries.id,
+      connector: deliveries.connector_id,
+      attempts: deliveries.attempts,
+      nextAt: deliveries.next_at,
+      lastStatus: deliveries.last_status,
+      reference: sql<string | null>`(${body} ->> 'identifier')`,
+      site: sql<string | null>`(${body} -> 'site' ->> 'id')`,
+    })
+    .from(deliveries)
+    .innerJoin(connectors, eq(connectors.id, deliveries.connector_id))
+    .where(eq(connectors.workspace_id, workspace))
+    // Oldest first, so that the newest of one note is the one the map keeps.
+    .orderBy(deliveries.created_at, deliveries.id);
+
+  const pending = new Map<string, Pending>();
+  for (const row of rows) {
+    if (row.reference === null || row.site === null) continue;
+    const key: [string, string, string] = [row.connector, row.site, row.reference];
+    pending.set(JSON.stringify(key), {
+      id: row.id,
+      connector: row.connector,
+      attempts: Number(row.attempts),
+      nextAt: row.nextAt === null ? null : Number(row.nextAt),
+      lastStatus: row.lastStatus === null ? null : Number(row.lastStatus),
+      key,
+    });
+  }
+
+  return pending;
+}
+
+/** The rows of one place: `fruitback`, a connector id, or `removed`. */
+function placeIs(place: string) {
+  if (place === 'fruitback') return eq(note_index.place, 'fruitback');
+  if (place === 'removed') return and(eq(note_index.place, 'connector'), isNull(note_index.connector_id));
+
+  return eq(note_index.connector_id, place);
+}
+
+/** The place of a row, as `list` filters and counts it: `fruitback`, a connector id, or `removed`. */
+function placeKey() {
+  return sql<string>`CASE WHEN ${note_index.place} = 'fruitback' THEN 'fruitback' WHEN ${note_index.connector_id} IS NULL THEN 'removed' ELSE ${note_index.connector_id} END`;
+}
+
+/** The sites a caller may read: absent, every one; an empty list, none. */
+function readable(sites: readonly string[] | undefined) {
+  if (sites === undefined) return undefined;
+
+  return sites.length === 0 ? sql`false` : inArray(note_index.site_id, [...sites]);
+}
+
+/** Every filter of a query but its place and its cursor. */
+function filtered(workspace: string, query: NoteQuery) {
+  return and(
+    eq(note_index.workspace_id, workspace),
+    readable(query.sites),
+    query.site === undefined ? undefined : eq(note_index.site_id, query.site),
+    query.stage === undefined ? undefined : eq(note_index.stage, query.stage),
+    query.author === undefined ? undefined : eq(note_index.author_account_id, query.author),
+    ...wordsOf(query.q).map((word) => {
+      const like = `%${word.replace(/[\\%_]/gu, (c) => `\\${c}`)}%`;
+
+      return or(
+        ilike(note_index.excerpt, like),
+        ilike(note_index.page_url, like),
+        ilike(sites.origin, like),
+        ilike(note_index.stage, like),
+        ilike(note_index.reference, like),
+      );
+    }),
+  );
+}
+
+/** The words of a search: each must be found, in any of the fields. At most eight. */
+function wordsOf(q: string | undefined): string[] {
+  return (q ?? '').trim().split(/\s+/u).filter(Boolean).slice(0, 8);
+}
+
+type PageRow = {
+  row: typeof note_index.$inferSelect;
+  connector: { id: string; kind: string; label: string } | null;
+  memberName: string | null;
+  memberRole: string | null;
+  delivery: Pending | undefined;
+};
+
+function listedOf({ row, connector, memberName, memberRole, delivery }: PageRow): ListedNote {
+  return {
+    site: row.site_id,
+    seed: row.seed_id,
+    pageUrl: row.page_url,
+    excerpt: row.excerpt,
+    stage: row.stage,
+    channel: row.channel === 'script' || row.channel === 'extension' ? row.channel : null,
+    author: {
+      kind: row.author_kind as AuthorKind,
+      ...(row.author_account_id === null ? {} : { account: row.author_account_id }),
+      ...(memberName === null || memberRole === null ? {} : { member: { name: memberName, role: memberRole } }),
+    },
+    place:
+      row.place === 'fruitback'
+        ? { kind: 'fruitback' }
+        : { kind: 'connector', ...(connector === null ? {} : { connector }) },
+    ...(row.reference === null ? {} : { reference: row.reference }),
+    ...(row.reference_url === null ? {} : { referenceUrl: row.reference_url }),
+    createdAt: Number(row.created_at),
+    checkedAt: Number(row.checked_at),
+    ...(delivery === undefined
+      ? {}
+      : {
+          delivery: {
+            id: delivery.id,
+            attempts: Number(delivery.attempts),
+            ...(delivery.nextAt === null ? {} : { nextAt: Number(delivery.nextAt) }),
+            ...(delivery.lastStatus === null ? {} : { lastStatus: Number(delivery.lastStatus) }),
+          },
+        }),
   };
 }
 

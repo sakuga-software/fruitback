@@ -550,7 +550,22 @@ reads every column of every row for 65 characters of a text.
 - **The index never costs a note**: a note whose row is not written is kept and answered `201`, and
   its row is written at the next read of its page.
 
-### The accounts, and what decides who reads a site (FRU-96)
+### The list of the notes of a workspace (FRU-244)
+
+`GET /console/workspaces/<id>/notes` answers the rows of the index above, a page at a time: **an
+excerpt of 64 characters at most, never the text of a note**, and a search on what the index keeps
+only (the excerpt, the page, the origin of the site, the stage, the reference).
+
+- **Every member of the workspace reads the list** (`read-feedback`), a guest included, as it reads
+  every site today. **Where a note went is read with `see-tracker` only**: the place and the
+  connector, the reference and its link in the tracker, the delivery that did not arrive, and the
+  counts by place. A guest gets none of it, and a `place` filter is `403` to it. A person of another
+  workspace gets `404`, a caller with no session `401`, and the token of an extension `401`.
+- **The name of an author is the name its account has now, for a member of the workspace only**;
+  a member who left is shown with no name. A name a reporter typed is not in the index, so it is
+  not in the list.
+- **« Send again » is `manage-sites`**, and reaches only a delivery of a connector of the workspace
+  in the address: the note of another workspace is `404`.
 
 With `FRUITBACK_DATABASE_URL` the clients of the worker are the sites the console wrote, read from
 that database on every request. A site is a client of one workspace, so a session reaches it only through

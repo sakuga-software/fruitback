@@ -110,6 +110,81 @@ export type NoteIndex = {
    * it, or every row of the account of a member.
    */
   forget(which: { notes: readonly { identifier: string; seed: string }[] } | { account: string }): Promise<number>;
+  /**
+   * One page of the notes of a workspace (FRU-244), the newest first, with the counts of the filter.
+   * It reads the index and nothing else: **a search finds what the index keeps** (the excerpt, the
+   * page, the origin of the site, the stage, the reference), never the rest of a text.
+   */
+  list(workspace: string, query: NoteQuery): Promise<NoteList>;
+  /** The delivery of one note that did not arrive (FRU-244), for « Send again ». */
+  deliveryOf(workspace: string, site: string, seed: string): Promise<{ connector: string; id: string } | undefined>;
+};
+
+/** The smallest and the largest page of `list`, and the page when none is asked. */
+export const PAGE_SIZES = { min: 8, max: 50, default: 25 } as const;
+
+/** Where a page starts: after this note, in the order of `list`. */
+export type NoteCursor = { at: number; site: string; seed: string };
+
+/** What `list` filters on. Each field narrows; an absent one does not. */
+export type NoteQuery = {
+  site?: string;
+  stage?: SeedStage;
+  /** `fruitback`, or the id of a connector of the workspace. */
+  place?: string;
+  /** The account whose own notes are asked (`mine`). */
+  author?: string;
+  /** Words, each in one of the fields the index keeps. At most `QUERY_LENGTH` characters. */
+  q?: string;
+  /**
+   * The sites the caller may read. Absent: every site of the workspace, as every role reads them
+   * today. The guest of one site (Q3 of FRU-230) narrows it here, and the counts with it.
+   */
+  sites?: readonly string[];
+  after?: NoteCursor;
+  limit: number;
+};
+
+/** The longest search `list` takes. */
+export const QUERY_LENGTH = 200;
+
+/** What `list` searches, in the order the console names them. */
+export const SEARCHED = ['excerpt', 'page', 'site', 'stage', 'reference'] as const;
+
+/** A note of a page of `list`: the row of the index, with what the workspace knows of it now. */
+export type ListedNote = {
+  site: string;
+  seed: string;
+  pageUrl: string;
+  excerpt: string;
+  stage: string;
+  channel: Channel | null;
+  author: {
+    kind: AuthorKind;
+    account?: string;
+    /** The name the account has now, and its role here, when it is still a member. */
+    member?: { name: string; role: string };
+  };
+  /** `connector` with no id: the connector was removed since. */
+  place: { kind: 'fruitback' } | { kind: 'connector'; connector?: { id: string; kind: string; label: string } };
+  reference?: string;
+  referenceUrl?: string;
+  createdAt: number;
+  checkedAt: number;
+  /** Its delivery that did not arrive, when it went to a receiving connector. */
+  delivery?: { id: string; attempts: number; nextAt?: number; lastStatus?: number };
+};
+
+export type NoteList = {
+  notes: ListedNote[];
+  /** The notes of the whole filter, every page. */
+  total: number;
+  /** The notes of the filter without `place`, by place: `fruitback`, a connector id, or `removed`. */
+  byPlace: Map<string, number>;
+  /** The notes of the filter without `place` whose delivery did not arrive. */
+  undelivered: number;
+  /** Where the next page starts; absent on the last one. */
+  next?: NoteCursor;
 };
 
 /** The author of a note, from what the worker verified when it took it. */
