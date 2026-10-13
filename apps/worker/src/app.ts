@@ -704,11 +704,13 @@ async function memberOf(request: Request, config: Served, workspace: string): Pr
  * The pictures that the extension takes with a note (FRU-44): `POST /screenshot` keeps one,
  * `GET /screenshot/<id>` answers it.
  *
- * **Both answer a member of a workspace, and nobody else.** A picture shows a page of a staging
- * site, so it is read like the tracker of a workspace and never like the pins of a public site
- * (FRU-84 is still open on what a public site may show). The member is the session of the extension:
- * its token, signed with the worker key, names the account and the workspace, and the role is read
- * at each request. A picture is sent for a client (`?client=`, the site of the note) and belongs to
+ * **Both answer somebody of the workspace, whatever their role, and nobody else.** A picture shows a
+ * page of a staging site, so it is never read without a session, as the pins of a public site are
+ * (FRU-84 is still open on what a public site may show). A guest sends one and reads one (FRU-213):
+ * a guest reads the notes of the workspace, and the address of the picture is in the note. The right
+ * asked for is to be of the workspace, and not `see-tracker`, which is about the tracker and what
+ * the team answers there. That somebody is the session of the extension: its token, signed with the
+ * worker key, names the account and the workspace, and the role is read at each request. A picture is sent for a client (`?client=`, the site of the note) and belongs to
  * the workspace of that site. To anybody who is not one of its members, with a token, a picture
  * answers `404`, as one that does not exist.
  *

@@ -1112,7 +1112,9 @@ writes the address it gets back in the seed. The setting is off until the review
   takes the session token of the extension, a `client` (the site of the note), and keeps the
   picture for the workspace of that site when the token is a session of that workspace and its
   person is a member of it now. `GET /screenshot/<id>` answers the same members, and `404` to
-  anybody else with a token, as for a picture that does not exist; `401` with no token. The address
+  anybody else with a token, as for a picture that does not exist; `401` with no token. **« A
+  member » is anybody of the workspace, a guest included**: a guest reads the notes, and the
+  address of a picture is in its note. test:`is sent and read by a guest of the workspace, as by a member`. The address
   is no secret: 128 random bits, but the route asks who reads. **A picture is never readable like
   the pins of a site at `read: 'public'`**: what a public site may show is still open (FRU-84).
 - **The guards of the write path.** The rate limit, the CORS of the sites and of the extension,

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { deflateSync } from 'node:zlib';
 import { createPairing, redeemPairing } from './session.ts';
 import { handleRequest } from './app.ts';
-import { WORKER, type World, signInTo, worlds } from './console-world.fixture.ts';
+import { WORKER, type World, memberOf, signInTo, worlds } from './console-world.fixture.ts';
 import { signIdentityToken } from './identity.ts';
 import { createMemoryKv } from './kv.ts';
 import { NO_REAL_POSTGRES, createPgliteDatabase, createRealDatabase } from './postgres.fixture.ts';
@@ -92,6 +92,7 @@ async function setUp(env: World) {
     alice,
     acme,
     secret,
+    tokenOf,
     send: `/screenshot?client=${site.id}`,
     sendToGlobex: `/screenshot?client=${other.id}`,
     alice_token: await tokenOf(alice.id, acme.id),
@@ -148,6 +149,30 @@ describe('a picture of a note, sent by the extension (FRU-44)', () => {
     assert.equal(read.headers.get('Cache-Control'), 'private, no-store');
     assert.equal(read.headers.get('X-Content-Type-Options'), 'nosniff');
     assert.deepEqual(new Uint8Array(await read.arrayBuffer()), picture);
+  });
+
+  // FRU-213: the route asks for somebody of the workspace, and not for the right to see the tracker.
+  it('is sent and read by a guest of the workspace, as by a member', async () => {
+    const env = await envWith();
+    const { alice_token, acme, send, tokenOf } = await setUp(env);
+    const store = createMemoryScreenshotStore();
+    const picture = png(120, 60);
+    const sent = await call(env, store, send, { method: 'POST', token: alice_token, body: picture });
+    const { id } = (await sent.json()) as { id: string };
+
+    for (const role of ['guest', 'member', 'admin'] as const) {
+      const person = await signInTo(env, `${role}@client.dev`);
+      // The control: somebody with a session of the workspace and no role in it reads nothing.
+      const token = await tokenOf(person.id, acme.id);
+      assert.equal((await call(env, store, `/screenshot/${id}`, { token })).status, 404, `${role}, before`);
+      assert.equal((await call(env, store, send, { method: 'POST', token, body: picture })).status, 401, role);
+
+      await memberOf(env, acme.id, person.id, role);
+      const read = await call(env, store, `/screenshot/${id}`, { token });
+      assert.equal(read.status, 200, role);
+      assert.deepEqual(new Uint8Array(await read.arrayBuffer()), picture, role);
+      assert.equal((await call(env, store, send, { method: 'POST', token, body: picture })).status, 201, role);
+    }
   });
 
   it('is read by nobody else: no token, a member of another workspace, a token of a site', async () => {
