@@ -100,10 +100,16 @@ can read them, with or without the widget.
 - **No access log.** The worker writes to its output at boot, on a configuration problem and on a
   failed request. It does not log the requests it serves. Your reverse proxy probably does: its
   access log holds the address of every visitor that loaded a pin, and you set its retention.
-- **The address of a caller, for two minutes, in memory.** The rate limit counts requests per
-  address over one-minute windows, and keeps a window for two. Nothing writes the address to disk.
-- **The answer to a read, for 15 seconds, in memory.** The read cache keeps a page's notes so a burst
-  of visitors costs one call to the store.
+- **The address of a caller, for two minutes.** The rate limit counts requests per address over
+  one-minute windows, and keeps a window for two. On a worker with no database it is in memory, and
+  nothing writes the address to disk. **On a worker with a database it is a row of the table `kv`**
+  (FRU-67), so that the replicas share one limit: the address is then in the database for those two
+  minutes, and in a backup taken during them. Expired rows are removed as requests come.
+- **The answer to a read, for 15 seconds**, in the same place: memory, or the table `kv`. The read
+  cache keeps a page's notes so a burst of visitors costs one call to the store.
+- **The address a sign-in link or an invitation was sent to, for the time of its limit**, in the same
+  place, as the key of a count: the worker sends a few messages to one address in a window, and no
+  more.
 - **The extension's sessions, on disk**, when `FRUITBACK_SESSION_PATH` is set, or in the PostgreSQL
   database of `FRUITBACK_DATABASE_URL` in place of that file (FRU-142). Each row holds the
   subject, name and e-mail the operator gave when minting the pairing code, its dates, and a SHA-256

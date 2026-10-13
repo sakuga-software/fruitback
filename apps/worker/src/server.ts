@@ -1,7 +1,7 @@
 import { type IncomingMessage, type Server, type ServerResponse, createServer } from 'node:http';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { announceFirstReviewer, handleRequest, storeFor, deliverPending, recheckPending } from './app.ts';
+import { announceFirstReviewer, handleRequest, kvFor, storeFor, deliverPending, recheckPending } from './app.ts';
 import { systemResolver } from './domain-proof.ts';
 import { announceAuth } from './auth.ts';
 import type { SeedStore } from './store.ts';
@@ -44,7 +44,7 @@ export function createFruitbackServer(env: WorkerEnv, provided?: SeedStore): Ser
    */
   const store = provided ?? (config.ok ? storeFor(config.config) : undefined);
   // One per process, like the store. The handler falls back to this same instance.
-  const kv = processKv();
+  const kv = config.ok ? kvFor(config.config) : processKv();
 
   return createServer((incoming, response) => {
     void respond(incoming, response, env, trustedProxyHops, store, kv);

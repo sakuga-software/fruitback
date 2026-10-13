@@ -72,7 +72,7 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
   await migrate(database, migrationsThrough(BEFORE_THE_MOVE));
   await withRows(database);
   await migrate(database);
-  // The tables that came after the move (FRU-103, FRU-44): `withRows` writes the schema of before it.
+  // The tables that came after the move (FRU-103, FRU-44, FRU-67): `withRows` writes the schema of before it.
   await rowsOf(
     database,
     `INSERT INTO domains (id, workspace_id, domain, created_at, verified_at, lost_at, checked_at, previews_site_id) VALUES ('dom_1', 'ws_acme', 'acme.dev', 1, 1, 1, 1, 'site_acme')`,
@@ -82,6 +82,7 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
     `INSERT INTO screenshots (id, workspace_id, account_id, content, width, height, created_at)
        VALUES ('shot_1', 'ws_acme', 'acc_alice', '\\x89504e47'::bytea, 1, 1, 1)`,
   );
+  await rowsOf(database, `INSERT INTO kv (key, value, expires_at) VALUES ('fruitback:test:count', '1', 1)`);
 
   return database;
 }
@@ -91,7 +92,7 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the twenty-one BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the twenty-two BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
     'connectors.attention_at',
     'connectors.created_at',
@@ -105,6 +106,7 @@ it('knows the twenty-one BIGINT columns of the worker, and that better-auth has 
     'email_links.created_at',
     'email_links.expires_at',
     'email_links.spent_at',
+    'kv.expires_at',
     'pairings.created_at',
     'pairings.expires_at',
     'pairings.redeemed_at',

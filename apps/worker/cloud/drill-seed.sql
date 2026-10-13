@@ -79,3 +79,8 @@ INSERT INTO "invitation" ("id", "organizationId", "email", "role", "status", "ex
 -- The picture of a note (FRU-44): the first bytes of a PNG, enough for a row that the drill compares.
 INSERT INTO screenshots (id, workspace_id, account_id, content, width, height, created_at) VALUES
   ('shot_drill1', 'ws_drill1', 'acc_drill1', '\x89504e470d0a1a0a0000000d49484452', 120, 60, 1);
+
+-- What the replicas share (FRU-67): a count of the rate limiter. Nothing of it must survive a
+-- restore, and the drill compares it like any other row.
+INSERT INTO kv (key, value, expires_at) VALUES
+  ('fruitback:drill:count', '3', 1);
