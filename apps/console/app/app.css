@@ -938,3 +938,71 @@ textarea {
 [data-required='true'] > .label::after {
   content: none;
 }
+
+/*
+  A menu (`Menu` in ui.tsx). Its button is drawn by the screen or as a button that is a picture; it
+  moves nothing under a press. The menu is the surface of a page with the frame of a card, wherever
+  its button is: on the rail too.
+*/
+.kit-menu-trigger {
+  cursor: pointer;
+  transform: none;
+  transition: none;
+}
+
+.kit-menu-trigger:active,
+.kit-menu-trigger[data-pressed='true'] {
+  transform: none;
+}
+
+.kit-menu {
+  min-width: 220px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-box);
+  background: var(--surface);
+  color: var(--color-ink);
+  box-shadow: var(--shadow-frame);
+}
+
+.kit-menu .menu-item {
+  min-height: var(--spacing-control-panel);
+  border-radius: var(--radius-button);
+  font-size: var(--text-small);
+  line-height: var(--text-small--line-height);
+  transform: none;
+  transition: none;
+}
+
+.kit-menu .menu-item[data-hovered='true'],
+.kit-menu .menu-item[data-focused='true'] {
+  background: var(--color-chip);
+}
+
+/* The item the keyboard is on: the ring of a page, inside the item so the menu does not clip it. */
+.kit-menu .menu-item[data-focus-visible='true'] {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+  box-shadow: none;
+}
+
+.kit-menu__words {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.kit-menu .menu-item .label {
+  color: inherit;
+  font-weight: 600;
+}
+
+.kit-menu .menu-item .description {
+  color: var(--muted);
+  font-size: var(--text-hint);
+  line-height: var(--text-hint--line-height);
+}
+
+/* The strong accent is 5.89:1 on the tint of an item under the pointer, where the accent is 4.28:1. */
+.kit-menu .menu-item[data-danger='true'] {
+  color: var(--color-accent-strong);
+}

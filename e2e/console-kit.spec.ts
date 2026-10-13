@@ -809,6 +809,100 @@ test("the logo and the frame of a page outside a workspace are the mockup's (FRU
   expect(results.violations.map((violation) => `${violation.id}: ${violation.nodes[0]?.target.join(' ')}`)).toEqual([]);
 });
 
+test('a menu opens from its button, a keyboard walks it, and Escape gives focus back (FRU-232)', async ({ page }) => {
+  await openKit(page);
+  const menus = page.locator('[data-kit="menus"]');
+  const picked = menus.locator('[data-kit="menu-picked"]');
+
+  // A button that is a picture: the box of the « … » of a row of the mockup, named for a screen reader.
+  const more = menus.getByRole('button', { name: 'More for staging.acme.dev' });
+  await expectStyle(more, 'the button of a menu', {
+    height: '36px',
+    width: '36px',
+    borderTopLeftRadius: '8px',
+    color: MUTED_TONE,
+  });
+  await expect(more).toHaveAttribute('aria-haspopup', /^(menu|true)$/);
+  await expect(more).toHaveAttribute('aria-expanded', 'false');
+
+  await more.focus();
+  await page.keyboard.press('Enter');
+  // The menu is named after its button.
+  const menu = page.getByRole('menu', { name: 'More for staging.acme.dev' });
+  await expect(menu).toBeVisible();
+  await expect(more).toHaveAttribute('aria-expanded', 'true');
+  await expect(menu.getByRole('menuitem')).toHaveText(['Install', 'Change who sees the notes', 'Not yet', 'Remove']);
+
+  // The surface of a page with the frame of a card. The menu is not drawn in the mockup.
+  const popover = page.locator('.kit-menu');
+  await expectStyle(popover, 'menu', {
+    backgroundColor: WHITE,
+    borderTopWidth: '1px',
+    borderTopColor: LINE,
+    borderTopLeftRadius: '10px',
+    color: INK,
+  });
+  const install = menu.getByRole('menuitem', { name: 'Install' });
+  await expectStyle(install, 'item', { minHeight: '40px', borderTopLeftRadius: '6px', fontSize: '14px' });
+  // An item that takes something away is the strong accent: 6.47:1 on white, 5.89:1 on the tint of an item.
+  const remove = menu.getByRole('menuitem', { name: 'Remove' });
+  await expectStyle(remove, 'item that removes', { color: ACCENT_STRONG });
+  await expect(menu.getByRole('menuitem', { name: 'Not yet' })).toHaveAttribute('aria-disabled', 'true');
+
+  // The keyboard is on the first item, which shows it; the arrows walk the items, past the disabled one.
+  await expect(install).toBeFocused();
+  await expectStyle(install, 'item with focus', {
+    outlineStyle: 'solid',
+    outlineWidth: '2px',
+    outlineColor: ACCENT,
+    backgroundColor: CHIP,
+  });
+  await page.keyboard.press('ArrowDown');
+  await expect(menu.getByRole('menuitem', { name: 'Change who sees the notes' })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(remove).toBeFocused();
+  expect
+    .soft(contrast(await painted(remove, 'color'), await painted(remove, 'backgroundColor')))
+    .toBeGreaterThanOrEqual(4.5);
+  const open = await new AxeBuilder({ page }).include('.kit-menu').analyze();
+  expect
+    .soft(open.violations.map((violation) => `${violation.id}: ${violation.nodes[0]?.target.join(' ')}`))
+    .toEqual([]);
+
+  // Escape closes the menu with nothing done, and focus is back on the button.
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect(more).toBeFocused();
+  await expect(picked).toHaveText('Picked: nothing, acme');
+
+  // An item pressed says which one it is, and the menu closes.
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(menu).toBeHidden();
+  await expect(picked).toHaveText('Picked: audience, acme');
+  await expect(more).toBeFocused();
+
+  // A menu that is a choice: its items are radios, and the current one is checked.
+  const choice = menus.getByRole('button', { name: 'Workspace' });
+  await choice.click();
+  const radios = page.getByRole('menu', { name: 'Workspace' }).getByRole('menuitemradio');
+  await expect(radios).toHaveCount(2);
+  await expect(radios.nth(0)).toHaveAttribute('aria-checked', 'true');
+  await expect(radios.nth(1)).toHaveAttribute('aria-checked', 'false');
+  await expect(radios.nth(1)).toContainText('Lumen Studio');
+  // The second line of an item is its description, in the muted tone: 5.28:1 on white.
+  await expectStyle(radios.nth(1).getByText('Member'), 'detail of an item', { color: MUTED_TONE, fontSize: '13px' });
+  // The menu of a button of the rail is a page all the same: its ring is the one of a page.
+  await radios.nth(1).hover();
+  await expectStyle(radios.nth(1), 'item under the pointer', { backgroundColor: CHIP });
+  await radios.nth(1).click();
+  await expect(picked).toHaveText('Picked: audience, lumen');
+  await choice.click();
+  await expect(page.getByRole('menuitemradio', { name: /Lumen Studio/ })).toHaveAttribute('aria-checked', 'true');
+  await page.keyboard.press('Escape');
+});
+
 /** Each text of the page with the colour it is painted in and the colour that is behind it. */
 function pairs(page: Page): Promise<{ text: string; ratio: number }[]> {
   return page.evaluate(() => {

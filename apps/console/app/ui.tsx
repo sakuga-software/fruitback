@@ -1,6 +1,7 @@
 import {
   Alert,
   Description,
+  Dropdown,
   Header,
   Button as HeroButton,
   Chip as HeroChip,
@@ -708,5 +709,76 @@ export function Divider({ children, className = '' }: { children: ReactNode; cla
     <div aria-hidden="true" className={`kit-divider ${className}`}>
       {children}
     </div>
+  );
+}
+
+export type MenuItem = {
+  id: string;
+  label: string;
+  /** A second line under the label: the role of a person in a workspace. */
+  detail?: string;
+  /** The item takes something away: « Remove ». */
+  danger?: boolean;
+  disabled?: boolean;
+};
+
+type MenuProps = {
+  items: readonly MenuItem[];
+  /** The item that is the current one, when the menu is a choice: it is checked. */
+  chosen?: string;
+  onAction: (id: string) => void;
+  /**
+   * What opens the menu: a button that is a picture (36 px, named by `triggerLabel`), or a button of
+   * the screen, which gives its box with `triggerClassName`.
+   */
+  trigger?: 'icon' | 'plain';
+  triggerLabel?: string;
+  triggerClassName?: string;
+  /** What the button shows. */
+  children: ReactNode;
+};
+
+/**
+ * A button that opens a menu, as the dropdown of HeroUI: the arrows walk the items, Escape closes
+ * the menu and gives focus back to the button. The menu is named after its button, so the button
+ * says what the menu lists. The menu is drawn on the surface of a page, wherever its button is.
+ */
+export function Menu({
+  items,
+  chosen,
+  onAction,
+  trigger = 'plain',
+  triggerLabel,
+  triggerClassName = '',
+  children,
+}: MenuProps) {
+  return (
+    <Dropdown>
+      <Dropdown.Trigger
+        className={`kit-menu-trigger ${trigger === 'icon' ? 'kit-icon-button' : ''} ${triggerClassName}`}
+        {...(triggerLabel === undefined ? {} : { 'aria-label': triggerLabel })}
+      >
+        {children}
+      </Dropdown.Trigger>
+      <Dropdown.Popover className="kit-menu" placement="bottom start">
+        <Dropdown.Menu
+          onAction={(id) => onAction(String(id))}
+          disabledKeys={items.filter((item) => item.disabled === true).map((item) => item.id)}
+          {...(chosen === undefined
+            ? {}
+            : { selectionMode: 'single' as const, selectedKeys: [chosen], disallowEmptySelection: true })}
+        >
+          {items.map((item) => (
+            <Dropdown.Item key={item.id} id={item.id} textValue={item.label} data-danger={item.danger === true}>
+              {chosen === undefined ? null : <Dropdown.ItemIndicator />}
+              <span className="kit-menu__words">
+                <Label>{item.label}</Label>
+                {item.detail === undefined ? null : <Description>{item.detail}</Description>}
+              </span>
+            </Dropdown.Item>
+          ))}
+        </Dropdown.Menu>
+      </Dropdown.Popover>
+    </Dropdown>
   );
 }
