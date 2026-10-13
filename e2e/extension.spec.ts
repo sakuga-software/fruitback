@@ -160,6 +160,32 @@ test('private mode: the same decision posted again keeps the open composer and i
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 });
 
+/**
+ * The picture of a note, taken by the browser (FRU-44). Here the capture cannot succeed: no popup was
+ * opened on the page, so the browser grants no `activeTab`, and the reviewer has no session. The
+ * promise of the ticket is what is left to check: a capture that fails costs the picture, never the
+ * note. The cases where it gives up, and the one where it uploads, are in `src/capture.test.ts`.
+ */
+test('private mode: a picture the browser cannot take costs the picture, never the note', async ({ extension }) => {
+  await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'ext-capture');
+
+  // The extension offers the picture, and it is off until the reviewer turns it on.
+  await page.getByLabel('Open Fruitback settings').click();
+  const setting = page.locator('[name="screenshot"]');
+  await expect(setting).not.toBeChecked();
+  await setting.check();
+  await page.getByLabel('Open Fruitback settings').click();
+
+  await plantOnTheLatteCard(page, /Leave feedback/, 'Sans image, et pourtant envoyée');
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
+
+  const [seed] = await seedsOn(page);
+  expect(seed?.note).toBe('Sans image, et pourtant envoyée');
+  expect(seed && 'screenshot' in seed).toBe(false);
+});
+
 /** What a team-mode site ships: a dormant widget that mounts when the extension announces itself. */
 async function mountTheSiteWidget(page: Page, endpoint: string): Promise<void> {
   await page.addScriptTag({ path: IIFE });

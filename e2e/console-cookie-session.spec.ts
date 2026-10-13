@@ -1,4 +1,4 @@
-import { type Page, expect, test } from '@playwright/test';
+import { type BrowserContext, type Page, expect, test } from '@playwright/test';
 import { CONSOLE, SESSION_COOKIE, type Worker, cloudWorker, finished, linkIn, served } from './cloud-worker.ts';
 import { WORKER_ORIGIN } from './pin.ts';
 
@@ -228,5 +228,119 @@ test.describe('the console, signed in by the cookie of better-auth (FRU-148)', (
     await page.getByRole('button', { name: 'Sign out', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Create your workspace' })).toBeVisible();
     expect((await me()).status).toBe(401);
+  });
+
+  /** Another person signs in, in another tab of the same browser: the cookie is theirs from then on. */
+  async function signInElsewhere(context: BrowserContext, worker: Worker, email: string, mails: number): Promise<Page> {
+    const tab = await context.newPage();
+    await tab.goto(`${CONSOLE}/setup`);
+    await tab.getByRole('textbox', { name: 'Work email' }).fill(email);
+    await tab.getByRole('textbox', { name: 'Workspace name' }).fill('Other');
+    await tab.getByRole('button', { name: 'Continue', exact: true }).click();
+    await expect.poll(async () => (await worker.sent()).length).toBe(mails);
+    await tab.goto(await linkIn(worker));
+    await expect(tab.getByRole('heading', { name: 'Where should feedback go?' })).toBeVisible();
+
+    return tab;
+  }
+
+  /** What the worker was asked to change on the sites of a workspace. */
+  const sitesWritten = async (worker: Worker): Promise<number> =>
+    (await worker.received()).filter((each) => each.method === 'POST' && each.path.endsWith('/sites')).length;
+
+  /** The screen of a tab that stopped: nothing of the person before, but what was typed, to copy. */
+  async function expectStopped(page: Page, title: string): Promise<void> {
+    await expect(page.getByRole('alert').getByRole('heading', { name: title })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Sites', level: 1 })).toHaveCount(0);
+    await expect(page.getByText('Acme')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Add the site', exact: true })).toHaveCount(0);
+    const draft = page.getByRole('textbox', { name: 'Site address' });
+    await expect(draft).toHaveValue('staging.acme.dev');
+    await expect(draft).toHaveAttribute('readonly', '');
+  }
+
+  test('« Continue » sends nothing when another account signed in, and keeps what was typed to copy (FRU-210)', async ({
+    page,
+    context,
+  }) => {
+    await signInByLink(page, worker, 'ana@acme.dev');
+    await page.getByRole('textbox', { name: 'Site address' }).fill('staging.acme.dev');
+    // The session of Ana ends, as in the case above, and her next call shows the banner.
+    const cookies = await context.cookies(`${WORKER_ORIGIN}/console/me`);
+    await fetch(`${worker.origin}/console/auth/revoke-sessions`, {
+      method: 'POST',
+      headers: {
+        Origin: CONSOLE,
+        'Content-Type': 'application/json',
+        Cookie: cookies.map((each) => `${each.name}=${each.value}`).join('; '),
+      },
+      body: '{}',
+    });
+    await page.getByRole('button', { name: 'Add the site', exact: true }).click();
+    const notice = page.getByRole('alert').filter({ hasText: 'Your session ended' });
+    await expect(notice).toBeVisible();
+    const written = await sitesWritten(worker);
+
+    // Bob signs in in another tab, and somebody presses « Continue » on the screen of Ana.
+    const other = await signInElsewhere(context, worker, 'bob@acme.dev', 2);
+    await notice.getByRole('button', { name: 'Continue', exact: true }).click();
+
+    await expectStopped(page, 'Another account is signed in in this browser');
+    expect(await sitesWritten(worker)).toBe(written);
+    // The one way on loads the console for whoever is signed in now.
+    await page.getByRole('button', { name: 'Load the console again', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Sites', level: 1 })).toBeVisible();
+    await expect(page.getByText('Other')).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Site address' })).toHaveValue('');
+    await other.close();
+  });
+
+  test('a tab that comes back stops when another account signed in, or when its session ended elsewhere (FRU-210)', async ({
+    page,
+    context,
+  }) => {
+    await signInByLink(page, worker, 'ana@acme.dev');
+    await page.getByRole('textbox', { name: 'Site address' }).fill('staging.acme.dev');
+    /** The tab is shown again: what a browser tells a page when somebody comes back to it. */
+    const comesBack = (tab: Page) => tab.evaluate(() => void window.dispatchEvent(new Event('focus')));
+
+    // The control: the tab comes back and nothing changed. The screen stays.
+    await comesBack(page);
+    await expect(page.getByRole('textbox', { name: 'Site address' })).toHaveValue('staging.acme.dev');
+    await expect(page.getByRole('heading', { name: 'Sites', level: 1 })).toBeVisible();
+
+    // In a second tab Ana signs out, and Bob signs in.
+    const second = await context.newPage();
+    await second.goto(CONSOLE);
+    await second.getByRole('link', { name: 'My account' }).click();
+    await second.getByRole('button', { name: 'Sign out', exact: true }).click();
+    await expect(second.getByRole('heading', { name: 'Create your workspace' })).toBeVisible();
+    await second.close();
+    const other = await signInElsewhere(context, worker, 'bob@acme.dev', 2);
+
+    await comesBack(page);
+    await expectStopped(page, 'Another account is signed in in this browser');
+    expect(await sitesWritten(worker)).toBe(0);
+    await other.close();
+  });
+
+  test('a tab that comes back after a sign-out elsewhere shows nothing of its person (FRU-210)', async ({
+    page,
+    context,
+  }) => {
+    await signInByLink(page, worker, 'ana@acme.dev');
+    await page.getByRole('textbox', { name: 'Site address' }).fill('staging.acme.dev');
+    const second = await context.newPage();
+    await second.goto(CONSOLE);
+    await second.getByRole('link', { name: 'My account' }).click();
+    await second.getByRole('button', { name: 'Sign out', exact: true }).click();
+    await expect(second.getByRole('heading', { name: 'Create your workspace' })).toBeVisible();
+    await second.close();
+
+    await page.evaluate(() => void window.dispatchEvent(new Event('focus')));
+
+    await expectStopped(page, 'You were signed out');
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Create your workspace' })).toBeVisible();
   });
 });

@@ -141,13 +141,37 @@ export type RelayResponseMessage = {
   response: RelayResponse;
 };
 
+/**
+ * The widget asks for the picture of an element, on its way to the background (FRU-44).
+ *
+ * The page can send one of these: it buys a picture of its own tab, sent to the worker of its own
+ * entry with a session it never sees, and only when the reviewer granted `activeTab`. The area is
+ * the only thing the page decides, and `capture.ts` keeps it inside the capture.
+ */
+export type CaptureRequestMessage = {
+  channel: typeof CHANNEL;
+  kind: 'capture-request';
+  id: string;
+  area: { left: number; top: number; width: number; height: number; scale: number };
+};
+
+/** The address of the picture, or nothing: no picture, for whatever reason. */
+export type CaptureResponseMessage = {
+  channel: typeof CHANNEL;
+  kind: 'capture-response';
+  id: string;
+  picture?: { url: string; width: number; height: number };
+};
+
 export type BridgeMessage =
   | MountMessage
   | UnmountMessage
   | ReadyMessage
   | AnnounceMessage
   | RelayRequestMessage
-  | RelayResponseMessage;
+  | RelayResponseMessage
+  | CaptureRequestMessage
+  | CaptureResponseMessage;
 
 /**
  * Recognise one of our messages, or return `undefined`.
@@ -164,6 +188,8 @@ export function parseBridgeMessage(data: unknown): BridgeMessage | undefined {
   if (data.kind === 'announce') return { channel: CHANNEL, kind: 'announce' };
   if (data.kind === 'relay-request') return parseRelayRequestMessage(data);
   if (data.kind === 'relay-response') return parseRelayResponseMessage(data);
+  if (data.kind === 'capture-request') return parseCaptureRequest(data);
+  if (data.kind === 'capture-response') return parseCaptureResponse(data);
   if (data.kind !== 'mount') return undefined;
 
   const { endpoint, clientId, label, relay, locale } = data;
@@ -250,6 +276,46 @@ function allowedHeaders(value: unknown): Record<string, string> {
 
 function isWithinBodyCap(body: unknown): body is string {
   return typeof body === 'string' && new TextEncoder().encode(body).byteLength <= MAX_BODY_BYTES;
+}
+
+/** A number a screen can have: finite, and not past a side of 100 000 pixels. */
+function isCoordinate(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= 100_000;
+}
+
+function parseCaptureRequest(data: Record<string, unknown>): CaptureRequestMessage | undefined {
+  const id = parseId(data.id);
+  if (id === undefined || !isRecord(data.area)) return undefined;
+  const { left, top, width, height, scale } = data.area;
+  if (![left, top, width, height].every(isCoordinate)) return undefined;
+  if (typeof scale !== 'number' || !(scale > 0 && scale <= 8)) return undefined;
+
+  return {
+    channel: CHANNEL,
+    kind: 'capture-request',
+    id,
+    area: { left: left as number, top: top as number, width: width as number, height: height as number, scale },
+  };
+}
+
+function parseCaptureResponse(data: Record<string, unknown>): CaptureResponseMessage | undefined {
+  const id = parseId(data.id);
+  if (id === undefined) return undefined;
+  const picture = isRecord(data.picture) ? data.picture : undefined;
+  const ok =
+    picture !== undefined &&
+    isWorkerEndpoint(picture.url) &&
+    typeof picture.width === 'number' &&
+    typeof picture.height === 'number';
+
+  return {
+    channel: CHANNEL,
+    kind: 'capture-response',
+    id,
+    ...(ok
+      ? { picture: { url: picture.url as string, width: picture.width as number, height: picture.height as number } }
+      : {}),
+  };
 }
 
 function parseId(value: unknown): string | undefined {

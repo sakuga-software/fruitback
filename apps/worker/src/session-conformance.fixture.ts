@@ -813,6 +813,20 @@ export function sessionCases(it: Declare<SessionStore>): void {
     assert.notEqual(await presented(store, tokens[0] as string, at + 3), 'rotated');
   });
 
+  // --- Whether anybody paired (FRU-108)
+
+  it('holds no session until a code is spent, and holds one after, ended or not', async (store) => {
+    assert.equal(await store.holdsSession(), false);
+    await createPairing(store, ALICE);
+    assert.equal(await store.holdsSession(), false, 'a code that nobody spent is not a session');
+
+    const { token, at } = await opened(store);
+    assert.equal(await store.holdsSession(), true);
+    await store.endSessionsOf({ subject: ALICE.subject }, at + 1);
+    assert.notEqual(await presented(store, token, at + 2), 'rotated', 'the session ended');
+    assert.equal(await store.holdsSession(), true, 'a session that ended is still a reviewer who paired');
+  });
+
   // --- The purge
 
   it('drops the codes and the sessions that are expired, and nothing that is not', async (store) => {

@@ -1,3 +1,4 @@
+import { type FirstReviewer, readFirstReviewer } from './first-reviewer.ts';
 import { z } from 'zod';
 import { type TemSettings, parseTemCredentials } from './mail.ts';
 import { type OAuthClient, parseOAuthClient } from './oauth-client.ts';
@@ -76,6 +77,12 @@ export type WorkerEnv = {
   FRUITBACK_KV?: string;
   /** `redis://` or `rediss://`, read only when `FRUITBACK_KV=redis`. It can carry a password. */
   FRUITBACK_REDIS_URL?: string;
+  /**
+   * The first reviewer of a self-hosted worker (FRU-108): `Alice Martin`, or `Alice Martin
+   * <alice@acme.dev>`. Set, a worker that holds no session yet writes a pairing code for that person
+   * in its log when it starts. **The code is in the log in the clear**: see `first-reviewer.ts`.
+   */
+  FRUITBACK_FIRST_REVIEWER?: string;
   /**
    * The SQLite file of the accounts, until FRU-150. **Refused at boot**: the accounts are in
    * PostgreSQL, and `migrate-to-postgres` copies a file there. It is read only to say so.
@@ -217,6 +224,8 @@ const configSchema = z.object({
    * `404`, exactly as they did before this feature existed.
    */
   sessionPath: z.string().min(1).optional(),
+  /** The person a worker with no session mints a pairing code for when it starts (FRU-108). */
+  firstReviewer: z.custom<FirstReviewer | undefined>().optional(),
   /** The PostgreSQL database that holds the accounts (FRU-141). Absent: the clients come from the env. */
   databaseUrl: z.string().min(1).optional(),
   /** The console's address, with no slash at the end (FRU-98). */
@@ -295,6 +304,7 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     // team — which is precisely the leak the map exists to prevent.
     clients: clients.ok ? clients.clients : Number.NaN,
     sessionPath: env.FRUITBACK_SESSION_PATH || undefined,
+    firstReviewer: readFirstReviewer(env.FRUITBACK_FIRST_REVIEWER),
     databaseUrl: readDatabaseUrl(env.FRUITBACK_DATABASE_URL),
     consoleUrl: readConsoleUrl(env.FRUITBACK_CONSOLE_URL),
     mail: readMail(env),
@@ -397,6 +407,29 @@ export function readConfig(env: WorkerEnv): ConfigResult {
       ok: false,
       missing: ['FRUITBACK_CLIENTS (FRUITBACK_SESSION_PATH is set, and no client declares a workspace for a session)'],
     };
+  }
+
+  // FRU-108. Each refusal is a variable that would be set and do nothing, with the operator waiting
+  // for a line that never comes.
+  if (env.FRUITBACK_FIRST_REVIEWER) {
+    if (result.data.firstReviewer === undefined) {
+      return { ok: false, missing: ['FRUITBACK_FIRST_REVIEWER (a name, or a name and <an address>)'] };
+    }
+    if (!sessions) {
+      return {
+        ok: false,
+        missing: ['FRUITBACK_SESSION_PATH (FRUITBACK_FIRST_REVIEWER is set, and pairing opens a session)'],
+      };
+    }
+    // A session of a worker with workspaces names one, and this variable names none.
+    if (accounts || workspacesOf(result.data.clients).length > 0) {
+      return {
+        ok: false,
+        missing: [
+          'FRUITBACK_FIRST_REVIEWER (it names no workspace: on a worker with workspaces, pair with `pair --workspace`, or from the console)',
+        ],
+      };
+    }
   }
 
   // WARNING: a client key equal to the worker key verifies every session token as the site's own,

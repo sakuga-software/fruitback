@@ -343,5 +343,11 @@ export function createPostgresSessionStore(database: Database): SessionStore {
       await run((db) => db.delete(pairings).where(lte(pairings.expires_at, now)));
       await run((db) => db.delete(sessions).where(lte(sessions.expires_at, now)));
     },
+
+    async holdsSession() {
+      const rows = await run((db) => db.select({ token_hash: sessions.token_hash }).from(sessions).limit(1));
+
+      return rows.length > 0;
+    },
   };
 }

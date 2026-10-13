@@ -32,6 +32,22 @@ export type Site = {
   destination?: Destination;
   destinations?: Destination[];
 };
+/**
+ * A domain the workspace says it owns (FRU-103), as the worker answers it. `state` is the worker's
+ * word: `proven` only while the DNS shows `record`. `previews` is the pattern a proven domain covers,
+ * and `previewsSite` the site an admin named for it.
+ */
+export type Domain = {
+  id: string;
+  domain: string;
+  state: 'pending' | 'proven' | 'lost';
+  record: { type: 'TXT'; name: string; value: string };
+  previews: string;
+  previewsSite?: string;
+  verifiedAt?: string;
+  lostAt?: string;
+  checkedAt?: string;
+};
 /** How many places a site can send to: the bound of the worker. */
 export const MAX_DESTINATIONS = 5;
 
@@ -122,6 +138,66 @@ async function answer<T>(response: Response | undefined): Promise<Answer<T>> {
     : { ok: false, status: response.status, error: body.error ?? 'unknown' };
 }
 
+/**
+ * The account this tab was drawn for, and why the tab stopped (FRU-210).
+ *
+ * The cookie of a session belongs to the browser, not to a tab. Somebody who signs in in another tab
+ * changes who every tab speaks for, and a screen that was drawn for the person before would send
+ * what that person typed with the cookie of the new one. So the tab keeps the id of the first
+ * account that `/console/me` answered, and stops when the worker answers another one:
+ *
+ * - `changed`: another account is signed in. Nothing leaves this tab any more, until it is loaded
+ *   again.
+ * - `ended`: the tab came back, and the session had ended somewhere else.
+ *
+ * A session that ends while somebody works (a `401` on a call they made) is not one of these: the
+ * screen stays, with what they typed (FRU-148), and « Continue » goes on for the same account only.
+ */
+export type Left = 'changed' | 'ended';
+let tabAccount: string | undefined;
+let left: Left | undefined;
+/** A call the person made was refused with `401`: the banner says so, and the screen stays. */
+let endSeen = false;
+let checking: Promise<void> | undefined;
+const leftListeners = new Set<(why: Left) => void>();
+/** What a call answers once the tab stopped. No request leaves. */
+const LEFT = { ok: false, status: 409, error: 'tab-left' } as const;
+
+/** Tells the listener when this tab stops, and why. Returns how to stop. */
+export function onLeft(listener: (why: Left) => void): () => void {
+  leftListeners.add(listener);
+
+  return () => void leftListeners.delete(listener);
+}
+
+function leave(why: Left): void {
+  if (left !== undefined) return;
+  left = why;
+  for (const listener of leftListeners) listener(why);
+}
+
+/**
+ * Asks the worker who the browser is signed in as, when the tab comes back. A change of account
+ * stops the tab; so does a session that ended while the tab was away.
+ *
+ * WARNING: every call waits for this one (`call`). Without the wait, a click in the moment after
+ * the tab comes back leaves with the cookie of the other account, and a list that the screen reads
+ * in that moment comes back with the data of the other account.
+ */
+export function checkTab(): Promise<void> {
+  if (tabAccount === undefined || left !== undefined) return Promise.resolve();
+  checking ??= ask('GET', '/console/me', undefined, { quiet: true })
+    .then((me) => {
+      // No answer, and a refusal that is not about the session, say nothing of who is signed in.
+      if (!me.ok && me.status === 401 && !endSeen) leave('ended');
+    })
+    .finally(() => {
+      checking = undefined;
+    });
+
+  return checking;
+}
+
 const RETRY_MS = 5_000;
 
 /**
@@ -158,10 +234,43 @@ export async function call<T>(
   body?: unknown,
   options: { quiet?: boolean } = {},
 ): Promise<Answer<T>> {
-  const response = await send(method, to, body);
-  if (response?.status === 401 && options.quiet !== true) for (const listener of signedOutListeners) listener();
+  // A call waits for the question of a tab that came back: its answer would be of whoever is signed
+  // in now, and its change would be made in their name.
+  if (checking !== undefined) await checking;
 
-  return answer<T>(response);
+  return ask<T>(method, to, body, options);
+}
+
+/** The call itself, with no wait: the question of a tab that came back is asked through it. */
+async function ask<T>(
+  method: string,
+  to: string,
+  body?: unknown,
+  options: { quiet?: boolean } = {},
+): Promise<Answer<T>> {
+  // A tab that stopped sends nothing.
+  if (left !== undefined) return LEFT;
+  const response = await send(method, to, body);
+  if (response?.status === 401 && options.quiet !== true) {
+    endSeen = true;
+    for (const listener of signedOutListeners) listener();
+  }
+  const result = await answer<T>(response);
+  if (method === 'GET' && to === '/console/me' && result.ok) {
+    const id = (result.data as { account?: { id?: unknown } } | undefined)?.account?.id;
+    if (typeof id === 'string') {
+      if (tabAccount !== undefined && id !== tabAccount) {
+        // The answer is of another account: no screen of this tab reads it.
+        leave('changed');
+
+        return LEFT;
+      }
+      tabAccount = id;
+      endSeen = false;
+    }
+  }
+
+  return result;
 }
 
 /** Tells the account the language its person chose (FRU-119). `false` when it did not take it. */
@@ -200,6 +309,9 @@ export function providerStart(provider: keyof Providers): string {
 }
 
 export async function requestLink(email: string, tag: string): Promise<Answer<{ sent: true }>> {
+  // A tab that stopped signs nobody in, and signs nobody out: it is loaded again first (FRU-210).
+  if (left !== undefined) return LEFT;
+
   return answer(await send('POST', '/console/auth/email', { email, locale: tag }));
 }
 
@@ -208,7 +320,17 @@ export async function requestLink(email: string, tag: string): Promise<Answer<{ 
  * sets the cookie; the console keeps nothing.
  */
 export async function redeemLink(code: string): Promise<Answer<{ account: Account }>> {
-  return answer(await send('POST', '/console/auth/email/redeem', { token: code, locale: locale() }));
+  if (left !== undefined) return LEFT;
+  const redeemed = await answer<{ account: Account }>(
+    await send('POST', '/console/auth/email/redeem', { token: code, locale: locale() }),
+  );
+  // A sign-in made in this tab: the tab is of that account from now on (FRU-210).
+  if (redeemed.ok) {
+    tabAccount = typeof redeemed.data?.account?.id === 'string' ? redeemed.data.account.id : undefined;
+    endSeen = false;
+  }
+
+  return redeemed;
 }
 
 /**
@@ -218,7 +340,13 @@ export async function redeemLink(code: string): Promise<Answer<{ account: Accoun
  * and stays: somebody who reads « signed out » leaves the browser to the next person.
  */
 export async function signOut(): Promise<boolean> {
-  return (await send('POST', '/console/auth/sign-out', {}))?.ok === true;
+  // The session of the browser is of another account now: this tab does not end it (FRU-210).
+  if (left !== undefined) return false;
+  const out = (await send('POST', '/console/auth/sign-out', {}))?.ok === true;
+  // Signed out here: the tab is of nobody, and the next sign-in in it says whose it is.
+  if (out) tabAccount = undefined;
+
+  return out;
 }
 
 /**

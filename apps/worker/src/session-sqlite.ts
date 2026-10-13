@@ -531,5 +531,9 @@ export function createSqliteSessionStore(path: string): SessionStore {
       database.prepare('DELETE FROM pairings WHERE expires_at <= ?').run(now);
       database.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(now);
     },
+
+    async holdsSession() {
+      return connect(path).prepare('SELECT 1 FROM sessions LIMIT 1').get() !== undefined;
+    },
   };
 }
