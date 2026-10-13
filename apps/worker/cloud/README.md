@@ -137,6 +137,29 @@ database in service whole: that is the state to investigate from. `ALTER DATABAS
 a database that a session holds; the worker is stopped, so only a `psql` left open would hold it.
 Then check `https://api.fruitback.com/health`, and sign in.
 
+### Restore one schema
+
+Only for a worker whose tables are in a schema of its own (`FRUITBACK_DATABASE_SCHEMA`, FRU-219),
+in a database that another application uses too. The Cloud is not one: its worker owns its database,
+and its tables are in `public`. `snapshot-pg.sh` then takes `PGSCHEMA=<the schema>` and dumps that
+schema alone (`pg_dump -n`): nothing of the other application is in the file.
+
+```bash
+docker cp shared.pgdump "$PG:/tmp/shared.pgdump" &&
+  docker exec "$PG" pg_restore -f /dev/null /tmp/shared.pgdump &&
+  docker exec "$PG" createdb -U fruitback shared_restored &&
+  docker exec "$PG" pg_restore -U fruitback -d shared_restored --no-owner --exit-on-error /tmp/shared.pgdump
+```
+
+The dump makes the schema itself, so it goes into a database that does not have it. To put it back
+in the database it came from, where the other application still is, drop the schema of the worker
+there first (`DROP SCHEMA <the schema> CASCADE`, with the worker stopped), then restore into that
+database: the tables of the other application are not in the dump, and are not touched.
+`restore-drill.sh` runs the commands above (step 4b): a database with a table of another
+application in `public` and a worker in `fruitback`, the dump of that schema, its restore on another
+server, the same tables, rows and sequences on both sides, and no table of `public` brought back.
+**Not tried:** the restore into the database it came from.
+
 **Tried on 2026-10-11, on a laptop and never on the host**, by `restore-drill.sh`, which CI runs in
 the `docker image` job on every pull request to `main`. It starts a database and the worker of the
 pull request, fills every table (38 rows in 19 tables, the journal of Drizzle `__drizzle_migrations`

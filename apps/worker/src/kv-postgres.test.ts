@@ -43,7 +43,10 @@ describe('two replicas that count at once, on a real server (FRU-67)', { skip: N
   /** Two pools of one connection each, on one database: two replicas, as far as the server can tell. */
   async function twoReplicas() {
     const own = await ownDatabase();
-    const databases = [createPgDatabase(own.url, { max: 1 }), createPgDatabase(own.url, { max: 1 })] as const;
+    const databases = [
+      createPgDatabase(own.url, 'public', { max: 1 }),
+      createPgDatabase(own.url, 'public', { max: 1 }),
+    ] as const;
     await migrated(databases[0]);
 
     return {
@@ -118,10 +121,12 @@ describe(
   'a write of the Kv that does not wait for the disk, on a real server (FRU-67)',
   { skip: NO_REAL_POSTGRES },
   () => {
-    it('commits without waiting in its own statement, and leaves the connection as the server set it', async () => {
+    // `public`, and a schema of its own (FRU-219): the Kv writes in the schema of its worker, and its
+    // `SET LOCAL` leaves the search path that the pool set as it was.
+    const writesWithoutWaiting = async (schema: string): Promise<void> => {
       const own = await ownDatabase();
       // One connection: every statement below runs on it, and the pids say so.
-      const pool = createPgDatabase(own.url, { max: 1 });
+      const pool = createPgDatabase(own.url, schema, { max: 1 });
       const { database, answers } = watched(pool);
       const setting = async () => (await rowsOf(pool, 'SHOW synchronous_commit'))[0]?.synchronous_commit;
       const pid = async () => (await rowsOf(pool, 'SELECT pg_backend_pid() AS pid'))[0]?.pid;
@@ -153,11 +158,26 @@ describe(
         assert.equal(written?.commits, ofTheServer);
         assert.equal(written?.pid, connection, 'the account was not written on the connection of the Kv');
         assert.equal(await pid(), connection);
+        // Where the rows are: the table of the schema, and no other.
+        assert.deepEqual(await rowsOf(pool, "SELECT array_to_string(current_schemas(false), ',') AS path"), [
+          { path: schema },
+        ]);
+        assert.deepEqual(
+          (await rowsOf(pool, `SELECT schemaname FROM pg_tables WHERE tablename = 'kv'`)).map((row) => row.schemaname),
+          [schema],
+        );
+        assert.deepEqual(await rowsOf(pool, `SELECT count(*)::int AS n FROM "${schema}".kv`), [{ n: 2 }]);
       } finally {
         await pool.close();
         await own.drop();
       }
-    });
+    };
+
+    it('commits without waiting in its own statement, and leaves the connection as the server set it', () =>
+      writesWithoutWaiting('public'));
+
+    it('does the same in a schema of its own, and writes in its table (FRU-219)', () =>
+      writesWithoutWaiting('fruitback'));
   },
 );
 
@@ -228,6 +248,7 @@ describe('the Kv of the database (FRU-67)', () => {
 
   it('rejects with KvError when the database does not answer, and quotes no address', async () => {
     const down: Database = {
+      schema: 'public',
       run: async () => {
         throw new StoreError('PostgreSQL did not answer: connect ECONNREFUSED');
       },
@@ -275,15 +296,20 @@ describe('which Kv a worker runs on (FRU-67)', () => {
   const base = { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: 'https://app.fruitback.test' };
 
   it('changes nothing for a worker with no database: the store of the process, the very instance', () => {
-    assert.equal(kvFor({}), processKv());
-    assert.equal(kvFor({ databaseUrl: undefined }), processKv());
+    assert.equal(kvFor({ databaseSchema: 'public' }), processKv());
+    assert.equal(kvFor({ databaseUrl: undefined, databaseSchema: 'public' }), processKv());
   });
 
   it('keeps the state in the database of a worker that has one, with one instance for the process', () => {
     const url = 'postgres://fruitback:not-a-password@127.0.0.1:1/fruitback';
 
-    assert.notEqual(kvFor({ databaseUrl: url }), processKv());
-    assert.equal(kvFor({ databaseUrl: url }), kvFor({ databaseUrl: url }));
+    const of = (databaseSchema: string) => kvFor({ databaseUrl: url, databaseSchema });
+
+    assert.notEqual(of('public'), processKv());
+    assert.equal(of('public'), of('public'));
+    // Two schemas of one database are two workers (FRU-219): each has its Kv, in its schema.
+    assert.notEqual(of('fruitback'), of('public'));
+    assert.equal(of('fruitback'), of('fruitback'));
   });
 
   it('answers a worker with no database from memory, with no variable to set', async () => {

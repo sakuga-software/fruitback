@@ -11,6 +11,8 @@ import { defineConfig } from 'drizzle-kit';
 export default defineConfig({
   dialect: 'postgresql',
   // The tables of the worker, and the ones of better-auth: one database, one schema, one journal.
+  // The schema is `public` here, and the worker writes the one of `FRUITBACK_DATABASE_SCHEMA` in its
+  // place when it applies a migration (`inSchema` of `postgres-migrate.ts`, FRU-219).
   schema: ['./src/postgres-schema.ts', './src/auth-schema.ts'],
   out: './drizzle',
   migrations: { table: '__drizzle_migrations', schema: 'public' },
