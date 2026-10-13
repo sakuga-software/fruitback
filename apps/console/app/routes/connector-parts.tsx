@@ -146,11 +146,16 @@ export function Disconnect({
   confirmLabel,
   consequence,
   onConfirm,
+  keepLabel,
+  space = 'normal',
 }: {
   label: string;
   confirmLabel: string;
   consequence: string;
   onConfirm: () => void;
+  keepLabel?: string;
+  /** The space around the words: 10 px at the foot of a panel, 12 px beside a button of a page. */
+  space?: 'normal' | 'loose';
 }) {
   const [asking, setAsking] = useState(false);
   // Set once the person stepped back: the words then take focus again when they reappear.
@@ -158,7 +163,7 @@ export function Disconnect({
 
   if (!asking)
     return (
-      <LinkButton space="normal" autoFocus={back} onClick={() => setAsking(true)}>
+      <LinkButton space={space} autoFocus={back} onClick={() => setAsking(true)}>
         {label}
       </LinkButton>
     );
@@ -168,6 +173,7 @@ export function Disconnect({
       confirmLabel={confirmLabel}
       consequence={consequence}
       onConfirm={onConfirm}
+      {...(keepLabel === undefined ? {} : { keepLabel })}
       onKeep={() => {
         setBack(true);
         setAsking(false);

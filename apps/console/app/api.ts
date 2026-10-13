@@ -357,6 +357,43 @@ export async function signOut(): Promise<boolean> {
 }
 
 /**
+ * A session of the console of the person, as `GET /console/sessions` lists it (FRU-181): its id, and
+ * never its token. `current` is the session of this browser. The worker also answers a user agent
+ * when its operator switched that on; this type leaves it out, and no screen shows it (Q7 of FRU-230).
+ */
+export type ConsoleSession = { id: string; createdAt: string; lastUsedAt: string; current: boolean };
+
+/** The sessions of the console of the person. A refusal is no list: the screen says it could not read. */
+export async function consoleSessions(): Promise<Answer<ConsoleSession[]>> {
+  const listed = await call<{ sessions?: ConsoleSession[] }>('GET', '/console/sessions');
+  if (!listed.ok) return listed;
+
+  return Array.isArray(listed.data?.sessions)
+    ? { ok: true, data: listed.data.sessions }
+    : { ok: false, status: 200, error: 'unknown' };
+}
+
+/** Ends one session of the person by its id: its browser is refused at its next call. */
+export async function endConsoleSession(id: string): Promise<boolean> {
+  return (await call('DELETE', `/console/sessions/${encodeURIComponent(id)}`)).ok;
+}
+
+/**
+ * « Sign out everywhere »: ends every session of the person on the worker, this one too.
+ *
+ * `false` when the worker did not say so, as `signOut` (FRU-204): the screen then says that the
+ * sessions may still be open, and stays.
+ */
+export async function signOutEverywhere(): Promise<boolean> {
+  // The session of the browser is of another account now: this tab does not end it (FRU-210).
+  if (left !== undefined) return false;
+  const out = (await send('POST', '/console/auth/revoke-sessions', {}))?.ok === true;
+  if (out) tabAccount = undefined;
+
+  return out;
+}
+
+/**
  * Whether the worker sends the message of an invitation (FRU-104). Without a mailer it keeps the
  * invitation all the same, and the person who invites sends `invitationLink()` by hand.
  */

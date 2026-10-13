@@ -172,6 +172,21 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   mockup draws it inside: the list of the kit has no place for it. « Connect » is written seven
   times, so each button also holds the name of its source for a screen reader.
   `e2e/console-connectors.spec.ts` holds the values, the states, the roles, 390 px and axe.
+- **My account shows the sessions of the console, and ends them, with the routes of FRU-181**
+  (FRU-248, `routes/account.tsx`). `GET /console/sessions` lists them by id, with no token: this
+  browser first, then the others, each with « Disconnect » (`DELETE /console/sessions/<id>`, one
+  press: a session ended by mistake is a sign-in away). « Sign out everywhere » is
+  `/console/auth/revoke-sessions`, asks twice, and ends this browser too. **A way out that the
+  worker did not confirm says so and stays** (FRU-204), for the three of them. **A list that was
+  not read is no list.** **No kind of browser is shown**: the worker answers a user agent when its
+  operator switched that on, the type of `api.ts` leaves it out, and what to show of it waits for
+  Q7 of FRU-230. So another browser is « Console · another browser », with when it signed in and
+  when it was last used. **What has no route has no control**: the name is a locked field, a
+  provider says « On this Fruitback » or « Not set up » with no « Link » nor « Unlink », and no
+  extension is listed (FRU-249). The deletion of the workspace stays at the bottom, for its owner:
+  the mockup does not draw it, and it is nowhere else. `e2e/console-account.spec.ts` holds the
+  screen on stubs, and the sessions on a worker with accounts: one browser disconnects the other,
+  which learns it at its next call, and « Sign out everywhere » ends every one.
 - **A box is compared to the mockup in the font of the mockup** (`e2e/console-workspace.ts`,
   `MOCKUP_FONT`): the mockup sizes its boxes by their text, and the Linux of CI has another font
   (52 px where the mockup has 49). `expectBox` compares on macOS; the computed styles are read
