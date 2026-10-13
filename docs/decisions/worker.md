@@ -1527,6 +1527,15 @@ path of before » is how the two lived together until then.
   answer had no `Set-Cookie`; the same reading with `returnHeaders` hands back the cookie of the
   sign-in, token and attributes, with `Max-Age=604800`. A new route that reads the cookie through
   `sessionOfCookie` gets this with nothing to write.
+- **A change on a route of better-auth carries the `Origin` of the console** (FRU-212, decided for
+  Mathieu on 2026-10-12): `handleAuthRoutes` applies `mutationAllowed` to every call that is not a
+  read, before it hands the request over. Read in `api/middlewares/origin-check.mjs` of 1.7.7:
+  `validateOrigin` takes `origin || referer`, has no option that asks for the `Origin`, and returns
+  at once for a request with no cookie. `trustedOrigins` as a function of the request was tried and
+  left: it refuses the `Referer` of the console, but better-auth always adds its own address to the
+  list, so the `Referer` of the worker still passed. **A provider that comes back by a `POST`**
+  (`response_mode=form_post`: Apple) posts from its own origin, and is refused here: adding one
+  means naming its callback as an exception, with a test.
 - **A rejection of better-auth is a `502`**, with its reason in the log and no address of the
   database: `auth.handler` rejects on a schema that is wrong.
 - **The link of the e-mail is the worker's own two routes.** `POST /console/auth/email` calls
@@ -2217,6 +2226,25 @@ Per-client session minting was absent for a stated reason rather than an acciden
 signed with the worker-wide key, and a worker with `FRUITBACK_CLIENTS` ignored that key. The pair was
 refused at boot instead of shipping a feature that paired successfully and then answered `401` to
 everything. FRU-95 lifted it, below.
+
+## The first reviewer, named in the environment (FRU-108)
+
+- **`FRUITBACK_FIRST_REVIEWER` names the person, and the worker mints their code when it starts**,
+  only while `SessionStore.holdsSession()` is false: no session, live or ended. A code that nobody
+  spent is not a session, so each start mints another one until somebody pairs.
+- **`first-reviewer.ts` holds it, `announceFirstReviewer` in `app.ts` writes the lines, and
+  `server.ts` calls it after the boot lines.** It never rejects: a store that does not open is one
+  line of error, and the worker serves.
+- **The code is in the log in the clear.** That is the price of not entering the container, and why
+  the variable is off by default: `SECURITY.md` says who can then pair.
+- **`readConfig` refuses the variable where it would do nothing**: with no sessions, with a value
+  that names nobody, and on a worker with accounts or workspaces, where a session names a workspace.
+- **The link needs `FRUITBACK_PUBLIC_URL`**: the container does not know its address. Without it
+  the code is written alone.
+- **Measured on the image built from this branch**, from an empty folder with `docker-compose.yml`
+  and a `.env` of eight lines, under `env -i`: the first start writes the code, `POST /session/pair`
+  with it answers `200` and a token of the person named, the next start writes nothing. With
+  `FRUITBACK_PUBLIC_URL` the line is the link, and `GET /pair` answers `200`.
 
 ## Rotation, and the grace that is not a clock (FRU-61)
 
