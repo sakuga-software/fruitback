@@ -51,8 +51,13 @@ export function workspaceNameFrom(email: string): string {
   const local = (at === -1 ? address : address.slice(0, at)).split('+')[0] ?? '';
   const domain = at === -1 ? '' : address.slice(at + 1);
   const read = domain === '' || PUBLIC_MAILBOXES.has(domain) ? local : owner(domain);
-  // One line: the worker refuses a name with a control character.
-  const name = capital((read === '' ? local : read).replaceAll(/\p{Cc}/gu, '')).slice(0, LONGEST);
+  // One line, as the worker reads it: no control character, spaces of any kind as one, none at the ends.
+  const name = capital(
+    (read === '' ? local : read)
+      .replaceAll(/\p{Cc}/gu, '')
+      .replaceAll(/\s+/g, ' ')
+      .trim(),
+  ).slice(0, LONGEST);
 
   return name === '' ? NO_NAME : name;
 }

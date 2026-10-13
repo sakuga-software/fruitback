@@ -44,5 +44,8 @@ describe('the name a workspace takes from the address of its first person (FRU-2
     assert.equal(workspaceNameFrom('ana@localhost'), 'Localhost');
     assert.equal(workspaceNameFrom(`ana@${'a'.repeat(120)}.dev`).length, 80);
     assert.equal(workspaceNameFrom('a\nb@gmail.com'), 'Ab');
+    // Only spaces, of any kind, is no name: the worker would refuse it.
+    assert.equal(workspaceNameFrom('\u2003\u00a0@gmail.com'), 'Workspace');
+    assert.equal(workspaceNameFrom('ana\u2003lee@gmail.com'), 'Ana lee');
   });
 });
