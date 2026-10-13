@@ -279,8 +279,16 @@ async function boxOf(locator: Locator): Promise<Box> {
   return { x: round(box.x), y: round(box.y), width: round(box.width), height: round(box.height) };
 }
 
+/**
+ * The mockup is measured in the system font of macOS: a line of text with no line height of its own
+ * is 1 or 2 px taller in the system font of Linux, which the CI draws, and a word is not as wide.
+ * So the boxes are compared where the font is the mockup's. Everything else is measured everywhere.
+ */
+const FONT_OF_THE_MOCKUP = process.platform === 'darwin';
+
 /** Each side of `built` is within `tolerance` pixels of the mockup's. */
 function expectNear(built: Box, mockup: Box, name: string, tolerance: number): void {
+  if (!FONT_OF_THE_MOCKUP) return;
   for (const side of ['x', 'y', 'width', 'height'] as const) {
     expect
       .soft(Math.abs(built[side] - mockup[side]), `${name}: ${side} is ${built[side]}, the mockup has ${mockup[side]}`)
