@@ -1070,6 +1070,38 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   focus does not leave it and a second failure finds it. A failed read after a good one changes nothing, so the pins stay.
 - **The playground does not have it**: it assembles the widget part by part. `e2e/sidebar.spec.ts`
   loads the built script, like `package.spec.ts`, and runs axe in both schemes with its own control.
+- **It is the list of the mock-up of 2026-10-13** (FRU-259, screen 16). Read in its CSS, held by
+  `e2e/sidebar.spec.ts` on computed styles.
+  - **It lies over the page and does not push it.** The mock-up narrows its example site by
+    428 px. A margin on the page of somebody else breaks a layout nobody here read, so the panel is
+    `position: fixed`, 380 px on the end edge, as before at 340 px. The spec measures the page
+    before and after, and its control is the margin of the mock-up.
+  - **Three tabs: « Open », « Done », « All »**, each with its number. Open is what is left to do:
+    new, to do, in progress. Done is the rest: done and closed. A note is in one or the other, so
+    « All » is their sum. `role="tablist"`, one stop for the three, the arrows, Home and End; the
+    arrows swap in a right-to-left language. The tab chosen is kept while the widget lives.
+  - **The tabs count what the overlay draws**: a stage the reporter hid in the settings is in no
+    tab and in no number, like the copied text. A tab shows no number until a read answered.
+  - **A row**: the drop of the pin with its number (`overlay.resolutions()`), the note cut at two
+    lines, and one line: the word of the store for the state (the stage when it has none), who,
+    when, how many replies, « Approximate position » when it is the case.
+  - **« further down »** when the top of the frame of the note is under the bottom of the window
+    (`overlay.below`). The list follows the page while it scrolls, a frame behind at most, and
+    listens to nothing while it is closed.
+  - **The row of the note whose thread is open** says `aria-current` (`overlay.openId`, and
+    `onThread` to draw again).
+  - **« Could not be placed · 1 »** holds the notes whose element is gone, under the tabs, which do
+    not count them: the mock-up counts 6 and 2 beside one such note. Each is a button, not a
+    paragraph as drawn: it still opens its thread, which holds the replies and the way to the
+    store. Its second line is « Its element is no longer on this page. The note stays here. » The
+    mock-up adds « and in Linear »: the widget does not know the name of the store (FRU-31).
+    The chip of `orphans.ts` on the page is unchanged.
+  - **The dock stands aside while the list is open** (`data-fruitback-listing` on the host of the
+    widget), as drawn: the panel covers its corner. So the list holds « Leave feedback », with the
+    label of the host, which closes the list and starts a capture; the gear is back at the close.
+  - **Kept, though the mock-up does not draw it**: the three states of a read; the notes kept for
+    later, at the head of « Open » and nowhere else; « No note here. » for a tab that holds
+    nothing; the sheet at the bottom of a phone, 70 % of its height at most; the dark scheme.
 
 ## Notes kept for later, and sent together (FRU-124)
 

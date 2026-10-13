@@ -34,7 +34,7 @@ import { ICON_DATA, type IconShape } from './icon-data.ts';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-export type IconName = 'gear' | 'close' | 'drop' | 'dropDashed' | 'list' | 'mark';
+export type IconName = 'gear' | 'close' | 'drop' | 'dropDashed' | 'list' | 'mark' | 'markDashed';
 
 /**
  * The drop of the mark, as the mock-up of 2026-10-13 draws it on the launch button (FRU-252): a
@@ -50,6 +50,12 @@ const ICONS: Record<IconName, IconShape> = {
   close: ICON_DATA.close,
   drop: { viewBox: '0 0 16 16', paths: [{ fill: 'currentColor', d: DROP }] },
   mark: { viewBox: '16 6 96 116', paths: [{ fill: 'currentColor', d: MARK }] },
+  // The mark in a dashed outline, for the notes that could not be placed (FRU-259): the stroke and
+  // the dashes of the mock-up, on the grid of the mark.
+  markDashed: {
+    viewBox: '16 6 96 116',
+    paths: [{ d: MARK, fill: 'none', stroke: 'currentColor', 'stroke-width': '11', 'stroke-dasharray': '18 12' }],
+  },
   // Dashed, because that is how the overlay draws a pin it could not re-anchor. The chip and the pin
   // then say the same thing in the same language, which an emoji could not do.
   // Three lines, drawn here. It is no path of somebody else, so it adds no notice to carry.

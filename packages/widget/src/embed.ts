@@ -8,8 +8,8 @@ import {
 } from '@fruitback/shared';
 import { type CapturedPlace, captureSeed, capturePlace } from './capture.ts';
 import { type WidgetConfig, createConfigStore } from './config.ts';
-import { type FeedbackEntry, feedbackAsText, placementOf } from './export.ts';
-import { type ReadState, type Sidebar, createSidebar } from './sidebar.ts';
+import { feedbackAsText, placementOf } from './export.ts';
+import { type ReadState, type Sidebar, type SidebarEntry, createSidebar } from './sidebar.ts';
 import { type CaptureHost, type CaptureTarget, createCaptureHost, readableName } from './host.ts';
 import type { FruitbackTheme } from './theme.ts';
 import { type FruitbackTransport, fetchTransport } from './transport.ts';
@@ -257,6 +257,9 @@ export function init(options: FruitbackOptions): Fruitback {
     isDraft,
     // The page changed under the pins: the list says what each one resolved to now.
     onResolve: () => sidebar.refresh(),
+    // A thread opened or closed: the list marks the note that is open. It builds no row again, or
+    // the thread would have no row to give focus back to.
+    onThread: () => sidebar.mark(),
   });
 
   const stages = createOfferedStages();
@@ -361,11 +364,15 @@ export function init(options: FruitbackOptions): Fruitback {
   });
 
   /** The notes the overlay draws now, with how each one was found. The list and the copied text read it. */
-  const entries = (): FeedbackEntry[] =>
+  const entries = (): SidebarEntry[] =>
     overlay
       .resolutions()
       .filter((resolution) => !isDraft(resolution.issue))
-      .map((resolution) => ({ issue: resolution.issue, placement: placementOf(resolution) }));
+      .map((resolution) => ({
+        issue: resolution.issue,
+        placement: placementOf(resolution),
+        ...(resolution.number === undefined ? {} : { number: resolution.number }),
+      }));
 
   /** One request after another, then a read: the pins the reviewer sees next are the worker's. */
   let sending = false;
@@ -400,6 +407,10 @@ export function init(options: FruitbackOptions): Fruitback {
     drafts: () => drafts.list(),
     onSendDrafts: sendKept,
     onSelect: (id) => void overlay.select(id),
+    current: () => overlay.openId(),
+    below: (id) => overlay.below(id),
+    // The dock stands aside while the list is open, so the list holds the way to a new note.
+    leave: { label: options.label ?? translator.text('launch.label'), onLeave: () => host.start() },
     readState: () => readState,
     onRetry: () => {
       readState = 'pending';

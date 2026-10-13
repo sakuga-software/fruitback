@@ -47,10 +47,11 @@ for (const [name, fail] of Object.entries(failures)) {
     await mount(page, `read-failure-${name.replace(' ', '-')}`);
 
     await page.getByRole('button', { name: 'Show every note of this page' }).click();
-    const list = page.getByRole('dialog', { name: 'Every note of this page' });
+    const list = page.getByRole('dialog', { name: 'Notes on this page' });
     await expect(list.getByRole('status')).toHaveText(/could not be read/);
     await expect(list.getByText('No note on this page yet.')).toBeHidden();
-    await expect(list.getByText('0 notes')).toBeHidden();
+    // No number on a tab: zero notes would be a guess.
+    await expect(list.getByRole('tab')).toHaveText(['Open', 'Done', 'All']);
     const retry = list.getByRole('button', { name: 'Try again' });
     await expect(retry).toBeFocused();
 
@@ -58,7 +59,7 @@ for (const [name, fail] of Object.entries(failures)) {
     failing = false;
     await retry.click();
     await expect(list.getByText('No note on this page yet.')).toBeVisible();
-    await expect(list.getByText('0 notes')).toBeVisible();
+    await expect(list.getByRole('tab')).toHaveText(['Open 0', 'Done 0', 'All 0']);
     await expect(list.getByText(/could not be read/)).toHaveCount(0);
   });
 }
@@ -84,8 +85,8 @@ test('a read that fails after a good one leaves the pins and the list as they we
 
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
   await page.getByRole('button', { name: 'Show every note of this page' }).click();
-  const list = page.getByRole('dialog', { name: 'Every note of this page' });
+  const list = page.getByRole('dialog', { name: 'Notes on this page' });
+  await list.getByRole('tab', { name: 'All 1' }).click();
   await expect(list.locator('[data-fruitback-note]')).toHaveCount(1);
-  await expect(list.getByText('1 note')).toBeVisible();
   await expect(list.getByText(/could not be read/)).toBeHidden();
 });
