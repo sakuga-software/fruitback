@@ -647,6 +647,14 @@ the worker in no address`. A link works once, for 15 minutes, and two calls at t
   request with no `Origin`: another page that spent a link of its own in this browser would sign the
   person in to its account (test:`spends a link for the console only, and not for a request with no
 Origin`).
+- **A tab that waited for the link goes on by itself, on the answer of the worker and never on the
+  word of another tab** (FRU-235). The tab that opened the link tells the other tabs of the console,
+  on a `BroadcastChannel` of its origin, that the browser is signed in. The message is one word: it
+  carries no token, no account and no address. A tab that hears it asks `GET /console/me` with the
+  cookie, and goes on only if the worker answers a session: `e2e/console-sign-in.spec.ts` has a page
+  of the console say the word while nobody is signed in, and the tab that waits does not move.
+  **What this does not hold**: a script that runs in the origin of the console can say the word, as
+  it can do everything else there; all it gets is one question to the worker.
 - **The database keeps the link as a digest of a digest of a digest**, and a copy of the row opens
   nothing: test:`keeps the link as a digest of a digest, which opens nothing when a copy presents
 it`. The value of the row is the address it was sent to.
