@@ -1,5 +1,6 @@
 import type { Site, Workspace } from '../api';
-import { t } from '../i18n';
+import { ago } from '../ago';
+import { locale, t } from '../i18n';
 import { EXTENSION_GUIDE, snippetFor, useConnect, useCopy } from '../install-options';
 import { AutoGrid, Button, LinkButton, OptionCard, Problem, Snippet } from '../ui';
 import { useLocale } from '../use-locale';
@@ -9,10 +10,10 @@ import { useLocale } from '../use-locale';
 /**
  * Step 3: the two ways to put Fruitback on the site, each in its card, then what to do on the site.
  *
- * Two things of the mockup are not here, each for a decision that is open (FRU-230). The extension
- * does not « sign in with this account » yet (Q8): a browser is connected from here, with a code
- * that nobody types. And nothing tells the console that a first note came (FRU-237): so the step
- * does not say that it waits for one, and « Open the console » is always there.
+ * The extension does not « sign in with this account » here yet: a browser is connected from here,
+ * with a code that nobody types, until the popup asks by itself (FRU-238, FRU-251). The step waits
+ * for the first note (`setup.tsx` reads the site again), and « Open the console » stays, for a person
+ * who does not send one now.
  */
 export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Site }) {
   useLocale();
@@ -71,7 +72,8 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
           ) : null}
         </OptionCard>
       </AutoGrid>
-      <p className="mt-4.5 text-small">
+      <p role="status" className="mt-4.5 text-small">
+        <strong className="font-semibold">{t('Waiting for your first note.')}</strong>{' '}
         <span className="text-muted">{t('Open the site, click Leave feedback, then any part of the page.')}</span>{' '}
         <LinkButton space="inline" href={site.origin} newTab>
           {t('Open {site}', { site: host })}
@@ -81,6 +83,48 @@ export function PutOnSite({ workspace, site }: { workspace: Workspace; site: Sit
         <Button to={`/w/${workspace.id}/sites`}>{t('Open the console')}</Button>
       </div>
     </>
+  );
+}
+
+/**
+ * The browser this page runs in, from its user agent: the one where the person most likely turned
+ * the extension on. Only for « Extension on in Chrome »; `undefined` when it cannot be told.
+ */
+function thisBrowser(): string | undefined {
+  if (typeof navigator === 'undefined') return undefined;
+  const agent = navigator.userAgent;
+  if (agent.includes('Edg/')) return 'Edge';
+  if (agent.includes('Firefox/')) return 'Firefox';
+  if (agent.includes('Chrome/')) return 'Chrome';
+  if (agent.includes('Safari/')) return 'Safari';
+
+  return undefined;
+}
+
+/** How the first note came: the extension, the script, or the worker does not say. */
+function howItCame(via: readonly ('script' | 'extension')[], browser: string | undefined): string {
+  if (via.includes('extension'))
+    return browser === undefined ? t('Extension on') : t('Extension on in {browser}', { browser });
+  if (via.includes('script')) return t('Script on the site');
+
+  return t('Fruitback on the site');
+}
+
+/** Step 3, done: how the first note came, and when (the state `first-note` of the mockup). */
+export function PutDone({ site }: { site: Site }) {
+  useLocale();
+  const browser = thisBrowser();
+  const how = howItCame(site.via ?? [], browser);
+  const when =
+    site.lastNoteAt === undefined || Date.now() - new Date(site.lastNoteAt).getTime() < 60_000
+      ? t('First note received just now')
+      : t('First note received {when}', { when: ago(site.lastNoteAt).toLocaleLowerCase(locale()) });
+
+  return (
+    <div className="mt-1.5 flex flex-col gap-1 text-body">
+      <p className="font-semibold">{how}</p>
+      <p className="text-muted">{when}</p>
+    </div>
   );
 }
 

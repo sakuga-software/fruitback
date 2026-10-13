@@ -535,6 +535,18 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Open the site, click Leave feedback, then any part of the page.':
     'Ouvrez le site, cliquez sur Laisser un feedback, puis sur n’importe quelle partie de la page.',
   'Open the console': 'Ouvrir la console',
+  // The first note of the setup (FRU-242).
+  'Waiting for your first note.': 'En attente de votre première note.',
+  'Extension on': 'Extension activée',
+  'Extension on in {browser}': 'Extension activée dans {browser}',
+  'Script on the site': 'Script sur le site',
+  'Fruitback on the site': 'Fruitback sur le site',
+  'First note received just now': 'Première note reçue à l’instant',
+  'First note received {when}': 'Première note reçue {when}',
+  'Your first note is in': 'Votre première note est arrivée',
+  'It waits in the {workspace} workspace. Send your notes to Linear or your own API whenever you like.':
+    'Elle vous attend dans le workspace {workspace}. Envoyez vos notes vers Linear ou votre propre API quand vous voulez.',
+  '{name} · just now': '{name} · à l’instant',
   // How long ago (ago.ts).
   'Just now': 'À l’instant',
   '{count} min ago': 'il y a {count} min',

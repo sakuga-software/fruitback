@@ -131,11 +131,15 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   (decided on 2026-10-13: a fixed illustration). Its caption says « An example page ». The picture
   is `aria-hidden` and `inert`: its two buttons are drawn, and take no focus. **Its colours are the
   example site's, in `preview-scene.css`, and are no tokens**: nothing of the console takes them.
-  **Two things of the mockup wait, each for a decision that is open** (FRU-230): « Signs in with
-  this account. No code to type. » (Q8: a browser is still connected from here, with « Connect this
-  browser »), and the first note that ends the setup (FRU-237: nothing tells the console that a
-  note came). So the step does not say « Waiting for your first note. », and « Open the console »
-  is always there. **The script keeps `data-fruitback-endpoint`** (inventory A24): the widget finds
+  **The setup ends at the first note on the site** (FRU-237 counts them): while the step waits it
+  says « Waiting for your first note. », and reads the site again every five seconds while the tab
+  is shown (`useFirstNote` in `setup.tsx`; a hidden tab asks nothing, a read that fails changes
+  nothing). At the first note the step is done by itself, the picture has its pin and its card,
+  and « Your first note is in » is said (`role="status"`, no move of the focus) with « Open the
+  console » and « Connect a tracker ». The sentence says « Linear or your own API »: GitHub is no
+  source of a workspace yet (FRU-188). « Open the console » stays under the cards while the step
+  waits, for a person who sends no note now. **Still waiting**: « Signs in with this account. No
+  code to type. » (a browser is still connected from here until the popup asks, FRU-238, FRU-251). **The script keeps `data-fruitback-endpoint`** (inventory A24): the widget finds
   its worker by that attribute only.
 - **An invitation has a screen, and joining says what comes next** (FRU-241, screen 03 of the mockup
   of 2026-10-13). `/invitations` shows the most recent invitation of the address that is signed in:
