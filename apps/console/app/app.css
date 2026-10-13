@@ -434,8 +434,8 @@ textarea {
   min-width: 0;
 }
 
+/* The question is 8 px over the first card, as the cards are 8 px apart. */
 .kit-pick > .label {
-  margin-bottom: 8px;
   color: var(--color-ink);
   font-size: var(--text-label);
   font-weight: 600;
@@ -456,8 +456,10 @@ textarea {
   border-color: var(--color-ink);
 }
 
+/* 19 px: the 16 px of the radio and the 3 px the mockup puts over it. */
 .kit-pick__card .radio__content {
   gap: 10px;
+  min-height: 19px;
 }
 
 /* Ink when it is chosen, as the switch: the accent is the red of an alert. */

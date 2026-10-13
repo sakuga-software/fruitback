@@ -495,6 +495,16 @@ test('the fields, the lists and the radio cards have the measures of the mockup 
     height: '16px',
     backgroundColor: INK,
   });
+  // The question is 8 px over the first card, the cards are 8 px apart, and a card is 90 px high
+  // with a detail of two lines on the mockup: here one line, 70.5 px.
+  const [question, first, second] = await Promise.all(
+    ['.kit-pick > .label', '.kit-pick__card >> nth=0', '.kit-pick__card >> nth=1'].map(
+      async (selector) => (await fields.locator(selector).boundingBox())!,
+    ),
+  );
+  expect.soft(first!.y - (question!.y + question!.height), 'the question over the cards').toBe(8);
+  expect.soft(second!.y - (first!.y + first!.height), 'between two cards').toBe(8);
+  expect.soft(first!.height, 'a card with a detail of one line').toBe(70.5);
   await expect(fields.getByRole('radio', { name: /Members of Acme/ })).toBeChecked();
 });
 
