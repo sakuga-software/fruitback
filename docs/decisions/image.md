@@ -52,6 +52,10 @@ immutable.
   `packages: write`.
   `.github/dependabot.yml` moves an existing pin, SHA and comment together. It does not pin a new step:
   `workflows.test.ts` fails on any `uses:` that is not a SHA followed by its version.
+- **No step negates a command with `!`** (FRU-222). GitHub runs a step with `bash -e`, and bash does
+  not stop on a command that `!` inverts: `! grep -q unsafe-inline` left the step green with
+  `unsafe-inline` in the policy of the console. A check of an absence is written
+  `if grep …; then exit 1; fi`, and `workflows.test.ts` fails on the other form.
 - **`persist-credentials: false` on every checkout** — `actions/checkout` otherwise writes the token
   into `.git/config`, where any later step reads it.
 - **Only the `publish` job holds the write permissions** (FRU-70). The workflow grants
