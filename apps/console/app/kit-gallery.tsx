@@ -65,6 +65,9 @@ export default function KitGallery() {
         <Button tone="outline" disabled>
           Outline disabled
         </Button>
+        <Button tone="outline" size="page" inset={16}>
+          Send again in 0:41
+        </Button>
         <Button tone="outline" size="page" href="https://fruitback.com">
           Continue in this tab
         </Button>
@@ -290,8 +293,10 @@ export default function KitGallery() {
 export function KitEntryGallery() {
   return (
     <EntryPage aside={<span>Running your own server?</span>}>
-      <Title>Sign in to Fruitback</Title>
-      <Lead className="mt-2">We email you a link that signs you in on this browser.</Lead>
+      <div className="mb-2">
+        <Title>Sign in to Fruitback</Title>
+      </div>
+      <Lead className="mb-7">We email you a link that signs you in on this browser.</Lead>
       <Divider className="my-[22px]">or</Divider>
     </EntryPage>
   );

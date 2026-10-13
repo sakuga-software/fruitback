@@ -163,6 +163,10 @@ textarea {
   The kit (ui.tsx). HeroUI writes its components in the cascade layer `components`: a rule here is in
   no layer, so it wins whatever its selector. Every value is a token of the theme above, or a
   measure of the mockup that one component alone has.
+
+  WARNING: a rule here wins over a utility of Tailwind too, which is in the layer `utilities`. So the
+  kit sets no margin on a component that a screen places (`Title`, `Lead`, `KeyValue`): `mb-7` on
+  it would do nothing, in silence. The space around a component is the screen's.
 */
 
 /* The buttons. The mockup changes a colour at once, and moves nothing under a press. */
@@ -742,7 +746,6 @@ textarea {
 
 /* A list of a name and its value. */
 .kit-key-value {
-  margin: 0;
   border-top: 1px solid var(--color-line);
   font-size: var(--text-body);
   line-height: normal;
@@ -770,7 +773,6 @@ textarea {
 
 /* The head of a page. */
 .kit-title {
-  margin: 0;
   font-size: var(--text-title);
   font-weight: 700;
   line-height: var(--text-title--line-height);
@@ -783,7 +785,6 @@ textarea {
 }
 
 .kit-lead {
-  margin: 0;
   color: var(--muted);
   font-size: var(--text-lead);
   line-height: var(--text-lead--line-height);
