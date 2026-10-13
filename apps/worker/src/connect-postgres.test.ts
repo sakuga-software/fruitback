@@ -10,17 +10,25 @@ import {
   mutatedModule,
   turn,
 } from './conformance.fixture.ts';
+import type { AccountStore } from './accounts.ts';
 import type { ConnectStore } from './connect.ts';
+import { handleExtensionConnect } from './connect-routes.ts';
+import { createPostgresKv } from './kv-postgres.ts';
+import { createPgDatabase } from './postgres.ts';
+import { migrate } from './postgres-migrate.ts';
+import { createPostgresConnectStore, createPostgresSessionStore } from './session-postgres.ts';
+import { digest, refreshSession } from './session.ts';
 import { type ConnectSubject, connectCases } from './connect-conformance.fixture.ts';
 import type { Database } from './postgres.ts';
 import {
   NO_REAL_POSTGRES,
   createPgliteDatabase,
   createRealDatabase,
+  migrationsThrough,
   outcomeOnChangedStore,
+  ownDatabase,
   rowsOf,
 } from './postgres.fixture.ts';
-import { createPostgresConnectStore } from './session-postgres.ts';
 
 /**
  * The store of the requests of the extension (FRU-238), against its cases, on PGlite and on a server,
@@ -184,7 +192,7 @@ const VIOLATIONS: Violation<ConnectSubject>[] = [
     breaks: 'claims an approved request once, and writes a session of the account, of no workspace',
     by: 'writes the session of a claim with no account',
     replace: {
-      from: '          account_id: claimed.account_id,\n          browser',
+      from: '          account_id: account,\n          browser',
       to: '          account_id: null,\n          browser',
     },
   },
@@ -224,8 +232,8 @@ const VIOLATIONS: Violation<ConnectSubject>[] = [
     breaks: 'opens nothing for an account that is gone at the claim',
     by: 'opens a session for an account that is gone',
     replace: {
-      from: 'const person = await open(claimed.account_id);',
-      to: 'const person = (await open(claimed.account_id)) ?? {};',
+      from: 'const person = await open(account);',
+      to: 'const person = (await open(account)) ?? {};',
     },
   },
   {
@@ -341,3 +349,236 @@ describe('two claims of one request at the same moment, on two connections (FRU-
     },
   );
 });
+
+/**
+ * The migration of FRU-238 on a database of before it, with sessions that live: they go on, each of
+ * its workspace, and none becomes a session of an account.
+ */
+for (const { label, open, skip } of [
+  { label: 'PGlite', open: createPgliteDatabase, skip: false },
+  { label: 'a real server', open: createRealDatabase, skip: NO_REAL_POSTGRES },
+] as const) {
+  describe(`the migration of the requests, on ${label} (FRU-238)`, { skip }, () => {
+    it('applies on a database with live sessions, which go on as sessions of their workspace', async () => {
+      const database = await open();
+      try {
+        await migrate(database, migrationsThrough('0006_kv'));
+        const now = Date.now();
+        await rowsOf(
+          database,
+          `INSERT INTO sessions (token_hash, subject, name, email, workspace, created_at, expires_at)
+             VALUES ('${await digest('a-refresh-token-of-before')}', 'acc_alice', 'Alice', 'alice@acme.dev', 'ws_acme',
+                     ${now}, ${now + 60_000})`,
+        );
+
+        await migrate(database);
+
+        const refreshed = await refreshSession(
+          createPostgresSessionStore(database),
+          'a-refresh-token-of-before',
+          'a-worker-secret-of-exactly-enough',
+          now + 1,
+        );
+        assert.ok(refreshed.ok);
+        assert.deepEqual(refreshed.identity, {
+          subject: 'acc_alice',
+          name: 'Alice',
+          email: 'alice@acme.dev',
+          workspace: 'ws_acme',
+        });
+        assert.deepEqual(await rowsOf(database, 'SELECT DISTINCT account_id, browser, connection_id FROM sessions'), [
+          { account_id: null, browser: null, connection_id: null },
+        ]);
+        assert.deepEqual(await rowsOf(database, 'SELECT * FROM connect_requests'), []);
+      } finally {
+        await database.close();
+      }
+    });
+  });
+}
+
+/**
+ * Two replicas of the worker on one database (FRU-238): each has its pool, its store and its `Kv`,
+ * and a request made on one is answered and claimed on the other. The pace of the claims is shared:
+ * the `Kv` is in the database.
+ */
+describe('two replicas on one database (FRU-238)', { skip: NO_REAL_POSTGRES }, () => {
+  it('makes a request on one replica, answers it on the other, and gives one session to claims on both', async () => {
+    const own = await ownDatabase();
+    const pools = [createPgDatabase(own.url, 'public'), createPgDatabase(own.url, 'public')];
+    try {
+      const accounts = { account: async (id: string) => ({ id, email: 'alice@acme.dev' }) } as unknown as AccountStore;
+      const replicas = pools.map((database) => ({
+        connect: createPostgresConnectStore(database),
+        kv: createPostgresKv(database),
+      }));
+      const call = (replica: (typeof replicas)[number], path: string, body: unknown) =>
+        handleExtensionConnect(
+          new Request(`https://api.fruitback.test${path}`, { method: 'POST', body: JSON.stringify(body) }),
+          path,
+          {
+            ...replica,
+            accounts,
+            clientIp: '198.51.100.7',
+            secret: 'a-worker-secret-of-exactly-enough',
+            consoleUrl: 'https://app.fruitback.test',
+          },
+          {},
+        );
+      const [a, b] = replicas as [(typeof replicas)[number], (typeof replicas)[number]];
+
+      const asked = (await (await call(a, '/session/connect', {}))?.json()) as { request: string; claim: string };
+      assert.deepEqual(
+        await b.connect.answer({
+          requestHash: await digest(asked.request),
+          account: 'acc_alice',
+          outcome: 'approved',
+          now: Date.now(),
+        }),
+        { ok: true },
+      );
+
+      // Two claims at the same moment, one on each replica: one session, and the other is paced.
+      const answers = await Promise.all(
+        [a, b].map((replica) => call(replica, '/session/connect/claim', { claim: asked.claim })),
+      );
+      assert.deepEqual(answers.map((answer) => answer?.status).sort(), [200, 429]);
+      // Once the interval went by, the claim is spent, on either replica.
+      await a.kv.set(`fruitback:connect-poll:${await digest(asked.claim)}`, '0', 1);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      assert.equal((await call(b, '/session/connect/claim', { claim: asked.claim }))?.status, 410);
+      assert.equal((await rowsOf(pools[0] as Database, 'SELECT 1 FROM sessions')).length, 1);
+    } finally {
+      for (const pool of pools) await pool.close();
+      await own.drop();
+    }
+  });
+
+  it('gives one session to two claims on two replicas when nothing paces them', async () => {
+    const own = await ownDatabase();
+    const pools = [createPgDatabase(own.url, 'public'), createPgDatabase(own.url, 'public')];
+    try {
+      const [a, b] = pools.map((database) => createPostgresConnectStore(database)) as [ConnectStore, ConnectStore];
+      const now = Date.now();
+      await a.createRequest({
+        requestHash: 'digest-of-a-request',
+        claimHash: 'digest-of-a-claim',
+        word: 'PLUM 47',
+        browser: 'A browser',
+        now,
+        expiresAt: now + 60_000,
+        maxLive: 10,
+      });
+      // An approval and a refusal on two replicas at once: one answer.
+      const answered = await Promise.all([
+        a.answer({ requestHash: 'digest-of-a-request', account: 'acc_alice', outcome: 'approved', now }),
+        b.answer({ requestHash: 'digest-of-a-request', account: 'acc_bob', outcome: 'refused', now }),
+      ]);
+      assert.equal(answered.filter((each) => each.ok).length, 1);
+      const approved = answered[0]?.ok === true;
+
+      const claims = await Promise.all(
+        [a, b, a, b].map((store, index) =>
+          store.claim({
+            claimHash: 'digest-of-a-claim',
+            now: now + 1,
+            tokenHash: `digest-of-token-${index}`,
+            connectionId: `connection-${index}`,
+            expiresAt: now + 60_000,
+            open: async () => ({}),
+          }),
+        ),
+      );
+      const opened = claims.filter((each) => each.state === 'claimed').length;
+      assert.equal(opened, approved ? 1 : 0, JSON.stringify(claims));
+      assert.equal((await rowsOf(pools[0] as Database, 'SELECT 1 FROM sessions')).length, opened);
+    } finally {
+      for (const pool of pools) await pool.close();
+      await own.drop();
+    }
+  });
+});
+
+/**
+ * « My account » ends a browser while its extension refreshes (FRU-238). The refresh holds its chain
+ * and has written a successor it did not commit yet: a trigger holds that row. The end holds the rows
+ * of the connection first, so it waits for the refresh, and then ends the successor too. Without the
+ * hold, it ends the rows it could see when it started, and the successor stays live.
+ */
+describe(
+  'a browser ended while its extension refreshes, on two connections (FRU-238)',
+  { skip: NO_REAL_POSTGRES },
+  () => {
+    async function endsTheSuccessor(create: (database: Database) => ConnectStore): Promise<string | undefined> {
+      const database = await createRealDatabase();
+      try {
+        const connect = create(database);
+        const sessions = createPostgresSessionStore(database);
+        const now = Date.now();
+        await connect.createRequest({
+          requestHash: 'digest-of-a-request',
+          claimHash: 'digest-of-a-claim',
+          word: 'PLUM 47',
+          browser: 'A browser',
+          now,
+          expiresAt: now + 60_000,
+          maxLive: 10,
+        });
+        await connect.answer({ requestHash: 'digest-of-a-request', account: 'acc_alice', outcome: 'approved', now });
+        await connect.claim({
+          claimHash: 'digest-of-a-claim',
+          now,
+          tokenHash: 'digest-of-the-token',
+          connectionId: 'connection-of-alice',
+          expiresAt: now + 60_000,
+          open: async () => ({}),
+        });
+        await rowsOf(
+          database,
+          `CREATE FUNCTION hold_the_row() RETURNS trigger LANGUAGE plpgsql
+           AS $$ BEGIN PERFORM pg_sleep(0.3); RETURN NEW; END $$`,
+        );
+        await rowsOf(
+          database,
+          `CREATE TRIGGER hold_the_row BEFORE INSERT ON sessions FOR EACH ROW
+           WHEN (NEW.predecessor_hash IS NOT NULL) EXECUTE FUNCTION hold_the_row()`,
+        );
+        await Promise.all([rowsOf(database, 'SELECT 1'), rowsOf(database, 'SELECT 1')]);
+
+        const rotating = sessions.rotateSession({
+          tokenHash: 'digest-of-the-token',
+          successorHash: 'digest-of-the-successor',
+          now: now + 1,
+          graceMs: 60_000,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        assert.equal(await connect.endBrowser('acc_alice', 'connection-of-alice', now + 2), true);
+        assert.equal((await rotating).outcome, 'rotated', 'the refresh did not run first');
+
+        const live = await rowsOf(database, 'SELECT token_hash FROM sessions WHERE revoked_at IS NULL');
+
+        return live.map((row) => String(row.token_hash)).join(',') || undefined;
+      } finally {
+        await database.close();
+      }
+    }
+
+    it('ends the successor of a refresh that was in flight', async () => {
+      assert.equal(await endsTheSuccessor(createPostgresConnectStore), undefined);
+    });
+
+    it('leaves it live when the rows of the connection are not held first', async () => {
+      const mutant = await mutatedModule('session-postgres.ts', {
+        after: 'async endBrowser(',
+        from: ".orderBy(sessions.token_hash)\n          .for('update');",
+        to: '.orderBy(sessions.token_hash);',
+      });
+      try {
+        const create = mutant.module.createPostgresConnectStore as (database: Database) => ConnectStore;
+        assert.equal(await endsTheSuccessor(create), 'digest-of-the-successor');
+      } finally {
+        mutant.remove();
+      }
+    });
+  },
+);

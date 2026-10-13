@@ -876,6 +876,62 @@ table` reads every table of the schema after a code was spent, a session refresh
 - **Whoever can write to the database can write a session**, as whoever could write the session file.
   `SECURITY.md` says it, with what the database holds.
 
+## The extension asks, the console approves (FRU-238)
+
+A person connects their own extension: it asks the worker for a request, opens the console at
+`/connect/<request>`, the person approves there, and the extension claims its session. The pairing by
+code stays, for the operator of an instance. `SECURITY.md` says what each half protects.
+
+### The rules, in short
+
+- **Two values, and only one is a secret.** `request` is public (it is in the address of the console);
+  `claim` is the secret of the extension, and the one thing that opens a session. Both are stored as
+  digests, in `connect_requests`. A route never takes the one for the other: `isRequestId` and
+  `isClaim` read their own shape, and a value of another shape is not looked up.
+- **A session of an account names no workspace.** Its row has `account_id` (its `subject`) and a NULL
+  `workspace`; its access token has `scope: 'account'` and no `ws`. `identity.ts` refuses a token with
+  both, `session.ts` refuses to mint one, and `session-rows.ts` reads a row with both as no session.
+- **Its workspace is read at each request, never carried.** `verifyForClient` lets it reach a client
+  only through `policy.sessions.member`, which `routeFor` builds from `roleIn`. A policy with no
+  `member` refuses it: a worker with no accounts, and `memberOf` of the pictures, which builds its own
+  policy and must give one. `GET /session/sites` lists the memberships of the account at the call.
+- **The refresh ends a session of an account whose account is gone** (`stillOfTheWorkspace`, through
+  `accountExists`). A member removed from a workspace keeps the session: it reads that workspace no
+  more, at the next call.
+- **The store decides each rule in one statement that reads what it changes**: an answer is
+  `UPDATE … WHERE outcome IS NULL`, a claim is `UPDATE … WHERE claimed_at IS NULL` with the session
+  written in the same transaction, a wrong word counts and refuses in one `UPDATE`. The outcome and
+  the expiry are read before, with no lock: neither goes back.
+- **The account is read before the transaction of a claim, never in it.** The accounts are in the same
+  database, and on PGlite, which has one connection, a read inside the transaction waits for it for
+  ever. The first version did, and the route tests hung on PGlite while the store's own cases passed:
+  their `open` read nothing.
+- **The pace of the claims is in the `Kv`** (`fruitback:connect-poll:<digest of the claim>`), so the
+  replicas share it, as they share the rate limit. The limit of requests per address is a second key
+  there, beside the limit of every route.
+- **The routes of the console take the cookie and, for a change, the `Origin` of the console**, as
+  `callerOf` of `console-api.ts`. An approval names the word and the account the screen showed.
+
+### The reasons, and the measurements
+
+- **Built on the pairing, not on the plugin of better-auth.** `device-authorization` ends in a session
+  of better-auth; the extension needs its own, which rotates, with the reuse detection of FRU-61. The
+  plugin stays in `REFUSED_PLUGINS`.
+- **The cases of the store run on PGlite and on PostgreSQL 17, with a planted violation for each**
+  (`connect-postgres.test.ts`, 16 cases, 22 violations). The races are planted twice: on PGlite by a
+  store that reads, lets a turn go and writes; on a server by the real store with the claim read in a
+  subquery, held by a trigger (`outcomeOnChangedStore`). test:`fails on a real server with a claim
+that is read apart from the statement that spends it`.
+- **Two replicas are two pools on one database**: a request made on one, answered and claimed on the
+  other, with one session for claims on both, and the pace shared through the `Kv` of the database
+  (test:`makes a request on one replica, answers it on the other, and gives one session to claims on
+both`).
+- **The guard of raw fragments counted `sql` and not `sql<number>`.** The browsers of « My account »
+  select `min` and `max` of an instant, typed: `postgres-numbers.test.ts` now counts a typed fragment
+  too, and `mapWith` of the column reads the driver's string as a number on both sides of 2^32.
+- **The label of a browser is cleaned in two steps**: white space to one space first, then the
+  controls and the marks of format. The other order glued « Firefox\non » into « Firefoxon ».
+
 ## better-auth, built and switched off (FRU-144)
 
 The first slice of FRU-139 that adds better-auth. **It changes nothing a caller can observe**: no

@@ -468,43 +468,48 @@ export function createPostgresConnectStore(database: Database): ConnectStore {
     },
 
     async claim({ claimHash, now, tokenHash, connectionId, expiresAt, open }): Promise<ClaimOutcome> {
-      return transaction(async (tx) => {
-        // The outcome and the expiry are read with no lock: neither ever goes back. An answer is given
-        // once, and `now` is the instant of this call.
-        const row = (await tx.select().from(connect_requests).where(eq(connect_requests.claim_hash, claimHash)))[0];
-        if (row === undefined || row.expires_at <= now) return { state: 'gone' };
-        if (row.outcome === 'refused') return { state: 'refused' };
-        if (row.outcome !== 'approved' || row.account_id === null) return { state: 'pending' };
+      // The outcome and the expiry are read with no lock: neither ever goes back. An answer is given
+      // once, and `now` is the instant of this call.
+      const row = (
+        await run((db) => db.select().from(connect_requests).where(eq(connect_requests.claim_hash, claimHash)))
+      )[0];
+      if (row === undefined || row.expires_at <= now) return { state: 'gone' };
+      if (row.outcome === 'refused') return { state: 'refused' };
+      if (row.outcome !== 'approved' || row.account_id === null) return { state: 'pending' };
+      const account = row.account_id;
 
+      // The account as it is now: one deleted since the approval opens nothing. Read before the
+      // transaction: the accounts are in this database, and on a database of one connection (PGlite)
+      // a read made inside the transaction would wait for that connection for ever.
+      const person = await open(account);
+      if (person === undefined) return { state: 'gone' };
+
+      return transaction(async (tx) => {
         // Who claims it is the one thing two claims can both read as open: one statement decides. The
         // second of two claims waits for the row, reads `claimed_at` again, and changes nothing.
         const spent = await tx
           .update(connect_requests)
           .set({ claimed_at: now })
           .where(and(eq(connect_requests.claim_hash, claimHash), isNull(connect_requests.claimed_at)))
-          .returning({ account_id: connect_requests.account_id, browser: connect_requests.browser });
+          .returning({ browser: connect_requests.browser });
         const claimed = spent[0];
-        if (claimed === undefined || claimed.account_id === null) return { state: 'gone' };
-
-        // The account as it is now: one deleted since the approval opens nothing.
-        const person = await open(claimed.account_id);
-        if (person === undefined) return { state: 'gone' };
+        if (claimed === undefined) return { state: 'gone' };
 
         // In the same transaction: a session that cannot be written takes the claim back with it.
         await tx.insert(sessions).values({
           token_hash: tokenHash,
-          subject: claimed.account_id,
+          subject: account,
           name: person.name ?? null,
           email: person.email ?? null,
           workspace: null,
           created_at: now,
           expires_at: expiresAt,
-          account_id: claimed.account_id,
+          account_id: account,
           browser: claimed.browser,
           connection_id: connectionId,
         });
 
-        return { state: 'claimed', account: claimed.account_id, browser: claimed.browser };
+        return { state: 'claimed', account, browser: claimed.browser };
       });
     },
 

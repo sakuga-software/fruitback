@@ -251,7 +251,7 @@ export async function outcomeOnChangedStore<Store>(input: {
   cases: Cases<Store>;
   /** The name of the case to run. */
   name: string;
-  change: { from: string; to: string };
+  change: { after?: string; from: string; to: string };
   held: { table: string; when?: string };
   open: () => Promise<Database>;
 }): Promise<unknown> {

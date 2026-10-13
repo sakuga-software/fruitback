@@ -129,7 +129,7 @@ export const WORDS: readonly string[] = [
   'CORAL',
   'AMBER',
   'JADE',
-  'PEARL',
+  'OPAL',
   'OCHRE',
   'IVORY',
   'SLATE',
@@ -201,9 +201,11 @@ export function isConnectionId(value: unknown): value is string {
 export function readBrowserLabel(value: unknown): string {
   if (typeof value !== 'string') return UNNAMED_BROWSER;
   const cleaned = value
-    // Controls, the marks of direction and the invisible ones that hide a character.
-    .replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, '')
+    // A line break or a tab is a space; then the other controls, the marks of direction and the
+    // invisible ones that hide a character go.
     .replace(/\s+/gu, ' ')
+    .replace(/[\p{Cc}\p{Cf}]/gu, '')
+    .replace(/ +/g, ' ')
     .trim();
   const characters = [...cleaned];
   const label =

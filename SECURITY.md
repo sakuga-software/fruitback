@@ -399,6 +399,90 @@ the answer.
 Pairing asks for a host permission on the **worker's** origin, which is not the site's. It is optional
 and granted per worker at the moment somebody pairs, never at install.
 
+### Connecting the extension from the console (FRU-238)
+
+The extension can also be connected by the person it is for, with no operator and no code to copy:
+**the extension asks, the console approves.** It is the pairing above turned around, built on the
+same store, and it borrows from RFC 8628 (the device authorization grant). better-auth's plugin for
+that grant stays refused (`REFUSED_PLUGINS` of `auth.ts`): it ends in a session of better-auth, and
+the extension keeps its own session, which rotates. The pairing by code stays, for the operator of an
+instance.
+
+|             |                                                                                   |
+| ----------- | --------------------------------------------------------------------------------- |
+| Request id  | 128 bits, public: it is in the address the extension opens in the console         |
+| Claim       | 256 bits, secret, kept by the extension alone, never in an address                |
+| Word        | one of 64 words and two digits (« PLUM 47 »), shown on both screens, not a secret |
+| Lifetime    | a request lives 15 minutes, is answered once and claimed once                     |
+| Polling     | a claim asked again within 5 seconds answers `429 slow-down`                      |
+| Limits      | 10 requests per address in 15 minutes; 1000 requests waiting on the instance      |
+| Wrong words | the request is refused after 5 approvals with a word that is not its own          |
+| On disk     | the request id and the claim are stored as **SHA-256 digests**                    |
+
+**What a session of the extension gets this way.** It belongs to the account that approved, and not
+to one workspace: it reads every site of every workspace the account is a member of **at the moment
+of each request**, with the role the account has there. Its access token carries `scope: 'account'`
+and no `ws`, and a client of a workspace accepts it, signed with the worker key, only while the
+account is a member of that workspace: the role is read in the database at every read, every note and
+every picture, as `GET /session/sites` reads it. A member removed or demoted is cut at the next call,
+with the access token still unexpired in their extension. It never reads more than a session paired
+for the workspace would (test:`lets each role approve, and gives the session what a session of the
+workspace gets, and no more`). An account with no workspace gets a session that reads nothing. The
+console refuses its token as it refuses every token (FRU-202): it is the cookie of better-auth there.
+
+**Who can start a request: anybody.** `POST /session/connect` takes no credential, like the pairing.
+A page of a site cannot start one from a browser: its `Origin` is refused, and only an extension or a
+caller with no `Origin` is answered. A caller outside a browser writes the `Origin` it likes, so that
+check says nothing of an attacker, and the limits above are what bound a flood.
+
+**What a person who guesses or reads a request id gets: nothing to claim.** The id is in the address
+of the console, so it can leak with a history, a screen share or a log. It opens no session: only the
+claim does, and the claim never leaves the extension that asked. A signed-in person who holds the id
+sees the word and the label of the browser while the request waits, and could approve it **to their
+own account**: the extension would then be connected to that account. That is not a theft of the
+victim's account, and the claim tells the extension which account it is connected to, for the popup
+to name it (FRU-251). Once answered, a request shows
+nothing to anybody but the account that answered it.
+
+**Phishing: an attacker starts a request and makes a victim approve it.** This is the attack of this
+kind of flow, and what stands against it is the person, helped where the worker can:
+
+- **No approval in one click from a link.** Opening the address only reads the request. Approving is a
+  `POST` from the console, with the cookie **and** the `Origin` of the console, that names the word
+  the screen showed and the account it showed: a link, a form of another page and an image cannot.
+- **The word is on both screens.** The console asks the person to check that the popup of **this**
+  browser shows the same word. A person who did not ask has no popup showing a word. The word is
+  drawn apart from the request, from no clock: nothing reads one from the other.
+- **The console shows the label of the browser that asked.** It is the text the extension sent, cleaned
+  of controls and of marks that turn a line around, 60 characters at most. It is the caller's word,
+  shown and never trusted: an attacker names the browser they like.
+- **The request is short-lived**, and five wrong words refuse it.
+
+What the worker cannot do is tell a person who is fooled from one who is not. A victim who approves an
+attacker's request, with the word the attacker read out to them, connects the attacker's extension to
+the victim's account, for what that account may read. « My account » lists every such browser, and
+ends one.
+
+**Replay, double approval, races.** A request is answered once: of two answers at the same instant,
+one statement decides, and the other reads `409`. A claim is spent by one statement, with the session
+written in the same transaction; a second claim answers as an expired one. An approval or a claim at
+the instant of expiry changes nothing. A refused or expired request never becomes valid again, and an
+expired one is deleted at the next request. These hold on two connections, so on two replicas: the
+cases run on PostgreSQL 17, and a store that reads apart from the statement that writes fails them
+(`connect-postgres.test.ts`).
+
+**What ends such a session.** Its owner, from « My account » (`DELETE /console/me/browsers/<id>`),
+the extension logging out, the deletion of the account, or a replay of a spent refresh token, as for
+every session. **« Sign out everywhere » and the sign-out of one browser of the console do not**: they
+end sessions of the console, and « The extension stays connected. » is what the console says. The
+removal of a member does not end it either: it cuts that workspace off at the next call, and the
+session goes on with the others.
+
+**Nothing of it is written in a log.** No route writes the request, the claim or a token, and a test
+reads the output of the whole way for them (test:`keeps no request, claim or token in clear in any row,
+and writes none of them in the log`). The request id is in the path of `GET /console/connect/<id>`,
+so a proxy in front of the worker logs it: it is the public half.
+
 ### What the extension relays, and what it refuses to
 
 In team mode (FRU-57) the site embeds its own widget and leaves it dormant. The extension puts a

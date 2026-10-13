@@ -135,6 +135,21 @@ describe('a session belongs to one workspace (FRU-95)', () => {
     });
   }
 
+  it('refuses the token of a session of an account on a worker that keeps no accounts (FRU-238)', async () => {
+    const env = envWith();
+    const now = Math.floor(Date.now() / 1000);
+    // Signed with the worker key, of the account of a member: nothing here can say what it is a member of.
+    const token = await signIdentityToken({ sub: 'alice', scope: 'account', iat: now, exp: now + 600 }, SECRET);
+
+    for (const client of ['a', 'b']) {
+      assert.equal((await read(env, client, `https://${client}.test`, token)).status, 401, client);
+      assert.equal((await write(env, client, RELAY_ORIGIN, token)).status, 401, client);
+    }
+    // The control: the same person, with a session of the workspace, reads.
+    const { access } = await sessionOf(env, { subject: 'alice', workspace: 'ws-a' });
+    assert.equal((await read(env, 'a', 'https://a.test', access)).status, 200);
+  });
+
   it('lets the workspace B read its own site with its own session', async () => {
     const env = envWith();
     const { access } = await sessionOf(env, { subject: 'bob', workspace: 'ws-b' });
