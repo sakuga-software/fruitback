@@ -528,6 +528,28 @@ With accounts no site needs it: a site is a row the console wrote, and it signs 
 that served one site with this key, and then got accounts, must change it. The steps are in
 [docs/self-hosting.md](docs/self-hosting.md#change-fruitback_identity_secret).
 
+### The index of the notes, and who reads it (FRU-237)
+
+A worker with accounts keeps an index of the notes of its sites: `docs/privacy.md` names each
+column. **It holds at most 64 characters of the text of a note**, in one column, and no name or
+address a reporter typed: a test leaves a long note, one with composed emoji and an empty one, and
+reads every column of every row for 65 characters of a text.
+
+- **The counts of a site are read by every member of its workspace**, as the list of the sites is:
+  owner, admin, member and guest (`read-feedback`). **What did not arrive** (`undelivered`) is about
+  the tracker, and only a role with `see-tracker` gets it: a guest does not. A person of another
+  workspace gets `404`, a caller with no session `401`, and the token of an extension `401` on the
+  console's routes (FRU-202).
+- **The extension gets the counts of the sites of its workspace** in `GET /session/sites`, with the
+  session of a member, and not what did not arrive.
+- **A guest reads the counts of every site of the workspace**, because a guest reads every site
+  today. The guest of one site (Q3 of FRU-230) narrows the list first, and the counts with it.
+- **An anonymous reader of a public page writes to the index**: a read that asks the store writes
+  the stages it got, at most once for each answer of the read cache. It writes only what the store
+  answered for the site of that read, and nothing the reader sent.
+- **The index never costs a note**: a note whose row is not written is kept and answered `201`, and
+  its row is written at the next read of its page.
+
 ### The accounts, and what decides who reads a site (FRU-96)
 
 With `FRUITBACK_DATABASE_URL` the clients of the worker are the sites the console wrote, read from

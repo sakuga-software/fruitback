@@ -1,5 +1,6 @@
 import type { AccountStore } from './accounts.ts';
 import type { Kv } from './kv.ts';
+import type { NoteIndex } from './notes-index.ts';
 import { z } from 'zod';
 import { type Database, databaseFor, databaseUrlOf, readDatabaseSchema } from './postgres.ts';
 import type { ScreenshotStore } from './screenshots.ts';
@@ -145,6 +146,19 @@ export function postgresKv(url: string, schema: string): Kv {
   }
 
   return kv;
+}
+
+/** The index of the notes of this database (FRU-237): `notes-index-postgres.ts`, loaded at the first call. */
+export function postgresNoteIndex(url: string, schema: string): NoteIndex {
+  const database = databaseFor(url, schema);
+
+  return later(async () => (await import('./notes-index-postgres.ts')).createPostgresNoteIndex(database), {
+    record: true,
+    refresh: true,
+    summary: true,
+    undelivered: true,
+    forget: true,
+  });
 }
 
 /**
