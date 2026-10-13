@@ -442,11 +442,13 @@ test.describe('the browsers of a person, on a worker with accounts', () => {
     return answer.status;
   }
 
-  /** A browser of its own, signed in as `email` by the link of the mail, on the sites of the workspace. */
+  /**
+   * A browser of its own, signed in as `email` by the link of the mail, on the sites of the workspace.
+   * The first one makes the workspace, named after the domain of the address (FRU-239).
+   */
   async function browserOf(
     browser: import('@playwright/test').Browser,
     email: string,
-    workspace?: string,
   ): Promise<{ page: Page; context: BrowserContext }> {
     const context = await browser.newContext();
     contexts.push(context);
@@ -455,19 +457,19 @@ test.describe('the browsers of a person, on a worker with accounts', () => {
     const before = (await worker.sent()).length;
     await page.goto(`${WORKER_CONSOLE}/setup`);
     await page.getByRole('textbox', { name: 'Work email' }).fill(email);
-    if (workspace !== undefined) await page.getByRole('textbox', { name: 'Workspace name' }).fill(workspace);
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByRole('button', { name: 'Email me a link', exact: true }).click();
     await expect.poll(async () => (await worker.sent()).length).toBe(before + 1);
     const link = /http:\/\/\S+\/sign-in#\S+/.exec((await worker.sent()).at(-1) ?? '')?.[0];
     expect(link, 'no sign-in link in the message').toBeDefined();
     await page.goto(link as string);
     // The link is spent when the worker takes the cookie of this browser: the front door is asked after.
     await expect.poll(() => accepted(context)).toBe(200);
-    // The name typed before makes the workspace, after the sign-in: the next step of the setup says it is made.
-    if (workspace !== undefined)
-      await expect(page.getByRole('heading', { name: 'Where should feedback go?' })).toBeVisible();
-    await page.goto(WORKER_CONSOLE);
-    await expect(page).toHaveURL(/\/w\/ws_[0-9a-f]{20}\/sites$/);
+    // The setup is at its second step: the workspace is there, with no site yet.
+    await expect(page.getByRole('heading', { name: 'Current step: Your site' })).toBeVisible();
+    const read = (await worker.received())
+      .map((each) => /^\/console\/workspaces\/(ws_[0-9a-f]{20})\/sites$/.exec(each.path)?.[1])
+      .filter((id) => id !== undefined);
+    await page.goto(`${WORKER_CONSOLE}/w/${read.at(-1) as string}/sites`);
     await expect(page.getByRole('heading', { name: 'No site yet' })).toBeVisible();
 
     return { page, context };
@@ -504,7 +506,7 @@ test.describe('the browsers of a person, on a worker with accounts', () => {
   test('the extension stays connected when My account disconnects a browser, and when it signs out everywhere', async ({
     browser,
   }) => {
-    const first = await browserOf(browser, 'ana@acme.dev', 'Acme');
+    const first = await browserOf(browser, 'ana@acme.dev');
     const second = await browserOf(browser, 'ana@acme.dev');
     const workspace = /\/w\/(ws_[0-9a-f]{20})\//.exec(first.page.url())?.[1];
     expect(workspace).toBeDefined();
@@ -554,7 +556,7 @@ test.describe('the browsers of a person, on a worker with accounts', () => {
   test('one browser disconnects the other, which learns it at its next call; « Sign out everywhere » ends both', async ({
     browser,
   }) => {
-    const first = await browserOf(browser, 'ana@acme.dev', 'Acme');
+    const first = await browserOf(browser, 'ana@acme.dev');
     const second = await browserOf(browser, 'ana@acme.dev');
     expect(await accepted(first.context)).toBe(200);
     expect(await accepted(second.context)).toBe(200);
