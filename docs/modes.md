@@ -55,6 +55,22 @@ holds, and only the relay carries it. Their name and address on a note are self-
 in a public-mode site that supplies no token — `reporter.verified` is the worker's word and it
 withholds it.
 
+## On a worker with accounts: the visibility of a site is `read`
+
+A worker with a database (`FRUITBACK_DATABASE_URL`) reads its sites from the console, and
+`FRUITBACK_READ` does not apply to it. Each site says who reads it:
+
+- **`everyone`** is `read: 'public'`. A visitor needs no account, no extension and no token to
+  leave a note and to see the pins: this is the public mode, and the reporter is self-declared.
+- **`members`** is `read: 'authenticated'`. A read needs the session of a member of the workspace,
+  which the extension gets by pairing: this is the team mode.
+
+**The token that the host's own backend mints does not exist there.** A site of the console has no
+secret of its own, so `init({ identityToken })` has nothing to sign with: the second line of « So »
+above, « a site with its own login », is for a worker of `FRUITBACK_CLIENTS` only. Whether a site
+of the console gets such a secret, or that way of working goes with `FRUITBACK_CLIENTS` (FRU-184),
+is not decided.
+
 ## Private mode is not going away
 
 Team mode covers a team reviewing its own product, which private mode served awkwardly: it asked a

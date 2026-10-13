@@ -1192,7 +1192,7 @@ variable` holds the rest.
   tables wherever the search path said; the address, the role and the database now have no say.
 - **A store reads a `BIGINT` through the schema, never with a raw statement.** Through the schema it
   is a number. In the answer of a raw statement it is a string, and `account-rows.ts` reads a string
-  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the twenty-eight columns.
+  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the thirty columns.
 - **A transaction is the one of `postgres.ts`, never `db.transaction` of Drizzle on the pool.** A
   store takes `database.transaction`, which gives it Drizzle on one connection.
 - **The words of an error of Drizzle reach no log.** They quote the statement and its values: an
@@ -1282,7 +1282,7 @@ the lock` is its control: the same two processes, with the line of the lock remo
   That is why the `BIGINT` is a number by the schema.
   test:`answers a BIGINT of the schema as a number, on the driver that ships`.
 - **What the parser that is gone changes, measured on a server** (raised in review). For each of the
-  `BIGINT` columns (twenty then, sixteen since FRU-146, twenty since FRU-103, twenty-one since FRU-44, twenty-seven since FRU-218, twenty-eight since FRU-67), a pool built as `postgres.ts` built it before answers a number for a raw
+  `BIGINT` columns (twenty then, sixteen since FRU-146, twenty since FRU-103, twenty-one since FRU-44, twenty-seven since FRU-218, twenty-eight since FRU-67, thirty since FRU-237), a pool built as `postgres.ts` built it before answers a number for a raw
   statement, the pool that ships answers a string for the same statement, and the schema answers
   the number: test:`answered a number for a raw statement, and now answers a string for it and a
 number through the schema`. No store sends a raw statement
@@ -1295,7 +1295,7 @@ exact integer`, test:`is null when the column holds no instant, and never 0`. Th
 store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
 2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the twenty-eight BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the thirty BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -1400,6 +1400,28 @@ an earlier migration, and writes nothing`.
 (FRU-219)`).
 - **`migrate-to-postgres` does not read the switch.** It copies files into a server, and takes
   `FRUITBACK_DATABASE_URL` alone.
+
+## A visitor with no account (FRU-224)
+
+- **A visitor leaves a note with no account on a site that everyone reads.** Mathieu, 2026-10-13:
+  an account is always possible for whoever administers, and is not needed to leave a note. The
+  code did it already. `visitor.test.ts` now holds the whole path on a worker whose sites come from
+  the console: the tests that did ran on `FRUITBACK_CLIENTS`, which is going (FRU-184).
+  `e2e/visitor.spec.ts` holds it in a browser, where CORS is what stops a page of another origin.
+- **Played backwards.** With the origin of the site not checked (`resolveClient`), one test of
+  `visitor.test.ts` fails. With the visibility not read (`clientOf`), two fail.
+- **Two checks refuse an origin, and the test names both.** An origin that is no site of the worker
+  is refused before the site is looked for (`origin-not-allowed`). The origin of another site, of
+  any workspace, is refused for this site (`origin-not-allowed-for-client`).
+- **Measured, and not decided here: a site for members takes a note that has no session.** The
+  visibility is the rule of the reads. The ticket said that such a site « asks for a session »:
+  that is true of a read. test:`still takes a note sent with no session, which its sender cannot
+read back` holds what the worker does, and `SECURITY.md` says it. Refusing that note is a change of
+  `attributionFor`, and a question for Mathieu.
+- **Not decided: the token signed by the site.** A site that has its own login signs a token with
+  the `identitySecret` of its client, in `FRUITBACK_CLIENTS`. A site of the console has no secret.
+  A secret for each site, or the end of that way of working: FRU-184 asks, and nothing here
+  changes it. `docs/modes.md` says what holds today.
 
 ## The notes in PostgreSQL (FRU-218)
 
@@ -2391,6 +2413,47 @@ everything. FRU-95 lifted it, below.
   and a `.env` of eight lines, under `env -i`: the first start writes the code, `POST /session/pair`
   with it answers `200` and a token of the person named, the next start writes nothing. With
   `FRUITBACK_PUBLIC_URL` the line is the link, and `GET /pair` answers `200`.
+
+## The index of the notes (FRU-237)
+
+### The rules, in short
+
+- **One row for each note planted for a site of a workspace**, in `note_index`, wherever the note
+  went (`notes-index.ts`, `notes-index-postgres.ts`). A worker with no database has no index.
+- **At most `EXCERPT_LENGTH` (64) characters of the text**, in `excerpt`, and nothing else of it
+  (Mathieu, 2026-10-13: « oui sans le texte », then « les 64 premiers caractères juste pour
+  l'identification des notes »). Counted in code points, cut between two graphemes, spaces made one.
+- **No typed name, no typed address.** `author_kind` and, for a member, the account.
+- **Written when the note is planted, and its stage when a read asks the store**: in the loader of
+  the read cache, so once for each answer of the cache. The worker learns that a tracker moved a
+  note nowhere else: no webhook, no poll. A count can therefore date; `asOf` is the oldest instant
+  at which a store confirmed a note of the site.
+- **A note from before the index is written at the first read of its page**, with what the read
+  says: no `channel`, `verified` or `visitor` for its author, the instant the widget wrote.
+- **`channel` is `extension` when a session of the workspace signed the note**, and `script`
+  otherwise. An extension used with no session is `script`: nothing tells them apart, and nothing
+  more is asked of the browser.
+- **The index never fails a note**: `indexed` logs and goes on. **An index that does not answer
+  costs the counts of the list of the sites, never the list.**
+- **A row goes with its site and its workspace** (foreign keys `cascade`). The notes of the worker's
+  own store stay when a site goes, as `seeds-postgres.ts` decided pending FRU-194; their index does
+  not. **`forget` removes the rows of the notes it deletes, before it deletes them**: an index that
+  does not answer stops the command with nothing deleted. A row is named by the reference of the
+  note **and** the id the widget gave it: a tracker of another workspace may call an issue `FB-12`
+  as well, and its row stays.
+
+### What it does not do, and the measurements
+
+- **A note deleted in a tracker keeps its row** until its site goes. A read cannot tell a deletion
+  from a note that a tracker did not list (a read of Linear is bounded). To close it: remove, at a
+  read, the rows of the page and the place that the read did not return, once every store says its
+  read of a page is complete; or a webhook. Neither is done here.
+- Measured on PostgreSQL 17.11 in a local container, 100 000 notes in the workspace on 20 sites and
+  100 000 in another workspace: the counts of the 20 sites in one `GROUP BY` answer in 12.8 ms at
+  the median (23.5 ms at p95; a parallel scan, the planner's choice for half the table); the write
+  added to `POST /feedback`, 0.70 ms; the write of a read of a page of 20 notes, 1.58 ms; 200 000
+  rows take 70 MB with their indexes. The counts scan the notes of the workspace: a workspace of
+  millions of notes would want counters kept beside them.
 
 ## A schema of its own, in a database that exists already (FRU-219)
 

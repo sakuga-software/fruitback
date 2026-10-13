@@ -151,6 +151,39 @@ can read them, with or without the widget.
 - **The notes that wait to be sent to a connected address** (FRU-122), in the database of the accounts.
   A note goes from there when it arrives, and 30 days after its last attempt when it never does.
 
+### The index of the notes, on a worker with accounts (FRU-237)
+
+A worker with a database keeps **one row for each note it planted for a site of a workspace**,
+wherever the note went: Linear, a REST endpoint, or its own store. The console counts the notes of a
+site from it, and lists them. The row is written when the note is planted, and its stage is written
+again each time a read of the page asks the store; a note planted before the index is written at
+the first read of its page, with what that read says.
+
+| Column                       | What it holds                                                                                                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `site_id`, `workspace_id`    | The site of the note and its workspace.                                                                                                                             |
+| `seed_id`                    | The id the widget gave the note.                                                                                                                                    |
+| `page_url`                   | The address of the page, as the worker canonicalised it.                                                                                                            |
+| `excerpt`                    | **The first 64 characters of the text, never more**, spaces and line breaks made one space, cut between two characters. For a person to tell one note from another. |
+| `stage`                      | The stage the store last said, and `checked_at` when it said it.                                                                                                    |
+| `channel`                    | `script` or `extension`: whether a session of an extension signed the note. Empty for a note from before the index.                                                 |
+| `author_kind`                | `visitor`, `site` (a token the site signed), `member` (a session of the workspace) or `verified` (a note from before the index whose reporter was verified).        |
+| `author_account_id`          | The account of a member who left the note. Empty for everyone else.                                                                                                 |
+| `place`, `connector_id`      | Where the note went: the worker's own store, or a connector of the workspace.                                                                                       |
+| `reference`, `reference_url` | What the store calls the note (`ACM-151`, `FB-12`) and its address there.                                                                                           |
+| `created_at`                 | When the worker took the note.                                                                                                                                      |
+
+**What the index does not keep**: the rest of the text, the name or the address a reporter typed,
+the anchor, the environment, the picture, the replies. Those stay where the note went. So **a
+visitor's typed name is in the tracker and never in the index**: the console shows « Visitor ».
+
+**It goes with its site and its workspace**: removing a site removes its rows at once, whatever
+becomes of the notes themselves (FRU-194). **`forget` removes the rows of the notes it deletes**,
+before it deletes them. **A note deleted in a tracker keeps its row**, excerpt included, until its
+site goes: the worker is not told of a deletion there, and a read of the page cannot tell a note
+that was deleted from one that a tracker did not list. That is the one place where up to 64
+characters of a note outlive it; `docs/decisions/worker.md` says how it would be closed.
+
 ### What stays in the reporter's browser
 
 Since FRU-119 an account also holds the language its person reads, taken from the browser that opened their first sign-in link, or chosen by them: the e-mails to that address are written in it.

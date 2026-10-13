@@ -1,0 +1,1600 @@
+# Annexe de SPEC.md : textes exacts, état par état
+
+Produit par `tools/texts.py` à partir du DOM rendu de chaque état (hors du dépôt : `tools/capture.cjs` le refait). Chaque ligne : balise porteuse, taille/graisse de police et couleur **lues dans les styles en ligne hérités**, puis le texte mot pour mot (anglais, seule langue de la maquette). Les lignes en italique sont les contrôles et leurs attributs (`aria-label`, `placeholder`, `role`…). Attention : la couleur d'un lien `<a>` sans couleur en ligne est `#18181b` (règle `a{color:#18181b}` de la feuille de style), pas la couleur héritée affichée ici ; dans le rail sombre les liens portent leur couleur en ligne.
+
+### 01-setup-email
+
+- _[a href=https://fruitback.com]_
+- _[img alt="Fruitback"]_
+- `p` 14px/ #6b6b74 — « Running your own server? »
+- _[a href=https://fruitback.com/self-hosting.html]_
+- `a` 14px/ #6b6b74 — « Self-hosting guide »
+- `h1` 30px/700 #18181b — « Set up Fruitback »
+- `p` 16px/ #6b6b74 — « Three steps to your first note on a live page. Hosted in Europe. »
+- `li` 12px/700 #ffffff — « 1 »
+- `h2` 17px/600 #18181b — « Current step: »
+- `h2` 17px/600 #18181b — « Your account »
+- `p` 15px/ #6b6b74 — « We send you a sign-in link. No password to make up. »
+- `label` 13px/600 #18181b — « Work email »
+- _[input type=email placeholder="you@studio.com"]_
+- _[button type=submit]_
+- `button` 14px/600 #ffffff — « Email me a link »
+- `p` 13px/ #6b6b74 — « Your workspace takes the name of your domain. Rename it whenever you like. »
+- `li` 13px/ #6b6b74 — « or »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Continue with Google »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Continue with GitHub »
+- `li` 12px/700 #6b6b74 — « 2 »
+- `h2` 17px/600 #6b6b74 — « Your site »
+- `p` 14px/ #6b6b74 — « The address you review. »
+- `li` 12px/700 #6b6b74 — « 3 »
+- `h2` 17px/600 #6b6b74 — « Put it on the site »
+- `p` 14px/ #6b6b74 — « The extension, or a script tag. »
+- _[section aria-label="Preview of your site"]_
+- `span` 13px/ #6b6b74 — « your site »
+- `p` 15px/ #6b6b74 — « Your site shows here once you add it, with its pins. »
+- `p` 13px/ #6b6b74 — « A preview of your site. Pins show the same way on the real page. »
+
+### 01-setup-first-note
+
+- _[a href=https://fruitback.com]_
+- _[img alt="Fruitback"]_
+- `p` 14px/ #6b6b74 — « Running your own server? »
+- _[a href=https://fruitback.com/self-hosting.html]_
+- `a` 14px/ #6b6b74 — « Self-hosting guide »
+- `h1` 30px/700 #18181b — « Set up Fruitback »
+- `p` 16px/ #6b6b74 — « Three steps to your first note on a live page. Hosted in Europe. »
+- `h2` 17px/600 #18181b — « Your account »
+- `p` 15px/ #6b6b74 — « Signed in as »
+- `p` 15px/600 #18181b — « mathieu@sakuga.dev »
+- `p` 15px/ #6b6b74 — « Workspace »
+- `p` 15px/600 #18181b — « Sakuga »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Rename »
+- `h2` 17px/600 #18181b — « Your site »
+- `p` 15px/600 #18181b — « staging.acme.dev »
+- `p` 15px/ #6b6b74 — « Members of Sakuga see the notes »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Change »
+- `h2` 17px/600 #18181b — « Put it on the site »
+- `p` 15px/600 #18181b — « Extension on in Chrome »
+- `p` 15px/ #6b6b74 — « First note received just now »
+- `h2` 22px/700 #18181b — « Your first note is in »
+- `p` 15px/ #6b6b74 — « It waits in the Sakuga workspace. Send your notes to Linear, GitHub or your own API whenever you like. »
+- _[a href=Sites.dc.html]_
+- `a` 14px/600 #ffffff — « Open the console »
+- _[a href=Connectors.dc.html]_
+- `a` 14px/600 #18181b — « Connect a tracker »
+- _[section aria-label="Preview of your site"]_
+- `span` 13px/ #6b6b74 — « staging.acme.dev »
+- `span` 17px/700 #22302a — « Acme Outdoor »
+- `span` 13px/ #22302a — « Shop »
+- `span` 13px/ #22302a — « Journal »
+- `span` 13px/ #22302a — « Stores »
+- `p` 40px/ #f6f6f3 — « Pack light, walk far. »
+- `p` 13px/600 #ffffff — « 1 »
+- `p` 14px/ #dfe6df — « The spring range is in the shops. »
+- `span` 13px/600 #22302a — « Shop the range »
+- `span` 13px/600 #18181b — « New »
+- `span` 14px/ #18181b — « The headline runs to three lines on a phone. Could it be shorter? »
+- `span` 12px/ #6b6b74 — « Mathieu · just now »
+- `div` 11px/ #3f4652 — « [product photo] »
+- `p` 14px/ #22302a — « Ridge 28 pack »
+- `div` 11px/ #35483c — « [product photo] »
+- `p` 14px/ #22302a — « Fell shell jacket »
+- `div` 11px/ #5c3a36 — « [product photo] »
+- `p` 14px/ #22302a — « Camp mug, enamel »
+- _[button type=button aria-label="Fruitback settings"]_
+- _[button type=button]_
+- `button` 13px/600 #ffffff — « Leave feedback »
+- `p` 13px/ #6b6b74 — « A preview of your site. Pins show the same way on the real page. »
+
+### 01-setup-install
+
+- _[a href=https://fruitback.com]_
+- _[img alt="Fruitback"]_
+- `p` 14px/ #6b6b74 — « Running your own server? »
+- _[a href=https://fruitback.com/self-hosting.html]_
+- `a` 14px/ #6b6b74 — « Self-hosting guide »
+- `h1` 30px/700 #18181b — « Set up Fruitback »
+- `p` 16px/ #6b6b74 — « Three steps to your first note on a live page. Hosted in Europe. »
+- `h2` 17px/600 #18181b — « Your account »
+- `p` 15px/ #6b6b74 — « Signed in as »
+- `p` 15px/600 #18181b — « mathieu@sakuga.dev »
+- `p` 15px/ #6b6b74 — « Workspace »
+- `p` 15px/600 #18181b — « Sakuga »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Rename »
+- `h2` 17px/600 #18181b — « Your site »
+- `p` 15px/600 #18181b — « staging.acme.dev »
+- `p` 15px/ #6b6b74 — « Members of Sakuga see the notes »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Change »
+- `li` 12px/700 #ffffff — « 3 »
+- `h2` 17px/600 #18181b — « Current step: »
+- `h2` 17px/600 #18181b — « Put it on the site »
+- `p` 15px/ #6b6b74 — « Use one, or both. »
+- `h3` 15px/600 #18181b — « Browser extension »
+- `p` 14px/ #6b6b74 — « Nothing to deploy. Right for a client's site you cannot touch. »
+- `p` 13px/ #18181b — « Signs in with this account. No code to type. »
+- _[a href=https://chromewebstore.google.com]_
+- `a` 14px/600 #18181b — « Add to Chrome »
+- `h3` 15px/600 #18181b — « Script tag »
+- `p` 14px/ #6b6b74 — « Before the closing body tag. Members see their pins on every visit. »
+- `pre` 12px/ #18181b — « <script src="https://cloud.fruitback.com/fruitback.iife.js" data-fruitback-client="st_7k2m9q" defer></script> »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Copy script »
+- _[p role=status]_
+- `strong` 14px/ #18181b — « Waiting for your first note. »
+- `p` 14px/ #6b6b74 — « Open the site, click Leave feedback, then any part of the page. »
+- _[a href=https://staging.acme.dev]_
+- `a` 14px/600 #18181b — « Open staging.acme.dev »
+- _[section aria-label="Preview of your site"]_
+- `span` 13px/ #6b6b74 — « staging.acme.dev »
+- `span` 17px/700 #22302a — « Acme Outdoor »
+- `span` 13px/ #22302a — « Shop »
+- `span` 13px/ #22302a — « Journal »
+- `span` 13px/ #22302a — « Stores »
+- `p` 40px/ #f6f6f3 — « Pack light, walk far. »
+- `p` 14px/ #dfe6df — « The spring range is in the shops. »
+- `span` 13px/600 #22302a — « Shop the range »
+- `div` 11px/ #3f4652 — « [product photo] »
+- `p` 14px/ #22302a — « Ridge 28 pack »
+- `div` 11px/ #35483c — « [product photo] »
+- `p` 14px/ #22302a — « Fell shell jacket »
+- `div` 11px/ #5c3a36 — « [product photo] »
+- `p` 14px/ #22302a — « Camp mug, enamel »
+- `div` 13px/ #ffffff — « Click Leave feedback, then any part of the page. »
+- _[button type=button aria-label="Fruitback settings"]_
+- _[button type=button]_
+- `button` 13px/600 #ffffff — « Leave feedback »
+- `p` 13px/ #6b6b74 — « A preview of your site. Pins show the same way on the real page. »
+
+### 01-setup-sent
+
+- _[a href=https://fruitback.com]_
+- _[img alt="Fruitback"]_
+- `p` 14px/ #6b6b74 — « Running your own server? »
+- _[a href=https://fruitback.com/self-hosting.html]_
+- `a` 14px/ #6b6b74 — « Self-hosting guide »
+- `h1` 30px/700 #18181b — « Set up Fruitback »
+- `p` 16px/ #6b6b74 — « Three steps to your first note on a live page. Hosted in Europe. »
+- `li` 12px/700 #ffffff — « 1 »
+- `h2` 17px/600 #18181b — « Current step: »
+- `h2` 17px/600 #18181b — « Your account »
+- _[div role=status]_
+- `p` 15px/600 #18181b — « Check your inbox »
+- `p` 15px/ #18181b — « A sign-in link is on its way to »
+- `strong` 15px/ #18181b — « mathieu@sakuga.dev »
+- `p` 15px/ #18181b — « . Open it in this browser: this page carries on by itself. »
+- `p` 13px/ #6b6b74 — « The link works once, for fifteen minutes. Nothing in it asks for a password. »
+- _[button type=button disabled]_
+- `button` 14px/600 #18181b — « Send again in 0:41 »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Use another address »
+- `li` 12px/700 #6b6b74 — « 2 »
+- `h2` 17px/600 #6b6b74 — « Your site »
+- `p` 14px/ #6b6b74 — « The address you review. »
+- `li` 12px/700 #6b6b74 — « 3 »
+- `h2` 17px/600 #6b6b74 — « Put it on the site »
+- `p` 14px/ #6b6b74 — « The extension, or a script tag. »
+- _[section aria-label="Preview of your site"]_
+- `span` 13px/ #6b6b74 — « your site »
+- `p` 15px/ #6b6b74 — « Your site shows here once you add it, with its pins. »
+- `p` 13px/ #6b6b74 — « A preview of your site. Pins show the same way on the real page. »
+
+### 01-setup-site
+
+- _[a href=https://fruitback.com]_
+- _[img alt="Fruitback"]_
+- `p` 14px/ #6b6b74 — « Running your own server? »
+- _[a href=https://fruitback.com/self-hosting.html]_
+- `a` 14px/ #6b6b74 — « Self-hosting guide »
+- `h1` 30px/700 #18181b — « Set up Fruitback »
+- `p` 16px/ #6b6b74 — « Three steps to your first note on a live page. Hosted in Europe. »
+- `h2` 17px/600 #18181b — « Your account »
+- `p` 15px/ #6b6b74 — « Signed in as »
+- `p` 15px/600 #18181b — « mathieu@sakuga.dev »
+- `p` 15px/ #6b6b74 — « Workspace »
+- `p` 15px/600 #18181b — « Sakuga »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Rename »
+- `li` 12px/700 #ffffff — « 2 »
+- `h2` 17px/600 #18181b — « Current step: »
+- `h2` 17px/600 #18181b — « Your site »
+- `label` 13px/600 #18181b — « Site address »
+- _[input type=text placeholder="staging.acme.dev"]_
+- `label` 13px/400 #6b6b74 — « Any page of it will do. A pattern such as *.preview.acme.dev covers every preview build. »
+- `legend` 13px/600 #18181b — « Who sees the notes? »
+- _[input type=radio name=who checked]_
+- `label` 15px/600 #18181b — « Members of Sakuga »
+- `label` 13px/ #6b6b74 — « Visitors of the site see nothing. Right for staging and for a client's site. »
+- _[input type=radio name=who]_
+- `label` 15px/600 #18181b — « Everyone who visits »
+- `label` 13px/ #6b6b74 — « A public way to report a problem on a live site. »
+- _[button type=submit]_
+- `button` 14px/600 #ffffff — « Add site »
+- `li` 12px/700 #6b6b74 — « 3 »
+- `h2` 17px/600 #6b6b74 — « Put it on the site »
+- `p` 14px/ #6b6b74 — « The extension, or a script tag. »
+- _[section aria-label="Preview of your site"]_
+- `span` 13px/ #6b6b74 — « your site »
+- `p` 15px/ #6b6b74 — « Your site shows here once you add it, with its pins. »
+- `p` 13px/ #6b6b74 — « A preview of your site. Pins show the same way on the real page. »
+
+### 02-sign-in-expired
+
+- _[a href=https://fruitback.com]_
+- _[img alt="Fruitback"]_
+- `h1` 28px/700 #18181b — « This link no longer works »
+- `p` 16px/ #6b6b74 — « A link works once, for fifteen minutes. This one was already used or ran out of time. »
+- `label` 13px/600 #18181b — « Work email »
+- _[input type=email placeholder="you@studio.com"]_
+- _[button type=submit]_
+- `button` 14px/600 #ffffff — « Send me a new link »
+
+### 02-sign-in-link-opened
+
+- _[a href=https://fruitback.com]_
+- _[img alt="Fruitback"]_
+- `h1` 28px/700 #18181b — « You are signed in »
+- _[p role=status]_
+- `p` 16px/ #6b6b74 — « Your other Fruitback tab has carried on without you. You can close this one. »
+- _[a href=Sites.dc.html]_
+- `a` 14px/600 #18181b — « Continue in this tab »
+
+### 02-sign-in-sent
+
+- _[a href=https://fruitback.com]_
+- _[img alt="Fruitback"]_
+- `h1` 28px/700 #18181b — « Check your inbox »
+- _[p role=status]_
+- `p` 16px/ #18181b — « A sign-in link is on its way to »
+- `strong` 16px/ #18181b — « mathieu@sakuga.dev »
+- `p` 16px/ #18181b — « . »
+- `p` 15px/ #6b6b74 — « Open it in this browser and this tab signs in by itself. The link works once, for fifteen minutes. »
+- _[button type=button disabled]_
+- `button` 14px/600 #18181b — « Send again in 0:41 »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Use another address »
+
+### 02-sign-in-sign-in
+
+- _[a href=https://fruitback.com]_
+- _[img alt="Fruitback"]_
+- `h1` 28px/700 #18181b — « Sign in to Fruitback »
+- `p` 16px/ #6b6b74 — « We email you a link that signs you in on this browser. »
+- `label` 13px/600 #18181b — « Work email »
+- _[input type=email placeholder="you@studio.com"]_
+- _[button type=submit]_
+- `button` 14px/600 #ffffff — « Email me a link »
+- `div` 13px/ #6b6b74 — « or »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Continue with Google »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Continue with GitHub »
+- `p` 14px/ #6b6b74 — « New to Fruitback? »
+- _[a href=Main.dc.html]_
+- `a` 14px/600 #6b6b74 — « Set up a workspace »
+
+### 03-invitation-invitation
+
+- _[a href=https://fruitback.com]_
+- _[img alt="Fruitback"]_
+- `p` 13px/700 #ffffff — « M »
+- `p` 14px/600 #18181b — « Mathieu »
+- `p` 14px/ #6b6b74 — « from Sakuga invited you »
+- `h1` 28px/700 #18181b — « Review staging.acme.dev with Sakuga »
+- `p` 16px/ #6b6b74 — « You join as a guest: you see and leave notes on this site only. Guests are free and never see the tracker. »
+- `dt` 15px/ #6b6b74 — « Signed in as »
+- `dd` 15px/600 #18181b — « camille@acme.dev »
+- `dt` 15px/ #6b6b74 — « Role »
+- `dd` 15px/600 #18181b — « Guest »
+- `dt` 15px/ #6b6b74 — « Site »
+- `dd` 15px/600 #18181b — « staging.acme.dev »
+- _[button type=button]_
+- `button` 14px/600 #ffffff — « Join Sakuga »
+- `p` 14px/ #6b6b74 — « The link in the invitation signed you in. Not camille@acme.dev? »
+- _[a href=Sign-in.dc.html]_
+- `a` 14px/600 #6b6b74 — « Use another address »
+
+### 03-invitation-joined
+
+- _[a href=https://fruitback.com]_
+- _[img alt="Fruitback"]_
+- `h1` 28px/700 #18181b — « You are in »
+- _[p role=status]_
+- `p` 16px/ #6b6b74 — « One more thing: the extension shows the notes on staging.acme.dev and lets you leave yours. It signs in with this account. »
+- _[a href=https://chromewebstore.google.com]_
+- `a` 14px/600 #ffffff — « Add to Chrome »
+- _[a href=https://staging.acme.dev]_
+- `a` 14px/600 #18181b — « Open staging.acme.dev »
+- `p` 14px/ #6b6b74 — « Using Firefox? »
+- _[a href=https://addons.mozilla.org]_
+- `a` 14px/600 #6b6b74 — « Get the Firefox add-on »
+
+### 04-connect-browser-ask
+
+- _[a href=https://fruitback.com]_
+- _[img alt="Fruitback"]_
+- `h1` 28px/700 #18181b — « Connect this browser »
+- `p` 16px/ #6b6b74 — « The Fruitback extension asks to sign in as you. It reads and leaves notes on the sites of your workspaces, and nothing else. »
+- `span` 14px/ #d4d4d8 — « Check that the popup shows the same word »
+- `span` 22px/700 #ffffff — « PLUM 47 »
+- `dt` 15px/ #6b6b74 — « Account »
+- `dd` 15px/600 #18181b — « mathieu@sakuga.dev »
+- `dt` 15px/ #6b6b74 — « Browser »
+- `dd` 15px/600 #18181b — « Chrome on macOS »
+- `dt` 15px/ #6b6b74 — « Workspaces »
+- `dd` 15px/600 #18181b — « Sakuga, Northwind »
+- _[button type=button]_
+- `button` 14px/600 #ffffff — « Connect Chrome »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Not now »
+- `p` 13px/ #6b6b74 — « You can disconnect it at any time from My account. »
+
+### 04-connect-browser-connected
+
+- _[a href=https://fruitback.com]_
+- _[img alt="Fruitback"]_
+- `h1` 28px/700 #18181b — « Chrome is connected »
+- _[p role=status]_
+- `p` 16px/ #6b6b74 — « Open the popup on any site of Sakuga or Northwind. You can close this tab. »
+
+### 04-connect-browser-signed-out
+
+- _[a href=https://fruitback.com]_
+- _[img alt="Fruitback"]_
+- `h1` 28px/700 #18181b — « Sign in to connect this browser »
+- `p` 16px/ #6b6b74 — « The Fruitback extension in Chrome is waiting. Sign in, and it connects in the same move. »
+- `label` 13px/600 #18181b — « Work email »
+- _[input type=email placeholder="you@studio.com"]_
+- _[button type=submit]_
+- `button` 14px/600 #ffffff — « Email me a link »
+- `p` 14px/ #6b6b74 — « Or »
+- _[a href=Sign-in.dc.html]_
+- `a` 14px/600 #6b6b74 — « continue with Google or GitHub »
+
+### 05-popup-signed-out-default
+
+- _[img alt="Fruitback"]_
+- _[button type=button aria-label="Settings and every site"]_
+- `p` 13px/ #6b6b74 — « staging.acme.dev »
+- `h1` 18px/700 #18181b — « Sign in to see and leave notes here »
+- `p` 14px/ #6b6b74 — « One account for the console and this extension. The sign-in opens in a tab, and this popup picks it up by itself. »
+- _[button type=button]_
+- `button` 14px/600 #ffffff — « Sign in to Fruitback »
+- `div` 13px/ #6b6b74 — « Running your own Fruitback? »
+- _[a href=#]_
+- `a` 13px/600 #6b6b74 — « Connect it in settings »
+
+### 06-popup-site-in-workspace-default
+
+- _[img alt="Fruitback"]_
+- _[span role=img aria-label="Signed in as Mathieu"]_
+- `span` 12px/700 #ffffff — « M »
+- _[button type=button aria-label="Settings and every site"]_
+- `h1` 18px/700 #18181b — « staging.acme.dev »
+- `p` 13px/ #6b6b74 — « In Sakuga · members see the notes »
+- `p` 14px/600 #18181b — « 12 »
+- `p` 14px/600 #18181b — « notes wait on this site »
+- _[div role=img aria-label="3 new, 2 to do, 4 in progress, 2 done, 1 closed"]_
+- `p` 12px/ #6b6b74 — « 3 new · 2 to do · 4 in progress · 2 done · 1 closed »
+- _[button type=button]_
+- `button` 14px/600 #ffffff — « Turn on here »
+- `p` 12px/ #6b6b74 — « Chrome asks for access to this site only. »
+- `span` 13px/ #6b6b74 — « mathieu@sakuga.dev »
+- _[a href=Sites.dc.html]_
+- `a` 13px/600 #6b6b74 — « Open the console »
+
+### 07-popup-on-default
+
+- _[img alt="Fruitback"]_
+- _[span role=img aria-label="Signed in as Mathieu"]_
+- `span` 12px/700 #ffffff — « M »
+- _[button type=button aria-label="Settings and every site"]_
+- `label` 18px/700 #18181b — « staging.acme.dev »
+- `label` 13px/ #6b6b74 — « On · Sakuga »
+- _[input type=checkbox role=switch checked aria-label="Fruitback on staging.acme.dev"]_
+- `h2` 14px/600 #18181b — « On this page »
+- `h2` 14px/400 #6b6b74 — « 8 notes »
+- `li` 13px/ #18181b — « New »
+- `li` 13px/600 #18181b — « 2 »
+- `li` 13px/ #18181b — « To do »
+- `li` 13px/600 #18181b — « 1 »
+- `li` 13px/ #18181b — « In progress »
+- `li` 13px/600 #18181b — « 3 »
+- `li` 13px/ #18181b — « Done »
+- `li` 13px/600 #18181b — « 2 »
+- `li` 13px/ #18181b — « Closed »
+- `li` 13px/600 #6b6b74 — « 0 »
+- _[button type=button]_
+- `button` 14px/600 #ffffff — « Leave feedback »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Show every note of the page »
+- `span` 13px/ #6b6b74 — « mathieu@sakuga.dev »
+- _[a href=Sites.dc.html]_
+- `a` 13px/600 #6b6b74 — « Open the console »
+
+### 08-popup-new-site-default
+
+- _[img alt="Fruitback"]_
+- _[span role=img aria-label="Signed in as Mathieu"]_
+- `span` 12px/700 #ffffff — « M »
+- _[button type=button aria-label="Settings and every site"]_
+- `h1` 18px/700 #18181b — « preview.lumen.studio »
+- `p` 13px/ #6b6b74 — « Not in a workspace yet »
+- `p` 14px/ #6b6b74 — « Add it to review it. Nothing goes on the site: members with the extension see the notes, visitors see nothing. »
+- `label` 13px/600 #18181b — « Workspace »
+- _[select]_
+- `option` 14px/400 #18181b — « Sakuga »
+- `option` 14px/400 #18181b — « Northwind »
+- _[input type=checkbox checked]_
+- `label` 14px/600 #18181b — « Every preview build too »
+- `label` 12px/ #6b6b74 — « Covers *.lumen.studio, so each new preview has its notes. »
+- _[button type=submit]_
+- `button` 14px/600 #ffffff — « Add to Sakuga and turn on »
+- `p` 12px/ #6b6b74 — « Chrome asks for access to this site only. »
+- `span` 13px/ #6b6b74 — « mathieu@sakuga.dev »
+- _[a href=Sites.dc.html]_
+- `a` 13px/600 #6b6b74 — « Open the console »
+
+### 09-console-sites-empty
+
+- _[button type=button aria-haspopup=menu]_
+- `button` 14px/700 #18181b — « S »
+- `button` 15px/600 #ffffff — « Sakuga »
+- `button` 12px/ #a1a1aa — « Cloud workspace »
+- _[nav aria-label="Workspace"]_
+- _[a aria-current=page href=Sites.dc.html]_
+- `a` 15px/600 #ffffff — « Sites »
+- _[a href=Notes.dc.html]_
+- `a` 15px/ #d4d4d8 — « Notes »
+- _[a href=Connectors.dc.html]_
+- `a` 15px/ #d4d4d8 — « Connectors »
+- _[a href=Members.dc.html]_
+- `a` 15px/ #d4d4d8 — « Members »
+- _[a href=Account.dc.html]_
+- `a` 15px/ #d4d4d8 — « My account »
+- _[a href=https://fruitback.com]_
+- `a` 14px/ #d4d4d8 — « Help and docs »
+- _[img alt="Fruitback"]_
+- `h1` 28px/700 #18181b — « Sites »
+- `p` 16px/ #6b6b74 — « Where Sakuga collects notes, and where they stand. »
+- `h2` 20px/700 #18181b — « No site yet »
+- `p` 15px/ #6b6b74 — « Paste the address of a site you review. Staging, a preview build or a client's live site: any page of it will do. »
+- `label` 13px/600 #18181b — « Site address »
+- _[input type=text placeholder="staging.acme.dev"]_
+- _[button type=submit]_
+- `button` 14px/600 #ffffff — « Add site »
+
+### 09-console-sites-failed
+
+- _[button type=button aria-haspopup=menu]_
+- `button` 14px/700 #18181b — « S »
+- `button` 15px/600 #ffffff — « Sakuga »
+- `button` 12px/ #a1a1aa — « Cloud workspace »
+- _[nav aria-label="Workspace"]_
+- _[a aria-current=page href=Sites.dc.html]_
+- `a` 15px/600 #ffffff — « Sites »
+- _[a href=Notes.dc.html]_
+- `a` 15px/ #d4d4d8 — « Notes »
+- _[a href=Connectors.dc.html]_
+- `a` 15px/ #d4d4d8 — « Connectors »
+- _[a href=Members.dc.html]_
+- `a` 15px/ #d4d4d8 — « Members »
+- _[a href=Account.dc.html]_
+- `a` 15px/ #d4d4d8 — « My account »
+- _[a href=https://fruitback.com]_
+- `a` 14px/ #d4d4d8 — « Help and docs »
+- _[img alt="Fruitback"]_
+- `h1` 28px/700 #18181b — « Sites »
+- `p` 16px/ #6b6b74 — « Where Sakuga collects notes, and where they stand. »
+- _[div role=alert]_
+- `h2` 17px/600 #18181b — « The sites did not load »
+- `p` 15px/ #6b6b74 — « Fruitback did not answer. Your sites and notes are safe. »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Try again »
+
+### 09-console-sites-list
+
+- _[button type=button aria-haspopup=menu]_
+- `button` 14px/700 #18181b — « S »
+- `button` 15px/600 #ffffff — « Sakuga »
+- `button` 12px/ #a1a1aa — « Cloud workspace »
+- _[nav aria-label="Workspace"]_
+- _[a aria-current=page href=Sites.dc.html]_
+- `a` 15px/600 #ffffff — « Sites »
+- _[a href=Notes.dc.html]_
+- `a` 15px/ #d4d4d8 — « Notes »
+- _[a href=Connectors.dc.html]_
+- `a` 15px/ #d4d4d8 — « Connectors »
+- _[a href=Members.dc.html]_
+- `a` 15px/ #d4d4d8 — « Members »
+- _[a href=Account.dc.html]_
+- `a` 15px/ #d4d4d8 — « My account »
+- _[a href=https://fruitback.com]_
+- `a` 14px/ #d4d4d8 — « Help and docs »
+- _[img alt="Fruitback"]_
+- `h1` 28px/700 #18181b — « Sites »
+- `p` 16px/ #6b6b74 — « Where Sakuga collects notes, and where they stand. »
+- _[button type=button]_
+- `button` 14px/600 #ffffff — « Add a site »
+- _[ul aria-label="Statuses"]_
+- `li` 13px/ #6b6b74 — « New »
+- `li` 13px/ #6b6b74 — « To do »
+- `li` 13px/ #6b6b74 — « In progress »
+- `li` 13px/ #6b6b74 — « Done »
+- `li` 13px/ #6b6b74 — « Closed »
+- `th` 13px/600 #6b6b74 — « Site »
+- `th` 13px/600 #6b6b74 — « Notes »
+- `th` 13px/600 #6b6b74 — « On the page with »
+- `th` 13px/600 #6b6b74 — « Notes go to »
+- `th` 13px/600 #6b6b74 — « Last note »
+- `th` 13px/ #6b6b74 — « Actions »
+- _[a href=#]_
+- `a` 14px/600 #18181b — « staging.acme.dev »
+- `td` 13px/ #6b6b74 — « Members of Sakuga »
+- `td` 14px/600 #18181b — « 12 »
+- _[span role=img aria-label="12 notes: 3 new, 2 to do, 4 in progress, 2 done, 1 closed"]_
+- `td` 14px/ #18181b — « Extension, script »
+- `td` 14px/ #18181b — « Linear »
+- `td` 13px/ #6b6b74 — « Team Acme web »
+- `td` 14px/ #6b6b74 — « 2 h ago »
+- _[button type=button aria-haspopup=menu aria-label="More for staging.acme.dev"]_
+- _[a href=#]_
+- `a` 14px/600 #18181b — « *.preview.acme.dev »
+- `td` 13px/ #6b6b74 — « Members of Sakuga »
+- `td` 14px/600 #18181b — « 5 »
+- _[span role=img aria-label="5 notes: 2 new, 1 to do, 1 in progress, 1 done, 0 closed"]_
+- `td` 14px/ #18181b — « Script »
+- `td` 14px/ #18181b — « Linear »
+- `td` 13px/ #6b6b74 — « Team Acme web »
+- `td` 14px/ #6b6b74 — « Yesterday »
+- _[button type=button aria-haspopup=menu aria-label="More for *.preview.acme.dev"]_
+- _[a href=#]_
+- `a` 14px/600 #18181b — « acme.dev »
+- `td` 13px/ #6b6b74 — « Everyone who visits »
+- `td` 14px/600 #18181b — « 23 »
+- _[span role=img aria-label="23 notes: 6 new, 4 to do, 5 in progress, 7 done, 1 closed"]_
+- `td` 14px/ #18181b — « Script »
+- `td` 14px/ #18181b — « GitHub Issues »
+- `td` 13px/ #6b6b74 — « acme/website »
+- `td` 14px/ #6b6b74 — « 12 min ago »
+- _[button type=button aria-haspopup=menu aria-label="More for acme.dev"]_
+- _[a href=#]_
+- `a` 14px/600 #18181b — « support.acme.dev »
+- `td` 13px/ #6b6b74 — « Everyone who visits »
+- `td` 14px/600 #18181b — « 4 »
+- _[span role=img aria-label="4 notes: 2 new, 1 to do, 0 in progress, 1 done, 0 closed"]_
+- `td` 14px/ #18181b — « Script »
+- `td` 14px/ #18181b — « REST API »
+- `td` 13px/ #6b6b74 — « 2 not delivered yet »
+- `td` 14px/ #6b6b74 — « 40 min ago »
+- _[button type=button aria-haspopup=menu aria-label="More for support.acme.dev"]_
+- _[a href=#]_
+- `a` 14px/600 #18181b — « preview.lumen.studio »
+- `td` 13px/ #6b6b74 — « Members of Sakuga »
+- `td` 13px/ #6b6b74 — « Waiting for the first note »
+- `td` 14px/ #18181b — « Extension »
+- `td` 14px/ #18181b — « Kept in Fruitback »
+- `td` 13px/ #6b6b74 — « No tracker yet »
+- `td` 14px/ #6b6b74 — « · »
+- _[button type=button aria-haspopup=menu aria-label="More for preview.lumen.studio"]_
+- `p` 13px/ #6b6b74 — « A site with no tracker keeps its notes in Fruitback. »
+- _[a href=Connectors.dc.html]_
+- `a` 13px/600 #6b6b74 — « Connect a tracker »
+- `p` 13px/ #6b6b74 — « or »
+- _[a href=Notes.dc.html]_
+- `a` 13px/600 #6b6b74 — « see where every note went »
+
+### 10-console-notes-default
+
+- _[button type=button aria-haspopup=menu]_
+- `button` 14px/700 #18181b — « S »
+- `button` 15px/600 #ffffff — « Sakuga »
+- `button` 12px/ #a1a1aa — « Cloud workspace »
+- _[nav aria-label="Workspace"]_
+- _[a href=Sites.dc.html]_
+- `a` 15px/ #d4d4d8 — « Sites »
+- _[a aria-current=page href=Notes.dc.html]_
+- `a` 15px/600 #ffffff — « Notes »
+- _[a href=Connectors.dc.html]_
+- `a` 15px/ #d4d4d8 — « Connectors »
+- _[a href=Members.dc.html]_
+- `a` 15px/ #d4d4d8 — « Members »
+- _[a href=Account.dc.html]_
+- `a` 15px/ #d4d4d8 — « My account »
+- _[a href=https://fruitback.com]_
+- `a` 14px/ #d4d4d8 — « Help and docs »
+- _[img alt="Fruitback"]_
+- `h1` 28px/700 #18181b — « Notes »
+- `p` 16px/ #6b6b74 — « Every note left on the sites of Sakuga, and where it went. »
+- _[div role=group aria-label="Where the notes went"]_
+- _[button type=button aria-pressed=true]_
+- `button` 13px/600 #ffffff — « All »
+- `button` 13px/400 #d4d4d8 — « 44 »
+- _[button type=button aria-pressed=false]_
+- `button` 13px/600 #18181b — « Linear »
+- `button` 13px/400 #6b6b74 — « 17 »
+- _[button type=button aria-pressed=false]_
+- `button` 13px/600 #18181b — « GitHub Issues »
+- `button` 13px/400 #6b6b74 — « 23 »
+- _[button type=button aria-pressed=false]_
+- `button` 13px/600 #18181b — « REST API »
+- `button` 13px/400 #6b6b74 — « 2 »
+- _[button type=button aria-pressed=false]_
+- `button` 13px/600 #dd2c27 — « Not delivered »
+- `button` 13px/400 #6b6b74 — « 2 »
+- `label` / #18181b — « Search notes »
+- _[input type=search placeholder="Search the text, the page or the author"]_
+- `label` / #18181b — « Site »
+- _[select]_
+- `option` 14px/inherit #18181b — « Every site »
+- `option` 14px/inherit #18181b — « staging.acme.dev »
+- `option` 14px/inherit #18181b — « *.preview.acme.dev »
+- `option` 14px/inherit #18181b — « acme.dev »
+- `option` 14px/inherit #18181b — « support.acme.dev »
+- `label` / #18181b — « Status »
+- _[select]_
+- `option` 14px/inherit #18181b — « Any status »
+- `option` 14px/inherit #18181b — « New »
+- `option` 14px/inherit #18181b — « To do »
+- `option` 14px/inherit #18181b — « In progress »
+- `option` 14px/inherit #18181b — « Done »
+- `option` 14px/inherit #18181b — « Closed »
+- _[input type=checkbox]_
+- `label` 14px/ #18181b — « Only my notes »
+- `th` 13px/600 #6b6b74 — « Note »
+- `th` 13px/600 #6b6b74 — « Status »
+- `th` 13px/600 #6b6b74 — « Left by »
+- `th` 13px/600 #6b6b74 — « Went to »
+- `th` 13px/600 #6b6b74 — « When »
+- `td` 14px/ #18181b — « The order form rejects postcodes with a space. »
+- `td` 13px/ #6b6b74 — « support.acme.dev/contact »
+- _[a href=Widget-thread.dc.html]_
+- `a` 13px/600 #6b6b74 — « Show on the page »
+- `td` 14px/ #18181b — « New »
+- `td` 14px/ #18181b — « Visitor »
+- `td` 13px/ #6b6b74 — « Anonymous »
+- `td` 14px/600 #18181b — « REST API »
+- `td` 13px/600 #dd2c27 — « Not delivered yet »
+- _[button type=button]_
+- `button` 13px/600 #18181b — « Send again »
+- `td` 14px/ #6b6b74 — « 40 min ago »
+- `td` 14px/ #18181b — « The headline runs to three lines on a phone. Could it be shorter? »
+- `td` 13px/ #6b6b74 — « staging.acme.dev/ »
+- _[a href=Widget-thread.dc.html]_
+- `a` 13px/600 #6b6b74 — « Show on the page »
+- `td` 14px/ #18181b — « New »
+- `td` 14px/ #18181b — « Mathieu »
+- `td` 13px/ #6b6b74 — « You »
+- `td` 14px/600 #18181b — « Linear »
+- _[a href=#]_
+- `a` 13px/ #18181b — « ACM-151 »
+- `td` 14px/ #6b6b74 — « 1 h ago »
+- `td` 14px/ #18181b — « The returns policy says "recieve". »
+- `td` 13px/ #6b6b74 — « acme.dev/help/returns »
+- _[a href=Widget-thread.dc.html]_
+- `a` 13px/600 #6b6b74 — « Show on the page »
+- `td` 14px/ #18181b — « To do »
+- `td` 14px/ #18181b — « Visitor »
+- `td` 13px/ #6b6b74 — « Anonymous »
+- `td` 14px/600 #18181b — « GitHub Issues »
+- _[a href=#]_
+- `a` 13px/ #18181b — « acme/website#91 »
+- `td` 14px/ #6b6b74 — « 3 h ago »
+- `td` 14px/ #18181b — « The chat bubble covers the send button on a phone. »
+- `td` 13px/ #6b6b74 — « support.acme.dev/ »
+- _[a href=Widget-thread.dc.html]_
+- `a` 13px/600 #6b6b74 — « Show on the page »
+- `td` 14px/ #18181b — « Done »
+- `td` 14px/ #18181b — « Léa »
+- `td` 13px/ #6b6b74 — « Member »
+- `td` 14px/600 #18181b — « REST API »
+- `td` 13px/ #6b6b74 — « Delivered to hooks.acme.dev »
+- `td` 14px/ #6b6b74 — « Yesterday »
+- `td` 14px/ #18181b — « The button is hard to read on the green. Could it take the cream of the logo, with dark text? »
+- `td` 13px/ #6b6b74 — « staging.acme.dev/ »
+- _[a href=Widget-thread.dc.html]_
+- `a` 13px/600 #6b6b74 — « Show on the page »
+- `td` 14px/ #18181b — « In progress »
+- `td` 14px/ #18181b — « Camille Durand »
+- `td` 13px/ #6b6b74 — « Guest »
+- `td` 14px/600 #18181b — « Linear »
+- _[a href=#]_
+- `a` 13px/ #18181b — « ACM-142 »
+- `td` 14px/ #6b6b74 — « 2 days ago »
+- `td` 14px/ #18181b — « The yearly toggle goes back to monthly on reload. »
+- `td` 13px/ #6b6b74 — « pr-214.preview.acme.dev/pricing »
+- _[a href=Widget-thread.dc.html]_
+- `a` 13px/600 #6b6b74 — « Show on the page »
+- `td` 14px/ #18181b — « To do »
+- `td` 14px/ #18181b — « Marc »
+- `td` 13px/ #6b6b74 — « Admin »
+- `td` 14px/600 #18181b — « Linear »
+- _[a href=#]_
+- `a` 13px/ #18181b — « ACM-139 »
+- `td` 14px/ #6b6b74 — « 3 days ago »
+- `td` 14px/ #18181b — « The checkout button sits under the cookie banner. »
+- `td` 13px/ #6b6b74 — « acme.dev/checkout »
+- _[a href=Widget-thread.dc.html]_
+- `a` 13px/600 #6b6b74 — « Show on the page »
+- `td` 14px/ #18181b — « In progress »
+- `td` 14px/ #18181b — « Visitor »
+- `td` 13px/ #6b6b74 — « Verified by acme.dev »
+- `td` 14px/600 #18181b — « GitHub Issues »
+- _[a href=#]_
+- `a` 13px/ #18181b — « acme/website#88 »
+- `td` 14px/ #6b6b74 — « 4 days ago »
+- `td` 14px/ #18181b — « The mug is cut off at the top on every tile of this row. »
+- `td` 13px/ #6b6b74 — « staging.acme.dev/shop »
+- _[a href=Widget-thread.dc.html]_
+- `a` 13px/600 #6b6b74 — « Show on the page »
+- `td` 14px/ #18181b — « Done »
+- `td` 14px/ #18181b — « Léa »
+- `td` 13px/ #6b6b74 — « Member »
+- `td` 14px/600 #18181b — « Linear »
+- _[a href=#]_
+- `a` 13px/ #18181b — « ACM-120 »
+- `td` 14px/ #6b6b74 — « 6 days ago »
+- _[nav aria-label="Pages of notes"]_
+- `span` 14px/ #6b6b74 — « 1 to 8 of 44 »
+- _[button type=button disabled]_
+- `button` 14px/600 #18181b — « Previous »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Next »
+
+### 11-console-connectors-default
+
+- _[button type=button aria-haspopup=menu]_
+- `button` 14px/700 #18181b — « S »
+- `button` 15px/600 #ffffff — « Sakuga »
+- `button` 12px/ #a1a1aa — « Cloud workspace »
+- _[nav aria-label="Workspace"]_
+- _[a href=Sites.dc.html]_
+- `a` 15px/ #d4d4d8 — « Sites »
+- _[a href=Notes.dc.html]_
+- `a` 15px/ #d4d4d8 — « Notes »
+- _[a aria-current=page href=Connectors.dc.html]_
+- `a` 15px/600 #ffffff — « Connectors »
+- _[a href=Members.dc.html]_
+- `a` 15px/ #d4d4d8 — « Members »
+- _[a href=Account.dc.html]_
+- `a` 15px/ #d4d4d8 — « My account »
+- _[a href=https://fruitback.com]_
+- `a` 14px/ #d4d4d8 — « Help and docs »
+- _[img alt="Fruitback"]_
+- `h1` 28px/700 #18181b — « Connectors »
+- `p` 16px/ #6b6b74 — « Connect a tracker once. Every site of Sakuga can then send its notes there. »
+- `h2` 15px/600 #18181b — « Connected »
+- _[button type=button aria-pressed=true]_
+- `button` 13px/700 #18181b — « L »
+- `button` 15px/600 #18181b — « Linear »
+- `button` 13px/ #6b6b74 — « Team Acme web · 2 sites »
+- `button` 13px/600 #15803d — « Connected »
+- _[button type=button aria-pressed=false]_
+- `button` 13px/700 #18181b — « G »
+- `button` 15px/600 #18181b — « GitHub Issues »
+- `button` 13px/ #6b6b74 — « acme/website · 1 site »
+- `button` 13px/600 #15803d — « Connected »
+- _[button type=button aria-pressed=false]_
+- `button` 12px/700 #18181b — « { } »
+- `button` 15px/600 #18181b — « REST API »
+- `button` 13px/ #6b6b74 — « hooks.acme.dev/feedback · 1 site »
+- `button` 13px/600 #dd2c27 — « 2 notes did not arrive »
+- `h2` 15px/600 #18181b — « Add a source »
+- `li` 15px/600 #18181b — « Jira »
+- `li` 13px/ #6b6b74 — « An issue in a Jira Cloud project. »
+- _[button type=button aria-label="Connect Jira"]_
+- `button` 14px/600 #18181b — « Connect »
+- `li` 15px/600 #18181b — « GitLab »
+- `li` 13px/ #6b6b74 — « An issue in a project, cloud or self-managed. »
+- _[button type=button aria-label="Connect GitLab"]_
+- `button` 14px/600 #18181b — « Connect »
+- `li` 15px/600 #18181b — « Trello »
+- `li` 13px/ #6b6b74 — « A card in the list you choose. »
+- _[button type=button aria-label="Connect Trello"]_
+- `button` 14px/600 #18181b — « Connect »
+- `li` 15px/600 #18181b — « Notion »
+- `li` 13px/ #6b6b74 — « A row in a database. »
+- _[button type=button aria-label="Connect Notion"]_
+- `button` 14px/600 #18181b — « Connect »
+- `li` 15px/600 #18181b — « Webhook »
+- `li` 13px/ #6b6b74 — « Tells Slack or any address when a note arrives. »
+- _[button type=button aria-label="Connect Webhook"]_
+- `button` 14px/600 #18181b — « Connect »
+- `h2` 18px/700 #18181b — « Linear »
+- `p` 13px/ #6b6b74 — « Connected by Mathieu with OAuth · Team Acme web »
+- `h3` 14px/600 #18181b — « Sites sending here »
+- `li` 14px/600 #18181b — « staging.acme.dev »
+- `li` 14px/ #6b6b74 — « 12 notes »
+- `li` 14px/600 #18181b — « *.preview.acme.dev »
+- `li` 14px/ #6b6b74 — « 5 notes »
+- `h3` 14px/600 #18181b — « Status of the pins »
+- `p` 13px/ #6b6b74 — « Which Linear state gives each pin its status. »
+- `span` 14px/ #18181b — « Triage »
+- `label` 14px/ #18181b — « Status for Triage »
+- _[select]_
+- `option` 14px/inherit #18181b — « New »
+- `span` 14px/ #18181b — « Todo »
+- `label` 14px/ #18181b — « Status for Todo »
+- _[select]_
+- `option` 14px/inherit #18181b — « To do »
+- `span` 14px/ #18181b — « In Progress »
+- `label` 14px/ #18181b — « Status for In Progress »
+- _[select]_
+- `option` 14px/inherit #18181b — « In progress »
+- `span` 14px/ #18181b — « Done »
+- `label` 14px/ #18181b — « Status for Done »
+- _[select]_
+- `option` 14px/inherit #18181b — « Done »
+- `span` 14px/ #18181b — « Canceled »
+- `label` 14px/ #18181b — « Status for Canceled »
+- _[select]_
+- `option` 14px/inherit #18181b — « Closed »
+- `label` 14px/ #18181b — « Show Linear comments as replies »
+- _[input type=checkbox role=switch checked]_
+- `label` 14px/ #18181b — « Attach a picture of the element »
+- _[input type=checkbox role=switch checked]_
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Disconnect Linear »
+- `span` 13px/ #6b6b74 — « Last issue created 12 min ago »
+
+### 12-console-members-default
+
+- _[button type=button aria-haspopup=menu]_
+- `button` 14px/700 #18181b — « S »
+- `button` 15px/600 #ffffff — « Sakuga »
+- `button` 12px/ #a1a1aa — « Cloud workspace »
+- _[nav aria-label="Workspace"]_
+- _[a href=Sites.dc.html]_
+- `a` 15px/ #d4d4d8 — « Sites »
+- _[a href=Notes.dc.html]_
+- `a` 15px/ #d4d4d8 — « Notes »
+- _[a href=Connectors.dc.html]_
+- `a` 15px/ #d4d4d8 — « Connectors »
+- _[a aria-current=page href=Members.dc.html]_
+- `a` 15px/600 #ffffff — « Members »
+- _[a href=Account.dc.html]_
+- `a` 15px/ #d4d4d8 — « My account »
+- _[a href=https://fruitback.com]_
+- `a` 14px/ #d4d4d8 — « Help and docs »
+- _[img alt="Fruitback"]_
+- `h1` 28px/700 #18181b — « Members »
+- `p` 16px/ #6b6b74 — « Who sees and leaves notes, and who changes the workspace. »
+- _[form aria-label="Invite someone"]_
+- `label` 13px/600 #18181b — « Email »
+- _[input type=email placeholder="name@company.com"]_
+- `label` 13px/600 #18181b — « Role »
+- _[select]_
+- `option` 15px/400 #18181b — « Guest, one site »
+- `option` 15px/400 #18181b — « Member »
+- `option` 15px/400 #18181b — « Admin »
+- `label` 13px/600 #18181b — « Site »
+- _[select]_
+- `option` 15px/400 #18181b — « staging.acme.dev »
+- `option` 15px/400 #18181b — « *.preview.acme.dev »
+- `option` 15px/400 #18181b — « acme.dev »
+- _[button type=submit]_
+- `button` 14px/600 #ffffff — « Invite »
+- `th` 13px/600 #6b6b74 — « Person »
+- `th` 13px/600 #6b6b74 — « Role »
+- `th` 13px/600 #6b6b74 — « Sites »
+- `th` 13px/600 #6b6b74 — « Last seen »
+- `td` 13px/700 #ffffff — « M »
+- `td` 14px/600 #18181b — « Mathieu »
+- `td` 13px/ #6b6b74 — « mathieu@sakuga.dev »
+- `td` 14px/ #18181b — « Owner »
+- `td` 14px/ #18181b — « Every site »
+- `td` 14px/ #6b6b74 — « Now »
+- `td` 13px/700 #ffffff — « M »
+- `td` 14px/600 #18181b — « Marc »
+- `td` 13px/ #6b6b74 — « marc@sakuga.dev »
+- `td` 14px/ #18181b — « Admin »
+- `td` 14px/ #18181b — « Every site »
+- `td` 14px/ #6b6b74 — « 1 h ago »
+- `td` 13px/700 #ffffff — « L »
+- `td` 14px/600 #18181b — « Léa »
+- `td` 13px/ #6b6b74 — « lea@sakuga.dev »
+- `td` 14px/ #18181b — « Member »
+- `td` 14px/ #18181b — « Every site »
+- `td` 14px/ #6b6b74 — « Yesterday »
+- `td` 13px/700 #ffffff — « C »
+- `td` 14px/600 #18181b — « Camille Durand »
+- `td` 13px/ #6b6b74 — « camille@acme.dev »
+- `td` 14px/ #18181b — « Guest »
+- `td` 14px/ #18181b — « staging.acme.dev »
+- `td` 14px/ #6b6b74 — « 2 days ago »
+- `td` 13px/700 #6b6b74 — « P »
+- `td` 14px/600 #18181b — « paul@lumen.studio »
+- `td` 13px/ #6b6b74 — « Invitation sent »
+- `td` 14px/ #18181b — « Guest »
+- `td` 14px/ #18181b — « preview.lumen.studio »
+- `td` 14px/ #6b6b74 — « Sent 3 Oct »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Resend »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Cancel »
+- `dt` 14px/600 #18181b — « Admin »
+- `dd` 14px/ #6b6b74 — « Sites, connectors and members. »
+- `dt` 14px/600 #18181b — « Member »
+- `dd` 14px/ #6b6b74 — « Every site. Sees the links to the tracker. »
+- `dt` 14px/600 #18181b — « Guest »
+- `dd` 14px/ #6b6b74 — « Only the sites shared with them. Free, and never sees the tracker. »
+
+### 13-console-account-default
+
+- _[button type=button aria-haspopup=menu]_
+- `button` 14px/700 #18181b — « S »
+- `button` 15px/600 #ffffff — « Sakuga »
+- `button` 12px/ #a1a1aa — « Cloud workspace »
+- _[nav aria-label="Workspace"]_
+- _[a href=Sites.dc.html]_
+- `a` 15px/ #d4d4d8 — « Sites »
+- _[a href=Notes.dc.html]_
+- `a` 15px/ #d4d4d8 — « Notes »
+- _[a href=Connectors.dc.html]_
+- `a` 15px/ #d4d4d8 — « Connectors »
+- _[a href=Members.dc.html]_
+- `a` 15px/ #d4d4d8 — « Members »
+- _[a aria-current=page href=Account.dc.html]_
+- `a` 15px/600 #ffffff — « My account »
+- _[a href=https://fruitback.com]_
+- `a` 14px/ #d4d4d8 — « Help and docs »
+- _[img alt="Fruitback"]_
+- `h1` 28px/700 #18181b — « My account »
+- `p` 16px/ #6b6b74 — « Your name on notes, how you sign in, and where. »
+- `h2` 18px/700 #18181b — « Profile »
+- `label` 13px/600 #18181b — « Name shown on notes »
+- _[input type=text readonly value="Mathieu"]_
+- `label` 13px/600 #18181b — « Language »
+- _[select]_
+- `option` 15px/400 #18181b — « English »
+- `option` 15px/400 #18181b — « Français »
+- `h2` 18px/700 #18181b — « How you sign in »
+- `p` 14px/ #6b6b74 — « Any of these opens the same account, in the console and in the extension. »
+- `li` 15px/600 #18181b — « Email link »
+- `li` 13px/ #6b6b74 — « mathieu@sakuga.dev »
+- `li` 14px/ #6b6b74 — « Always on »
+- `li` 15px/600 #18181b — « GitHub »
+- `li` 13px/ #6b6b74 — « Linked as mheos »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Unlink »
+- `li` 15px/600 #18181b — « Google »
+- `li` 13px/ #6b6b74 — « Not linked »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Link Google »
+- `h2` 18px/700 #18181b — « Where you are signed in »
+- `p` 14px/ #6b6b74 — « Disconnect a browser you no longer use. It stops showing notes at once. »
+- `li` 15px/600 #18181b — « Console · Firefox on macOS »
+- `li` 13px/ #6b6b74 — « Active now »
+- `li` 14px/ #6b6b74 — « This browser »
+- `li` 15px/600 #18181b — « Extension · Chrome on macOS »
+- `li` 13px/ #6b6b74 — « Connected 12 Oct · used 2 h ago »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Disconnect »
+- `li` 15px/600 #18181b — « Extension · Firefox on Linux »
+- `li` 13px/ #6b6b74 — « Connected 2 Oct · used 3 days ago »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Disconnect »
+- _[section aria-label="Sign out"]_
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Sign out »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Sign out everywhere »
+
+### 14-widget-reading-default
+
+- `span` 21px/700 #22302a — « Acme Outdoor »
+- `span` 15px/ #22302a — « Shop »
+- `span` 15px/ #22302a — « Journal »
+- `span` 15px/ #22302a — « Stores »
+- `span` 15px/ #22302a — « Basket (2) »
+- `p` 76px/ #f6f6f3 — « Pack light, walk far. »
+- _[button type=button aria-label="Note 1, new"]_
+- `button` 13px/600 #ffffff — « 1 »
+- `p` 18px/ #dfe6df — « The spring range is in the shops and online. »
+- `span` 15px/600 #22302a — « Shop the range »
+- _[button type=button aria-expanded=true aria-label="Note 2, in progress, open"]_
+- `button` 13px/600 #18181b — « 2 »
+- _[div role=dialog aria-label="Note 2"]_
+- `span` 13px/600 #18181b — « In progress »
+- _[a href=#]_
+- `a` 12px/ #6b6b74 — « ACM-142 in Linear »
+- _[button type=button aria-label="Close the note"]_
+- `p` 14px/ #18181b — « The button is hard to read on the green. Could it take the cream of the logo, with dark text? »
+- `p` 12px/ #6b6b74 — « Camille Durand · guest · 2 days ago »
+- `p` 11.5px/ #52525b — « HeroBanner · src/components/Hero.tsx:42 »
+- `p` 11px/600 #18181b — « Léa »
+- `p` 11px/ #6b6b74 — « · Sakuga · yesterday »
+- `p` 12px/ #18181b — « Trying the cream variant in the next build. I will mark it done when it is live. »
+- `label` 14px/ #18181b — « Reply »
+- _[textarea placeholder="Reply to Camille"]_
+- _[button type=submit]_
+- `button` 13px/600 #ffffff — « Send »
+- `div` 12px/ #dfe6df — « [hero photo: a walker on a ridge at dawn] »
+- _[button type=button aria-label="Note 4, to do"]_
+- `button` 13px/600 #ffffff — « 4 »
+- `p` 30px/ #22302a — « New this spring »
+- `div` 12px/ #3f4652 — « [product photo] »
+- `p` 16px/ #22302a — « Ridge 28 pack »
+- `div` 12px/ #35483c — « [product photo] »
+- `p` 16px/ #22302a — « Fell shell jacket »
+- `div` 12px/ #5c3a36 — « [product photo] »
+- `p` 16px/ #22302a — « Camp mug, enamel »
+- _[button type=button aria-label="Note 3, done"]_
+- `button` 13px/600 #ffffff — « 3 »
+- `div` 12px/ #44425a — « [product photo] »
+- `p` 16px/ #22302a — « Trail socks, two pairs »
+- _[button type=button aria-label="Fruitback settings"]_
+- _[button type=button]_
+- `button` 13px/600 #ffffff — « Leave feedback »
+
+### 15-widget-leaving-default
+
+- `span` 21px/700 #22302a — « Acme Outdoor »
+- `span` 15px/ #22302a — « Shop »
+- `span` 15px/ #22302a — « Journal »
+- `span` 15px/ #22302a — « Stores »
+- `span` 15px/ #22302a — « Basket (2) »
+- `p` 76px/ #f6f6f3 — « Pack light, walk far. »
+- `p` 13px/600 #ffffff — « 1 »
+- `p` 18px/ #dfe6df — « The spring range is in the shops and online. »
+- `span` 15px/600 #22302a — « Shop the range »
+- `span` 13px/600 #18181b — « 2 »
+- `div` 12px/ #dfe6df — « [hero photo: a walker on a ridge at dawn] »
+- `span` 13px/600 #ffffff — « 4 »
+- `p` 30px/ #22302a — « New this spring »
+- `div` 12px/ #3f4652 — « [product photo] »
+- `p` 16px/ #22302a — « Ridge 28 pack »
+- `div` 12px/ #35483c — « [product photo] »
+- `p` 16px/ #22302a — « Fell shell jacket »
+- `span` 11px/600 #ffffff — « ProductCard »
+- _[form aria-label="New note"]_
+- `span` 13px/600 #18181b — « New note »
+- `span` 12px/ #6b6b74 — « on Fell shell jacket »
+- _[button type=button aria-label="Close without sending"]_
+- `label` 14px/ #18181b — « What should change? »
+- _[textarea placeholder="What should change?"]_
+- `textarea` 14px/inherit #18181b — « The jacket is cut off at the top on every tile of this row. Could the photos sit lower? »
+- _[input type=checkbox checked]_
+- `label` 12px/ #18181b — « Attach a picture of this element »
+- `span` 12px/ #6b6b74 — « As Mathieu, Sakuga »
+- _[button type=button]_
+- `button` 13px/600 #6b6b74 — « Cancel »
+- _[button type=submit]_
+- `button` 13px/600 #ffffff — « Send »
+- `div` 12px/ #5c3a36 — « [product photo] »
+- `p` 16px/ #22302a — « Camp mug, enamel »
+- `span` 13px/600 #ffffff — « 3 »
+- `div` 12px/ #44425a — « [product photo] »
+- `p` 16px/ #22302a — « Trail socks, two pairs »
+- _[div role=status]_
+- `span` 13px/ #ffffff — « Click the part of the page your note is about »
+- `span` 13px/ #a1a1aa — « Esc to stop »
+- _[button type=button]_
+- `button` 13px/600 #ffffff — « Stop »
+- _[button type=button aria-label="Fruitback settings"]_
+- _[button type=button aria-pressed=true]_
+- `button` 13px/600 #ffffff — « Leave feedback »
+
+### 16-widget-all-notes-default
+
+- `span` 21px/700 #22302a — « Acme Outdoor »
+- `span` 15px/ #22302a — « Shop »
+- `span` 15px/ #22302a — « Journal »
+- `span` 15px/ #22302a — « Stores »
+- `span` 15px/ #22302a — « Basket (2) »
+- `p` 68px/ #f6f6f3 — « Pack light, walk far. »
+- `p` 13px/600 #ffffff — « 1 »
+- `p` 18px/ #dfe6df — « The spring range is in the shops and online. »
+- `span` 15px/600 #22302a — « Shop the range »
+- `span` 13px/600 #18181b — « 2 »
+- `div` 12px/ #dfe6df — « [hero photo: a walker on a ridge at dawn] »
+- `span` 13px/600 #ffffff — « 4 »
+- `p` 30px/ #22302a — « New this spring »
+- `div` 12px/ #3f4652 — « [product photo] »
+- `p` 16px/ #22302a — « Ridge 28 pack »
+- `div` 12px/ #35483c — « [product photo] »
+- `p` 16px/ #22302a — « Fell shell jacket »
+- `div` 12px/ #5c3a36 — « [product photo] »
+- `p` 16px/ #22302a — « Camp mug, enamel »
+- `span` 13px/600 #ffffff — « 3 »
+- `h2` 15px/600 #18181b — « Notes on this page »
+- `p` 12px/ #6b6b74 — « staging.acme.dev/ »
+- _[button type=button aria-label="Close the notes"]_
+- _[button type=button]_
+- `button` 13px/600 #ffffff — « Leave feedback »
+- _[div role=tablist aria-label="Which notes"]_
+- _[button type=button role=tab aria-selected=true]_
+- `button` 13px/600 #18181b — « Open 6 »
+- _[button type=button role=tab aria-selected=false]_
+- `button` 13px/600 #52525b — « Done 2 »
+- _[button type=button role=tab aria-selected=false]_
+- `button` 13px/600 #52525b — « All 8 »
+- _[div role=tabpanel]_
+- _[button type=button aria-current=true]_
+- `button` 12px/600 #18181b — « 2 »
+- `button` 14px/ #18181b — « The button is hard to read on the green. Could it take the cream of the logo, with dark text? »
+- `button` 12px/ #6b6b74 — « In progress · Camille Durand · 2 days ago · 1 reply »
+- _[button type=button aria-current=false]_
+- `button` 12px/600 #ffffff — « 1 »
+- `button` 14px/ #18181b — « The headline runs to three lines on a phone. Could it be shorter? »
+- `button` 12px/ #6b6b74 — « New · Mathieu · 1 h ago »
+- _[button type=button aria-current=false]_
+- `button` 12px/600 #ffffff — « 4 »
+- `button` 14px/ #18181b — « The photo crops the walker at the knees on a phone. »
+- `button` 12px/ #6b6b74 — « To do · Marc · yesterday »
+- _[button type=button aria-current=false]_
+- `button` 12px/600 #ffffff — « 5 »
+- `button` 14px/ #18181b — « The basket count does not change after adding the socks. »
+- `button` 12px/ #6b6b74 — « New · Léa · 3 h ago · further down »
+- _[button type=button aria-current=false]_
+- `button` 12px/600 #18181b — « 6 »
+- `button` 14px/ #18181b — « Footer links are tiny on a phone and sit too close together. »
+- `button` 12px/ #6b6b74 — « In progress · Camille Durand · 4 days ago · further down »
+- _[button type=button aria-current=false]_
+- `button` 12px/600 #ffffff — « 7 »
+- `button` 14px/ #18181b — « The size guide opens in a new tab. Keep it on the page? »
+- `button` 12px/ #6b6b74 — « To do · Marc · 5 days ago · further down »
+- `h3` 13px/600 #18181b — « Could not be placed · 1 »
+- `p` 14px/ #18181b — « The promo banner says "Sping" instead of "Spring". »
+- `p` 12px/ #6b6b74 — « Its element is no longer on this page. The note stays here and in Linear. »
+
+### 17-admin-instance-default
+
+- `span` 15px/600 #ffffff — « feedback.acme.dev »
+- `span` 12px/ #a1a1aa — « Self-hosted instance »
+- _[nav aria-label="Instance"]_
+- _[a aria-current=page href=Admin.dc.html]_
+- `a` 15px/600 #ffffff — « Instance »
+- _[a href=Admin-workspaces.dc.html]_
+- `a` 15px/ #d4d4d8 — « Workspaces »
+- _[a href=Admin-users.dc.html]_
+- `a` 15px/ #d4d4d8 — « Users »
+- _[a href=Admin-notes.dc.html]_
+- `a` 15px/ #d4d4d8 — « Notes »
+- _[a href=Sites.dc.html]_
+- `a` 15px/ #d4d4d8 — « My workspaces »
+- _[a href=https://fruitback.com/self-hosting.html]_
+- `a` 14px/ #d4d4d8 — « Self-hosting guide »
+- _[img alt="Fruitback"]_
+- `h1` 28px/700 #18181b — « Instance »
+- `p` 16px/ #6b6b74 — « Everything this server runs, set from here instead of the .env file. A variable set in the environment still wins, and locks its field. »
+- `h2` 18px/700 #18181b — « Health »
+- `dt` 13px/ #6b6b74 — « Worker »
+- `dd` 15px/600 #15803d — « Answering »
+- `dd` 13px/ #6b6b74 — « Up for 12 days »
+- `dt` 13px/ #6b6b74 — « Database »
+- `dd` 15px/600 #18181b — « PostgreSQL »
+- `dd` 13px/ #6b6b74 — « Backed up 4 h ago »
+- `dt` 13px/ #6b6b74 — « Mail »
+- `dd` 15px/600 #18181b — « Scaleway TEM »
+- `dd` 13px/ #6b6b74 — « Last link sent 3 min ago »
+- `dt` 13px/ #6b6b74 — « Connectors »
+- `dd` 15px/600 #dd2c27 — « 1 needs a look »
+- `dd` 13px/ #6b6b74 — « REST API, Acme support »
+- `h2` 18px/700 #18181b — « Sign-in »
+- `p` 14px/ #6b6b74 — « How people get into this instance, in the console and in the extension. »
+- `li` 15px/600 #18181b — « Email link »
+- `li` 13px/ #6b6b74 — « Sent through Scaleway TEM from feedback@acme.dev »
+- _[input type=checkbox role=switch checked aria-label="Email link sign-in"]_
+- `li` 15px/600 #18181b — « GitHub »
+- `li` 13px/ #6b6b74 — « OAuth app set up 3 Sep »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Edit keys »
+- _[input type=checkbox role=switch checked aria-label="GitHub sign-in"]_
+- `li` 15px/600 #18181b — « Google »
+- `li` 13px/ #6b6b74 — « Not set up yet »
+- `label` 13px/600 #18181b — « Client ID »
+- _[input type=text placeholder="1234-abc.apps.googleusercontent.com"]_
+- `label` 13px/600 #18181b — « Client secret »
+- _[input type=password placeholder="Paste it here"]_
+- `li` 13px/ #6b6b74 — « Redirect address to give Google: »
+- `code` 12px/ #18181b — « https://feedback.acme.dev/console/auth/callback/google »
+- _[button type=button]_
+- `button` 13px/600 #18181b — « Copy »
+- _[button type=submit]_
+- `button` 14px/600 #ffffff — « Turn on Google »
+- `legend` 15px/600 #18181b — « Who can make an account »
+- _[input type=radio name=signup]_
+- `label` 15px/ #18181b — « Only people invited to a workspace »
+- _[input type=radio name=signup checked]_
+- `label` 15px/ #18181b — « Anyone with an address at acme.dev, and people invited »
+- _[input type=radio name=signup]_
+- `label` 15px/ #18181b — « Anyone »
+- `label` 13px/600 #18181b — « Public address »
+- _[input type=url readonly value="https://feedback.acme.dev"]_
+- `label` 13px/400 #6b6b74 — « Set by FRUITBACK_PUBLIC_URL in the environment. »
+- `h2` 18px/700 #18181b — « Workspaces »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « New workspace »
+- `th` 13px/600 #6b6b74 — « Name »
+- `th` 13px/600 #6b6b74 — « Owner »
+- `th` 13px/600 #6b6b74 — « Members »
+- `th` 13px/600 #6b6b74 — « Sites »
+- `th` 13px/600 #6b6b74 — « Created »
+- `td` 14px/600 #18181b — « Acme web »
+- `td` 14px/ #18181b — « nadia@acme.dev »
+- `td` 14px/ #18181b — « 6 »
+- `td` 14px/ #18181b — « 3 »
+- `td` 14px/ #6b6b74 — « 3 Sep »
+- `td` 14px/600 #18181b — « Acme support »
+- `td` 14px/ #18181b — « tom@acme.dev »
+- `td` 14px/ #18181b — « 2 »
+- `td` 14px/ #18181b — « 1 »
+- `td` 14px/ #6b6b74 — « 18 Sep »
+- `td` 14px/600 #18181b — « Lumen »
+- `td` 14px/ #18181b — « paul@lumen.studio »
+- `td` 14px/ #18181b — « 1 »
+- `td` 14px/ #18181b — « 1 »
+- `td` 14px/ #6b6b74 — « 12 Oct »
+
+### 18-admin-workspaces-default
+
+- `span` 15px/600 #ffffff — « feedback.acme.dev »
+- `span` 12px/ #a1a1aa — « Self-hosted instance »
+- _[nav aria-label="Instance"]_
+- _[a href=Admin.dc.html]_
+- `a` 15px/ #d4d4d8 — « Instance »
+- _[a aria-current=page href=Admin-workspaces.dc.html]_
+- `a` 15px/600 #ffffff — « Workspaces »
+- _[a href=Admin-users.dc.html]_
+- `a` 15px/ #d4d4d8 — « Users »
+- _[a href=Admin-notes.dc.html]_
+- `a` 15px/ #d4d4d8 — « Notes »
+- _[a href=Sites.dc.html]_
+- `a` 15px/ #d4d4d8 — « My workspaces »
+- _[a href=https://fruitback.com/self-hosting.html]_
+- `a` 14px/ #d4d4d8 — « Self-hosting guide »
+- _[img alt="Fruitback"]_
+- `h1` 28px/700 #18181b — « Workspaces »
+- `p` 16px/ #6b6b74 — « Every workspace on this instance, who owns it and where its notes go. »
+- _[button type=button]_
+- `button` 14px/600 #ffffff — « New workspace »
+- `label` / #18181b — « Search workspaces »
+- _[input type=search placeholder="Search by name or owner"]_
+- `label` / #18181b — « Show »
+- _[select]_
+- `option` 14px/inherit #18181b — « All workspaces »
+- `option` 14px/inherit #18181b — « Needs a look »
+- `option` 14px/inherit #18181b — « Suspended »
+- `th` 13px/600 #6b6b74 — « Workspace »
+- `th` 13px/600 #6b6b74 — « Owner »
+- `th` 13px/600 #6b6b74 — « Notes »
+- `th` 13px/600 #6b6b74 — « Notes go to »
+- _[a aria-current=false href=#]_
+- `a` 14px/600 #18181b — « Acme web »
+- `td` 13px/ #6b6b74 — « 6 people · 3 sites »
+- `td` 14px/ #18181b — « nadia@acme.dev »
+- `td` 14px/600 #18181b — « 112 »
+- _[span role=img aria-label="112 notes: 14 new, 22 to do, 18 in progress, 49 done, 9 closed"]_
+- `td` 14px/ #18181b — « Linear, GitHub Issues »
+- _[a aria-current=true href=#]_
+- `a` 14px/600 #18181b — « Acme support »
+- `td` 13px/ #6b6b74 — « 2 people · 1 site »
+- `td` 14px/ #18181b — « tom@acme.dev »
+- `td` 14px/600 #18181b — « 23 »
+- _[span role=img aria-label="23 notes: 5 new, 6 to do, 4 in progress, 7 done, 1 closed"]_
+- `td` 14px/ #18181b — « REST API »
+- `td` 13px/600 #dd2c27 — « 2 notes not delivered »
+- _[a aria-current=false href=#]_
+- `a` 14px/600 #18181b — « Lumen »
+- `td` 13px/ #6b6b74 — « 1 person · 1 site »
+- `td` 14px/ #18181b — « paul@lumen.studio »
+- `td` 14px/600 #18181b — « 1 »
+- _[span role=img aria-label="1 notes: 1 new, 0 to do, 0 in progress, 0 done, 0 closed"]_
+- `td` 14px/ #18181b — « Kept in Fruitback »
+- `h2` 18px/700 #18181b — « Acme support »
+- `p` 13px/ #6b6b74 — « Owned by tom@acme.dev · created 18 Sep »
+- `h3` 14px/600 #18181b — « Where notes go »
+- `p` 14px/600 #18181b — « REST API »
+- `p` 14px/ #6b6b74 — « hooks.acme.dev/fruitback »
+- _[p role=alert]_
+- `p` 13px/600 #dd2c27 — « 2 notes not delivered. »
+- `p` 13px/ #18181b — « The address answered 503 at 09:12 and 09:40. »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Send them again »
+- _[a href=Admin-notes.dc.html]_
+- `a` 14px/600 #18181b — « See the notes »
+- `h3` 14px/600 #18181b — « People · 2 »
+- `li` 14px/ #18181b — « Tom Marchal »
+- `li` 14px/ #6b6b74 — « Owner »
+- `li` 14px/ #18181b — « Nadia Benali »
+- `li` 14px/ #6b6b74 — « Member »
+- _[a href=Admin-users.dc.html]_
+- `a` 14px/600 #18181b — « Manage in Users »
+- `h3` 14px/600 #18181b — « Sites · 1 »
+- `li` 14px/600 #18181b — « support.acme.dev »
+- `li` 14px/ #6b6b74 — « Everyone who visits »
+- `label` 13px/600 #18181b — « Owner »
+- _[select]_
+- `option` 14px/400 #18181b — « Tom Marchal, tom@acme.dev »
+- `option` 14px/400 #18181b — « Nadia Benali, nadia@acme.dev »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Suspend »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Delete the workspace »
+
+### 19-admin-users-default
+
+- `span` 15px/600 #ffffff — « feedback.acme.dev »
+- `span` 12px/ #a1a1aa — « Self-hosted instance »
+- _[nav aria-label="Instance"]_
+- _[a href=Admin.dc.html]_
+- `a` 15px/ #d4d4d8 — « Instance »
+- _[a href=Admin-workspaces.dc.html]_
+- `a` 15px/ #d4d4d8 — « Workspaces »
+- _[a aria-current=page href=Admin-users.dc.html]_
+- `a` 15px/600 #ffffff — « Users »
+- _[a href=Admin-notes.dc.html]_
+- `a` 15px/ #d4d4d8 — « Notes »
+- _[a href=Sites.dc.html]_
+- `a` 15px/ #d4d4d8 — « My workspaces »
+- _[a href=https://fruitback.com/self-hosting.html]_
+- `a` 14px/ #d4d4d8 — « Self-hosting guide »
+- _[img alt="Fruitback"]_
+- `h1` 28px/700 #18181b — « Users »
+- `p` 16px/ #6b6b74 — « Everyone who can sign in to this instance, and in which workspaces. »
+- _[button type=button]_
+- `button` 14px/600 #ffffff — « Invite someone »
+- `label` / #18181b — « Search people »
+- _[input type=search placeholder="Search by name or address"]_
+- `label` / #18181b — « Show »
+- _[select]_
+- `option` 14px/inherit #18181b — « All people · 8 »
+- `option` 14px/inherit #18181b — « Instance admins · 1 »
+- `option` 14px/inherit #18181b — « Suspended · 1 »
+- `option` 14px/inherit #18181b — « Invited · 1 »
+- `th` 13px/600 #6b6b74 — « Person »
+- `th` 13px/600 #6b6b74 — « Workspaces »
+- `th` 13px/600 #6b6b74 — « Signs in with »
+- `th` 13px/600 #6b6b74 — « Status »
+- `td` 13px/700 #ffffff — « N »
+- _[a aria-current=false href=#]_
+- `a` 14px/600 #18181b — « Nadia Benali »
+- `td` 13px/ #6b6b74 — « nadia@acme.dev »
+- `td` 14px/ #18181b — « Acme web · owner Acme support · member »
+- `td` 14px/ #52525b — « Email link, GitHub »
+- `td` 14px/600 #18181b — « Instance admin »
+- `td` 13px/ #6b6b74 — « Active now »
+- `td` 13px/700 #ffffff — « T »
+- _[a aria-current=false href=#]_
+- `a` 14px/600 #18181b — « Tom Marchal »
+- `td` 13px/ #6b6b74 — « tom@acme.dev »
+- `td` 14px/ #18181b — « Acme support · owner Acme web · member »
+- `td` 14px/ #52525b — « Email link »
+- `td` 14px/600 #15803d — « Active »
+- `td` 13px/ #6b6b74 — « 2 h ago »
+- `td` 13px/700 #ffffff — « I »
+- _[a aria-current=false href=#]_
+- `a` 14px/600 #18181b — « Inès Roux »
+- `td` 13px/ #6b6b74 — « ines@acme.dev »
+- `td` 14px/ #18181b — « Acme web · admin »
+- `td` 14px/ #52525b — « Google »
+- `td` 14px/600 #15803d — « Active »
+- `td` 13px/ #6b6b74 — « Yesterday »
+- `td` 13px/700 #ffffff — « M »
+- _[a aria-current=false href=#]_
+- `a` 14px/600 #18181b — « Malik Haddad »
+- `td` 13px/ #6b6b74 — « malik@acme.dev »
+- `td` 14px/ #18181b — « Acme web · member »
+- `td` 14px/ #52525b — « GitHub »
+- `td` 14px/600 #15803d — « Active »
+- `td` 13px/ #6b6b74 — « 4 days ago »
+- `td` 13px/700 #ffffff — « C »
+- _[a aria-current=false href=#]_
+- `a` 14px/600 #18181b — « Camille Durand »
+- `td` 13px/ #6b6b74 — « camille@client.fr »
+- `td` 14px/ #18181b — « Acme web · guest staging.acme.dev only »
+- `td` 14px/ #52525b — « Email link »
+- `td` 14px/600 #15803d — « Active »
+- `td` 13px/ #6b6b74 — « 2 days ago »
+- `td` 13px/700 #ffffff — « H »
+- _[a aria-current=true href=#]_
+- `a` 14px/600 #18181b — « Hugo Petit »
+- `td` 13px/ #6b6b74 — « hugo@acme.dev »
+- `td` 14px/ #18181b — « Acme web · member »
+- `td` 14px/ #52525b — « Email link »
+- `td` 14px/600 #dd2c27 — « Suspended »
+- `td` 13px/ #6b6b74 — « Since 30 Sep »
+- `td` 13px/700 #ffffff — « P »
+- _[a aria-current=false href=#]_
+- `a` 14px/600 #18181b — « Paul Lemaire »
+- `td` 13px/ #6b6b74 — « paul@lumen.studio »
+- `td` 14px/ #18181b — « Lumen · owner »
+- `td` 14px/ #52525b — « Email link »
+- `td` 14px/600 #15803d — « Active »
+- `td` 13px/ #6b6b74 — « Yesterday »
+- `td` 13px/700 #6b6b74 — « S »
+- _[a aria-current=false href=#]_
+- `a` 14px/600 #18181b — « sara@acme.dev »
+- `td` 13px/ #6b6b74 — « Invitation sent 10 Oct »
+- `td` 14px/ #18181b — « Acme support · member »
+- `td` 14px/ #52525b — « Not signed in yet »
+- `td` 14px/600 #6b6b74 — « Invited »
+- `td` 13px/ #6b6b74 — « Resend »
+- `h2` 18px/700 #18181b — « Hugo Petit »
+- `p` 13px/ #6b6b74 — « hugo@acme.dev »
+- _[p role=status]_
+- `p` 14px/600 #dd2c27 — « Suspended »
+- `p` 14px/ #18181b — « on 30 Sep by Nadia Benali. Hugo cannot sign in, and his browsers were signed out. »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Restore access »
+- `h3` 14px/600 #18181b — « Workspaces »
+- `span` 14px/600 #18181b — « Acme web »
+- `label` 14px/ #18181b — « Role in Acme web »
+- _[select]_
+- `option` 14px/inherit #18181b — « Member »
+- `option` 14px/inherit #18181b — « Admin »
+- `option` 14px/inherit #18181b — « Guest »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Add to a workspace »
+- `h3` 14px/600 #18181b — « Sign-in »
+- `li` 14px/ #18181b — « Email link »
+- `li` 14px/ #6b6b74 — « hugo@acme.dev »
+- `li` 14px/ #18181b — « Browsers signed in »
+- `li` 14px/ #6b6b74 — « None »
+- `label` 14px/600 #18181b — « Instance admin »
+- `label` 13px/ #6b6b74 — « Sees this admin and every workspace. »
+- _[input type=checkbox role=switch]_
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Delete Hugo's account »
+- `p` 13px/ #6b6b74 — « His notes stay where they are, signed as a former member. »
+
+### 20-admin-notes-default
+
+- `span` 15px/600 #ffffff — « feedback.acme.dev »
+- `span` 12px/ #a1a1aa — « Self-hosted instance »
+- _[nav aria-label="Instance"]_
+- _[a href=Admin.dc.html]_
+- `a` 15px/ #d4d4d8 — « Instance »
+- _[a href=Admin-workspaces.dc.html]_
+- `a` 15px/ #d4d4d8 — « Workspaces »
+- _[a href=Admin-users.dc.html]_
+- `a` 15px/ #d4d4d8 — « Users »
+- _[a aria-current=page href=Admin-notes.dc.html]_
+- `a` 15px/600 #ffffff — « Notes »
+- _[a href=Sites.dc.html]_
+- `a` 15px/ #d4d4d8 — « My workspaces »
+- _[a href=https://fruitback.com/self-hosting.html]_
+- `a` 14px/ #d4d4d8 — « Self-hosting guide »
+- _[img alt="Fruitback"]_
+- `h1` 28px/700 #18181b — « Notes »
+- `p` 16px/ #6b6b74 — « Every note left on this instance, and where it is stored now. »
+- _[div role=group aria-label="Where notes are stored"]_
+- _[button type=button aria-pressed=true]_
+- `button` 13px/600 #ffffff — « All »
+- `button` 13px/400 #d4d4d8 — « 136 »
+- _[button type=button aria-pressed=false]_
+- `button` 13px/600 #18181b — « Linear »
+- `button` 13px/400 #6b6b74 — « 84 »
+- _[button type=button aria-pressed=false]_
+- `button` 13px/600 #18181b — « GitHub Issues »
+- `button` 13px/400 #6b6b74 — « 28 »
+- _[button type=button aria-pressed=false]_
+- `button` 13px/600 #18181b — « REST API »
+- `button` 13px/400 #6b6b74 — « 21 »
+- _[button type=button aria-pressed=false]_
+- `button` 13px/600 #18181b — « In Fruitback »
+- `button` 13px/400 #6b6b74 — « 3 »
+- _[button type=button aria-pressed=false]_
+- `button` 13px/600 #dd2c27 — « Not delivered »
+- `button` 13px/400 #6b6b74 — « 2 »
+- `label` / #18181b — « Search notes »
+- _[input type=search placeholder="Search the text, the page or the author"]_
+- `label` / #18181b — « Workspace »
+- _[select]_
+- `option` 14px/inherit #18181b — « Every workspace »
+- `option` 14px/inherit #18181b — « Acme web »
+- `option` 14px/inherit #18181b — « Acme support »
+- `option` 14px/inherit #18181b — « Lumen »
+- `label` / #18181b — « Status »
+- _[select]_
+- `option` 14px/inherit #18181b — « Any status »
+- `option` 14px/inherit #18181b — « New »
+- `option` 14px/inherit #18181b — « To do »
+- `option` 14px/inherit #18181b — « In progress »
+- `option` 14px/inherit #18181b — « Done »
+- `option` 14px/inherit #18181b — « Closed »
+- `th` 13px/600 #6b6b74 — « Note »
+- `th` 13px/600 #6b6b74 — « Status »
+- `th` 13px/600 #6b6b74 — « Left by »
+- `th` 13px/600 #6b6b74 — « Stored in »
+- `th` 13px/600 #6b6b74 — « When »
+- `td` 14px/ #18181b — « The order form rejects postcodes with a space. »
+- `td` 13px/ #6b6b74 — « support.acme.dev/contact »
+- `td` 13px/ #6b6b74 — « · »
+- `td` 13px/ #6b6b74 — « Acme support »
+- `td` 14px/ #18181b — « New »
+- `td` 14px/ #18181b — « Visitor »
+- `td` 13px/ #6b6b74 — « Anonymous »
+- `td` 14px/600 #18181b — « In Fruitback »
+- `td` 13px/600 #dd2c27 — « Not delivered to REST API »
+- _[button type=button]_
+- `button` 13px/600 #18181b — « Send again »
+- `td` 14px/ #6b6b74 — « 40 min ago »
+- `td` 14px/ #18181b — « The headline runs to three lines on a phone. Could it be shorter? »
+- `td` 13px/ #6b6b74 — « staging.acme.dev/ »
+- `td` 13px/ #6b6b74 — « · »
+- `td` 13px/ #6b6b74 — « Acme web »
+- `td` 14px/ #18181b — « New »
+- `td` 14px/ #18181b — « Inès Roux »
+- `td` 13px/ #6b6b74 — « Admin »
+- `td` 14px/600 #18181b — « Linear »
+- _[a href=#]_
+- `a` 13px/ #18181b — « ACM-151 »
+- `td` 14px/ #6b6b74 — « 1 h ago »
+- `td` 14px/ #18181b — « The returns policy says "recieve". »
+- `td` 13px/ #6b6b74 — « acme.dev/help/returns »
+- `td` 13px/ #6b6b74 — « · »
+- `td` 13px/ #6b6b74 — « Acme web »
+- `td` 14px/ #18181b — « To do »
+- `td` 14px/ #18181b — « Visitor »
+- `td` 13px/ #6b6b74 — « Anonymous »
+- `td` 14px/600 #18181b — « GitHub Issues »
+- _[a href=#]_
+- `a` 13px/ #18181b — « acme/website#91 »
+- `td` 14px/ #6b6b74 — « 3 h ago »
+- `td` 14px/ #18181b — « The checkout button sits under the cookie banner. »
+- `td` 13px/ #6b6b74 — « acme.dev/checkout »
+- `td` 13px/ #6b6b74 — « · »
+- `td` 13px/ #6b6b74 — « Acme web »
+- `td` 14px/ #18181b — « To do »
+- `td` 14px/ #18181b — « Visitor »
+- `td` 13px/ #6b6b74 — « Verified by acme.dev »
+- `td` 14px/600 #18181b — « GitHub Issues »
+- _[a href=#]_
+- `a` 13px/ #18181b — « acme/website#88 »
+- `td` 14px/ #6b6b74 — « Yesterday »
+- `td` 14px/ #18181b — « The hero video does not play on Safari. »
+- `td` 13px/ #6b6b74 — « preview.lumen.studio/ »
+- `td` 13px/ #6b6b74 — « · »
+- `td` 13px/ #6b6b74 — « Lumen »
+- `td` 14px/ #18181b — « New »
+- `td` 14px/ #18181b — « Paul Lemaire »
+- `td` 13px/ #6b6b74 — « Owner »
+- `td` 14px/600 #18181b — « In Fruitback »
+- `td` 13px/ #6b6b74 — « No tracker connected »
+- `td` 14px/ #6b6b74 — « Yesterday »
+- `td` 14px/ #18181b — « The button is hard to read on the green. Could it take the cream of the logo, with dark text? »
+- `td` 13px/ #6b6b74 — « staging.acme.dev/ »
+- `td` 13px/ #6b6b74 — « · »
+- `td` 13px/ #6b6b74 — « Acme web »
+- `td` 14px/ #18181b — « In progress »
+- `td` 14px/ #18181b — « Camille Durand »
+- `td` 13px/ #6b6b74 — « Guest »
+- `td` 14px/600 #18181b — « Linear »
+- _[a href=#]_
+- `a` 13px/ #18181b — « ACM-142 »
+- `td` 14px/ #6b6b74 — « 2 days ago »
+- `td` 14px/ #18181b — « The mug is cut off at the top on every tile of this row. »
+- `td` 13px/ #6b6b74 — « staging.acme.dev/shop »
+- `td` 13px/ #6b6b74 — « · »
+- `td` 13px/ #6b6b74 — « Acme web »
+- `td` 14px/ #18181b — « Done »
+- `td` 14px/ #18181b — « Tom Marchal »
+- `td` 13px/ #6b6b74 — « Member »
+- `td` 14px/600 #18181b — « Linear »
+- _[a href=#]_
+- `a` 13px/ #18181b — « ACM-120 »
+- `td` 14px/ #6b6b74 — « 6 days ago »
+- `td` 14px/ #18181b — « The logo looks blurry on a retina screen. »
+- `td` 13px/ #6b6b74 — « staging.acme.dev/ »
+- `td` 13px/ #6b6b74 — « · »
+- `td` 13px/ #6b6b74 — « Acme web »
+- `td` 14px/ #18181b — « Closed »
+- `td` 14px/ #18181b — « Malik Haddad »
+- `td` 13px/ #6b6b74 — « Member »
+- `td` 14px/600 #18181b — « Linear »
+- _[a href=#]_
+- `a` 13px/ #18181b — « ACM-98 »
+- `td` 14px/ #6b6b74 — « 2 weeks ago »
+- _[nav aria-label="Pages of notes"]_
+- `span` 14px/ #6b6b74 — « 1 to 8 of 136 »
+- _[button type=button disabled]_
+- `button` 14px/600 #18181b — « Previous »
+- _[button type=button]_
+- `button` 14px/600 #18181b — « Next »

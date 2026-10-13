@@ -1,6 +1,7 @@
 import type { AccountStore } from './accounts.ts';
 import { previewPattern, proofState } from './domain-proof.ts';
 import { readBearerToken, verifyIdentityToken } from './identity.ts';
+import { type NoteIndex, noNotes } from './notes-index.ts';
 
 /**
  * The sites of the workspace a session belongs to (FRU-101, the first step of it).
@@ -27,6 +28,7 @@ export async function handleSessionSites(
   secret: string,
   headers: Record<string, string>,
   now?: number,
+  noteIndex?: NoteIndex,
 ): Promise<Response> {
   if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
 
@@ -54,6 +56,15 @@ export async function handleSessionSites(
   const proven = (await accounts.domains(workspaceId)).filter(
     (domain) => domain.previewsSite !== undefined && proofState(domain, instant) === 'proven',
   );
+  // FRU-237: what the popup counts on a site (06, 07). What did not arrive stays in the console.
+  // An index that does not answer costs the counts, never the sites.
+  const notes = await noteIndex?.summary(workspaceId).catch((error: unknown) => {
+    console.error(
+      `[fruitback] the index of the notes did not answer: ${error instanceof Error ? error.message : String(error)}`,
+    );
+
+    return undefined;
+  });
   const previewsOf = (site: string): string[] =>
     proven.filter((domain) => domain.previewsSite === site).map((domain) => previewPattern(domain.domain));
 
@@ -70,6 +81,7 @@ export async function handleSessionSites(
           origin: site.origin,
           visibility: site.visibility,
           ...(previews.length === 0 ? {} : { previews }),
+          ...(notes === undefined ? {} : (notes.get(site.id) ?? noNotes())),
         };
       }),
     },

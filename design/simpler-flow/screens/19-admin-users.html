@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>Users, instance admin</title>
+<script src="../assets/654b7f6201e7e08c.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#fff}
+::selection{background:#18181b;color:#fff}
+::placeholder{color:#6b6b74;opacity:1}
+input{caret-color:#dd2c27}
+:focus-visible{outline:2px solid #dd2c27;outline-offset:2px}
+.rail :focus-visible{outline-color:#ec5b57}
+a{color:#18181b;text-decoration-thickness:1px;text-underline-offset:3px}
+a:hover{color:#b91c1c}
+button,select{cursor:pointer}
+.num{font-variant-numeric:tabular-nums}
+.b-accent:hover{background:#b91c1c !important}
+.b-wide:hover{background:#fafafa !important;border-color:#18181b !important}
+.b-link:hover{color:#b91c1c !important}
+.nav-link:hover{background:#27272a !important;color:#ffffff !important}
+.rail-nav{display:flex;flex-direction:column;gap:2px}
+@media (max-width: 900px){.rail-nav{flex-direction:row;overflow-x:auto}.rail-foot{display:none !important}}
+.scroll{scrollbar-width:thin;scrollbar-color:#8a8a93 transparent}
+.switch{appearance:none;-webkit-appearance:none;width:40px;height:24px;border-radius:999px;background:#8a8a93;position:relative;margin:0;cursor:pointer;flex:none}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .22s cubic-bezier(.16,1,.3,1)}
+.switch:checked{background:#18181b}
+.switch:checked::after{transform:translateX(16px)}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #ffffff; color: #18181b; font-family: -apple-system, system-ui, sans-serif; -webkit-font-smoothing: antialiased">
+
+  <aside class="rail" style="flex: 1 1 248px; box-sizing: border-box; padding: 16px 12px; background: #18181b; color: #ffffff; display: flex; flex-direction: column; gap: 20px">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 8px">
+      <span aria-hidden="true" style="width: 32px; height: 32px; flex: none; border-radius: 8px; border: 1px solid #52525b; box-sizing: border-box; display: flex; align-items: center; justify-content: center"><svg sc-camel-view-box="16 6 96 116" style="width: 13px; height: 16px"><path d="M 64 121.9 L 30.1 87.9 A 48 48 0 1 1 97.9 87.9 Z M 64 37 A 17 17 0 1 0 64 71 A 17 17 0 1 0 64 37 Z" fill="#ec5b57" fill-rule="evenodd"></path></svg></span>
+      <span style="min-width: 0">
+        <span style="display: block; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">feedback.acme.dev</span>
+        <span style="display: block; font-size: 12px; color: #a1a1aa">Self-hosted instance</span>
+      </span>
+    </div>
+    <nav aria-label="Instance" class="rail-nav">
+      <a href="Admin.dc.html" class="nav-link" style="display: flex; align-items: center; min-height: 40px; padding: 0 12px 0 31px; border-radius: 10px; color: #d4d4d8; font-size: 15px; text-decoration: none; white-space: nowrap">Instance</a>
+      <a href="Admin-workspaces.dc.html" class="nav-link" style="display: flex; align-items: center; min-height: 40px; padding: 0 12px 0 31px; border-radius: 10px; color: #d4d4d8; font-size: 15px; text-decoration: none; white-space: nowrap">Workspaces</a>
+      <a href="Admin-users.dc.html" aria-current="page" style="display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px; border-radius: 10px; background: #27272a; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; white-space: nowrap"><span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #ec5b57"></span>Users</a>
+      <a href="Admin-notes.dc.html" class="nav-link" style="display: flex; align-items: center; min-height: 40px; padding: 0 12px 0 31px; border-radius: 10px; color: #d4d4d8; font-size: 15px; text-decoration: none; white-space: nowrap">Notes</a>
+      <a href="Sites.dc.html" class="nav-link" style="display: flex; align-items: center; min-height: 40px; padding: 0 12px 0 31px; border-radius: 10px; color: #d4d4d8; font-size: 15px; text-decoration: none; white-space: nowrap">My workspaces</a>
+    </nav>
+    <div class="rail-foot" style="margin-top: auto; padding: 8px; display: flex; flex-direction: column; gap: 14px">
+      <a href="https://fruitback.com/self-hosting.html" style="color: #d4d4d8; font-size: 14px">Self-hosting guide</a>
+      <img src="../assets/7878e337d78a3a6d.svg" alt="Fruitback" style="height: 16px; width: 82px; display: block">
+    </div>
+  </aside>
+
+  <div style="flex: 999 1 640px; min-width: 0">
+    <main style="max-width: 1240px; box-sizing: border-box; padding: 40px clamp(16px, 4vw, 48px) 72px">
+      <header style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 24px; margin-bottom: 24px">
+        <div style="min-width: 0">
+          <h1 style="margin: 0 0 6px; font-size: 28px; line-height: 1.15; font-weight: 700; letter-spacing: -0.02em">Users</h1>
+          <p style="margin: 0; font-size: 16px; line-height: 1.5; color: #6b6b74">Everyone who can sign in to this instance, and in which workspaces.</p>
+        </div>
+        <button type="button" class="b-accent" style="height: 44px; padding: 0 22px; border: 0; border-radius: 999px; background: #dd2c27; color: #ffffff; font: inherit; font-size: 14px; font-weight: 600">Invite someone</button>
+      </header>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px">
+        <label style="flex: 999 1 260px; display: flex"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search people</span>
+          <input type="search" placeholder="Search by name or address" style="flex: 1; height: 40px; box-sizing: border-box; border: 1px solid #8a8a93; border-radius: 8px; padding: 0 12px; font: inherit; font-size: 14px; color: #18181b; background: #ffffff">
+        </label>
+        <label style="flex: 1 1 200px; display: flex"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Show</span>
+          <sc-raw-select style="flex: 1; height: 40px; box-sizing: border-box; border: 1px solid #8a8a93; border-radius: 8px; padding: 0 10px; font: inherit; font-size: 14px; color: #18181b; background: #ffffff">
+            <option>All people · 8</option>
+            <option>Instance admins · 1</option>
+            <option>Suspended · 1</option>
+            <option>Invited · 1</option>
+          </sc-raw-select>
+        </label>
+      </div>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start">
+        <div class="scroll" style="flex: 999 1 560px; min-width: 0; border: 1px solid #e4e4e7; border-radius: 14px; overflow-x: auto">
+          <sc-raw-table style="width: 100%; min-width: 700px; border-collapse: collapse; font-size: 14px; line-height: 1.45">
+            <sc-raw-thead>
+              <sc-raw-tr style="text-align: left; font-size: 13px; color: #6b6b74">
+                <sc-raw-th scope="col" style="padding: 12px 20px; font-weight: 600; border-bottom: 1px solid #e4e4e7">Person</sc-raw-th>
+                <sc-raw-th scope="col" style="padding: 12px 16px; font-weight: 600; border-bottom: 1px solid #e4e4e7">Workspaces</sc-raw-th>
+                <sc-raw-th scope="col" style="padding: 12px 16px; font-weight: 600; border-bottom: 1px solid #e4e4e7">Signs in with</sc-raw-th>
+                <sc-raw-th scope="col" style="padding: 12px 20px 12px 16px; font-weight: 600; border-bottom: 1px solid #e4e4e7">Status</sc-raw-th>
+              </sc-raw-tr>
+            </sc-raw-thead>
+            <sc-raw-tbody>
+              <sc-for list="{{ people }}" as="p" hint-placeholder-count="7">
+                <sc-raw-tr style="background: {{ p.bg }}">
+                  <sc-raw-td style="padding: 12px 20px; border-bottom: 1px solid #e4e4e7">
+                    <span style="display: flex; align-items: center; gap: 12px">
+                      <span aria-hidden="true" style="width: 32px; height: 32px; flex: none; border-radius: 999px; background: {{ p.avatarBg }}; color: {{ p.avatarFg }}; border: 1px solid #e4e4e7; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700">{{ p.initial }}</span>
+                      <span style="min-width: 0">
+                        <a href="#" aria-current="{{ p.current }}" style="display: block; font-weight: 600; text-decoration: none">{{ p.name }}</a>
+                        <span style="display: block; font-size: 13px; color: #6b6b74">{{ p.email }}</span>
+                      </span>
+                    </span>
+                  </sc-raw-td>
+                  <sc-raw-td style="padding: 12px 16px; border-bottom: 1px solid #e4e4e7; white-space: pre-line">{{ p.workspaces }}</sc-raw-td>
+                  <sc-raw-td style="padding: 12px 16px; border-bottom: 1px solid #e4e4e7; color: #52525b">{{ p.signin }}</sc-raw-td>
+                  <sc-raw-td style="padding: 12px 20px 12px 16px; border-bottom: 1px solid #e4e4e7">
+                    <span style="display: block; font-weight: 600; color: {{ p.statusColor }}">{{ p.status }}</span>
+                    <span class="num" style="display: block; font-size: 13px; color: #6b6b74">{{ p.seen }}</span>
+                  </sc-raw-td>
+                </sc-raw-tr>
+              </sc-for>
+            </sc-raw-tbody>
+          </sc-raw-table>
+        </div>
+
+        <aside aria-labelledby="user-panel" style="flex: 1 1 340px; min-width: 0; max-width: 100%; border: 1px solid #e4e4e7; border-radius: 14px; background: #fafafa">
+          <div style="padding: 20px 22px; border-bottom: 1px solid #e4e4e7">
+            <h2 id="user-panel" style="margin: 0; font-size: 18px; font-weight: 700">Hugo Petit</h2>
+            <p style="margin: 2px 0 0; font-size: 13px; color: #6b6b74">hugo@acme.dev</p>
+          </div>
+          <div style="padding: 20px 22px; display: flex; flex-direction: column; gap: 22px">
+            <section style="display: flex; flex-direction: column; gap: 10px">
+              <p role="status" style="margin: 0; font-size: 14px; line-height: 1.5"><span style="font-weight: 600; color: #dd2c27">Suspended</span> on 30 Sep by Nadia Benali. Hugo cannot sign in, and his browsers were signed out.</p>
+              <div><button type="button" class="b-wide" style="height: 40px; padding: 0 14px; border: 1px solid #8a8a93; border-radius: 6px; background: #ffffff; color: #18181b; font: inherit; font-size: 14px; font-weight: 600">Restore access</button></div>
+            </section>
+            <section>
+              <h3 style="margin: 0 0 8px; font-size: 14px; font-weight: 600">Workspaces</h3>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #e4e4e7; font-size: 14px">
+                <span style="font-weight: 600">Acme web</span>
+                <label style="display: flex"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Role in Acme web</span>
+                  <sc-raw-select style="height: 36px; box-sizing: border-box; border: 1px solid #8a8a93; border-radius: 8px; padding: 0 8px; font: inherit; font-size: 14px; color: #18181b; background: #ffffff">
+                    <option>Member</option>
+                    <option>Admin</option>
+                    <option>Guest</option>
+                  </sc-raw-select>
+                </label>
+              </div>
+              <button type="button" class="b-link" style="margin-top: 6px; border: 0; background: none; padding: 8px 0; font: inherit; font-size: 14px; font-weight: 600; color: #18181b; text-decoration: underline; text-underline-offset: 3px">Add to a workspace</button>
+            </section>
+            <section>
+              <h3 style="margin: 0 0 8px; font-size: 14px; font-weight: 600">Sign-in</h3>
+              <ul style="list-style: none; margin: 0; padding: 0; font-size: 14px">
+                <li style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #e4e4e7"><span>Email link</span><span style="color: #6b6b74">hugo@acme.dev</span></li>
+                <li style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #e4e4e7"><span>Browsers signed in</span><span class="num" style="color: #6b6b74">None</span></li>
+              </ul>
+            </section>
+            <label style="display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 14px; cursor: pointer"><span><span style="display: block; font-weight: 600">Instance admin</span><span style="display: block; font-size: 13px; color: #6b6b74">Sees this admin and every workspace.</span></span><input type="checkbox" role="switch" class="switch"></label>
+          </div>
+          <div style="padding: 14px 22px; border-top: 1px solid #e4e4e7; display: flex; flex-direction: column; gap: 4px">
+            <button type="button" class="b-link" style="align-self: flex-start; border: 0; background: none; padding: 8px 0; font: inherit; font-size: 14px; font-weight: 600; color: #18181b; text-decoration: underline; text-underline-offset: 3px">Delete Hugo's account</button>
+            <p style="margin: 0; font-size: 13px; line-height: 1.5; color: #6b6b74">His notes stay where they are, signed as a former member.</p>
+          </div>
+        </aside>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:1040}}">
+class Component extends DCLogic {
+  renderVals() {
+    const raw = [
+      { name: 'Nadia Benali', email: 'nadia@acme.dev', workspaces: 'Acme web · owner\nAcme support · member', signin: 'Email link, GitHub', status: 'Instance admin', statusColor: '#18181b', seen: 'Active now' },
+      { name: 'Tom Marchal', email: 'tom@acme.dev', workspaces: 'Acme support · owner\nAcme web · member', signin: 'Email link', status: 'Active', statusColor: '#15803d', seen: '2 h ago' },
+      { name: 'Inès Roux', email: 'ines@acme.dev', workspaces: 'Acme web · admin', signin: 'Google', status: 'Active', statusColor: '#15803d', seen: 'Yesterday' },
+      { name: 'Malik Haddad', email: 'malik@acme.dev', workspaces: 'Acme web · member', signin: 'GitHub', status: 'Active', statusColor: '#15803d', seen: '4 days ago' },
+      { name: 'Camille Durand', email: 'camille@client.fr', workspaces: 'Acme web · guest\nstaging.acme.dev only', signin: 'Email link', status: 'Active', statusColor: '#15803d', seen: '2 days ago' },
+      { name: 'Hugo Petit', email: 'hugo@acme.dev', workspaces: 'Acme web · member', signin: 'Email link', status: 'Suspended', statusColor: '#dd2c27', seen: 'Since 30 Sep', current: true },
+      { name: 'Paul Lemaire', email: 'paul@lumen.studio', workspaces: 'Lumen · owner', signin: 'Email link', status: 'Active', statusColor: '#15803d', seen: 'Yesterday' },
+      { name: 'sara@acme.dev', email: 'Invitation sent 10 Oct', workspaces: 'Acme support · member', signin: 'Not signed in yet', status: 'Invited', statusColor: '#6b6b74', seen: 'Resend', invited: true }
+    ];
+    const people = raw.map((p) => ({
+      ...p,
+      initial: p.name.charAt(0).toUpperCase(),
+      avatarBg: p.invited ? '#ffffff' : '#3f3f46',
+      avatarFg: p.invited ? '#6b6b74' : '#ffffff',
+      bg: p.current ? '#f4f4f5' : 'transparent',
+      current: p.current ? 'true' : 'false'
+    }));
+    return { people: people };
+  }
+}
+</script>
+
+
+</body></html>

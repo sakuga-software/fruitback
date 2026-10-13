@@ -3,7 +3,7 @@ import { DEFAULT_SEED_STAGE, type Seed, type SeedIssue } from '@fruitback/shared
 import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
 import { seed_comments, seeds } from './postgres-schema.ts';
-import { forgetSelectorFor, identifierFor, noteOf, threadsOf, toSeedIssue } from './seed-rows.ts';
+import { forgetSelectorFor, identifierFor, noteOf, seedIdOf, threadsOf, toSeedIssue } from './seed-rows.ts';
 import { type BatchAnswer, type CreatedIssue, type SeedStore, StoreError } from './store.ts';
 
 /**
@@ -164,6 +164,7 @@ export function createPostgresSeedStore(database: Database): SeedStore {
 
           return found.map((row) => ({
             identifier: identifierFor(row.id),
+            seed: seedIdOf(row.seed),
             createdAt: new Date(row.created_at).toISOString(),
             pageUrl: row.page_url,
             note: noteOf(row.seed),
