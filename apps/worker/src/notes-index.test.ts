@@ -328,7 +328,7 @@ describe('the summary of the sites of a workspace (FRU-237)', () => {
 });
 
 describe('forget, and the index (FRU-237)', () => {
-  it('removes the rows of the notes it deletes, their excerpt with them, and no other', async () => {
+  it('removes the rows of the notes it deletes, their excerpt with them, and no other, not even one of the same reference', async () => {
     const { createPgliteDatabase } = await import('./postgres.fixture.ts');
     const { createPostgresAccountStore } = await import('./accounts-postgres.ts');
     const { createPostgresSeedStore } = await import('./seeds-postgres.ts');
@@ -372,6 +372,26 @@ describe('forget, and the index (FRU-237)', () => {
         );
       }
 
+      // Another workspace, whose tracker also calls one of its issues as Alice's note is called here.
+      const bob = await accounts.signIn({ provider: 'email', subject: 'bob@other.dev', email: 'bob@other.dev' });
+      const other = await accounts.createWorkspace('Other', bob.id);
+      const otherSite = await accounts.addSite(other.id, { origin: 'https://other.dev', visibility: 'everyone' });
+      await index.record(
+        [
+          {
+            workspace: other.id,
+            site: otherSite.id,
+            seed: seedFixture({ id: 'sd_other', note: 'A note of the other workspace.' }),
+            channel: 'script',
+            author: { kind: 'visitor' },
+            place: { kind: 'fruitback' },
+            issue: { identifier: planted[0] ?? '' },
+            stage: 'seeded',
+          },
+        ],
+        Date.now(),
+      );
+
       const done = await runForget(
         ['--email', 'alice@client.fr'],
         { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: '*' },
@@ -380,8 +400,9 @@ describe('forget, and the index (FRU-237)', () => {
       );
       assert.equal(done.ok, true, done.lines.join('\n'));
 
-      assert.deepEqual(await rowsOf(database, 'SELECT seed_id, excerpt FROM note_index'), [
+      assert.deepEqual(await rowsOf(database, 'SELECT seed_id, excerpt FROM note_index ORDER BY seed_id'), [
         { seed_id: 'sd_bob', excerpt: 'A note of Bob.' },
+        { seed_id: 'sd_other', excerpt: 'A note of the other workspace.' },
       ]);
     } finally {
       await database.close();

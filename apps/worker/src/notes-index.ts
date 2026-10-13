@@ -105,8 +105,11 @@ export type NoteIndex = {
    * given up (FRU-122). A delivery that arrived is removed, so it is not counted.
    */
   undelivered(workspace: string): Promise<Map<string, number>>;
-  /** Removes the rows of these notes: by their reference in the store, or by the account of a member. */
-  forget(which: { identifiers: readonly string[] } | { account: string }): Promise<number>;
+  /**
+   * Removes the rows of these notes: each by its reference in the store and the id the widget gave
+   * it, or every row of the account of a member.
+   */
+  forget(which: { notes: readonly { identifier: string; seed: string }[] } | { account: string }): Promise<number>;
 };
 
 /** The author of a note, from what the worker verified when it took it. */

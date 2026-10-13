@@ -2416,7 +2416,9 @@ everything. FRU-95 lifted it, below.
 - **A row goes with its site and its workspace** (foreign keys `cascade`). The notes of the worker's
   own store stay when a site goes, as `seeds-postgres.ts` decided pending FRU-194; their index does
   not. **`forget` removes the rows of the notes it deletes, before it deletes them**: an index that
-  does not answer stops the command with nothing deleted.
+  does not answer stops the command with nothing deleted. A row is named by the reference of the
+  note **and** the id the widget gave it: a tracker of another workspace may call an issue `FB-12`
+  as well, and its row stays.
 
 ### What it does not do, and the measurements
 

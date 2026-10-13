@@ -1,6 +1,6 @@
 import type { SeedIssue, SeedStage } from '@fruitback/shared';
 import { SEED_STAGES } from '@fruitback/shared';
-import { count, eq, inArray, max, min, sql } from 'drizzle-orm';
+import { and, count, eq, max, min, or, sql } from 'drizzle-orm';
 import { type NoteEntry, type NoteIndex, type Place, type SiteNotes, excerptOf, noNotes } from './notes-index.ts';
 import type { Database } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
@@ -167,9 +167,19 @@ function instantOf(iso: string, now: number): number {
   return Number.isFinite(at) ? Math.min(at, now) : now;
 }
 
-/** The rows that `forget` removes. An empty list removes nothing. */
+/**
+ * The rows that `forget` removes. An empty list removes nothing.
+ *
+ * A note is named by its reference **and** the id the widget gave it: a reference alone is not one
+ * note. `FB-12` of this worker's store is one, but a tracker of another workspace can call one of
+ * its issues `FB-12` too, and its row is not a note this command deleted.
+ */
 function selected(which: Parameters<NoteIndex['forget']>[0]) {
   if ('account' in which) return eq(note_index.author_account_id, which.account);
 
-  return which.identifiers.length === 0 ? sql`false` : inArray(note_index.reference, [...which.identifiers]);
+  return (
+    or(
+      ...which.notes.map((note) => and(eq(note_index.reference, note.identifier), eq(note_index.seed_id, note.seed))),
+    ) ?? sql`false`
+  );
 }

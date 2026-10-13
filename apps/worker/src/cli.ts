@@ -328,7 +328,7 @@ export async function runForget(
       // that does not answer stops the command before a note is deleted: run it again, and nothing
       // of a note is left behind in the index.
       const index = heldIndex ?? (held === undefined ? noteIndexFor(config.config) : undefined);
-      await index?.forget({ identifiers: found.map((seed) => seed.identifier) });
+      await index?.forget({ notes: found.map(({ identifier, seed }) => ({ identifier, seed })) });
       found = await store.forget(which, { dryRun: false });
     }
   } catch (error) {
