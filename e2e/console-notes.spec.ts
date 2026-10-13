@@ -278,7 +278,7 @@ async function open(page: Page, query = ''): Promise<void> {
 const table = (page: Page) => page.getByRole('region', { name: 'Notes' });
 const rows = (page: Page) => table(page).locator('tbody tr');
 const chips = (page: Page) => page.getByRole('group', { name: 'Where the notes went' }).getByRole('button');
-const chip = (page: Page, name: string) =>
+const chip = (page: Page, name: string | RegExp) =>
   page.getByRole('group', { name: 'Where the notes went' }).getByRole('button', { name });
 const search = (page: Page) => page.getByRole('searchbox', { name: 'Search notes' });
 const pages = (page: Page) => page.getByRole('navigation', { name: 'Pages of notes' });
