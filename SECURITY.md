@@ -556,7 +556,9 @@ role owns the database or is a superuser. Two applications in one database trust
 it, and each other as far as their grants say. A role that has its schema and nothing else is
 enough for the worker (test:`is enough: no right on public, none on the database, and the worker
 signs a person in`), and that test reads that such a role is refused a table of `public` once
-`USAGE` on `public` is taken from `PUBLIC`.
+`USAGE` on `public` is taken from `PUBLIC`. **The worker says it in its log while its role may use
+`public`** (FRU-266), and starts all the same: test:`is said once in the log, and not refused;
+nothing is said once it may not, nor for a worker in public`.
 
 **Since FRU-146 the people, their ways to sign in, the workspaces and their members are in four
 tables of better-auth**, `user`, `account`, `organization` and `member`, under the ids they had. The

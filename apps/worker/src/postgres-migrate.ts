@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { sql } from 'drizzle-orm';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
-import type { Database, Db } from './postgres.ts';
+import { type Database, type Db, DEFAULT_DATABASE_SCHEMA } from './postgres.ts';
 import { BASELINE_CATALOGUE } from './postgres-baseline-catalogue.ts';
 import { StoreError } from './store.ts';
 
@@ -507,6 +507,31 @@ async function refuseTheToolOfBeforeInAnotherSchema(db: Db, schema: string): Pro
   }
 }
 
+/** What the worker says when its role can still read `public` from a schema of its own (FRU-266). */
+export const PUBLIC_IS_OPEN =
+  'the role of FRUITBACK_DATABASE_URL may use the schema « public » of this database, beside the schema of the ' +
+  'worker: a schema of its own is a place for names, not a wall. Revoke what it does not need ' +
+  '(docs/self-hosting.md, « In a database that another application uses »)';
+
+/**
+ * Warns, once for each database, when a worker in a schema of its own may use `public` (FRU-266).
+ *
+ * PostgreSQL gives every role `USAGE` on `public`, and with it whatever an application there granted
+ * to `PUBLIC`. The worker names no other schema; whoever holds its address can. A warning and not a
+ * refusal: an operator may share a database on purpose (decided on 2026-10-13). Nothing for a worker
+ * in `public`, nor when the database has no schema of that name.
+ */
+async function warnWhenPublicIsOpen(db: Db, schema: string, warn: (line: string) => void): Promise<void> {
+  if (schema === DEFAULT_DATABASE_SCHEMA) return;
+  const [row] = rowsOf(
+    await db.execute(
+      sql`SELECT CASE WHEN to_regnamespace('public') IS NULL THEN false
+                      ELSE has_schema_privilege(current_user, 'public', 'USAGE') END AS open`,
+    ),
+  );
+  if (row?.open === true) warn(`[fruitback] ${PUBLIC_IS_OPEN}`);
+}
+
 export async function migrate(database: Database, folder: string = migrationsFolder()): Promise<void> {
   refuseTwoMigrationsOfOneDate(folder);
   const { schema } = database;
@@ -520,6 +545,7 @@ export async function migrate(database: Database, folder: string = migrationsFol
       await adoptWhatTheHomeMadeToolMade(db, folder, schema);
       await refuseWhatDrizzleWouldSkip(db, folder, schema);
       await applyWhatIsNotApplied(db, folder, schema);
+      await warnWhenPublicIsOpen(db, schema, (line) => console.warn(line));
     } finally {
       await db.execute(sql`SELECT pg_advisory_unlock(${MIGRATION_LOCK})`);
     }

@@ -2459,7 +2459,10 @@ tables, its journal and its people`. A person of one is not a person of the othe
 
 - **It does not keep the role from reading the rest of the database.** The worker names no other
   schema, and PostgreSQL decides what a role may read: `USAGE` on `public` is given to every role
-  by default. `docs/self-hosting.md` says what to revoke; `SECURITY.md` says what it means.
+  by default. `docs/self-hosting.md` says what to revoke; `SECURITY.md` says what it means. Since
+  FRU-266 the worker writes one line in its log when it migrates while its role may use `public`.
+  A warning and not a refusal (decided on 2026-10-13, on delegation of Mathieu): an operator may
+  share a database on purpose.
 - **It does not work through a pooler that shares sessions.** The search path and the advisory lock
   are the state of a session. PgBouncer in transaction mode loses both. Not tried here.
 - **It does not move a database from `public`**, and does not copy from one schema to another.
