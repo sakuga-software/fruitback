@@ -37,7 +37,9 @@ works too. Then, on a site of one of your workspaces, the popup names the worksp
 wait on the site, and offers **Turn on here**. One click: the browser asks for access to that site
 only, and the widget appears, reading and writing as you. Once it is on, the popup has a switch to
 turn it off and on, the notes of the page by stage, **Leave feedback** and **Show every note of the
-page**. To set a site up by hand, the gear opens the options page.
+page**. On a site of none of your workspaces, an owner or an admin gets **Add to {workspace} and
+turn on**: the browser asks for access to the site, the site is added to that workspace, for its
+members only, and the widget appears. To set a site up by hand, the gear opens the options page.
 
 On a worker you run yourself, or on a site of no workspace, open the page you want to review and
 click the extension. While this browser holds no session at all, the popup offers

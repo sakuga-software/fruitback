@@ -6,6 +6,7 @@ import {
   connecting,
   initialOf,
   loading,
+  newSite,
   notAWebPage,
   shell,
   showPageCounts,
@@ -436,5 +437,61 @@ describe('the notes of the page, added to a screen 07 already drawn (FRU-254)', 
     showPageCounts(root, COUNTS);
 
     assert.equal(root.querySelector('.page-notes'), null);
+  });
+});
+
+describe('a site of no workspace (08, FRU-255)', () => {
+  const SAKUGA = { id: 'ws_1', name: 'Sakuga' };
+  const NORTHWIND = { id: 'ws_2', name: 'Northwind' };
+  const base = { origin: 'https://preview.client.fr', browserName: 'Chrome', onAdd: nothing, onSettings: nothing };
+
+  it('with one workspace: no list, its name in the button, and the add goes to it', () => {
+    const added: string[] = [];
+    const root = newSite(page(), { ...base, workspaces: [SAKUGA], onAdd: (id) => added.push(id) });
+
+    assert.equal(root.querySelector('h1')?.textContent, 'preview.client.fr');
+    assert.equal(root.querySelector('.subtitle')?.textContent, 'Not in a workspace yet');
+    assert.equal(root.querySelector('select'), null);
+    assert.deepEqual(stops(root), ['button: Settings and every site', 'button: Add to Sakuga and turn on']);
+    (root.querySelector('form') as HTMLFormElement).requestSubmit();
+    assert.deepEqual(added, ['ws_1']);
+    // Nothing about previews: no proof of the domain, no preview (Q4).
+    assert.doesNotMatch(root.textContent ?? '', /preview build/i);
+  });
+
+  it('with two: a list named « Workspace », and the button follows the choice', () => {
+    const added: string[] = [];
+    const root = newSite(page(), { ...base, workspaces: [SAKUGA, NORTHWIND], onAdd: (id) => added.push(id) });
+    const select = root.querySelector('select') as HTMLSelectElement;
+
+    assert.equal(root.querySelector('label.field')?.firstChild?.textContent, 'Workspace');
+    assert.deepEqual(
+      [...select.options].map((option) => [option.value, option.textContent]),
+      [
+        ['ws_1', 'Sakuga'],
+        ['ws_2', 'Northwind'],
+      ],
+    );
+    select.value = 'ws_2';
+    select.dispatchEvent(new (select.ownerDocument.defaultView as unknown as typeof globalThis).Event('change'));
+    assert.equal(root.querySelector('.action')?.textContent, 'Add to Northwind and turn on');
+    (root.querySelector('form') as HTMLFormElement).requestSubmit();
+    assert.deepEqual(added, ['ws_2']);
+  });
+
+  it('with none: says who can add it, and has no button', () => {
+    const root = newSite(page(), { ...base, workspaces: [] });
+
+    assert.equal(root.querySelector('.lead')?.textContent, 'Ask an admin of your workspace to add this site.');
+    assert.equal(root.querySelector('.action'), null);
+    assert.deepEqual(stops(root), ['button: Settings and every site']);
+  });
+
+  it('speaks French', () => {
+    setLanguage('fr');
+    const root = newSite(page(), { ...base, workspaces: [SAKUGA] });
+
+    assert.equal(root.querySelector('.subtitle')?.textContent, 'Dans aucun workspace pour l’instant');
+    assert.equal(root.querySelector('.action')?.textContent, 'Ajouter à Sakuga et activer');
   });
 });

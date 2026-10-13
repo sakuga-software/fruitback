@@ -64,6 +64,7 @@ export type PopupState =
   | { kind: 'rule' }
   | { kind: 'offer' }
   | { kind: 'unreachable' }
+  | { kind: 'new-site' }
   | { kind: 'signed-out'; canSignIn: boolean; ended: boolean };
 
 export function decide(facts: PopupFacts): PopupState {
@@ -87,6 +88,8 @@ export function decide(facts: PopupFacts): PopupState {
 
   if (facts.account === 'ended') return { kind: 'signed-out', canSignIn: facts.canSignIn, ended: true };
   if (facts.account === 'unreachable') return { kind: 'unreachable' };
+  // 08 (FRU-255): signed in, on a site of no workspace: add it to one, or say who can.
+  if (facts.account === 'ok') return { kind: 'new-site' };
   // Nobody signed in and nothing paired: the one question is to sign in (05). A self-hosted instance
   // is one link away, on the settings page.
   if (facts.sessions === 0) return { kind: 'signed-out', canSignIn: facts.canSignIn, ended: false };

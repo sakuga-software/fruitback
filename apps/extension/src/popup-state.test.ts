@@ -49,7 +49,7 @@ describe('the screen of the popup (FRU-251)', () => {
 
   it('goes on to the page once the sign-in is done', () => {
     assert.deepEqual(on({ connect: 'signed-in', account: 'ok', sessions: 1, offer: true }), { kind: 'offer' });
-    assert.deepEqual(on({ connect: 'signed-in', account: 'ok', sessions: 1 }), { kind: 'form' });
+    assert.deepEqual(on({ connect: 'signed-in', account: 'ok', sessions: 1 }), { kind: 'new-site' });
   });
 
   it('puts the rule of this browser before anything about an account', () => {
@@ -72,8 +72,14 @@ describe('the screen of the popup (FRU-251)', () => {
     assert.deepEqual(on({ account: 'unreachable', sessions: 1 }), { kind: 'unreachable' });
   });
 
-  it('gives the fields to somebody signed in on a site of no workspace, or paired by hand', () => {
-    assert.deepEqual(on({ account: 'ok', sessions: 1 }), { kind: 'form' });
+  it('offers to add a site of no workspace to somebody signed in (08, FRU-255)', () => {
+    assert.deepEqual(on({ account: 'ok', sessions: 1 }), { kind: 'new-site' });
+    assert.deepEqual(on({ account: 'ok', sessions: 2, rule: true }), { kind: 'rule' });
+    assert.deepEqual(on({ account: 'ok', sessions: 1, offer: true }), { kind: 'offer' });
+    assert.deepEqual(on({ account: 'ok', sessions: 1, editing: true }), { kind: 'form' });
+  });
+
+  it('gives the fields to somebody paired by hand, or who asked for them', () => {
     assert.deepEqual(on({ sessions: 1 }), { kind: 'form' });
     assert.deepEqual(on({ editing: true }), { kind: 'form' });
   });

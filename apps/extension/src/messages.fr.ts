@@ -51,6 +51,18 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'A note is being written on the page. Send it or close it first.':
     'Une note est en cours d’écriture sur la page. Envoyez-la ou fermez-la d’abord.',
   'The page did not answer. Reload it, then try again.': 'La page n’a pas répondu. Rechargez-la, puis réessayez.',
+  // A site of no workspace (FRU-255).
+  'Not in a workspace yet': 'Dans aucun workspace pour l’instant',
+  'Ask an admin of your workspace to add this site.': 'Demandez à un admin de votre workspace d’ajouter ce site.',
+  'Add it to review it. Nothing goes on the site: members with the extension see the notes, visitors see nothing.':
+    'Ajoutez-le pour le relire. Rien n’est posé sur le site : les membres qui ont l’extension voient les notes, les visiteurs ne voient rien.',
+  Workspace: 'Workspace',
+  'Add to {workspace} and turn on': 'Ajouter à {workspace} et activer',
+  'Your role in this workspace does not let you add a site.':
+    'Votre rôle dans ce workspace ne permet pas d’ajouter un site.',
+  'Too many sites were added in the last hour. Try again later.':
+    'Trop de sites ont été ajoutés dans l’heure. Réessayez plus tard.',
+  'Fruitback did not answer. Try again.': 'Fruitback n’a pas répondu. Réessayez.',
   'Your sign-in ended': 'Votre connexion a pris fin',
   'Sign in again to see and leave notes here.': 'Reconnectez-vous pour voir et laisser des notes ici.',
   'Fruitback did not answer. The popup asks again.': 'Fruitback n’a pas répondu. Le popup redemande.',
