@@ -136,6 +136,12 @@ function cloudSeams(): CloudSeams {
     ensureAccess: (endpoint) => sessions.ensureAccess(endpoint),
     // FRU-103: what the worker lists now is what this browser grants, before the click stores a rule.
     remember: rememberPreviews,
+    // The epoch of the session in place: an answer is kept only for the session that asked.
+    sessionOf: async (endpoint) => {
+      const held = (await sessions.list())[endpoint];
+
+      return held === undefined ? undefined : (held.epoch ?? '');
+    },
   };
 }
 

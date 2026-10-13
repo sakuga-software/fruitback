@@ -128,6 +128,12 @@ export default defineBackground(() => {
         endpoints: async () => Object.keys(await sessions.list()),
         ensureAccess: (endpoint) => sessions.ensureAccess(endpoint),
         remember: rememberPreviews,
+        // The epoch of the session in place: an answer is kept only for the session that asked.
+        sessionOf: async (endpoint) => {
+          const held = (await sessions.list())[endpoint];
+
+          return held === undefined ? undefined : (held.epoch ?? '');
+        },
       });
     } catch (error) {
       console.error('[fruitback] could not ask the workers for the previews they proved', error);

@@ -29,8 +29,21 @@ export type CloudSeams = {
    * Called with every answer, so what this browser grants is never older than its last question.
    */
   remember?: (endpoint: string, listed: ListedPreviews | undefined) => Promise<void>;
+  /**
+   * The mark of the session this browser holds with a worker: nothing when it holds none, and
+   * another value once a session started or ended (its epoch). An answer is kept only for the
+   * session that asked. Absent, « still paired » is all that is compared.
+   */
+  sessionOf?: (endpoint: string) => Promise<string | undefined>;
   now?: () => number;
 };
+
+/** See `CloudSeams.sessionOf`. */
+async function sessionMark(endpoint: string, seams: CloudSeams): Promise<string | undefined> {
+  if (seams.sessionOf !== undefined) return seams.sessionOf(endpoint);
+
+  return (await seams.endpoints()).includes(endpoint) ? '' : undefined;
+}
 
 /** The answer of `GET /session/sites`, parsed field by field: a bad entry costs that site. */
 export function parseWorkspaceSites(body: unknown): WorkspaceSites | undefined {
@@ -89,20 +102,33 @@ export async function offerFor(origin: string, seams: CloudSeams): Promise<Offer
  * it said nothing. A worker that keeps no accounts lists nothing, and what it listed before goes. A
  * worker that did not answer changes nothing: what it listed ages by itself.
  */
-async function listedBy(
-  endpoint: string,
-  { ensureAccess, fetcher = fetch, remember, now = Date.now }: CloudSeams,
-): Promise<WorkspaceSites | undefined> {
+async function listedBy(endpoint: string, seams: CloudSeams): Promise<WorkspaceSites | undefined> {
+  const { ensureAccess, fetcher = fetch, remember, now = Date.now } = seams;
   if (!isSecureWorkerEndpoint(endpoint)) return undefined;
 
+  const asking = await sessionMark(endpoint, seams);
+  if (asking === undefined) return undefined;
   const access = await ensureAccess(endpoint).catch(() => undefined);
   if (access === undefined || !access.ok) return undefined;
 
   const listed = await ask(endpoint, access.grant.accessToken, fetcher);
   if (listed === undefined) return undefined;
+  // WARNING: the answer took a call to the worker, and a logout or a new pairing can land in that
+  // time. The background forgets the list at that instant (`session-previews.ts`), and an answer
+  // written after it would put back the list of the session of before: nobody asks a worker again
+  // once it is logged out, and after a new pairing the list of one account would serve another.
+  // So the session is read again, and the answer of a session that is gone is dropped.
+  if ((await sessionMark(endpoint, seams)) !== asking) return undefined;
   await remember?.(endpoint, listed === NO_ACCOUNTS ? undefined : listedPreviews(listed.sites, now())).catch(
     () => undefined,
   );
+  // And once more after the write: the read above and the write are two steps, and the session can
+  // end between them, after the background has already forgotten.
+  if ((await sessionMark(endpoint, seams)) !== asking) {
+    await remember?.(endpoint, undefined).catch(() => undefined);
+
+    return undefined;
+  }
 
   return listed === NO_ACCOUNTS ? undefined : listed;
 }
