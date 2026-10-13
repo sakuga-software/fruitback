@@ -78,7 +78,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   draws none of it**: « (you) », « Remove » and « Cancel », which ask twice under their row
   (`Confirmation`), the day an invitation ends, the block that gives the link of an invitation, and
   every sentence of a refusal. A worker with no mailer sent nothing, so its rows say « Invitation
-  kept ». What is asked under a row stays in what is seen of a table that scrolls.
+  kept ». What is asked under a row stays in what is seen of a table that scrolls. **A read made
+  again keeps the rows that are shown** (FRU-271): « Loading… » in their place took the table away
+  for the time of the read, so what is under it jumped and no action of a row was there to press.
   `e2e/console-members.spec.ts` reads the values and the boxes of the mockup at 1440 and 390 px,
   the keyboard, the contrasts and axe.
 - **The setup is one screen, and resumes where the worker says the person is** (FRU-239, screen 01 of
