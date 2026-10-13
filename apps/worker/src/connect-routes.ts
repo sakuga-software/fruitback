@@ -142,12 +142,13 @@ export async function handleExtensionConnect(
   }
 
   const refreshToken = createRefreshToken();
+  const tokenHash = await digest(refreshToken);
   // The person as the account says it at the claim, written in the session and in its tokens.
   let person: { name?: string; email?: string } | undefined;
   const claimed = await context.connect.claim({
     claimHash,
     now,
-    tokenHash: await digest(refreshToken),
+    tokenHash,
     connectionId: createConnectionId(),
     expiresAt: now + REFRESH_TTL_SECONDS * 1000,
     open: async (id) => {
@@ -174,7 +175,7 @@ export async function handleExtensionConnect(
     200,
     {
       refreshToken,
-      accessToken: await mintAccessToken(identity, context.secret, now),
+      accessToken: await mintAccessToken(identity, context.secret, now, tokenHash),
       expiresIn: ACCESS_TTL_SECONDS,
       identity,
     },

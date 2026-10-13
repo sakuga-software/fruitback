@@ -474,6 +474,17 @@ expired one is deleted at the next request. These hold on two connections, so on
 cases run on PostgreSQL 17, and a store that reads apart from the statement that writes fails them
 (`connect-postgres.test.ts`).
 
+**A write reads the session again; a read keeps the window of its token.** An access token lives
+10 minutes, and nothing reaches a token already minted. So a route that **writes** for an extension
+(the picture of a note, and the creation of a site of FRU-255) asks the store, at each call, whether
+the session of the token is still live, still the same person, still a member of its workspace or
+still an account (`sessionStillValid` of `session-check.ts`): a session ended a second ago writes
+nothing (test:`writes nothing for a session that ended, with the access token it still holds, and
+reads in its window`). Every access token names its chain for that (`sid`, a digest, never a token);
+one minted before names none and is refused, and the extension refreshes. A route that **reads**, and
+the note itself, still take the token as it is, until it expires: ten minutes at most, plus the
+skew.
+
 **What ends such a session.** Its owner, from « My account » (`DELETE /console/me/browsers/<id>`),
 the extension logging out, the deletion of the account, or a replay of a spent refresh token, as for
 every session. **« Sign out everywhere » and the sign-out of one browser of the console do not**: they

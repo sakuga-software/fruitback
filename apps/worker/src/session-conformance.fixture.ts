@@ -827,6 +827,37 @@ export function sessionCases(it: Declare<SessionStore>): void {
     assert.equal(await store.holdsSession(), true, 'a session that ended is still a reviewer who paired');
   });
 
+  // --- The chain a write reads again (FRU-238)
+
+  it('names the chain of a token, the head for the first and every successor alike', async (store) => {
+    const { token, at } = await opened(store);
+    const head = await digest(token);
+    const successor = await digest(createRefreshToken());
+    await store.rotateSession({ tokenHash: head, successorHash: successor, now: at + 1, graceMs: GRACE });
+
+    assert.equal(await store.chainOf(head), head);
+    assert.equal(await store.chainOf(successor), head);
+    assert.equal(await store.chainOf(await digest('a-token-nobody-has')), undefined);
+  });
+
+  it('answers the person of a chain while one of its tokens lives, and nobody once it ended or expired', async (store) => {
+    const { token, at } = await opened(store);
+    const chain = await digest(token);
+    const successor = await digest(createRefreshToken());
+    await store.rotateSession({ tokenHash: chain, successorHash: successor, now: at + 1, graceMs: GRACE });
+    // The successor is live and the head is too, inside the grace: either keeps the person.
+    assert.deepEqual(await store.liveIdentity(chain, at + 2), ALICE);
+    assert.equal(await store.liveIdentity(chain, at + REFRESH_TTL_SECONDS * 1000), undefined, 'expired');
+
+    await store.revokeSession(successor, at + 3);
+    assert.equal(await store.liveIdentity(chain, at + 4), undefined, 'logged out');
+    assert.equal(await store.liveIdentity(await digest('a-token-nobody-has'), at), undefined);
+
+    const other = await opened(store, at);
+    await store.endSessionsOf({ subject: ALICE.subject }, at + 5);
+    assert.equal(await store.liveIdentity(await digest(other.token), at + 6), undefined, 'its person was removed');
+  });
+
   // --- The purge
 
   it('drops the codes and the sessions that are expired, and nothing that is not', async (store) => {

@@ -360,6 +360,32 @@ export function createPostgresSessionStore(database: Database): SessionStore {
 
       return rows.length > 0;
     },
+
+    async chainOf(tokenHash) {
+      const rows = await run((db) =>
+        db.select({ root_hash: sessions.root_hash }).from(sessions).where(eq(sessions.token_hash, tokenHash)),
+      );
+
+      return rows[0] === undefined ? undefined : chainOf(rows[0], tokenHash);
+    },
+
+    async liveIdentity(chain, now) {
+      const rows = await run((db) =>
+        db
+          .select(SESSION)
+          .from(sessions)
+          .where(
+            and(
+              isNull(sessions.revoked_at),
+              gt(sessions.expires_at, now),
+              or(eq(sessions.root_hash, chain), eq(sessions.token_hash, chain)),
+            ),
+          )
+          .limit(1),
+      );
+
+      return rows[0] === undefined ? undefined : identityOf(rows[0]);
+    },
   };
 }
 

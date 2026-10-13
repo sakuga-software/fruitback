@@ -377,6 +377,28 @@ const VIOLATIONS: Violation<SessionStore>[] = [
     replace: { from: DROP_ORPHANS, to: '' },
   },
   {
+    breaks: 'names the chain of a token, the head for the first and every successor alike',
+    by: 'names each token as a chain of its own',
+    replace: {
+      after: 'async chainOf(tokenHash)',
+      from: 'chainOf(row, tokenHash)',
+      to: 'tokenHash',
+    },
+  },
+  {
+    breaks: 'answers the person of a chain while one of its tokens lives, and nobody once it ended or expired',
+    by: 'answers the person of a chain that ended',
+    replace: { from: 'WHERE revoked_at IS NULL AND expires_at > ? AND', to: 'WHERE ? IS NOT NULL AND' },
+  },
+  {
+    breaks: 'answers the person of a chain while one of its tokens lives, and nobody once it ended or expired',
+    by: 'answers the person of a chain that expired',
+    replace: {
+      from: 'WHERE revoked_at IS NULL AND expires_at > ? AND',
+      to: 'WHERE revoked_at IS NULL AND ? IS NOT NULL AND',
+    },
+  },
+  {
     breaks: 'holds no session until a code is spent, and holds one after, ended or not',
     by: 'counts a code that nobody spent as a session',
     replace: { from: "'SELECT 1 FROM sessions LIMIT 1'", to: "'SELECT 1 FROM pairings LIMIT 1'" },

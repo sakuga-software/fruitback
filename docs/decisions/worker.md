@@ -895,6 +895,11 @@ code stays, for the operator of an instance. `SECURITY.md` says what each half p
   only through `policy.sessions.member`, which `routeFor` builds from `roleIn`. A policy with no
   `member` refuses it: a worker with no accounts, and `memberOf` of the pictures, which builds its own
   policy and must give one. `GET /session/sites` lists the memberships of the account at the call.
+- **A route that writes for an extension calls `sessionStillValid`** (`session-check.ts`), or
+  `sessionWrites` of `app.ts`, which builds its arguments: one read of the store, so a session that
+  ended writes nothing, while a route that reads keeps the 10 minutes of its token (decided on
+  2026-10-14, for FRU-255). Every access token names its chain in `sid` (`chainOf` of the store after
+  a refresh, the digest of the first token otherwise); a token with no `sid` is refused there.
 - **The refresh ends a session of an account whose account is gone** (`stillOfTheWorkspace`, through
   `accountExists`). A member removed from a workspace keeps the session: it reads that workspace no
   more, at the next call.

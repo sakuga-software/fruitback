@@ -112,6 +112,8 @@ export function sessionStoreOn(database: Database): SessionStore {
     endSessionsOf: true,
     purge: true,
     holdsSession: true,
+    chainOf: true,
+    liveIdentity: true,
   });
 }
 

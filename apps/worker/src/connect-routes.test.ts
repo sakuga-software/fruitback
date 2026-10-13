@@ -832,6 +832,37 @@ for (const { label, open, skip } of DATABASES) {
       assert.equal((await as(worker, back, `/console/me/browsers/${list[0]?.id}`, { method: 'DELETE' })).status, 404);
     });
 
+    it('writes nothing for a session that ended, with the access token it still holds, and reads in its window', async () => {
+      const worker = await workerOn(open);
+      const alice = await person(worker, 'alice@acme.dev');
+      const acme = await workspaceOf(worker, alice, 'acme');
+      const session = await connected(worker, alice);
+      const picture = () =>
+        worker.call(`/screenshot?client=${acme.members}`, {
+          method: 'POST',
+          origin: EXTENSION,
+          headers: { Authorization: `Bearer ${session.accessToken}`, 'Content-Type': 'image/png' },
+          body: 'not a picture',
+        });
+      // The session writes: the worker reads the body, and refuses what is not a PNG.
+      assert.equal((await picture()).status, 400);
+
+      const { browsers } = (await (await as(worker, alice, '/console/me/browsers')).json()) as {
+        browsers: { id: string }[];
+      };
+      assert.equal(
+        (await as(worker, alice, `/console/me/browsers/${browsers[0]?.id}`, { method: 'DELETE' })).status,
+        204,
+      );
+
+      // The same access token, signed and not expired: the write reads the session again, and refuses.
+      const refused = await picture();
+      assert.equal(refused.status, 401);
+      assert.deepEqual(await refused.json(), { error: 'identity-required' });
+      // A read keeps the window of the token (SECURITY.md): ten minutes at most.
+      assert.equal((await read(worker, acme.members, 'https://acme.test', session.accessToken)).status, 200);
+    });
+
     it('is refused by the console: the token of an account session names nobody there (FRU-202)', async () => {
       const worker = await workerOn(open);
       const alice = await person(worker, 'alice@acme.dev');

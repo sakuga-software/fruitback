@@ -41,6 +41,12 @@ export type IdentityClaims = {
    * account is a member of the workspace of that client, read at each request. Never with `ws`.
    */
   scope?: 'account';
+  /**
+   * The chain of the session this token was minted for (FRU-238): the digest that names it in the
+   * store, never a token. A route that writes for an extension reads the session again by it
+   * (`session-check.ts`). Only this worker writes it.
+   */
+  sid?: string;
 };
 
 export type IdentityFailure =
@@ -52,7 +58,7 @@ export type IdentityFailure =
   | 'invalid-claims';
 
 export type IdentityResult =
-  | { ok: true; reporter: SeedReporter; workspace?: string; account?: true }
+  | { ok: true; reporter: SeedReporter; workspace?: string; account?: true; chain?: string }
   | { ok: false; reason: IdentityFailure };
 
 const encoder = new TextEncoder();
@@ -152,6 +158,9 @@ export async function verifyIdentityToken(
     // routing fact about the token.
     ...(typeof claims.ws === 'string' && claims.ws.length > 0 ? { workspace: claims.ws } : {}),
     ...(claims.scope === 'account' ? { account: true as const } : {}),
+    ...(typeof claims.sid === 'string' && claims.sid.length > 0 && claims.sid.length <= 64
+      ? { chain: claims.sid }
+      : {}),
   };
 }
 

@@ -535,5 +535,24 @@ export function createSqliteSessionStore(path: string): SessionStore {
     async holdsSession() {
       return connect(path).prepare('SELECT 1 FROM sessions LIMIT 1').get() !== undefined;
     },
+
+    async chainOf(tokenHash) {
+      const row = connect(path).prepare('SELECT root_hash FROM sessions WHERE token_hash = ?').get(tokenHash) as
+        | Record<string, unknown>
+        | undefined;
+
+      return row === undefined ? undefined : chainOf(row, tokenHash);
+    },
+
+    async liveIdentity(chain, now) {
+      const row = connect(path)
+        .prepare(
+          `SELECT subject, name, email, workspace FROM sessions
+             WHERE revoked_at IS NULL AND expires_at > ? AND (root_hash = ? OR token_hash = ?) LIMIT 1`,
+        )
+        .get(now, chain, chain) as Record<string, unknown> | undefined;
+
+      return row === undefined ? undefined : identityOf(row);
+    },
   };
 }

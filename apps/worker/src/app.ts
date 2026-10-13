@@ -45,6 +45,7 @@ import {
 } from './postgres-stores.ts';
 import type { ConnectStore } from './connect.ts';
 import { handleConsoleConnect, handleExtensionConnect } from './connect-routes.ts';
+import { sessionStillValid } from './session-check.ts';
 import {
   MAX_SCREENSHOT_BYTES,
   SCREENSHOT_PATH,
@@ -859,6 +860,25 @@ async function memberOf(request: Request, config: Served, workspace: string): Pr
 }
 
 /**
+ * Whether the session of the token of this request is still valid in the store (FRU-238): the check of
+ * every route that writes for an extension. See `session-check.ts`.
+ */
+export async function sessionWrites(request: Request, config: Served, context: RequestContext): Promise<boolean> {
+  const token = readBearerToken(request.headers.get('Authorization'));
+  const sessions = context.sessionStore ?? sessionStoreFor(config);
+  if (token === undefined || sessions === undefined || config.identitySecret === undefined) return false;
+
+  return (
+    (await sessionStillValid(token, {
+      sessions,
+      secret: config.identitySecret,
+      ...(config.roleIn === undefined ? {} : { roleIn: config.roleIn }),
+      ...(config.accountExists === undefined ? {} : { accountExists: config.accountExists }),
+    })) !== undefined
+  );
+}
+
+/**
  * The pictures that the extension takes with a note (FRU-44): `POST /screenshot` keeps one,
  * `GET /screenshot/<id>` answers it.
  *
@@ -894,6 +914,8 @@ async function handleScreenshot(
     const workspace = route.policy.sessions?.workspace;
     const account = workspace === undefined ? undefined : await memberOf(request, config, workspace);
     if (workspace === undefined || account === undefined) return json(401, { error: 'identity-required' }, headers);
+    // A write: the session is read again in the store, so one that ended writes nothing (FRU-238).
+    if (!(await sessionWrites(request, config, context))) return json(401, { error: 'identity-required' }, headers);
 
     const body = await readBoundedBytes(request, MAX_SCREENSHOT_BYTES);
     if (body === null) return json(413, { error: 'payload-too-large', maxBytes: MAX_SCREENSHOT_BYTES }, headers);
