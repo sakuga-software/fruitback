@@ -541,6 +541,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Extension on in {browser}': 'Extension activée dans {browser}',
   'Script on the site': 'Script sur le site',
   'Fruitback on the site': 'Fruitback sur le site',
+  'First note received': 'Première note reçue',
   'First note received just now': 'Première note reçue à l’instant',
   'First note received {when}': 'Première note reçue {when}',
   'Your first note is in': 'Votre première note est arrivée',

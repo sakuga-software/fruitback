@@ -115,17 +115,20 @@ export function PutDone({ site }: { site: Site }) {
   useLocale();
   const browser = thisBrowser();
   const how = howItCame(site.via ?? [], browser);
-  const when =
-    site.lastNoteAt === undefined || Date.now() - new Date(site.lastNoteAt).getTime() < 60_000
-      ? t('First note received just now')
-      : t('First note received {when}', { when: ago(site.lastNoteAt).toLocaleLowerCase(locale()) });
-
   return (
     <div className="mt-1.5 flex flex-col gap-1 text-body">
       <p className="font-semibold">{how}</p>
-      <p className="text-muted">{when}</p>
+      <p className="text-muted">{received(site.lastNoteAt)}</p>
     </div>
   );
+}
+
+/** When the first note came. A worker that counts the notes and gives no day says no moment. */
+function received(at: string | undefined): string {
+  if (at === undefined) return t('First note received');
+  if (Date.now() - new Date(at).getTime() < 60_000) return t('First note received just now');
+
+  return t('First note received {when}', { when: ago(at).toLocaleLowerCase(locale()) });
 }
 
 /** The arrow of a link that leaves the console. */

@@ -308,6 +308,8 @@ type Stub = {
   audience?: 'members' | 'everyone';
   /** From this read of the sites on, the site of « sited » has its first note (FRU-242). */
   notedFrom?: number;
+  /** The worker counts the note and gives no day of the last one. */
+  noDay?: boolean;
 };
 
 const LONG_HOST = 'preview-branch-feature-very-long-name-1234.staging.acme.dev';
@@ -357,7 +359,7 @@ async function stubWorker(page: Page, stub: Stub): Promise<string[]> {
           stub.notedFrom !== undefined && reads >= stub.notedFrom
             ? {
                 notes: { seeded: 1, green: 0, ripening: 0, ripe: 0, composted: 0 },
-                lastNoteAt: new Date().toISOString(),
+                ...(stub.noDay === true ? {} : { lastNoteAt: new Date().toISOString() }),
                 via: ['extension'],
               }
             : {};
@@ -732,6 +734,13 @@ test.describe('the states of the setup, against the mockup (FRU-239)', () => {
     stub.refuses = undefined;
     await page.clock.runFor(5_000);
     await expect(page.getByRole('heading', { name: 'Your first note is in' })).toBeVisible();
+  });
+
+  test('a count with no day of the last note says no moment', async ({ page }) => {
+    await stubWorker(page, { as: 'sited', notedFrom: 1, noDay: true });
+    await page.goto(`${CONSOLE}/setup`);
+    await expect(page.getByText('First note received', { exact: true })).toBeVisible();
+    await expect(page.getByText('First note received just now')).toHaveCount(0);
   });
 
   test('a site that has its first note already: the setup opens on its end', async ({ page }) => {
