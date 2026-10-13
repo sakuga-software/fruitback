@@ -323,6 +323,13 @@ test('the buttons have the measures of the mockup (FRU-232)', async ({ page }) =
   const target = await button('Use another address').boundingBox();
   expect.soft(target!.height, 'the target of a link').toBeGreaterThanOrEqual(24);
 
+  // The tones of before the mockup stay as HeroUI draws them: a pill, in semibold.
+  for (const name of ['Quiet', 'Danger']) {
+    const before = await styleOf(button(name), ['borderTopLeftRadius', 'fontWeight']);
+    expect.soft(Number.parseFloat(String(before.borderTopLeftRadius)), `${name}: a pill`).toBeGreaterThanOrEqual(18);
+    expect.soft(before.fontWeight, `${name}: weight`).toBe('600');
+  }
+
   // `.b-ghost`: a picture of 36 px.
   const icon = button('More for staging.acme.dev');
   await expectStyle(icon, 'icon', {
@@ -369,6 +376,9 @@ test('a button changes under the pointer as on the mockup, and shows its focus (
     ['outline', buttons.getByRole('button', { name: 'Try again' })],
     ['link', buttons.getByRole('button', { name: 'Use another address' })],
     ['icon', buttons.getByRole('button', { name: 'More for staging.acme.dev' })],
+    // The two tones of before the mockup keep the ring too, and their round shape.
+    ['quiet', buttons.getByRole('button', { name: 'Quiet', exact: true })],
+    ['danger', buttons.getByRole('button', { name: 'Danger', exact: true })],
     ['field', page.getByRole('textbox', { name: 'Work email' })],
     ['chip', page.getByRole('button', { name: /^New/ })],
   ];
