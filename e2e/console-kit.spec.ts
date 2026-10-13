@@ -290,6 +290,15 @@ test('the buttons have the measures of the mockup (FRU-232)', async ({ page }) =
     fontSize: '13px',
   });
   await expectStyle(button('Outline disabled'), 'outline, disabled', { opacity: '0.5', cursor: 'not-allowed' });
+  // The padding the mockup writes on one button: 16 px on « Send again », which is 157.5 px wide there.
+  await expectStyle(button('Send again in 0:41'), 'outline, with its own padding', {
+    height: '44px',
+    paddingLeft: '16px',
+    paddingRight: '16px',
+  });
+  expect
+    .soft((await button('Send again in 0:41').boundingBox())!.width, 'the width of « Send again »')
+    .toBeCloseTo(157.5, 0);
   // A link drawn as a control has the same box.
   await expectStyle(buttons.getByRole('link', { name: 'Continue in this tab' }), 'outline, link', {
     ...outline,
@@ -778,6 +787,8 @@ test("the logo and the frame of a page outside a workspace are the mockup's (FRU
   await expectStyle(page.locator('main'), 'main', { paddingTop: '90px', paddingLeft: '16px', paddingBottom: '64px' });
   const title = await page.getByRole('heading', { level: 1 }).boundingBox();
   expect.soft({ x: title!.x, y: title!.y, width: title!.width }).toEqual({ x: 520, y: 155, width: 400 });
+  // A screen places a component: a margin it writes on one is not lost under a rule of the kit.
+  await expectStyle(page.locator('.kit-lead'), 'lead, placed by the screen', { marginBottom: '28px' });
   await expectStyle(page.locator('.kit-divider'), 'divider', {
     color: MUTED_TONE,
     fontSize: '13px',
