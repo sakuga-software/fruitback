@@ -4,7 +4,6 @@
  * A name of a product is a key too when a screen shows it through `t`, and it reads the same.
  */
 export const FRENCH: Readonly<Record<string, string>> = {
-  Fruitback: 'Fruitback',
   Linear: 'Linear',
 
   'Fruitback cannot reach its server. Check your connection.':
@@ -192,6 +191,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   '{name} leaves the workspace, and their extension stops reading its sites. Their notes stay.':
     '{name} quitte l’espace de travail, et son extension cesse de lire ses sites. Ses notes restent.',
   'Invitation sent': 'Invitation envoyée',
+  'Until {date}': 'Jusqu’au {date}',
   'Invitation kept': 'Invitation gardée',
   'Sent {date}': 'Envoyée le {date}',
   Joined: 'Arrivée',
@@ -230,8 +230,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'No invitation waits for {email}. An invitation sent to another address shows to that address only.':
     'Aucune invitation n’attend {email}. Une invitation envoyée à une autre adresse ne s’affiche qu’à cette adresse.',
   'Go to the console': 'Aller à la console',
-  'For {email}.': 'Pour {email}.',
-  'Until {date}': 'Jusqu’au {date}',
   Decline: 'Refuser',
   'Joining…': 'Arrivée…',
   'Join {workspace}': 'Rejoindre {workspace}',
@@ -497,4 +495,24 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Change: 'Modifier',
   '{site} is still in your sites, with its notes. Remove it in Sites if you no longer review it.':
     '{site} est toujours dans vos sites, avec ses notes. Retirez-le dans Sites si vous ne le relisez plus.',
+  // The screen of an invitation (FRU-241).
+  '{workspace} invited you': '{workspace} vous a invité',
+  'Join {workspace} on Fruitback': 'Rejoignez {workspace} sur Fruitback',
+  'You join as an admin: you manage the sites, the connectors and the members of {workspace}.':
+    'Vous rejoignez en tant qu’admin : vous gérez les sites, les connecteurs et les membres de {workspace}.',
+  'You join as a member: you see and leave notes on every site of {workspace}.':
+    'Vous rejoignez en tant que membre : vous voyez et laissez des notes sur tous les sites de {workspace}.',
+  'Signed in as': 'Connecté en tant que',
+  'Not {email}?': 'Vous n’êtes pas {email} ?',
+  'One more invitation': 'Une autre invitation',
+  '{count} more invitations': '{count} autres invitations',
+  'You are in': 'Vous y êtes',
+  'One more thing: the extension shows the notes on the sites of {workspace} and lets you leave yours.':
+    'Une dernière chose : l’extension affiche les notes sur les sites de {workspace} et vous permet de laisser les vôtres.',
+  'One more thing: the extension shows the notes on {site} and lets you leave yours.':
+    'Une dernière chose : l’extension affiche les notes sur {site} et vous permet de laisser les vôtres.',
+  'Add to Chrome': 'Ajouter à Chrome',
+  'Open {site}': 'Ouvrir {site}',
+  'Using Firefox?': 'Vous utilisez Firefox ?',
+  'Get the Firefox add-on': 'Obtenir le module pour Firefox',
 };
