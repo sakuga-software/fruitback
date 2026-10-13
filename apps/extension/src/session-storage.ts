@@ -134,6 +134,15 @@ export function touchesARefreshToken(keys: string[]): boolean {
   return keys.some((key) => key.startsWith(RUN_PREFIX));
 }
 
+/**
+ * The endpoints whose session started or ended, among the keys of a change of `local`: a pairing and
+ * a logout each mint an epoch, and nothing else does. What was remembered for the session of before
+ * (the previews its workspace proved, FRU-103) must not serve the session of after.
+ */
+export function endpointsOfNewEpochs(keys: readonly string[]): string[] {
+  return keys.filter((key) => key.startsWith(EPOCH_PREFIX)).map((key) => key.slice(EPOCH_PREFIX.length));
+}
+
 /** Every endpoint the snapshot holds under `prefix`, parsed. An entry that fails to parse is dropped. */
 export function entriesOf<T>(
   snapshot: Record<string, unknown>,

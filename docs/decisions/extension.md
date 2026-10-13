@@ -909,7 +909,14 @@ proven)` answers no only when the worker of the rule listed that very wildcard f
   rule: a rules file cannot grant. The background registers the scripts from the same list, and
   syncs when the list changes, so a proof that is lost takes the scripts off. `accessInUse` keeps
   the host permission of such a rule while it is on, proven or not: the permission alone runs
-  nothing, and a proof that comes back must not ask the reviewer again. **Not driven in a browser**:
+  nothing, and a proof that comes back must not ask the reviewer again. **A reader asks for the
+  keys of the workers its rules name, and never lists the area** (`freshFor` in `sites.ts`): the
+  bridge reads this in a content script, and the refresh tokens are in the same area.
+  `sites-storage.test.ts` plants a session and reads the log of the calls. **A list does not outlive
+  its session**: a pairing and a logout each mint an epoch, and the background then forgets what
+  that worker listed and asks it again (`endpointsOfNewEpochs`), so an account of another workspace
+  that pairs with the same worker does not get the wildcard of the first. Both raised in review.
+  **Not driven in a browser**:
   the prompt for a wildcard, the alarm and the registration; the predicate, the list and the offer
   are held by `proven-previews.test.ts`, with five planted violations.
 - **A site asked for is remembered before the browser asks for access** (FRU-118). The permission

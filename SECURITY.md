@@ -850,7 +850,10 @@ site only while the workspace of that site proves the domain.
   hours it grants nothing, and the background asks again every thirty minutes. So a proof that is
   lost stops in the browser thirty minutes after the worker saw it, at most; with the six hours
   between two checks of the DNS, a record that was removed can lend a session for six and a half
-  hours at most. A worker that cannot be reached stops granting after two hours.
+  hours at most. A worker that cannot be reached stops granting after two hours. **The answer is
+  for the session that asked**: a logout, and a new pairing with the same worker, each forget it at
+  once. The page's own script reads the answer of the workers its rules name and nothing else of
+  that storage, where the refresh tokens are.
 - **Not covered:** a page in clear (`http`), another port, and a team rule that names no site (a
   site that embeds its own widget): those stay refused.
 

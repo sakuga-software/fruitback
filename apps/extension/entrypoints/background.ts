@@ -9,7 +9,7 @@ import { createSiteOwner, isExtensionPage, parseSiteMutation } from '../src/site
 import { lendsSession, parseSitePattern } from '../src/site-patterns.ts';
 import { matchPatternFor, serialize, syncRegistration } from '../src/registration.ts';
 import { createBrowserSessions } from '../src/session-browser.ts';
-import { touchesARefreshToken } from '../src/session-storage.ts';
+import { endpointsOfNewEpochs, touchesARefreshToken } from '../src/session-storage.ts';
 import {
   REFUSED_STATUS,
   RELAY_CALL_TIMEOUT_MS,
@@ -241,6 +241,18 @@ export default defineBackground(() => {
     // which writes every endpoint at once. Each re-entry settles at once: the next run finds the
     // tokens fresh, refreshes nothing and only re-arms the alarm.
     if (touchesARefreshToken(Object.keys(changes))) void refreshSessions();
+    // FRU-103. A pairing or a logout: what the worker listed was for the session of before. Another
+    // account of another workspace could pair with the same worker, and the list of the first would
+    // serve its wildcard with the session of the second, for two hours at most. So the list is
+    // forgotten at once, and the worker is asked again with the session there is now, if any.
+    const ended = endpointsOfNewEpochs(Object.keys(changes));
+    if (ended.length > 0) {
+      void Promise.all(ended.map((endpoint) => rememberPreviews(endpoint, undefined)))
+        .catch((error: unknown) =>
+          console.error('[fruitback] could not forget the previews of a session that ended', error),
+        )
+        .then(() => refreshProven());
+    }
   });
   browser.permissions.onRemoved.addListener(() => void sync());
   // The options page grants access to an entry that is already stored, so no storage change follows.
