@@ -756,7 +756,6 @@ function RestDetail({
               <li key={site.id} className="rounded-md bg-chip px-3 py-2">
                 <Choice
                   label={new URL(site.origin).host}
-                  labelStrong
                   value={sends ? THERE : HERE}
                   disabled={!manages || full || writing}
                   onChange={(value) => void place(site, value)}
@@ -954,7 +953,6 @@ function Settings({ base, connector }: { base: string; connector: Connector & { 
           <li key={state.id}>
             <Choice
               label={teams > 1 ? `${state.team} · ${state.name}` : state.name}
-              labelStrong
               value={settings.stages[state.id] ?? state.stage}
               onChange={(value) => stageOf(state, value as Stage)}
               options={STAGES.map((stage) => ({ value: stage, label: t(STAGE_NAMES[stage]) }))}

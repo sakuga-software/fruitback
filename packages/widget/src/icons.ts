@@ -34,7 +34,13 @@ import { ICON_DATA, type IconShape } from './icon-data.ts';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-export type IconName = 'gear' | 'close' | 'drop' | 'dropDashed' | 'list';
+export type IconName = 'gear' | 'close' | 'drop' | 'dropDashed' | 'list' | 'mark';
+
+/**
+ * The drop of the mark, as the mock-up of 2026-10-13 draws it on the launch button (FRU-252): a
+ * circle and a point, taller than wide, on its own grid. Not the pin: a pin is a rotated corner.
+ */
+const MARK = 'M 64 121.9 L 30.1 87.9 A 48 48 0 1 1 97.9 87.9 Z';
 
 /** The pin's silhouette, rotated so the sharp corner points down. */
 const DROP = 'M8.00 14.51 L4.75 11.25 A4.6 4.6 0 0 1 4.75 4.75 A4.6 4.6 0 0 1 11.25 4.75 A4.6 4.6 0 0 1 11.25 11.25 Z';
@@ -43,6 +49,7 @@ const ICONS: Record<IconName, IconShape> = {
   gear: ICON_DATA.gear,
   close: ICON_DATA.close,
   drop: { viewBox: '0 0 16 16', paths: [{ fill: 'currentColor', d: DROP }] },
+  mark: { viewBox: '16 6 96 116', paths: [{ fill: 'currentColor', d: MARK }] },
   // Dashed, because that is how the overlay draws a pin it could not re-anchor. The chip and the pin
   // then say the same thing in the same language, which an emoji could not do.
   // Three lines, drawn here. It is no path of somebody else, so it adds no notice to carry.

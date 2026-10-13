@@ -20,6 +20,7 @@ import {
   relayRefusal,
 } from '../src/protocol.ts';
 import { createRelay } from '../src/relay.ts';
+import { KNOWN_SETTING, SYNC_SETTING, createSiteSync } from '../src/site-sync.ts';
 import { type CaptureArea, createCapture, pixelsOf } from '../src/capture.ts';
 
 /** Named once: the alarm is created, cleared and answered in three different places. */
@@ -180,9 +181,38 @@ export default defineBackground(() => {
   /** The only writer of the sites map, so a change from the popup and one from the options page cannot drop each other (FRU-43). */
   const returnAccess = createBrowserAccessReturn(sessions);
   // FRU-115: a rule that is switched off, removed or moved to another worker gives its access back.
-  const ownSites = createSiteOwner({ read: readAll, replace: replaceAll }, (before, mutation) =>
-    returnAccess(accessOf(before, patternsOf(mutation))),
-  );
+  // FRU-72: the rules in the account of the browser, when the reviewer asked for it. See `site-sync.ts`.
+  const siteSync = createSiteSync({
+    enabled: async () => (await browser.storage.local.get(SYNC_SETTING))[SYNC_SETTING] === true,
+    known: {
+      read: async () => {
+        const stored = (await browser.storage.local.get(KNOWN_SETTING))[KNOWN_SETTING];
+
+        return Array.isArray(stored) ? stored.filter((each): each is string => typeof each === 'string') : [];
+      },
+      write: (patterns) => browser.storage.local.set({ [KNOWN_SETTING]: patterns }),
+    },
+    readLocal: readAll,
+    area: {
+      get: () => browser.storage.sync.get(null),
+      set: (items) => browser.storage.sync.set(items),
+      remove: (keys) => browser.storage.sync.remove(keys),
+    },
+    apply: (mutation) => ownSites(mutation),
+  });
+  const mergeRules = (): void =>
+    void siteSync
+      .merge()
+      .catch((error: unknown) => console.error('[fruitback] could not merge the rules of the browser account', error));
+  const ownSites = createSiteOwner({ read: readAll, replace: replaceAll }, async (before, mutation) => {
+    // The copy first, and its failure (a quota, an account that is away) does not keep the access.
+    await siteSync
+      .stored(mutation)
+      .catch((error: unknown) =>
+        console.error('[fruitback] could not copy a site change to the browser account', error),
+      );
+    await returnAccess(accessOf(before, patternsOf(mutation)));
+  });
   const extensionRoot = browser.runtime.getURL('/popup.html').replace(/popup\.html$/, '');
   const pending = createBrowserPending((pattern, site) => ownSites({ kind: 'write', entries: { [pattern]: site } }));
 
@@ -245,9 +275,29 @@ export default defineBackground(() => {
         console.error('[fruitback] could not give back the access of the rules that are off', error),
       );
   });
-  browser.runtime.onStartup.addListener(() => void sync());
+  browser.runtime.onStartup.addListener(() => {
+    void sync();
+    mergeRules();
+  });
   browser.storage.onChanged.addListener((changes, area) => {
+    if (area === 'sync') {
+      void siteSync
+        .changed(changes)
+        .catch((error: unknown) => console.error('[fruitback] could not take a rule of the browser account', error));
+
+      return;
+    }
     if (area !== 'local') return;
+    // The reviewer just turned the copy on: each side takes the rules it does not have.
+    if (changes[SYNC_SETTING]?.newValue === true) mergeRules();
+    // Turned off: what was known of the account is forgotten, so the next merge removes nothing.
+    if (changes[SYNC_SETTING] !== undefined && changes[SYNC_SETTING].newValue !== true) {
+      void siteSync
+        .forget()
+        .catch((error: unknown) =>
+          console.error('[fruitback] could not forget the rules of the browser account', error),
+        );
+    }
     if (changes.sites !== undefined || touchesPreviews(Object.keys(changes))) void sync();
     // A pairing or a logout from the popup, this run's own writes — the worker rotates on every
     // refresh (FRU-61), so every refresh stores a new token — and the upgrade in `upgradeAreas`,

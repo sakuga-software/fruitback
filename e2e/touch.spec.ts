@@ -136,11 +136,11 @@ test.describe('on a touch screen at 390 px', () => {
       .getByRole('button', { name: /A note from a phone/ })
       .first()
       .tap();
-    const thread = page.getByRole('dialog', { name: /^Feedback / });
+    const thread = page.getByRole('dialog', { name: /^Note \d+$/ });
     await expect(thread).toBeVisible();
     await measure();
-    await expectAtLeast(page, 'Close', COMFORTABLE);
-    await page.getByRole('button', { name: 'Close', exact: true }).tap();
+    await expectAtLeast(page, 'Close the note', COMFORTABLE);
+    await page.getByRole('button', { name: 'Close the note', exact: true }).tap();
     await expect(thread).toHaveCount(0);
 
     // The list.

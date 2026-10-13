@@ -52,12 +52,12 @@ export const FRENCH: Catalog = {
   'composer.destinationGone':
     "L'envoi vers {destination} n'est plus possible. Cette note ira vers la destination par défaut.",
 
-  'pin.label': '{stage} · {note}',
-  'pin.labelUncertain': '{stage} · {note} (position approximative)',
+  'pin.label': 'Note {number}, {stage} : {note}',
+  'pin.labelUncertain': 'Note {number}, {stage}, position approximative : {note}',
   'pin.labelDraft': 'Pas encore envoyée · {note}',
 
-  'thread.close': 'Fermer',
-  'thread.dialog': 'Feedback {identifier}',
+  'thread.close': 'Fermer la note',
+  'thread.dialog': 'Note {number}',
   'thread.draft': 'Pas encore envoyée',
   'thread.draftDialog': 'Note pas encore envoyée',
   'thread.noNote': 'Aucune note.',
@@ -68,7 +68,7 @@ export const FRENCH: Catalog = {
   'thread.orphan': 'Élément introuvable — position approximative.',
   'thread.uncertain':
     'Élément retrouvé par sa position, pas par son identité — la page a peut-être changé sous le pin.',
-  'thread.link': '{identifier} →',
+  'thread.link': '{identifier}',
 
   'orphans.count': { one: '{count} note détachée', other: '{count} notes détachées' },
   'orphans.entry': '{stage} · {note}',

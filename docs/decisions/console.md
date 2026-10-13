@@ -17,7 +17,7 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   loses what somebody typed and runs its effects twice. **`HydrateFallback` holds no word**: it is rendered when the console
   is built, and a word in another language is a hydration error in the browser.
 - `apps/console` (`@fruitback/console`) — the console of the Cloud (FRU-99): React Router in SPA mode,
-  Tailwind on the tokens of `design/`, served as static files by nginx. **It holds no secret, and no
+  Tailwind on the tokens of `design/README.md`, served as static files by nginx. **It holds no secret, and no
   token at all** (FRU-148): the session is a cookie of the worker that no script reads, and
   `transport.ts` sends it with every call (`credentials: 'include'`). There is nothing to refresh.
   See _The session of the console_ below for the worker of before, the `401` and the providers.
@@ -73,21 +73,43 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the browser stopped the form with its own bubble, in its own language, and the sentence of the
   console never showed. The worker still decides what a site is.
 - **The console draws its controls with HeroUI v3, through its own kit** (FRU-125). `ui.tsx` is the
-  one file that imports `@heroui/react`: `Button`, `Field`, `Choice` (a select), `Pick` (radios),
-  `Chip` and `Problem`. A screen uses the kit, and `messages.test.ts` fails on a native control in a
-  screen. **HeroUI takes the theme**: `app.css` gives its variables the tokens of `design/README.md`,
-  and HeroUI names `--color-accent`, `--color-muted` and `--color-surface` from them, so those three
-  are no longer in our `@theme`. **A state that HeroUI derives is measured, and given in `app.css` when
-  it fails** (FRU-163): it lightens a hovered button, and white on that red was 3.9:1, so
-  `--accent-hover` is the strong accent (6.47:1). It draws an alert as a white card with muted text, so
-  `.alert--danger` puts the danger of the theme on the text and the border (5.84:1 on its tint).
-  `e2e/console-kit.spec.ts` measures both. **The shapes are the boards', not HeroUI's** (FRU-168):
-  HeroUI draws every button as a pill and a field at 12 px with a shadow and a border of 1.49:1.
-  `app.css` gives `--field-radius` 8 px, `--field-shadow` nothing to paint and `--field-border`
-  `#8f8883` (3.49:1); `.wide-button` is 6 px with that border, and the pill stays for the action of
-  a step; the asterisk of a required label is taken off, as on the boards. The same spec measures them. **A button takes no `title`**: a tooltip does not open on a disabled
+  one file that imports `@heroui/react`. A screen uses the kit, and `messages.test.ts` fails on a
+  native control in a screen. **A button takes no `title`**: a tooltip does not open on a disabled
   control, so the reason is written beside it. The overlays of React Aria position with inline
   styles, which the console's CSP allows (`style-src 'unsafe-inline'`); its scripts stay hashed.
+- **The values are the mockup's of 2026-10-13, named once in `app.css`** (FRU-232, on the palette:
+  read as Mathieu's answer by the orchestrator on 2026-10-13, and he may come back on it).
+  `design/README.md` has the table. **A screen writes the name of a token and never a value**:
+  `tokens.test.ts` fails on a colour written in a screen or in the kit, and on a colour of the
+  palette of before anywhere in the console. A token that a screen needs and that is not there is
+  added to `app.css` in a pull request of the kit, not in the screen.
+- **HeroUI takes the theme, and the kit takes the shapes.** `app.css` gives the variables of HeroUI
+  the tokens, so a button of HeroUI and `bg-accent` paint the same red. HeroUI writes its
+  components in the cascade layer `components`; the rules of the kit (`.kit-*`) are in no layer, so
+  they win whatever their selector, and each one is a measure read in the code of the mockup.
+  **A state that HeroUI derives is measured** (FRU-163): it lightens a hovered button, moves it
+  under a press, tints a hovered field and draws an alert as a white card with muted text. The kit
+  gives each of these the value of the mockup, which changes a colour at once and moves nothing.
+- **The kit, component by component** (`ui.tsx`):
+  `Button` (`tone="primary"`: the pill of the action of a step, 44 px; `tone="outline"`: the
+  rectangle of a control, 6 px, at 44, 40 or 32 px with `size`; `to` or `href` makes it a link of
+  the same box), `WideButton` (an outlined button over its column), `LinkButton` (underlined words;
+  its padding is its target, 33 px at the least, where the mockup draws « Rename » at 21 px),
+  `IconButton` (36 px, named by `label`), `Field` and `Choice` (44 px, `compact` 40 px, `locked` for
+  a value set elsewhere), `Pick` (radio cards), `Toggle`, `FilterChip` (`aria-pressed`), `StatusDot`
+  and `StatusBar`, `DataTable`, `SidePanel`, `KeyValue`, `SuccessMark`, `Title`, `Lead`, `PageHead`,
+  `Initial`, `Card`, `Chip`, `Problem`. The tones `quiet` and `danger` of `Button` are of before the
+  mockup: they stay as HeroUI draws them until their screens are drawn again.
+- **`/kit` mounts each component once, on the development server only** (`kit-gallery.tsx`):
+  `e2e/console-kit.spec.ts` reads there what the browser computes (colour, border, corner, height,
+  type) against the mockup, each state under the pointer, under a press and with focus, 4.5:1 for
+  every text on what is behind it, and axe. A build has no `/kit` (`kit-route.test.ts`).
+- **What the kit does not copy from the mockup.** The padding of a button is of its size, where the
+  mockup writes 22, 24 or 26 px on the same pill. A switch changes colour in 200 ms everywhere,
+  where the mockup does so in the popup only. A disabled switch dims its control and not its words.
+  The frame of a table takes focus, so a keyboard scrolls a table wider than its screen.
+- **Not measured**: what VoiceOver and NVDA say of the kit; the kit in Firefox and in Safari (the
+  spec runs in Chromium).
 
 ## The session of the console (FRU-148)
 

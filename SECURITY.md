@@ -112,15 +112,25 @@ and an address are a claim by whoever was on the page, and they are stored as on
 The whole seed — note, page URL, selector, the reporter's name and address, the screenshot URL — is
 stored as it arrived, and **where** depends on the connector:
 
-| Store    | Where a seed lands                                       | Who can read it                                                                    |
-| -------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `linear` | verbatim in an issue description                         | anyone with access to that workspace                                               |
-| `sqlite` | `JSON.stringify(seed)` in a column of your database file | anyone who can read the file, or a backup of it                                    |
-| `github` | verbatim in an issue body                                | anyone who can read that repository. **On a public repository, that is everyone.** |
+| Store      | Where a seed lands                                                                              | Who can read it                                                                                                      |
+| ---------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `linear`   | verbatim in an issue description                                                                | anyone with access to that workspace                                                                                 |
+| `sqlite`   | `JSON.stringify(seed)` in a column of your database file                                        | anyone who can read the file, or a backup of it                                                                      |
+| `postgres` | `JSON.stringify(seed)` in the `seed` column of the table `seeds`, in the database of the worker | anyone who can read that database, or a dump of it: the role of `FRUITBACK_DATABASE_URL`, and whoever holds a backup |
+| `github`   | verbatim in an issue body                                                                       | anyone who can read that repository. **On a public repository, that is everyone.**                                   |
 
 Whichever store, it outlives any expiry you had in mind, which is why an identity token travels in an
 `Authorization` header and never in the seed. On SQLite the file and its backups are the boundary,
 and they deserve the care a database of personal data deserves.
+
+**On PostgreSQL one database holds the notes of every workspace** (FRU-218), in the clear, beside
+the accounts. Nothing is sealed: `FRUITBACK_SECRETS_KEY` covers the keys of the trackers, not the
+notes. What keeps one workspace from the notes of another is the read itself, which names its site
+(`client_id`), and a read that names none gets the notes that name none:
+test:`never gives a site of one workspace the notes of a site of another, on one page of one address`,
+test:`gives a read that names no site the notes that name none, and never the notes of a site`.
+`node server.mjs forget` deletes across every site of the worker: it is the command of whoever runs
+the worker. The notes of a site that is removed stay in the table (FRU-194 will decide).
 
 Tell your reporters not to type credentials into a feedback note, because the note is going to sit
 somewhere for a long time.
@@ -1052,12 +1062,17 @@ when it is accepted`. An invitation waits 7 days; one address gets one invitatio
   transaction: it counts the owners and then removes one, it looks for an invitation of an address
   and then writes one. On a real PostgreSQL, two owners who left, demoted themselves or removed
   each other at the same moment left a workspace with no owner, which nobody can repair or delete
-  (measured, 3 runs of 3), and four invitations of one address wrote two or three rows. The routes
-  of the worker that change a workspace now run one after the other for that workspace:
+  (measured, 3 runs of 3), and four invitations of one address wrote two or three rows. The
+  `POST /console/auth/organization/*` routes of the worker that name a workspace now run one after
+  the other for that workspace:
   test:`keeps one owner when two owners go at the same moment (FRU-209)`,
   test:`writes one invitation for one address when two people invite it at the same moment`.
   **This holds for one process of the worker.** Two replicas do not share it: the rate limit is
   shared through the database (FRU-67), this is not.
+  **The rename and the deletion of a workspace are outside it**: `POST` and `DELETE` on
+  `/console/workspaces/<id>`. Neither counts the owners or looks for an invitation before it
+  writes. Two renames at the same moment leave the last one written. Not measured: a rename at the
+  moment its author loses the right, or at the moment the workspace is deleted.
 - **Nobody is removed while their extension lives** (FRU-209). The sessions of the extensions of a
   member end before better-auth deletes the member; when that fails, nothing is deleted, the call
   answers `502`, and it is made again:
@@ -1142,6 +1157,15 @@ when it is accepted`. An invitation waits 7 days; one address gets one invitatio
 - **A workspace is made by the plugin for somebody of the cookie**: `POST /console/workspaces`
   reads the name, then calls it in the process. Its route stays closed to a request: it takes a
   slug, a logo and metadata that nothing reads.
+- **A workspace is renamed by its owner or an admin** (FRU-236), by `POST /console/workspaces/<id>`
+  with a name, under the rule of the creation: one line, 1 to 80 characters. The role is read in
+  the store of the worker at the call, a member and a guest get `403`, somebody who is not of the
+  workspace `404`, and a call that does not carry the `Origin` of the console `403`, as on every
+  route of the console that changes something. The plugin writes the name, called in the process
+  with the name and nothing else, and reads the person and their role again; its own route
+  (`/organization/update`, which also takes a slug, a logo and metadata) stays closed. The id, the
+  sites, the members and the extensions that are paired do not move: they name the id.
+  test:`moves nothing else: the id, the sites, the members, and the extensions that are paired`.
 
 ### The picture of a note, taken by the extension (FRU-44)
 

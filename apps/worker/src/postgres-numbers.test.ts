@@ -82,6 +82,15 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
     `INSERT INTO screenshots (id, workspace_id, account_id, content, width, height, created_at)
        VALUES ('shot_1', 'ws_acme', 'acc_alice', '\\x89504e47'::bytea, 1, 1, 1)`,
   );
+  // One note and one reply (FRU-218). Their numbers are BIGINT too, and `write` puts one value in a
+  // column at a time: the key from the reply to its note is taken off, or the two could not differ
+  // for the time of one statement.
+  await rowsOf(
+    database,
+    `INSERT INTO seeds (client_id, page_url, stage, seed, created_at, updated_at) VALUES ('site_1', 'https://acme.dev/', 'seeded', '{}', 1, 1)`,
+  );
+  await rowsOf(database, `INSERT INTO seed_comments (seed_id, body, created_at) VALUES (1, 'a reply', 1)`);
+  await rowsOf(database, 'ALTER TABLE seed_comments DROP CONSTRAINT seed_comments_seed_id_fkey');
   await rowsOf(database, `INSERT INTO kv (key, value, expires_at) VALUES ('fruitback:test:count', '1', 1)`);
 
   return database;
@@ -92,7 +101,7 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the twenty-two BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the twenty-eight BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
     'connectors.attention_at',
     'connectors.created_at',
@@ -111,6 +120,12 @@ it('knows the twenty-two BIGINT columns of the worker, and that better-auth has 
     'pairings.expires_at',
     'pairings.redeemed_at',
     'screenshots.created_at',
+    'seed_comments.created_at',
+    'seed_comments.id',
+    'seed_comments.seed_id',
+    'seeds.created_at',
+    'seeds.id',
+    'seeds.updated_at',
     'sessions.created_at',
     'sessions.expires_at',
     'sessions.revoked_at',

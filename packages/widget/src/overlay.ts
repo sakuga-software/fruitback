@@ -1,7 +1,7 @@
 import { type SeedBounds, type SeedIssue } from '@fruitback/shared';
 import { type Direction, type Translator, createTranslator, languageOf } from './messages.ts';
 import { createIcon } from './icons.ts';
-import { stageToken } from './theme.ts';
+import { onStageToken, stageToken } from './theme.ts';
 import { isElement } from './dom.ts';
 import { deepActiveElement } from './focus.ts';
 import { createOrphanList, type OrphanList } from './orphans.ts';
@@ -30,15 +30,32 @@ import { type AnchorResolution, resolveAnchor } from './resolve.ts';
 /** How long a note stays readable on the badge before it turns into a tooltip. */
 const BADGE_MAX_LENGTH = 32;
 
-/** Kept next to the stylesheet's `width`, because `positionThread` has to know it to flip sides. */
-const THREAD_WIDTH = 300;
+/**
+ * Kept next to the stylesheet's `width`, because `positionThread` has to know it to flip sides. The
+ * 360 px of the mock-up (FRU-256); a window narrower than that takes the width the stylesheet left.
+ */
+const THREAD_WIDTH = 360;
 const THREAD_GAP = 8;
+/**
+ * Where the bubble sits beside its pin, read on the mock-up (FRU-256): 30 px past the element and
+ * 36 px above its top. The frame stands 4 px off the element, so that is 26 and 32 px from the frame,
+ * and 8 px above the drop.
+ */
+const THREAD_BESIDE = 26;
+const THREAD_RISE = 32;
 
 /**
  * How far apart the badges of one spot sit (FRU-155). Kept next to the stylesheet, which reads it
  * through `--fruitback-pin-slot`: a 26 px drop and a 4 px gap.
  */
 const BADGE_STEP = 30;
+
+/**
+ * How far the frame of a pin stands off its element, on every side (FRU-252): the 4 px of the
+ * mock-up. The frame is 2 px thick, so 2 px of the page show between the element and its frame, and
+ * the frame draws around the element and not on it.
+ */
+const FRAME_OUTSET = 4;
 
 /**
  * The room a badge needs on the left of its element, from the document's edge: the 26 px drop
@@ -103,7 +120,13 @@ export type Overlay = {
    */
   refilter(): void;
   /** What each pin resolved to, in render order — the honest account of what was found. */
-  resolutions(): { issue: SeedIssue; strategy: AnchorResolution['strategy']; confident: boolean }[];
+  resolutions(): {
+    issue: SeedIssue;
+    strategy: AnchorResolution['strategy'];
+    confident: boolean;
+    /** The number its pin carries (FRU-252). A note kept for later has none. */
+    number?: number;
+  }[];
   /** Whether a thread is open. `render` closes it, so a caller that can wait asks first. */
   threadOpen(): boolean;
   /**
@@ -170,12 +193,17 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     });
   }
 
-  function resolutions(): { issue: SeedIssue; strategy: AnchorResolution['strategy']; confident: boolean }[] {
-    return placed.map((entry) => ({
-      issue: entry.issue,
-      strategy: entry.resolution.strategy,
-      confident: entry.resolution.confident,
-    }));
+  function resolutions(): ReturnType<Overlay['resolutions']> {
+    return placed.map((entry) => {
+      const number = NUMBERS.get(entry.issue);
+
+      return {
+        issue: entry.issue,
+        strategy: entry.resolution.strategy,
+        confident: entry.resolution.confident,
+        ...(number === undefined ? {} : { number }),
+      };
+    });
   }
 
   function reposition(): void {
@@ -201,10 +229,10 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     entry.pin.classList.toggle('fruitback-pin-uncertain', !attached || !entry.resolution.confident);
 
     Object.assign(entry.pin.style, {
-      left: `${rect.left}px`,
-      top: `${rect.top}px`,
-      width: `${rect.width}px`,
-      height: `${rect.height}px`,
+      left: `${rect.left - FRAME_OUTSET}px`,
+      top: `${rect.top - FRAME_OUTSET}px`,
+      width: `${rect.width + 2 * FRAME_OUTSET}px`,
+      height: `${rect.height + 2 * FRAME_OUTSET}px`,
     });
   }
 
@@ -338,12 +366,26 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     const refocus = focusedTarget();
     closeThread(false);
     container.replaceChildren();
+    // A note has the number of its place among the notes of the page, before any is hidden: hiding a
+    // stage must not give « note 3 » to another note. A note kept for later is not counted.
+    // Both marks are written at each draw, and the other one taken away: the two stores outlive a
+    // render, and an object a caller draws first as a draft and then as a sent note must not keep
+    // the look of the draft.
+    let count = 0;
+    for (const issue of source) {
+      if (options.isDraft?.(issue) === true) {
+        DRAFTS.add(issue);
+        NUMBERS.delete(issue);
+      } else {
+        DRAFTS.delete(issue);
+        NUMBERS.set(issue, (count += 1));
+      }
+    }
 
     placed = source
       .filter((issue) => options.shouldShow?.(issue) ?? true)
       .map((issue) => {
         const resolution = resolveAnchor(issue.seed.anchor, { document });
-        if (options.isDraft?.(issue) === true) DRAFTS.add(issue);
         const pin = buildPin(document, issue, resolution, t);
         const entry = { issue, resolution, pin };
 
@@ -423,6 +465,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     closeThread();
     threadOpener = active !== null && active !== document.body ? (active as HTMLElement) : null;
     entry.pin.dataset.fruitbackOpen = '';
+    entry.pin.querySelector('.fruitback-pin-badge')?.setAttribute('aria-expanded', 'true');
     thread = buildThread(document, entry.issue, entry.resolution, t);
     thread.querySelector('.fruitback-thread-close')?.addEventListener('click', () => closeThread());
     container.append(thread);
@@ -437,7 +480,10 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     const opener = placed.find((entry) => entry.pin.dataset.fruitbackOpen !== undefined);
     thread?.remove();
     thread = null;
-    for (const entry of placed) delete entry.pin.dataset.fruitbackOpen;
+    for (const entry of placed) {
+      delete entry.pin.dataset.fruitbackOpen;
+      entry.pin.querySelector('.fruitback-pin-badge')?.setAttribute('aria-expanded', 'false');
+    }
     const badge = opener?.pin.querySelector<HTMLElement>('.fruitback-pin-badge');
     if (focused) (threadOpener?.isConnected === true ? threadOpener : badge)?.focus();
     threadOpener = null;
@@ -522,6 +568,9 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   };
 }
 
+/** The number an overlay gave a note: its place among the notes of the page (FRU-252). */
+const NUMBERS = new WeakMap<SeedIssue, number>();
+
 /** The issues an overlay was told are drafts. Marked on the object, which the overlay draws as it got it. */
 const DRAFTS = new WeakSet<SeedIssue>();
 
@@ -538,6 +587,8 @@ function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolu
   // dark theme, the host override and, once FRU-24 lands, a contract that stops shipping colours at
   // all — a widget's palette has no business travelling in the payload both ends must agree on.
   pin.style.setProperty('--fruitback-pin-color', pinColor(issue));
+  // What is written on the drop: dark on the amber of « in progress », white on the others (FRU-233).
+  if (!DRAFTS.has(issue)) pin.style.setProperty('--fruitback-pin-on-color', onStageToken(issue.stage));
   pin.dataset.fruitbackPin = issue.seed.id;
   if (DRAFTS.has(issue)) pin.dataset.fruitbackDraft = '';
   pin.dataset.fruitbackStage = issue.stage;
@@ -545,6 +596,8 @@ function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolu
   const badge = document.createElement('button');
   badge.type = 'button';
   badge.className = 'fruitback-pin-badge';
+  // A pin opens its note: a screen reader is told which one is open, and is not told it twice.
+  badge.setAttribute('aria-expanded', 'false');
   badge.title = DRAFTS.has(issue) ? stateLabel(issue, t) : `${issue.identifier} · ${stateLabel(issue, t)}`;
   // The drop is rotated, so the glyph rides in its own span and is turned back upright.
   const glyph = document.createElement('span');
@@ -580,16 +633,20 @@ function applyResolution(pin: HTMLElement, issue: SeedIssue, resolution: AnchorR
     DRAFTS.has(issue)
       ? t.text('pin.labelDraft', { note: summarise(issue) })
       : t.text(resolution.confident ? 'pin.label' : 'pin.labelUncertain', {
-          stage: t.stage(issue.stage),
+          number: NUMBERS.get(issue) ?? 0,
+          // « Note 2, in progress »: the name of a stage is a label, written with a capital. In a
+          // sentence it takes none.
+          stage: t.stage(issue.stage).toLocaleLowerCase(t.lang),
           note: summarise(issue),
         }),
   );
   const glyph = pin.querySelector('.fruitback-pin-glyph');
-  // Empty when the pin is sure of itself (FRU-24): the drop's shape and its stage colour say which
-  // stage it is, and the emoji that used to sit here was a rendering choice travelling in a published
-  // type. The `≈` stays, because it is the whole warning in one character — this one was placed by
-  // coordinates, not recognised — and a typographic symbol is not an emoji.
-  if (glyph !== null) glyph.textContent = resolution.confident ? '' : '≈';
+  // The number of the note (FRU-252), which the list of the page writes beside the same note. It is
+  // what the `≈` of an unsure pin gave way to: the dashed frame, the name of the pin and its thread
+  // still say that this one was placed by coordinates, and one drop holds one mark. A note kept for
+  // later has no number: the drop is empty, in its neutral colour.
+  const number = NUMBERS.get(issue);
+  if (glyph !== null) glyph.textContent = number === undefined ? '' : String(number);
 }
 
 function summarise(issue: SeedIssue): string {
@@ -616,7 +673,11 @@ function replies(document: Document, issue: SeedIssue, t: Translator): HTMLEleme
   if (issue.comments === undefined) return [];
 
   if (issue.comments.length === 0) {
-    return [element(document, 'p', 'fruitback-thread-empty', t.text('thread.noReplies'))];
+    return [
+      element(document, 'div', 'fruitback-thread-answers', [
+        element(document, 'p', 'fruitback-thread-empty', t.text('thread.noReplies')),
+      ]),
+    ];
   }
 
   const list = document.createElement('ul');
@@ -632,11 +693,13 @@ function replies(document: Document, issue: SeedIssue, t: Translator): HTMLEleme
     item.append(
       byline(
         document,
-        'span',
+        'p',
         'fruitback-thread-reply-who',
         comment.author ?? t.text('thread.team'),
         comment.createdAt,
         t,
+        // Who answers is what the eye looks for in a conversation: the name is in the ink, the date is not.
+        'fruitback-thread-reply-name',
       ),
       // `textContent`, never markup: this is Linear's markdown, written by whoever can comment on the
       // issue, rendered inside someone else's page. It is text here and nothing more.
@@ -645,7 +708,25 @@ function replies(document: Document, issue: SeedIssue, t: Translator): HTMLEleme
     list.append(item);
   }
 
-  return [list];
+  return [element(document, 'div', 'fruitback-thread-answers', [list])];
+}
+
+/**
+ * The component and the file behind the element, when the capture found them (FRU-256).
+ *
+ * It is what a developer reads first, and until now only the export said it. A note taken on a page
+ * with no React, or on a production build, has none: the line is then absent, and nothing stands in.
+ * As text, like everything a note carries.
+ */
+function sourceLine(document: Document, issue: SeedIssue): HTMLElement[] {
+  const source = issue.seed.source;
+  if (source === undefined) return [];
+
+  const line = source.line === undefined ? '' : `:${source.line}`;
+  const file = source.file === undefined ? undefined : `${source.file}${line}`;
+  const parts = [source.component, file].filter((part): part is string => part !== undefined && part.trim() !== '');
+
+  return parts.length > 0 ? [element(document, 'p', 'fruitback-thread-source', parts.join(' · '))] : [];
 }
 
 /**
@@ -675,30 +756,44 @@ function buildThread(document: Document, issue: SeedIssue, resolution: AnchorRes
   thread.setAttribute('role', 'dialog');
   thread.setAttribute(
     'aria-label',
-    DRAFTS.has(issue) ? t.text('thread.draftDialog') : t.text('thread.dialog', { identifier: issue.identifier }),
+    // « Note 2 », the number its drop carries (FRU-256): the name of the dialog and the name of the pin
+    // that opens it then say the same note. The identifier of the store is the link of the head.
+    DRAFTS.has(issue) ? t.text('thread.draftDialog') : t.text('thread.dialog', { number: NUMBERS.get(issue) ?? 0 }),
   );
   thread.style.setProperty('--fruitback-pin-color', pinColor(issue));
 
   const reporter = issue.seed.reporter?.name ?? issue.seed.reporter?.email ?? t.text('thread.anonymous');
 
+  // The drop of the pin, small, in front of the word of the state: the colour is never alone.
+  const drop = document.createElement('span');
+  drop.className = 'fruitback-thread-drop';
+  drop.setAttribute('aria-hidden', 'true');
+
   thread.append(
     // A div, not a header: inside the widget's region landmark a header is a banner (FRU-51).
     element(document, 'div', 'fruitback-thread-head', [
-      // The store's own word for the state, with no glyph in front of it. `stateName` is what the
-      // store said — Linear's "In Progress", SQLite's own — and the stage colour is already on the
-      // thread's top border through `--fruitback-pin-color`.
+      // The store's own word for the state. `stateName` is what the store said — Linear's
+      // "In Progress", SQLite's own — and the drop beside it carries the stage colour through
+      // `--fruitback-pin-color`.
       //
       // See `stateLabel` for why this is not just `issue.stateName`.
-      element(document, 'span', 'fruitback-thread-stage', stateLabel(issue, t)),
+      element(document, 'span', 'fruitback-thread-stage', [
+        drop,
+        element(document, 'span', 'fruitback-thread-state', stateLabel(issue, t)),
+      ]),
+      // In the head (FRU-256), where the mock-up draws it: the way out is known before the note is read.
+      ...link(document, issue, t),
       closeButton(document, t),
     ]),
-    element(document, 'p', 'fruitback-thread-note', issue.seed.note || t.text('thread.noNote')),
-    byline(document, 'p', 'fruitback-thread-meta', reporter, issue.seed.createdAt, t),
-    // Said out loud rather than hidden. A reader who is told the pin might be on the wrong element
-    // checks; a reader who is told nothing believes it.
-    ...uncertaintyNote(document, resolution, t),
+    element(document, 'div', 'fruitback-thread-body', [
+      element(document, 'p', 'fruitback-thread-note', issue.seed.note || t.text('thread.noNote')),
+      byline(document, 'p', 'fruitback-thread-meta', reporter, issue.seed.createdAt, t),
+      ...sourceLine(document, issue),
+      // Said out loud rather than hidden. A reader who is told the pin might be on the wrong element
+      // checks; a reader who is told nothing believes it.
+      ...uncertaintyNote(document, resolution, t),
+    ]),
     ...replies(document, issue, t),
-    ...link(document, issue, t),
   );
 
   return thread;
@@ -761,12 +856,16 @@ function byline(
   who: string,
   written: string,
   t: Translator,
+  nameClass?: string,
 ): HTMLElement {
   const date = new Date(written);
-  if (Number.isNaN(date.getTime())) return element(document, tag, className, `${who} · ${written}`);
-
-  const node = element(document, tag, className, `${who} · ${t.relative(date)}`);
-  node.title = t.date(date);
+  const when = Number.isNaN(date.getTime()) ? written : t.relative(date);
+  const node =
+    nameClass === undefined
+      ? element(document, tag, className, `${who} · ${when}`)
+      : element(document, tag, className, [element(document, 'span', nameClass, who)]);
+  if (nameClass !== undefined) node.append(` · ${when}`);
+  if (!Number.isNaN(date.getTime())) node.title = t.date(date);
 
   return node;
 }
@@ -781,8 +880,10 @@ function element(document: Document, tag: string, className: string, content: st
 }
 
 /**
- * Below the pin when there is room for it on screen, above it when there is not. Aligned on the pin's
- * start edge for the reading direction; the value stays a physical left, like the pin (FRU-38).
+ * Beside the frame when the window has the room, as the mock-up draws it (FRU-256): past its end edge
+ * for the reading direction, a little above its top. Otherwise below the pin, or above it when there
+ * is no room below: that is every phone, and every element that runs to the edge of the window. The
+ * values stay physical, like the pin (FRU-38).
  */
 function positionThread(thread: HTMLElement, pin: HTMLElement | undefined, direction: Direction): void {
   if (pin === undefined) return;
@@ -797,14 +898,28 @@ function positionThread(thread: HTMLElement, pin: HTMLElement | undefined, direc
   const scrollX = view?.scrollX ?? 0;
   const scrollY = view?.scrollY ?? 0;
 
-  // Measured after insertion, so this is the height the thread actually took.
+  // Measured after insertion, so these are the sizes the thread actually took. A window narrower than
+  // the bubble gives it less than `THREAD_WIDTH`; a document with no layout gives 0, and the constant.
   const threadHeight = thread.offsetHeight;
+  const threadWidth = thread.offsetWidth || THREAD_WIDTH;
+  // The pin's left is in document coordinates, so the window it must stay inside starts at `scrollX` (FRU-68).
+  const first = scrollX + THREAD_GAP;
+  const last = scrollX + viewportWidth - threadWidth - THREAD_GAP;
+
+  const beside = direction === 'rtl' ? left - THREAD_BESIDE - threadWidth : left + pinWidth + THREAD_BESIDE;
+  if (beside >= first && beside <= last) {
+    // Never under the bottom of the window, and never above its top: the head holds the way out.
+    const lowest = scrollY + viewportHeight - threadHeight - THREAD_GAP;
+    thread.style.left = `${beside}px`;
+    thread.style.top = `${Math.max(scrollY + THREAD_GAP, Math.min(top - THREAD_RISE, lowest))}px`;
+    return;
+  }
+
   const below = top + pinHeight + THREAD_GAP;
   const roomBelow = below + threadHeight <= scrollY + viewportHeight;
-  const start = direction === 'rtl' ? left + pinWidth - THREAD_WIDTH : left;
+  const start = direction === 'rtl' ? left + pinWidth - threadWidth : left;
 
-  // The pin's left is in document coordinates, so the window it must stay inside starts at `scrollX` (FRU-68).
-  thread.style.left = `${Math.max(scrollX + THREAD_GAP, Math.min(start, scrollX + viewportWidth - THREAD_WIDTH - THREAD_GAP))}px`;
+  thread.style.left = `${Math.max(first, Math.min(start, last))}px`;
   thread.style.top = `${roomBelow ? below : Math.max(0, top - threadHeight - THREAD_GAP)}px`;
 }
 
@@ -885,14 +1000,20 @@ const STYLES = `
   border-radius: 50% 50% 50% 0;
   transform: rotate(-90deg);
   background: var(--fruitback-pin-color);
-  color: var(--fruitback-color-on-stage);
-  font: 13px/1 var(--fruitback-font-sans);
+  color: var(--fruitback-pin-on-color, var(--fruitback-color-on-stage));
+  font: 600 13px/1 var(--fruitback-font-sans);
   cursor: pointer;
   box-shadow: var(--fruitback-shadow-sm);
   /* Squash and stretch: the drop lands, flattens, and settles. */
   animation: fruitback-pin-drop var(--fruitback-duration-slow) cubic-bezier(0.2, 1.4, 0.35, 1);
 }
-.fruitback-pin-glyph { transform: rotate(90deg); font-size: 13px; line-height: 1; }
+.fruitback-pin-glyph {
+  transform: rotate(90deg);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
 /* No room on the left: above the element, going right, as before FRU-158. */
 .fruitback-pin-tight .fruitback-pin-badge {
   right: auto;
@@ -914,72 +1035,133 @@ const STYLES = `
 .fruitback-thread {
   position: absolute;
   z-index: 2147483100;
-  width: 300px;
+  /* 360 px, and what a narrower window leaves: 8 px on each side, the gap the placement keeps. */
+  width: min(360px, calc(100vw - 16px));
   pointer-events: auto;
-  border: 1px solid var(--fruitback-color-border-strong);
-  border-top: 3px solid var(--fruitback-pin-color);
-  border-radius: var(--fruitback-radius-md);
-  padding: 12px 14px;
+  border-radius: var(--fruitback-radius-lg);
   background: var(--fruitback-color-surface);
   color: var(--fruitback-color-text);
   font: 14px/1.5 var(--fruitback-font-sans);
   box-shadow: var(--fruitback-shadow-lg);
 }
-.fruitback-thread-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.fruitback-thread-stage { font-weight: 600; font-size: 13px; letter-spacing: -0.006em; }
+/* A shadow is not drawn in forced colours: the bubble then needs an edge of its own. */
+@media (forced-colors: active) {
+  .fruitback-thread { outline: 1px solid CanvasText; }
+}
+.fruitback-thread-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-block: 8px;
+  padding-inline: 16px 8px;
+  border-bottom: 1px solid var(--fruitback-color-border);
+}
+.fruitback-thread-stage {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: -0.006em;
+}
+/* The silhouette of the pin, which is not in the scale and is not settable (see theme.ts). */
+.fruitback-thread-drop {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-90deg);
+  background: var(--fruitback-pin-color);
+}
+/* anywhere: the store names its states, and a long name must wrap inside the head. */
+.fruitback-thread-state { min-width: 0; overflow-wrap: anywhere; }
 .fruitback-thread-close {
-  display: grid;
-  place-items: center;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-inline-start: auto;
   border: 0;
-  background: none;
+  border-radius: var(--fruitback-radius-field);
+  background: var(--fruitback-color-surface);
   font-size: 15px;
   line-height: 1;
   cursor: pointer;
   color: var(--fruitback-color-text-muted);
 }
-.fruitback-thread-close:hover { color: var(--fruitback-color-text); }
+.fruitback-thread-close:hover { background: var(--fruitback-color-surface-sunken); }
+.fruitback-thread-body { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; }
 /* anywhere: an address has no space, and it must wrap inside the thread instead of leaving it (FRU-154). */
-.fruitback-thread-note { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.fruitback-thread-meta { margin: 8px 0 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
-.fruitback-thread-orphan { margin: 8px 0 0; font-size: 12px; color: var(--fruitback-color-warning); }
+.fruitback-thread-note { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.fruitback-thread-meta { margin: 0; font-size: 12px; color: var(--fruitback-color-text-muted); overflow-wrap: anywhere; }
+.fruitback-thread-source {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  border: 1px solid var(--fruitback-color-border);
+  border-radius: var(--fruitback-radius-sm);
+  background: var(--fruitback-color-surface-raised);
+  color: var(--fruitback-color-text-subtle);
+  font: 11.5px/1.5 var(--fruitback-font-mono);
+  overflow-wrap: anywhere;
+}
+.fruitback-thread-orphan { margin: 0; font-size: 12px; color: var(--fruitback-color-warning); }
+.fruitback-thread-answers { border-top: 1px solid var(--fruitback-color-border); }
 .fruitback-thread-empty {
-  margin: 8px 0 0;
+  margin: 0;
+  padding: 12px 16px;
   font-size: 12px;
   color: var(--fruitback-color-text-subtle);
   font-style: italic;
 }
 .fruitback-thread-replies {
-  margin: 10px 0 0;
-  padding: 0;
-  padding-inline-start: 10px;
-  border-inline-start: 2px solid var(--fruitback-color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 16px;
   list-style: none;
-  /* A long conversation belongs in Linear, which the link below goes to. */
+  /* A long conversation belongs in Linear, which the link of the head goes to. */
   max-height: 180px;
   overflow-y: auto;
+}
+/*
+  Inside, not around: the list goes to the edges of the bubble, and a ring drawn outside it would lie
+  on the rule above and leave the bubble below.
+*/
+.fruitback-thread-replies:focus-visible {
+  outline: 2px solid var(--fruitback-color-accent);
+  outline-offset: -2px;
+  border-end-start-radius: var(--fruitback-radius-lg);
+  border-end-end-radius: var(--fruitback-radius-lg);
 }
 /*
   On the item, not only on the list. The host reset gives every element all:initial, which resets each
   item's own list-style-type to its initial value of disc — and a reset value beats what it would have
   inherited from the list. The bullets came back, and only a recording showed it.
 */
-.fruitback-thread-replies:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 2px; }
-.fruitback-thread-reply { list-style: none; }
-.fruitback-thread-reply + .fruitback-thread-reply { margin-top: 8px; }
-.fruitback-thread-reply-who { display: block; font-size: 11px; color: var(--fruitback-color-text-muted); }
-.fruitback-thread-reply-body { margin: 2px 0 0; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.fruitback-thread-reply { display: flex; flex-direction: column; gap: 2px; flex: none; list-style: none; }
+.fruitback-thread-reply-who { margin: 0; font-size: 11px; color: var(--fruitback-color-text-muted); overflow-wrap: anywhere; }
+.fruitback-thread-reply-name { font-weight: 600; color: var(--fruitback-color-text); }
+.fruitback-thread-reply-body { margin: 0; font-size: 12px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .fruitback-thread-link {
-  display: inline-block;
-  margin-top: 10px;
-  font-size: 13px;
-  color: var(--fruitback-color-accent);
+  flex: none;
+  font-size: 12px;
+  color: var(--fruitback-color-text-muted);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
 }
+.fruitback-thread-link:hover { color: var(--fruitback-color-accent-strong); }
 /*
   A thumb, not a pointer (FRU-157). The cross stays 15 px and its button grows to 44 px. The negative
-  margins give the extra size back to the padding of the thread, so the head keeps its height.
+  margins give the extra size back to the padding of the head, so the head keeps its height.
 */
 @media (pointer: coarse) {
-  .fruitback-thread-close { min-width: 44px; min-height: 44px; margin-block: -12px; margin-inline-end: -14px; }
-  .fruitback-thread-link { display: inline-flex; align-items: center; min-height: 32px; margin-top: 4px; }
+  .fruitback-thread-close { min-width: 44px; min-height: 44px; margin-block: -6px; margin-inline-end: -6px; }
+  .fruitback-thread-link { display: inline-flex; align-items: center; min-height: 32px; }
 }
 `;

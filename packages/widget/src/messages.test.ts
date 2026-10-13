@@ -472,6 +472,9 @@ describe('every word the widget shows', () => {
       // A note kept for later, and the path of its page (FRU-124).
       'NOTE KEPT',
       '/pricing',
+      // The component and the file behind the element, which the bubble shows as the note carries them (FRU-256).
+      'CheckoutCta',
+      'src/components/checkout-cta.tsx',
     ];
     const untranslated = snapshots.filter((text) => {
       const rest = data.reduce((left, value) => left.split(value).join(''), text.replace(/⟦[^⟧]+⟧/g, ''));

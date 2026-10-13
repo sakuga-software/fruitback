@@ -1,8 +1,11 @@
 import type { AccountStore } from './accounts.ts';
 import type { Kv } from './kv.ts';
-import { type Database, databaseFor } from './postgres.ts';
+import { z } from 'zod';
+import { type Database, databaseFor, readDatabaseUrl } from './postgres.ts';
 import type { ScreenshotStore } from './screenshots.ts';
 import type { SessionStore } from './session.ts';
+import type { SeedStore } from './store.ts';
+import { type StoreSpec, defineStore } from './store-config.ts';
 
 /**
  * The stores of a worker on a database, loaded at their first call (FRU-180).
@@ -138,6 +141,44 @@ export function postgresKv(url: string): Kv {
   }
 
   return kv;
+}
+
+/**
+ * The notes of this database (FRU-218): `createPostgresSeedStore` of `seeds-postgres.ts`, loaded at
+ * the first call. `name` and `scope` are read with no call, by `/health` and by the key of the read
+ * cache, so they are written here and held equal to the real ones by a test.
+ */
+export function postgresSeedStore(url: string): SeedStore {
+  const database = databaseFor(url);
+  type Calls = Required<Pick<SeedStore, 'create' | 'createBatch' | 'findForPage' | 'forget'>>;
+  const store = later<Calls>(
+    async () => (await import('./seeds-postgres.ts')).createPostgresSeedStore(database) as Calls,
+    {
+      create: true,
+      createBatch: true,
+      findForPage: true,
+      forget: true,
+    },
+  );
+
+  return { name: 'postgres', scope: () => 'postgres', ...store };
+}
+
+/**
+ * The database as a selectable store (FRU-218): `FRUITBACK_STORE=postgres`.
+ *
+ * It reads the variable of the accounts, `FRUITBACK_DATABASE_URL`, and no other: the notes are in the
+ * database of the worker, with its sites. A worker with no database is told the name of that
+ * variable. It is not the default: `DEFAULT_STORE_PROVIDER` does not change here.
+ */
+export function createPostgresStoreSpec(): StoreSpec {
+  return defineStore({
+    provider: 'postgres',
+    envNames: { url: 'FRUITBACK_DATABASE_URL' },
+    read: (env) => ({ url: readDatabaseUrl(env.FRUITBACK_DATABASE_URL) }),
+    schema: z.object({ url: z.string().min(1) }),
+    create: ({ url }) => postgresSeedStore(url),
+  });
 }
 
 /** What `migrate-to-postgres` copies, and where (FRU-145). */

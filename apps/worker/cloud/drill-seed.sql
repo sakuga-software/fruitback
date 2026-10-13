@@ -80,6 +80,19 @@ INSERT INTO "invitation" ("id", "organizationId", "email", "role", "status", "ex
 INSERT INTO screenshots (id, workspace_id, account_id, content, width, height, created_at) VALUES
   ('shot_drill1', 'ws_drill1', 'acc_drill1', '\x89504e470d0a1a0a0000000d49484452', 120, 60, 1);
 
+-- The notes the worker keeps itself, and the replies to them (FRU-218). An explicit number, as the
+-- copy of a SQLite file writes them, and the sequence moved after it: a restore that left the
+-- sequence at 1 would give the next note the number of one that exists. Three notes and two replies.
+INSERT INTO seeds (id, client_id, page_url, stage, seed, created_at, updated_at) VALUES
+  (1, 'site_drill1', 'https://staging.acme.dev/pricing', 'seeded', '{"id":"sd_drill1","note":"The price is cut off on a phone."}', 1, 1),
+  (2, 'site_drill1', 'https://staging.acme.dev/pricing', 'ripe', '{"id":"sd_drill2","note":"Done."}', 2, 3),
+  (7, NULL, 'https://staging.acme.dev/', 'seeded', '{"id":"sd_drill7","note":"A note that names no site."}', 4, 4);
+SELECT setval(pg_get_serial_sequence('seeds', 'id'), 7);
+
+INSERT INTO seed_comments (seed_id, author, body, created_at) VALUES
+  (1, 'Alice Martin', 'We see it too.', 5),
+  (1, NULL, 'Fixed in the next deployment.', 6);
+
 -- What the replicas share (FRU-67): a count of the rate limiter. Nothing of it must survive a
 -- restore, and the drill compares it like any other row.
 INSERT INTO kv (key, value, expires_at) VALUES

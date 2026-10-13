@@ -143,7 +143,7 @@ A second Redis client (PR #235) was closed unmerged on 2026-10-13, for the Postg
 
 Decided on 2026-10-13: no Redis. PostgreSQL is required for the Cloud and is to be for every worker,
 so it is the one store that replicas share, and a second system for a few counts is one more thing
-to run. `kv-postgres.ts` is the store, `kv` its table (migration `0005_kv`, generated), and `kvFor`
+to run. `kv-postgres.ts` is the store, `kv` its table (migration `0006_kv`, generated after `0005_seeds`), and `kvFor`
 gives it to a worker that has `FRUITBACK_DATABASE_URL`.
 
 **Hand-made, after the libraries were read.** None covers the uses of the `Kv`: Keyv, unstorage and
@@ -1159,7 +1159,7 @@ PostgreSQL. Porting them to Drizzle first would be work on code that leaves.
   Remove its SQL file, its snapshot and its entry, then run `db:generate`. Do not merge the journal
   by hand: see the first defect below.
 - **Drizzle is named by the files of the database only**: `postgres-schema.ts`, `auth-schema.ts`,
-  `postgres-migrate.ts`, `accounts-postgres.ts`, `session-postgres.ts` and `screenshots-postgres.ts`,
+  `postgres-migrate.ts`, `accounts-postgres.ts`, `session-postgres.ts`, `screenshots-postgres.ts` and `seeds-postgres.ts`,
   and `postgres.ts` as types. No file that every worker loads imports one of them: `app.ts` takes a store, and `auth.ts`
   takes `migrated`, from `postgres-stores.ts`, which loads them at their first call. A lint rule
   holds both, and test:`loads no file of Drizzle and no file of the driver for a worker without the
@@ -1190,7 +1190,7 @@ variable` holds the rest.
   database give no search path, and no schema has the name of the role.
 - **A store reads a `BIGINT` through the schema, never with a raw statement.** Through the schema it
   is a number. In the answer of a raw statement it is a string, and `account-rows.ts` reads a string
-  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the twenty-two columns.
+  as no instant: 1970, with no error. `postgres-numbers.test.ts` holds each of the twenty-eight columns.
 - **A transaction is the one of `postgres.ts`, never `db.transaction` of Drizzle on the pool.** A
   store takes `database.transaction`, which gives it Drizzle on one connection.
 - **The words of an error of Drizzle reach no log.** They quote the statement and its values: an
@@ -1282,7 +1282,7 @@ the lock` is its control: the same two processes, with the line of the lock remo
   That is why the `BIGINT` is a number by the schema.
   test:`answers a BIGINT of the schema as a number, on the driver that ships`.
 - **What the parser that is gone changes, measured on a server** (raised in review). For each of the
-  `BIGINT` columns (twenty then, sixteen since FRU-146, twenty since FRU-103, twenty-one since FRU-44, twenty-two since FRU-67), a pool built as `postgres.ts` built it before answers a number for a raw
+  `BIGINT` columns (twenty then, sixteen since FRU-146, twenty since FRU-103, twenty-one since FRU-44, twenty-seven since FRU-218, twenty-eight since FRU-67), a pool built as `postgres.ts` built it before answers a number for a raw
   statement, the pool that ships answers a string for the same statement, and the schema answers
   the number: test:`answered a number for a raw statement, and now answers a string for it and a
 number through the schema`. No store sends a raw statement
@@ -1295,7 +1295,7 @@ exact integer`, test:`is null when the column holds no instant, and never 0`. Th
 store of the accounts`, test:`decides a pairing and a session by their instants, on each side of
 2^32`.
 - **better-auth reads no `BIGINT` of its tables on that pool, and a count is one.** Its seven tables
-  have none (test:`knows the twenty-two BIGINT columns of the worker, and that better-auth has none`).
+  have none (test:`knows the twenty-eight BIGINT columns of the worker, and that better-auth has none`).
   `count(*)` is a `BIGINT` whatever the table: the pool now answers it as a string, and better-auth
   reads it as a number, through its adapter and the layer of FRU-181
   (test:`gives better-auth a count as a string, which better-auth reads as a number`).
@@ -1375,6 +1375,50 @@ an earlier migration, and writes nothing`.
   types, and the planted races hold them, which pass on PGlite and fail on a server.
 - **Not measured: Node 26 on a developer machine.** The measurements of this section ran on Node 25.8
   and on the runners of CI, which have the version of `.nvmrc`.
+
+## The notes in PostgreSQL (FRU-218)
+
+Mathieu decided on 2026-10-13 that a worker always has PostgreSQL, self-hosted too. Nothing can take
+SQLite out while the notes have no other home: this is that home. It is a store an operator names,
+`FRUITBACK_STORE=postgres`, and not the default yet (FRU-225).
+
+### The rules, in short
+
+- **`seeds-postgres.ts` is `sqlite.ts` on two tables of the database**, `seeds` and `seed_comments`:
+  the same columns, the same `FB-<n>`, no page to open, its own stages, and nothing in the worker
+  that writes a reply. `seed-rows.ts` reads a row of either database, and imports neither.
+- **Every read names its site.** One database holds the notes of every workspace, so a read that
+  names no site gets the notes that name none, where `sqlite.ts` answers the whole page. The
+  conformance suite takes the reason from the subject (`readWithNoClient`) and reports that case as
+  skipped, not passed.
+- **`client_id` holds no foreign key to `sites`.** What becomes of the notes of a site that is
+  removed is FRU-194, not decided: a key would decide it, by a cascade or by a refusal.
+- **The note is a `TEXT`, parsed and never trusted**, as for a file. `JSONB` was not taken: it
+  refuses the `\u0000` that a note may hold (`TEXT` holds its six characters), and a row that is
+  wrong must cost one pin, which a reader of text decides.
+- **The page is under a hash index.** A B-tree refuses an address of 6 400 characters that do not
+  compress (measured on 17.11, the sentence is in `postgres-schema.ts`), and the note would not be
+  kept at all. The ticket asked for an index (page, client): the site is read in the rows of the
+  page, and `seeds_by_client` is the index of the notes of one site.
+- **The numbers are an identity that takes a value when one is given**: the copy of a SQLite file
+  (FRU-220) keeps the `FB-<n>` that people quoted, and then moves the sequence.
+- **`forget` reads the notes of the whole instance**, in one transaction with the deletion, and
+  filters on the rows: a note is text. It is the command of whoever runs the worker. A filter by
+  site comes with FRU-194.
+- **A batch is one transaction**: every note, or none and a `StoreError`. No parent: a row is not
+  an issue of a tracker.
+- **The store is loaded at its first call** (`postgresSeedStore` in `postgres-stores.ts`), like the
+  accounts. `name` and `scope` are read with no call, so they are written there too, and
+  test:`says its name and its scope before any call, as the store it loads says them` holds them
+  equal.
+- **Every failure is a `StoreError`**, a statement that the database refuses too: the worker
+  answers `502 store-unavailable`, and the widget keeps the note.
+
+### The migration
+
+One migration, generated, that only adds: two tables, their sequences, three indexes. **Its number
+is taken at the merge**: a pull request that is rebased after another one merged a migration
+removes its own SQL file, snapshot and entry, and generates again.
 
 ## The copy of the SQLite files into PostgreSQL (FRU-145)
 
@@ -1717,6 +1761,17 @@ may change, and who », says what is protected; this section says how to change 
   of the cookie. The second does not use
   the plugin, whose deletion is off (`disableOrganizationDeletion`): it revokes the tokens of Linear
   first, and the foreign keys take the rest.
+- **A workspace is renamed by a route of the worker too** (FRU-236): `POST /console/workspaces/<id>`
+  `{ name }` answers `200 { id, name, role }`, for `manage-workspace` (owner, admin), with the rule
+  and the code of the creation (`invalid-name`). It calls `updateOrganization` of the plugin in the
+  process, with `{ organizationId, data: { name } }` and nothing else of the request. Opening
+  `/organization/update` under a rule of `ORGANIZATION_PATHS` was weighed and left: that route takes
+  `data` as an object of four fields, and the rule of a name (one line, 80 characters) is the
+  worker's, written once in `workspaceName`. Read in `routes/crud-org.mjs` of 1.7.7: the plugin
+  reads the session of the cookie, the member and the permission `organization: update`, which the
+  owner and the admin have; a refusal of the plugin there is a `502`, because the worker already
+  answered `403` and `404` from its own store. No name is unique, as at the creation. The worker
+  proposes no name: the console does.
 - **`endSessionsOf` holds every chain of the person before it ends them** (`session-postgres.ts`).
   Without the hold, a refresh in flight leaves a live successor:
   test:`fails on a real server with no hold on the chains of the person`.

@@ -156,7 +156,7 @@ export default function Setup() {
               >
                 <span
                   className={`flex h-7 w-7 flex-none items-center justify-center rounded-full text-xs font-semibold ${
-                    current ? 'bg-accent text-white' : 'border border-faint text-muted'
+                    current ? 'bg-accent text-white' : 'border border-control text-muted'
                   }`}
                 >
                   {number}

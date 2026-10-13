@@ -14,7 +14,7 @@ import {
 import { type AccountStore, type Role, can } from './accounts.ts';
 import { SESSION_SITES_PATH, handleSessionSites } from './session-sites.ts';
 import { type Auth, authFor } from './auth.ts';
-import { createWorkspaceWithPlugin, handleOrganizationRoutes } from './auth-organization.ts';
+import { createWorkspaceWithPlugin, handleOrganizationRoutes, renameWorkspaceWithPlugin } from './auth-organization.ts';
 import { MAX_BODY_BYTES, readBoundedBytes, readBoundedText } from './bounded-body.ts';
 import { AuthUnavailable, handleAuthRoutes, isAuthRoute, sessionOfCookie, withRenewedCookie } from './auth-routes.ts';
 import { SIGN_IN_PROVIDERS, consoleCors, isConsoleRoute } from './console-cors.ts';
@@ -533,6 +533,9 @@ async function routed(
                 // A workspace is made by the organization plugin for somebody of the cookie (FRU-149).
                 createWorkspace: async (each: Request, name: string) =>
                   createWorkspaceWithPlugin(await auth, each.headers, name),
+                // And renamed by it (FRU-236).
+                renameWorkspace: async (each: Request, workspace: string, name: string) =>
+                  renameWorkspaceWithPlugin(await auth, each.headers, workspace, name),
               }),
         },
         cors.headers,
