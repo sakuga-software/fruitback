@@ -302,6 +302,9 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   }
 
   function select(element: Element): void {
+    // A choice ends what was held: the frame of the element before must not come back under a
+    // note that is about this one. The caller holds the new element if it wants its frame.
+    chosen = null;
     stop();
     void sourceOf(element).then((source) => options.onSelect({ element, source }));
   }

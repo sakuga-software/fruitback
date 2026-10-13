@@ -93,6 +93,32 @@ describe('what the popover looks like (FRU-36)', () => {
     assert.equal(about().querySelector('img'), null);
   });
 
+  it('keeps what was written when the open composer is pointed at another element', async () => {
+    // A second capture over an open composer chooses another element. Losing what somebody just
+    // wrote is the one failure the product cannot afford: the text stays, and the head says the new element.
+    mount(async () => true);
+    composer?.open(ANCHOR, 'The first element');
+    field().value = 'Half a note';
+
+    composer?.open({ left: 400, top: 500, bottom: 540, right: 600 }, 'The second element');
+
+    assert.equal(field().value, 'Half a note');
+    assert.equal(composer?.element.querySelector('[data-fruitback-about]')?.textContent, 'on The second element');
+
+    // The control: closed and opened again, it is a new note.
+    composer?.close();
+    composer?.open(ANCHOR, 'The first element');
+    assert.equal(field().value, '');
+
+    // And a composer that shows « sent » is not being written in: the next note starts empty.
+    field().value = 'A whole note';
+    sendButton().click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(composer?.state(), 'sent');
+    composer?.open(ANCHOR, 'The first element');
+    assert.equal(field().value, '');
+  });
+
   it('closes on the cross like on Cancel, and gives the note up', () => {
     let closed = 0;
     mount(async () => true, { onClose: () => (closed += 1) });

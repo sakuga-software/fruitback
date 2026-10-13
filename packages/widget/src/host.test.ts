@@ -397,6 +397,51 @@ describe('createCaptureHost', () => {
     assert.equal(highlight.style.display, 'none');
   });
 
+  it('does not give the frame back to the element before when another one is chosen', async () => {
+    // The composer is open on the button, a second capture runs, and the reporter chooses the
+    // paragraph: the note is about the paragraph now, and the frame of the button must not return.
+    const under: { element: Element | null } = { element: null };
+    const page = mountPage(PAGE, { width: 1_000, height: 1_000 });
+    const boxes = new Map<Element, { left: number; top: number; width: number; height: number }>([
+      [page.query('#cta'), { left: 10, top: 20, width: 100, height: 30 }],
+      [page.query('p'), { left: 300, top: 400, width: 50, height: 10 }],
+    ]);
+    const engine: CaptureEngine = {
+      ...fakeEngine(page, () => under.element),
+      boundsOf: (element) => boxes.get(element) ?? { left: 0, top: 0, width: 0, height: 0 },
+    };
+    const holds = { next: false };
+    host = createCaptureHost({
+      document: page.document,
+      engine,
+      onSelect: (target) => {
+        if (holds.next) host?.hold(target.element);
+      },
+    });
+    const highlight = host.root.querySelector('[data-fruitback-host-highlight]') as HTMLElement;
+    const choose = async () => {
+      host?.hold(page.query('#cta'));
+      host?.start();
+      under.element = page.query('p');
+      clickAt(page, page.query('p'));
+      // At the choice, before the caller is told: the frame of the button is not back.
+      assert.equal(highlight.style.display, 'none');
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    };
+
+    // A caller that holds nothing new: no frame, rather than the frame of another element.
+    await choose();
+    assert.equal(highlight.style.display, 'none');
+
+    // A caller that holds what was chosen: the frame is on the paragraph.
+    holds.next = true;
+    await choose();
+    assert.equal(highlight.style.display, 'block');
+    assert.equal(highlight.style.left, '294px');
+  });
+
   it('takes the frame away at the choice for a caller that holds nothing', async () => {
     // A host that assembles the parts itself, and was written before `hold`: nothing stays on its page.
     const { page } = mount(() => page.query('#cta'));

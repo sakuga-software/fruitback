@@ -288,8 +288,12 @@ export function createComposer(options: ComposerOptions): Composer {
       closing = 0;
     }
 
+    // Somebody is writing, and points the open composer at another element: a second capture over
+    // it does that. The note they wrote is still their note, about the element they chose last.
+    // A composer that shows « sent » is not being written in: its text went with the note.
+    const writing = !root.hidden && (state === 'idle' || state === 'failed');
     session += 1;
-    field.value = '';
+    if (!writing) field.value = '';
     // As text: it is whatever the page wrote in its element.
     about.textContent = subject === '' ? '' : t.text('composer.about', { element: subject });
     about.hidden = subject === '';
