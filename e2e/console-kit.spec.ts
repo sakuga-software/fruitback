@@ -735,6 +735,55 @@ test('the head of a page has the type of the mockup (FRU-232)', async ({ page })
   await expectStyle(page.locator('body'), 'page', { backgroundColor: WHITE, color: INK });
 });
 
+test("the logo and the frame of a page outside a workspace are the mockup's (FRU-232)", async ({ page }) => {
+  await openKit(page);
+  const logos = page.locator('[data-kit="logos"]');
+
+  // 113 × 22 on a page, in ink and the accent; 82 × 16 on the rail, in white and the accent of the rail.
+  const onPage = logos.getByRole('img', { name: 'Fruitback' }).first();
+  await expectStyle(onPage, 'logo', { width: '113px', height: '22px' });
+  await expectStyle(onPage.locator('path').nth(0), 'logo, name', { fill: INK });
+  await expectStyle(onPage.locator('path').nth(1), 'logo, drop', { fill: ACCENT });
+  const onRail = logos.getByRole('img', { name: 'Fruitback' }).nth(1);
+  await expectStyle(onRail, 'logo of the rail', { width: '82px', height: '16px' });
+  await expectStyle(onRail.locator('path').nth(0), 'logo of the rail, name', { fill: WHITE });
+  await expectStyle(onRail.locator('path').nth(1), 'logo of the rail, drop', { fill: 'rgb(236, 91, 87)' });
+
+  await page.goto(`${CONSOLE}/kit/entry`);
+  const header = page.locator('header');
+  await expectStyle(header, 'header', { borderBottomWidth: '1px', borderBottomColor: LINE, height: '65px' });
+  // clamp(16px, 4vw, 32px) at 1440 px.
+  await expectStyle(header.locator('> div'), 'header, inside', {
+    paddingLeft: '32px',
+    minHeight: '64px',
+    maxWidth: '1280px',
+  });
+  const home = header.getByRole('link', { name: 'Fruitback' });
+  await expect(home).toHaveAttribute('href', 'https://fruitback.com');
+  // The logo of screen 02 of the mockup, at 1440 px: x 80, y 21 (`measures.json`).
+  const logo = await home.getByRole('img').boundingBox();
+  expect.soft(logo).toEqual({ x: 80, y: 21, width: 113, height: 22 });
+
+  // clamp(48px, 10vh, 112px) of a screen of 900 px, and a column of 400 px in the middle.
+  await expectStyle(page.locator('main'), 'main', { paddingTop: '90px', paddingLeft: '16px', paddingBottom: '64px' });
+  const title = await page.getByRole('heading', { level: 1 }).boundingBox();
+  expect.soft({ x: title!.x, y: title!.y, width: title!.width }).toEqual({ x: 520, y: 155, width: 400 });
+  await expectStyle(page.locator('.kit-divider'), 'divider', {
+    color: MUTED_TONE,
+    fontSize: '13px',
+    columnGap: '12px',
+  });
+  await expect(page.locator('.kit-divider')).toHaveAttribute('aria-hidden', 'true');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  // clamp(16px, 4vw, 32px) at 390 px is 16 px, and 10vh of 844 px is 84.4 px.
+  await expectStyle(header.locator('> div'), 'header, narrow', { paddingLeft: '16px' });
+  await expectStyle(page.locator('main'), 'main, narrow', { paddingTop: '84.4px' });
+  expect.soft(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations.map((violation) => `${violation.id}: ${violation.nodes[0]?.target.join(' ')}`)).toEqual([]);
+});
+
 /** Each text of the page with the colour it is painted in and the colour that is behind it. */
 function pairs(page: Page): Promise<{ text: string; ratio: number }[]> {
   return page.evaluate(() => {
