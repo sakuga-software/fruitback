@@ -203,6 +203,10 @@ export default function Sites() {
               {t('A site with no tracker keeps its notes in Fruitback.')}{' '}
               <LinkButton space="inline" to={`/w/${workspace.id}/connectors`}>
                 {t('Connect a tracker')}
+              </LinkButton>{' '}
+              {t('or')}{' '}
+              <LinkButton space="inline" to={`/w/${workspace.id}/notes`}>
+                {t('see where every note went')}
               </LinkButton>
             </p>
           ) : null}
