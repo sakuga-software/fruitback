@@ -48,6 +48,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Leave feedback': 'Laisser un feedback',
   'Show every note of the page': 'Voir toutes les notes de la page',
   'Your browser': 'Votre navigateur',
+  'A note is being written on the page. Send it or close it first.':
+    'Une note est en cours d’écriture sur la page. Envoyez-la ou fermez-la d’abord.',
+  'The page did not answer. Reload it, then try again.': 'La page n’a pas répondu. Rechargez-la, puis réessayez.',
   'Your sign-in ended': 'Votre connexion a pris fin',
   'Sign in again to see and leave notes here.': 'Reconnectez-vous pour voir et laisser des notes ici.',
   'Fruitback did not answer. The popup asks again.': 'Fruitback n’a pas répondu. Le popup redemande.',

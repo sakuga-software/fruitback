@@ -154,6 +154,20 @@ test('a site of the workspace: one click, then the switch, the notes of the page
   await expect.poll(() => popup.isClosed()).toBe(true);
   await page.keyboard.press('Escape');
 
+  // A note being written: « Leave feedback » takes nothing from it, and the popup stays and says why.
+  await page.getByRole('button', { name: 'Leave feedback' }).click();
+  await page.locator('[data-testid="card-latte"] .add').click();
+  await page.getByPlaceholder('What should change?').fill('Une note en cours');
+  popup = await reopen(extension, page);
+  await popup.getByRole('button', { name: 'Leave feedback' }).click();
+  await expect(popup.getByText('A note is being written on the page. Send it or close it first.')).toBeVisible();
+  expect(popup.isClosed()).toBe(false);
+  await expect(page.getByPlaceholder('What should change?')).toHaveValue('Une note en cours');
+  await expect(page.locator('[data-fruitback-capturing]')).toHaveCount(0);
+  await page.getByPlaceholder('What should change?').fill('');
+  await page.getByPlaceholder('What should change?').press('Escape');
+  await expect(page.getByPlaceholder('What should change?')).toBeHidden();
+
   // The switch, twice: the widget leaves, then comes back once.
   popup = await reopen(extension, page);
   await popup.getByRole('switch').click();

@@ -469,14 +469,22 @@ async function siteOfWorkspaceOn(
       turn();
     },
     // The widget takes over the tab: the popup would stand over the page somebody is about to click.
-    onLeaveFeedback: () => void askTab(tab, 'leave-feedback').then(() => window.close()),
-    onShowEveryNote: () => void askTab(tab, 'show-notes').then(() => window.close()),
+    // It goes only when the widget did it: otherwise it stays, and says why.
+    onLeaveFeedback: () =>
+      void askTab(tab, 'leave-feedback').then(({ done }) =>
+        done ? window.close() : showProblem(problem, t(NOT_NOW_WRITING)),
+      ),
+    onShowEveryNote: () =>
+      void askTab(tab, 'show-notes').then(({ done }) => (done ? window.close() : showProblem(problem, t(NOT_THERE)))),
     onSettings: openSettings,
   });
   screen.querySelector('.popup-body')?.append(problem);
 
   return screen;
 }
+
+const NOT_NOW_WRITING = msg('A note is being written on the page. Send it or close it first.');
+const NOT_THERE = msg('The page did not answer. Reload it, then try again.');
 
 /** A command to the widget of the tab the popup was opened on (FRU-254). See `tab-command.ts`. */
 async function askTab(tab: PopupTab | undefined, command: TabCommand): Promise<TabCommandAnswer> {
