@@ -43,6 +43,13 @@
       "when": 1791885697137,
       "tag": "0005_seeds",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791893760447,
+      "tag": "0006_kv",
+      "breakpoints": true
     }
   ]
 }

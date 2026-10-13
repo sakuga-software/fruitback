@@ -14,8 +14,9 @@ async function walkTo(page: Page, target: Locator): Promise<void> {
   for (let step = 0; step < 400; step += 1) {
     await page.keyboard.press('ArrowDown');
     const [want, got] = await Promise.all([target.boundingBox(), highlight.boundingBox()]);
-    if (want !== null && got !== null && Math.abs(want.x - got.x) < 2 && Math.abs(want.y - got.y) < 2) {
-      if (Math.abs(want.width - got.width) < 2 && Math.abs(want.height - got.height) < 2) return;
+    // The frame stands 6 px off the element on every side (FRU-258).
+    if (want !== null && got !== null && Math.abs(want.x - 6 - got.x) < 2 && Math.abs(want.y - 6 - got.y) < 2) {
+      if (Math.abs(want.width + 12 - got.width) < 2 && Math.abs(want.height + 12 - got.height) < 2) return;
     }
   }
   throw new Error('the keyboard cursor never reached the target');
@@ -28,27 +29,35 @@ test('a note can be planted with the keyboard alone', async ({ page }) => {
   await launch.focus();
   await page.keyboard.press('Enter');
   await expect(page.locator('[data-fruitback-host]')).toHaveAttribute('data-fruitback-capturing', '');
-  await expect(page.locator('[data-fruitback-announcer]')).toContainText('arrow keys');
+  // The banner says how a keyboard moves (FRU-258): read, and not drawn.
+  await expect(page.locator('[data-fruitback-host-banner]')).toContainText('arrow keys');
 
   await walkTo(page, page.locator('#checkout-cta'));
   await expect(page.locator('[data-fruitback-announcer]')).toContainText(/^button: /);
   await page.keyboard.press('Enter');
 
-  const dialog = page.getByRole('dialog', { name: 'Leave a note' });
-  const field = page.getByPlaceholder('What is wrong here?');
+  const dialog = page.getByRole('dialog', { name: 'New note' });
+  const field = page.getByPlaceholder('What should change?');
   await expect(dialog).toBeVisible();
   await expect(field).toBeFocused();
   await expect(field).toHaveValue('');
 
   await page.keyboard.type('Planté sans souris');
+  // The cross of the head is the control before the field (FRU-258), and the first of the dialog:
+  // one more step back wraps to the last one, which is Send.
+  await page.keyboard.press('Shift+Tab');
+  await expect(page.getByRole('button', { name: 'Close without sending' })).toBeFocused();
   await page.keyboard.press('Shift+Tab');
   const plant = page.getByRole('button', { name: 'Send', exact: true });
   await expect(plant).toBeFocused();
   // The reset removes the browser's focus ring, and host.ts puts one back.
   expect(await plant.evaluate((node) => getComputedStyle(node).outlineStyle)).toBe('solid');
   await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
   await expect(field).toBeFocused();
+  await expect(field).toHaveValue('Planté sans souris');
 
+  await page.keyboard.press('Shift+Tab');
   await page.keyboard.press('Shift+Tab');
   await page.keyboard.press('Enter');
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
@@ -68,7 +77,7 @@ test('Escape leaves the capture mode without scrolling the page or pressing anyt
 
   await page.keyboard.press('Escape');
   await expect(page.locator('[data-fruitback-host]')).not.toHaveAttribute('data-fruitback-capturing');
-  await expect(page.getByRole('dialog', { name: 'Leave a note' })).toBeHidden();
+  await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden();
 });
 
 test('the settings dialog holds focus, and gives it back to the gear', async ({ page }) => {
@@ -119,7 +128,7 @@ for (const scheme of ['light', 'dark'] as const) {
     const note = `Vu par axe, ${scheme}`;
     await plantPin(page, cta, note);
     // The popover stays open in its sent state for a moment, and each scan must see one state.
-    await expect(page.getByRole('dialog', { name: 'Leave a note' })).toBeHidden({ timeout: 5_000 });
+    await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 5_000 });
 
     const violations: string[] = [];
     const scan = async (state: string) => {
@@ -152,7 +161,7 @@ for (const scheme of ['light', 'dark'] as const) {
 
     await page.getByRole('button', { name: /Leave feedback/ }).click();
     await cta.click();
-    await expect(page.getByRole('dialog', { name: 'Leave a note' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'New note' })).toBeVisible();
     await scan('composer');
 
     expect(violations).toEqual([]);

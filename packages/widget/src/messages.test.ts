@@ -380,7 +380,7 @@ describe('every word the widget shows', () => {
       badge.click();
       snapshots.push(...shown(host.root));
     }
-    composer.open({ left: 0, top: 0, bottom: 10, right: 10 });
+    composer.open({ left: 0, top: 0, bottom: 10, right: 10 }, 'ELEMENT');
     snapshots.push(...shown(host.root));
     // A read takes the places away under the open popover, and the composer says so.
     places.set([]);
@@ -469,6 +469,8 @@ describe('every word the widget shows', () => {
       'https://…',
       'acme',
       'PLACE ONE',
+      // What the element says, after « on » in the head of the composer (FRU-258).
+      'ELEMENT',
       // A note kept for later, and the path of its page (FRU-124).
       'NOTE KEPT',
       '/pricing',

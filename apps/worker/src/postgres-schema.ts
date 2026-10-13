@@ -271,6 +271,24 @@ export const screenshots = pgTable(
 );
 
 /**
+ * The state that the replicas of a worker share (FRU-67): the counts of the rate limiter and of the
+ * messages, the cached answers, the tickets of a minute. See `kv-postgres.ts`.
+ *
+ * `expires_at` is an instant of the clock of the database. A row whose instant is past reads as
+ * absent, and `kv_by_expiry` is what the sweep reads to remove it. Nothing here must survive a
+ * crash, and nothing of it is of a workspace: no foreign key.
+ */
+export const kv = pgTable(
+  'kv',
+  {
+    key: text('key').primaryKey(),
+    value: text('value').notNull(),
+    expires_at: instant('expires_at').notNull(),
+  },
+  (table) => [index('kv_by_expiry').on(table.expires_at)],
+);
+
+/**
  * A note that the worker keeps itself (FRU-218): the notes of a site with no destination, on a worker
  * whose store is `postgres`. Until then they were in a SQLite file, `sqlite.ts`, and the columns are
  * the same.

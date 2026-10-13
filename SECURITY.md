@@ -147,11 +147,32 @@ token to one repository and one hour, but the key itself does not expire. So:
 - If the key leaks, generate a new one, delete the old one under **Private keys** in the settings of
   the App, and restart the worker with the new key.
 
-### The rate limit is per process
+### The rate limit is per process, unless the worker has a database
 
-`RATE_LIMIT_PER_MINUTE` (20 by default) is held in memory, per container. **Run N replicas and the
-effective ceiling is N times what you configured**, with nothing to see anywhere. One container is the
-ordinary deployment and the whole story; a store the replicas share is tracked as FRU-67.
+`RATE_LIMIT_PER_MINUTE` (20 by default) is held in memory, per container, on a worker with no
+`FRUITBACK_DATABASE_URL`. **Run N replicas of such a worker and the effective ceiling is N times what
+you configured**, with nothing to see anywhere.
+
+**A worker with a database counts there** (FRU-67), in the table `kv`: its replicas share one limit,
+one count of the sign-in links and of the invitations of an address, and one read cache. No variable
+turns it on. What follows from it:
+
+- **Two replicas that count at the same moment get two different counts.** One statement counts, and
+  PostgreSQL locks the row of the key. It runs on a real server, in CI:
+  test:`gives each of 400 counts of one key to one caller, from two connections`.
+- **A database that does not answer refuses the metered call**, with `503 limiter-unavailable`,
+  rather than letting it through: a limiter that opens when its store stops is a limiter anybody can
+  open. That holds below the limiter too: the count of the links and the ticket of the way to Linear
+  answer the same `503`. `/health` reads no count.
+- **A write of that table does not wait for the disk.** The limiter writes once for each request of
+  the widget, and the wait was the whole cost of a count. If the server of the database crashes, the
+  writes of its last few hundred milliseconds can be lost: a caller gets a few requests more in that
+  minute. Nothing else is written that way: an account, a site and a session wait for the disk as
+  before. On a real server:
+  test:`commits without waiting in its own statement, and leaves the connection as the server set it`.
+- **Whoever can write to that table can plant pins and clear limits.** A cached answer holds the
+  notes of a page, their authors and the replies for 15 seconds, and a row of the limiter holds the
+  address of a caller for two minutes. It is the database of the accounts, behind the same password.
 
 The window slides, estimated from the current minute and the one before it. A caller who sends a full
 burst at the end of a window and spaces the next ones out gets **at most 39 requests in any 60
@@ -1054,8 +1075,8 @@ when it is accepted`. An invitation waits 7 days; one address gets one invitatio
   the other for that workspace:
   test:`keeps one owner when two owners go at the same moment (FRU-209)`,
   test:`writes one invitation for one address when two people invite it at the same moment`.
-  **This holds for one process of the worker.** Two replicas do not share it, as they do not share
-  the rate limit.
+  **This holds for one process of the worker.** Two replicas do not share it: the rate limit is
+  shared through the database (FRU-67), this is not.
   **The rename and the deletion of a workspace are outside it**: `POST` and `DELETE` on
   `/console/workspaces/<id>`. Neither counts the owners or looks for an invitation before it
   writes. Two renames at the same moment leave the last one written. Not measured: a rename at the

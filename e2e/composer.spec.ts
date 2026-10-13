@@ -10,14 +10,14 @@ import { openPlayground } from './pin.ts';
 async function selectTheCta(page: import('@playwright/test').Page) {
   await page.getByRole('button', { name: /Leave feedback/ }).click();
   await page.locator('#checkout-cta').click();
-  await expect(page.getByPlaceholder('What is wrong here?')).toBeVisible();
+  await expect(page.getByPlaceholder('What should change?')).toBeVisible();
 }
 
 test('a note goes from sending to sent, and the pin lands', async ({ page }) => {
   await openPlayground(page, 'composer-happy');
   await selectTheCta(page);
 
-  await page.getByPlaceholder('What is wrong here?').fill('Le CTA devrait être plus large');
+  await page.getByPlaceholder('What should change?').fill('Le CTA devrait être plus large');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
 
   // The product's own word for it, in the status the composer announces.
@@ -38,12 +38,12 @@ test('a failed send keeps the note and stays open', async ({ page }) => {
   await selectTheCta(page);
 
   const note = 'Une remarque qui a pris du temps à écrire';
-  await page.getByPlaceholder('What is wrong here?').fill(note);
+  await page.getByPlaceholder('What should change?').fill(note);
   await page.getByRole('button', { name: 'Send', exact: true }).click();
 
   await expect(page.locator('[data-fruitback-composer]')).toContainText(/did not go through/);
   await expect(page.locator('[data-fruitback-composer]')).toBeVisible();
-  await expect(page.getByPlaceholder('What is wrong here?')).toHaveValue(note);
+  await expect(page.getByPlaceholder('What should change?')).toHaveValue(note);
   // Retrying is one click, not one more typing session.
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
 });
@@ -80,7 +80,7 @@ test('it stays inside the viewport when the element is against the right edge', 
   await openPlayground(page, 'composer-edge');
   await page.getByRole('button', { name: /Leave feedback/ }).click();
   await page.locator('main header button').click();
-  await expect(page.getByPlaceholder('What is wrong here?')).toBeVisible();
+  await expect(page.getByPlaceholder('What should change?')).toBeVisible();
 
   const viewport = page.viewportSize();
   await expect
@@ -105,7 +105,7 @@ test('it honours a reader who asked for less motion', async ({ page }) => {
 test('the pin is a drop, and it says what it is to a screen reader', async ({ page }) => {
   await openPlayground(page, 'composer-pin-shape');
   await selectTheCta(page);
-  await page.getByPlaceholder('What is wrong here?').fill('Un pin en goutte');
+  await page.getByPlaceholder('What should change?').fill('Un pin en goutte');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 
@@ -121,4 +121,176 @@ test('the pin is a drop, and it says what it is to a screen reader', async ({ pa
   expect(shape.transform).not.toBe('none');
   // The note lives in the accessible name now that the badge carries an emoji.
   await expect(badge).toHaveAttribute('aria-label', /Un pin en goutte/);
+});
+
+test('the composer has the measures of the mock-up, above its element (FRU-258)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await openPlayground(page, 'composer-measures');
+  // The button at the foot of the page: the window has room above it, whatever the fonts measure.
+  const button = page.locator('#checkout-cta');
+  await button.scrollIntoViewIfNeeded();
+  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await button.click();
+  const composer = page.getByRole('dialog', { name: 'New note', exact: true });
+  await expect(composer).toBeVisible();
+  const read = (selector: string, properties: string[]) =>
+    page.locator(selector).evaluate((element, names) => {
+      const style = getComputedStyle(element);
+      const box = element.getBoundingClientRect();
+
+      return {
+        x: box.x,
+        y: box.y,
+        width: box.width,
+        height: box.height,
+        ...Object.fromEntries(names.map((name) => [name, style.getPropertyValue(name)])),
+      } as Record<string, string | number>;
+    }, properties);
+
+  const box = await read('[data-fruitback-composer]', [
+    'border-radius',
+    'background-color',
+    'font-size',
+    'line-height',
+  ]);
+  expect(box).toMatchObject({
+    width: 360,
+    'border-radius': '14px',
+    'background-color': 'rgb(255, 255, 255)',
+    'font-size': '14px',
+    'line-height': '21px',
+  });
+  expect(await page.locator('[data-fruitback-composer]').evaluate((node) => getComputedStyle(node).boxShadow)).toBe(
+    'rgba(24, 24, 27, 0.22) 0px 14px 40px 0px',
+  );
+  // Above the element: it ends 40 px over its top, on the edge of the frame, 6 px off the element.
+  const target = (await button.boundingBox())!;
+  expect(Number(box.y) + Number(box.height)).toBeCloseTo(target.y - 40, 0);
+  expect(Number(box.x)).toBeCloseTo(target.x - 6, 0);
+  // The frame stays on the element the note is about, with the name of its component.
+  await expect(page.locator('[data-fruitback-host-highlight]')).toBeVisible();
+  await expect(page.locator('.fruitback-highlight-tag')).toHaveText('Button');
+  // The capture is over: one click, one note.
+  await expect(page.locator('[data-fruitback-host-launch]')).toHaveAttribute('aria-pressed', 'false');
+
+  expect(await read('.fruitback-composer-head', ['padding', 'gap'])).toMatchObject({
+    height: 48,
+    padding: '8px 8px 8px 16px',
+    gap: '10px',
+  });
+  await expect(page.locator('.fruitback-composer-title')).toHaveText('New note');
+  expect(await read('.fruitback-composer-title', ['font-size', 'font-weight'])).toMatchObject({
+    'font-size': '13px',
+    'font-weight': '600',
+  });
+  // What the element says, on one line.
+  await expect(page.locator('.fruitback-composer-about')).toHaveText('on Commander');
+  expect(await read('.fruitback-composer-about', ['font-size', 'color', 'white-space', 'text-overflow'])).toMatchObject(
+    {
+      'font-size': '12px',
+      color: 'rgb(107, 107, 116)',
+      'white-space': 'nowrap',
+      'text-overflow': 'ellipsis',
+    },
+  );
+  const cross = page.getByRole('button', { name: 'Close without sending' });
+  expect(await read('.fruitback-composer-close', ['border-radius', 'color'])).toMatchObject({
+    width: 32,
+    height: 32,
+    'border-radius': '8px',
+    color: 'rgb(107, 107, 116)',
+  });
+  expect(await read('.fruitback-composer-body', ['padding'])).toMatchObject({ padding: '0px 16px 12px' });
+  expect(
+    await read('[data-fruitback-note]', ['border-top-width', 'border-top-color', 'border-radius', 'padding', 'resize']),
+  ).toMatchObject({
+    // Three lines of 21 px, 9 px above and under, and the border.
+    height: 83,
+    width: 328,
+    'border-top-width': '1px',
+    'border-top-color': 'rgb(138, 138, 147)',
+    'border-radius': '8px',
+    padding: '9px 12px',
+    resize: 'vertical',
+  });
+  expect(
+    await read('.fruitback-composer-foot', ['padding', 'gap', 'border-top-width', 'border-top-color']),
+  ).toMatchObject({
+    padding: '10px 12px 12px 16px',
+    gap: '8px',
+    'border-top-width': '1px',
+    'border-top-color': 'rgb(228, 228, 231)',
+  });
+  expect(
+    await read('[data-fruitback-cancel]', ['padding', 'border-radius', 'color', 'font-size', 'font-weight']),
+  ).toMatchObject({
+    height: 36,
+    padding: '0px 12px',
+    'border-radius': '999px',
+    color: 'rgb(107, 107, 116)',
+    'font-size': '13px',
+    'font-weight': '600',
+  });
+  expect(await read('[data-fruitback-send]', ['padding', 'border-radius', 'background-color', 'color'])).toMatchObject({
+    height: 36,
+    padding: '0px 18px',
+    'border-radius': '999px',
+    'background-color': 'rgb(221, 44, 39)',
+    color: 'rgb(255, 255, 255)',
+  });
+  // A visitor with no account: no sentence « As … », and the name stays an offer.
+  await expect(composer).not.toContainText(/\bAs /);
+  await expect(page.getByRole('button', { name: 'Add my name (optional)' })).toBeVisible();
+
+  // Under the pointer: the strong accent for Send, the sunken surface for Cancel and for the cross.
+  await page.locator('[data-fruitback-send]').hover();
+  expect(await read('[data-fruitback-send]', ['background-color'])).toMatchObject({
+    'background-color': 'rgb(185, 28, 28)',
+  });
+  await page.locator('[data-fruitback-cancel]').hover();
+  expect(await read('[data-fruitback-cancel]', ['background-color'])).toMatchObject({
+    'background-color': 'rgb(244, 244, 245)',
+  });
+  await cross.hover();
+  expect(await read('.fruitback-composer-close', ['background-color'])).toMatchObject({
+    'background-color': 'rgb(244, 244, 245)',
+  });
+
+  // The cross closes without sending, and the frame goes with the composer.
+  await cross.click();
+  await expect(composer).toBeHidden();
+  await expect(page.locator('[data-fruitback-host-highlight]')).toBeHidden();
+  await expect(page.locator('[data-fruitback-pin]')).toHaveCount(0);
+});
+
+test('it rises from the corner nearest to its element, with no fade', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openPlayground(page, 'composer-rise');
+  await page.locator('#checkout-cta').scrollIntoViewIfNeeded();
+  await page.getByRole('button', { name: /Leave feedback/ }).click();
+  await page.locator('#checkout-cta').click();
+  await expect(page.getByPlaceholder('What should change?')).toBeVisible();
+
+  const motion = await page.locator('[data-fruitback-composer]').evaluate((node) => {
+    const style = getComputedStyle(node);
+
+    return {
+      name: style.animationName,
+      duration: style.animationDuration,
+      curve: style.animationTimingFunction,
+      origin: style.transformOrigin,
+      // Its own height, not the one on screen: it is still growing from 96 %.
+      height: (node as HTMLElement).offsetHeight,
+    };
+  });
+  expect(motion).toMatchObject({
+    name: 'fruitback-composer-in',
+    duration: '0.42s',
+    curve: 'cubic-bezier(0.16, 1, 0.3, 1)',
+  });
+  // « bottom left », in the pixels of its own box.
+  const [x, y] = motion.origin.split(' ').map((part) => Number.parseFloat(part));
+  expect(x).toBe(0);
+  expect(Math.abs((y ?? 0) - motion.height)).toBeLessThanOrEqual(1);
 });

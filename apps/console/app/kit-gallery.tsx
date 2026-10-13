@@ -14,6 +14,7 @@ import {
   Lead,
   Logo,
   LinkButton,
+  Menu,
   PageHead,
   Pick,
   Problem,
@@ -41,6 +42,8 @@ export default function KitGallery() {
   const [who, setWho] = useState<'members' | 'public'>('members');
   const [role, setRole] = useState('guest');
   const [text, setText] = useState('');
+  const [picked, setPicked] = useState('nothing');
+  const [workspace, setWorkspace] = useState('acme');
 
   return (
     <main className="mx-auto flex max-w-[1120px] flex-col gap-10 px-8 py-10">
@@ -276,6 +279,42 @@ export default function KitGallery() {
           <Chip tone="done">Invited</Chip>
         </p>
         <Initial name="Marie" size="small" />
+      </section>
+
+      <section aria-label="Menus" className="flex flex-wrap items-center gap-6" data-kit="menus">
+        <Menu
+          trigger="icon"
+          triggerLabel="More for staging.acme.dev"
+          onAction={setPicked}
+          items={[
+            { id: 'install', label: 'Install' },
+            { id: 'audience', label: 'Change who sees the notes' },
+            { id: 'later', label: 'Not yet', disabled: true },
+            { id: 'remove', label: 'Remove', danger: true },
+          ]}
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <circle cx="5" cy="12" r="1.8" fill="currentColor" />
+            <circle cx="12" cy="12" r="1.8" fill="currentColor" />
+            <circle cx="19" cy="12" r="1.8" fill="currentColor" />
+          </svg>
+        </Menu>
+        <span className="kit-rail bg-rail p-3">
+          <Menu
+            chosen={workspace}
+            onAction={setWorkspace}
+            triggerClassName="flex items-center gap-2 rounded-box p-2 text-white"
+            items={[
+              { id: 'acme', label: 'Acme', detail: 'Owner' },
+              { id: 'lumen', label: 'Lumen Studio', detail: 'Member' },
+            ]}
+          >
+            Workspace
+          </Menu>
+        </span>
+        <p className="text-small text-muted" data-kit="menu-picked">
+          Picked: {picked}, {workspace}
+        </p>
       </section>
 
       <section aria-label="Logos" className="flex flex-wrap items-center gap-6" data-kit="logos">
