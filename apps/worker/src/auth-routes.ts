@@ -199,6 +199,12 @@ function failed(consoleUrl: string, code: string): Response {
 
 async function startWithProvider(request: Request, provider: string, context: AuthRouteContext): Promise<Response> {
   if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, {});
+  // FRU-211: a page of another site does not start a sign-in. This route calls better-auth in the
+  // process, so the check better-auth makes on its own route does not run. The person lands on the
+  // sign-in screen of the console, and starts from there if they want to. A browser that sends no
+  // `Sec-Fetch-Site` is served as before: the header cannot be asked of a browser that has none.
+  if (request.headers.get('Sec-Fetch-Site') === 'cross-site')
+    return failed(context.consoleUrl, 'started_from_another_site');
   const auth = await context.auth;
   const consoleOrigin = new URL(context.consoleUrl).origin;
   // A provider that this worker does not have: the console says so. Read in the options, and not in
@@ -401,6 +407,12 @@ export async function handleAuthRoutes(
 
   const path = pathname.slice(AUTH_BASE_PATH.length);
   if (!Object.hasOwn(SERVED_PATHS, path)) return json(404, { error: 'not-found' }, headers);
+  // FRU-212: the rule of the worker's own routes, before better-auth reads the request. better-auth
+  // 1.7.7 takes a `Referer` when there is no `Origin` (`origin || referer`, with no option to ask
+  // for the `Origin`), and checks nothing for a request with no cookie. Nothing legitimate writes
+  // here without the `Origin` of the console: GitHub and Google come back by a `GET`. A provider
+  // that comes back by a form (`response_mode=form_post`, Apple) would need its route named here.
+  if (!mutationAllowed(request, context.consoleUrl)) return json(403, { error: 'origin-not-allowed' }, headers);
 
   const forwarded = new Request(request.url, {
     method: request.method,

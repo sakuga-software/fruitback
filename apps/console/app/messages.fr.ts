@@ -95,6 +95,14 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Console · this browser': 'Console · ce navigateur',
   'Active now': 'Actif maintenant',
   'Sign out': 'Se déconnecter',
+  'Another account is signed in in this browser': 'Un autre compte est connecté dans ce navigateur',
+  'You were signed out': 'Vous avez été déconnecté',
+  'This tab was open for another account, so it stopped: nothing was sent from it. Load it again to go on.':
+    'Cet onglet était ouvert pour un autre compte, il s’est donc arrêté : rien n’en est parti. Rechargez-le pour continuer.',
+  'Your session ended while this tab was away, so it stopped: nothing was sent from it.':
+    'Votre session s’est terminée pendant que cet onglet était de côté, il s’est donc arrêté : rien n’en est parti.',
+  'What you were writing, to copy:': 'Ce que vous étiez en train d’écrire, à copier :',
+  'Load the console again': 'Recharger la console',
   'You are still signed in: Fruitback did not confirm the sign-out. Try again.':
     'Vous êtes toujours connecté : Fruitback n’a pas confirmé la déconnexion. Réessayez.',
   'Delete the workspace': 'Supprimer le workspace',
@@ -386,4 +394,44 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'A site sends to {count} places at most.': 'Un site envoie vers {count} destinations au plus.',
   'A note goes to the default place. With two places or more, a member chooses one in the widget when they write.':
     'Une note va vers la destination par défaut. À partir de deux destinations, un membre en choisit une dans le widget quand il écrit.',
+  // The domains a workspace proves, for its previews (FRU-103).
+  'This is not a domain. Type the name alone, like preview.acme.dev.':
+    'Ce n’est pas un domaine. Tapez le nom seul, comme preview.acme.dev.',
+  'A workspace holds 20 domains at most. Remove one first.':
+    'Un workspace garde 20 domaines au plus. Retirez-en un d’abord.',
+  'Only an owner or an admin of the workspace proves a domain.':
+    'Seul un propriétaire ou un admin du workspace prouve un domaine.',
+  'This domain is not proven, so it covers no preview yet.':
+    'Ce domaine n’est pas prouvé : il ne couvre encore aucune preview.',
+  'This domain was not added. Try again.': 'Ce domaine n’a pas été ajouté. Réessayez.',
+  'This did not change. Try again.': 'Rien n’a changé. Réessayez.',
+  'Preview deploys': 'Previews',
+  'Each preview has an address of its own. Prove that a domain is yours, and every address under it counts as a preview of the site you choose.':
+    'Chaque preview a sa propre adresse. Prouvez qu’un domaine est à vous, et chaque adresse sous ce domaine compte comme une preview du site que vous choisissez.',
+  Domain: 'Domaine',
+  'Add the domain': 'Ajouter le domaine',
+  'Fruitback did not answer. Your domains are not lost.': 'Fruitback n’a pas répondu. Vos domaines ne sont pas perdus.',
+  'No domain yet. A site covers its own address only.':
+    'Aucun domaine pour l’instant. Un site ne couvre que sa propre adresse.',
+  'The DNS did not confirm this domain for three days. Its previews are not covered until it does.':
+    'Le DNS n’a pas confirmé ce domaine depuis trois jours. Ses previews ne sont plus couvertes tant qu’il ne le fait pas.',
+  'The record is gone from the DNS since {when}. The previews of this domain are not covered until it is back.':
+    'L’enregistrement a disparu du DNS depuis {when}. Les previews de ce domaine ne sont plus couvertes tant qu’il n’est pas revenu.',
+  'Add this TXT record to the DNS of the domain, then check.':
+    'Ajoutez cet enregistrement TXT au DNS du domaine, puis vérifiez.',
+  Name: 'Nom',
+  Value: 'Valeur',
+  'Copy the value': 'Copier la valeur',
+  'The browser refused the copy. Select the value above and copy it by hand.':
+    'Le navigateur a refusé la copie. Sélectionnez la valeur ci-dessus et copiez-la à la main.',
+  'Site whose previews are {pattern}': 'Site dont les previews sont {pattern}',
+  'No site': 'Aucun site',
+  'The DNS did not answer just now. Nothing changed: check again in a minute.':
+    'Le DNS n’a pas répondu à l’instant. Rien n’a changé : vérifiez à nouveau dans une minute.',
+  'Check the DNS': 'Vérifier le DNS',
+  'The previews under {domain} are not covered any more. The record can stay in the DNS: adding the domain again proves it at once.':
+    'Les previews sous {domain} ne sont plus couvertes. L’enregistrement peut rester dans le DNS : ajouter le domaine à nouveau le prouve aussitôt.',
+  Proven: 'Prouvé',
+  'Proof lost': 'Preuve perdue',
+  'Not proven yet': 'Pas encore prouvé',
 };

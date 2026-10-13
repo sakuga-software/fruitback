@@ -1,4 +1,5 @@
 import type { AccountStore } from './accounts.ts';
+import { previewPattern, proofState } from './domain-proof.ts';
 import { readBearerToken, verifyIdentityToken } from './identity.ts';
 
 /**
@@ -47,13 +48,30 @@ export async function handleSessionSites(
   const sites = await accounts.sites(workspaceId);
   // The language the person reads (FRU-119), so the extension and its widget speak it too (FRU-131).
   const locale = (await accounts.account(subject))?.locale;
+  // The previews a site covers (FRU-103): the wildcard of each domain of the workspace that is proven
+  // now and names this site. A proof that is lost or that nobody confirmed is not here.
+  const instant = now ?? Date.now();
+  const proven = (await accounts.domains(workspaceId)).filter(
+    (domain) => domain.previewsSite !== undefined && proofState(domain, instant) === 'proven',
+  );
+  const previewsOf = (site: string): string[] =>
+    proven.filter((domain) => domain.previewsSite === site).map((domain) => previewPattern(domain.domain));
 
   return json(
     200,
     {
       workspace: { id: workspaceId, name: workspace?.name ?? '' },
       ...(locale === undefined ? {} : { locale }),
-      sites: sites.map((site) => ({ id: site.id, origin: site.origin, visibility: site.visibility })),
+      sites: sites.map((site) => {
+        const previews = previewsOf(site.id);
+
+        return {
+          id: site.id,
+          origin: site.origin,
+          visibility: site.visibility,
+          ...(previews.length === 0 ? {} : { previews }),
+        };
+      }),
     },
     headers,
   );

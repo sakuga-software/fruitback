@@ -593,6 +593,68 @@ for (const { label, open, skip } of DATABASES) {
     });
   });
 
+  describe(`a change on a route of better-auth comes from the console, on ${label} (FRU-212)`, { skip }, () => {
+    /** Every route of better-auth that the worker serves and that a request can change something by. */
+    const WRITES: Record<string, unknown> = {
+      '/sign-out': {},
+      '/revoke-sessions': {},
+      '/sign-in/social': { provider: 'github', callbackURL: CONSOLE_URL },
+      // better-auth takes a POST on its callbacks, for a provider that comes back by a form. GitHub
+      // and Google come back by a GET, so nothing legitimate posts here.
+      '/callback/github': { code: 'a-code', state: 'a-state' },
+      '/callback/google': { code: 'a-code', state: 'a-state' },
+    };
+
+    it('lists every served route that is not only read', () => {
+      const read = ['/ok', '/error'];
+
+      assert.deepEqual(Object.keys(SERVED_PATHS).sort(), [...Object.keys(WRITES), ...read].sort());
+    });
+
+    for (const [path, body] of Object.entries(WRITES)) {
+      it(`refuses a change on ${path} with no Origin, whatever its Referer`, async () => {
+        const worker = await workerOn(open);
+        const cookie = await worker.signIn('alice@acme.dev');
+        const from = (more: { origin: string | null; referer?: string }) =>
+          worker.call(`${AUTH_BASE_PATH}${path}`, {
+            body,
+            origin: more.origin,
+            headers: { Cookie: cookie, ...(more.referer === undefined ? {} : { Referer: more.referer }) },
+          });
+
+        for (const [name, referer] of [
+          ['no Origin', undefined],
+          ['the Referer of the console only', `${CONSOLE_URL}/w/ws_1/account`],
+          ['the Referer of the worker only', `${PUBLIC_URL}/pair`],
+        ] as const) {
+          const refused = await from({ origin: null, ...(referer === undefined ? {} : { referer }) });
+          assert.equal(refused.status, 403, name);
+          assert.deepEqual(await refused.json(), { error: 'origin-not-allowed' }, name);
+          assert.deepEqual(refused.headers.getSetCookie(), [], name);
+        }
+        // Nothing changed: the session of the cookie is still there.
+        assert.equal((await worker.call('/console/me', { headers: { Cookie: cookie } })).status, 200);
+        // With no cookie either: better-auth alone checks no origin at all for such a request.
+        const bare = await worker.call(`${AUTH_BASE_PATH}${path}`, { body, origin: null });
+        assert.equal(bare.status, 403, 'no cookie and no Origin');
+        assert.deepEqual(await bare.json(), { error: 'origin-not-allowed' });
+
+        // The control: the same call from the console reaches better-auth, which answers it.
+        const taken = await from({ origin: CONSOLE_URL });
+        assert.notEqual(taken.status, 403, await taken.clone().text());
+      });
+    }
+
+    it('still answers a read of better-auth with no Origin: the way back from a provider is one', async () => {
+      const worker = await workerOn(open);
+
+      assert.equal((await worker.call(`${AUTH_BASE_PATH}/ok`, { origin: null })).status, 200);
+      // No state: better-auth answers its own refusal, a redirect to the console, and not the worker's 403.
+      const back = await worker.call(`${AUTH_BASE_PATH}/callback/github?code=a-code&state=a-state`, { origin: null });
+      assert.equal(back.status, 302);
+    });
+  });
+
   describe(`GitHub and Google, through better-auth, on ${label} (FRU-147)`, { skip }, () => {
     it('creates no account and joins none for an address that GitHub did not verify', async () => {
       const worker = await workerOn(open);
@@ -856,6 +918,34 @@ for (const { label, open, skip } of DATABASES) {
       const failedAt = new URL(refused.headers.get('Location') ?? '');
       assert.equal(`${failedAt.origin}${failedAt.pathname}`, `${CONSOLE_URL}/setup`);
       assert.equal(failedAt.searchParams.get('error'), 'access_denied');
+    });
+
+    it('starts no sign-in for a navigation that a page of another site made (FRU-211)', async () => {
+      const worker = await workerOn(open);
+      const from = (site: string | undefined) =>
+        worker.call('/console/auth/start/github', {
+          origin: null,
+          headers: site === undefined ? {} : { 'Sec-Fetch-Site': site },
+        });
+
+      // A link or a redirect of another site: the browser says so, and no state is made.
+      const refused = await from('cross-site');
+      assert.equal(refused.status, 302);
+      const to = new URL(refused.headers.get('Location') ?? '');
+      assert.equal(`${to.origin}${to.pathname}`, `${CONSOLE_URL}/setup`);
+      assert.equal(to.searchParams.get('error'), 'started_from_another_site');
+      assert.deepEqual(refused.headers.getSetCookie(), []);
+      assert.equal(refused.headers.get('Cache-Control'), 'no-store');
+      assert.deepEqual(await rowsOf(worker.database, 'SELECT 1 FROM "verification"'), []);
+
+      // The control: the button of the console (the same site), the address typed by hand, and a
+      // browser that sends no such header all start the sign-in, as before.
+      for (const site of ['same-site', 'same-origin', 'none', undefined]) {
+        const started = await from(site);
+        assert.equal(started.status, 302, String(site));
+        assert.equal(new URL(started.headers.get('Location') ?? '').origin, 'https://github.com', String(site));
+        assert.equal(started.headers.getSetCookie().length > 0, true, String(site));
+      }
     });
 
     it('sends the console a code of better-auth when a sign-in with a provider fails (FRU-148)', async () => {
