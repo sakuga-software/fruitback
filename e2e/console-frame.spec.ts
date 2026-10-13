@@ -1,13 +1,25 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Locator, type Page, expect, test } from '@playwright/test';
-import { ACME, LUMEN, contrast, painted, rgb, sideScroll, stubWorker, styles } from './console-workspace.ts';
+import {
+  ACME,
+  LUMEN,
+  box,
+  contrast,
+  expectBox,
+  painted,
+  rgb,
+  sideScroll,
+  stubWorker,
+  styles,
+} from './console-workspace.ts';
 
 /**
  * The frame of a workspace (FRU-234), measured in a browser against the mockup of 2026-10-13: the
  * dark rail, the workspace and its menu, the sections, and the room it gives a screen.
  *
  * The values are read in the code of the mockup (`09-console-sites.html`, `<aside class="rail">`),
- * and the boxes in its render at 1440 px and at 390 px. The worker is answered by stubs.
+ * and the boxes in its render at 1440 px and at 390 px. A box is compared where the font is the one
+ * of the mockup, on macOS; the computed styles are read everywhere. The worker is answered by stubs.
  */
 const CONSOLE = 'http://localhost:5178';
 
@@ -32,24 +44,6 @@ async function open(page: Page, screen = 'sites', workspace = 'w1'): Promise<voi
 async function openProbe(page: Page): Promise<void> {
   await page.goto(`${CONSOLE}/kit/frame`);
   await expect(sections(page)).toBeVisible();
-}
-
-type Box = { x: number; y: number; width: number; height: number };
-
-async function box(locator: Locator): Promise<Box> {
-  const found = await locator.boundingBox();
-  if (found === null) throw new Error('the element has no box');
-
-  return found;
-}
-
-/** Each side of a box against the mockup, within a tolerance in pixels. */
-function expectBox(found: Box, mockup: Partial<Box>, tolerance: number, name: string): void {
-  for (const [side, value] of Object.entries(mockup) as [keyof Box, number][]) {
-    expect
-      .soft(Math.abs(found[side] - value), `${name}: ${side} is ${found[side]}, the mockup has ${value}`)
-      .toBeLessThanOrEqual(tolerance);
-  }
 }
 
 test('at 1440 px the rail has the values of the mockup', async ({ page }) => {
@@ -236,8 +230,8 @@ test('a section under the pointer, and a control with focus, read on the rail', 
   expect.soft(await painted(resting, 'color')).toEqual(rgb(WHITE));
   await page.mouse.move(700, 500);
 
-  // The keyboard enters the rail by the workspace, then walks the sections in their order.
-  await page.locator('body').click({ position: { x: 700, y: 500 } });
+  // The keyboard enters the rail by the workspace, then walks the sections in their order. Nothing
+  // was pressed on the page, so the first Tab is the first control of the page.
   const order = [
     switcher(page),
     ...['Sites', 'Connectors', 'Members', 'My account'].map((name) => sections(page).getByRole('link', { name })),
@@ -482,7 +476,11 @@ test('at 390 px a short screen leaves the rail at its own height', async ({ page
   await open(page);
   const main = await box(page.locator('main'));
   expect(main.y + main.height).toBeLessThan(1800);
-  // The mockup gives the rest of the window to the rail: 286 px of rail at 390 px.
+  // The mockup gives the rest of the window to the rail: 286 px of rail at 390 px. Here the rail is
+  // its own height, whatever the font, and the screen starts right under it.
+  const above = await box(rail(page));
+  expect(above.height).toBeLessThan(200);
+  expect(main.y).toBe(above.y + above.height);
   expectBox(await box(rail(page)), { x: 0, y: 0, width: 390, height: 141 }, 4, 'the rail');
   expectBox(await box(page.locator('main h1')), { x: 16, y: 181 }, 4, 'the title');
 

@@ -1,4 +1,4 @@
-import type { Locator, Page, Route } from '@playwright/test';
+import { type Locator, type Page, type Route, expect } from '@playwright/test';
 import { WORKER_ORIGIN } from './pin.ts';
 
 /**
@@ -94,4 +94,36 @@ export function styles(locator: Locator, names: readonly string[]): Promise<Reco
 
     return Object.fromEntries(list.map((name) => [name, computed.getPropertyValue(name)]));
   }, names);
+}
+
+export type Box = { x: number; y: number; width: number; height: number };
+
+export async function box(locator: Locator): Promise<Box> {
+  const found = await locator.boundingBox();
+  if (found === null) throw new Error('the element has no box');
+
+  return found;
+}
+
+/**
+ * Whether this browser draws text with the font the mockup was measured in: the system font of
+ * macOS. The mockup writes `line-height: normal` and sizes most boxes by their text, so the same
+ * styles give other boxes with another font: on the Linux of CI the name of a workspace is 52 px
+ * high where the mockup has 49, and every box under it is 3 px lower (measured, 2026-10-13).
+ */
+export const MOCKUP_FONT = process.platform === 'darwin';
+
+/**
+ * Each side of a box against the mockup, within a tolerance in pixels.
+ *
+ * WARNING: it compares only where the font is the one of the mockup (`MOCKUP_FONT`). Elsewhere a
+ * spec holds the screen to the mockup by its computed styles, which no font changes.
+ */
+export function expectBox(found: Box, mockup: Partial<Box>, tolerance: number, name: string): void {
+  if (!MOCKUP_FONT) return;
+  for (const [side, value] of Object.entries(mockup) as [keyof Box, number][]) {
+    expect
+      .soft(Math.abs(found[side] - value), `${name}: ${side} is ${found[side]}, the mockup has ${value}`)
+      .toBeLessThanOrEqual(tolerance);
+  }
 }
