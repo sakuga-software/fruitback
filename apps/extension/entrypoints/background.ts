@@ -291,8 +291,13 @@ export default defineBackground(() => {
     // The reviewer just turned the copy on: each side takes the rules it does not have.
     if (changes[SYNC_SETTING]?.newValue === true) mergeRules();
     // Turned off: what was known of the account is forgotten, so the next merge removes nothing.
-    if (changes[SYNC_SETTING] !== undefined && changes[SYNC_SETTING].newValue !== true)
-      void browser.storage.local.remove(KNOWN_SETTING);
+    if (changes[SYNC_SETTING] !== undefined && changes[SYNC_SETTING].newValue !== true) {
+      void siteSync
+        .forget()
+        .catch((error: unknown) =>
+          console.error('[fruitback] could not forget the rules of the browser account', error),
+        );
+    }
     if (changes.sites !== undefined || touchesPreviews(Object.keys(changes))) void sync();
     // A pairing or a logout from the popup, this run's own writes — the worker rotates on every
     // refresh (FRU-61), so every refresh stores a new token — and the upgrade in `upgradeAreas`,

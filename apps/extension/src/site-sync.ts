@@ -117,6 +117,8 @@ export function createSiteSync({ enabled, known, readLocal, area, apply }: SiteS
   let remembering: Promise<void> = Promise.resolve();
   const remember = (add: string[], drop: string[] = []): Promise<void> => {
     const next = remembering.then(async () => {
+      // Turned off meanwhile: `forget` emptied the list, and a merge that still runs writes nothing back.
+      if (!(await enabled())) return;
       const now = new Set(await known.read());
       for (const pattern of add) now.add(pattern);
       for (const pattern of drop) now.delete(pattern);
@@ -133,7 +135,14 @@ export function createSiteSync({ enabled, known, readLocal, area, apply }: SiteS
       if (arrived.has(mutation) || !(await enabled())) return;
 
       if (mutation.kind === 'remove') {
-        await area.remove([syncKeyOf(mutation.pattern)]);
+        try {
+          await area.remove([syncKeyOf(mutation.pattern)]);
+        } catch (error) {
+          // The account may still hold the rule. Known and not here: the next merge removes it there,
+          // and does not take it back (raised in review, for a rule that was not known yet).
+          await remember([mutation.pattern]);
+          throw error;
+        }
         await remember([], [mutation.pattern]);
 
         return;
@@ -144,6 +153,18 @@ export function createSiteSync({ enabled, known, readLocal, area, apply }: SiteS
         await area.set(Object.fromEntries(changed.map(([pattern, site]) => [syncKeyOf(pattern), site])));
       }
       await remember(Object.keys(mutation.entries));
+    },
+
+    /**
+     * The reviewer turned the copy off: what was known of the account is forgotten, so a later merge
+     * takes and removes nothing it cannot tell apart. In the same line as `remember`: a merge or a
+     * copy that still runs does not write the list back after it (raised in review).
+     */
+    forget(): Promise<void> {
+      const next = remembering.then(() => known.write([]));
+      remembering = next.catch(() => undefined);
+
+      return next;
     },
 
     /** What `storage.onChanged` says of the `sync` area: applied here, rule by rule. */

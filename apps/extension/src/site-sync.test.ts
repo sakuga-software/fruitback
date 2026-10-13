@@ -242,6 +242,59 @@ describe('the rules of a reviewer in two browsers (FRU-72)', () => {
     assert.deepEqual(here.self.known, ['https://acme.dev', 'https://globex.dev']);
   });
 
+  // Raised in review: the copy of a removal fails, for a rule that this browser did not know in the
+  // account yet. The next merge took the rule back from the account.
+  it('carries at the next merge a removal whose copy failed, for a rule that was not known yet', async () => {
+    const shared = account();
+    const here = browserOn(shared, { 'https://acme.dev': ACME });
+    shared.items['site:https://acme.dev'] = ACME;
+    const area = shared.areaOf(here.self);
+    const away = createSiteSync({
+      enabled: async () => true,
+      known: { read: async () => here.self.known, write: async (patterns) => void (here.self.known = patterns) },
+      readLocal: async () => here.self.map,
+      area: { ...area, remove: async () => Promise.reject(new Error('the account is away')) },
+      apply: async () => {},
+    });
+
+    here.self.map = {};
+    await assert.rejects(away.stored({ kind: 'remove', pattern: 'https://acme.dev' }), /the account is away/);
+    assert.deepEqual(Object.keys(shared.items), ['site:https://acme.dev']);
+
+    await here.sync.merge();
+
+    assert.deepEqual(shared.items, {});
+    assert.deepEqual(here.self.map, {});
+    assert.deepEqual(here.self.known, []);
+  });
+
+  // Raised in review: the list was forgotten outside the line of its writes, and a merge that still
+  // ran wrote it back. The next time the copy was turned on, the merge removed rules by that list.
+  it('forgets what was known when the copy is turned off, and a merge that still runs writes nothing back', async () => {
+    const shared = account();
+    const here = browserOn(shared, { 'https://acme.dev': ACME });
+    const area = shared.areaOf(here.self);
+    let release = (): void => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const slow = createSiteSync({
+      enabled: async () => here.self.on,
+      known: { read: async () => here.self.known, write: async (patterns) => void (here.self.known = patterns) },
+      readLocal: async () => here.self.map,
+      area: { ...area, set: async (items) => (await held, area.set(items)) },
+      apply: async () => {},
+    });
+    here.self.known = ['https://old.dev'];
+
+    const merging = slow.merge();
+    here.self.on = false;
+    await slow.forget();
+    assert.deepEqual(here.self.known, []);
+    release();
+    await merging;
+
+    assert.deepEqual(here.self.known, []);
+  });
+
   it('sends nothing and takes nothing while the reviewer has not turned it on', async () => {
     const shared = account();
     const here = browserOn(shared);
