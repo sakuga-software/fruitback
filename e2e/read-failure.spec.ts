@@ -46,8 +46,15 @@ for (const [name, fail] of Object.entries(failures)) {
     );
     await mount(page, `read-failure-${name.replace(' ', '-')}`);
 
-    await page.getByRole('button', { name: 'Show every note of this page' }).click();
+    const opener = page.getByRole('button', { name: 'Show every note of this page' });
+    await opener.click();
     const list = page.getByRole('dialog', { name: 'Notes on this page' });
+    await expect(list.getByRole('status')).toHaveText(/could not be read/);
+    // The list gives focus when it opens. On a busy runner the read can fail after that, and focus
+    // stays on the close button (FRU-268): the list is opened again once the read has failed.
+    await page.keyboard.press('Escape');
+    await expect(list).toBeHidden();
+    await opener.click();
     await expect(list.getByRole('status')).toHaveText(/could not be read/);
     await expect(list.getByText('No note on this page yet.')).toBeHidden();
     // No number on a tab: zero notes would be a guess.
