@@ -41,6 +41,13 @@ const THREAD_GAP = 8;
 const BADGE_STEP = 30;
 
 /**
+ * How far the frame of a pin stands off its element, on every side (FRU-252): the 4 px of the
+ * mock-up. The frame is 2 px thick, so 2 px of the page show between the element and its frame, and
+ * the frame draws around the element and not on it.
+ */
+const FRAME_OUTSET = 4;
+
+/**
  * The room a badge needs on the left of its element, from the document's edge: the 26 px drop
  * (FRU-158). With less, the fan goes back above the element.
  */
@@ -103,7 +110,13 @@ export type Overlay = {
    */
   refilter(): void;
   /** What each pin resolved to, in render order — the honest account of what was found. */
-  resolutions(): { issue: SeedIssue; strategy: AnchorResolution['strategy']; confident: boolean }[];
+  resolutions(): {
+    issue: SeedIssue;
+    strategy: AnchorResolution['strategy'];
+    confident: boolean;
+    /** The number its pin carries (FRU-252). A note kept for later has none. */
+    number?: number;
+  }[];
   /** Whether a thread is open. `render` closes it, so a caller that can wait asks first. */
   threadOpen(): boolean;
   /**
@@ -170,12 +183,17 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     });
   }
 
-  function resolutions(): { issue: SeedIssue; strategy: AnchorResolution['strategy']; confident: boolean }[] {
-    return placed.map((entry) => ({
-      issue: entry.issue,
-      strategy: entry.resolution.strategy,
-      confident: entry.resolution.confident,
-    }));
+  function resolutions(): ReturnType<Overlay['resolutions']> {
+    return placed.map((entry) => {
+      const number = NUMBERS.get(entry.issue);
+
+      return {
+        issue: entry.issue,
+        strategy: entry.resolution.strategy,
+        confident: entry.resolution.confident,
+        ...(number === undefined ? {} : { number }),
+      };
+    });
   }
 
   function reposition(): void {
@@ -201,10 +219,10 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     entry.pin.classList.toggle('fruitback-pin-uncertain', !attached || !entry.resolution.confident);
 
     Object.assign(entry.pin.style, {
-      left: `${rect.left}px`,
-      top: `${rect.top}px`,
-      width: `${rect.width}px`,
-      height: `${rect.height}px`,
+      left: `${rect.left - FRAME_OUTSET}px`,
+      top: `${rect.top - FRAME_OUTSET}px`,
+      width: `${rect.width + 2 * FRAME_OUTSET}px`,
+      height: `${rect.height + 2 * FRAME_OUTSET}px`,
     });
   }
 
@@ -338,12 +356,18 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     const refocus = focusedTarget();
     closeThread(false);
     container.replaceChildren();
+    // A note has the number of its place among the notes of the page, before any is hidden: hiding a
+    // stage must not give « note 3 » to another note. A note kept for later is not counted.
+    let count = 0;
+    for (const issue of source) {
+      if (options.isDraft?.(issue) === true) DRAFTS.add(issue);
+      else NUMBERS.set(issue, (count += 1));
+    }
 
     placed = source
       .filter((issue) => options.shouldShow?.(issue) ?? true)
       .map((issue) => {
         const resolution = resolveAnchor(issue.seed.anchor, { document });
-        if (options.isDraft?.(issue) === true) DRAFTS.add(issue);
         const pin = buildPin(document, issue, resolution, t);
         const entry = { issue, resolution, pin };
 
@@ -423,6 +447,7 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     closeThread();
     threadOpener = active !== null && active !== document.body ? (active as HTMLElement) : null;
     entry.pin.dataset.fruitbackOpen = '';
+    entry.pin.querySelector('.fruitback-pin-badge')?.setAttribute('aria-expanded', 'true');
     thread = buildThread(document, entry.issue, entry.resolution, t);
     thread.querySelector('.fruitback-thread-close')?.addEventListener('click', () => closeThread());
     container.append(thread);
@@ -437,7 +462,10 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
     const opener = placed.find((entry) => entry.pin.dataset.fruitbackOpen !== undefined);
     thread?.remove();
     thread = null;
-    for (const entry of placed) delete entry.pin.dataset.fruitbackOpen;
+    for (const entry of placed) {
+      delete entry.pin.dataset.fruitbackOpen;
+      entry.pin.querySelector('.fruitback-pin-badge')?.setAttribute('aria-expanded', 'false');
+    }
     const badge = opener?.pin.querySelector<HTMLElement>('.fruitback-pin-badge');
     if (focused) (threadOpener?.isConnected === true ? threadOpener : badge)?.focus();
     threadOpener = null;
@@ -522,6 +550,9 @@ export function createOverlay(options: OverlayOptions = {}): Overlay {
   };
 }
 
+/** The number an overlay gave a note: its place among the notes of the page (FRU-252). */
+const NUMBERS = new WeakMap<SeedIssue, number>();
+
 /** The issues an overlay was told are drafts. Marked on the object, which the overlay draws as it got it. */
 const DRAFTS = new WeakSet<SeedIssue>();
 
@@ -547,6 +578,8 @@ function buildPin(document: Document, issue: SeedIssue, resolution: AnchorResolu
   const badge = document.createElement('button');
   badge.type = 'button';
   badge.className = 'fruitback-pin-badge';
+  // A pin opens its note: a screen reader is told which one is open, and is not told it twice.
+  badge.setAttribute('aria-expanded', 'false');
   badge.title = DRAFTS.has(issue) ? stateLabel(issue, t) : `${issue.identifier} · ${stateLabel(issue, t)}`;
   // The drop is rotated, so the glyph rides in its own span and is turned back upright.
   const glyph = document.createElement('span');
@@ -582,16 +615,20 @@ function applyResolution(pin: HTMLElement, issue: SeedIssue, resolution: AnchorR
     DRAFTS.has(issue)
       ? t.text('pin.labelDraft', { note: summarise(issue) })
       : t.text(resolution.confident ? 'pin.label' : 'pin.labelUncertain', {
-          stage: t.stage(issue.stage),
+          number: NUMBERS.get(issue) ?? 0,
+          // « Note 2, in progress »: the name of a stage is a label, written with a capital. In a
+          // sentence it takes none.
+          stage: t.stage(issue.stage).toLocaleLowerCase(t.lang),
           note: summarise(issue),
         }),
   );
   const glyph = pin.querySelector('.fruitback-pin-glyph');
-  // Empty when the pin is sure of itself (FRU-24): the drop's shape and its stage colour say which
-  // stage it is, and the emoji that used to sit here was a rendering choice travelling in a published
-  // type. The `≈` stays, because it is the whole warning in one character — this one was placed by
-  // coordinates, not recognised — and a typographic symbol is not an emoji.
-  if (glyph !== null) glyph.textContent = resolution.confident ? '' : '≈';
+  // The number of the note (FRU-252), which the list of the page writes beside the same note. It is
+  // what the `≈` of an unsure pin gave way to: the dashed frame, the name of the pin and its thread
+  // still say that this one was placed by coordinates, and one drop holds one mark. A note kept for
+  // later has no number: the drop is empty, in its neutral colour.
+  const number = NUMBERS.get(issue);
+  if (glyph !== null) glyph.textContent = number === undefined ? '' : String(number);
 }
 
 function summarise(issue: SeedIssue): string {
@@ -888,13 +925,19 @@ const STYLES = `
   transform: rotate(-90deg);
   background: var(--fruitback-pin-color);
   color: var(--fruitback-pin-on-color, var(--fruitback-color-on-stage));
-  font: 13px/1 var(--fruitback-font-sans);
+  font: 600 13px/1 var(--fruitback-font-sans);
   cursor: pointer;
   box-shadow: var(--fruitback-shadow-sm);
   /* Squash and stretch: the drop lands, flattens, and settles. */
   animation: fruitback-pin-drop var(--fruitback-duration-slow) cubic-bezier(0.2, 1.4, 0.35, 1);
 }
-.fruitback-pin-glyph { transform: rotate(90deg); font-size: 13px; line-height: 1; }
+.fruitback-pin-glyph {
+  transform: rotate(90deg);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
 /* No room on the left: above the element, going right, as before FRU-158. */
 .fruitback-pin-tight .fruitback-pin-badge {
   right: auto;

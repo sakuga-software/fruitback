@@ -52,8 +52,8 @@ export const FRENCH: Catalog = {
   'composer.destinationGone':
     "L'envoi vers {destination} n'est plus possible. Cette note ira vers la destination par défaut.",
 
-  'pin.label': '{stage} · {note}',
-  'pin.labelUncertain': '{stage} · {note} (position approximative)',
+  'pin.label': 'Note {number}, {stage} : {note}',
+  'pin.labelUncertain': 'Note {number}, {stage}, position approximative : {note}',
   'pin.labelDraft': 'Pas encore envoyée · {note}',
 
   'thread.close': 'Fermer',
