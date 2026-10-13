@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate, useOutletContext, useParams } from 'react-router';
 import { type Me, type Workspace, callUntilAnswered, saveLanguage } from '../api';
 import { adoptLanguage, msg, t } from '../i18n';
+import { PageHead as KitPageHead } from '../ui';
 import { useLocale } from '../use-locale';
 
 /**
@@ -82,11 +83,7 @@ export default function WorkspaceFrame() {
   );
 }
 
+/** The head of a page of the workspace, in the space the frame of before gives it. */
 export function PageHead({ title, lead }: { title: string; lead: string }) {
-  return (
-    <header className="mb-6 pt-4">
-      <h1 className="text-[26px] font-bold tracking-[-0.02em]">{title}</h1>
-      <p className="mt-1.5 text-[15px] text-muted">{lead}</p>
-    </header>
-  );
+  return <KitPageHead title={title} lead={lead} className="mb-6 pt-4" />;
 }
