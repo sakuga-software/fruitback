@@ -94,7 +94,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   FRU-236). Nothing is kept in `localStorage` any more. **One workspace is made, in whatever tab**:
   the tab that waited for the link and the tab of the link can both arrive at the setup in the same
   second. `firstWorkspace` takes a lock of the browser (`navigator.locks`), and the tab that gets it
-  second reads `/console/me` again and finds the workspace of the first.
+  second reads `/console/me` again and finds the workspace of the first. **The lock needs a secure context**: a
+  console served over `http` on a host other than `localhost` has no `navigator.locks`, and there two
+  tabs that arrive in the same second can each make a workspace. The worker does not refuse a second
+  one: that would be a rule of the worker (one first workspace per account), not of the console.
   `e2e/console-setup.spec.ts` holds the first request open and lets a second tab arrive: without the
   lock the worker is asked twice (planted). **Somebody who was invited gets no workspace made behind
   their back**: with an invitation that waits, the setup sends to `/invitations`.

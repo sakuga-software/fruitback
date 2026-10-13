@@ -118,6 +118,8 @@ async function firstWorkspace(account: Account, name?: string): Promise<Made> {
       ? { workspace: created.data }
       : { problem: problemOf(created, NAME_PROBLEMS, WORKSPACE_NOT_CREATED) };
   };
+  // No lock outside a secure context (`http` on a host other than localhost): two tabs can then each
+  // make one. docs/decisions/console.md says so.
   if (typeof navigator === 'undefined' || navigator.locks === undefined) return make();
 
   return navigator.locks.request('fruitback:first-workspace', make);
