@@ -13,8 +13,8 @@ import { WORKER_ORIGIN } from './pin.ts';
 const CONSOLE = 'http://localhost:5178';
 
 const WORDS = {
-  en: { keep: 'Keep it', remove: 'Remove', disconnect: 'Disconnect' },
-  fr: { keep: 'Le garder', remove: 'Retirer', disconnect: 'Déconnecter' },
+  en: { keep: 'Keep it', remove: 'Remove', disconnect: 'Disconnect Linear' },
+  fr: { keep: 'Le garder', remove: 'Retirer', disconnect: 'Déconnecter Linear' },
 } as const;
 type Locale = keyof typeof WORDS;
 

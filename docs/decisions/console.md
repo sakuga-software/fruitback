@@ -140,6 +140,23 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   860 px and a place for it outside the table. The card and the alert are sized by their content
   (`box-content`), as the mockup sizes them: 640 px and 760 px inside their padding.
   `e2e/console-sites.spec.ts` holds the three states, the form, the menu, the roles, 390 px and axe.
+- **The Connectors screen is the one of the mockup, with the sources that exist** (FRU-246):
+  `routes/connectors.tsx` (the list and « Add a source »), `connector-add.tsx` (the two forms),
+  `connector-linear.tsx` and `connector-rest.tsx` (the panels), `connector-parts.tsx` (what they
+  share). **A source that does not exist connects nothing**: GitHub Issues, Jira, GitLab, Trello,
+  Notion and Webhook are listed with the sentence of the mockup and a disabled « After the beta »,
+  where the mockup draws « Connect ». Linear and an address stay in « Add a source » when one is
+  connected: a workspace can connect a second one. **A row says « Connected », « Needs attention »,
+  or how many notes did not reach an address**; the count is read with the list, and an address
+  whose count was not read says « Connected » and no number. On the chosen row the red is the
+  strong accent: the accent is 4.28:1 on its tint. **The panel keeps what the mockup does not
+  draw**: the places of each site (FRU-123), under « Sites sending here » for the sites that send
+  there and under « Other sites » for the others; the notes that did not arrive; « Use an API
+  key ». It does not show « Attach a picture of the element » (FRU-198), a count of notes by site
+  nor « Last issue created » (FRU-237). **The drop of a status is beside its list**, where the
+  mockup draws it inside: the list of the kit has no place for it. « Connect » is written seven
+  times, so each button also holds the name of its source for a screen reader.
+  `e2e/console-connectors.spec.ts` holds the values, the states, the roles, 390 px and axe.
 - **A box is compared to the mockup in the font of the mockup** (`e2e/console-workspace.ts`,
   `MOCKUP_FONT`): the mockup sizes its boxes by their text, and the Linux of CI has another font
   (52 px where the mockup has 49). `expectBox` compares on macOS; the computed styles are read
