@@ -2723,8 +2723,11 @@ client map were refused together at boot.
 - `POST /console/me/name {name}` names the person of the cookie, and nobody else. `readPersonName`
   of `accounts.ts` is the one rule: one line, 1 to 80 characters, NFC, no control, format, private
   or unassigned character.
-- The name an extension signs is read again at each refresh (`currentIdentity` of `app.ts`): the
-  session keeps the identity of its pairing, and only the access token carries the new name.
+- A rename writes the new name on the live sessions of the person and on their codes that wait
+  (`renameSessionsOf` of the session stores): each extension signs it from its next access token. A
+  name read from the account at each refresh was tried first, and dropped: it would also have
+  replaced the name an operator gave a pairing of the `pair` command, for a person who never chose
+  one (the E2E suite caught it).
 - `GET /console/me/sign-in` lists the ways; `GET /console/auth/link/<provider>` links one by a
   navigation, because WebKit keeps no cookie of the state from the answer of a `fetch` (FRU-147);
   `DELETE /console/me/sign-in/<provider>` unlinks one.

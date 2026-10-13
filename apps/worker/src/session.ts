@@ -93,6 +93,12 @@ export type SessionStore = {
    * before it ends them.
    */
   endSessionsOf(of: SessionsOf, now: number): Promise<void>;
+  /**
+   * Writes the name a person chose on their sessions that live, and on the codes minted for them and
+   * not redeemed yet (FRU-249): an extension signs it from its next access token. The sessions that
+   * ended keep the name they had.
+   */
+  renameSessionsOf(subject: string, name: string, now: number): Promise<void>;
   /** Drops what is expired. Called on redeem, so a worker nobody administers still stays small. */
   purge(now: number): Promise<void>;
   /**
@@ -313,11 +319,6 @@ export async function refreshSession(
   refreshToken: string,
   secret: string,
   now: number = Date.now(),
-  /**
-   * The identity as it is now (FRU-249): a person who changed their name signs the next access token
-   * with it. The session keeps the identity of its pairing; only the token carries the new name.
-   */
-  current: (identity: SessionIdentity) => Promise<SessionIdentity> = async (identity) => identity,
 ): Promise<
   | { ok: true; accessToken: string; refreshToken: string; expiresIn: number; identity: SessionIdentity }
   | { ok: false; reason: SessionFailure }
@@ -334,14 +335,13 @@ export async function refreshSession(
   // caller that the token they replayed was a real one that had been rotated is telling them their
   // copy was genuine.
   if (rotation.outcome !== 'rotated') return { ok: false, reason: 'session-revoked-or-expired' };
-  const identity = await current(rotation.identity);
 
   return {
     ok: true,
-    accessToken: await mintAccessToken(identity, secret, now),
+    accessToken: await mintAccessToken(rotation.identity, secret, now),
     refreshToken: successor,
     expiresIn: ACCESS_TTL_SECONDS,
-    identity,
+    identity: rotation.identity,
   };
 }
 

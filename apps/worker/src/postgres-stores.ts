@@ -109,6 +109,7 @@ export function sessionStoreOn(database: Database): SessionStore {
     rotateSession: true,
     revokeSession: true,
     endSessionsOf: true,
+    renameSessionsOf: true,
     purge: true,
     holdsSession: true,
   });

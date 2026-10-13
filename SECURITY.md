@@ -1018,7 +1018,8 @@ the account had`. A later sign-in with a provider does not write over it. There 
   reserved names: a name is a claim of the person, as the name in a note always was, and the
   address beside it is the one the worker proved.
 - **An extension signs the new name from its next access token**, at its next refresh, within ten
-  minutes: test:`signs the next access token of an extension with the new name, and keeps the pairing
+  minutes: the rename writes it on the live sessions of the person and on their codes that wait:
+  test:`signs the next access token of an extension with the new name, and leaves the token in hand
 as it was`. The notes already in a tracker keep the name they were sent with.
 - **A provider is linked only for the address of the account, verified by the provider.**
   `GET /console/auth/link/<provider>` starts it by a navigation, as a sign-in starts, with the same

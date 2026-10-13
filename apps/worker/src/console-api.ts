@@ -379,12 +379,13 @@ export async function handleConsoleApi(
   }
 
   // The name on the notes of the person (FRU-249). Their own account only. The notes already sent
-  // keep the name they were sent with; an extension signs the new one from its next access token.
+  // keep the name they were sent with; their extensions sign the new one from their next access token.
   if (pathname === '/console/me/name') {
     if (request.method !== 'POST') return json(405, { error: 'method-not-allowed' }, headers);
     const name = readPersonName((await readBody(request))?.name);
     if (name === undefined) return json(400, { error: 'invalid-name' }, headers);
     await context.accounts.setName(account.id, name);
+    await context.sessions.renameSessionsOf(account.id, name, context.now ?? Date.now());
 
     return json(200, { account: { ...account, name } }, headers);
   }

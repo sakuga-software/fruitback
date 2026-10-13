@@ -306,6 +306,20 @@ export function createPostgresSessionStore(database: Database): SessionStore {
       });
     },
 
+    async renameSessionsOf(subject, name, now) {
+      if (subject === '') return;
+      await transaction(async (tx) => {
+        await tx
+          .update(sessions)
+          .set({ name })
+          .where(and(eq(sessions.subject, subject), isNull(sessions.revoked_at), gt(sessions.expires_at, now)));
+        await tx
+          .update(pairings)
+          .set({ name })
+          .where(and(eq(pairings.subject, subject), isNull(pairings.redeemed_at), gt(pairings.expires_at, now)));
+      });
+    },
+
     async endSessionsOf(of, now) {
       const { subject, workspace } = namedSessionsOf(of);
       const theirs = (table: typeof sessions | typeof pairings) =>

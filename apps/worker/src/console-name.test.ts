@@ -8,7 +8,7 @@ import { workerOf } from './auth-worker.fixture.ts';
  * The name a person signs their notes with (FRU-249), set by `POST /console/me/name`.
  *
  * Their own account only, by a POST of the console. The notes already in a tracker keep the name
- * they were sent with; an extension signs the new name from its next access token.
+ * they were sent with; an extension signs the new name from its next access token: the rename writes it on their sessions.
  */
 
 const { opening } = databasesOfACase();
@@ -145,7 +145,7 @@ for (const { label, open, skip } of DATABASES) {
       assert.equal(await nameOf(), undefined);
     });
 
-    it('signs the next access token of an extension with the new name, and keeps the pairing as it was', async () => {
+    it('signs the next access token of an extension with the new name, and leaves the token in hand as it was', async () => {
       const { worker, headers } = await signedIn();
       assert.equal((await worker.call('/console/me/name', { body: { name: 'Alice' }, headers })).status, 200);
       const paired = await extensionOf(worker, headers);
