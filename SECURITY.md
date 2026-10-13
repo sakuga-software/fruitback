@@ -977,7 +977,7 @@ the console. Each one has a rule in `ORGANIZATION_PATHS` (`organization-paths.ts
 | Route                   | Who                                          | What it does                               |
 | ----------------------- | -------------------------------------------- | ------------------------------------------ |
 | `list-members`          | owner, admin, member                         | names, addresses and roles                 |
-| `update-member-role`    | owner, admin                                 | one role, one of the four                  |
+| `update-member-role`    | owner, admin                                 | owner, admin or member, not guest          |
 | `remove-member`         | owner, admin                                 | the member, and their codes                |
 | `leave`                 | anybody of the workspace, but its last owner | themselves                                 |
 | `invite-member`         | owner, admin                                 | an address, as an admin or a member        |
@@ -1030,6 +1030,36 @@ when it is accepted`. An invitation waits 7 days; one address gets one invitatio
   test:`refuses at the acceptance an invitation whose inviter no longer invites, when no cancellation ran (FRU-209)`.
   **Both are on the routes of the worker**, not in better-auth: a call to the plugin in the process
   passes neither, and no code of the worker makes one for these routes.
+- **One call at a time changes a workspace** (FRU-209). better-auth reads, then writes, in no
+  transaction: it counts the owners and then removes one, it looks for an invitation of an address
+  and then writes one. On a real PostgreSQL, two owners who left, demoted themselves or removed
+  each other at the same moment left a workspace with no owner, which nobody can repair or delete
+  (measured, 3 runs of 3), and four invitations of one address wrote two or three rows. The routes
+  of the worker that change a workspace now run one after the other for that workspace:
+  test:`keeps one owner when two owners go at the same moment (FRU-209)`,
+  test:`writes one invitation for one address when two people invite it at the same moment`.
+  **This holds for one process of the worker.** Two replicas do not share it, as they do not share
+  the rate limit.
+- **Nobody is removed while their extension lives** (FRU-209). The sessions of the extensions of a
+  member end before better-auth deletes the member; when that fails, nothing is deleted, the call
+  answers `502`, and it is made again:
+  test:`removes nobody when the end of their extensions fails, answers 502, and removes them at the next call (FRU-209)`.
+  `leave` has no hook to do it first: its clean-up comes after the write, a failure answers `502`,
+  and the same call made again finishes it,
+  test:`finishes what follows a departure when somebody who left asks again (FRU-209)`. Until then
+  the second lock holds: a refresh and `/session/sites` read the membership.
+- **Smaller rules of the invitations** (FRU-209). An invitation that was accepted cannot be
+  cancelled (test:`refuses to cancel an invitation that was accepted, and the person stays a member (FRU-209)`).
+  One past its end is listed nowhere (test:`lists no invitation past its end, to whoever invites and to the person it names (FRU-209)`).
+  A « Resend » names the role of the invitation that waits, or is refused
+  (test:`refuses a « Resend » that names another role than the invitation that waits, and sends nothing (FRU-209)`).
+  A change of role gives `owner`, `admin` or `member`, and no `guest`, for the reason an invitation
+  gives none (test:`makes no guest by a change of role, as by an invitation (FRU-209)`). The address
+  of the session must be verified (`requireEmailVerificationOnInvitation`):
+  test:`takes an invitation from a session whose address is verified, and from no other (FRU-209)`.
+  The window of an address counts its mailbox, without a `+suffix`, for an invitation and for a
+  sign-in link: test:`counts the window of an address by its mailbox: a suffix after « + » opens no other (FRU-209)`.
+  Dots in the name of a mailbox are not folded: only some providers ignore them.
 - **A cancel names the workspace, and the invitation must be of it.** better-auth reads the
   workspace of an invitation from the invitation; the worker reads the role in the workspace of the
   call, so it checks first that the two are one:
