@@ -98,7 +98,7 @@ test('pointing at the settings button never captures it', async ({ page }) => {
   await page.getByLabel('Open Fruitback settings').click();
 
   await expect(page.locator(panel)).toBeVisible();
-  await expect(page.getByPlaceholder('What is wrong here?')).toBeHidden();
+  await expect(page.getByPlaceholder('What should change?')).toBeHidden();
 });
 
 test('a stage hidden before the pins arrive is never drawn', async ({ page }) => {

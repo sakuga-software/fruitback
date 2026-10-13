@@ -1,5 +1,6 @@
 import type { SeedSource } from '@fruitback/shared';
 import { isElement } from './dom.ts';
+import { componentOf } from './capture.ts';
 import { deepActiveElement } from './focus.ts';
 import { type FruitbackTheme, THEME_STYLES, applyTheme } from './theme.ts';
 import { type CaptureEngine, reactGrabEngine } from './engine.ts';
@@ -71,6 +72,13 @@ export type CaptureHost = {
   start(): void;
   stop(): void;
   capturing(): boolean;
+  /**
+   * Keep the frame of a capture on an element, with the name of its component, while the caller
+   * writes about it (FRU-258): `hold` in `onSelect`, `release` when the note is sent or given up.
+   * A caller that asks for nothing gets what it had: the frame goes when the element is chosen.
+   */
+  hold(element: Element): void;
+  release(): void;
   destroy(): void;
 };
 
@@ -115,9 +123,10 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   const launchLabel = document.createElement('span');
   launchLabel.textContent = restingLabel;
   button.append(createIcon(document, 'mark'), launchLabel);
-  // No `aria-pressed` yet, though the mock-up has it: while a capture runs this button changes its
-  // words (« Esc to cancel »), and a switch that also changes its name says two things at once to a
-  // screen reader. FRU-258 moves those words to a banner; the name then stays, and the state comes.
+  // A switch (FRU-258): its name stays, and `aria-pressed` says that a capture runs. It changed its
+  // words to « Esc to cancel » until the banner took them, and a switch that also changes its name
+  // says two things at once to a screen reader.
+  button.setAttribute('aria-pressed', 'false');
 
   // Beside the launch button rather than inside the settings panel, because the panel is what it
   // opens. Only built when there is something to open.
@@ -140,6 +149,24 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   const highlight = document.createElement('div');
   highlight.className = 'fruitback-highlight';
   highlight.dataset.fruitbackHostHighlight = '';
+  // The name of the component behind the element, when the page gives one (FRU-258). A drawing for
+  // the eye: the note carries the same name, and a screen reader hears the element itself.
+  const tag = document.createElement('span');
+  tag.className = 'fruitback-highlight-tag';
+  tag.setAttribute('aria-hidden', 'true');
+  tag.hidden = true;
+  highlight.append(tag);
+
+  // What a capture asks for, and the way out of it (FRU-258). Always in the tree and empty at rest:
+  // a live region that was hidden announces nothing when it comes back.
+  const banner = document.createElement('div');
+  banner.className = 'fruitback-banner';
+  banner.dataset.fruitbackHostBanner = '';
+  banner.setAttribute('role', 'status');
+  const halt = document.createElement('button');
+  halt.type = 'button';
+  halt.className = 'fruitback-banner-stop';
+  halt.textContent = t.text('capture.stop');
 
   const panel = document.createElement('div');
   panel.className = 'fruitback-panel';
@@ -160,7 +187,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   announcer.setAttribute('role', 'status');
   announcer.setAttribute('aria-live', 'polite');
 
-  root.append(style, dock, highlight, panel, announcer);
+  root.append(style, banner, dock, highlight, panel, announcer);
 
   configure.addEventListener('click', (event) => {
     event.preventDefault();
@@ -180,6 +207,30 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
 
   let capturing = false;
   let hovered: Element | null = null;
+  /** The element the frame is held on after a choice, from `hold` to `release`. */
+  let chosen: Element | null = null;
+  /**
+   * What the engine said of each element, asked once. The pointer crosses an element many times, and
+   * the choice asks for the same answer. Emptied at each start: a page hot-reloads between two notes.
+   */
+  let sources = new WeakMap<Element, Promise<SeedSource | undefined>>();
+
+  // A seed with no `source` is a perfectly good seed, so a rejecting engine costs the metadata and
+  // nothing else. Without the catch, a swapped-in engine that throws would drop the capture on the
+  // floor and leave an unhandled rejection behind — the reporter's note lost to a missing filename.
+  function sourceOf(element: Element): Promise<SeedSource | undefined> {
+    let source = sources.get(element);
+    if (source === undefined) {
+      try {
+        source = engine.sourceOf(element).catch(() => undefined);
+      } catch {
+        source = Promise.resolve(undefined);
+      }
+      sources.set(element, source);
+    }
+
+    return source;
+  }
 
   /** Anything of ours, wherever it sits in the composed tree — plus whatever the caller disowns. */
   const isOurs = (element: Element) =>
@@ -194,6 +245,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   }
 
   function show(element: Element | null): void {
+    const changed = element !== hovered;
     hovered = element;
 
     if (element === null) {
@@ -201,13 +253,35 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
       return;
     }
 
+    frame(element);
+    if (changed) name(element);
+  }
+
+  /** The frame stands 6 px off the element on every side, as the mock-up draws it (FRU-258). */
+  function frame(element: Element): void {
     const bounds = engine.boundsOf(element);
+    const top = bounds.top + (view?.scrollY ?? 0) - HIGHLIGHT_OUTSET;
     Object.assign(highlight.style, {
       display: 'block',
-      left: `${bounds.left + (view?.scrollX ?? 0)}px`,
-      top: `${bounds.top + (view?.scrollY ?? 0)}px`,
-      width: `${bounds.width}px`,
-      height: `${bounds.height}px`,
+      left: `${bounds.left + (view?.scrollX ?? 0) - HIGHLIGHT_OUTSET}px`,
+      top: `${top}px`,
+      width: `${bounds.width + 2 * HIGHLIGHT_OUTSET}px`,
+      height: `${bounds.height + 2 * HIGHLIGHT_OUTSET}px`,
+    });
+    // The name sits above the frame. At the top of the document there is no above: it goes inside.
+    highlight.toggleAttribute('data-fruitback-tag-inside', top < TAG_ROOM);
+  }
+
+  /** Write the name of the component on the frame, if the element is still the one framed. */
+  function name(element: Element): void {
+    tag.hidden = true;
+    void sourceOf(element).then((source) => {
+      if (element !== hovered && element !== chosen) return;
+      // The name the note will carry, which is not always the engine's: see `componentOf`.
+      const component = componentOf(element, source)?.trim() ?? '';
+      // As text: a name is whatever the page called its component.
+      tag.textContent = component;
+      tag.hidden = component === '';
     });
   }
 
@@ -229,13 +303,24 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
 
   function select(element: Element): void {
     stop();
-    // A seed with no `source` is a perfectly good seed, so a rejecting engine costs the metadata and
-    // nothing else. Without the catch, a swapped-in engine that throws would drop the capture on the
-    // floor and leave an unhandled rejection behind — the reporter's note lost to a missing filename.
-    void engine
-      .sourceOf(element)
-      .catch(() => undefined)
-      .then((source) => options.onSelect({ element, source }));
+    void sourceOf(element).then((source) => options.onSelect({ element, source }));
+  }
+
+  function hold(element: Element): void {
+    chosen = element;
+    frame(element);
+    name(element);
+  }
+
+  function release(): void {
+    chosen = null;
+    if (!capturing) highlight.style.display = 'none';
+  }
+
+  /** Out of the capture by its own controls: focus goes back to the button that started it. */
+  function leave(): void {
+    stop();
+    button.focus();
   }
 
   /**
@@ -254,7 +339,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
       // One key press cancels one thing: the page and the thread must not also act on it.
       event.preventDefault();
       event.stopPropagation();
-      stop();
+      leave();
 
       return;
     }
@@ -328,24 +413,50 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
 
   function start(): void {
     capturing = true;
+    chosen = null;
+    sources = new WeakMap();
     container.dataset.fruitbackCapturing = '';
+    button.setAttribute('aria-pressed', 'true');
     // A phone has no Escape key and no arrows (FRU-157). Read at each start: a tablet gains a
     // keyboard and a mouse, and loses them.
     const touch = view?.matchMedia?.('(pointer: coarse)').matches === true;
-    launchLabel.textContent = t.text(touch ? 'launch.capturingTouch' : 'launch.capturing');
-    announcer.textContent = t.text(touch ? 'capture.instructionsTouch' : 'capture.instructions');
+    const say = (className: string, key: Parameters<Translator['text']>[0]): HTMLElement => {
+      const part = document.createElement('span');
+      part.className = className;
+      part.textContent = t.text(key);
+
+      return part;
+    };
+    // The banner is the one voice of a start: what to do, the key that stops, and for a keyboard the
+    // way to move, which is read and not drawn. Then the button, which a thumb needs.
+    banner.replaceChildren(
+      say('fruitback-banner-ask', touch ? 'capture.bannerTouch' : 'capture.banner'),
+      ...(touch
+        ? []
+        : [say('fruitback-banner-key', 'capture.escape'), say('fruitback-banner-keys', 'capture.instructions')]),
+      halt,
+    );
   }
 
   function stop(): void {
     capturing = false;
     hovered = null;
+    chosen = null;
     delete container.dataset.fruitbackCapturing;
-    launchLabel.textContent = restingLabel;
+    button.setAttribute('aria-pressed', 'false');
+    banner.replaceChildren();
     highlight.style.display = 'none';
     announcer.textContent = '';
   }
 
   button.addEventListener('click', () => (capturing ? stop() : start()));
+  halt.addEventListener('click', (event) => {
+    // Inside the Shadow root, so the capture does not take this click for a choice; and the page
+    // must not hear it either.
+    event.preventDefault();
+    event.stopPropagation();
+    leave();
+  });
   // Capture phase, so the page's own handlers never see the pointer while selection is on.
   document.addEventListener('mousemove', onMove, true);
   document.addEventListener('click', onClick, true);
@@ -357,6 +468,8 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     start,
     stop,
     capturing: () => capturing,
+    hold,
+    release,
     destroy() {
       document.removeEventListener('mousemove', onMove, true);
       document.removeEventListener('click', onClick, true);
@@ -391,11 +504,28 @@ function preceding(element: Element, root: Element): Element | null {
 /** What a screen reader says about the element under the keyboard cursor. */
 function describe(element: Element, t: Translator): string {
   const tag = element.tagName.toLowerCase();
-  const text = (element.getAttribute('aria-label') ?? element.textContent ?? '').replace(/\s+/g, ' ').trim();
+  const text = readableName(element);
   if (text === '') return t.text('capture.elementEmpty', { tag });
 
-  return t.text('capture.element', { tag, text: text.length > 80 ? `${text.slice(0, 79)}…` : text });
+  return t.text('capture.element', { tag, text });
 }
+
+/**
+ * A name a person reads for an element: its accessible name when the page wrote one, its text
+ * otherwise, on one line and cut at 80 characters. Empty when the element says nothing. It is what
+ * the keyboard capture reads out, and what the composer writes after « on » (FRU-258).
+ */
+export function readableName(element: Element): string {
+  const oneLine = (text: string | null) => (text ?? '').replace(/\s+/g, ' ').trim();
+  // `||`: a label left empty names nothing, and the text of the element is then the name.
+  const text = oneLine(element.getAttribute('aria-label')) || oneLine(element.textContent);
+
+  return text.length > 80 ? `${text.slice(0, 79)}…` : text;
+}
+
+/** How far the frame of a capture stands off its element, and the room its name takes above it. */
+const HIGHLIGHT_OUTSET = 6;
+const TAG_ROOM = 24;
 
 /**
  * `all: initial` on every element, because a Shadow root stops the page's *selectors* but not its
@@ -501,9 +631,83 @@ li { display: list-item; }
   z-index: 2147483100;
   /* The reporter is aiming at the page, not at this box. */
   pointer-events: none;
-  outline: 2px solid var(--fruitback-color-accent);
-  background: color-mix(in srgb, var(--fruitback-color-accent) 8%, transparent);
+  border: 2px solid var(--fruitback-color-accent);
+  background: color-mix(in srgb, var(--fruitback-color-accent) 6%, transparent);
   border-radius: var(--fruitback-radius-sm);
+}
+/*
+  The name of the component, on the start corner of the frame and above it: 30 px above the element,
+  as the mock-up draws it. Its positions count from inside the 2 px border of the frame.
+*/
+.fruitback-highlight-tag {
+  position: absolute;
+  inset-inline-start: -2px;
+  top: -26px;
+  max-width: min(320px, 90vw);
+  padding: 3px 8px;
+  border-radius: var(--fruitback-radius-sm);
+  border-end-start-radius: 0;
+  background: var(--fruitback-color-accent);
+  color: var(--fruitback-color-on-accent);
+  font: 600 11px/1.5 var(--fruitback-font-sans);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fruitback-highlight-tag[hidden] { display: none; }
+.fruitback-highlight[data-fruitback-tag-inside] .fruitback-highlight-tag {
+  top: -2px;
+  border-end-start-radius: var(--fruitback-radius-sm);
+  border-start-end-radius: 0;
+}
+/* The banner of a capture (FRU-258): a dark pill at the top of the window, in its middle. */
+.fruitback-banner {
+  position: fixed;
+  top: 16px;
+  /* In the middle, with no side named: the two edges and the two margins say it in any direction. */
+  inset-inline: 0;
+  margin-inline: auto;
+  width: fit-content;
+  max-width: calc(100vw - 16px);
+  z-index: 2147483200;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-block: 6px;
+  padding-inline: 18px 6px;
+  border-radius: var(--fruitback-radius-pill);
+  background: var(--fruitback-color-ink);
+  color: var(--fruitback-color-on-ink);
+  font: 13px/1.5 var(--fruitback-font-sans);
+  box-shadow: var(--fruitback-shadow-lg);
+  white-space: nowrap;
+}
+/* Empty at rest, and still in the tree: no box, no paint. */
+.fruitback-banner:empty { padding: 0; box-shadow: none; }
+/* The key and the button keep their line: in a narrow window the sentence is what wraps. */
+.fruitback-banner-key { flex: none; color: var(--fruitback-color-on-ink-muted); white-space: nowrap; }
+/* Read, not drawn: how a keyboard moves. */
+.fruitback-banner-keys {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.fruitback-banner-stop {
+  flex: none;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--fruitback-radius-pill);
+  background: var(--fruitback-color-chip);
+  color: var(--fruitback-color-on-chip);
+  font: 600 13px/1 var(--fruitback-font-sans);
+  cursor: pointer;
+}
+/* A window narrower than the sentence: it wraps, and a pill of two lines is a rounded box. */
+@media (max-width: 480px) {
+  .fruitback-banner { white-space: normal; border-radius: var(--fruitback-radius-lg); }
 }
 .fruitback-panel { position: absolute; top: 0; left: 0; }
 .fruitback-announcer {
@@ -518,6 +722,10 @@ li { display: list-item; }
 :host([data-fruitback-capturing]) .fruitback-launch { background: var(--fruitback-color-accent-strong); }
 /*
   A thumb, not a pointer (FRU-157): the three buttons of the dock were 30 px and grew to 44 px on a
-  touch screen. They are 44 px everywhere now, so a touch screen needs no rule of its own here.
+  touch screen. They are 44 px everywhere now, so a touch screen needs no rule of its own here. The
+  way out of a capture is the one control a phone has for it: 44 px there, in a pill that grows with it.
 */
+@media (pointer: coarse) {
+  .fruitback-banner-stop { min-height: 44px; padding-inline: 18px; }
+}
 `;

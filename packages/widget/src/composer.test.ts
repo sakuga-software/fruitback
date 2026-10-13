@@ -32,7 +32,7 @@ let mounted: MountedPage | null = null;
 
 function mount(
   onSubmit: (note: string, reporter?: SeedReporter) => Promise<boolean | void | SendFailure>,
-  more: Pick<ComposerOptions, 'memory' | 'identified' | 'keep'> = {},
+  more: Pick<ComposerOptions, 'memory' | 'identified' | 'keep' | 'picture' | 'onClose'> = {},
 ) {
   const page = mountPage('<main><button id="cta">Commander</button></main>', { width: 1_000, height: 1_000 });
   const host = page.document.createElement('div');
@@ -52,17 +52,57 @@ function press(key: string, modifiers: { metaKey?: boolean; ctrlKey?: boolean } 
 
 const field = () => composer?.element.querySelector('[data-fruitback-note]') as HTMLTextAreaElement;
 const sendButton = () => composer?.element.querySelector('[data-fruitback-send]') as HTMLButtonElement;
+const closeButton = () => composer?.element.querySelector('[data-fruitback-close]') as HTMLButtonElement;
 const statusText = () => composer?.element.querySelector('[data-fruitback-status]')?.textContent ?? '';
 
 describe('what the popover looks like (FRU-36)', () => {
-  it('draws the drop on the send button and still calls it Send', () => {
+  it('writes Send alone, and draws the cross that closes without sending (FRU-258)', () => {
     // The icon is appended after the template is parsed, because an SVG written into an innerHTML
     // string lands in the HTML namespace and renders nothing at all. It is aria-hidden, so the
-    // button's accessible name has to be the word alone.
+    // name of the cross is its label alone.
     mount(async () => {});
 
-    assert.ok(sendButton().querySelector('svg.fruitback-icon'), 'the send button lost its mark');
+    // The mock-up writes the word and no drop: the drop is the mark of the launch button and of the pins.
+    assert.equal(sendButton().querySelector('svg'), null);
     assert.equal(sendButton().textContent, 'Send');
+    assert.ok(closeButton().querySelector('svg.fruitback-icon'), 'the cross is not drawn');
+    assert.equal(closeButton().textContent, '');
+    assert.equal(closeButton().getAttribute('aria-label'), 'Close without sending');
+  });
+
+  it('has a head: its title, and what the note is about when the element says something (FRU-258)', () => {
+    mount(async () => {});
+    const title = () => composer?.element.querySelector('[data-fruitback-title]') as HTMLElement;
+    const about = () => composer?.element.querySelector('[data-fruitback-about]') as HTMLElement;
+
+    composer?.open(ANCHOR, 'Fell shell jacket');
+    assert.equal(title().textContent, 'New note');
+    assert.equal(about().textContent, 'on Fell shell jacket');
+    assert.equal(about().hidden, false);
+
+    // An element with no text: the title alone, and no « on » left hanging.
+    composer?.close();
+    composer?.open(ANCHOR);
+    assert.equal(about().textContent, '');
+    assert.equal(about().hidden, true);
+
+    // As text: it is whatever the page wrote in its element.
+    composer?.close();
+    composer?.open(ANCHOR, '<img src=x onerror=alert(1)>');
+    assert.equal(about().textContent, 'on <img src=x onerror=alert(1)>');
+    assert.equal(about().querySelector('img'), null);
+  });
+
+  it('closes on the cross like on Cancel, and gives the note up', () => {
+    let closed = 0;
+    mount(async () => true, { onClose: () => (closed += 1) });
+    composer?.open(ANCHOR);
+    field().value = 'Une note';
+
+    closeButton().click();
+
+    assert.equal(composer?.element.hidden, true);
+    assert.equal(closed, 1);
   });
 
   it('confirms in words, with no strawberry in front of them', async () => {
@@ -285,7 +325,8 @@ describe('createComposer', () => {
     const status = composer?.element.querySelector('[data-fruitback-status]');
     assert.equal(status?.getAttribute('role'), 'status');
     assert.equal(status?.getAttribute('aria-live'), 'polite');
-    assert.equal(field().getAttribute('aria-label'), 'Your comment');
+    assert.equal(field().getAttribute('aria-label'), 'What should change?');
+    assert.equal(field().placeholder, 'What should change?');
   });
 
   it('writes a host translation as text, never as markup (FRU-37)', () => {
@@ -324,11 +365,12 @@ describe('createComposer', () => {
       return left;
     };
 
-    assert.equal(placedLeft(createTranslator()), '500px');
-    // 700 minus the popover's 320: its right edge sits on the element's right edge.
+    // On the edge of the frame, which stands 6 px off the element (FRU-258).
+    assert.equal(placedLeft(createTranslator()), '494px');
+    // 706 minus the popover's 360: its right edge sits on the right edge of the frame.
     assert.equal(
       placedLeft(createTranslator({ locale: 'ar', messages: { ar: { 'composer.send': 'أرسل' } } })),
-      '380px',
+      '346px',
     );
   });
 
@@ -350,9 +392,9 @@ describe('createComposer', () => {
     };
 
     // The element is on screen at document x 2000, so the popover opens there.
-    assert.equal(placedLeft({ left: 2_000, top: 200, bottom: 240, right: 2_100 }), '2000px');
-    // Near the right edge of the window it stops 10px short of it: 1500 + 1000 - 320 - 10.
-    assert.equal(placedLeft({ left: 2_400, top: 200, bottom: 240, right: 2_450 }), '2170px');
+    assert.equal(placedLeft({ left: 2_000, top: 200, bottom: 240, right: 2_100 }), '1994px');
+    // Near the right edge of the window it stops 10px short of it: 1500 + 1000 - 360 - 10.
+    assert.equal(placedLeft({ left: 2_400, top: 200, bottom: 240, right: 2_450 }), '2130px');
     // Right to left, near the left edge of the window, it stops 10px after it: 1500 + 10.
     assert.equal(
       placedLeft(
@@ -361,6 +403,90 @@ describe('createComposer', () => {
       ),
       '1510px',
     );
+  });
+
+  it('opens above its element, 40 px over its top, and below when there is no room above (FRU-258)', () => {
+    const placed = (anchor: { left: number; top: number; bottom: number; right: number }, scrollY = 0) => {
+      const page = mountPage('<main></main>', { width: 1_000, height: 1_000 });
+      page.view.scrollTo(0, scrollY);
+      const host = page.document.createElement('div');
+      page.document.body.append(host);
+      const opened = createComposer({ document: page.document, host, onSubmit: async () => true });
+      // No layout here: the test gives the popover the height the mock-up measures.
+      opened.element.getBoundingClientRect = () => ({ height: 240 }) as DOMRect;
+      opened.open(anchor);
+      const result = {
+        top: opened.element.style.getPropertyValue('--fruitback-composer-top'),
+        side: opened.element.dataset.fruitbackSide,
+      };
+      opened.destroy();
+
+      return result;
+    };
+
+    // 600 − 40 − 240: its bottom edge ends 40 px over the element, the name of the component between them.
+    assert.deepEqual(placed({ left: 100, top: 600, bottom: 640, right: 300 }), { top: '320px', side: 'above' });
+    // No room above: under the frame, 6 px off the element, and 10 px more.
+    assert.deepEqual(placed({ left: 100, top: 200, bottom: 240, right: 300 }), { top: '256px', side: 'below' });
+    // The window, not the document, says what room there is: scrolled, the same element has none above.
+    assert.deepEqual(placed({ left: 100, top: 600, bottom: 640, right: 300 }, 400), { top: '656px', side: 'below' });
+    // Room on neither side, for an element as tall as the window: it stays in the window, at its bottom.
+    assert.deepEqual(placed({ left: 100, top: 100, bottom: 950, right: 300 }), { top: '750px', side: 'below' });
+  });
+
+  it('shows the box of the picture only when a picture can be taken, and never ticks it itself (FRU-258)', () => {
+    // Privacy: no image leaves the page without a choice. The box shows the preference; the default is off.
+    let attach = false;
+    const listeners: (() => void)[] = [];
+    const picture = {
+      offered: () => true,
+      get: () => attach,
+      set: (next: boolean) => {
+        attach = next;
+      },
+      subscribe: (listener: () => void) => {
+        listeners.push(listener);
+
+        return () => {};
+      },
+    };
+    mount(async () => true, { picture });
+    const label = () => composer?.element.querySelector('[data-fruitback-picture-label]') as HTMLElement;
+    const box = () => composer?.element.querySelector('[data-fruitback-picture]') as HTMLInputElement;
+
+    composer?.open(ANCHOR);
+    assert.equal(label().hidden, false);
+    assert.equal(label().textContent?.trim(), 'Attach a picture of this element');
+    assert.equal(box().checked, false, 'the box was ticked by default');
+    assert.equal(attach, false, 'opening the composer changed the preference');
+
+    // Ticked: the preference is kept at once, with or without a note sent.
+    box().checked = true;
+    const EventCtor = (mounted as MountedPage).view as unknown as { Event: typeof Event };
+    box().dispatchEvent(new EventCtor.Event('change', { bubbles: true }));
+    assert.equal(attach, true);
+
+    // The next note shows what was chosen, and the settings panel can turn it off under an open composer.
+    composer?.close();
+    composer?.open(ANCHOR);
+    assert.equal(box().checked, true);
+    attach = false;
+    for (const listener of listeners) listener();
+    assert.equal(box().checked, false);
+  });
+
+  it('has no box of the picture when the host cannot take one', () => {
+    mount(async () => true);
+    composer?.open(ANCHOR);
+    const label = () => composer?.element.querySelector('[data-fruitback-picture-label]') as HTMLElement;
+    assert.equal(label().hidden, true);
+
+    composer?.destroy();
+    mount(async () => true, { picture: { offered: () => false, get: () => true, set: () => {} } });
+    composer?.open(ANCHOR);
+    assert.equal(label().hidden, true);
+    // Not offered is not ticked, whatever the stored preference says.
+    assert.equal((label().querySelector('input') as HTMLInputElement).checked, false);
   });
 
   it('takes its own DOM with it when destroyed', () => {
@@ -627,7 +753,7 @@ describe('the popover as a dialog (FRU-51)', () => {
 
     assert.equal(composer?.element.getAttribute('role'), 'dialog');
     assert.equal(composer?.element.getAttribute('aria-modal'), 'true');
-    assert.equal(composer?.element.getAttribute('aria-label'), 'Leave a note');
+    assert.equal(composer?.element.getAttribute('aria-label'), 'New note');
     assert.notEqual(composer?.element.getAttribute('aria-label'), field().getAttribute('aria-label'));
   });
 
@@ -637,9 +763,10 @@ describe('the popover as a dialog (FRU-51)', () => {
 
     sendButton().focus();
     assert.equal(keyOn(sendButton(), 'Tab').defaultPrevented, true);
-    assert.ok(active() === field(), 'Tab on the last control did not go back to the first');
+    // The cross of the head is the first control (FRU-258); the note field keeps the focus of the open.
+    assert.ok(active() === closeButton(), 'Tab on the last control did not go back to the first');
 
-    assert.equal(keyOn(field(), 'Tab', true).defaultPrevented, true);
+    assert.equal(keyOn(closeButton(), 'Tab', true).defaultPrevented, true);
     assert.ok(active() === sendButton(), 'Shift+Tab on the first control did not go to the last');
   });
 
@@ -661,7 +788,7 @@ describe('the popover as a dialog (FRU-51)', () => {
     cancelButton().focus();
     keyOn(cancelButton(), 'Tab');
 
-    assert.ok(active() === field(), 'the disabled send button is still in the cycle');
+    assert.ok(active() === closeButton(), 'the disabled send button is still in the cycle');
   });
 
   it('closes on Escape from any control, and the Escape goes no further', () => {
@@ -722,7 +849,7 @@ describe('the popover as a dialog (FRU-51)', () => {
     assert.equal(sendButton().disabled, true);
 
     assert.equal(keyOn(sendButton(), 'Tab').defaultPrevented, true);
-    assert.ok(active() === field(), 'Tab from the disabled send button left the popover');
+    assert.ok(active() === closeButton(), 'Tab from the disabled send button left the popover');
   });
 
   it('brings Tab back in after a click moved focus to the page, in both directions', () => {
@@ -732,7 +859,7 @@ describe('the popover as a dialog (FRU-51)', () => {
 
     outside.focus();
     assert.equal(keyOn(outside, 'Tab').defaultPrevented, true);
-    assert.ok(active() === field(), 'Tab from the page left the popover behind');
+    assert.ok(active() === closeButton(), 'Tab from the page left the popover behind');
 
     outside.focus();
     keyOn(outside, 'Tab', true);

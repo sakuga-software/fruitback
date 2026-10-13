@@ -82,8 +82,23 @@ export type ComposerOptions = {
     offered(): boolean;
     onKeep: (note: string, reporter?: SeedReporter, destination?: string) => Promise<true | SendFailure>;
   };
+  /**
+   * The box « Attach a picture of this element » (FRU-258). It is the preference the settings panel
+   * holds, shown beside the note it applies to: the composer reads it and writes it, and keeps
+   * nothing. Left out, or while `offered()` says no, there is no box: a host that cannot take a
+   * picture offers none. **The composer never ticks it**: what it shows is what the reporter chose.
+   */
+  picture?: PictureChoice;
   /** The widget's words (FRU-37). Left out: English, with dates in this document's language. */
   translator?: Translator;
+};
+
+export type PictureChoice = {
+  offered(): boolean;
+  get(): boolean;
+  set(attach: boolean): void;
+  /** The preference changed somewhere else, in the settings panel for one. */
+  subscribe?(listener: () => void): () => void;
 };
 
 export type NameMemory = {
@@ -107,7 +122,11 @@ export type DestinationChoice = {
 };
 
 export type Composer = {
-  open(anchor: { left: number; top: number; bottom: number; right: number }): void;
+  /**
+   * `about` is a name a person reads for the element, written after « on » in the head (FRU-258).
+   * Left out or empty, the head holds the title alone.
+   */
+  open(anchor: { left: number; top: number; bottom: number; right: number }, about?: string): void;
   close(): void;
   state(): ComposerState;
   /**
@@ -142,10 +161,17 @@ export function createComposer(options: ComposerOptions): Composer {
 
   const field = root.querySelector('[data-fruitback-note]') as HTMLTextAreaElement;
   const send = root.querySelector('[data-fruitback-send]') as HTMLButtonElement;
-  // Appended after the template is parsed: the seed the button plants, in the shape the page will
-  // then show it in. Written here rather than in TEMPLATE because an SVG in an innerHTML string is
-  // parsed into the HTML namespace and renders nothing (FRU-36).
-  send.append(createIcon(document, 'drop'), t.text('composer.send'));
+  // The word alone, as the mock-up writes it (FRU-258): the drop that stood before it is the mark of
+  // the launch button now, and of the pins.
+  send.textContent = t.text('composer.send');
+  const title = root.querySelector('[data-fruitback-title]') as HTMLElement;
+  const about = root.querySelector('[data-fruitback-about]') as HTMLElement;
+  const shut = root.querySelector('[data-fruitback-close]') as HTMLButtonElement;
+  // Appended after the template is parsed: an SVG in an innerHTML string is parsed into the HTML
+  // namespace and renders nothing (FRU-36).
+  shut.append(createIcon(document, 'close'));
+  const pictureLabel = root.querySelector('[data-fruitback-picture-label]') as HTMLLabelElement;
+  const picture = root.querySelector('[data-fruitback-picture]') as HTMLInputElement;
   const cancel = root.querySelector('[data-fruitback-cancel]') as HTMLButtonElement;
   const keep = root.querySelector('[data-fruitback-keep]') as HTMLButtonElement;
   const status = root.querySelector('[data-fruitback-status]') as HTMLElement;
@@ -166,6 +192,9 @@ export function createComposer(options: ComposerOptions): Composer {
   // Set after parsing and never interpolated into TEMPLATE: a host translation is text, not markup.
   field.placeholder = t.text('composer.placeholder');
   field.setAttribute('aria-label', t.text('composer.label'));
+  title.textContent = t.text('composer.dialog');
+  shut.setAttribute('aria-label', t.text('composer.close'));
+  (pictureLabel.querySelector('span') as HTMLElement).textContent = t.text('composer.picture');
   identify.textContent = t.text('composer.identify');
   name.placeholder = t.text('composer.namePlaceholder');
   name.setAttribute('aria-label', t.text('composer.nameLabel'));
@@ -246,7 +275,14 @@ export function createComposer(options: ComposerOptions): Composer {
     identify.setAttribute('aria-expanded', 'false');
   }
 
-  function open(anchor: { left: number; top: number; bottom: number; right: number }): void {
+  /** The box shows the preference as it is now. It is never ticked by anything but its reporter. */
+  function showPicture(): void {
+    const offered = options.picture?.offered() === true;
+    pictureLabel.hidden = !offered;
+    picture.checked = offered && options.picture?.get() === true;
+  }
+
+  function open(anchor: { left: number; top: number; bottom: number; right: number }, subject = ''): void {
     if (closing !== 0) {
       view?.clearTimeout(closing);
       closing = 0;
@@ -254,6 +290,10 @@ export function createComposer(options: ComposerOptions): Composer {
 
     session += 1;
     field.value = '';
+    // As text: it is whatever the page wrote in its element.
+    about.textContent = subject === '' ? '' : t.text('composer.about', { element: subject });
+    about.hidden = subject === '';
+    showPicture();
     askForNameOrNot();
     keep.hidden = options.keep?.offered() !== true;
     showRememberedName();
@@ -271,9 +311,11 @@ export function createComposer(options: ComposerOptions): Composer {
   }
 
   /**
-   * Under the element it belongs to, flipped above when there is no room. Aligned on the element's
-   * start edge: its left in a left-to-right language, its right otherwise. The value stays a physical
-   * left, because it is a position against the page (FRU-38).
+   * Above the element it belongs to, 40 px over its top, as the mock-up draws it (FRU-258): the frame
+   * and the name of the component stay in sight under it. Below when there is no room above, and
+   * inside the window when there is room on neither side. Aligned on the start edge of the frame:
+   * its left in a left-to-right language, its right otherwise. The value stays a physical left,
+   * because it is a position against the page (FRU-38).
    *
    * On a narrow screen the rules below take over entirely and pin it to the bottom of the viewport, so
    * the position set here stops mattering — which is why it is set with `style` and overridden by a media query.
@@ -284,10 +326,17 @@ export function createComposer(options: ComposerOptions): Composer {
     const scrollX = view?.scrollX ?? 0;
     const scrollY = view?.scrollY ?? 0;
     const own = root.getBoundingClientRect();
-    const below = anchor.bottom + GAP;
+    const above = anchor.top - RISE - own.height;
+    const below = anchor.bottom + FRAME + GAP;
+    const fitsAbove = above >= scrollY + GAP;
     const fitsBelow = below + own.height <= scrollY + height;
-    const start = t.direction === 'rtl' ? anchor.right - WIDTH : anchor.left;
+    const start = t.direction === 'rtl' ? anchor.right + FRAME - WIDTH : anchor.left - FRAME;
+    // With room on neither side it stays under the element, as far down as the window lets it.
+    const under = fitsBelow ? below : Math.max(scrollY + GAP, scrollY + height - own.height - GAP);
+    const top = fitsAbove ? above : under;
 
+    // Where it grows from: the corner nearest to its element.
+    root.dataset.fruitbackSide = fitsAbove ? 'above' : 'below';
     // Custom properties rather than inline `left`/`top`: an inline style would beat the media query
     // below and leave the mobile sheet offset by whatever the element's position happened to be.
     // `start` is in document coordinates, so the window it must stay inside starts at `scrollX` (FRU-68).
@@ -295,10 +344,7 @@ export function createComposer(options: ComposerOptions): Composer {
       '--fruitback-composer-left',
       `${Math.max(scrollX + GAP, Math.min(start, scrollX + width - WIDTH - GAP))}px`,
     );
-    root.style.setProperty(
-      '--fruitback-composer-top',
-      `${fitsBelow ? below : Math.max(0, anchor.top - own.height - GAP)}px`,
-    );
+    root.style.setProperty('--fruitback-composer-top', `${top}px`);
   }
 
   /**
@@ -437,9 +483,16 @@ export function createComposer(options: ComposerOptions): Composer {
 
   const stopFollowingPlaces = choice?.subscribe(drawDestinations);
 
+  // Kept at the tick, like every preference: it is the reporter's, with or without a note sent.
+  picture.addEventListener('change', () => options.picture?.set(picture.checked));
+  const stopFollowingPicture = options.picture?.subscribe?.(showPicture);
+  showPicture();
+
   send.addEventListener('click', () => void submit());
   keep.addEventListener('click', () => void submit('keep'));
   cancel.addEventListener('click', close);
+  // The cross and « Cancel » do the same thing: the head holds a way out wherever the eye is.
+  shut.addEventListener('click', close);
   field.addEventListener('keydown', (event) => {
     const key = event as KeyboardEvent;
     // ⌘/Ctrl+Enter sends, because a plain Enter belongs to the note.
@@ -460,14 +513,19 @@ export function createComposer(options: ComposerOptions): Composer {
       if (closing !== 0) view?.clearTimeout(closing);
       focus.destroy();
       stopFollowingPlaces?.();
+      stopFollowingPicture?.();
       root.remove();
       style.remove();
     },
   };
 }
 
-const WIDTH = 320;
+/** The measures of the mock-up (FRU-258), kept next to the stylesheet that `place` must agree with. */
+const WIDTH = 360;
 const GAP = 10;
+/** How far above the top of its element the composer ends, and how far the frame stands off the element. */
+const RISE = 40;
+const FRAME = 6;
 
 const STATUS = {
   sending: 'composer.sending',
@@ -490,18 +548,27 @@ const FAILURES = {
 } as const satisfies Record<SendFailure, MessageKey>;
 
 const TEMPLATE = `
-  <div class="fruitback-composer-drop" aria-hidden="true"></div>
-  <textarea data-fruitback-note rows="3"></textarea>
-  <button type="button" data-fruitback-identify class="fruitback-composer-identify" aria-expanded="false"></button>
-  <div data-fruitback-who class="fruitback-composer-who" hidden>
-    <input data-fruitback-name type="text" name="fruitback-name" autocomplete="name" />
-    <label data-fruitback-remember-label class="fruitback-composer-remember">
-      <input data-fruitback-remember type="checkbox" name="fruitback-remember" /><span></span>
-    </label>
+  <div class="fruitback-composer-head">
+    <span data-fruitback-title class="fruitback-composer-title"></span>
+    <span data-fruitback-about class="fruitback-composer-about" hidden></span>
+    <button type="button" data-fruitback-close class="fruitback-composer-close"></button>
   </div>
-  <button type="button" data-fruitback-destination class="fruitback-composer-identify" aria-expanded="false" hidden></button>
-  <div data-fruitback-destinations class="fruitback-composer-places" role="radiogroup" hidden></div>
-  <div data-fruitback-destination-gone class="fruitback-composer-notice" role="status" aria-live="polite"></div>
+  <div class="fruitback-composer-body">
+    <textarea data-fruitback-note rows="3"></textarea>
+    <label data-fruitback-picture-label class="fruitback-composer-check" hidden>
+      <input data-fruitback-picture type="checkbox" name="fruitback-picture" /><span></span>
+    </label>
+    <button type="button" data-fruitback-identify class="fruitback-composer-identify" aria-expanded="false"></button>
+    <div data-fruitback-who class="fruitback-composer-who" hidden>
+      <input data-fruitback-name type="text" name="fruitback-name" autocomplete="name" />
+      <label data-fruitback-remember-label class="fruitback-composer-check fruitback-composer-remember">
+        <input data-fruitback-remember type="checkbox" name="fruitback-remember" /><span></span>
+      </label>
+    </div>
+    <button type="button" data-fruitback-destination class="fruitback-composer-identify" aria-expanded="false" hidden></button>
+    <div data-fruitback-destinations class="fruitback-composer-places" role="radiogroup" hidden></div>
+    <div data-fruitback-destination-gone class="fruitback-composer-notice" role="status" aria-live="polite"></div>
+  </div>
   <div class="fruitback-composer-foot">
     <span data-fruitback-status class="fruitback-composer-status" role="status" aria-live="polite"></span>
     <button type="button" data-fruitback-keep class="fruitback-composer-ghost fruitback-composer-keep" hidden></button>
@@ -511,58 +578,90 @@ const TEMPLATE = `
 `;
 
 /**
- * The fruit art direction, in the two places it is load-bearing: the drop that ties the popover to
- * the pin, and the rounding that keeps it from looking like a form. `prefers-reduced-motion` turns
- * the animation off rather than shortening it — a widget that overlays someone else's site is the
- * last thing that should ignore that setting.
+ * The composer of the mock-up of 2026-10-13 (FRU-258): a head, the note, a foot behind a rule.
+ * `prefers-reduced-motion` turns the animation off rather than shortening it — a widget that
+ * overlays someone else's site is the last thing that should ignore that setting.
  */
 const STYLES = `
 .fruitback-composer {
   position: absolute;
-  /* WIDTH is what place() clamps against, so the rendered box has to be exactly that — with
-     content-box the padding sat outside it and the popover could overhang the viewport. Set here
+  /* WIDTH is what place() clamps against, so the rendered box has to be exactly that. Set here
      rather than inherited from the host's reset: this file has to hold up wherever it is mounted. */
   box-sizing: border-box;
   left: var(--fruitback-composer-left, 0px);
   top: var(--fruitback-composer-top, 0px);
   z-index: 2147483300;
   width: ${WIDTH}px;
-  padding: 14px;
   border-radius: var(--fruitback-radius-lg);
-  background: var(--fruitback-color-surface-raised);
+  background: var(--fruitback-color-surface);
   color: var(--fruitback-color-text);
   font: 14px/1.5 var(--fruitback-font-sans);
   box-shadow: var(--fruitback-shadow-xl);
-  /* The curve and the time of the mock-up (FRU-233): it arrives fast and settles, with no overshoot. */
-  animation: fruitback-composer-in var(--fruitback-duration-slow) var(--fruitback-ease-out);
+  /* The curve and the time of the mock-up (FRU-233): it arrives fast and settles, with no overshoot.
+     It grows from the corner nearest to its element. */
+  animation: fruitback-composer-in var(--fruitback-duration-slow) var(--fruitback-ease-out) both;
+  transform-origin: bottom left;
 }
+.fruitback-composer:dir(rtl) { transform-origin: bottom right; }
+.fruitback-composer[data-fruitback-side="below"] { animation-name: fruitback-composer-down; transform-origin: top left; }
+.fruitback-composer[data-fruitback-side="below"]:dir(rtl) { transform-origin: top right; }
 .fruitback-composer[hidden] { display: none; }
-.fruitback-composer-drop {
-  position: absolute;
-  top: -7px;
-  inset-inline-start: 22px;
-  width: 14px;
-  height: 14px;
-  background: var(--fruitback-color-surface-raised);
-  /* A seed rather than a triangle: three round corners and one sharp, turned to point at the pin. */
-  border-radius: 50% 50% 50% 0;
-  transform: rotate(-45deg);
+/* A shadow is not drawn in forced colours: the composer then needs an edge of its own. */
+@media (forced-colors: active) {
+  .fruitback-composer { outline: 1px solid CanvasText; }
 }
+.fruitback-composer-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-block: 8px;
+  padding-inline: 16px 8px;
+}
+.fruitback-composer-title { flex: none; font-weight: 600; font-size: 13px; letter-spacing: -0.006em; }
+/* One line: what the element says can be a paragraph. */
+.fruitback-composer-about {
+  min-width: 0;
+  font-size: 12px;
+  color: var(--fruitback-color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fruitback-composer-about[hidden] { display: none; }
+.fruitback-composer-close {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-inline-start: auto;
+  border: 0;
+  border-radius: var(--fruitback-radius-field);
+  background: var(--fruitback-color-surface);
+  color: var(--fruitback-color-text-muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.fruitback-composer-close:hover { background: var(--fruitback-color-surface-sunken); }
+.fruitback-composer-body { display: flex; flex-direction: column; padding: 0 16px 12px; }
 .fruitback-composer textarea {
   display: block;
   width: 100%;
   border: 1px solid var(--fruitback-color-border-strong);
-  border-radius: var(--fruitback-radius-md);
-  padding: 10px 12px;
+  border-radius: var(--fruitback-radius-field);
+  padding: 9px 12px;
   font: inherit;
   resize: vertical;
   background: var(--fruitback-color-surface);
   color: inherit;
+  caret-color: var(--fruitback-color-accent);
 }
 .fruitback-composer textarea:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 1px; }
 .fruitback-composer-identify {
   display: block;
-  margin-top: 8px;
+  margin-top: 10px;
   border: 0;
   background: none;
   padding: 0;
@@ -572,46 +671,53 @@ const STYLES = `
   text-decoration: underline;
   cursor: pointer;
 }
-.fruitback-composer-who { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.fruitback-composer-who { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
 .fruitback-composer-who[hidden] { display: none; }
 .fruitback-composer-identify[hidden] { display: none; }
-.fruitback-composer-remember {
+/* A box and its words: the picture, and the name to remember. 10 px under what is above, as the
+   mock-up spaces the parts of the body. */
+.fruitback-composer-check {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  margin-top: 10px;
   font-size: 12px;
-  color: var(--fruitback-color-text-muted);
   cursor: pointer;
 }
-.fruitback-composer-remember[hidden] { display: none; }
-.fruitback-composer-remember input, .fruitback-composer-place input {
+.fruitback-composer-remember { margin-top: 0; color: var(--fruitback-color-text-muted); }
+.fruitback-composer-check[hidden] { display: none; }
+.fruitback-composer-check input, .fruitback-composer-place input {
   /* The reset of the host sets appearance to none, and a native box then draws nothing. */
   appearance: auto;
   -webkit-appearance: checkbox;
-  width: 14px;
-  height: 14px;
-  accent-color: var(--fruitback-color-accent);
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  /* The ink of the mock-up, which is the colour of the text: it follows the scheme. */
+  accent-color: var(--fruitback-color-text);
+  cursor: pointer;
 }
 /* Where the note goes (FRU-123). No board draws this line, so it is made of what the composer has:
-   the disclosure of the name above it, and the row of the box that remembers the name. */
-.fruitback-composer-places { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+   the disclosure of the name above it, and the row of a box. */
+.fruitback-composer-places { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
 .fruitback-composer-places[hidden] { display: none; }
 .fruitback-composer-place {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 12px;
   color: var(--fruitback-color-text-muted);
   cursor: pointer;
 }
-.fruitback-composer-place input { flex: none; -webkit-appearance: radio; }
+.fruitback-composer-place input { -webkit-appearance: radio; }
 /* A name comes from a tracker and can be one long word. */
 .fruitback-composer-place span, .fruitback-composer-identify { overflow-wrap: anywhere; }
 .fruitback-composer-identify { text-align: start; }
 /* Always in the tree, because a live region that was hidden announces nothing. Empty, it has no
    height, and the margin comes with the words. */
 .fruitback-composer-notice { font-size: 12px; color: var(--fruitback-color-accent); }
-.fruitback-composer-notice:not(:empty) { margin-top: 8px; }
+.fruitback-composer-notice:not(:empty) { margin-top: 10px; }
 .fruitback-composer-who input[type="text"] {
   min-width: 0;
   padding: 6px 8px;
@@ -623,27 +729,36 @@ const STYLES = `
   background: var(--fruitback-color-surface);
 }
 .fruitback-composer-who input[type="text"]:focus-visible { outline: 2px solid var(--fruitback-color-accent); outline-offset: 1px; }
-.fruitback-composer-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
-.fruitback-composer-status { flex: 1; font-size: 12px; color: var(--fruitback-color-text-muted); }
+.fruitback-composer-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-block: 10px 12px;
+  padding-inline: 16px 12px;
+  border-top: 1px solid var(--fruitback-color-border);
+}
+.fruitback-composer-status { flex: 1; min-width: 0; font-size: 12px; color: var(--fruitback-color-text-muted); }
 .fruitback-composer-ghost, .fruitback-composer-send {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
   border: 0;
   border-radius: var(--fruitback-radius-pill);
-  padding: 8px 14px;
   font: 600 13px/1 var(--fruitback-font-sans);
   cursor: pointer;
 }
-.fruitback-composer-ghost { background: transparent; color: var(--fruitback-color-text-muted); }
+.fruitback-composer-ghost { padding: 0 12px; background: transparent; color: var(--fruitback-color-text-muted); }
+.fruitback-composer-ghost:hover:not([disabled]) { background: var(--fruitback-color-surface-sunken); }
 .fruitback-composer-send {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  padding: 0 18px;
   background: var(--fruitback-color-accent);
   color: var(--fruitback-color-on-accent);
+  letter-spacing: -0.006em;
 }
+.fruitback-composer-send:hover:not([disabled]) { background: var(--fruitback-color-accent-strong); }
 .fruitback-composer-send[disabled] { opacity: 0.55; cursor: default; }
 .fruitback-composer-keep[hidden] { display: none; }
-/* Kept for later is a second action: the colour of the text, not the accent of Send (FRU-124). */
-.fruitback-composer-keep { color: var(--fruitback-color-text); box-shadow: inset 0 0 0 1px var(--fruitback-color-border-strong); }
 .fruitback-composer-keep[disabled] { opacity: 0.55; cursor: default; }
 .fruitback-composer[data-fruitback-state="sent"] .fruitback-composer-status,
 .fruitback-composer[data-fruitback-state="kept"] .fruitback-composer-status {
@@ -659,12 +774,17 @@ const STYLES = `
   margin-inline-start: auto;
 }
 
+/* The « rise » of the mock-up: no fade, it is there at once and settles. */
 @keyframes fruitback-composer-in {
-  from { opacity: 0; transform: translateY(-6px) scale(0.96); }
-  to { opacity: 1; transform: none; }
+  from { transform: translateY(6px) scale(0.96); }
+  to { transform: none; }
+}
+@keyframes fruitback-composer-down {
+  from { transform: translateY(-6px) scale(0.96); }
+  to { transform: none; }
 }
 
-/* Full screen on a phone: a 320px popover anchored to an element is unusable at that width. */
+/* Full screen on a phone: a 360px popover anchored to an element is unusable at that width. */
 @media (max-width: 640px) {
   .fruitback-composer {
     position: fixed;
@@ -674,23 +794,26 @@ const STYLES = `
     top: auto;
     width: auto;
     border-radius: var(--fruitback-radius-lg) var(--fruitback-radius-lg) 0 0;
-    padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .fruitback-composer, .fruitback-composer[data-fruitback-side="below"] {
     animation-name: fruitback-composer-sheet-in;
   }
-  .fruitback-composer-drop { display: none; }
   .fruitback-composer textarea { min-height: 96px; }
 }
 
 /*
   A thumb, not a pointer (FRU-157). iOS Safari zooms the page into a field under 16 px, and the zoom
   stays after the field loses focus. A box is toggled by its whole row, and the row is tall enough.
+  The cross grows to 44 px, and gives the extra size back to the padding of the head.
 */
 @media (pointer: coarse) {
   .fruitback-composer textarea, .fruitback-composer-who input[type="text"] { font-size: 16px; }
   .fruitback-composer-who input[type="text"] { padding-block: 8px; }
   .fruitback-composer-identify { min-height: 36px; }
-  .fruitback-composer-remember, .fruitback-composer-place { min-height: 36px; }
+  .fruitback-composer-check, .fruitback-composer-place { min-height: 36px; }
   .fruitback-composer-ghost, .fruitback-composer-send { min-height: 44px; padding-inline: 18px; }
+  .fruitback-composer-close { min-width: 44px; min-height: 44px; margin-block: -6px; margin-inline-end: -6px; }
 }
 
 @keyframes fruitback-composer-sheet-in {
@@ -699,6 +822,6 @@ const STYLES = `
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fruitback-composer { animation: none; }
+  .fruitback-composer, .fruitback-composer[data-fruitback-side="below"] { animation: none; }
 }
 `;

@@ -15,7 +15,11 @@ import { WORKER_ORIGIN } from './pin.ts';
 const IIFE = 'packages/widget/dist/fruitback.iife.js';
 
 /** Mount the published bundle with a capture function whose behaviour the test chooses. */
-async function mountWith(page: import('@playwright/test').Page, capture: 'ok' | 'throws' | 'nothing' | 'urlless') {
+async function mountWith(
+  page: import('@playwright/test').Page,
+  capture: 'ok' | 'throws' | 'nothing' | 'urlless',
+  setting: 'on' | 'untouched' = 'on',
+) {
   await page.addScriptTag({ path: IIFE });
   await page.evaluate(
     ([endpoint, mode]) => {
@@ -40,6 +44,8 @@ async function mountWith(page: import('@playwright/test').Page, capture: 'ok' | 
     [WORKER_ORIGIN, capture] as const,
   );
 
+  if (setting === 'untouched') return;
+
   // The setting is off by default; a reporter turns it on in the panel, so the test does too.
   await page.getByLabel('Open Fruitback settings').click();
   await page.locator('[name="screenshot"]').check();
@@ -49,7 +55,7 @@ async function mountWith(page: import('@playwright/test').Page, capture: 'ok' | 
 async function plant(page: import('@playwright/test').Page, note: string) {
   await page.getByRole('button', { name: '🌱 Feedback' }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
-  await page.getByPlaceholder('What is wrong here?').fill(note);
+  await page.getByPlaceholder('What should change?').fill(note);
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 }
@@ -73,6 +79,78 @@ test('a picture reaches the seed when the host can take one', async ({ page }) =
   await plant(page, 'Avec une image');
 
   expect(await storedScreenshot(page)).toEqual({ url: 'https://cdn.test/shot.png', width: 120, height: 40 });
+});
+
+test('no picture leaves the page until the box of the composer is ticked, and the choice is kept (FRU-258)', async ({
+  page,
+}) => {
+  // Privacy: the host can take a picture, and nobody chose one. The box is there, and it is off.
+  // The control is the second half: the same path with the box ticked stores a picture, so the
+  // first half is not green for want of a capture.
+  await page.goto('/?widget=off&case=shot-box');
+  await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
+  await mountWith(page, 'ok', 'untouched');
+  const box = page.getByRole('checkbox', { name: 'Attach a picture of this element' });
+  const open = async () => {
+    await page.getByRole('button', { name: '🌱 Feedback' }).click();
+    await page.locator('[data-testid="card-latte"] .add').click();
+    await expect(page.getByPlaceholder('What should change?')).toBeVisible();
+  };
+  const send = async (note: string, pins: number) => {
+    await page.getByPlaceholder('What should change?').fill(note);
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(page.locator('[data-fruitback-pin]')).toHaveCount(pins);
+    await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 5_000 });
+  };
+  const stored = () =>
+    page.evaluate(async (origin) => {
+      const canonical = `${window.location.origin}${window.location.pathname}${window.location.search}`;
+      const response = await fetch(`${origin}/feedback?url=${encodeURIComponent(canonical)}&client=playground`);
+      const { issues } = (await response.json()) as { issues: { seed: { note: string; screenshot?: unknown } }[] };
+
+      return Object.fromEntries(issues.map((issue) => [issue.seed.note, issue.seed.screenshot ?? null]));
+    }, WORKER_ORIGIN);
+
+  await open();
+  await expect(box).toBeVisible();
+  await expect(box).not.toBeChecked();
+  await send('Never ticked', 1);
+  expect(await stored()).toEqual({ 'Never ticked': null });
+
+  // Ticked: this note carries a picture, and the preference is the one the settings panel holds.
+  await open();
+  await box.check();
+  await send('Ticked', 2);
+  expect(await stored()).toEqual({
+    'Never ticked': null,
+    Ticked: { url: 'https://cdn.test/shot.png', width: 120, height: 40 },
+  });
+  await page.getByLabel('Open Fruitback settings').click();
+  await expect(page.locator('[name="screenshot"]')).toBeChecked();
+  // Turned off in the panel, it is off in the composer: one preference, shown in two places.
+  await page.locator('[name="screenshot"]').uncheck();
+  await page.getByLabel('Open Fruitback settings').click();
+  await open();
+  await expect(box).not.toBeChecked();
+});
+
+test('the composer has no box of the picture when the host cannot take one (FRU-258)', async ({ page }) => {
+  await page.goto('/?widget=off&case=shot-no-box');
+  await page.getByRole('heading', { name: 'Nos formules' }).waitFor();
+  await page.addScriptTag({ path: IIFE });
+  await page.evaluate(
+    (endpoint) =>
+      (globalThis as unknown as { Fruitback: { init(options: unknown): unknown } }).Fruitback.init({
+        endpoint,
+        clientId: 'playground',
+      }),
+    WORKER_ORIGIN,
+  );
+  await page.getByRole('button', { name: 'Leave feedback' }).click();
+  await page.locator('[data-testid="card-latte"] .add').click();
+  await expect(page.getByPlaceholder('What should change?')).toBeVisible();
+
+  await expect(page.getByRole('checkbox', { name: 'Attach a picture of this element' })).toHaveCount(0);
 });
 
 test('a capture that throws costs the picture, never the note', async ({ page }) => {

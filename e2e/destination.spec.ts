@@ -87,15 +87,15 @@ async function mount(page: Page, testCase: string): Promise<void> {
 async function compose(page: Page, card: string): Promise<void> {
   await page.getByRole('button', { name: 'Leave feedback' }).click();
   await page.locator(`[data-testid="${card}"] .add`).click();
-  await expect(page.getByPlaceholder('What is wrong here?')).toBeFocused();
+  await expect(page.getByPlaceholder('What should change?')).toBeFocused();
 }
 
 async function send(page: Page, note: string): Promise<void> {
-  await page.getByPlaceholder('What is wrong here?').fill(note);
+  await page.getByPlaceholder('What should change?').fill(note);
   await page.getByRole('button', { name: 'Send', exact: true }).click();
 }
 
-const composer = (page: Page) => page.getByRole('dialog', { name: 'Leave a note' });
+const composer = (page: Page) => page.getByRole('dialog', { name: 'New note' });
 const line = (page: Page) => composer(page).getByRole('button', { name: /^Send to: / });
 const places = (page: Page) => composer(page).getByRole('radiogroup', { name: 'Where this note goes' });
 
@@ -209,7 +209,7 @@ test('a place the worker refuses keeps the note, and the line says where the not
   await send(page, note);
 
   await expect(composer(page)).toContainText(/did not go through/);
-  await expect(page.getByPlaceholder('What is wrong here?')).toHaveValue(note);
+  await expect(page.getByPlaceholder('What should change?')).toHaveValue(note);
   await expect(composer(page)).toContainText('Sending to Linear · Design is no longer possible.');
   await expect(line(page)).toHaveText('Send to: Linear · Web');
   await expect(places(page).getByRole('radio')).toHaveCount(2);
@@ -283,7 +283,8 @@ for (const scheme of ['light', 'dark'] as const) {
     // The control for the empty list: names as pale as the popover must be a finding.
     await page.locator('[data-fruitback-host]').evaluate((host) => {
       (host as HTMLElement).style.setProperty('--fruitback-color-text-muted', '#bbb');
-      (host as HTMLElement).style.setProperty('--fruitback-color-surface-raised', '#ccc');
+      // The composer stands on the surface since FRU-258.
+      (host as HTMLElement).style.setProperty('--fruitback-color-surface', '#ccc');
     });
     expect((await scan()).filter((found) => found.startsWith('color-contrast'))).not.toEqual([]);
   });
