@@ -101,9 +101,9 @@ test('the thread takes focus, and gives it back to its pin', async ({ page }) =>
 
   await badge.focus();
   await page.keyboard.press('Enter');
-  const thread = page.getByRole('dialog', { name: /^Feedback / });
+  const thread = page.getByRole('dialog', { name: /^Note \d+$/ });
   await expect(thread).toBeVisible();
-  await expect(thread.getByRole('button', { name: 'Close' })).toBeFocused();
+  await expect(thread.getByRole('button', { name: 'Close the note' })).toBeFocused();
 
   await page.keyboard.press('Escape');
   await expect(thread).toHaveCount(0);
@@ -141,7 +141,7 @@ for (const scheme of ['light', 'dark'] as const) {
     await page.keyboard.press('Escape');
 
     await badgeFor(page, note).click();
-    await expect(page.getByRole('dialog', { name: /^Feedback / })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: /^Note \d+$/ })).toBeVisible();
     await scan('thread');
     await page.keyboard.press('Escape');
 

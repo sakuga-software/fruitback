@@ -263,6 +263,34 @@ amber, where white cannot be read (FRU-233)`.
     settings »: the mock-up names it « Fruitback settings », which is the name of the dialog it
     opens, and two controls with one name cannot be told apart (`docs/translating.md`).
 
+- **The bubble of a note has the measures of the mock-up** (FRU-256, screen 14). Read in its CSS,
+  held by `e2e/thread.spec.ts` on computed styles.
+  - **Three parts, each behind a rule**: a head (the drop and the word of the status, the way out
+    to the store, the cross), the note (its text, who and when, the component), the replies. 360 px
+    wide, 14 px of corner, no border and no coloured top: the shadow is the edge, and the colour of
+    the status is the drop beside its word.
+  - **It opens beside the frame**: 26 px past its end edge and 32 px above its top (30 and 36 px
+    from the element), which is where the mock-up puts it. When the window has no room there, it opens under the pin as before, or
+    above it. That is every phone: the mock-up draws no phone, and the bubble keeps the place it
+    had, at the width the window leaves.
+  - **The component and the file are shown**, « HeroBanner · src/components/Hero.tsx:42 », from the
+    `source` the note already carries. Only the copied text said it before. A note with none has no
+    line.
+  - **The dialog is named « Note 2 »**, the number of its drop, and the cross « Close the note ».
+  - **The link is the identifier alone, « ACM-142 »**, where the mock-up writes « ACM-142 in
+    Linear ». The widget does not know which store is behind the worker (FRU-31), and the worker
+    does not say its name: saying it is a new field of a public response, which is not this
+    change. The arrow went with the move to the head.
+  - **« Camille Durand · 2 days ago », not « · guest »**, and « Léa · yesterday », not
+    « · Sakuga »: a read gives the name of who wrote, not the role nor the workspace. Same reason.
+  - **Nothing to answer with.** The field « Reply to Camille » of the mock-up waits for a
+    decision (who may answer from a page, and as whom).
+  - **Kept, though the mock-up does not draw it**: « No reply yet. », which is not the same as
+    saying nothing; the two sentences about an approximate place, under the byline; the replies
+    capped at 180 px with a scroll a keyboard can reach (FRU-154), 10 px apart; a note kept for
+    later, whose head says « Not sent yet » behind a grey drop, with no link; the dark scheme; and
+    an outline in forced colours, where a shadow is not drawn.
+
 ## The popover
 
 ### The rules, in short
@@ -673,8 +701,9 @@ with no context and no instruction added.
   the dock, the panel and the drawer must be at the inline end. `e2e/direction.spec.ts` mounts the
   built widget in Arabic and checks in a browser that the dock and the popover move and the pin stays
   on its element.
-- **The link's arrow is a message** (`thread.link`), because a right-to-left catalog points it the
-  other way.
+- **The link of a thread is a message** (`thread.link`), though it is the identifier alone since
+  FRU-256: a language may need a word around it. It held an arrow before, which a right-to-left
+  catalog pointed the other way.
 - **Each bundled catalog weighs on the size guard.** If the list grows, catalogs load on demand; the
   guard is not widened.
 
@@ -810,13 +839,13 @@ nothing for the frame around the element.
 
 **Contrast**, measured with the WCAG 2.2 formula on the default tokens:
 
-| Pair                                        | Where                          | Light        | Dark |
-| ------------------------------------------- | ------------------------------ | ------------ | ---- |
-| `on-accent` on `accent`                     | launch and send labels         | 4.23         | 4.23 |
-| `accent` on `surface-raised`                | failed status                  | 4.16         | 3.73 |
-| `accent` on `surface`                       | thread and detached-note links | 4.23         | 4.14 |
-| `warning` on `surface`                      | approximate-position warning   | 4.62         | 3.78 |
-| `on-stage` on seeded, green, ripening, ripe | the `≈` on an approximate pin  | 2.28 to 4.23 | same |
+| Pair                                        | Where                         | Light        | Dark |
+| ------------------------------------------- | ----------------------------- | ------------ | ---- |
+| `on-accent` on `accent`                     | launch and send labels        | 4.23         | 4.23 |
+| `accent` on `surface-raised`                | failed status                 | 4.16         | 3.73 |
+| `accent` on `surface`                       | detached-note links           | 4.23         | 4.14 |
+| `warning` on `surface`                      | approximate-position warning  | 4.62         | 3.78 |
+| `on-stage` on seeded, green, ripening, ripe | the `≈` on an approximate pin | 2.28 to 4.23 | same |
 
 Text needs 4.5:1. Three values changed, because the old ones failed and nothing else paints with them:
 
@@ -882,8 +911,8 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   `#1c1917` on it: 5.68 as a label, 5.12 as a link on the raised surface. The warning has the same
   two roles and takes `#a88a7e` with dark text, 5.50 both ways.
 - **The stage colours do not change in the dark scheme, but one.** A pin sits on the page of the host, whose
-  colour follows nothing here. The stage colour is also the mark of a detached note and the top
-  border of a thread, on the surface: a drawing, which needs 3:1, and measures 3.27 at least on the
+  colour follows nothing here. The stage colour is also the mark of a detached note and the drop in
+  the head of a thread (its top border until FRU-256), on the surface: a drawing, which needs 3:1, and measures 3.27 at least on the
   dark surface. `contrast.test.ts` holds that pair now; it did not before.
 - **Axe found a defect in this very change.** While capturing, the launch button takes the chip as
   its background and kept the foreground of the accent. Both were white, so nothing showed. With a

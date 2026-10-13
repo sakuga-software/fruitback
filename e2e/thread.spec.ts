@@ -74,10 +74,11 @@ for (const scheme of ['light', 'dark'] as const) {
       .getByRole('button', { name: /A note with a long conversation/ })
       .first()
       .click();
-    const thread = page.getByRole('dialog', { name: /^Feedback / });
+    const thread = page.getByRole('dialog', { name: /^Note \d+$/ });
     await expect(thread.locator('.fruitback-thread-reply')).toHaveCount(14);
 
-    expect(await display(page, 'ul.fruitback-thread-replies')).toBe('block');
+    // A column since FRU-256. What matters is that it is not the `inline` the reset of the host leaves.
+    expect(await display(page, 'ul.fruitback-thread-replies')).toBe('flex');
     const list = await thread.locator('.fruitback-thread-replies').evaluate((element) => ({
       height: element.getBoundingClientRect().height,
       scrolls: element.scrollHeight > element.clientHeight,
@@ -85,8 +86,8 @@ for (const scheme of ['light', 'dark'] as const) {
     }));
     expect(list.height).toBeLessThanOrEqual(180);
     expect(list.scrolls).toBe(true);
-    // The replies sit behind their rule: 2 px of border and 10 px of padding.
-    expect(list.indent).toBe(12);
+    // The replies start where the note does: 16 px from the edge of the bubble (FRU-256).
+    expect(list.indent).toBe(16);
     // A reply holds the same address, and wraps too.
     expect(await overflowsSideways(page, '.fruitback-thread-replies')).toBe(0);
 
@@ -101,6 +102,156 @@ for (const scheme of ['light', 'dark'] as const) {
     expect(await display(page, 'ul.fruitback-sidebar-list')).toBe('block');
   });
 }
+
+/** The note of the mock-up: what the store in memory cannot give, a component and one reply. */
+async function theNoteOfTheMockUp(page: Page): Promise<void> {
+  await page.route(`${WORKER_ORIGIN}/feedback?**`, async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      issues: { stateName: string; stage: string; comments?: unknown[]; seed: Record<string, unknown> }[];
+    };
+    for (const issue of body.issues) {
+      issue.stateName = 'In progress';
+      issue.stage = 'ripening';
+      issue.seed.source = { component: 'HeroBanner', file: 'src/components/Hero.tsx', line: 42 };
+      issue.seed.reporter = { name: 'Camille Durand' };
+      issue.comments = [
+        {
+          id: 'reply-1',
+          body: 'Trying the cream variant in the next build. I will mark it done when it is live.',
+          createdAt: new Date(Date.now() - 86_400_000).toISOString(),
+          author: 'Léa',
+        },
+      ];
+    }
+    await route.fulfill({ response, json: body });
+  });
+}
+
+test('the bubble of a note has the measures of the mock-up, and opens beside its frame (FRU-256)', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await theNoteOfTheMockUp(page);
+  await mount(page, 'thread-measures');
+  await plant(page, 'The button is hard to read on the green. Could it take the cream of the logo, with dark text?');
+
+  const badge = page.getByRole('button', { name: /^Note 1, in progress: The button is hard/ });
+  await badge.click();
+  await expect(badge).toHaveAttribute('aria-expanded', 'true');
+  const thread = page.getByRole('dialog', { name: 'Note 1', exact: true });
+  await expect(thread).toBeVisible();
+
+  const read = (selector: string, properties: string[]) =>
+    page.locator(selector).evaluate((element, names) => {
+      const style = getComputedStyle(element);
+      const box = element.getBoundingClientRect();
+
+      return {
+        width: box.width,
+        height: box.height,
+        ...Object.fromEntries(names.map((name) => [name, style.getPropertyValue(name)])),
+      } as Record<string, string | number>;
+    }, properties);
+
+  expect(await read('.fruitback-thread', ['border-radius', 'font-size', 'line-height'])).toMatchObject({
+    width: 360,
+    'border-radius': '14px',
+    'font-size': '14px',
+    'line-height': '21px',
+  });
+  expect(await page.locator('.fruitback-thread').evaluate((element) => getComputedStyle(element).boxShadow)).toMatch(
+    /0px 10px 30px 0px$|^rgba?\(0, 0, 0, 0\.18\) 0px 10px 30px 0px/,
+  );
+  // The head: 8 px around a cross of 32 px, and the rule under it.
+  expect(await read('.fruitback-thread-head', ['padding', 'border-bottom-width', 'gap'])).toMatchObject({
+    height: 49,
+    padding: '8px 8px 8px 16px',
+    'border-bottom-width': '1px',
+    gap: '10px',
+  });
+  expect(await read('.fruitback-thread-stage', ['font-size', 'font-weight', 'gap'])).toMatchObject({
+    'font-size': '13px',
+    'font-weight': '600',
+    gap: '7px',
+  });
+  expect(await read('.fruitback-thread-drop', ['background-color'])).toMatchObject({
+    width: 10,
+    height: 10,
+    // The amber of « in progress », the colour its pin has.
+    'background-color': 'rgb(245, 158, 11)',
+  });
+  expect(await read('.fruitback-thread-link', ['font-size', 'text-decoration-line', 'color'])).toMatchObject({
+    'font-size': '12px',
+    'text-decoration-line': 'underline',
+    color: 'rgb(107, 107, 116)',
+  });
+  await expect(thread.getByRole('link')).toHaveText(/^DEV-\d+$/);
+  expect(await read('.fruitback-thread-close', ['border-radius'])).toMatchObject({
+    width: 32,
+    height: 32,
+    'border-radius': '8px',
+  });
+  expect(await read('.fruitback-thread-body', ['padding', 'gap', 'display'])).toMatchObject({
+    padding: '14px 16px',
+    gap: '8px',
+    display: 'flex',
+  });
+  expect(await read('.fruitback-thread-meta', ['font-size', 'color'])).toMatchObject({
+    'font-size': '12px',
+    color: 'rgb(107, 107, 116)',
+  });
+  await expect(page.locator('.fruitback-thread-source')).toHaveText('HeroBanner · src/components/Hero.tsx:42');
+  const source = await read('.fruitback-thread-source', [
+    'font-size',
+    'font-family',
+    'padding',
+    'border-radius',
+    'margin-top',
+    'background-color',
+    'color',
+  ]);
+  expect(source).toMatchObject({
+    'font-size': '11.5px',
+    padding: '6px 8px',
+    'border-radius': '6px',
+    'margin-top': '4px',
+    'background-color': 'rgb(250, 250, 250)',
+    color: 'rgb(82, 82, 91)',
+  });
+  expect(String(source['font-family'])).toMatch(/^ui-monospace/);
+  expect(await read('.fruitback-thread-answers', ['border-top-width'])).toMatchObject({ 'border-top-width': '1px' });
+  expect(await read('.fruitback-thread-replies', ['padding'])).toMatchObject({ padding: '12px 16px' });
+  expect(await read('.fruitback-thread-reply', ['gap', 'display'])).toMatchObject({ gap: '2px', display: 'flex' });
+  expect(await read('.fruitback-thread-reply-who', ['font-size'])).toMatchObject({ 'font-size': '11px' });
+  expect(await read('.fruitback-thread-reply-name', ['font-weight', 'color'])).toMatchObject({
+    'font-weight': '600',
+    color: 'rgb(24, 24, 27)',
+  });
+  expect(await read('.fruitback-thread-reply-body', ['font-size', 'line-height'])).toMatchObject({
+    'font-size': '12px',
+    'line-height': '18px',
+  });
+  // Nothing to answer with: that part of the mock-up waits for a decision.
+  await expect(thread.locator('form, textarea')).toHaveCount(0);
+
+  // Beside the frame, as the mock-up places it: 26 px past its edge and 32 px above its top, which
+  // is 30 and 36 px from the element.
+  const place = await page.evaluate(() => {
+    const root = document.querySelector('[data-fruitback-host]')!.shadowRoot!;
+    const pin = root.querySelector('[data-fruitback-pin][data-fruitback-open]')!.getBoundingClientRect();
+    const bubble = root.querySelector('.fruitback-thread')!.getBoundingClientRect();
+
+    return { beside: bubble.left - pin.right, above: pin.top - bubble.top };
+  });
+  expect(place.beside).toBeCloseTo(26, 0);
+  expect(place.above).toBeCloseTo(32, 0);
+
+  // The cross answers a pointer with the sunken surface, and a keyboard with the ring of the widget.
+  await page.locator('.fruitback-thread-close').hover();
+  expect(await read('.fruitback-thread-close', ['background-color'])).toMatchObject({
+    'background-color': 'rgb(244, 244, 245)',
+  });
+});
 
 test('at 390 px, a note with a long address wraps in the thread and in the list', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
