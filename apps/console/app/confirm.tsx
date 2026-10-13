@@ -44,6 +44,28 @@ export function Confirm({
     setAsking(false);
   };
 
+  return <Confirmation confirmLabel={confirmLabel} consequence={consequence} onConfirm={onConfirm} onKeep={keep} />;
+}
+
+/**
+ * The second time of a gesture that asks twice: what it costs, « Keep it », which has focus, and the
+ * button that acts. A screen that asks the first time elsewhere, in a menu, shows this alone, and
+ * gives focus back to what opened it in `onKeep`.
+ */
+export function Confirmation({
+  confirmLabel,
+  consequence,
+  onConfirm,
+  onKeep,
+}: {
+  confirmLabel: string;
+  consequence: string;
+  onConfirm: () => void;
+  /** « Keep it », and Escape. */
+  onKeep: () => void;
+}) {
+  useLocale();
+
   return (
     <div
       role="group"
@@ -52,11 +74,11 @@ export function Confirm({
       onKeyDown={(event) => {
         if (event.key !== 'Escape') return;
         event.stopPropagation();
-        keep();
+        onKeep();
       }}
     >
       <p className="w-full text-sm">{consequence}</p>
-      <Button tone="quiet" autoFocus onClick={keep}>
+      <Button tone="quiet" autoFocus onClick={onKeep}>
         {t('Keep it')}
       </Button>
       <Button tone="danger" onClick={onConfirm}>

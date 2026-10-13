@@ -78,14 +78,14 @@ test.describe('an invited reviewer (FRU-104)', () => {
     await expect(owner.getByText('staging.acme.dev', { exact: true })).toBeVisible();
 
     await owner.goto(`${CONSOLE}/w/${workspace}/members`);
-    await owner.getByRole('textbox', { name: 'Address of the person to invite' }).fill('paul@client.dev');
+    await owner.getByRole('textbox', { name: 'Email', exact: true }).fill('paul@client.dev');
     await owner.getByRole('button', { name: 'Invite', exact: true }).click();
     const kept = owner.getByRole('status');
     await expect(kept).toContainText('Invitation sent to paul@client.dev.');
     // The link to send by hand is the one of the message: it names no invitation (FRU-107).
     await expect(kept).toContainText(`${CONSOLE}/invitations`);
     await expect(owner.getByText('paul@client.dev', { exact: true })).toBeVisible();
-    await expect(owner.getByText('Invited', { exact: true })).toBeVisible();
+    await expect(owner.getByText('Invitation sent', { exact: true })).toBeVisible();
 
     // Paul: the message names the workspace, and its link holds nothing to spend.
     const message = await lastTo(worker, 'paul@client.dev');
@@ -113,7 +113,7 @@ test.describe('an invited reviewer (FRU-104)', () => {
     // The owner sees Paul as a member, and the invitation is gone.
     await owner.reload();
     await expect(owner.getByText('paul@client.dev', { exact: true })).toBeVisible();
-    await expect(owner.getByText('Invited', { exact: true })).toHaveCount(0);
+    await expect(owner.getByText('Invitation sent', { exact: true })).toHaveCount(0);
 
     // Paul connects his browser: the pairing page opens with a code after the `#`.
     await paul.getByRole('button', { name: 'Install' }).click();
@@ -182,7 +182,7 @@ test.describe('an invited reviewer (FRU-104)', () => {
       (await worker.mail()).filter((each) => each.to === 'paul@client.dev').length;
 
     await owner.goto(`${CONSOLE}/w/${workspace}/members`);
-    await owner.getByRole('textbox', { name: 'Address of the person to invite' }).fill('paul@client.dev');
+    await owner.getByRole('textbox', { name: 'Email', exact: true }).fill('paul@client.dev');
     await owner.getByRole('button', { name: 'Invite', exact: true }).click();
     const notice = owner.getByRole('status');
     await expect(notice).toContainText('Invitation sent to paul@client.dev.');
@@ -199,6 +199,6 @@ test.describe('an invited reviewer (FRU-104)', () => {
     await expect(notice).toContainText(`${CONSOLE}/invitations`);
     await expect(notice.getByRole('button', { name: 'Copy the link' })).toBeVisible();
     expect(await toPaul()).toBe(3);
-    await expect(owner.getByText('Invited', { exact: true })).toBeVisible();
+    await expect(owner.getByText('Invitation sent', { exact: true })).toBeVisible();
   });
 });
