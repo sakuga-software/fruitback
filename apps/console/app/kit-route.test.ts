@@ -27,12 +27,17 @@ describe('the page of the kit (FRU-232)', () => {
   it('is no route of a build', async () => {
     const built = await paths('production');
 
-    assert.equal(built.includes('kit'), false);
+    assert.deepEqual(
+      built.filter((path) => path.startsWith('kit')),
+      [],
+    );
     // The control: the routes were read, and the screens are among them.
     assert.ok(built.includes('setup') && built.includes('w/:workspace/sites'), built.join(', '));
   });
 
   it('is a route of the development server', async () => {
-    assert.ok((await paths('development')).includes('kit'));
+    const served = await paths('development');
+
+    assert.ok(served.includes('kit') && served.includes('kit/entry'), served.join(', '));
   });
 });

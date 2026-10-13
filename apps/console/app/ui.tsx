@@ -15,6 +15,9 @@ import {
 } from '@heroui/react';
 import type { ChangeEvent, FocusEvent, KeyboardEvent, ReactNode, Ref } from 'react';
 import { Link } from 'react-router';
+import { Logo } from './logo';
+
+export { Logo };
 
 /** The pin of the widget, as the mockup draws it beside the name. */
 export function Mark({ size = 14 }: { size?: number }) {
@@ -64,6 +67,11 @@ type ButtonProps = Destination & {
   size?: ControlSize;
   /** Takes the whole width of its column. */
   wide?: boolean;
+  /**
+   * The padding at each end, in pixels, where the mockup writes another one than the one of the
+   * size: 16 on « Send again », 24 on « Invite », 26 on « Connect Chrome ».
+   */
+  inset?: 14 | 16 | 18 | 22 | 24 | 26;
   type?: 'button' | 'submit';
   disabled?: boolean;
   onClick?: () => void;
@@ -100,6 +108,7 @@ export function Button({
   tone = 'primary',
   size = tone === 'outline' ? 'panel' : 'page',
   wide = false,
+  inset,
   type = 'button',
   disabled = false,
   onClick,
@@ -111,7 +120,11 @@ export function Button({
   children,
 }: ButtonProps) {
   const classes = `${TONE_CLASSES[tone]} ${className}`;
-  const data = { 'data-size': size, 'data-wide': wide };
+  const data = {
+    'data-size': size,
+    'data-wide': wide,
+    ...(inset === undefined ? {} : { style: { paddingInline: inset } }),
+  };
   if (to !== undefined || href !== undefined) return anchor({ to, href, newTab }, classes, data, children);
 
   return (
@@ -653,5 +666,47 @@ export function PageHead({
       </div>
       {action ?? null}
     </header>
+  );
+}
+
+/** The site of the product: where the logo of a page outside a workspace leads. */
+const SITE = 'https://fruitback.com';
+
+type EntryPageProps = {
+  /** The column of the page: 400 px (« narrow »), 440 px (« wide »), or the whole page for the setup. */
+  width?: 'narrow' | 'wide' | 'full';
+  /** At the end of the header: a sentence and a link, as « Running your own server? ». */
+  aside?: ReactNode;
+  children: ReactNode;
+};
+
+/**
+ * A page outside a workspace: the sign-in, an invitation, the setup. A header with the logo, which
+ * leads to the site of the product, and one column under it.
+ */
+export function EntryPage({ width = 'narrow', aside, children }: EntryPageProps) {
+  return (
+    <div className="kit-entry">
+      <header className="kit-entry__header">
+        <div>
+          <a href={SITE} className="kit-entry__logo">
+            <Logo />
+          </a>
+          {aside ?? null}
+        </div>
+      </header>
+      <main className="kit-entry__main" data-width={width}>
+        {width === 'full' ? children : <div className="kit-entry__column">{children}</div>}
+      </main>
+    </div>
+  );
+}
+
+/** A rule with a word in its middle: « or », between two ways to do one thing. A picture only. */
+export function Divider({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return (
+    <div aria-hidden="true" className={`kit-divider ${className}`}>
+      {children}
+    </div>
   );
 }
