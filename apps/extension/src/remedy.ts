@@ -1,5 +1,5 @@
 import { DUPLICATE_PROBLEM, NO_ACCESS_PROBLEM, STORE_PROBLEM } from './site-editor.ts';
-import { PATTERN_PROBLEM, STALE_TEAM_WILDCARD, WILDCARD_TEAM_PROBLEM } from './site-form.ts';
+import { PATTERN_PROBLEM, PREVIEWS_NOT_PROVEN, STALE_TEAM_WILDCARD, WILDCARD_TEAM_PROBLEM } from './site-form.ts';
 import type { PairFailure } from './session.ts';
 import type { SitesImport } from './site-transfer.ts';
 
@@ -68,6 +68,11 @@ export const PROBLEMS: readonly Problem[] = [
   { text: PATTERN_PROBLEM, remedy: null, why: 'The field to correct is beside the message.' },
   { text: WILDCARD_TEAM_PROBLEM, remedy: null, why: 'The field to correct is beside the message.' },
   { text: STALE_TEAM_WILDCARD, remedy: null, why: 'The row offers Remove, and nothing else can run that rule.' },
+  {
+    text: PREVIEWS_NOT_PROVEN,
+    remedy: null,
+    why: 'Only the DNS of the workspace changes it: the console says what to do.',
+  },
   { text: IMPORT_PROBLEM['not-json'], remedy: null, why: 'Only another file changes the answer.' },
   { text: IMPORT_PROBLEM['not-a-sites-file'], remedy: null, why: 'Only another file changes the answer.' },
   { text: IMPORT_PROBLEM['newer-version'], remedy: null, why: 'The browser updates the extension, not this page.' },

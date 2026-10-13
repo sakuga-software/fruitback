@@ -897,6 +897,30 @@ one, and names the one it refused`.
   the one predicate: `resolveSite` skips such an entry, so the bridge, the relay and the popup all
   refuse it, `complaint` takes the pattern and refuses it in the form and in the import, and the
   background does not register it. A wildcard stays valid in private mode, which carries no token.
+- **One team wildcard serves: the previews a worker lists** (FRU-103). `lendsSession(pattern, site,
+proven)` answers no only when the worker of the rule listed that very wildcard for the site the
+  rule mounts, in an answer of `GET /session/sites` that is less than two hours old
+  (`proven-previews.ts`). **The grant is not in the rule.** It is in `storage.local`, one key for each
+  worker (`provenPreviews:<endpoint>`), written only by `cloud.ts` from an answer of that worker: the
+  popup when it offers the click, the background every thirty minutes and when it starts. One key
+  for each worker, because both write: two writers of one map would each read it and write it back,
+  and the later one would put back a list the other had just emptied. A caller that passes no
+  `proven` keeps FRU-75 whole, and `complaint` passes none, so the form and the import refuse the
+  rule: a rules file cannot grant. The background registers the scripts from the same list, and
+  syncs when the list changes, so a proof that is lost takes the scripts off. `accessInUse` keeps
+  the host permission of such a rule while it is on, proven or not: the permission alone runs
+  nothing, and a proof that comes back must not ask the reviewer again. **A reader asks for the
+  keys of the workers its rules name, and never lists the area** (`freshFor` in `sites.ts`): the
+  bridge reads this in a content script, and the refresh tokens are in the same area.
+  `sites-storage.test.ts` plants a session and reads the log of the calls. **A list does not outlive
+  its session**: a pairing and a logout each mint an epoch, and the background then forgets what
+  that worker listed and asks it again (`session-previews.ts`), so an account of another workspace
+  that pairs with the same worker does not get the wildcard of the first. `session-previews.test.ts`
+  drives it with the real sessions over one storage area: a pairing and a logout forget the list, a
+  refresh keeps it. Both raised in review.
+  **Not driven in a browser**:
+  the prompt for a wildcard, the alarm and the registration; the predicate, the list and the offer
+  are held by `proven-previews.test.ts`, with five planted violations.
 - **A site asked for is remembered before the browser asks for access** (FRU-118). The permission
   prompt can close the popup, and the code after `permissions.request` then never runs: the grant
   exists and no entry does. `pending-site.ts` writes the intent first, **not awaited** (an await loses

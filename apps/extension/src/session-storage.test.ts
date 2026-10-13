@@ -9,6 +9,7 @@ import {
   EPOCH_PREFIX,
   RUN_PREFIX,
   createSessionArea,
+  endpointsOfNewEpochs,
   stillOpen,
   keyFor,
   moveToRunKeys,
@@ -80,6 +81,22 @@ describe('one key per run of an endpoint', () => {
 
   it('drops an entry whose epoch is not the one its key names', () => {
     assert.deepEqual(runsOf({ [runKeyFor(ENDPOINT, 'epo.1')]: { ...SESSION, epoch: 'epo.2' } }), []);
+  });
+
+  // FRU-103: a pairing and a logout each mint an epoch, and the background then forgets what the
+  // worker listed for the session of before.
+  it('names the endpoints whose session started or ended, and no other key', () => {
+    assert.deepEqual(
+      endpointsOfNewEpochs([
+        'sites',
+        `${EPOCH_PREFIX}https://api.fruitback.test`,
+        `${RUN_PREFIX}https://api.fruitback.test`,
+        'provenPreviews:https://api.fruitback.test',
+        `${EPOCH_PREFIX}https://other.test:8443`,
+      ]),
+      ['https://api.fruitback.test', 'https://other.test:8443'],
+    );
+    assert.deepEqual(endpointsOfNewEpochs([`${RUN_PREFIX}https://api.fruitback.test`, 'sites']), []);
   });
 
   it('tells a refresh token from every other key the area changes', () => {

@@ -18,6 +18,10 @@ export const PATTERN_PROBLEM =
 export const STALE_TEAM_WILDCARD =
   'A wildcard cannot serve team mode, so this rule runs nowhere. Remove it, and add one rule for each origin.';
 
+/** For the previews of a site of a workspace, turned on in one click, whose worker does not list them now (FRU-103). */
+export const PREVIEWS_NOT_PROVEN =
+  'The workspace does not prove this domain now, so this rule runs nowhere. It runs again when the worker says the domain is proven.';
+
 export const WILDCARD_TEAM_PROBLEM =
   'A team-mode rule must name one origin. A wildcard would lend your session to every site it covers.';
 

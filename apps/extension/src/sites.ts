@@ -1,4 +1,5 @@
 import { browser } from 'wxt/browser';
+import { type FreshPreviews, type ListedPreviews, freshPreviews, parseProven, previewsKey } from './proven-previews.ts';
 import { type ResolvedSite, resolveSite } from './site-patterns.ts';
 
 /**
@@ -52,7 +53,46 @@ export async function readSite(origin: string): Promise<SiteConfig | undefined> 
 
 /** The same entry, with the pattern it is stored under. The popup names that pattern. */
 export async function findSite(origin: string): Promise<ResolvedSite | undefined> {
-  return resolveSite(await readAll(), origin);
+  const sites = await readAll();
+
+  return resolveSite(sites, origin, await freshFor(sites, Date.now()));
+}
+
+/** The previews the workers proved and that still grant now (FRU-103): see `proven-previews.ts`. */
+export async function readFreshPreviews(now: number = Date.now()): Promise<FreshPreviews> {
+  return freshFor(await readAll(), now);
+}
+
+/**
+ * What the workers of these rules listed, read key by key.
+ *
+ * WARNING: never `get(null)` here. The bridge calls this in a content script, on every page a rule
+ * covers, and the refresh tokens are in the same area (FRU-60): a read of the whole area would load
+ * them in a context that must not hold one. A list counts only for a rule of its worker, so the
+ * workers of the rules are every key there is to ask for. `sites-storage.test.ts` holds this.
+ */
+async function freshFor(sites: Record<string, SiteConfig>, now: number): Promise<FreshPreviews> {
+  const workers = new Set(
+    Object.values(sites)
+      .filter((site) => site.mode === 'team')
+      .map((site) => site.endpoint),
+  );
+  const stored = await Promise.all([...workers].map((endpoint) => browser.storage.local.get(previewsKey(endpoint))));
+
+  return freshPreviews(parseProven(Object.assign({}, ...stored)), now);
+}
+
+/**
+ * Keeps what a worker just listed, in place of what it listed before. `undefined` forgets the
+ * worker: its session is gone, or it keeps no accounts.
+ *
+ * WARNING: only a caller that holds an answer of `GET /session/sites` of this worker calls this.
+ * Nothing a page, a rules file or a form says reaches it.
+ */
+export async function rememberPreviews(endpoint: string, listed: ListedPreviews | undefined): Promise<void> {
+  // One key for each worker, written whole and read by no writer: see `PREVIEWS_KEY`.
+  if (listed === undefined) await browser.storage.local.remove(previewsKey(endpoint));
+  else await browser.storage.local.set({ [previewsKey(endpoint)]: listed });
 }
 
 export async function readAll(): Promise<Record<string, SiteConfig>> {
