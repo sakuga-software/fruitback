@@ -82,7 +82,9 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   `e2e/console-members.spec.ts` reads the values and the boxes of the mockup at 1440 and 390 px,
   the keyboard, the contrasts and axe.
 - **The setup is one screen, and resumes where the worker says the person is** (FRU-239, screen 01 of
-  the mockup of 2026-10-13). `setup.tsx` shows three steps together: « Your account », « Your site »,
+  the mockup of 2026-10-13). `setup.tsx` shows three steps together (step 1 in `setup-account.tsx`,
+  step 2 in `setup-site.tsx`; where the person is, decided from the answers of the worker, in
+  `setup-stage.ts`, which knows no React and no network and has its own `setup-stage.test.ts`): « Your account », « Your site »,
   « Put it on the site ». The step is read from the worker at each visit: nobody signed in, no
   workspace, no site, a site. So a visit goes on anywhere, and the address has no `?step=`. **The
   front door sends a workspace with no site back to the setup**, for who adds a site (an owner, an
