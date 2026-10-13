@@ -914,8 +914,10 @@ proven)` answers no only when the worker of the rule listed that very wildcard f
   bridge reads this in a content script, and the refresh tokens are in the same area.
   `sites-storage.test.ts` plants a session and reads the log of the calls. **A list does not outlive
   its session**: a pairing and a logout each mint an epoch, and the background then forgets what
-  that worker listed and asks it again (`endpointsOfNewEpochs`), so an account of another workspace
-  that pairs with the same worker does not get the wildcard of the first. Both raised in review.
+  that worker listed and asks it again (`session-previews.ts`), so an account of another workspace
+  that pairs with the same worker does not get the wildcard of the first. `session-previews.test.ts`
+  drives it with the real sessions over one storage area: a pairing and a logout forget the list, a
+  refresh keeps it. Both raised in review.
   **Not driven in a browser**:
   the prompt for a wildcard, the alarm and the registration; the predicate, the list and the offer
   are held by `proven-previews.test.ts`, with five planted violations.
