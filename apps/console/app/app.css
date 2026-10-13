@@ -458,7 +458,8 @@ textarea {
 
 /* 19 px: the 16 px of the radio and the 3 px the mockup puts over it. */
 .kit-pick__card .radio__content {
-  gap: 10px;
+  /* The words start 30 px after the radio starts: its 16 px, and a column of 20 px with 10 px after. */
+  gap: 14px;
   min-height: 19px;
 }
 
@@ -475,7 +476,7 @@ textarea {
 }
 
 .kit-pick__card .description {
-  padding-left: 26px;
+  padding-left: 30px;
   color: var(--muted);
   font-size: var(--text-hint);
   line-height: var(--text-hint--line-height);
@@ -1041,6 +1042,8 @@ textarea {
   display: flex;
   align-items: center;
   gap: 12px;
+  /* 44 px over its rule, as the mockup writes it. */
+  box-sizing: content-box;
   height: 44px;
   padding: 0 16px;
   border-bottom: 1px solid var(--color-line);

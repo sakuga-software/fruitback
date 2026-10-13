@@ -505,6 +505,20 @@ test('the fields, the lists and the radio cards have the measures of the mockup 
   expect.soft(first!.y - (question!.y + question!.height), 'the question over the cards').toBe(8);
   expect.soft(second!.y - (first!.y + first!.height), 'between two cards').toBe(8);
   expect.soft(first!.height, 'a card with a detail of one line').toBe(70.5);
+  // The words of a card start 30 px after its radio starts, the title and the detail alike.
+  const starts = await fields
+    .locator('.kit-pick__card')
+    .first()
+    .evaluate((card) =>
+      ['.radio__control', '.radio__content .label', '.description'].map((selector) => {
+        const element = card.querySelector(selector) as HTMLElement;
+        const range = document.createRange();
+        range.selectNodeContents(element);
+
+        return Math.round((selector === '.radio__control' ? element : range).getBoundingClientRect().left);
+      }),
+    );
+  expect.soft([starts[1]! - starts[0]!, starts[2]! - starts[0]!], 'the words after the radio').toEqual([30, 30]);
   await expect(fields.getByRole('radio', { name: /Members of Acme/ })).toBeChecked();
 });
 
@@ -1002,7 +1016,8 @@ test("the steps, a callout, the option cards and the drawn browser are the mocku
     borderTopLeftRadius: '14px',
     boxShadow: 'rgba(24, 24, 27, 0.08) 0px 10px 30px 0px',
   });
-  await expectStyle(browser.locator('.kit-browser__bar'), 'bar', { height: '44px', backgroundColor: SUBTLE });
+  // 44 px and the rule under it.
+  await expectStyle(browser.locator('.kit-browser__bar'), 'bar', { height: '45px', backgroundColor: SUBTLE });
   await expectStyle(browser.locator('.kit-browser__page'), 'page', { height: '620px' });
   await expectStyle(browser.locator('.kit-browser__empty svg'), 'drop', { width: '56px', height: '68px', fill: LINE });
   await expectStyle(browser.getByText('your site', { exact: true }), 'address', {
