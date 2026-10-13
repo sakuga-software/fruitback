@@ -1,106 +1,42 @@
-import {
-  type FormEvent,
-  Fragment,
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useSearchParams } from 'react-router';
-import {
-  type Connector,
-  type ConnectorSettings,
-  type Delivery,
-  type Destination,
-  MAX_DESTINATIONS,
-  STAGES,
-  type Site,
-  type Stage,
-  type Team,
-  type TrackerState,
-  UNREACHABLE,
-  call,
-  hasRoomFor,
-  placesOf,
-  samePlace,
-  setPlaces,
-} from '../api';
-import { Confirm } from '../confirm';
-import { copyText } from '../problems';
+import { type Connector, type Delivery, type Site, call, placesOf } from '../api';
 import { type Listed, known, listedOf } from '../listed';
-import { Button, Card, Chip, Choice, Field, Problem, Toggle } from '../ui';
+import { Button, LinkButton, Problem } from '../ui';
 import { PageHead, useWorkspace } from './workspace';
-import { locale, msg, t } from '../i18n';
+import { msg, t } from '../i18n';
 import { useLocale } from '../use-locale';
+import { AddLinear, AddRest } from './connector-add';
+import { LinearPanel } from './connector-linear';
+import { KEY_PROBLEMS, KINDS, SourceMark, siteCount, sourceLine } from './connector-parts';
+import { RestPanel } from './connector-rest';
 
 /**
- * The sources (design/boards/4-connectors.png). Linear connects with an API key (FRU-121), and an
- * address of the workspace's own receives each note (FRU-132). The other sources are drawn where the
- * design puts them, and say that they are not there yet.
+ * The sources of a workspace, as screen 11 of the mockup of 2026-10-13 draws them (FRU-246): the
+ * sources that are connected, the ones to add, and the panel of the source that is chosen.
+ *
+ * Linear connects with OAuth or an API key (FRU-121, FRU-134), and an address of the workspace's own
+ * receives each note (FRU-132). The other sources are listed where the mockup puts them, and say
+ * that they are not there yet: no button connects what does not exist.
  */
 const LATER = [
-  { mark: 'G', name: 'GitHub Issues', detail: msg('An issue per note, in one repository.') },
-  { mark: 'J', name: 'Jira', detail: msg('Issues in a Jira Cloud project.') },
-  { mark: 'T', name: 'Trello', detail: msg('A card per note, in the list you choose.') },
-  { mark: 'N', name: 'Notion', detail: msg('A row per note in a database.') },
+  { name: 'GitHub Issues', detail: msg('An issue per note, in one repository.') },
+  { name: 'Jira', detail: msg('An issue in a Jira Cloud project.') },
+  { name: 'GitLab', detail: msg('An issue in a project, cloud or self-managed.') },
+  { name: 'Trello', detail: msg('A card in the list you choose.') },
+  { name: 'Notion', detail: msg('A row in a database.') },
+  { name: 'Webhook', detail: msg('Tells Slack or any address when a note arrives.') },
 ] as const;
-
-/** How each kind of source is drawn. The mark is a letter of the boards, not a logo. */
-const KINDS = {
-  linear: { mark: 'L', name: 'Linear' },
-  rest: { mark: '{}', name: 'REST API' },
-} as const;
-
-/** Where the contract of the request is written, for whoever writes the receiver. */
-const REST_GUIDE = 'https://fruitback.com/rest-connector.html';
-
-/** What a refused address means for the person, and what to do. */
-const ADDRESS_PROBLEMS: Record<string, string> = {
-  'invalid-address': msg(
-    'Fruitback cannot send to this address. Use a full https:// address that the internet can reach.',
-  ),
-  'invalid-secret': msg('A secret is 16 to 256 characters, with no space. Leave it empty and Fruitback makes one.'),
-  'connectors-unavailable': msg('This Fruitback cannot keep a key yet. Its operator must set FRUITBACK_SECRETS_KEY.'),
-  forbidden: msg('Only an owner or an admin of the workspace connects a source.'),
-  unreachable: msg('Fruitback did not answer. Try again.'),
-};
 
 /** What the way back from Linear says, as the worker words it in the address (FRU-134). */
 const LINEAR_RETURNS: Record<string, string> = {
   declined: msg('Linear was not connected: the consent was refused there.'),
   forbidden: msg('Only an owner or an admin of the workspace connects a source.'),
-  failed: msg('Linear was not connected. Start again from « Connect with Linear ».'),
+  failed: msg('Linear was not connected. Start again from « Connect ».'),
 };
 
-/**
- * What to do about a source that its tracker refuses (FRU-102), by what the tracker said. `{when}` is
- * the first refusal: the notes written since then are not in the tracker.
- */
-const ATTENTION: Record<NonNullable<Connector['attention']>['reason'], string> = {
-  'key-refused': msg(
-    'Linear refuses this connection since {when}, and the notes of its sites do not reach Linear. Disconnect it, then connect Linear again.',
-  ),
-  'key-lacks-access': msg(
-    'Since {when}, Linear refuses what Fruitback asks with this key, and the notes of its sites do not reach Linear. Disconnect it, then connect Linear with a key that has read and write access.',
-  ),
-  'connection-ended': msg(
-    'Linear ended this connection, and since {when} the notes of its sites do not reach Linear. Disconnect it, then connect Linear again.',
-  ),
-};
-
-/** What a refused key means for the person, and what to do. */
-const KEY_PROBLEMS: Record<string, string> = {
-  'key-refused': msg('Linear refused this key. Copy it again from Linear, in Settings, then Security and access.'),
-  'connectors-unavailable': msg('This Fruitback cannot keep a key yet. Its operator must set FRUITBACK_SECRETS_KEY.'),
-  'key-lacks-access': msg(
-    'Linear knows this key, and it may not list your teams. Create a key with read and write access, then try again.',
-  ),
-  forbidden: msg('Only an owner or an admin of the workspace connects a source.'),
-  unreachable: msg('Fruitback did not answer. Try again.'),
-  'store-unavailable': msg('Linear did not answer just now. Your key is not kept: try again in a minute.'),
-};
+/** The id of the title of the open panel. */
+const PANEL_TITLE = 'source-panel-title';
 
 export default function Connectors() {
   useLocale();
@@ -115,6 +51,9 @@ export default function Connectors() {
   const [leaving, setLeaving] = useState(false);
   const [problem, setProblem] = useState<string | undefined>(LINEAR_RETURNS[search.get('linear') ?? '']);
   const [sites, setSites] = useState<Listed<Site>>('loading');
+  // How many notes did not reach each address. An address that is not in it was not read: no list
+  // is not an empty list, so its row then says « Connected » and no number.
+  const [late, setLate] = useState<Readonly<Record<string, number>>>({});
   // A read that failed is not an empty list (FRU-162): no « 0 site », and a way to read again.
   const [unread, setUnread] = useState(false);
   const [selected, setSelected] = useState<string | undefined>();
@@ -138,6 +77,22 @@ export default function Connectors() {
 
     const read = listedOf(placed, (data) => data.sites);
     setSites((current) => (read === 'failed' && typeof current !== 'string' ? current : read));
+
+    // The notes that did not reach an address, for its row. A read that fails says nothing here: the
+    // panel of the address says that it could not read them.
+    if (listed.ok) {
+      const addresses = listed.data.connectors.filter((connector) => connector.kind === 'rest');
+      const counts = await Promise.all(
+        addresses.map(async (connector) => {
+          const read = await call<{ deliveries: Delivery[] }>('GET', `${base}/connectors/${connector.id}/deliveries`);
+
+          return read.ok && Array.isArray(read.data?.deliveries)
+            ? ([connector.id, read.data.deliveries.length] as const)
+            : undefined;
+        }),
+      );
+      setLate(Object.fromEntries(counts.filter((count) => count !== undefined)));
+    }
 
     return listed.ok ? listed.data.connectors : [];
   }, [base]);
@@ -168,8 +123,10 @@ export default function Connectors() {
   const open = connectors?.find((connector) => connector.id === selected);
   const placed = known(sites);
   /** « · 3 sites », only from a list that was read. */
-  const countOf = (keep: (site: Site) => boolean): string =>
-    placed === undefined ? '' : ` · ${siteCount(placed.filter(keep).length)}`;
+  const countOf = (connector: Connector): string =>
+    placed === undefined
+      ? ''
+      : ` · ${siteCount(placed.filter((site) => placesOf(site).some((place) => place.connector === connector.id)).length)}`;
 
   const panel =
     open === undefined ? null : (
@@ -184,175 +141,185 @@ export default function Connectors() {
           document.getElementById(rowId(open.id))?.focus();
         }}
       >
-        <Panel
-          base={base}
-          connector={open}
-          sites={sites}
-          manages={manages}
-          onChanged={reload}
-          onRemoved={() => {
-            setSelected(undefined);
-            void load();
-          }}
-        />
+        {open.kind === 'rest' ? (
+          <RestPanel
+            id={PANEL_TITLE}
+            base={base}
+            connector={open}
+            sites={sites}
+            manages={manages}
+            onChanged={reload}
+            onRemoved={() => {
+              setSelected(undefined);
+              void load();
+            }}
+          />
+        ) : (
+          <LinearPanel
+            id={PANEL_TITLE}
+            base={base}
+            connector={open}
+            sites={sites}
+            manages={manages}
+            onChanged={reload}
+            onRemoved={() => {
+              setSelected(undefined);
+              void load();
+            }}
+          />
+        )}
       </Opened>
     );
+
+  const cannot = !manages || !available;
 
   return (
     <>
       <PageHead
         title={t('Connectors')}
-        lead={t('Connect a source once. Every site of the workspace can then send its feedback there.')}
+        lead={t('Connect a tracker once. Every site of {workspace} can then send its notes there.', {
+          workspace: workspace.name,
+        })}
       />
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <div>
-          <h2 className="mb-2 text-sm font-semibold text-muted">{t('Connected')}</h2>
-          {unread ? (
-            <div className="mb-3 flex flex-wrap items-center gap-3">
-              <p role="alert" className="flex-1 text-sm text-muted">
-                {t('Fruitback did not answer. The sources and their sites could not be read.')}
-              </p>
-              <Button tone="outline" onClick={() => void reload()}>
-                {t('Try again')}
-              </Button>
-            </div>
-          ) : null}
-          <div className="mb-8 space-y-2">
-            <Card>
-              <div className="flex items-center gap-3 px-4 py-3.5">
-                <SourceMark>F</SourceMark>
-                <span className="flex-1">
-                  <span className="block text-[15px] font-semibold">{t('Fruitback')}</span>
-                  <span className="block text-xs text-muted">
-                    {t('The notes stay in this workspace')}
-                    {countOf((site) => placesOf(site).length === 0)}
-                  </span>
-                </span>
-                <Working />
+      <div className="flex flex-wrap items-start gap-[28px]">
+        <div className="flex min-w-0 flex-[999_1_440px] flex-col gap-[32px]">
+          <section aria-labelledby="connected-title">
+            <h2 id="connected-title" className="mb-[10px] text-body leading-auto font-semibold">
+              {t('Connected')}
+            </h2>
+            {unread ? (
+              <div className="mb-[12px] flex flex-wrap items-center gap-[12px]">
+                <p role="alert" className="min-w-0 flex-1 text-small text-muted">
+                  {t('Fruitback did not answer. The sources and their sites could not be read.')}
+                </p>
+                <Button tone="outline" onClick={() => void reload()}>
+                  {t('Try again')}
+                </Button>
               </div>
-            </Card>
-            {(connectors ?? []).map((connector) => (
-              <Fragment key={connector.id}>
-                <button
-                  type="button"
-                  aria-pressed={connector.id === selected}
-                  id={rowId(connector.id)}
-                  aria-controls={connector.id === selected ? PANEL : undefined}
-                  onClick={() => {
-                    // A person opened it, so the panel takes focus when it appears (FRU-197).
-                    opening.current = connector.id !== selected;
-                    setSelected(connector.id === selected ? undefined : connector.id);
-                  }}
-                  className={`flex w-full items-center gap-3 rounded-[14px] border bg-surface px-4 py-3.5 text-left ${
-                    connector.id === selected ? 'border-ink' : 'border-line hover:border-ink/40'
-                  }`}
-                >
-                  <SourceMark>{KINDS[connector.kind].mark}</SourceMark>
-                  <span className="flex-1">
-                    <span className="block text-[15px] font-semibold">{t(KINDS[connector.kind].name)}</span>
-                    <span className="block text-xs text-muted">
-                      {sourceLine(connector)}
-                      {countOf((site) => placesOf(site).some((place) => place.connector === connector.id))}
-                    </span>
-                  </span>
-                  <Working connected={connector.kind === 'rest'} attention={connector.attention !== undefined} />
-                </button>
-                {/* Under 1280 px there is no column beside the list: the panel opens under its row. */}
-                {!wide && connector.id === selected ? panel : null}
-              </Fragment>
-            ))}
-          </div>
+            ) : null}
+            {connectors === undefined && !unread ? <p className="text-small text-muted">{t('Loading…')}</p> : null}
+            {connectors?.length === 0 ? (
+              <p className="text-small text-muted">{t('No tracker yet. The notes stay in Fruitback.')}</p>
+            ) : null}
+            {connectors === undefined || connectors.length === 0 ? null : (
+              <ul className="overflow-hidden rounded-frame border border-line">
+                {connectors.map((connector) => {
+                  const chosen = connector.id === selected;
 
-          <h2 className="mb-2 text-sm font-semibold text-muted">{t('Add a source')}</h2>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            <Card className="flex flex-col p-4">
-              <div className="mb-2 flex items-center gap-3">
-                <SourceMark small>L</SourceMark>
-                <span className="text-[15px] font-semibold">{t('Linear')}</span>
-              </div>
-              <p className="mb-4 flex-1 text-sm text-muted">{t('An issue per note, in the team you choose.')}</p>
-              {adding === 'linear' ? (
-                <AddLinear
-                  base={base}
-                  onDone={(connector) => {
-                    setAdding(undefined);
-                    if (connector !== undefined) {
-                      setSelected(connector.id);
-                      void load();
-                    }
-                  }}
-                />
-              ) : (
-                <div className="flex flex-wrap items-center gap-2">
-                  {oauth ? (
+                  return (
+                    <li key={connector.id} className="border-b border-line last:border-b-0">
+                      <button
+                        type="button"
+                        aria-pressed={chosen}
+                        id={rowId(connector.id)}
+                        aria-controls={chosen ? PANEL : undefined}
+                        onClick={() => {
+                          // A person opened it, so the panel takes focus when it appears (FRU-197).
+                          opening.current = !chosen;
+                          setSelected(chosen ? undefined : connector.id);
+                        }}
+                        className={`flex w-full cursor-pointer items-center gap-[14px] px-[18px] py-[14px] text-left -outline-offset-2 ${
+                          chosen ? 'bg-chip' : 'hover:bg-subtle'
+                        }`}
+                      >
+                        <SourceMark>{KINDS[connector.kind].mark}</SourceMark>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-body leading-auto font-semibold">
+                            {t(KINDS[connector.kind].name)}
+                          </span>
+                          <span className="block text-hint leading-auto text-muted [overflow-wrap:anywhere]">
+                            {sourceLine(connector)}
+                            {countOf(connector)}
+                          </span>
+                        </span>
+                        <State connector={connector} late={late[connector.id]} chosen={chosen} />
+                      </button>
+                      {/* Under 1280 px there is no column beside the list: the panel opens under its row. */}
+                      {!wide && chosen ? panel : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          <section aria-labelledby="add-title">
+            <h2 id="add-title" className="mb-[10px] text-body leading-auto font-semibold">
+              {t('Add a source')}
+            </h2>
+            {manages ? null : (
+              <p className="mb-[10px] text-hint text-muted">{t('An owner or an admin connects a source')}</p>
+            )}
+            {available ? null : (
+              <p className="mb-[10px] text-hint text-muted">{t(KEY_PROBLEMS['connectors-unavailable'] ?? '')}</p>
+            )}
+            <ul className="border-t border-line">
+              <Source name={t(KINDS.linear.name)} detail={t('An issue per note, in the team you choose.')}>
+                {adding === 'linear' ? null : (
+                  <span className="flex flex-wrap items-center gap-x-[16px]">
+                    {oauth ? (
+                      <LinkButton disabled={cannot} onClick={() => setAdding('linear')}>
+                        {t('Use an API key')}
+                      </LinkButton>
+                    ) : null}
                     <Button
                       tone="outline"
-                      disabled={!manages || !available || leaving}
-                      onClick={() => void connectLinear()}
+                      inset={16}
+                      disabled={cannot || leaving}
+                      onClick={() => (oauth ? void connectLinear() : setAdding('linear'))}
                     >
-                      {leaving ? t('Going to Linear…') : t('Connect with Linear')}
+                      {leaving ? t('Going to Linear…') : <Connect name={t(KINDS.linear.name)} />}
                     </Button>
-                  ) : null}
-                  <Button
-                    tone={oauth ? 'quiet' : 'outline'}
-                    disabled={!manages || !available}
-                    onClick={() => setAdding('linear')}
-                  >
-                    {oauth ? t('Use an API key') : t('Connect')}
+                  </span>
+                )}
+                {adding === 'linear' ? (
+                  <Under>
+                    <AddLinear
+                      base={base}
+                      onDone={(connector) => {
+                        setAdding(undefined);
+                        if (connector !== undefined) {
+                          setSelected(connector.id);
+                          void load();
+                        }
+                      }}
+                    />
+                  </Under>
+                ) : null}
+                {problem === undefined ? null : (
+                  <Under>
+                    <Problem>{t(problem)}</Problem>
+                  </Under>
+                )}
+              </Source>
+              <Source name={t(KINDS.rest.name)} detail={t('POST each note to your own endpoint.')}>
+                {adding === 'rest' ? (
+                  <Under>
+                    <AddRest
+                      base={base}
+                      onAdded={(connector) => {
+                        setSelected(connector.id);
+                        void load();
+                      }}
+                      onDone={() => setAdding(undefined)}
+                    />
+                  </Under>
+                ) : (
+                  <Button tone="outline" inset={16} disabled={cannot} onClick={() => setAdding('rest')}>
+                    <Connect name={t(KINDS.rest.name)} />
                   </Button>
-                </div>
-              )}
-              {problem === undefined ? null : (
-                <div className="mt-2">
-                  <Problem>{t(problem)}</Problem>
-                </div>
-              )}
-              {manages ? null : (
-                <p className="mt-2 text-xs text-muted">{t('An owner or an admin connects a source')}</p>
-              )}
-              {available ? null : (
-                <p className="mt-2 text-xs text-muted">{t(KEY_PROBLEMS['connectors-unavailable'] ?? '')}</p>
-              )}
-            </Card>
-            <Card className="flex flex-col p-4">
-              <div className="mb-2 flex items-center gap-3">
-                <SourceMark small>{KINDS.rest.mark}</SourceMark>
-                <span className="text-[15px] font-semibold">{t('REST API')}</span>
-              </div>
-              <p className="mb-4 flex-1 text-sm text-muted">{t('POST each note to your own endpoint.')}</p>
-              {adding === 'rest' ? (
-                <AddRest
-                  base={base}
-                  onAdded={(connector) => {
-                    setSelected(connector.id);
-                    void load();
-                  }}
-                  onDone={() => setAdding(undefined)}
-                />
-              ) : (
-                <Button
-                  tone="outline"
-                  className="self-start"
-                  disabled={!manages || !available}
-                  onClick={() => setAdding('rest')}
-                >
-                  {t('Connect')}
-                </Button>
-              )}
-            </Card>
-            {LATER.map((source) => (
-              <Card key={source.name} className="flex flex-col p-4">
-                <div className="mb-2 flex items-center gap-3">
-                  <SourceMark small>{source.mark}</SourceMark>
-                  <span className="text-[15px] font-semibold">{source.name}</span>
-                </div>
-                <p className="mb-4 flex-1 text-sm text-muted">{t(source.detail)}</p>
-                <Button tone="outline" disabled className="self-start">
-                  {t('After the beta')}
-                </Button>
-              </Card>
-            ))}
-          </div>
+                )}
+              </Source>
+              {LATER.map((source) => (
+                <Source key={source.name} name={source.name} detail={t(source.detail)}>
+                  {/* No connector of this kind exists: the button says when, and connects nothing. */}
+                  <Button tone="outline" inset={16} disabled>
+                    {t('After the beta')}
+                  </Button>
+                </Source>
+              ))}
+            </ul>
+          </section>
         </div>
 
         {wide ? panel : null}
@@ -361,9 +328,65 @@ export default function Connectors() {
   );
 }
 
+/** « Connect », with the name of the source for a screen reader: seven buttons would say the same word. */
+function Connect({ name }: { name: string }) {
+  useLocale();
+
+  return (
+    <>
+      {t('Connect')}
+      <span className="sr-only"> {name}</span>
+    </>
+  );
+}
+
+/** A source to add: its name, what a note becomes there, and what connects it. */
+function Source({ name, detail, children }: { name: string; detail: string; children: ReactNode }) {
+  return (
+    <li
+      className="flex flex-wrap items-center gap-x-[16px] gap-y-[8px] border-b border-line py-[12px]"
+      data-source={name}
+    >
+      <span className="min-w-0 flex-[1_1_260px]">
+        <span className="block text-body leading-auto font-semibold">{name}</span>
+        <span className="block text-hint leading-auto text-muted">{detail}</span>
+      </span>
+      {children}
+    </li>
+  );
+}
+
+/** What opens under the row of a source to add: its form, or why it did not connect. */
+function Under({ children }: { children: ReactNode }) {
+  return <div className="w-full basis-full">{children}</div>;
+}
+
+/**
+ * The state of a source, at the end of its row. A source is « Connected »: the list cannot know that
+ * its notes arrive. An address says how many of its notes did not arrive, when the worker said so,
+ * and a tracker that refuses the source needs somebody (FRU-102): the panel of the source says what
+ * to do.
+ *
+ * On the row that is chosen the red is the strong accent: the accent is 4.28:1 on its tint.
+ */
+function State({ connector, late, chosen }: { connector: Connector; late: number | undefined; chosen: boolean }) {
+  useLocale();
+  const alert = `flex-none text-hint leading-auto font-semibold ${chosen ? 'text-accent-strong' : 'text-accent'}`;
+  if (connector.attention !== undefined) return <span className={alert}>{t('Needs attention')}</span>;
+  if (late !== undefined && late > 0) {
+    return (
+      <span className={alert}>
+        {late === 1 ? t('1 note did not arrive') : t('{count} notes did not arrive', { count: late })}
+      </span>
+    );
+  }
+
+  return <span className="flex-none text-hint leading-auto font-semibold text-done">{t('Connected')}</span>;
+}
+
 /** The id of the open panel, which its row names in `aria-controls`. */
 const PANEL = 'source-panel';
-/** The width of `xl:` in Tailwind, from which the panel has its column beside the list (the board). */
+/** The width from which the panel has its column beside the list, as on the mockup. */
 const WIDE = '(min-width: 80rem)';
 
 /** Whether the screen is wide enough for the column of the panel. The console is built wide. */
@@ -432,764 +455,16 @@ function Opened({
       role="region"
       aria-label={label}
       tabIndex={-1}
-      className="self-start scroll-mt-4 rounded-[14px]"
+      // Beside the list the panel is the second column of the mockup: 340 px inside its border. Under
+      // its row it is inside the frame of the list, with the rule of the list above it.
+      className={`scroll-mt-4 rounded-frame ${wide ? 'max-w-full min-w-0 flex-[1_1_342px]' : 'border-t border-line bg-subtle p-[12px]'}`}
       onKeyDown={(event) => {
-        // `Confirm` and an open list take their own Escape, and stop it before it gets here.
+        // `Confirmation` and an open list take their own Escape, and stop it before it gets here.
         if (event.key !== 'Escape' || event.defaultPrevented) return;
         onClose();
       }}
     >
       {children}
     </div>
-  );
-}
-
-type PanelProps = {
-  base: string;
-  connector: Connector;
-  sites: Listed<Site>;
-  manages: boolean;
-  onChanged: () => Promise<void>;
-  onRemoved: () => void;
-};
-
-/** The panel of a connector, by its kind: a tracker has teams, an address has deliveries. */
-function Panel(props: PanelProps) {
-  return props.connector.kind === 'rest' ? <RestDetail {...props} /> : <Detail {...props} />;
-}
-
-function SourceMark({ children, small = false }: { children: string; small?: boolean }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={`flex items-center justify-center bg-chip font-bold ${small ? 'h-8 w-8 rounded-md text-xs' : 'h-9 w-9 rounded-lg text-sm'}`}
-    >
-      {children}
-    </span>
-  );
-}
-
-/**
- * The state of a source. A tracker that took the key is working. An address is only connected: the
- * list cannot know that its notes arrive, and the panel of the address says which did not. A tracker
- * that refuses the source needs somebody (FRU-102), and the panel of the source says what to do.
- */
-function Working({ connected = false, attention = false }: { connected?: boolean; attention?: boolean }) {
-  useLocale();
-  if (attention) {
-    return (
-      <span className="flex items-center gap-1.5 text-sm font-semibold text-accent-strong">
-        <span className="h-2 w-2 rounded-full bg-accent-strong" />
-        {t('Needs attention')}
-      </span>
-    );
-  }
-
-  return (
-    <span className="flex items-center gap-1.5 text-sm font-semibold text-done">
-      <span className="h-2 w-2 rounded-full bg-done" />
-      {connected ? t('Connected') : t('Working')}
-    </span>
-  );
-}
-
-/** The key is typed once and sent once. Nothing here keeps it, and the worker never answers it. */
-function AddLinear({ base, onDone }: { base: string; onDone: (connector: Connector | undefined) => void }) {
-  useLocale();
-  const [apiKey, setApiKey] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | undefined>();
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setProblem(undefined);
-    const added = await call<Connector>('POST', `${base}/connectors`, { kind: 'linear', apiKey });
-    setBusy(false);
-    if (added.ok) return onDone(added.data);
-    setProblem(KEY_PROBLEMS[added.error] ?? msg('The key could not be kept just now. Try again.'));
-  }
-
-  return (
-    <form onSubmit={submit} className="space-y-2">
-      <Field
-        label={t('Linear API key')}
-        type="password"
-        autoComplete="off"
-        placeholder="lin_api_…"
-        value={apiKey}
-        onChange={(event) => setApiKey(event.target.value)}
-        hint={t('A personal API key, from Linear, Settings, Security and access. Fruitback keeps it encrypted.')}
-      />
-      {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
-      <div className="flex gap-2">
-        <Button type="submit" disabled={busy || apiKey.trim() === ''}>
-          {busy ? t('Checking…') : t('Connect')}
-        </Button>
-        <Button tone="quiet" onClick={() => onDone(undefined)}>
-          {t('Cancel')}
-        </Button>
-      </div>
-    </form>
-  );
-}
-
-/**
- * The address is typed once and sent once, like a key. A secret that Fruitback made is shown here
- * once: the worker answers it when the connector is made, and never again.
- */
-function AddRest({
-  base,
-  onAdded,
-  onDone,
-}: {
-  base: string;
-  onAdded: (connector: Connector) => void;
-  onDone: () => void;
-}) {
-  useLocale();
-  const [url, setUrl] = useState('');
-  const [secret, setSecret] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | undefined>();
-  const [made, setMade] = useState<string | undefined>();
-  const [copied, setCopied] = useState<'no' | 'yes' | 'refused'>('no');
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setProblem(undefined);
-    const added = await call<Connector & { secret?: string }>('POST', `${base}/connectors`, {
-      kind: 'rest',
-      url,
-      ...(secret.trim() === '' ? {} : { secret: secret.trim() }),
-    });
-    setBusy(false);
-    if (!added.ok) {
-      return setProblem(ADDRESS_PROBLEMS[added.error] ?? msg('The address could not be kept just now. Try again.'));
-    }
-    onAdded(added.data);
-    // A secret the person gave is theirs already: nothing is left to show.
-    if (added.data.secret === undefined) return onDone();
-    setMade(added.data.secret);
-  }
-
-  if (made !== undefined) {
-    return (
-      <div className="space-y-2">
-        <p className="text-sm font-semibold">{t('Copy this secret now')}</p>
-        <p className="text-xs text-muted">
-          {t('Your receiver checks each request with it. Fruitback does not show it again.')}
-        </p>
-        <code className="block break-all rounded-md bg-chip px-3 py-2 font-mono text-xs" data-secret>
-          {made}
-        </code>
-        <div className="flex gap-2">
-          <Button
-            tone="outline"
-            onClick={() => void copyText(made).then((taken) => setCopied(taken ? 'yes' : 'refused'))}
-          >
-            {copied === 'yes' ? t('Copied') : t('Copy')}
-          </Button>
-          <Button onClick={onDone}>{t('I kept it')}</Button>
-        </div>
-        {/* A clipboard can refuse. The secret is on the screen, to select by hand, and this says so. */}
-        {copied === 'refused' ? (
-          <p role="alert" className="text-xs text-muted">
-            {t('The browser refused the copy. Select the secret above and copy it by hand.')}
-          </p>
-        ) : null}
-      </div>
-    );
-  }
-
-  return (
-    <form onSubmit={submit} className="space-y-2">
-      <Field
-        label={t('Address of your receiver')}
-        type="url"
-        autoComplete="off"
-        placeholder="https://hooks.acme.dev/fruitback"
-        value={url}
-        onChange={(event) => setUrl(event.target.value)}
-        hint={t('Each note is posted there, signed. The notes stay in Fruitback too.')}
-      />
-      <Field
-        label={t('Secret (optional)')}
-        type="password"
-        autoComplete="off"
-        value={secret}
-        onChange={(event) => setSecret(event.target.value)}
-        hint={t('Leave it empty and Fruitback makes one, shown once.')}
-      />
-      {problem === undefined ? null : <Problem>{t(problem)}</Problem>}
-      <div className="flex gap-2">
-        <Button type="submit" disabled={busy || url.trim() === ''}>
-          {busy ? t('Checking…') : t('Connect')}
-        </Button>
-        <Button tone="quiet" onClick={onDone}>
-          {t('Cancel')}
-        </Button>
-      </div>
-    </form>
-  );
-}
-
-const HERE = 'fruitback';
-/** The value of the choice « this site sends its notes to the address ». */
-const THERE = 'address';
-
-/** The host a receiving connector sends to, as the worker named it: `REST · hooks.acme.dev`. */
-function hostOf(connector: Connector): string {
-  return connector.label.replace(/^REST · /, '');
-}
-
-/** The host of an address alone, so a button that names it fits the panel (FRU-165). */
-function shortHost(connector: Connector): string {
-  const address = hostOf(connector);
-  try {
-    return new URL(address).host;
-  } catch {
-    return address;
-  }
-}
-
-/** A moment, in the language of the console. */
-function moment(iso: string): string {
-  const date = new Date(iso);
-
-  return Number.isNaN(date.getTime())
-    ? iso
-    : date.toLocaleString(locale(), { dateStyle: 'medium', timeStyle: 'short' });
-}
-
-/** Why a delivery did not arrive, in a few words: the status of the receiver, or what stopped the request. */
-function reasonOf(delivery: Delivery): string {
-  if (delivery.lastStatus !== undefined) return t('Your receiver answered {status}', { status: delivery.lastStatus });
-  if (delivery.lastError !== undefined) return t('No answer: {error}', { error: delivery.lastError });
-
-  return t('Not sent yet');
-}
-
-/**
- * The panel of an address that receives (FRU-132): which sites send their notes there, and the notes
- * that did not arrive. A site has no team to choose here: it sends, or it does not.
- */
-function RestDetail({
-  base,
-  connector,
-  sites,
-  manages,
-  onChanged,
-  onRemoved,
-}: {
-  base: string;
-  connector: Connector;
-  sites: Listed<Site>;
-  manages: boolean;
-  onChanged: () => Promise<void>;
-  onRemoved: () => void;
-}) {
-  useLocale();
-  const [late, setLate] = useState<Delivery[] | undefined>();
-  // A list is written whole, from the list on the screen. A second change before the first one is
-  // kept and read again would be made from the list of before, and would take the first one away:
-  // the controls wait.
-  const [writing, setWriting] = useState(false);
-  const [problem, setProblem] = useState<string | undefined>();
-
-  const read = useCallback(async () => {
-    const listed = await call<{ deliveries: Delivery[] }>('GET', `${base}/connectors/${connector.id}/deliveries`);
-    // No list is not an empty list: a worker that did not answer must not read as « all arrived ».
-    setLate(listed.ok ? listed.data.deliveries : undefined);
-  }, [base, connector.id]);
-
-  useEffect(() => void read(), [read]);
-
-  async function place(site: Site, value: string) {
-    // One write at a time: see `writing`.
-    if (writing) return;
-    setWriting(true);
-    setProblem(undefined);
-    // The other places of the site stay, in their order: this address is added last, or taken out.
-    const others = placesOf(site).filter((each) => each.connector !== connector.id);
-    const set = await setPlaces(base, site, value === THERE ? [...others, { connector: connector.id }] : others);
-    if (!set.ok) setProblem(msg('The destination of this site did not change. Try again.'));
-    await onChanged();
-    setWriting(false);
-  }
-
-  async function retry(delivery: Delivery) {
-    setProblem(undefined);
-    const asked = await call('POST', `${base}/connectors/${connector.id}/deliveries/${delivery.id}/retry`);
-    if (!asked.ok) setProblem(msg('The new attempt was not started. Try again.'));
-    await read();
-  }
-
-  async function disconnect() {
-    const removed = await call('DELETE', `${base}/connectors/${connector.id}`);
-    if (removed.ok) return onRemoved();
-    setProblem(msg('This source is still connected. Try again.'));
-  }
-
-  return (
-    <Card className="self-start">
-      <div className="flex items-center gap-3 border-b border-line px-5 py-4">
-        <SourceMark>{KINDS.rest.mark}</SourceMark>
-        <div className="min-w-0">
-          <h2 className="text-[17px] font-bold">{t('REST API')}</h2>
-          <p className="truncate text-xs text-muted">{t('Sends to {host}', { host: hostOf(connector) })}</p>
-        </div>
-      </div>
-      <div className="px-5 py-4">
-        <h3 className="mb-2 text-sm font-semibold">{t('Which sites send their notes there')}</h3>
-        <SitesState sites={sites} />
-        <ul className="space-y-2">
-          {(known(sites) ?? []).map((site) => {
-            const places = placesOf(site);
-            const sends = places.some((each) => each.connector === connector.id);
-            // The worker refuses a sixth place: the reason is said here, and the choice is not offered.
-            const full = !hasRoomFor(site, connector.id);
-            const elsewhere = places.some((each) => each.connector !== connector.id);
-
-            return (
-              <li key={site.id} className="rounded-md bg-chip px-3 py-2">
-                <Choice
-                  label={new URL(site.origin).host}
-                  value={sends ? THERE : HERE}
-                  disabled={!manages || full || writing}
-                  onChange={(value) => void place(site, value)}
-                  options={[
-                    { value: HERE, label: elsewhere ? t('Another source') : t('Fruitback only') },
-                    { value: THERE, label: t('Fruitback, and this address') },
-                  ]}
-                />
-                {manages && full ? (
-                  <p className="mt-1 text-xs text-muted">
-                    {t('A site sends to {count} places at most.', { count: MAX_DESTINATIONS })}
-                  </p>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
-        <p className="mt-3 text-xs text-muted">
-          <a className="underline" href={REST_GUIDE} target="_blank" rel="noreferrer">
-            {t('The request, and how to check its signature')}
-          </a>
-        </p>
-      </div>
-      <div className="border-t border-line px-5 py-4" data-deliveries>
-        <h3 className="mb-2 text-sm font-semibold">{t('Notes that did not arrive')}</h3>
-        {late === undefined ? <p className="text-sm text-muted">{t('Fruitback did not answer. Try again.')}</p> : null}
-        {late?.length === 0 ? <p className="text-sm text-muted">{t('Every note arrived.')}</p> : null}
-        <ul className="space-y-2">
-          {(late ?? []).map((delivery) => (
-            <li key={delivery.id} className="rounded-md bg-chip px-3 py-2 text-sm">
-              <span className="block font-semibold">{reasonOf(delivery)}</span>
-              <span className="block text-xs text-muted">
-                {t('Written {when}', { when: moment(delivery.createdAt) })} ·{' '}
-                {delivery.attempts === 1 ? t('1 attempt') : t('{count} attempts', { count: delivery.attempts })}
-              </span>
-              <span className="block text-xs text-muted">
-                {delivery.nextAt === undefined
-                  ? t('Fruitback stopped trying.')
-                  : t('Next attempt {when}', { when: moment(delivery.nextAt) })}
-              </span>
-              {manages ? (
-                <Button tone="outline" className="mt-2" onClick={() => void retry(delivery)}>
-                  {t('Try now')}
-                </Button>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-        {problem === undefined ? null : (
-          <div className="mt-3">
-            <Problem>{t(problem)}</Problem>
-          </div>
-        )}
-      </div>
-      {manages ? (
-        <div className="border-t border-line px-5 py-3">
-          <Confirm
-            label={t('Disconnect')}
-            confirmLabel={t('Disconnect {source}', { source: shortHost(connector) })}
-            consequence={t('Its sites keep their notes in the workspace, and the notes that waited are not sent.')}
-            onConfirm={() => void disconnect()}
-            className="-ml-4"
-          />
-        </div>
-      ) : null}
-    </Card>
-  );
-}
-
-/** The person whose key this is, as the worker named the connector: `Linear · Camille`. */
-function personOf(connector: Connector): string {
-  return connector.label.replace(/^Linear · /, '');
-}
-
-/** A Linear connected with OAuth is named after its workspace of Linear: `Linear OAuth · Acme`. */
-const OAUTH_LABEL = /^Linear OAuth · /;
-
-/** How a source is connected, in one line under its name. */
-function sourceLine(connector: Connector): string {
-  if (connector.kind === 'rest') return hostOf(connector);
-  if (OAUTH_LABEL.test(connector.label)) {
-    return t('Workspace {name}', { name: connector.label.replace(OAUTH_LABEL, '') });
-  }
-
-  return t('Key of {person}', { person: personOf(connector) });
-}
-
-/** What the list of sites of a panel says before its rows: loading, not read, or none (FRU-162). */
-function SitesState({ sites }: { sites: Listed<Site> }) {
-  useLocale();
-  if (sites === 'loading') return <p className="text-sm text-muted">{t('Loading…')}</p>;
-  if (sites === 'failed') return <p className="text-sm text-muted">{t('Fruitback did not answer. Try again.')}</p>;
-
-  return sites.length === 0 ? <p className="text-sm text-muted">{t('This workspace has no site yet.')}</p> : null;
-}
-
-function siteCount(count: number): string {
-  return count === 1 ? t('{count} site', { count }) : t('{count} sites', { count });
-}
-
-/** The names of the five stages, as the widget shows them on a pin. */
-const STAGE_NAMES: Record<Stage, string> = {
-  seeded: msg('New'),
-  green: msg('To do'),
-  ripening: msg('In progress'),
-  ripe: msg('Done'),
-  composted: msg('Closed'),
-};
-
-/**
- * What the workspace sets on a Linear (FRU-102): which colour each state gives a pin, and whether
- * the replies come back. Only the exceptions are kept, by the id of the state: a state set back to
- * the stage of its type is no exception any more.
- */
-function Settings({ base, connector }: { base: string; connector: Connector & { settings: ConnectorSettings } }) {
-  useLocale();
-  const [settings, setSettings] = useState<ConnectorSettings>(connector.settings);
-  // No list is not an empty list (FRU-162): a read that failed says so, and is asked again.
-  const [states, setStates] = useState<Listed<TrackerState>>('loading');
-  const [problem, setProblem] = useState<string | undefined>();
-  // What the worker keeps, and the writes in flight, one after the other: a later change starts from
-  // the earlier one, and the answers cannot land out of order.
-  const kept = useRef<ConnectorSettings>(connector.settings);
-  const chosen = useRef(false);
-  const writes = useRef<Promise<void>>(Promise.resolve());
-
-  const read = useCallback(() => {
-    setStates('loading');
-    void call<{ states: TrackerState[]; settings: ConnectorSettings }>(
-      'GET',
-      `${base}/connectors/${connector.id}/states`,
-    ).then((answer) => {
-      setStates(listedOf(answer, (data) => data.states));
-      // A choice made while the states were read wins: its write is in flight, or done.
-      if (!answer.ok || chosen.current) return;
-      kept.current = answer.data.settings;
-      setSettings(answer.data.settings);
-    });
-  }, [base, connector.id]);
-
-  useEffect(() => read(), [read]);
-
-  function save(change: (current: ConnectorSettings) => ConnectorSettings) {
-    chosen.current = true;
-    setProblem(undefined);
-    setSettings((current) => change(current));
-    writes.current = writes.current.then(async () => {
-      const next = change(kept.current);
-      // `call` answers a failure and does not reject. `UNREACHABLE` all the same if it ever does: a
-      // rejected link would stop every later write of this chain, with no word on the screen.
-      const set = await call('POST', `${base}/connectors/${connector.id}/settings`, next).catch(() => UNREACHABLE);
-      if (set.ok) {
-        kept.current = next;
-        // The setting that failed before is kept now: its sentence goes.
-        setProblem(undefined);
-
-        return;
-      }
-      // What the screen shows must be what the worker keeps.
-      setSettings(kept.current);
-      setProblem(msg('This setting did not change. Try again.'));
-    });
-  }
-
-  function stageOf(state: TrackerState, stage: Stage) {
-    save((current) => {
-      const { [state.id]: _was, ...others } = current.stages;
-
-      return { ...current, stages: stage === state.stage ? others : { ...others, [state.id]: stage } };
-    });
-  }
-
-  const rows = known(states) ?? [];
-  const teams = new Set(rows.map((state) => state.teamId)).size;
-
-  return (
-    <div className="mt-5">
-      <h3 className="text-sm font-semibold">{t('Status of the pins')}</h3>
-      <p className="mb-2 text-xs text-muted">{t('Which Linear state gives which colour on the page.')}</p>
-      {states === 'failed' ? (
-        <div className="flex flex-wrap items-center gap-3">
-          <p role="alert" className="flex-1 text-sm text-muted">
-            {t('Fruitback could not read the states of Linear. The colours you set are not lost.')}
-          </p>
-          <Button tone="outline" onClick={read}>
-            {t('Try again')}
-          </Button>
-        </div>
-      ) : null}
-      {known(states)?.length === 0 ? (
-        <p className="text-sm text-muted">{t('The states appear here once a site sends its notes to a team.')}</p>
-      ) : null}
-      <ul className="space-y-2">
-        {rows.map((state) => (
-          <li key={state.id}>
-            <Choice
-              label={teams > 1 ? `${state.team} · ${state.name}` : state.name}
-              value={settings.stages[state.id] ?? state.stage}
-              onChange={(value) => stageOf(state, value as Stage)}
-              options={STAGES.map((stage) => ({ value: stage, label: t(STAGE_NAMES[stage]) }))}
-            />
-          </li>
-        ))}
-      </ul>
-      <div className="mt-4">
-        <Toggle
-          label={t('Show Linear comments as replies')}
-          value={settings.showComments}
-          onChange={(value) => save((current) => ({ ...current, showComments: value }))}
-        />
-      </div>
-      {problem === undefined ? null : (
-        <div className="mt-3">
-          <Problem>{t(problem)}</Problem>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** The panel of one connector: which sites send their notes there, and to which team. */
-function Detail({
-  base,
-  connector,
-  sites,
-  manages,
-  onChanged,
-  onRemoved,
-}: {
-  base: string;
-  connector: Connector;
-  sites: Listed<Site>;
-  manages: boolean;
-  onChanged: () => Promise<void>;
-  onRemoved: () => void;
-}) {
-  useLocale();
-  const [teams, setTeams] = useState<Team[] | undefined>();
-  const [problem, setProblem] = useState<string | undefined>();
-  const [silent, setSilent] = useState(false);
-  // A list is written whole, from the list on the screen. A second change before the first one is
-  // kept and read again would be made from the list of before, and would take the first one away:
-  // the controls wait.
-  const [writing, setWriting] = useState(false);
-
-  useEffect(() => {
-    if (!manages) return;
-    setSilent(false);
-    void call<{ teams: Team[] }>('GET', `${base}/connectors/${connector.id}/teams`).then((answer) => {
-      if (answer.ok) return setTeams(answer.data.teams);
-      setTeams([]);
-      setSilent(true);
-      // This read is what told the worker that Linear refuses the source: the list is read again, and
-      // the reason takes the place of the sentence below.
-      void onChanged();
-    });
-    // `onChanged` is not a reason to ask Linear again: the read above runs once for a connector.
-  }, [base, connector.id, manages]);
-
-  /** Writes the whole list of a site: the worker keeps all of it, or none of it. */
-  async function place(site: Site, places: Destination[]) {
-    // One write at a time: see `writing`.
-    if (writing) return;
-    setWriting(true);
-    setProblem(undefined);
-    const set = await setPlaces(base, site, places);
-    if (!set.ok) setProblem(msg('The destinations of this site did not change. Try again.'));
-    await onChanged();
-    setWriting(false);
-  }
-
-  /** The place a value of the list of teams names: `team`, or `team/project`. */
-  function placeOf(value: string): Destination | undefined {
-    const [teamId, projectId] = value.split('/');
-
-    return teamId === undefined || teamId === ''
-      ? undefined
-      : { connector: connector.id, teamId, ...(projectId === undefined ? {} : { projectId }) };
-  }
-
-  /** The words of a place: what the worker wrote for it, or the name of its team while that is all there is. */
-  function nameOf(each: Destination): string {
-    if (each.label !== undefined) return each.label;
-    if (each.connector !== connector.id) return t('Another source');
-    const team = teams?.find((one) => one.id === each.teamId);
-    const project = team?.projects.find((one) => one.id === each.projectId);
-
-    return [t('Linear'), team?.name, project?.name].filter(Boolean).join(' · ');
-  }
-
-  async function disconnect() {
-    const removed = await call('DELETE', `${base}/connectors/${connector.id}`);
-    if (removed.ok) return onRemoved();
-    setProblem(msg('This source is still connected. Try again.'));
-  }
-
-  return (
-    <Card className="self-start">
-      <div className="flex items-center gap-3 border-b border-line px-5 py-4">
-        <SourceMark>L</SourceMark>
-        <div>
-          <h2 className="text-[17px] font-bold">{t('Linear')}</h2>
-          <p className="text-xs text-muted">
-            {OAUTH_LABEL.test(connector.label)
-              ? t('Connected to the workspace {name}', { name: connector.label.replace(OAUTH_LABEL, '') })
-              : t('Connected with the key of {person}', { person: personOf(connector) })}
-          </p>
-        </div>
-      </div>
-      <div className="px-5 py-4">
-        {connector.attention === undefined ? null : (
-          <div className="mb-4">
-            <Problem>{t(ATTENTION[connector.attention.reason], { when: moment(connector.attention.since) })}</Problem>
-          </div>
-        )}
-        <h3 className="mb-2 text-sm font-semibold">{t('Where each site sends its notes')}</h3>
-        <SitesState sites={sites} />
-        <ul className="space-y-2">
-          {(known(sites) ?? []).map((site) => {
-            const places = placesOf(site);
-            const host = new URL(site.origin).host;
-            // A place that is already in the list is not offered again: the worker refuses it twice.
-            const free = (value: string): boolean => {
-              const wanted = placeOf(value);
-
-              return wanted !== undefined && !places.some((each) => samePlace(each, wanted));
-            };
-            const offered = (teams ?? [])
-              .map((team) => ({
-                heading: team.name,
-                options: [
-                  { value: team.id, label: t('{team}, no project', { team: team.name }) },
-                  ...team.projects.map((project) => ({
-                    value: `${team.id}/${project.id}`,
-                    label: `${team.name} · ${project.name}`,
-                  })),
-                ].filter((option) => free(option.value)),
-              }))
-              .filter((group) => group.options.length > 0);
-
-            return (
-              <li key={site.id} className="rounded-md bg-chip px-3 py-2" data-site={host}>
-                <p className="text-sm font-semibold">{host}</p>
-                {places.length === 0 ? (
-                  <p className="text-xs text-muted">{t('Its notes stay in Fruitback, in this workspace.')}</p>
-                ) : null}
-                <ol className="mt-1 space-y-1">
-                  {places.map((each, index) => {
-                    const own = each.connector === connector.id;
-                    const rest = places.filter((_, position) => position !== index);
-
-                    return (
-                      <li key={`${each.connector}/${each.teamId}/${each.projectId}`} className="text-sm">
-                        <span className="flex items-center gap-2">
-                          <span className="min-w-0 flex-1 truncate">{nameOf(each)}</span>
-                          {index === 0 ? <Chip>{t('Default')}</Chip> : null}
-                        </span>
-                        {manages && own ? (
-                          <span className="-ml-3 flex flex-wrap">
-                            {index === 0 ? null : (
-                              <Button tone="quiet" disabled={writing} onClick={() => void place(site, [each, ...rest])}>
-                                {t('Make it the default')}
-                              </Button>
-                            )}
-                            <Button tone="quiet" disabled={writing} onClick={() => void place(site, rest)}>
-                              {t('Remove')}
-                            </Button>
-                          </span>
-                        ) : null}
-                      </li>
-                    );
-                  })}
-                </ol>
-                {manages && places.length < MAX_DESTINATIONS && offered.length > 0 ? (
-                  <div className="mt-2">
-                    <Choice
-                      label={t('Add a destination for {site}', { site: host })}
-                      labelHidden
-                      value={HERE}
-                      disabled={teams === undefined || writing}
-                      onChange={(value) => {
-                        const added = placeOf(value);
-                        if (value !== HERE && added !== undefined) void place(site, [...places, added]);
-                      }}
-                      options={[{ value: HERE, label: t('Add a destination…') }, ...offered]}
-                    />
-                  </div>
-                ) : null}
-                {manages && places.length >= MAX_DESTINATIONS ? (
-                  <p className="mt-1 text-xs text-muted">
-                    {t('A site sends to {count} places at most.', { count: MAX_DESTINATIONS })}
-                  </p>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
-        {(known(sites) ?? []).length === 0 ? null : (
-          <p className="mt-2 text-xs text-muted">
-            {t(
-              'A note goes to the default place. With two places or more, a member chooses one in the widget when they write.',
-            )}
-          </p>
-        )}
-        {/* A source with a reason says it above: this sentence is for a Linear that only did not answer. */}
-        {silent && connector.attention === undefined ? (
-          <div className="mt-3">
-            <Problem>
-              {t('Linear did not answer for this connection. Disconnect it, then connect Linear again.')}
-            </Problem>
-          </div>
-        ) : null}
-        {problem === undefined ? null : (
-          <div className="mt-3">
-            <Problem>{t(problem)}</Problem>
-          </div>
-        )}
-        {manages && connector.settings !== undefined ? (
-          <Settings key={connector.id} base={base} connector={{ ...connector, settings: connector.settings }} />
-        ) : null}
-      </div>
-      {manages ? (
-        <div className="border-t border-line px-5 py-3">
-          <Confirm
-            label={t('Disconnect')}
-            confirmLabel={t('Disconnect {source}', { source: sourceLine(connector) })}
-            consequence={t(
-              'Its sites keep their notes in the workspace again. The issues already in Linear stay there.',
-            )}
-            onConfirm={() => void disconnect()}
-            className="-ml-4"
-          />
-        </div>
-      ) : null}
-    </Card>
   );
 }

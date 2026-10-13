@@ -53,7 +53,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Not sent yet': 'Pas encore envoyée',
   'The new attempt was not started. Try again.': 'La nouvelle tentative n’a pas démarré. Réessayez.',
   'Sends to {host}': 'Envoie à {host}',
-  'Which sites send their notes there': 'Quels sites y envoient leurs notes',
   'Fruitback only': 'Fruitback seulement',
   'Fruitback, and this address': 'Fruitback, et cette adresse',
   'The request, and how to check its signature': 'La requête, et comment vérifier sa signature',
@@ -71,12 +70,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Linear n’a pas répondu pour cette connexion. Déconnectez-la, puis connectez Linear de nouveau.',
   'Linear was not connected: the consent was refused there.':
     'Linear n’a pas été connecté : le consentement y a été refusé.',
-  'Linear was not connected. Start again from « Connect with Linear ».':
-    'Linear n’a pas été connecté. Recommencez depuis « Connecter avec Linear ».',
   'Fruitback could not start the connection to Linear. Try again.':
     'Fruitback n’a pas pu démarrer la connexion à Linear. Réessayez.',
   'Going to Linear…': 'Direction Linear…',
-  'Connect with Linear': 'Connecter avec Linear',
   'Use an API key': 'Utiliser une clé d’API',
   'Workspace {name}': 'Workspace {name}',
   'Connected to the workspace {name}': 'Connecté au workspace {name}',
@@ -114,9 +110,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Delete {workspace}': 'Supprimer {workspace}',
 
   'An issue per note, in one repository.': 'Un ticket par note, dans un dépôt.',
-  'Issues in a Jira Cloud project.': 'Des tickets dans un projet Jira Cloud.',
-  'A card per note, in the list you choose.': 'Une carte par note, dans la liste que vous choisissez.',
-  'A row per note in a database.': 'Une ligne par note dans une base.',
   'POST each note to your own endpoint.': 'Chaque note envoyée en POST à votre propre adresse.',
   'Linear refused this key. Copy it again from Linear, in Settings, then Security and access.':
     'Linear a refusé cette clé. Copiez-la de nouveau depuis Linear, dans Settings, puis Security and access.',
@@ -130,10 +123,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Linear did not answer just now. Your key is not kept: try again in a minute.':
     'Linear n’a pas répondu. Votre clé n’est pas gardée : réessayez dans une minute.',
   Connectors: 'Connecteurs',
-  'Connect a source once. Every site of the workspace can then send its feedback there.':
-    'Connectez une source une fois. Chaque site du workspace peut ensuite y envoyer ses retours.',
   Connected: 'Connectées',
-  'The notes stay in this workspace': 'Les notes restent dans ce workspace',
   'Key of {person}': 'Clé de {person}',
   'Add a source': 'Ajouter une source',
   'An issue per note, in the team you choose.': 'Un ticket par note, dans l’équipe que vous choisissez.',
@@ -145,7 +135,6 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Checking…': 'Vérification…',
   Connect: 'Connecter',
   Cancel: 'Annuler',
-  Working: 'En service',
   'Needs attention': 'Action requise',
   'Linear refuses this connection since {when}, and the notes of its sites do not reach Linear. Disconnect it, then connect Linear again.':
     'Linear refuse cette connexion depuis {when}, et les notes de ses sites n’arrivent pas dans Linear. Déconnectez-la, puis connectez Linear de nouveau.',
@@ -158,11 +147,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The destination of this site did not change. Try again.': 'La destination de ce site n’a pas changé. Réessayez.',
   'This source is still connected. Try again.': 'Cette source est toujours connectée. Réessayez.',
   'Connected with the key of {person}': 'Connectée avec la clé de {person}',
-  'Where each site sends its notes': 'Où chaque site envoie ses notes',
   'This workspace has no site yet.': 'Ce workspace n’a pas encore de site.',
   'Another source': 'Une autre source',
   '{team}, no project': '{team}, sans projet',
-  Disconnect: 'Déconnecter',
 
   Owner: 'Propriétaire',
   Admin: 'Administrateur',
@@ -388,6 +375,26 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'The widget stops on {site}, and the script pasted there no longer works: adding the site again gives it a new script. The notes already in a tracker stay there.':
     'Le widget s’arrête sur {site}, et le script collé là ne marche plus : ajouter le site à nouveau lui donne un nouveau script. Les notes déjà dans un tracker y restent.',
   'Disconnect {source}': 'Déconnecter {source}',
+  'Connect a tracker once. Every site of {workspace} can then send its notes there.':
+    'Connectez un tracker une fois. Chaque site de {workspace} peut alors y envoyer ses notes.',
+  'No tracker yet. The notes stay in Fruitback.': 'Pas encore de tracker. Les notes restent dans Fruitback.',
+  '1 note did not arrive': '1 note n’est pas arrivée',
+  '{count} notes did not arrive': '{count} notes ne sont pas arrivées',
+  'An issue in a Jira Cloud project.': 'Une issue dans un projet Jira Cloud.',
+  'An issue in a project, cloud or self-managed.': 'Une issue dans un projet, cloud ou auto-hébergé.',
+  'A card in the list you choose.': 'Une carte dans la liste que vous choisissez.',
+  'A row in a database.': 'Une ligne dans une base de données.',
+  'Tells Slack or any address when a note arrives.':
+    'Prévient Slack ou n’importe quelle adresse quand une note arrive.',
+  'Linear was not connected. Start again from « Connect ».':
+    'Linear n’a pas été connecté. Recommencez depuis « Connecter ».',
+  'Sites sending here': 'Sites qui envoient ici',
+  'No site sends its notes here yet.': 'Aucun site n’envoie encore ses notes ici.',
+  'Other sites': 'Autres sites',
+  'Which Linear state gives each pin its status.': 'Quel état Linear donne son statut à chaque pin.',
+  'Status for {state}': 'Statut pour {state}',
+  'Fruitback could not read the states of Linear. The statuses you set are not lost.':
+    'Fruitback n’a pas pu lire les états de Linear. Les statuts que vous avez réglés ne sont pas perdus.',
   'Its sites keep their notes in the workspace again. The issues already in Linear stay there.':
     'Ses sites gardent de nouveau leurs notes dans le workspace. Les issues déjà dans Linear y restent.',
   'Cloud workspace': 'Workspace Cloud',
@@ -401,12 +408,9 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Closed: 'Fermé',
   'This setting did not change. Try again.': 'Ce réglage n’a pas changé. Réessayez.',
   'Status of the pins': 'État des pins',
-  'Which Linear state gives which colour on the page.': 'Quel état de Linear donne quelle couleur sur la page.',
   'The states appear here once a site sends its notes to a team.':
     'Les états apparaissent ici dès qu’un site envoie ses notes à une équipe.',
   'Show Linear comments as replies': 'Montrer les commentaires de Linear comme réponses',
-  'Fruitback could not read the states of Linear. The colours you set are not lost.':
-    'Fruitback n’a pas pu lire les états de Linear. Les couleurs que vous avez réglées ne sont pas perdues.',
   'The destinations of this site did not change. Try again.':
     'Les destinations de ce site n’ont pas changé. Réessayez.',
   'Its notes stay in Fruitback, in this workspace.': 'Ses notes restent dans Fruitback, dans ce workspace.',
