@@ -52,6 +52,23 @@ function dayOf(iso: string | undefined, year: boolean): string | undefined {
   });
 }
 
+/**
+ * « Last seen » (FRU-249, Q7): the worker keeps a day of UTC and no hour, so that a colleague does not
+ * learn when somebody works. « Today », « Yesterday », « 3 days ago » for the week, then the day.
+ */
+export function seenOn(day: string | undefined, now: number = Date.now()): string {
+  if (day === undefined) return t('Not seen yet');
+  const at = Date.parse(`${day}T00:00:00Z`);
+  if (Number.isNaN(at)) return day;
+  const today = Date.parse(`${new Date(now).toISOString().slice(0, 10)}T00:00:00Z`);
+  const days = Math.max(0, Math.round((today - at) / 86_400_000));
+  if (days === 0) return t('Today');
+  if (days === 1) return t('Yesterday');
+  if (days < 7) return t('{count} days ago', { count: days });
+
+  return new Date(at).toLocaleDateString(DAYS[locale()], { day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
 /** What a list is while it is read again: itself when it is shown, « loading » when it is not. */
 function whileRead<T>(current: Listed<T>): Listed<T> {
   return typeof current === 'string' ? 'loading' : current;
@@ -65,9 +82,11 @@ function whileRead<T>(current: Listed<T>): Listed<T> {
  * The lists come from the organization plugin of better-auth, through the worker. A guest reads only
  * their own row: the worker refuses them the list (FRU-149).
  *
- * Not here, because the worker of today cannot say them: when somebody was last seen (the last
- * column is the day they joined), and the one site of a guest (an invitation is for a member or an
- * admin, and « Sites » says every site, or the shared ones for a guest).
+ * The last column is « Last seen » for an owner or an admin, who alone read it (FRU-249), and the
+ * day somebody joined for the others. It is read with the members, so the table is drawn once with
+ * it: a column that filled in after the rows would widen and move « Remove » under a press.
+ *
+ * Not here: the one site of a guest (Q3, after the rest).
  */
 export default function Members() {
   useLocale();
@@ -76,6 +95,9 @@ export default function Members() {
   const reads = workspace.role !== 'guest';
   const [mailed, setMailed] = useState(false);
   const [members, setMembers] = useState<Listed<Member>>('loading');
+  // The day each account was last seen, by its id. `undefined`: not read, or refused; the column is
+  // then the day somebody joined.
+  const [seen, setSeen] = useState<Readonly<Record<string, string>> | undefined>();
   const [invitations, setInvitations] = useState<Listed<Invitation>>('loading');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<InvitedRole>('member');
@@ -93,13 +115,19 @@ export default function Members() {
     // table away for the time of the read: what is under it went up, then down again, and an
     // action of a row was not there to press. Only a list that is not shown says that it is read.
     setMembers(whileRead);
-    const listed = await call<{ members: Member[] }>('GET', `${base}/list-members?${query}`);
+    const [listed, days] = await Promise.all([
+      call<{ members: Member[] }>('GET', `${base}/list-members?${query}`),
+      manages
+        ? call<{ seen: Record<string, string> }>('GET', `/console/workspaces/${workspace.id}/members/seen`)
+        : undefined,
+    ]);
+    setSeen(days?.ok && typeof days.data?.seen === 'object' ? days.data.seen : undefined);
     setMembers(listedOf(listed, (data) => data.members));
     if (!manages) return;
     setInvitations(whileRead);
     const waiting = await call<Invitation[]>('GET', `${base}/list-invitations?${query}`);
     setInvitations(listedOf(waiting, (data) => data.filter((each) => each.status === 'pending')));
-  }, [base, query, reads, manages]);
+  }, [base, query, reads, manages, workspace.id]);
 
   useEffect(() => void read(), [read]);
 
@@ -262,13 +290,16 @@ export default function Members() {
               {/* A guest reads their own row, which the worker gives no day: no column for one. */}
               {reads ? (
                 <th scope="col" data-align="end">
-                  {t('Joined')}
+                  {seen === undefined ? t('Joined') : t('Last seen')}
                 </th>
               ) : null}
             </tr>
           </thead>
           <tbody>
             {people.map((member) => {
+              // « Last seen » for who reads it, else the day somebody joined.
+              const lastOf = (one: Member) =>
+                seen === undefined ? (dayOf(one.createdAt, true) ?? '') : seenOn(seen[one.userId]);
               const name = nameOf(member);
               const removes = manages && member.userId !== me.account.id;
 
@@ -279,7 +310,7 @@ export default function Members() {
                   name={member.userId === me.account.id ? t('{name} (you)', { name }) : name}
                   detail={member.user.email}
                   role={member.role}
-                  when={reads ? (dayOf(member.createdAt, true) ?? '') : undefined}
+                  when={reads ? lastOf(member) : undefined}
                   problem={stuck?.row === member.id ? stuck.problem : undefined}
                   {...(removes
                     ? {

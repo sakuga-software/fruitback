@@ -19,9 +19,9 @@ import {
  *
  * The values are read in the code of the mockup (`12-console-members.html`), and the boxes in its
  * render at 1440 px and at 390 px (a box is compared where the font is the one of the mockup). The
- * screen has what the worker of today gives: no list « Site » and no « Guest, one site » in the form,
- * and the last column is the day somebody joined, not when they were last seen. The worker is
- * answered by stubs.
+ * screen has no list « Site » and no « Guest, one site » in the form (Q3). The last column is
+ * « Last seen » for an owner or an admin, read from `…/members/seen` (FRU-249), and the day somebody
+ * joined for the others, or when that read gives nothing. The worker is answered by stubs.
  */
 const CONSOLE = 'http://localhost:5178';
 
@@ -79,6 +79,8 @@ type World = {
   locale?: 'en' | 'fr';
   members?: readonly unknown[];
   invitations?: readonly unknown[];
+  /** The answer of `…/members/seen`: the day of each account, refused, or held. Absent: no route. */
+  seen?: Record<string, string> | 'refused' | 'waits';
 };
 
 /** A workspace with the people above, for a role. The stub keeps what the console sent. */
@@ -98,6 +100,13 @@ async function workerWith(page: Page, world: World = {}): Promise<Worker> {
       if (worker.members === 'fails') return json({ error: 'unknown' }, 500);
 
       return json({ members });
+    }
+    if (pathname === '/console/workspaces/w1/members/seen' && world.seen !== undefined) {
+      worker.read.push('seen');
+      if (world.seen === 'waits') return new Promise<void>(() => {});
+      if (world.seen === 'refused') return json({ error: 'forbidden' }, 403);
+
+      return json({ seen: world.seen });
     }
     if (call === 'list-invitations') {
       worker.read.push(call);
@@ -856,4 +865,51 @@ test('every text of the screen is at 4.5:1 on what is behind it', async ({ page 
   expect
     .soft(contrast(await painted(asked.locator('p'), 'color'), rgb(SUBTLE)), 'what a gesture costs')
     .toBeGreaterThanOrEqual(4.5);
+});
+
+/** Noon of UTC: « Today » is the day of UTC the worker writes. */
+const NOON_UTC = new Date('2026-10-13T12:00:00.000Z');
+const SEEN = { a1: '2026-10-13', a2: '2026-10-12', a3: '2026-10-10' };
+
+test('an owner reads « Last seen »: a day, never an hour, and « Not seen yet »', async ({ page }) => {
+  await page.clock.setFixedTime(NOON_UTC);
+  const worker = await workerWith(page, { seen: SEEN });
+  await open(page);
+  const table = page.getByRole('region', { name: 'Members' });
+  await expect(table.locator('thead th')).toHaveText(['Person', 'Role', 'Sites', 'Last seen']);
+  const last = (name: string) => table.locator('tbody tr').filter({ hasText: name }).first().locator('td').last();
+  await expect(last('ana@acme.dev')).toContainText('Today');
+  await expect(last('tom@acme.dev')).toContainText('Yesterday');
+  await expect(last('nora@acme.dev')).toContainText('3 days ago');
+  // Nobody saw this one since « Last seen » came: the screen says so, and not a date.
+  await expect(last('ines@client.fr')).toContainText('Not seen yet');
+  // An invitation still says when it was sent.
+  await expect(last('paul@client.fr')).toContainText('Sent 3 Oct');
+  expect(worker.read).toContain('seen');
+});
+
+test('the table comes once, with « Last seen »: nothing of a row moves when the day arrives', async ({ page }) => {
+  await page.clock.setFixedTime(NOON_UTC);
+  await workerWith(page, { seen: 'waits' });
+  await open(page);
+  // The members are read, the days are not: the table waits for both.
+  await expect(page.locator('main').getByText('Loading…')).toBeVisible();
+  await page.waitForTimeout(300);
+  await expect(page.getByRole('region', { name: 'Members' })).toHaveCount(0);
+});
+
+test('a member reads the day somebody joined, and does not ask « Last seen »', async ({ page }) => {
+  const worker = await workerWith(page, { role: 'member', seen: SEEN });
+  await open(page);
+  const table = page.getByRole('region', { name: 'Members' });
+  await expect(table.locator('thead th')).toHaveText(['Person', 'Role', 'Sites', 'Joined']);
+  await expect(page.getByText('Today')).toHaveCount(0);
+  expect(worker.read).not.toContain('seen');
+});
+
+test('a « Last seen » the worker refuses leaves the day somebody joined', async ({ page }) => {
+  await workerWith(page, { seen: 'refused' });
+  await open(page);
+  const table = page.getByRole('region', { name: 'Members' });
+  await expect(table.locator('thead th')).toHaveText(['Person', 'Role', 'Sites', 'Joined']);
 });
