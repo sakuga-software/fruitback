@@ -1121,6 +1121,15 @@ when it is accepted`. An invitation waits 7 days; one address gets one invitatio
 - **A workspace is made by the plugin for somebody of the cookie**: `POST /console/workspaces`
   reads the name, then calls it in the process. Its route stays closed to a request: it takes a
   slug, a logo and metadata that nothing reads.
+- **A workspace is renamed by its owner or an admin** (FRU-236), by `POST /console/workspaces/<id>`
+  with a name, under the rule of the creation: one line, 1 to 80 characters. The role is read in
+  the store of the worker at the call, a member and a guest get `403`, somebody who is not of the
+  workspace `404`, and a call that does not carry the `Origin` of the console `403`, as on every
+  route of the console that changes something. The plugin writes the name, called in the process
+  with the name and nothing else, and reads the person and their role again; its own route
+  (`/organization/update`, which also takes a slug, a logo and metadata) stays closed. The id, the
+  sites, the members and the extensions that are paired do not move: they name the id.
+  test:`moves nothing else: the id, the sites, the members, and the extensions that are paired`.
 
 ### The picture of a note, taken by the extension (FRU-44)
 

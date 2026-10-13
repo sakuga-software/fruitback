@@ -512,3 +512,37 @@ export async function createWorkspaceWithPlugin(auth: Auth, headers: Headers, na
 
   return { id: made.id, name: made.name };
 }
+
+/**
+ * A new name for a workspace, written by the organization plugin (FRU-236): `POST
+ * /console/workspaces/<id>` calls this, and `/organization/update` stays closed to a request. That
+ * route also takes a slug, a logo and metadata, which a workspace does not have: the one field
+ * handed over here is the name.
+ *
+ * The caller validated the name, and read the role of the person in the store of the worker. The
+ * plugin reads the person of the cookie and their role again, in its own table, and refuses anybody
+ * who may not update the workspace: two readers, as on the routes of the members.
+ *
+ * It throws `AuthUnavailable` when better-auth does not write it: the caller answers `502`.
+ */
+export async function renameWorkspaceWithPlugin(
+  auth: Auth,
+  headers: Headers,
+  workspace: string,
+  name: string,
+): Promise<Workspace> {
+  const plugin = auth.api as unknown as {
+    updateOrganization(input: object): Promise<{ id?: unknown; name?: unknown } | null>;
+  };
+  let renamed: { id?: unknown; name?: unknown } | null;
+  try {
+    renamed = await plugin.updateOrganization({ body: { organizationId: workspace, data: { name } }, headers });
+  } catch (error) {
+    throw new AuthUnavailable(error instanceof Error ? error.message : String(error), { cause: error });
+  }
+  if (renamed?.id !== workspace || typeof renamed.name !== 'string') {
+    throw new AuthUnavailable('better-auth renamed a workspace and answered another one');
+  }
+
+  return { id: workspace, name: renamed.name };
+}

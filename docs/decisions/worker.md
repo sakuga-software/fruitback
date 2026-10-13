@@ -1668,6 +1668,17 @@ may change, and who », says what is protected; this section says how to change 
   of the cookie. The second does not use
   the plugin, whose deletion is off (`disableOrganizationDeletion`): it revokes the tokens of Linear
   first, and the foreign keys take the rest.
+- **A workspace is renamed by a route of the worker too** (FRU-236): `POST /console/workspaces/<id>`
+  `{ name }` answers `200 { id, name, role }`, for `manage-workspace` (owner, admin), with the rule
+  and the code of the creation (`invalid-name`). It calls `updateOrganization` of the plugin in the
+  process, with `{ organizationId, data: { name } }` and nothing else of the request. Opening
+  `/organization/update` under a rule of `ORGANIZATION_PATHS` was weighed and left: that route takes
+  `data` as an object of four fields, and the rule of a name (one line, 80 characters) is the
+  worker's, written once in `workspaceName`. Read in `routes/crud-org.mjs` of 1.7.7: the plugin
+  reads the session of the cookie, the member and the permission `organization: update`, which the
+  owner and the admin have; a refusal of the plugin there is a `502`, because the worker already
+  answered `403` and `404` from its own store. No name is unique, as at the creation. The worker
+  proposes no name: the console does.
 - **`endSessionsOf` holds every chain of the person before it ends them** (`session-postgres.ts`).
   Without the hold, a refresh in flight leaves a live successor:
   test:`fails on a real server with no hold on the chains of the person`.
