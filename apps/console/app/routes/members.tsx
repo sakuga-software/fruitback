@@ -1,6 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { type Invitation, type Member, ORGANIZATION, type Role, call, invitationLink, sendsMail } from '../api';
 import { Confirm } from '../confirm';
+import { INVITED, type Message, messageOf } from '../invitation-message';
 import { type Listed, edited, listedOf } from '../listed';
 import { DID_NOT_ANSWER, copyText, problemOf } from '../problems';
 import { Button, Card, Chip, Choice, Field, Initial, Problem } from '../ui';
@@ -119,7 +120,12 @@ export default function Members() {
       organizationId: workspace.id,
       invitationId: invitation.id,
     });
-    if (!cancelled.ok) return setStuck({ row: invitation.id, problem: problemOf(cancelled, {}, NOT_CHANGED) });
+    if (!cancelled.ok) {
+      // It was accepted, declined or cancelled in the meantime: the list is read again.
+      if (cancelled.error === 'INVITATION_NOT_FOUND') return void read();
+
+      return setStuck({ row: invitation.id, problem: problemOf(cancelled, {}, NOT_CHANGED) });
+    }
     setInvitations((current) => edited(current, (items) => items.filter((each) => each.id !== invitation.id)));
   }
 
@@ -227,27 +233,6 @@ export default function Members() {
  * What an invitation became, and the link to send by hand (FRU-104, decided on FRU-107): the link
  * opens nothing by itself, so a chat is as good as a message. With a mailer, the message went too.
  */
-/** What became of the message of an invitation that the worker kept. */
-type Message = 'sent' | 'no-mailer' | 'held';
-
-/**
- * `held`: the worker sends mail, and sent none for this one, because this workspace sent the address
- * three in fifteen minutes. The invitation is kept all the same, and its link is given by hand.
- */
-function messageOf(invitation: Invitation, mails: boolean): Message {
-  if (!mails) return 'no-mailer';
-
-  return invitation.mailed === false ? 'held' : 'sent';
-}
-
-const INVITED: Readonly<Record<Message, string>> = {
-  sent: msg('Invitation sent to {email}. You can also send them this link:'),
-  'no-mailer': msg('Invitation kept for {email}. Send them this link:'),
-  held: msg(
-    'Invitation kept for {email}, but no message was sent: this workspace sent that address three in fifteen minutes. Send them this link:',
-  ),
-};
-
 function Invited({ email, message }: { email: string; message: Message }) {
   useLocale();
   const [copied, setCopied] = useState<'no' | 'yes' | 'refused'>('no');

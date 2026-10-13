@@ -131,11 +131,12 @@ export function onSignedOut(listener: SignedOutListener): () => void {
 async function answer<T>(response: Response | undefined): Promise<Answer<T>> {
   if (response === undefined) return UNREACHABLE;
   if (response.status === 204) return { ok: true, data: undefined as T };
-  const body = (await response.json().catch(() => ({}))) as { error?: string } & T;
+  const body = (await response.json().catch(() => ({}))) as { error?: unknown; code?: unknown } & T;
+  // A refusal of the worker names itself in `error`, and one of better-auth in `code` (FRU-209):
+  // without the second, no sentence a screen holds for a code of better-auth was ever shown.
+  const named = [body.error, body.code].find((name) => typeof name === 'string') as string | undefined;
 
-  return response.ok
-    ? { ok: true, data: body }
-    : { ok: false, status: response.status, error: body.error ?? 'unknown' };
+  return response.ok ? { ok: true, data: body } : { ok: false, status: response.status, error: named ?? 'unknown' };
 }
 
 /**
