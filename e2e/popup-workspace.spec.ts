@@ -112,14 +112,17 @@ test('a site of the workspace: one click, then the switch, the notes of the page
   await expect(rows.nth(0)).toHaveText(/New\s*1/);
   await expect(rows.nth(4)).toHaveText(/Closed\s*0/);
   expectNear(await boxOf(popup.getByRole('switch')), { x: 304, y: 85, width: 40, height: 24 }, 'switch');
+  // A session of a pairing keeps its row under the actions, so their size is measured here, and
+  // their place on the screen of an account (`popup-new-site.spec.ts`).
+  await expect(popup.getByText(`Paired as ${NAME}`)).toBeVisible();
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Leave feedback' })),
-    { x: 16, y: 388, width: 328, height: 44 },
+    { x: 16, width: 328, height: 44 },
     'leave',
   );
   expectNear(
     await boxOf(popup.getByRole('button', { name: 'Show every note of the page' })),
-    { x: 16, y: 440, width: 328, height: 40 },
+    { x: 16, width: 328, height: 40 },
     'every note',
   );
   // The keyboard: the gear, the switch, then the two actions.

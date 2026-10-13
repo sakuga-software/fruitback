@@ -129,7 +129,9 @@ for (const language of ['en', 'fr'] as const) {
     await turnOn.click();
     await expect(offered.getByRole('switch')).toBeChecked();
     await expect(offered.getByRole('img', { name: new RegExp(NAME.replace(/[.+]/g, '\\$&')) })).toBeVisible();
-    await expectLaidOut(offered, 'site turned on', 4);
+    // The row of the pairing stays, with its log out.
+    await expect(offered.getByText(/^(Paired as|Appairé en tant que) /)).toBeVisible();
+    await expectLaidOut(offered, 'site turned on', 5);
   });
 }
 

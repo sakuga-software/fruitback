@@ -479,6 +479,8 @@ async function siteOfWorkspaceOn(
     onSettings: openSettings,
   });
   screen.querySelector('.popup-body')?.append(problem);
+  // A session of a pairing is not in the head as an account is: its row, and its log out, stay here.
+  if (paired !== undefined) screen.querySelector('.popup-body')?.append(...(await session(site)));
 
   return screen;
 }
