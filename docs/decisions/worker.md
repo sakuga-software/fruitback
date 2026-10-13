@@ -111,7 +111,10 @@ the limiter is `503 limiter-unavailable`, with the CORS headers the browser need
 `Kv` that stops below the limit answers the same** (FRU-67): the count of the links of an address,
 the counts of the invitations and the ticket of the way to Linear are below it, and a database can
 answer the first call of a request and not the second. `handleRequest` catches a `KvError` that
-nothing below caught; the cache, the batch and its memory still swallow theirs, as before. Three
+nothing below caught; the cache, the batch and its memory still swallow theirs, as before. **One
+caller answers for itself: the invitation.** better-auth has kept it when the counts are asked, so a
+`503` would say that nothing was done: no message goes out, and the answer says `mailed: false`, as
+when a window is full. Three
 consequences, all deliberate:
 
 - `/health` never touches the `Kv`, so a store that stops answering does not take the container out
