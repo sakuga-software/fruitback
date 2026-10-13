@@ -187,7 +187,7 @@ describe('the tabs of the list (FRU-259)', () => {
   const ids = (items: HTMLElement[]) => items.map((item) => item.dataset.fruitbackNote).join('');
 
   it('counts and shows what is left to do, what is done, and all of it', () => {
-    const { sidebar, root, items, tabs, tabNames } = mount(eight());
+    const { page, sidebar, root, items, tabs, tabNames } = mount(eight());
     sidebar.open();
 
     // New, to do and in progress are open; done and closed are done. Six and two make eight.
@@ -207,8 +207,11 @@ describe('the tabs of the list (FRU-259)', () => {
     assert.equal(panel.getAttribute('aria-labelledby'), tabs()[0]?.id);
     assert.equal(tabs()[0]?.getAttribute('aria-controls'), panel.id);
 
+    // From a row the next tab does not show: focus goes to the tab that was chosen, not to the cross.
+    items()[0]?.focus();
     tabs()[1]?.click();
     assert.equal(ids(items()), 'df');
+    assert.ok(deepActiveElement(page.document) === tabs()[1], 'focus did not go to the chosen tab');
     assert.equal(panel.getAttribute('aria-labelledby'), tabs()[1]?.id);
     assert.deepEqual(
       tabs().map((tab) => tab.getAttribute('aria-selected')),

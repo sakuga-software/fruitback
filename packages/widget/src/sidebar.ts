@@ -174,7 +174,9 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     button.dataset.fruitbackTab = name;
     button.setAttribute('role', 'tab');
     button.setAttribute('aria-controls', 'fruitback-sidebar-panel');
-    button.addEventListener('click', () => choose(name, false));
+    // Focus too: a click gives a button no focus in every browser, and the row that had it may be
+    // one the chosen tab does not show.
+    button.addEventListener('click', () => choose(name, true));
     tabs.set(name, button);
     tablist.append(button);
   }
@@ -352,7 +354,7 @@ export function createSidebar(options: SidebarOptions): Sidebar {
     }
   }
 
-  /** Another tab. From the keyboard, focus follows the choice: that is what the arrows are for. */
+  /** Another tab. Focus follows the choice: that is what the arrows are for, and a click says the same. */
   function choose(next: Tab, focus: boolean): void {
     tab = next;
     draw();
