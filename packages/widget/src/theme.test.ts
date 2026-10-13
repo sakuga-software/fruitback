@@ -151,7 +151,8 @@ describe('a foreground token is only ever used on the background it is named for
     }
 
     // Asserted, because a regex that silently matches nothing is a test that passes for free.
-    assert.ok(checked >= 5, `only ${checked} foreground uses found — the block regex stopped matching`);
+    // Four since FRU-252: the launch button keeps the foreground of the accent while a capture runs.
+    assert.ok(checked >= 4, `only ${checked} foreground uses found — the block regex stopped matching`);
     assert.deepEqual(wrong, []);
   });
 

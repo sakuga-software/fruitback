@@ -34,10 +34,19 @@ export function repliesNewestFirst(count: number): Reply[] {
 export type ConformanceSubject = {
   /** The `provider` of the store's entry in `STORE_SPECS`. */
   provider: string;
+  /** What tells two subjects of one provider apart: where the store runs. Absent: the provider. */
+  on?: string;
+  /** Why the whole suite cannot run here: the cases are reported as skipped, with the reason. */
+  skip?: string | false;
   /** Prepare an empty store and its double. Called before each case. */
-  open(): SeedStore;
+  open(): SeedStore | Promise<SeedStore>;
   /** Remove what `open`, `broken` or `unreachable` prepared. Called after each case. */
-  close(): void;
+  close(): void | Promise<void>;
+  /**
+   * Why a read that names no client does not get every seed of the page. Absent: it does, as on a
+   * worker that serves one site.
+   */
+  readWithNoClient?: string;
   /** The stage of a seed just written. Absent when the store picks it some other way. */
   writtenStage?: SeedStage;
   /** The most replies a read returns on one seed. A case writes more, and `docs/self-hosting.md` gives it. */
@@ -45,7 +54,7 @@ export type ConformanceSubject = {
   /** A client configuration that sends the client's seeds to another tenant than the worker's own. */
   otherTenant: ClientConfig | string;
   /** Give a stored seed a state that the store does not know. */
-  unknownState: ((created: CreatedIssue) => void) | string;
+  unknownState: ((created: CreatedIssue) => void | Promise<void>) | string;
   /**
    * Write the seed with the replies of `repliesNewestFirst(count)`. A store that writes its own replies
    * can write another number, but at least two, stored newest first.
@@ -116,168 +125,182 @@ async function assertStoreUnavailable(failing: SeedStore): Promise<void> {
 }
 
 export function describeStoreConformance(subject: ConformanceSubject): void {
-  describe(`the ${subject.provider} store keeps the SeedStore promises`, () => {
-    let store: SeedStore;
+  const where = subject.on === undefined ? '' : `, on ${subject.on}`;
 
-    beforeEach(() => {
-      store = subject.open();
-      assert.equal(store.name, subject.provider, 'the subject opened another store');
-    });
+  describe(
+    `the ${subject.provider} store keeps the SeedStore promises${where}`,
+    { skip: subject.skip ?? false },
+    () => {
+      let store: SeedStore;
 
-    afterEach(() => {
-      subject.close();
-      resetCacheState();
-    });
+      beforeEach(async () => {
+        store = await subject.open();
+        assert.equal(store.name, subject.provider, 'the subject opened another store');
+      });
 
-    const find = (url: string, clientId: string | undefined, policy = POLICY) =>
-      store.findForPage({ url, clientId }, undefined, policy);
+      afterEach(async () => {
+        await subject.close();
+        resetCacheState();
+      });
 
-    it('reads a written seed back as the same seed', async () => {
-      const seed = seedFor('sd_round_trip', PAGE, 'acme');
-      const created = await store.create(seed, undefined, POLICY);
+      const find = (url: string, clientId: string | undefined, policy = POLICY) =>
+        store.findForPage({ url, clientId }, undefined, policy);
 
-      const found = await find(PAGE, 'acme');
+      it('reads a written seed back as the same seed', async () => {
+        const seed = seedFor('sd_round_trip', PAGE, 'acme');
+        const created = await store.create(seed, undefined, POLICY);
 
-      assert.equal(found.length, 1);
-      assert.deepEqual(found[0]?.seed, seed);
-      assert.equal(found[0]?.id, created.id);
-      assert.equal(found[0]?.identifier, created.identifier);
-      const stage = found[0]?.stage;
-      assert.ok(
-        (store.stages ?? SEED_STAGES).some((declared) => declared === stage),
-        'a stage the store does not declare',
+        const found = await find(PAGE, 'acme');
+
+        assert.equal(found.length, 1);
+        assert.deepEqual(found[0]?.seed, seed);
+        assert.equal(found[0]?.id, created.id);
+        assert.equal(found[0]?.identifier, created.identifier);
+        const stage = found[0]?.stage;
+        assert.ok(
+          (store.stages ?? SEED_STAGES).some((declared) => declared === stage),
+          'a stage the store does not declare',
+        );
+        if (subject.writtenStage !== undefined) assert.equal(stage, subject.writtenStage);
+      });
+
+      it('keeps a page apart from the same page with a query string', async () => {
+        await store.create(seedFor('sd_page', PAGE, 'acme'), undefined, POLICY);
+        await store.create(seedFor('sd_page_with_query', PAGE_WITH_QUERY, 'acme'), undefined, POLICY);
+
+        const ids = async (url: string) => (await find(url, 'acme')).map((issue) => issue.seed.id);
+
+        assert.deepEqual(await ids(PAGE), ['sd_page']);
+        assert.deepEqual(await ids(PAGE_WITH_QUERY), ['sd_page_with_query']);
+      });
+
+      it('never gives one client the seeds of another, or a seed that names no client', async () => {
+        await store.create(seedFor('sd_acme', PAGE, 'acme'), undefined, POLICY);
+        await store.create(seedFor('sd_globex', PAGE, 'globex'), undefined, POLICY);
+        await store.create(seedFor('sd_nobody', PAGE, undefined), undefined, POLICY);
+
+        const ids = async (clientId: string) => (await find(PAGE, clientId)).map((issue) => issue.seed.id);
+
+        assert.deepEqual(await ids('acme'), ['sd_acme']);
+        assert.deepEqual(await ids('globex'), ['sd_globex']);
+      });
+
+      // Only a worker without FRUITBACK_CLIENTS accepts a read that names no client.
+      it(
+        'gives a read that names no client every seed on the page',
+        { skip: subject.readWithNoClient ?? false },
+        async () => {
+          await store.create(seedFor('sd_acme', PAGE, 'acme'), undefined, POLICY);
+          await store.create(seedFor('sd_nobody', PAGE, undefined), undefined, POLICY);
+          await store.create(seedFor('sd_elsewhere', PAGE_WITH_QUERY, 'acme'), undefined, POLICY);
+
+          const ids = (await find(PAGE, undefined)).map((issue) => issue.seed.id).sort();
+
+          assert.deepEqual(ids, ['sd_acme', 'sd_nobody']);
+        },
       );
-      if (subject.writtenStage !== undefined) assert.equal(stage, subject.writtenStage);
-    });
 
-    it('keeps a page apart from the same page with a query string', async () => {
-      await store.create(seedFor('sd_page', PAGE, 'acme'), undefined, POLICY);
-      await store.create(seedFor('sd_page_with_query', PAGE_WITH_QUERY, 'acme'), undefined, POLICY);
+      it(
+        'writes and reads a client in the tenant its configuration names',
+        { skip: skipReason(subject.otherTenant) },
+        async () => {
+          if (typeof subject.otherTenant === 'string') return;
+          const tenant = subject.otherTenant;
+          // The default tenant is written first, as on a worker that already served it: its labels
+          // exist, and a store that looks them up in the wrong tenant finds them.
+          await store.create(seedFor('sd_default_tenant', PAGE, 'acme'), undefined, POLICY);
+          await store.create(seedFor('sd_other_tenant', PAGE, 'acme'), tenant, POLICY);
 
-      const ids = async (url: string) => (await find(url, 'acme')).map((issue) => issue.seed.id);
+          const ids = async (client: typeof tenant | undefined) =>
+            (await store.findForPage({ url: PAGE, clientId: 'acme' }, client, POLICY)).map((issue) => issue.seed.id);
 
-      assert.deepEqual(await ids(PAGE), ['sd_page']);
-      assert.deepEqual(await ids(PAGE_WITH_QUERY), ['sd_page_with_query']);
-    });
-
-    it('never gives one client the seeds of another, or a seed that names no client', async () => {
-      await store.create(seedFor('sd_acme', PAGE, 'acme'), undefined, POLICY);
-      await store.create(seedFor('sd_globex', PAGE, 'globex'), undefined, POLICY);
-      await store.create(seedFor('sd_nobody', PAGE, undefined), undefined, POLICY);
-
-      const ids = async (clientId: string) => (await find(PAGE, clientId)).map((issue) => issue.seed.id);
-
-      assert.deepEqual(await ids('acme'), ['sd_acme']);
-      assert.deepEqual(await ids('globex'), ['sd_globex']);
-    });
-
-    // Only a worker without FRUITBACK_CLIENTS accepts a read that names no client.
-    it('gives a read that names no client every seed on the page', async () => {
-      await store.create(seedFor('sd_acme', PAGE, 'acme'), undefined, POLICY);
-      await store.create(seedFor('sd_nobody', PAGE, undefined), undefined, POLICY);
-      await store.create(seedFor('sd_elsewhere', PAGE_WITH_QUERY, 'acme'), undefined, POLICY);
-
-      const ids = (await find(PAGE, undefined)).map((issue) => issue.seed.id).sort();
-
-      assert.deepEqual(ids, ['sd_acme', 'sd_nobody']);
-    });
-
-    it(
-      'writes and reads a client in the tenant its configuration names',
-      { skip: skipReason(subject.otherTenant) },
-      async () => {
-        if (typeof subject.otherTenant === 'string') return;
-        const tenant = subject.otherTenant;
-        // The default tenant is written first, as on a worker that already served it: its labels
-        // exist, and a store that looks them up in the wrong tenant finds them.
-        await store.create(seedFor('sd_default_tenant', PAGE, 'acme'), undefined, POLICY);
-        await store.create(seedFor('sd_other_tenant', PAGE, 'acme'), tenant, POLICY);
-
-        const ids = async (client: typeof tenant | undefined) =>
-          (await store.findForPage({ url: PAGE, clientId: 'acme' }, client, POLICY)).map((issue) => issue.seed.id);
-
-        assert.deepEqual(await ids(tenant), ['sd_other_tenant']);
-        assert.deepEqual(await ids(undefined), ['sd_default_tenant']);
-        assert.notEqual(store.scope(tenant), store.scope(undefined));
-      },
-    );
-
-    it('draws a state it does not know at the default stage', { skip: skipReason(subject.unknownState) }, async () => {
-      const created = await store.create(seedFor('sd_unknown_state', PAGE, 'acme'), undefined, POLICY);
-      if (typeof subject.unknownState === 'function') subject.unknownState(created);
-
-      const found = await find(PAGE, 'acme');
-
-      assert.equal(found.length, 1);
-      assert.equal(found[0]?.stage, DEFAULT_SEED_STAGE);
-    });
-
-    it('returns the replies oldest first', async () => {
-      await subject.plantReplies(store, seedFor('sd_replies', PAGE, 'acme'), 2);
-
-      const times = (await find(PAGE, 'acme'))[0]?.comments?.map((comment) => comment.createdAt) ?? [];
-
-      assert.ok(times.length >= 2, 'the seed has fewer than two replies');
-      assert.deepEqual(times, [...times].sort());
-      assert.notEqual(times[0], times.at(-1));
-    });
-
-    it('leaves the replies out when the client hides them', async () => {
-      await subject.plantReplies(store, seedFor('sd_hidden_replies', PAGE, 'acme'), 2);
-
-      const [shown] = await find(PAGE, 'acme', POLICY);
-      const [hidden] = await find(PAGE, 'acme', QUIET);
-
-      assert.ok((shown?.comments?.length ?? 0) > 0, 'the seed has no replies to hide');
-      assert.ok(hidden !== undefined, 'the seed was not found');
-      assert.equal('comments' in hidden, false);
-    });
-
-    it('returns the newest replies up to its cap', { skip: skipReason(subject.replyCap) }, async () => {
-      if (typeof subject.replyCap !== 'number') return;
-      const cap = subject.replyCap;
-      await subject.plantReplies(store, seedFor('sd_long_thread', PAGE, 'acme'), cap + 2);
-
-      const bodies = (await find(PAGE, 'acme'))[0]?.comments?.map((comment) => comment.body) ?? [];
-
-      // The two oldest replies, at minutes 0 and 1, are the ones left out.
-      assert.deepEqual(
-        bodies,
-        Array.from({ length: cap }, (_, index) => `reply ${index + 2}`),
+          assert.deepEqual(await ids(tenant), ['sd_other_tenant']);
+          assert.deepEqual(await ids(undefined), ['sd_default_tenant']);
+          assert.notEqual(store.scope(tenant), store.scope(undefined));
+        },
       );
-    });
 
-    it('says empty when a seed has no replies', async () => {
-      await store.create(seedFor('sd_no_replies', PAGE, 'acme'), undefined, POLICY);
+      it(
+        'draws a state it does not know at the default stage',
+        { skip: skipReason(subject.unknownState) },
+        async () => {
+          const created = await store.create(seedFor('sd_unknown_state', PAGE, 'acme'), undefined, POLICY);
+          if (typeof subject.unknownState === 'function') await subject.unknownState(created);
 
-      const [shown] = await find(PAGE, 'acme', POLICY);
+          const found = await find(PAGE, 'acme');
 
-      assert.ok(shown !== undefined, 'the seed was not found');
-      assert.deepEqual(shown.comments, []);
-    });
+          assert.equal(found.length, 1);
+          assert.equal(found[0]?.stage, DEFAULT_SEED_STAGE);
+        },
+      );
 
-    it(
-      'reports a provider error as store-unavailable, never as a 500',
-      { skip: skipReason(subject.broken) },
-      async () => {
-        if (typeof subject.broken === 'function') await assertStoreUnavailable(subject.broken());
-      },
-    );
+      it('returns the replies oldest first', async () => {
+        await subject.plantReplies(store, seedFor('sd_replies', PAGE, 'acme'), 2);
 
-    it(
-      'reports an unreachable provider as store-unavailable, never as a 500',
-      { skip: skipReason(subject.unreachable) },
-      async () => {
-        if (typeof subject.unreachable === 'function') await assertStoreUnavailable(subject.unreachable());
-      },
-    );
+        const times = (await find(PAGE, 'acme'))[0]?.comments?.map((comment) => comment.createdAt) ?? [];
 
-    it(
-      'reports an answer it cannot read as store-unavailable, never as a 500',
-      { skip: skipReason(subject.garbled) },
-      async () => {
-        if (typeof subject.garbled === 'function') await assertStoreUnavailable(subject.garbled());
-      },
-    );
-  });
+        assert.ok(times.length >= 2, 'the seed has fewer than two replies');
+        assert.deepEqual(times, [...times].sort());
+        assert.notEqual(times[0], times.at(-1));
+      });
+
+      it('leaves the replies out when the client hides them', async () => {
+        await subject.plantReplies(store, seedFor('sd_hidden_replies', PAGE, 'acme'), 2);
+
+        const [shown] = await find(PAGE, 'acme', POLICY);
+        const [hidden] = await find(PAGE, 'acme', QUIET);
+
+        assert.ok((shown?.comments?.length ?? 0) > 0, 'the seed has no replies to hide');
+        assert.ok(hidden !== undefined, 'the seed was not found');
+        assert.equal('comments' in hidden, false);
+      });
+
+      it('returns the newest replies up to its cap', { skip: skipReason(subject.replyCap) }, async () => {
+        if (typeof subject.replyCap !== 'number') return;
+        const cap = subject.replyCap;
+        await subject.plantReplies(store, seedFor('sd_long_thread', PAGE, 'acme'), cap + 2);
+
+        const bodies = (await find(PAGE, 'acme'))[0]?.comments?.map((comment) => comment.body) ?? [];
+
+        // The two oldest replies, at minutes 0 and 1, are the ones left out.
+        assert.deepEqual(
+          bodies,
+          Array.from({ length: cap }, (_, index) => `reply ${index + 2}`),
+        );
+      });
+
+      it('says empty when a seed has no replies', async () => {
+        await store.create(seedFor('sd_no_replies', PAGE, 'acme'), undefined, POLICY);
+
+        const [shown] = await find(PAGE, 'acme', POLICY);
+
+        assert.ok(shown !== undefined, 'the seed was not found');
+        assert.deepEqual(shown.comments, []);
+      });
+
+      it(
+        'reports a provider error as store-unavailable, never as a 500',
+        { skip: skipReason(subject.broken) },
+        async () => {
+          if (typeof subject.broken === 'function') await assertStoreUnavailable(subject.broken());
+        },
+      );
+
+      it(
+        'reports an unreachable provider as store-unavailable, never as a 500',
+        { skip: skipReason(subject.unreachable) },
+        async () => {
+          if (typeof subject.unreachable === 'function') await assertStoreUnavailable(subject.unreachable());
+        },
+      );
+
+      it(
+        'reports an answer it cannot read as store-unavailable, never as a 500',
+        { skip: skipReason(subject.garbled) },
+        async () => {
+          if (typeof subject.garbled === 'function') await assertStoreUnavailable(subject.garbled());
+        },
+      );
+    },
+  );
 }

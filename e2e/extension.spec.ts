@@ -3,6 +3,7 @@ import path from 'node:path';
 import { type Page, expect, test as withoutExtension } from '@playwright/test';
 import {
   BUILT_EXTENSION,
+  PLAYGROUND_ORIGIN,
   addRule,
   mintPairing,
   mintPairingCode,
@@ -24,7 +25,13 @@ import { AUTHENTICATED_WORKER_ORIGIN } from './worker-sessions.ts';
  * The part of the extension API that a spec calls inside the service worker. The types of the whole
  * API belong to `apps/extension`, and the root does not depend on them.
  */
-declare const chrome: { storage: { local: { get(key: string): Promise<Record<string, unknown>> } } };
+declare const chrome: {
+  storage: {
+    local: { get(key: string): Promise<Record<string, unknown>> };
+    sync: { get(key: null): Promise<Record<string, unknown>>; set(items: Record<string, unknown>): Promise<void> };
+  };
+  scripting: { getRegisteredContentScripts(): Promise<{ matches?: string[] }[]> };
+};
 
 /**
  * The extension across its worlds (FRU-45): what a site gets with it, without it, and what its page
@@ -158,6 +165,63 @@ test('private mode: the same decision posted again keeps the open composer and i
   await expect(page.getByRole('button', { name: /Leave feedback/ })).toHaveCount(1);
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
+});
+
+/**
+ * The rules in the account of the browser (FRU-72), on the built extension. This Chromium has no
+ * account, so `storage.sync` stays on the machine: what is read here is what the extension writes
+ * there and takes from there, not the journey between two browsers.
+ */
+test('the rules go to the account of the browser only when the reviewer asks, and a rule that arrives has no access', async ({
+  extension,
+}) => {
+  const inAccount = (): Promise<string[]> =>
+    extension.worker.evaluate(async () => Object.keys(await chrome.storage.sync.get(null)).sort());
+  await addRule(extension, { mode: 'private', clientId: 'playground', endpoint: WORKER_ORIGIN });
+  const options = await extension.context.newPage();
+  await options.goto(`chrome-extension://${extension.id}/options.html`);
+  const box = options.getByLabel('Keep my rules in the account of this browser');
+
+  // Off by default: a rule was added, and nothing left this browser.
+  await expect(box).not.toBeChecked();
+  expect(await inAccount()).toEqual([]);
+
+  await box.check();
+  await expect.poll(inAccount).toEqual([`site:${PLAYGROUND_ORIGIN}`]);
+
+  // A rule of another browser arrives: it is listed, and it runs nowhere until access is granted here.
+  await extension.worker.evaluate(async () => {
+    await chrome.storage.sync.set({
+      'site:https://staging.elsewhere.example': {
+        mode: 'private',
+        endpoint: 'https://worker.elsewhere.example',
+        clientId: 'elsewhere',
+        enabled: true,
+      },
+    });
+  });
+  const arrived = options.locator('.rules li').filter({ hasText: 'https://staging.elsewhere.example' });
+  await expect(arrived).toContainText('No access in this browser');
+  await expect(arrived.getByRole('button', { name: 'Grant access' })).toBeVisible();
+  expect(
+    await extension.worker.evaluate(async () =>
+      (await chrome.scripting.getRegisteredContentScripts()).flatMap((script) => script.matches ?? []),
+    ),
+  ).not.toContain('https://staging.elsewhere.example/*');
+
+  // Removed here: removed from the account too.
+  await arrived.getByRole('button', { name: 'Remove' }).click();
+  await expect.poll(inAccount).toEqual([`site:${PLAYGROUND_ORIGIN}`]);
+
+  // Turned off: the next change stays here.
+  await box.uncheck();
+  await options
+    .locator('.rules li')
+    .filter({ hasText: PLAYGROUND_ORIGIN })
+    .getByRole('button', { name: 'Remove' })
+    .click();
+  await expect(options.locator('.rules li')).toHaveCount(0);
+  expect(await inAccount()).toEqual([`site:${PLAYGROUND_ORIGIN}`]);
 });
 
 /**

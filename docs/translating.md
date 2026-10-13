@@ -29,9 +29,9 @@ reader cannot tell two controls with one name apart.
 ## Right-to-left languages
 
 The direction comes from the language's likely script, so an Arabic, Hebrew or Persian catalog turns
-the widget right to left with nothing more to do. Point the arrow of `thread.link` the other way:
-`{identifier} ←`. The widget's layout follows the direction; the pins do not, because they sit on
-elements of the page.
+the widget right to left with nothing more to do. No message holds an arrow to turn: `thread.link`
+is the identifier alone since FRU-256. The widget's layout follows the direction; the pins do not,
+because they sit on elements of the page.
 
 ## The size of the bundle
 

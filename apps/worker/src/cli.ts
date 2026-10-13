@@ -7,7 +7,7 @@ import { CACHE_TTL_MS } from './cache.ts';
 import { pairingLink } from './pair-page.ts';
 import { createPgDatabase, readDatabaseUrl } from './postgres.ts';
 import { copySqliteFiles } from './postgres-stores.ts';
-import type { ForgetSelector, ForgottenSeed } from './store.ts';
+import type { ForgetSelector, ForgottenSeed, SeedStore } from './store.ts';
 
 /**
  * Minting a pairing code, as a command rather than a route (FRU-42).
@@ -278,7 +278,12 @@ function describe(which: ForgetSelector): { that: string; none: string; search: 
   };
 }
 
-export async function runForget(argv: readonly string[], env: WorkerEnv): Promise<ForgetOutcome> {
+export async function runForget(
+  argv: readonly string[],
+  env: WorkerEnv,
+  /** The store a test opened. Absent, the one of the environment. */
+  held?: SeedStore,
+): Promise<ForgetOutcome> {
   const parsed = parseForgetArgs(argv);
   if (!parsed.ok) return { ok: false, lines: [parsed.error] };
 
@@ -287,7 +292,7 @@ export async function runForget(argv: readonly string[], env: WorkerEnv): Promis
 
   const { which, dryRun } = parsed.args;
   const { that, none, search } = describe(which);
-  const store = config.config.store.create();
+  const store = held ?? config.config.store.create();
   if (store.forget === undefined) {
     const provider = config.config.store.provider;
 

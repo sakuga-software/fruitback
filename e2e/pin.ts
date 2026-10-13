@@ -113,6 +113,9 @@ export function status(page: Page): Locator {
   return page.locator('[data-fruitback-dev="status"]');
 }
 
+/** How far the frame of a pin stands off its element: the 4 px of the mock-up, as `overlay.ts` has it. */
+const FRAME_OUTSET = 4;
+
 /**
  * The assertion that matters: the pin is drawn over the element, not merely present.
  *
@@ -127,11 +130,12 @@ export async function expectPinOn(pin: Locator, element: Locator): Promise<void>
         const [pinBox, elementBox] = await Promise.all([pin.boundingBox(), element.boundingBox()]);
         if (pinBox === null || elementBox === null) return null;
 
+        // The frame stands `FRAME_OUTSET` off the element on every side (FRU-252).
         return Math.max(
-          Math.abs(pinBox.x - elementBox.x),
-          Math.abs(pinBox.y - elementBox.y),
-          Math.abs(pinBox.width - elementBox.width),
-          Math.abs(pinBox.height - elementBox.height),
+          Math.abs(pinBox.x - (elementBox.x - FRAME_OUTSET)),
+          Math.abs(pinBox.y - (elementBox.y - FRAME_OUTSET)),
+          Math.abs(pinBox.width - (elementBox.width + 2 * FRAME_OUTSET)),
+          Math.abs(pinBox.height - (elementBox.height + 2 * FRAME_OUTSET)),
         );
       },
       { message: 'the pin never settled on its element' },

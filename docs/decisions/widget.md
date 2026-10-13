@@ -184,6 +184,112 @@ initial` also undoes the browser's `display: none` on `<style>`, which then rend
 - FRU-35 changed **no colour**: every token holds the hexadecimal that was already there, and
   `e2e/overlay.spec.ts`'s computed-colour read is the proof. One shadow moved 4px, because the thread
   and the panel spelled the same intention two ways.
+- **FRU-233 changes most of them, on purpose.** FRU-35 moved the colours into tokens and changed
+  none. The mock-up of 2026-10-13 (« simpler flow », FRU-230) changes the palette: the warm stone
+  greys become a neutral zinc scale, and the five « fruit » colours of the stages become five plain
+  status colours. A site that already has the widget sees it at its next load: **every pin changes
+  colour**, and the greys of the popover, the thread, the list and the settings turn neutral. The
+  names of the stages (`seeded`, `green`, `ripening`, `ripe`, `composted`) are the contract and do
+  not change. The values are read in the CSS of the mock-up, never by eye:
+
+  | Token                         | Before              | After                     |
+  | ----------------------------- | ------------------- | ------------------------- |
+  | `color-text`                  | `#1c1917`           | `#18181b`                 |
+  | `color-text-muted`            | `#78716c`           | `#6b6b74`                 |
+  | `color-text-subtle`           | `#7a736e`           | `#52525b`                 |
+  | `color-surface-raised`        | `#fffdf9`           | `#fafafa`                 |
+  | `color-border`                | `#e7e5e4`           | `#e4e4e7`                 |
+  | `color-border-strong`         | `#8f8883`           | `#8a8a93`                 |
+  | `color-chip`                  | `#44403c`           | `#3f3f46`                 |
+  | `color-success`               | `#4e7d2a`           | `#15803d`                 |
+  | `color-warning`               | `#8d6e63`           | `#b45309` (not drawn)     |
+  | `stage-seeded`, new           | `#6a7950`           | `#dd2c27`                 |
+  | `stage-green`, to do          | `#56802e`           | `#2563eb`                 |
+  | `stage-ripening`, in progress | `#ac5f00`           | `#f59e0b`, written in ink |
+  | `stage-ripe`, done            | `#8c1d40`           | `#15803d`                 |
+  | `stage-composted`, closed     | `#8d6e63`           | `#64748b`                 |
+  | `shadow-sm`, `shadow-xl`      | tinted `28, 25, 23` | tinted `24, 24, 27`       |
+
+  New tokens, each a value of the mock-up that a screen of FRU-252 to FRU-259 paints:
+  `color-accent-strong` (`#b91c1c`), `color-surface-sunken` (`#f4f4f5`), `color-on-stage-ripening`
+  (`#18181b`), `color-ink`, `color-on-ink`, `color-on-ink-muted` (the banner of a capture),
+  `color-unplaced` (`#d97706`), `shadow-xs`, `radius-field` (8 px), `font-mono` and `ease-out`
+  (`cubic-bezier(0.16, 1, 0.3, 1)`). The popover arrives on that curve in 420 ms, where it had an
+  overshoot in 220 ms. A screen takes a value from a token, and no token is defined outside
+  `theme.ts`.
+  - **« In progress » is written dark.** White on the amber is 2.15:1, the ink is 8.25:1.
+    `onStageToken` gives a stage its foreground, and `color-on-stage` stays the white of the four
+    others, so a host that set that one token keeps it. test:`writes « in progress » dark on its
+amber, where white cannot be read (FRU-233)`.
+  - **The amber is 2.15:1 on white, under the 3:1 of a drawing, and it stays**: it is the colour
+    the mock-up gives that status. A status is never said by its colour alone: the list names it,
+    a thread names it, a pin carries a number. `contrast.test.ts` names that one pair, and fails
+    when it passes or when another one fails.
+  - **The mock-up draws no dark scheme. It is kept, and derived**: the same zinc scale from its
+    other end (`#18181b` surface, `#27272a` raised, `#f4f4f5` text, `#a1a1aa` muted), every pair
+    measured. The five stages keep their values there: each is 3.43:1 or more on the dark surface.
+    The red of the dark accent stays `#ec6a65`: the `#ec5b57` of the mock-up's dark rail is 4.40:1
+    on the raised surface, under what text needs. `prefers-contrast: more` is unchanged.
+  - **`color-warning` is not in the mock-up.** Its brown belonged to the stone palette. It is the
+    amber of the mock-up darkened until it holds as text, 5.02:1.
+  - `e2e/overlay.spec.ts` reads the five colours on five real pins, and the ink on the amber one.
+
+- **The pins, their frame and the dock have the measures of the mock-up** (FRU-252, screens 14 to
+  16). Read in its CSS, held by `e2e/overlay.spec.ts` and `e2e/host.spec.ts` on computed styles.
+  - **A pin carries the number of its note**: its place among the notes of the page, counted before
+    a stage is hidden, so hiding one gives no other note its number. `overlay.resolutions()` gives
+    the number, for the list. A note kept for later has none.
+  - **The number took the place of the `≈`** of a pin placed by position. One drop holds one mark,
+    and the number is what ties a pin to its line of the list. The dashed frame, the name of the pin
+    and the thread still say that the place is approximate.
+  - **The name of a pin is « Note 2, in progress: » and then the note.** The mock-up names it
+    « Note 2, in progress ». The note stays in the name: it is how a screen reader tells two pins
+    of one status apart, and how every spec finds a pin. The mock-up also writes « , open » in the
+    name of the open pin, beside `aria-expanded="true"`: the attribute alone is kept, or a screen
+    reader says it twice.
+  - **The frame stands 4 px off its element** on every side (`FRAME_OUTSET`), 2 px thick, 6 px of
+    corner: it draws around the element, not on it. The drop is outside the top-left corner, its
+    point on the inner corner of the frame. Open, the frame takes its colour at 12 %. The tint
+    under the pointer of FRU-158 is kept; the mock-up draws the open one only.
+  - **The dock**: 24 px from the corner, 10 px between two controls, each 44 px high, on every
+    screen and not on a touch screen only. The launch button takes the strong accent under the
+    pointer and while a capture runs. It has no `aria-pressed` yet: it changes its words then, and
+    a switch that changes its name says two things at once. The state comes with the banner of
+    FRU-258, when the name stays. Its drop is
+    the mark, 12 by 15 px (`mark` in `icons.ts`), not the pin.
+  - **Kept, though the mock-up does not draw it**: the button of the list, left of the gear, in
+    its shape (the script alone has no other way to the list); the gear of Phosphor, at the 18 px
+    of the mock-up, whose own gear is another drawing; and the name of the gear, « Open Fruitback
+    settings »: the mock-up names it « Fruitback settings », which is the name of the dialog it
+    opens, and two controls with one name cannot be told apart (`docs/translating.md`).
+
+- **The bubble of a note has the measures of the mock-up** (FRU-256, screen 14). Read in its CSS,
+  held by `e2e/thread.spec.ts` on computed styles.
+  - **Three parts, each behind a rule**: a head (the drop and the word of the status, the way out
+    to the store, the cross), the note (its text, who and when, the component), the replies. 360 px
+    wide, 14 px of corner, no border and no coloured top: the shadow is the edge, and the colour of
+    the status is the drop beside its word.
+  - **It opens beside the frame**: 26 px past its end edge and 32 px above its top (30 and 36 px
+    from the element), which is where the mock-up puts it. When the window has no room there, it opens under the pin as before, or
+    above it. That is every phone: the mock-up draws no phone, and the bubble keeps the place it
+    had, at the width the window leaves.
+  - **The component and the file are shown**, « HeroBanner · src/components/Hero.tsx:42 », from the
+    `source` the note already carries. Only the copied text said it before. A note with none has no
+    line.
+  - **The dialog is named « Note 2 »**, the number of its drop, and the cross « Close the note ».
+  - **The link is the identifier alone, « ACM-142 »**, where the mock-up writes « ACM-142 in
+    Linear ». The widget does not know which store is behind the worker (FRU-31), and the worker
+    does not say its name: saying it is a new field of a public response, which is not this
+    change. The arrow went with the move to the head.
+  - **« Camille Durand · 2 days ago », not « · guest »**, and « Léa · yesterday », not
+    « · Sakuga »: a read gives the name of who wrote, not the role nor the workspace. Same reason.
+  - **Nothing to answer with.** The field « Reply to Camille » of the mock-up waits for a
+    decision (who may answer from a page, and as whom).
+  - **Kept, though the mock-up does not draw it**: « No reply yet. », which is not the same as
+    saying nothing; the two sentences about an approximate place, under the byline; the replies
+    capped at 180 px with a scroll a keyboard can reach (FRU-154), 10 px apart; a note kept for
+    later, whose head says « Not sent yet » behind a grey drop, with no link; the dark scheme; and
+    an outline in forced colours, where a shadow is not drawn.
 
 ## The popover
 
@@ -595,8 +701,9 @@ with no context and no instruction added.
   the dock, the panel and the drawer must be at the inline end. `e2e/direction.spec.ts` mounts the
   built widget in Arabic and checks in a browser that the dock and the popover move and the pin stays
   on its element.
-- **The link's arrow is a message** (`thread.link`), because a right-to-left catalog points it the
-  other way.
+- **The link of a thread is a message** (`thread.link`), though it is the identifier alone since
+  FRU-256: a language may need a word around it. It held an arrow before, which a right-to-left
+  catalog pointed the other way.
 - **Each bundled catalog weighs on the size guard.** If the list grows, catalogs load on demand; the
   guard is not widened.
 
@@ -732,13 +839,13 @@ nothing for the frame around the element.
 
 **Contrast**, measured with the WCAG 2.2 formula on the default tokens:
 
-| Pair                                        | Where                          | Light        | Dark |
-| ------------------------------------------- | ------------------------------ | ------------ | ---- |
-| `on-accent` on `accent`                     | launch and send labels         | 4.23         | 4.23 |
-| `accent` on `surface-raised`                | failed status                  | 4.16         | 3.73 |
-| `accent` on `surface`                       | thread and detached-note links | 4.23         | 4.14 |
-| `warning` on `surface`                      | approximate-position warning   | 4.62         | 3.78 |
-| `on-stage` on seeded, green, ripening, ripe | the `≈` on an approximate pin  | 2.28 to 4.23 | same |
+| Pair                                        | Where                         | Light        | Dark |
+| ------------------------------------------- | ----------------------------- | ------------ | ---- |
+| `on-accent` on `accent`                     | launch and send labels        | 4.23         | 4.23 |
+| `accent` on `surface-raised`                | failed status                 | 4.16         | 3.73 |
+| `accent` on `surface`                       | detached-note links           | 4.23         | 4.14 |
+| `warning` on `surface`                      | approximate-position warning  | 4.62         | 3.78 |
+| `on-stage` on seeded, green, ripening, ripe | the `≈` on an approximate pin | 2.28 to 4.23 | same |
 
 Text needs 4.5:1. Three values changed, because the old ones failed and nothing else paints with them:
 
@@ -804,8 +911,8 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   `#1c1917` on it: 5.68 as a label, 5.12 as a link on the raised surface. The warning has the same
   two roles and takes `#a88a7e` with dark text, 5.50 both ways.
 - **The stage colours do not change in the dark scheme, but one.** A pin sits on the page of the host, whose
-  colour follows nothing here. The stage colour is also the mark of a detached note and the top
-  border of a thread, on the surface: a drawing, which needs 3:1, and measures 3.27 at least on the
+  colour follows nothing here. The stage colour is also the mark of a detached note and the drop in
+  the head of a thread (its top border until FRU-256), on the surface: a drawing, which needs 3:1, and measures 3.27 at least on the
   dark surface. `contrast.test.ts` holds that pair now; it did not before.
 - **Axe found a defect in this very change.** While capturing, the launch button takes the chip as
   its background and kept the foreground of the accent. Both were white, so nothing showed. With a
