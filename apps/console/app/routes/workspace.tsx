@@ -58,13 +58,20 @@ export default function WorkspaceFrame() {
     });
   }, [id, navigate]);
 
-  if (context === undefined) return <p className="p-8 text-sm text-muted">{t('Loading…')}</p>;
+  // WARNING: the context of another workspace is not shown. After a change of workspace the address
+  // names the new one at once, and the answer of the worker comes later: a screen drawn in between
+  // would read, and write, in the workspace of before.
+  if (context === undefined || context.workspace.id !== id)
+    return <p className="p-8 text-sm text-muted">{t('Loading…')}</p>;
 
   const sections = SECTIONS.filter((section) => section.built);
   const current = sections.find((section) => pathname.startsWith(`/w/${context.workspace.id}/${section.path}`));
 
   return (
-    <div className="flex min-h-screen flex-wrap bg-page text-ink">
+    // Under 888 px the rail is above the section (248 + 640). `content-start` keeps it at its own
+    // height there: the screen is at least as high as the window, and a short section left the rest
+    // of that height to the rail, as the mockup does at 390 px (286 px of rail on « did not load »).
+    <div className="flex min-h-screen flex-wrap bg-page text-ink max-[887px]:content-start">
       <Rail
         workspace={context.workspace}
         workspaces={context.me.workspaces}
