@@ -108,6 +108,21 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   `e2e/console-kit.spec.ts` reads there what the browser computes (colour, border, corner, height,
   type) against the mockup, each state under the pointer, under a press and with focus, 4.5:1 for
   every text on what is behind it, and axe. A build has no `/kit` (`kit-route.test.ts`).
+- **The frame of a workspace is the rail of the mockup** (FRU-234, `routes/workspace.tsx`): the
+  workspace, its sections as links with `aria-current="page"` on the one on screen, and the way to
+  the documentation. **The rail shows a section only when its screen exists**: `SECTIONS` lists the
+  five of the mockup in its order, each with `built` and the widest its screen is drawn, and
+  `frame.test.ts` holds `built` to the routes of a build, so no entry leads nowhere. « Notes » is
+  there with `built: false`; `/kit/frame`, a page of the development server, mounts the rail with
+  the five. **The name of the workspace opens a menu only when the person has several workspaces**:
+  with one it is no button, and draws no chevrons. **At 900 px and under the sections are one row
+  that scrolls in the rail, and the page never scrolls sideways**: the mockup does at 390 px (its
+  document is 547 px wide). An edge of the row that hides a section fades, and the section on
+  screen or with focus is scrolled into view: measured in Chromium, focus alone does not scroll a
+  row to a link that is half hidden. `e2e/console-frame.spec.ts` reads the values and the boxes of
+  the mockup, at 1440 and 390 px, the menu, the keyboard and axe. **Not copied from the mockup**:
+  a link of the rail under the pointer is white, where the mockup turns every link `#b91c1c`
+  (2.6:1 on the rail); « Help and docs » opens in another tab, so a screen keeps what is typed in it.
 - **What the kit does not copy from the mockup.** The padding of a button is of its size, where the
   mockup writes 22, 24 or 26 px on the same pill. A switch changes colour in 200 ms everywhere,
   where the mockup does so in the popup only. A disabled switch dims its control and not its words.
