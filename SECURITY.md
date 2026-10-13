@@ -620,8 +620,15 @@ it`. The value of the row is the address it was sent to.
   does not keep out a page of the same site, and `demo.fruitback.com` is one. The routes under
   `/console/` refuse a request with the cookie from another origin (`403`), and a request with the
   cookie and no `Origin` that is not a read (`403 origin-not-allowed`): test:`refuses a change with
-the cookie from another origin, or from none, and takes it from the console`. better-auth refuses
-  the same two requests on its own routes. No call opens these routes with a token in
+the cookie from another origin, or from none, and takes it from the console`. **The routes of
+  better-auth are under the same rule, applied by the worker before better-auth reads the request**
+  (FRU-212): a call that is not a read answers `403 origin-not-allowed` unless its `Origin` is the
+  console. better-auth 1.7.7 alone takes a `Referer` in place of an `Origin` that is missing, and
+  checks nothing when the request has no cookie. No route is excepted: GitHub and Google come
+  back by a `GET`, and a provider that comes back by a form would need its route named.
+  test:`lists every served route that is not only read` names those routes, and one case for each
+  refuses it with no `Origin`, with the `Referer` of the console, and with the `Referer` of the
+  worker. No call opens these routes with a token in
   `Authorization` (FRU-150).
 - **A tab of the console sends nothing for another account than the one it was drawn for**
   (FRU-210). The cookie is of the browser, so a second person who signs in in another tab changes
