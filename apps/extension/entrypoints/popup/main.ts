@@ -441,7 +441,17 @@ function offered(origin: string, offer: Offer, account: Account | undefined): HT
  * now; none, and the popup says who can.
  */
 async function siteOfNoWorkspace(origin: string, account: Account | undefined): Promise<HTMLElement> {
-  const workspaces = CLOUD === undefined ? [] : ((await addableWorkspaces(CLOUD, cloudSeams())) ?? []);
+  const listed = CLOUD === undefined ? [] : await addableWorkspaces(CLOUD, cloudSeams());
+  // Fruitback said nothing: that is an outage, not « ask an admin ».
+  if (listed === undefined) {
+    return signInProblem(document, {
+      origin,
+      problem: 'unavailable',
+      onSignIn: () => void render(),
+      onSettings: openSettings,
+    });
+  }
+  const workspaces = listed;
   const problem = element('p', '', 'problem');
   const add = (id: string): void => {
     const workspace = workspaces.find((each) => each.id === id);

@@ -141,6 +141,19 @@ test('a site of no workspace: added to one and turned on, in one click (08)', as
   // 07: on, in Northwind. The site was asked for with the token, as one of the workspace chosen.
   await expect(popup.getByRole('switch', { name: 'Fruitback on localhost:5177' })).toBeChecked();
   await expect(popup.getByText('On · Northwind')).toBeVisible();
+  // Screen 07 of an account, against the mock-up: the switch and the two actions where it has them.
+  await popup.setViewportSize({ width: 360, height: 540 });
+  expectNear(await boxOf(popup.getByRole('switch')), { x: 304, y: 85, width: 40, height: 24 }, 'switch');
+  expectNear(
+    await boxOf(popup.getByRole('button', { name: 'Leave feedback' })),
+    { x: 16, y: 388, width: 328, height: 44 },
+    'leave',
+  );
+  expectNear(
+    await boxOf(popup.getByRole('button', { name: 'Show every note of the page' })),
+    { x: 16, y: 440, width: 328, height: 40 },
+    'every note',
+  );
   expect(posted).toEqual([
     { body: { workspace: 'ws_2', origin: PLAYGROUND_ORIGIN }, authorization: 'Bearer add-access' },
   ]);
@@ -169,6 +182,32 @@ test('a site of no workspace, for an account that may add none: who can, and no 
   await expect(popup.getByRole('button', { name: /^Add to/ })).toHaveCount(0);
   await clean(popup, 'the popup on a site of no workspace, without the right to add one');
   expect(posted).toEqual([]);
+});
+
+test('a Fruitback that does not answer is said, not read as « ask an admin »', async ({ extension }) => {
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'popup-new-site-down');
+  let down = false;
+  await extension.context.route(`${CLOUD}/session/sites`, (route) =>
+    down
+      ? route.abort('connectionrefused')
+      : route.fulfill({
+          json: {
+            account: true,
+            workspaces: [{ id: 'ws_1', name: 'Sakuga', role: 'owner', canAddSite: true }],
+            sites: [],
+          },
+        }),
+  );
+  await signedIn(extension, page, 'req_add_4');
+  down = true;
+
+  const popup = await openPopup(extension, page);
+  await expect(popup.getByRole('heading', { level: 1, name: 'Fruitback did not answer.' })).toBeVisible();
+  await expect(popup.getByText('Ask an admin of your workspace to add this site.')).toHaveCount(0);
+  down = false;
+  await popup.getByRole('button', { name: 'Try again' }).click();
+  await expect(popup.getByRole('button', { name: 'Add to Sakuga and turn on' })).toBeVisible();
 });
 
 test('a site of no workspace speaks French, with one workspace and its name in the button', async ({ extension }) => {
