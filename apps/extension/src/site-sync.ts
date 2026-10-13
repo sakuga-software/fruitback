@@ -129,6 +129,20 @@ export function createSiteSync({ enabled, known, readLocal, area, apply }: SiteS
     return next;
   };
 
+  /**
+   * A merge and a change that arrives run one after the other: each one decides on what it read, and
+   * the other would write between its reading and its writes (raised in review). `stored` is not in
+   * this line: it runs inside the one writer of the map, which a merge waits on, so the two would
+   * wait on each other. A merge reads again before it removes or sends, for that reason.
+   */
+  let line: Promise<void> = Promise.resolve();
+  const inLine = (work: () => Promise<void>): Promise<void> => {
+    const next = line.then(work);
+    line = next.catch(() => undefined);
+
+    return next;
+  };
+
   return {
     /** A change that the one writer just stored. Sent to `sync` unless it came from there. */
     async stored(mutation: SiteMutation): Promise<void> {
@@ -168,33 +182,8 @@ export function createSiteSync({ enabled, known, readLocal, area, apply }: SiteS
     },
 
     /** What `storage.onChanged` says of the `sync` area: applied here, rule by rule. */
-    async changed(changes: Record<string, { newValue?: unknown }>): Promise<void> {
-      if (!(await enabled())) return;
-      const local = await readLocal();
-      const entries: Record<string, SiteConfig> = {};
-
-      for (const [key, change] of Object.entries(changes)) {
-        const pattern = patternOf(key);
-        if (pattern === undefined) continue;
-
-        if (change.newValue === undefined) {
-          await remember([], [pattern]);
-          if (local[pattern] === undefined) continue;
-          const mutation: SiteMutation = { kind: 'remove', pattern };
-          arrived.add(mutation);
-          await apply(mutation);
-          continue;
-        }
-        const site = parseSite(change.newValue);
-        // The same rule is here already: nothing to write, and nothing that would echo.
-        if (site !== undefined && !same(local[pattern], site)) entries[pattern] = site;
-      }
-
-      if (Object.keys(entries).length === 0) return;
-      const mutation: SiteMutation = { kind: 'write', entries };
-      arrived.add(mutation);
-      await apply(mutation);
-      await remember(Object.keys(entries));
+    changed(changes: Record<string, { newValue?: unknown }>): Promise<void> {
+      return inLine(() => takeChanges(changes));
     },
 
     /**
@@ -202,49 +191,91 @@ export function createSiteSync({ enabled, known, readLocal, area, apply }: SiteS
      * then it was removed on one side while the other was closed, or while its copy failed, and the
      * removal is what is carried. A rule of both stays as it is on each.
      */
-    async merge(): Promise<void> {
-      if (!(await enabled())) return;
-      const [local, remote, before] = [await readLocal(), rulesIn(await area.get()), new Set(await known.read())];
-      const valid = (pattern: string): boolean => parseSitePattern(pattern) === pattern;
+    merge(): Promise<void> {
+      return inLine(mergeNow);
+    },
+  };
 
-      // In the account, not here.
-      const takeHere: Record<string, SiteConfig> = {};
-      const removeThere: string[] = [];
-      for (const [pattern, site] of Object.entries(remote)) {
-        if (local[pattern] !== undefined) continue;
-        if (before.has(pattern)) removeThere.push(pattern);
-        else takeHere[pattern] = site;
-      }
-      // Here, not in the account.
-      const sendThere: Record<string, SiteConfig> = {};
-      const removeHere: string[] = [];
-      for (const [pattern, site] of Object.entries(local)) {
-        if (!valid(pattern) || remote[pattern] !== undefined) continue;
-        if (before.has(pattern)) removeHere.push(pattern);
-        else sendThere[pattern] = site;
-      }
+  async function takeChanges(changes: Record<string, { newValue?: unknown }>): Promise<void> {
+    if (!(await enabled())) return;
+    const local = await readLocal();
+    const entries: Record<string, SiteConfig> = {};
 
-      if (Object.keys(takeHere).length > 0) {
-        const mutation: SiteMutation = { kind: 'write', entries: takeHere };
-        arrived.add(mutation);
-        await apply(mutation);
-      }
-      for (const pattern of removeHere) {
+    for (const [key, change] of Object.entries(changes)) {
+      const pattern = patternOf(key);
+      if (pattern === undefined) continue;
+
+      if (change.newValue === undefined) {
+        await remember([], [pattern]);
+        if (local[pattern] === undefined) continue;
         const mutation: SiteMutation = { kind: 'remove', pattern };
         arrived.add(mutation);
         await apply(mutation);
+        continue;
       }
-      if (removeThere.length > 0) await area.remove(removeThere.map(syncKeyOf));
-      if (Object.keys(sendThere).length > 0) {
-        await area.set(
-          Object.fromEntries(Object.entries(sendThere).map(([pattern, site]) => [syncKeyOf(pattern), site])),
-        );
-      }
+      const site = parseSite(change.newValue);
+      // The same rule is here already: nothing to write, and nothing that would echo.
+      if (site !== undefined && !same(local[pattern], site)) entries[pattern] = site;
+    }
 
-      const inBoth = [...Object.keys(remote), ...Object.keys(sendThere)].filter(
-        (pattern) => !removeThere.includes(pattern),
-      );
-      await remember(inBoth, [...removeThere, ...removeHere]);
-    },
-  };
+    if (Object.keys(entries).length === 0) return;
+    const mutation: SiteMutation = { kind: 'write', entries };
+    arrived.add(mutation);
+    await apply(mutation);
+    await remember(Object.keys(entries));
+  }
+
+  async function mergeNow(): Promise<void> {
+    if (!(await enabled())) return;
+    const [local, remote, before] = [await readLocal(), rulesIn(await area.get()), new Set(await known.read())];
+    const valid = (pattern: string): boolean => parseSitePattern(pattern) === pattern;
+
+    // In the account, not here.
+    const takeHere: Record<string, SiteConfig> = {};
+    const removeThere: string[] = [];
+    for (const [pattern, site] of Object.entries(remote)) {
+      if (local[pattern] !== undefined) continue;
+      if (before.has(pattern)) removeThere.push(pattern);
+      else takeHere[pattern] = site;
+    }
+    // Here, not in the account.
+    const sendThere: Record<string, SiteConfig> = {};
+    const removeHere: string[] = [];
+    for (const [pattern, site] of Object.entries(local)) {
+      if (!valid(pattern) || remote[pattern] !== undefined) continue;
+      if (before.has(pattern)) removeHere.push(pattern);
+      else sendThere[pattern] = site;
+    }
+
+    if (Object.keys(takeHere).length > 0) {
+      const mutation: SiteMutation = { kind: 'write', entries: takeHere };
+      arrived.add(mutation);
+      await apply(mutation);
+    }
+    // The reviewer may have changed a rule here since the reading above, and its copy is in the
+    // account already. What removes or sends is decided again on what both sides hold now.
+    const [localNow, remoteNow] = [await readLocal(), rulesIn(await area.get())];
+    const goneHere = removeHere.filter(
+      (pattern) => localNow[pattern] !== undefined && remoteNow[pattern] === undefined,
+    );
+    const goneThere = removeThere.filter((pattern) => localNow[pattern] === undefined);
+    const sent: Record<string, SiteConfig> = {};
+    for (const pattern of Object.keys(sendThere)) {
+      const site = localNow[pattern];
+      if (site !== undefined) sent[pattern] = site;
+    }
+
+    for (const pattern of goneHere) {
+      const mutation: SiteMutation = { kind: 'remove', pattern };
+      arrived.add(mutation);
+      await apply(mutation);
+    }
+    if (goneThere.length > 0) await area.remove(goneThere.map(syncKeyOf));
+    if (Object.keys(sent).length > 0) {
+      await area.set(Object.fromEntries(Object.entries(sent).map(([pattern, site]) => [syncKeyOf(pattern), site])));
+    }
+
+    const inBoth = [...Object.keys(remoteNow), ...Object.keys(sent)].filter((pattern) => !goneThere.includes(pattern));
+    await remember(inBoth, [...goneThere, ...goneHere]);
+  }
 }

@@ -295,6 +295,64 @@ describe('the rules of a reviewer in two browsers (FRU-72)', () => {
     assert.deepEqual(here.self.known, []);
   });
 
+  // Raised in review: a merge decided on what it read at its start. A rule that the reviewer put back
+  // here while the merge waited was removed from the account, as one that was removed here.
+  it('does not remove from the account a rule that came back here while the merge waited', async () => {
+    const shared = account();
+    const here = browserOn(shared);
+    shared.items['site:https://acme.dev'] = ACME;
+    here.self.known = ['https://acme.dev'];
+    const area = shared.areaOf(here.self);
+    let release = (): void => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const slow = createSiteSync({
+      enabled: async () => true,
+      known: {
+        read: async () => (await held, here.self.known),
+        write: async (patterns) => void (here.self.known = patterns),
+      },
+      readLocal: async () => here.self.map,
+      area,
+      apply: async () => {},
+    });
+
+    const merging = slow.merge();
+    await new Promise((resolve) => setImmediate(resolve));
+    here.self.map = { 'https://acme.dev': ACME };
+    release();
+    await merging;
+
+    assert.deepEqual(shared.items, { 'site:https://acme.dev': ACME });
+    assert.deepEqual(here.self.known, ['https://acme.dev']);
+  });
+
+  // Raised in review: a change that arrives during a merge was applied between the reading of the
+  // merge and its writes. The two run one after the other.
+  it('applies a change that arrives during a merge after the merge, not inside it', async () => {
+    const shared = account();
+    const here = browserOn(shared, { 'https://acme.dev': ACME });
+    const area = shared.areaOf(here.self);
+    let release = (): void => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const order: string[] = [];
+    const slow = createSiteSync({
+      enabled: async () => true,
+      known: { read: async () => here.self.known, write: async (patterns) => void (here.self.known = patterns) },
+      readLocal: async () => here.self.map,
+      area: { ...area, set: async (items) => (await held, order.push('the merge sent'), area.set(items)) },
+      apply: async () => void order.push('the change was applied'),
+    });
+
+    const merging = slow.merge();
+    const arriving = slow.changed({ 'site:https://globex.dev': { newValue: GLOBEX } });
+    for (let turn = 0; turn < 20; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(order, []);
+    release();
+    await Promise.all([merging, arriving]);
+
+    assert.deepEqual(order, ['the merge sent', 'the change was applied']);
+  });
+
   it('sends nothing and takes nothing while the reviewer has not turned it on', async () => {
     const shared = account();
     const here = browserOn(shared);
