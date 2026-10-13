@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { previewsKey } from './proven-previews.ts';
 import { createSiteOwner } from './site-writes.ts';
 import { type SyncArea, createSiteSync, patternOf, rulesIn, syncKeyOf } from './site-sync.ts';
 import type { SiteConfig, SiteMutation } from './sites.ts';
@@ -314,5 +315,54 @@ describe('the rules of a reviewer in two browsers (FRU-72)', () => {
     ]) {
       assert.ok(privacy.includes(said), `docs/privacy.md does not say « ${said} »`);
     }
+  });
+
+  // The previews that a worker lists (FRU-103) are a grant of that worker to this browser, for a
+  // time. They are not a rule of the reviewer, and they never go to the account of the browser.
+  it('sends no list of previews of a worker to the account, and takes none from it', async () => {
+    const shared = account();
+    const here = browserOn(shared);
+    const listed = { at: 1, previews: { 'https://*.acme.dev': 'site_1' } };
+
+    // A list that something put in the account is not a rule: it reaches no map here.
+    shared.items[previewsKey('https://worker.test')] = listed;
+    await here.sync.changed({ [previewsKey('https://worker.test')]: { newValue: listed } });
+    await here.change({ kind: 'write', entries: { 'https://team.dev': TEAM } });
+    await here.sync.merge();
+    await shared.idle();
+
+    assert.deepEqual(here.self.map, { 'https://team.dev': TEAM });
+    assert.deepEqual(rulesIn(shared.items), { 'https://team.dev': TEAM });
+    assert.equal(patternOf(previewsKey('https://worker.test')), undefined);
+    const written = shared.writes.flatMap((write) => write.replace(/^(set|remove) /, '').split(','));
+    assert.deepEqual(written, ['site:https://team.dev']);
+  });
+
+  it('has one place that reaches the account of the browser, and it carries rules only', () => {
+    const sources = ['../src/', '../entrypoints/'].flatMap((folder) =>
+      readdirSync(new URL(folder, import.meta.url), { recursive: true, encoding: 'utf8' })
+        .filter((name) => name.endsWith('.ts') && !name.endsWith('.test.ts') && !name.endsWith('.fixture.ts'))
+        .map((name) => ({
+          name: `${folder}${name}`,
+          text: readFileSync(new URL(`${folder}${name}`, import.meta.url), 'utf8'),
+        })),
+    );
+    const code = (text: string): string[] =>
+      text
+        .split('\n')
+        .filter(
+          (line) => !/^\s*(\*|\/\*|\/\/)/.test(line) && /\bstorage\s*\.\s*sync\b|\[\s*['"]sync['"]\s*\]/.test(line),
+        );
+
+    assert.deepEqual(
+      sources.flatMap(({ name, text }) => code(text).map((line) => `${name}: ${line.trim()}`)),
+      [
+        '../entrypoints/background.ts: get: () => browser.storage.sync.get(null),',
+        '../entrypoints/background.ts: set: (items) => browser.storage.sync.set(items),',
+        '../entrypoints/background.ts: remove: (keys) => browser.storage.sync.remove(keys),',
+      ],
+    );
+    const sync = readFileSync(new URL('./site-sync.ts', import.meta.url), 'utf8');
+    assert.doesNotMatch(sync, /proven-previews/, 'the copy of the rules must not read what a worker listed');
   });
 });

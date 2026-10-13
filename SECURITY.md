@@ -95,6 +95,9 @@ client id is still a claim. What the worker checks differs by mode:
   and it would let the sites of other people spend the reviewer's session. The form and the import
   refuse such a rule, and for one already stored the bridge does not announce and the relay answers
   `site-not-configured`. A wildcard stays valid in private mode, which carries no credential.
+  **One exception** (FRU-103): a wildcard that the worker of the session lists as the previews of a
+  site, because its workspace proved the domain. See
+  [A domain a workspace proves it owns](#a-domain-a-workspace-proves-it-owns-to-cover-its-previews-fru-103).
   A rules file holds no session and no host
   permission, so an imported rule runs nowhere until the reviewer grants its pattern in their browser.
 
@@ -620,9 +623,23 @@ it`. The value of the row is the address it was sent to.
   does not keep out a page of the same site, and `demo.fruitback.com` is one. The routes under
   `/console/` refuse a request with the cookie from another origin (`403`), and a request with the
   cookie and no `Origin` that is not a read (`403 origin-not-allowed`): test:`refuses a change with
-the cookie from another origin, or from none, and takes it from the console`. better-auth refuses
-  the same two requests on its own routes. No call opens these routes with a token in
+the cookie from another origin, or from none, and takes it from the console`. **The routes of
+  better-auth are under the same rule, applied by the worker before better-auth reads the request**
+  (FRU-212): a call that is not a read answers `403 origin-not-allowed` unless its `Origin` is the
+  console. better-auth 1.7.7 alone takes a `Referer` in place of an `Origin` that is missing, and
+  checks nothing when the request has no cookie. No route is excepted: GitHub and Google come
+  back by a `GET`, and a provider that comes back by a form would need its route named.
+  test:`lists every served route that is not only read` names those routes, and one case for each
+  refuses it with no `Origin`, with the `Referer` of the console, and with the `Referer` of the
+  worker. No call opens these routes with a token in
   `Authorization` (FRU-150).
+- **A tab of the console sends nothing for another account than the one it was drawn for**
+  (FRU-210). The cookie is of the browser, so a second person who signs in in another tab changes
+  who a tab left open speaks for. The tab asks who is signed in when it is shown again and when
+  somebody presses « Continue » after a session ended; on another account it stops, shows nothing
+  of the person before but the text they were typing, and sends nothing until it is loaded again.
+  **The condition: the browser tells the page that the tab is shown again** (`focus`,
+  `visibilitychange`); the worker does not check which account a tab believes it is.
 - **« Sign out » ends the session, or says that it did not** (FRU-204). The console stays on « My
   account » with « You are still signed in » when the worker did not confirm. The refresh cookie
   of the path of before, which a browser could hold for 30 days, opens nothing since FRU-150: no
@@ -816,9 +833,29 @@ site only while the workspace of that site proves the domain.
 - **The worker asks the DNS of its host**, with no DNSSEC check of its own. Who can answer the
   resolver of the worker in place of the zone can prove any domain. Tests never ask a real DNS: the
   resolver is a seam, and every case hands over a double.
-- **What this does not open yet:** the worker lists the previews of a site in `GET /session/sites`
-  (`previews`), and nothing else reads them. The extension still refuses every wildcard in team mode
-  (`lendsSession`). Letting it take one that the worker lists is a separate change.
+- **What a proven domain opens, exactly.** In the browser of a reviewer who is paired with the worker
+  and who pressed « Turn on Fruitback here » on a page under the domain, **every page of
+  `https://*.<domain>`, and of `https://<domain>` itself, on the default port**, gets the widget
+  and a relay that calls that worker with the session of the reviewer. A script of such a page can
+  forge relayed calls (see
+  [The extension's page bridge can be forged by the page](#the-extensions-page-bridge-can-be-forged-by-the-page)),
+  so it reads and writes what that session reads and writes: the notes of **every site of the
+  workspace**, not only the one the previews belong to, signed with the name of the reviewer. That
+  is what the proof is for: whoever serves a page under the domain holds its zone, or was given a
+  name in it by who does. **A workspace that proves a domain vouches for every host under it.**
+- **The extension grants a team wildcard only from the answer of the worker of the session**
+  (`proven-previews.ts`): the very wildcard, for the very site, of the very worker of the rule,
+  `https` only. It is kept beside the rules, never in one. A rule that a person types or imports is
+  refused as before, so a rules file cannot carry the grant. **The answer ages**: older than two
+  hours it grants nothing, and the background asks again every thirty minutes. So a proof that is
+  lost stops in the browser thirty minutes after the worker saw it, at most; with the six hours
+  between two checks of the DNS, a record that was removed can lend a session for six and a half
+  hours at most. A worker that cannot be reached stops granting after two hours. **The answer is
+  for the session that asked**: a logout, and a new pairing with the same worker, each forget it at
+  once. The page's own script reads the answer of the workers its rules name and nothing else of
+  that storage, where the refresh tokens are.
+- **Not covered:** a page in clear (`http`), another port, and a team rule that names no site (a
+  site that embeds its own widget): those stay refused.
 
 ### Linear, connected with OAuth (FRU-134)
 
@@ -937,7 +974,7 @@ the console. Each one has a rule in `ORGANIZATION_PATHS` (`organization-paths.ts
 | Route                   | Who                                          | What it does                               |
 | ----------------------- | -------------------------------------------- | ------------------------------------------ |
 | `list-members`          | owner, admin, member                         | names, addresses and roles                 |
-| `update-member-role`    | owner, admin                                 | one role, one of the four                  |
+| `update-member-role`    | owner, admin                                 | owner, admin or member, not guest          |
 | `remove-member`         | owner, admin                                 | the member, and their codes                |
 | `leave`                 | anybody of the workspace, but its last owner | themselves                                 |
 | `invite-member`         | owner, admin                                 | an address, as an admin or a member        |
@@ -963,8 +1000,19 @@ when it is accepted`. An invitation waits 7 days; one address gets one invitatio
   says `mailed: false`, and the console gives the link to send by hand. The count is by workspace
   and address (FRU-209): counted for every workspace together, somebody else closed the window of
   an address from a workspace of their own, and the refusal told an admin that the address was
-  invited elsewhere. **It does not bound what one account sends to many addresses, or from many
-  workspaces.** A worker with no mailer sends nothing and keeps the invitation: the console shows
+  invited elsewhere. **One account sends 20 invitation messages an hour, in every workspace together,
+  and one workspace 40, whoever invites** (FRU-209): anybody makes a workspace, so the window of an
+  address alone let one account write to as many addresses as it wanted, 60 messages from 12
+  workspaces (measured). Past either count the invitation is kept and no message goes, as for the
+  address. test:`sends no more messages than one account may in an hour, in every workspace together, and keeps the invitations (FRU-209)`,
+  test:`sends no more messages than one workspace may in an hour, whoever invites (FRU-209)`.
+  **The subject of the message is the same for every invitation**, and holds no text that a person
+  wrote: the name of the workspace was the subject, so « Your invoice is ready: https://… » went
+  out under the name of Fruitback. The names of the workspace and of the inviter are in the body
+  only, escaped, and written so that a mail client makes no link of them:
+  test:`writes no text of a person in the subject, and makes no link of a name in the body (FRU-209)`.
+  What remains: 20 messages an hour by account, with a sentence of the sender in the body, and
+  nothing that tells accounts of one person apart. A worker with no mailer sends nothing and keeps the invitation: the console shows
   the same link (FRU-107), and it opens nothing more than the message does.
   test:`sends an invitation again when asked to, and no more than three messages to one address in the window`,
   test:`keeps the window of an address to its workspace: another workspace neither closes it nor learns of it (FRU-209)`.
@@ -979,6 +1027,36 @@ when it is accepted`. An invitation waits 7 days; one address gets one invitatio
   test:`refuses at the acceptance an invitation whose inviter no longer invites, when no cancellation ran (FRU-209)`.
   **Both are on the routes of the worker**, not in better-auth: a call to the plugin in the process
   passes neither, and no code of the worker makes one for these routes.
+- **One call at a time changes a workspace** (FRU-209). better-auth reads, then writes, in no
+  transaction: it counts the owners and then removes one, it looks for an invitation of an address
+  and then writes one. On a real PostgreSQL, two owners who left, demoted themselves or removed
+  each other at the same moment left a workspace with no owner, which nobody can repair or delete
+  (measured, 3 runs of 3), and four invitations of one address wrote two or three rows. The routes
+  of the worker that change a workspace now run one after the other for that workspace:
+  test:`keeps one owner when two owners go at the same moment (FRU-209)`,
+  test:`writes one invitation for one address when two people invite it at the same moment`.
+  **This holds for one process of the worker.** Two replicas do not share it, as they do not share
+  the rate limit.
+- **Nobody is removed while their extension lives** (FRU-209). The sessions of the extensions of a
+  member end before better-auth deletes the member; when that fails, nothing is deleted, the call
+  answers `502`, and it is made again:
+  test:`removes nobody when the end of their extensions fails, answers 502, and removes them at the next call (FRU-209)`.
+  `leave` has no hook to do it first: its clean-up comes after the write, a failure answers `502`,
+  and the same call made again finishes it,
+  test:`finishes what follows a departure when somebody who left asks again (FRU-209)`. Until then
+  the second lock holds: a refresh and `/session/sites` read the membership.
+- **Smaller rules of the invitations** (FRU-209). An invitation that was accepted cannot be
+  cancelled (test:`refuses to cancel an invitation that was accepted, and the person stays a member (FRU-209)`).
+  One past its end is listed nowhere (test:`lists no invitation past its end, to whoever invites and to the person it names (FRU-209)`).
+  A « Resend » names the role of the invitation that waits, or is refused
+  (test:`refuses a « Resend » that names another role than the invitation that waits, and sends nothing (FRU-209)`).
+  A change of role gives `owner`, `admin` or `member`, and no `guest`, for the reason an invitation
+  gives none (test:`makes no guest by a change of role, as by an invitation (FRU-209)`). The address
+  of the session must be verified (`requireEmailVerificationOnInvitation`):
+  test:`takes an invitation from a session whose address is verified, and from no other (FRU-209)`.
+  The window of an address counts its mailbox, without a `+suffix`, for an invitation and for a
+  sign-in link: test:`counts the window of an address by its mailbox: a suffix after « + » opens no other (FRU-209)`.
+  Dots in the name of a mailbox are not folded: only some providers ignore them.
 - **A cancel names the workspace, and the invitation must be of it.** better-auth reads the
   workspace of an invitation from the invitation; the worker reads the role in the workspace of the
   call, so it checks first that the two are one:
@@ -1057,7 +1135,9 @@ writes the address it gets back in the seed. The setting is off until the review
   takes the session token of the extension, a `client` (the site of the note), and keeps the
   picture for the workspace of that site when the token is a session of that workspace and its
   person is a member of it now. `GET /screenshot/<id>` answers the same members, and `404` to
-  anybody else with a token, as for a picture that does not exist; `401` with no token. The address
+  anybody else with a token, as for a picture that does not exist; `401` with no token. **« A
+  member » is anybody of the workspace, a guest included**: a guest reads the notes, and the
+  address of a picture is in its note. test:`is sent and read by a guest of the workspace, as by a member`. The address
   is no secret: 128 random bits, but the route asks who reads. **A picture is never readable like
   the pins of a site at `read: 'public'`**: what a public site may show is still open (FRU-84).
 - **The guards of the write path.** The rate limit, the CORS of the sites and of the extension,

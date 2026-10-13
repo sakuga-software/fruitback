@@ -248,3 +248,44 @@ describe('the relay messages', () => {
     ]);
   });
 });
+
+/**
+ * The answer of the background to a capture, as the bridge reads it (FRU-44). The address is the one
+ * `capture.ts` builds: the endpoint of the entry, then `/screenshot/<id>`. Raised in a review of #209:
+ * if the check of the address refused a path after the endpoint, the picture would be lost here, in
+ * silence, after the worker kept it.
+ */
+describe('the answer to a capture (FRU-44)', () => {
+  const ID = 'shot_0123456789abcdef0123456789abcdef';
+  const answer = (url: string) =>
+    parseBridgeMessage({
+      channel: CHANNEL,
+      kind: 'capture-response',
+      id: 'req1',
+      picture: { url, width: 120, height: 60 },
+    });
+
+  for (const endpoint of [
+    'https://worker.test',
+    'https://api.acme.dev/fruitback',
+    'http://localhost:8788',
+    'http://127.0.0.1:8788',
+  ]) {
+    it(`keeps the address of a picture on ${endpoint}`, () => {
+      const url = `${endpoint}/screenshot/${ID}`;
+
+      assert.deepEqual(answer(url), {
+        channel: CHANNEL,
+        kind: 'capture-response',
+        id: 'req1',
+        picture: { url, width: 120, height: 60 },
+      });
+    });
+  }
+
+  it('drops an address that is not http(s), and keeps the answer with no picture', () => {
+    for (const url of ['javascript:alert(1)', 'data:image/png;base64,AAAA', 'not a url']) {
+      assert.deepEqual(answer(url), { channel: CHANNEL, kind: 'capture-response', id: 'req1' }, url);
+    }
+  });
+});

@@ -25,7 +25,11 @@ export function accessInUse(sites: Record<string, SiteConfig>, paired: readonly 
   const used = new Set<string>();
   for (const [pattern, site] of Object.entries(sites)) {
     // The same rules as the registration in the background: these are the rules that run.
-    if (!site.enabled || parseSitePattern(pattern) !== pattern || lendsSession(pattern, site)) continue;
+    // The previews of a site, turned on in one click (FRU-103), keep their access while their worker
+    // does not list them: the access alone runs nothing, and giving it back would ask the reviewer
+    // again each time a proof comes back.
+    const previews = site.mode === 'team' && site.mount !== undefined;
+    if (!site.enabled || parseSitePattern(pattern) !== pattern || (lendsSession(pattern, site) && !previews)) continue;
     used.add(pattern);
     const worker = originOfWorker(site.endpoint);
     if (worker !== undefined) used.add(worker);

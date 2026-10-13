@@ -1527,6 +1527,15 @@ path of before » is how the two lived together until then.
   answer had no `Set-Cookie`; the same reading with `returnHeaders` hands back the cookie of the
   sign-in, token and attributes, with `Max-Age=604800`. A new route that reads the cookie through
   `sessionOfCookie` gets this with nothing to write.
+- **A change on a route of better-auth carries the `Origin` of the console** (FRU-212, decided for
+  Mathieu on 2026-10-12): `handleAuthRoutes` applies `mutationAllowed` to every call that is not a
+  read, before it hands the request over. Read in `api/middlewares/origin-check.mjs` of 1.7.7:
+  `validateOrigin` takes `origin || referer`, has no option that asks for the `Origin`, and returns
+  at once for a request with no cookie. `trustedOrigins` as a function of the request was tried and
+  left: it refuses the `Referer` of the console, but better-auth always adds its own address to the
+  list, so the `Referer` of the worker still passed. **A provider that comes back by a `POST`**
+  (`response_mode=form_post`: Apple) posts from its own origin, and is refused here: adding one
+  means naming its callback as an exception, with a test.
 - **A rejection of better-auth is a `502`**, with its reason in the log and no address of the
   database: `auth.handler` rejects on a schema that is wrong.
 - **The link of the e-mail is the worker's own two routes.** `POST /console/auth/email` calls
@@ -1747,7 +1756,11 @@ joins. Six routes of the organization plugin more, under the rules of the sectio
   The window was by address alone, read before the plugin: another workspace closed it, the
   invitation was then not made at all, and the `429` said that the address was invited elsewhere
   (FRU-209). A message that does not leave answers `502`, and the
-  invitation waits, to send again with `resend: true`. **A worker with no mailer still invites**
+  invitation waits, to send again with `resend: true`. **Two more windows, of an hour**
+  (`mayMail`): 20 messages by account in every workspace together, 40 by workspace. The three are read first, and nothing is counted when one is full: a workspace past its count would otherwise spend the count of each admin who tries. Then each is counted in one step, and the message goes when none came back over.
+  The numbers are a guess for a team that invites in one sitting. **The subject is fixed**, and
+  `unlinked` in `mail.ts` puts a zero-width space after each `.`, `:`, `/` and `@` of a name in the
+  body: a client then makes no link of `https://…`, `www.…` or an address (FRU-209). **A worker with no mailer still invites**
   (decided on FRU-107): the invitation is kept, nothing is sent and nothing is counted, and the
   console shows the link to send by hand. The link is the same `<console>/invitations`, so a link
   sent in a chat is worth exactly the message: nothing without a session of the address.
@@ -1780,6 +1793,19 @@ roles, when it is accepted`.
   PGlite (`pool.query is not a function`, measured), and `leave` runs no hook at all. The route reads
   who was removed, and the new role, in the answer of better-auth. A demotion that keeps
   `manage-members` (admin to owner, owner to admin) cancels nothing.
+- **`oneAtATime` runs the calls that change a workspace one after the other, in the process**
+  (FRU-209). Not a transaction: the plugin opens its own and takes none from the caller, and a lock
+  in the database would need a connection held across the call of better-auth, which has the pool.
+  A chain of promises by workspace is what the worker can hold. It is the size of the `Kv`: one
+  process. The race of the last owner was found by reading and did not show on PGlite, which has one
+  connection; on PostgreSQL 17 it showed at every run without the chain.
+- **The end of the extensions is in `beforeRemoveMember`, and again in `afterRemoveMember`**
+  (FRU-209). Before, so that a failure removes nobody; after, for a session opened between the two.
+  A `500` of better-auth, which is how a hook that throws comes back, is answered `502`.
+- **The lists of invitations are rewritten by the route**: an invitation past its end is taken out,
+  since the plugin lists it as `pending` until somebody tries it.
+- **`mailboxOf` (accounts.ts) is what a window of messages counts**: the address without its
+  `+suffix`. Nothing else reads it: the account and the invitation keep the address as written.
 - **A second invitation of an address that waits** is refused (`USER_IS_ALREADY_INVITED…`), unless
   `resend`, which moves its end to 7 days from now and sends the message again.
 - **What the plugin answers on a resend is the invitation as it was**, with the new end.

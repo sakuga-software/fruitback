@@ -346,8 +346,21 @@ export async function authOptions(
       beforeAcceptInvitation: async ({ invitation }) => refuseOtherRoles(invitation.role),
       // `/organization/leave` runs no hook (read in `routes/crud-members.mjs` of 1.7.7): the route of
       // the worker ends the sessions of somebody who leaves, in `auth-organization.ts`.
-      afterRemoveMember: async ({ member }) =>
+      // The extensions of somebody who is removed stop **before** the member is deleted (FRU-209):
+      // when this fails the plugin deletes nothing, and the call is made again. After the write, a
+      // failure left a member who was gone with a session that was alive, and the second call
+      // answered `MEMBER_NOT_FOUND`. It runs again after, for a session opened between the two.
+      beforeRemoveMember: async ({ member }) =>
         sessions.endSessionsOf({ subject: member.userId, workspace: member.organizationId }, Date.now()),
+      // The second pass must not fail the call: the member is deleted, the first pass ended their
+      // sessions, and a `500` here kept the route from cancelling their invitations.
+      afterRemoveMember: async ({ member }) => {
+        try {
+          await sessions.endSessionsOf({ subject: member.userId, workspace: member.organizationId }, Date.now());
+        } catch (error) {
+          console.error(`[fruitback] the sessions of a removed member were ended once, not twice: ${String(error)}`);
+        }
+      },
     },
   });
   // Every route of the plugin that `ORGANIZATION_PATHS` does not name is closed to a request by
@@ -591,7 +604,17 @@ export async function announceAuth(
   try {
     // Inside the `try`: the server calls this and waits for nothing, so nothing here may reject.
     const starting = authFor(config, open);
-    if (starting === undefined) return 'off';
+    if (starting === undefined) {
+      // FRU-217: a worker with accounts and no secret for the session of the console starts, and
+      // nobody signs in to it. It said nothing, and the console showed a form that could not work.
+      if (config.databaseUrl !== undefined) {
+        log.error(
+          '[fruitback] nobody can sign in to the console: FRUITBACK_DATABASE_URL is set and FRUITBACK_AUTH_SECRET is not. Set FRUITBACK_AUTH_SECRET (32 characters or more) to turn the sign-in on.',
+        );
+      }
+
+      return 'off';
+    }
 
     await starting;
     log.log('[fruitback] better-auth is ready, under /console/auth');

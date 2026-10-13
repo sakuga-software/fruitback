@@ -1,3 +1,4 @@
+import type { FreshPreviews } from './proven-previews.ts';
 import type { SiteConfig } from './sites.ts';
 
 /**
@@ -93,14 +94,19 @@ export type ResolvedSite = { pattern: string; site: SiteConfig };
  * them. A key that is not a pattern covers nothing, and a wildcard in team mode covers nothing
  * either: see `lendsSession`.
  */
-export function resolveSite(sites: Record<string, SiteConfig>, origin: string): ResolvedSite | undefined {
+export function resolveSite(
+  sites: Record<string, SiteConfig>,
+  origin: string,
+  /** The previews the workers proved, still fresh (FRU-103). Absent: no wildcard serves team mode. */
+  proven?: FreshPreviews,
+): ResolvedSite | undefined {
   const exact = sites[origin];
   if (exact !== undefined && parseSitePattern(origin) === origin) return { pattern: origin, site: exact };
 
   let best: ResolvedSite | undefined;
   for (const [pattern, site] of Object.entries(sites)) {
     if (!pattern.includes(`://${WILDCARD}`) || parseSitePattern(pattern) !== pattern) continue;
-    if (lendsSession(pattern, site)) continue;
+    if (lendsSession(pattern, site, proven)) continue;
     if (!coversOrigin(pattern, origin)) continue;
     if (best === undefined || pattern.length > best.pattern.length) best = { pattern, site };
   }
@@ -124,6 +130,18 @@ export function isWildcardPattern(pattern: string): boolean {
  * `site-not-configured`, and the popup shows no rule. The form and the import refuse the rule, and
  * the background does not register it.
  */
-export function lendsSession(pattern: string, site: Pick<SiteConfig, 'mode'>): boolean {
-  return site.mode === 'team' && isWildcardPattern(pattern);
+export function lendsSession(
+  pattern: string,
+  site: Pick<SiteConfig, 'mode'> & { endpoint?: string; mount?: { clientId: string } },
+  proven?: FreshPreviews,
+): boolean {
+  if (site.mode !== 'team' || !isWildcardPattern(pattern)) return false;
+
+  // FRU-103, the one exception: the worker of this rule listed this very wildcard for this very
+  // site, and its answer is still fresh. Its workspace proved the domain by a record of its DNS, so
+  // the pages the wildcard covers are its own. A caller that gives no `proven` gets the rule of
+  // FRU-75 whole: the form and the import do, so a rule that a person types or imports is refused.
+  const listedFor = site.endpoint === undefined ? undefined : proven?.[site.endpoint]?.[pattern];
+
+  return listedFor === undefined || site.mount === undefined || listedFor !== site.mount.clientId;
 }

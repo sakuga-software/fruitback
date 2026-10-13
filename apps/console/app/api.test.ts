@@ -224,6 +224,34 @@ describe('a worker that does not say betterAuth (FRU-150)', () => {
   });
 });
 
+describe('a refusal of better-auth (FRU-209)', () => {
+  it('is named by its code, so a screen finds its sentence, and by error when the worker refuses', async () => {
+    worker({
+      'GET /auth/providers': BETTER_AUTH,
+      'POST /console/auth/organization/invite-member': () =>
+        Response.json({ code: 'USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION', message: 'x' }, { status: 400 }),
+      'POST /console/auth/organization/leave': () => Response.json({ error: 'not-found' }, { status: 404 }),
+      'POST /console/auth/organization/remove-member': () => new Response('Bad Gateway', { status: 502 }),
+    });
+
+    assert.deepEqual(await call('POST', '/console/auth/organization/invite-member', {}), {
+      ok: false,
+      status: 400,
+      error: 'USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION',
+    });
+    assert.deepEqual(await call('POST', '/console/auth/organization/leave', {}), {
+      ok: false,
+      status: 404,
+      error: 'not-found',
+    });
+    assert.deepEqual(await call('POST', '/console/auth/organization/remove-member', {}), {
+      ok: false,
+      status: 502,
+      error: 'unknown',
+    });
+  });
+});
+
 describe('the providers the worker signs people in with (FRU-135)', () => {
   it('says which are on when the worker answers, and takes nothing but true for on', async () => {
     mock.method(globalThis, 'fetch', async () => Response.json({ betterAuth: { github: true, google: 'true' } }));

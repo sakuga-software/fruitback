@@ -258,14 +258,22 @@ describe('a worker that has better-auth switched off (FRU-144)', () => {
     for (const env of [
       { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: CONSOLE_URL },
       filesOnly({ FRUITBACK_AUTH_SECRET: undefined }),
-      envWith({ FRUITBACK_AUTH_SECRET: undefined }),
     ]) {
       const config = configOf(env);
 
       assert.equal(authFor(config, refuses), undefined);
       assert.equal(await announceAuth(config, log, refuses), 'off');
     }
-    assert.deepEqual(lines, [], 'a worker with better-auth off said something of it at boot');
+    assert.deepEqual(lines, [], 'a worker with no accounts said something of the sign-in at boot');
+
+    // FRU-217: accounts and no secret. It starts, nobody signs in, and it says so in one line that
+    // names the variable to set. The line does not name better-auth: nothing of it was loaded.
+    const config = configOf(envWith({ FRUITBACK_AUTH_SECRET: undefined }));
+    assert.equal(authFor(config, refuses), undefined);
+    assert.equal(await announceAuth(config, log, refuses), 'off');
+    assert.equal(lines.length, 1);
+    assert.match(lines[0] ?? '', /^\[fruitback\] nobody can sign in to the console: .*FRUITBACK_AUTH_SECRET/);
+    assert.doesNotMatch(lines[0] ?? '', /better-auth|postgres:\/\//);
   });
 
   /**
@@ -478,6 +486,22 @@ describe('the routes of better-auth that the worker serves (FRU-144, FRU-147)', 
         assert.equal(answer.headers.get('Set-Cookie'), null);
       }
     }
+  });
+
+  // FRU-217: what the sign-in screen of the console reads to say that nobody can sign in.
+  it('answers no way to sign in on /auth/providers, and 401 on the console, with a database and no secret', async () => {
+    const database = await opening(createPgliteDatabase);
+    const env = envWith({ FRUITBACK_AUTH_SECRET: undefined });
+    const ask = (path: string): Promise<Response> =>
+      handleRequest(new Request(`https://worker.test${path}`, { headers: { Origin: CONSOLE_URL } }), env, {
+        clientIp: '192.0.2.210',
+        accounts: createPostgresAccountStore(database),
+      });
+
+    const providers = await ask('/auth/providers');
+    assert.equal(providers.status, 200);
+    assert.deepEqual(await providers.json(), {});
+    assert.equal((await ask('/console/me')).status, 401);
   });
 
   it('serves the routes of SERVED_PATHS when it is on, and answers 404 on any other one', async () => {

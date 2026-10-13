@@ -32,7 +32,10 @@ import { type SiteConfig, type SiteMutation, parseSite } from './sites.ts';
  * **What does not travel: the access, and the session.** A host permission is of one browser. A rule
  * that arrives runs nowhere until the reviewer grants access there: the options page says « No
  * access in this browser » beside it, with the button that grants it. The session of a worker is in
- * `local` and never here.
+ * `local` and never here. The previews that a worker listed (FRU-103, `proven-previews.ts`) are in
+ * `local` too, under their own keys: they are a grant of that worker to this browser, not a rule of
+ * the reviewer. A team wildcard that arrives as a rule covers nothing until the worker of the session
+ * of this browser lists it. `site-sync.test.ts` holds both.
  */
 
 /** In `local`: whether this browser copies its rules to `sync`. Absent is off. */

@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, it, mock } from 'node:test';
-import { ROLES, type Role, can } from './accounts.ts';
+import { ROLES, type Role, can, mailboxOf } from './accounts.ts';
 import { handleRequest } from './app.ts';
 import { type Auth, INVITATION_SECONDS, INVITER_GONE, ROLE_REFUSED, startAuth } from './auth.ts';
 import { CONSOLE_URL, DATABASES, PUBLIC_URL, ask, databasesOfACase } from './auth.fixture.ts';
-import { handleOrganizationRoutes } from './auth-organization.ts';
+import { INVITATIONS_PER_INVITER, INVITATIONS_PER_WORKSPACE, handleOrganizationRoutes } from './auth-organization.ts';
 import { type Call, workerOf } from './auth-worker.fixture.ts';
 import { MAX_BODY_BYTES } from './bounded-body.ts';
 import { MailError } from './mail.ts';
@@ -571,7 +571,7 @@ for (const { label, open, skip } of DATABASES) {
         const answers = [
           await as(worker, planted, `${ORG}/list-members?organizationId=${acme.workspace}`),
           await as(worker, planted, `${ORG}/update-member-role`, {
-            body: { organizationId: acme.workspace, memberId: acme.guest.member, role: 'guest' },
+            body: { organizationId: acme.workspace, memberId: acme.guest.member, role: 'member' },
           }),
           await as(worker, planted, `${ORG}/remove-member`, {
             body: { organizationId: acme.workspace, memberIdOrEmail: 'nobody@acme.dev' },
@@ -598,13 +598,13 @@ for (const { label, open, skip } of DATABASES) {
       // Their extension is the one of somebody who is of no workspace.
       assert.equal((await sitesOf(worker, paired.accessToken)).status, 401);
       assert.equal((await refresh(worker, paired.refreshToken)).status, 401);
-      assert.equal(await roleOf(worker, acme.guest.member), 'guest');
+      assert.equal(await roleOf(worker, acme.guest.member), 'member');
 
       // The control of the control: better-auth alone reads that row as an admin, and changes a role.
       const alone = await ask(worker.auth, '/organization/update-member-role', {
         method: 'POST',
         headers: { Cookie: planted.cookie },
-        body: JSON.stringify({ organizationId: acme.workspace, memberId: acme.guest.member, role: 'member' }),
+        body: JSON.stringify({ organizationId: acme.workspace, memberId: acme.guest.member, role: 'admin' }),
       });
       assert.equal(alone.status, 200, 'better-auth alone gives nothing to « guest,admin »: the case holds nothing');
     });
@@ -925,9 +925,9 @@ for (const { label, open, skip } of DATABASES) {
       assert.equal(worker.mail.sent.length, before + 1);
       const message = worker.mail.sent.at(-1);
       assert.equal(message?.to, 'paul@client.dev');
-      assert.equal(message?.subject, 'You are invited to acme on Fruitback');
+      assert.equal(message?.subject, 'You are invited to a workspace on Fruitback');
       assert.match(
-        message?.text ?? '',
+        (message?.text ?? '').replaceAll('\u200B', ''),
         /admin@acme\.dev invites you to the workspace « acme » on Fruitback, as a member\./,
       );
       assert.match(message?.text ?? '', /It waits for 7 days\./);
@@ -1112,6 +1112,86 @@ for (const { label, open, skip } of DATABASES) {
       assert.equal((await as(worker, paul, `${ORG}/accept-invitation`, { body: { invitationId: ours } })).status, 400);
     });
 
+    it('writes no text of a person in the subject, and makes no link of a name in the body (FRU-209)', async () => {
+      const worker = await workerOn(open);
+      const owner = await person(worker, 'owner@acme.dev');
+      const name = 'Your invoice is ready: https://evil.example/pay now www.evil.example';
+      const made = await as(worker, owner, '/console/workspaces', { body: { name } });
+      assert.equal(made.status, 201, await made.clone().text());
+      const workspace = ((await made.json()) as { id: string }).id;
+
+      for (const [email, locale, subject] of [
+        ['paul@client.dev', 'en', 'You are invited to a workspace on Fruitback'],
+        ['lea@client.dev', 'fr', 'Vous êtes invité dans un espace de travail sur Fruitback'],
+      ] as const) {
+        if (locale === 'fr') await worker.accounts.setLocale(owner.id, 'fr');
+        assert.equal((await invite(worker, owner, workspace, { email })).status, 200);
+        const message = worker.mail.sent.at(-1);
+        assert.equal(message?.subject, subject);
+        // The name is in the body, for whoever reads it, and nothing of it is an address to a client.
+        for (const body of [message?.text ?? '', message?.html ?? '']) {
+          assert.ok(body.replaceAll('\u200B', '').includes(name), body);
+          assert.deepEqual([...new Set(body.match(/https?:\/\/[^\s"<]+/g) ?? [])], [`${CONSOLE_URL}/invitations`]);
+          assert.doesNotMatch(body, /www\.evil|evil\.example|owner@acme\.dev/);
+        }
+      }
+    });
+
+    it('sends no more messages than one account may in an hour, in every workspace together, and keeps the invitations (FRU-209)', async () => {
+      const worker = await workerOn(open);
+      const owner = await person(worker, 'solo@many.dev');
+      const workspaces: string[] = [];
+      for (const name of ['one', 'two', 'three']) {
+        const made = await as(worker, owner, '/console/workspaces', { body: { name } });
+        workspaces.push(((await made.json()) as { id: string }).id);
+      }
+      const before = worker.mail.sent.length;
+      const mailed: boolean[] = [];
+      for (let n = 0; n < INVITATIONS_PER_INVITER + 2; n += 1) {
+        const answer = await invite(worker, owner, workspaces[n % 3] as string, { email: `person${n}@client.dev` });
+        assert.equal(answer.status, 200, await answer.clone().text());
+        mailed.push(((await answer.json()) as { mailed: boolean }).mailed);
+      }
+
+      assert.deepEqual(mailed, [...Array(INVITATIONS_PER_INVITER).fill(true), false, false]);
+      assert.equal(worker.mail.sent.length - before, INVITATIONS_PER_INVITER);
+      assert.equal((await rowsOf(worker.database, 'SELECT id FROM invitation')).length, INVITATIONS_PER_INVITER + 2);
+      // Another account is not held by it.
+      const acme = await team(worker);
+      const other = await invite(worker, acme.owner, acme.workspace, { email: 'person0@client.dev' });
+      assert.equal(((await other.json()) as { mailed: boolean }).mailed, true);
+    });
+
+    it('sends no more messages than one workspace may in an hour, whoever invites (FRU-209)', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const third = await added(worker, acme.workspace, await person(worker, 'third@acme.dev'), 'admin');
+      const before = worker.mail.sent.length;
+      const mailed: boolean[] = [];
+      const inviters = [acme.owner, acme.admin, third];
+      for (let n = 0; n < INVITATIONS_PER_WORKSPACE + 1; n += 1) {
+        const who = inviters[Math.floor(n / INVITATIONS_PER_INVITER)] as Person;
+        const answer = await invite(worker, who, acme.workspace, { email: `person${n}@client.dev` });
+        assert.equal(answer.status, 200, await answer.clone().text());
+        mailed.push(((await answer.json()) as { mailed: boolean }).mailed);
+      }
+
+      // Nobody is over their own count: the workspace is.
+      assert.deepEqual(mailed, [...Array(INVITATIONS_PER_WORKSPACE).fill(true), false]);
+      assert.equal(worker.mail.sent.length - before, INVITATIONS_PER_WORKSPACE);
+
+      // A workspace that is full spends nothing of who tries: the third admin tried once above, and
+      // still sends their twenty from another workspace.
+      const other = await team(worker, 'globex');
+      await added(worker, other.workspace, third, 'admin');
+      const elsewhere: boolean[] = [];
+      for (let n = 0; n < INVITATIONS_PER_INVITER; n += 1) {
+        const answer = await invite(worker, third, other.workspace, { email: `other${n}@client.dev` });
+        elsewhere.push(((await answer.json()) as { mailed: boolean }).mailed);
+      }
+      assert.deepEqual(elsewhere, Array(INVITATIONS_PER_INVITER).fill(true));
+    });
+
     it('keeps the window of an address to its workspace: another workspace neither closes it nor learns of it (FRU-209)', async () => {
       const worker = await workerOn(open);
       const acme = await team(worker);
@@ -1139,6 +1219,36 @@ for (const { label, open, skip } of DATABASES) {
         ).length,
         1,
       );
+    });
+
+    it('sends three messages and no more for calls at the same moment, and keeps one invitation', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const toPaul = () => worker.mail.sent.filter((each) => each.to === 'paul@client.dev').length;
+      assert.equal((await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev' })).status, 200);
+      assert.equal(toPaul(), 1);
+
+      // Twelve « Resend » at once, by two people. The count is taken after better-auth answers, so
+      // every call is past the plugin before any of them counts.
+      const answers = await Promise.all(
+        Array.from({ length: 12 }, (_, n) =>
+          invite(worker, n % 2 === 0 ? acme.owner : acme.admin, acme.workspace, {
+            email: 'paul@client.dev',
+            resend: true,
+          }),
+        ),
+      );
+      const mailed = await Promise.all(
+        answers.map(async (answer) => {
+          assert.equal(answer.status, 200, await answer.clone().text());
+
+          return ((await answer.json()) as { mailed: boolean }).mailed;
+        }),
+      );
+
+      assert.equal(toPaul(), 3);
+      assert.equal(mailed.filter(Boolean).length, 2);
+      assert.equal((await rowsOf(worker.database, 'SELECT id FROM invitation')).length, 1);
     });
 
     it('sends an invitation again when asked to, and no more than three messages to one address in the window', async () => {
@@ -1390,6 +1500,272 @@ for (const { label, open, skip } of DATABASES) {
       }
     });
 
+    /** `endSessionsOf` of this worker fails while `failing.now` is true, and counts its real calls. */
+    function sessionsThatFail(worker: Worker) {
+      const real = worker.sessions.endSessionsOf.bind(worker.sessions);
+      const failing = { now: true, ended: 0 };
+      (worker.sessions as { endSessionsOf: unknown }).endSessionsOf = async (...args: Parameters<typeof real>) => {
+        if (failing.now) throw new Error('the sessions of a test do not answer');
+        failing.ended += 1;
+
+        return real(...args);
+      };
+
+      return failing;
+    }
+
+    it('removes nobody when the end of their extensions fails, answers 502, and removes them at the next call (FRU-209)', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const paired = await extension(worker, acme.member, acme.workspace);
+      const failing = sessionsThatFail(worker);
+      const remove = () =>
+        as(worker, acme.owner, `${ORG}/remove-member`, {
+          body: { organizationId: acme.workspace, memberIdOrEmail: acme.member.member },
+        });
+
+      const refused = await remove();
+      assert.deepEqual([refused.status, await refused.json()], [502, { error: 'auth-unavailable' }]);
+      // Nothing was written: the member is there, and their extension goes on.
+      assert.equal(await roleOf(worker, acme.member.member), 'member');
+      assert.equal((await sitesOf(worker, paired.accessToken)).status, 200);
+
+      failing.now = false;
+      assert.equal((await remove()).status, 200);
+      assert.equal(await roleOf(worker, acme.member.member), undefined);
+      assert.equal((await refresh(worker, paired.refreshToken)).status, 401);
+    });
+
+    it('removes an admin and cancels their invitations when the second end of their extensions fails (FRU-209)', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const made = await invite(worker, acme.admin, acme.workspace, { email: 'second@elsewhere.dev' });
+      const { id } = (await made.json()) as { id: string };
+      const paired = await extension(worker, acme.admin, acme.workspace);
+      // The first pass, before the member is deleted, answers; the one after does not.
+      const failing = sessionsThatFail(worker);
+      failing.now = false;
+      const real = worker.sessions.endSessionsOf.bind(worker.sessions);
+      (worker.sessions as { endSessionsOf: unknown }).endSessionsOf = async (...args: Parameters<typeof real>) => {
+        const answered = await real(...args);
+        failing.now = true;
+
+        return answered;
+      };
+
+      const removed = await as(worker, acme.owner, `${ORG}/remove-member`, {
+        body: { organizationId: acme.workspace, memberIdOrEmail: acme.admin.member },
+      });
+
+      assert.equal(removed.status, 200, await removed.clone().text());
+      assert.equal(failing.now, true, 'the second pass was not played');
+      assert.equal(
+        (await rowsOf(worker.database, `SELECT status FROM invitation WHERE id = '${id}'`))[0]?.status,
+        'canceled',
+      );
+      assert.equal((await refresh(worker, paired.refreshToken)).status, 401);
+    });
+
+    it('finishes what follows a departure when somebody who left asks again (FRU-209)', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const made = await invite(worker, acme.admin, acme.workspace, { email: 'second@elsewhere.dev' });
+      const { id } = (await made.json()) as { id: string };
+      const failing = sessionsThatFail(worker);
+      const leave = () => as(worker, acme.admin, `${ORG}/leave`, { body: { organizationId: acme.workspace } });
+
+      const first = await leave();
+      assert.deepEqual([first.status, await first.json()], [502, { error: 'auth-unavailable' }]);
+      assert.equal(await roleOf(worker, acme.admin.member), undefined, 'better-auth wrote the departure');
+      assert.equal(failing.ended, 0);
+
+      failing.now = false;
+      assert.equal((await leave()).status, 404);
+      assert.equal(failing.ended, 1);
+      assert.equal(
+        (await rowsOf(worker.database, `SELECT status FROM invitation WHERE id = '${id}'`))[0]?.status,
+        'canceled',
+      );
+    });
+
+    it('keeps one owner when two owners go at the same moment (FRU-209)', async () => {
+      for (const how of ['demote', 'leave', 'remove'] as const) {
+        const worker = await workerOn(open);
+        const acme = await team(worker);
+        const promoted = await as(worker, acme.owner, `${ORG}/update-member-role`, {
+          body: { organizationId: acme.workspace, memberId: acme.admin.member, role: 'owner' },
+        });
+        assert.equal(promoted.status, 200, await promoted.clone().text());
+        const go = (who: Person, other: Person) => {
+          if (how === 'leave') return as(worker, who, `${ORG}/leave`, { body: { organizationId: acme.workspace } });
+          if (how === 'remove') {
+            return as(worker, who, `${ORG}/remove-member`, {
+              body: { organizationId: acme.workspace, memberIdOrEmail: other.member },
+            });
+          }
+
+          return as(worker, who, `${ORG}/update-member-role`, {
+            body: { organizationId: acme.workspace, memberId: who.member, role: 'admin' },
+          });
+        };
+
+        const answers = await Promise.all([go(acme.owner, acme.admin), go(acme.admin, acme.owner)]);
+
+        const owners = await rowsOf(
+          worker.database,
+          `SELECT id FROM member WHERE "organizationId" = '${acme.workspace}' AND role = 'owner'`,
+        );
+        assert.equal(owners.length, 1, `${how}: ${answers.map((answer) => answer.status).join(' ')}`);
+        assert.equal(answers.filter((answer) => answer.status === 200).length, 1, how);
+      }
+    });
+
+    it('writes one invitation for one address when two people invite it at the same moment', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+
+      const answers = await Promise.all(
+        [acme.owner, acme.admin, acme.owner, acme.admin].map((who) =>
+          invite(worker, who, acme.workspace, { email: 'max@client.dev' }),
+        ),
+      );
+      const waiting = await rowsOf(worker.database, `SELECT id FROM invitation WHERE status = 'pending'`);
+
+      assert.deepEqual(
+        { ok: answers.filter((answer) => answer.status === 200).length, waiting: waiting.length },
+        { ok: 1, waiting: 1 },
+      );
+      assert.equal(worker.mail.sent.filter((each) => each.to === 'max@client.dev').length, 1);
+    });
+
+    it('refuses to cancel an invitation that was accepted, and the person stays a member (FRU-209)', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const id = await invited(worker, acme, 'paul@client.dev');
+      const paul = await person(worker, 'paul@client.dev');
+      assert.equal((await as(worker, paul, `${ORG}/accept-invitation`, { body: { invitationId: id } })).status, 200);
+
+      const cancelled = await as(worker, acme.owner, `${ORG}/cancel-invitation`, {
+        body: { organizationId: acme.workspace, invitationId: id },
+      });
+
+      assert.equal(cancelled.status, 400);
+      assert.equal(((await cancelled.json()) as { code?: string }).code, 'INVITATION_NOT_FOUND');
+      assert.equal(
+        (await rowsOf(worker.database, `SELECT status FROM invitation WHERE id = '${id}'`))[0]?.status,
+        'accepted',
+      );
+      // The control: one that waits is cancelled.
+      const waits = await invited(worker, acme, 'lea@client.dev');
+      const done = await as(worker, acme.owner, `${ORG}/cancel-invitation`, {
+        body: { organizationId: acme.workspace, invitationId: waits },
+      });
+      assert.equal(done.status, 200);
+    });
+
+    it('lists no invitation past its end, to whoever invites and to the person it names (FRU-209)', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const other = await team(worker, 'globex');
+      const ended = await invited(worker, acme, 'paul@client.dev');
+      const waits = await invited(worker, other, 'paul@client.dev');
+      const paul = await person(worker, 'paul@client.dev');
+      const listed = async () => ({
+        ofAcme: (
+          (await (await as(worker, acme.owner, `${ORG}/list-invitations?organizationId=${acme.workspace}`)).json()) as {
+            id: string;
+          }[]
+        ).map((each) => each.id),
+        ofPaul: (await theirInvitations(worker, paul)).map((each) => each.id),
+      });
+      assert.deepEqual(await listed(), { ofAcme: [ended], ofPaul: [ended, waits] });
+
+      await rowsOf(
+        worker.database,
+        `UPDATE invitation SET "expiresAt" = now() - interval '1 minute' WHERE id = '${ended}'`,
+      );
+
+      assert.deepEqual(await listed(), { ofAcme: [], ofPaul: [waits] });
+    });
+
+    it('refuses a « Resend » that names another role than the invitation that waits, and sends nothing (FRU-209)', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      assert.equal((await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev' })).status, 200);
+      const before = worker.mail.sent.length;
+
+      const other = await invite(worker, acme.owner, acme.workspace, {
+        email: 'paul@client.dev',
+        role: 'admin',
+        resend: true,
+      });
+
+      assert.deepEqual([other.status, await other.json()], [400, { error: 'invalid-request', field: 'role' }]);
+      assert.equal(worker.mail.sent.length, before);
+      // The control: with the role of the invitation, it goes.
+      const same = await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev', resend: true });
+      assert.equal(same.status, 200);
+      assert.match(worker.mail.sent.at(-1)?.text ?? '', /as a member\./);
+    });
+
+    it('makes no guest by a change of role, as by an invitation (FRU-209)', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+
+      const answer = await as(worker, acme.owner, `${ORG}/update-member-role`, {
+        body: { organizationId: acme.workspace, memberId: acme.member.member, role: 'guest' },
+      });
+
+      assert.deepEqual([answer.status, await answer.json()], [400, { error: 'invalid-request', field: 'role' }]);
+      assert.equal(await roleOf(worker, acme.member.member), 'member');
+    });
+
+    it('takes an invitation from a session whose address is verified, and from no other (FRU-209)', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const id = await invited(worker, acme, 'paul@client.dev');
+      const paul = await person(worker, 'paul@client.dev');
+      // No route of the worker makes an account whose address is not verified: the row is written.
+      await rowsOf(worker.database, `UPDATE "user" SET "emailVerified" = false WHERE id = '${paul.id}'`);
+
+      for (const route of ['accept-invitation', 'reject-invitation']) {
+        const answer = await as(worker, paul, `${ORG}/${route}`, { body: { invitationId: id } });
+        assert.equal(answer.status, 403, route);
+        assert.equal(
+          ((await answer.json()) as { code?: string }).code,
+          'EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION',
+          route,
+        );
+      }
+      assert.equal((await rowsOf(worker.database, `SELECT id FROM member WHERE "userId" = '${paul.id}'`)).length, 0);
+
+      // The control: the same person, verified.
+      await rowsOf(worker.database, `UPDATE "user" SET "emailVerified" = true WHERE id = '${paul.id}'`);
+      assert.equal((await as(worker, paul, `${ORG}/accept-invitation`, { body: { invitationId: id } })).status, 200);
+    });
+
+    it('counts the window of an address by its mailbox: a suffix after « + » opens no other (FRU-209)', async () => {
+      const worker = await workerOn(open);
+      const acme = await team(worker);
+      const toCarol = () => worker.mail.sent.filter((each) => each.to.startsWith('carol+')).length;
+
+      const mailed: boolean[] = [];
+      for (let n = 0; n < 6; n += 1) {
+        const answer = await invite(worker, acme.owner, acme.workspace, { email: `carol+${n}@client.dev` });
+        assert.equal(answer.status, 200, await answer.clone().text());
+        mailed.push(((await answer.json()) as { mailed: boolean }).mailed);
+      }
+
+      assert.deepEqual(mailed, [true, true, true, false, false, false]);
+      assert.equal(toCarol(), 3);
+      // Each invitation is kept for the address as it was written.
+      assert.equal((await rowsOf(worker.database, 'SELECT id FROM invitation')).length, 6);
+      assert.deepEqual(
+        ['carol@client.dev', 'carol+a+b@client.dev', '+carol@client.dev', 'carol@cli+ent.dev'].map(mailboxOf),
+        ['carol@client.dev', 'carol@client.dev', '+carol@client.dev', 'carol@cli+ent.dev'],
+      );
+    });
+
     it('answers 502 when the message does not leave, keeps the invitation, and sends it again', async () => {
       const worker = await workerOn(open);
       const acme = await team(worker);
@@ -1461,7 +1837,7 @@ for (const { label, open, skip } of DATABASES) {
       // Nobody knows the language of a new address: the one of the inviter.
       await invite(worker, acme.owner, acme.workspace, { email: 'paul@client.dev', role: 'admin' });
       const french = worker.mail.sent.at(-1);
-      assert.equal(french?.subject, 'Vous êtes invité dans acme sur Fruitback');
+      assert.equal(french?.subject, 'Vous êtes invité dans un espace de travail sur Fruitback');
       assert.match(
         french?.text ?? '',
         /vous invite dans l'espace de travail « acme » sur Fruitback, comme administrateur\./,
@@ -1470,7 +1846,7 @@ for (const { label, open, skip } of DATABASES) {
 
       // Léa has an account that says English.
       await invite(worker, acme.owner, acme.workspace, { email: 'lea@client.dev' });
-      assert.equal(worker.mail.sent.at(-1)?.subject, 'You are invited to acme on Fruitback');
+      assert.equal(worker.mail.sent.at(-1)?.subject, 'You are invited to a workspace on Fruitback');
     });
 
     it('refuses an invitation past its seven days', async () => {

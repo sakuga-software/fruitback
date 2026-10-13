@@ -13,7 +13,7 @@ import {
   Switch,
   TextField,
 } from '@heroui/react';
-import type { ChangeEvent, ReactNode } from 'react';
+import type { ChangeEvent, FocusEvent, ReactNode } from 'react';
 
 /** The pin of the widget, as the boards draw it beside the name. */
 export function Mark({ size = 14 }: { size?: number }) {
@@ -120,6 +120,9 @@ type FieldProps = {
   maxLength?: number;
   required?: boolean;
   disabled?: boolean;
+  /** A text to read and to copy, as what somebody typed in a tab that stopped (FRU-210). */
+  readOnly?: boolean;
+  onFocus?: (event: FocusEvent<HTMLInputElement>) => void;
 };
 
 /** A text field of HeroUI: its label, its input, and the hint the input is described by. */

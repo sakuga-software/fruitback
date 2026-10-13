@@ -102,6 +102,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
     'Fruitback n’a pas pu confirmer ce changement. Vérifiez la liste, puis réessayez.',
   'This worker answers a signed-in reader only, and private mode carries no session. Notes do not show on this site.':
     'Ce worker ne répond qu’à un lecteur connecté, et le mode privé ne porte aucune session. Les notes ne s’affichent pas sur ce site.',
+  'The workspace does not prove this domain now, so this rule runs nowhere. It runs again when the worker says the domain is proven.':
+    'Le workspace ne prouve pas ce domaine en ce moment, donc cette règle ne s’applique nulle part. Elle s’appliquera à nouveau quand le worker dira que le domaine est prouvé.',
   'A wildcard cannot serve team mode, so this rule runs nowhere. Remove it, and add one rule for each origin.':
     'Un joker ne peut pas servir le mode équipe, donc cette règle ne s’applique nulle part. Supprimez-la, et ajoutez une règle par origine.',
   'A team-mode rule must name one origin. A wildcard would lend your session to every site it covers.':

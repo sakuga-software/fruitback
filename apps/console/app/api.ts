@@ -106,6 +106,8 @@ export type Answer<T> = { ok: true; data: T } | { ok: false; status: number; err
 
 /** Whether the worker sends mail: `email` in what it says of better-auth. `undefined`: not asked yet. */
 let mails: boolean | undefined;
+/** Whether the worker signs anybody in: it said `betterAuth`. `undefined` until it said. */
+let signsIn: boolean | undefined;
 
 function send(method: string, to: string, body?: unknown): Promise<Response | undefined> {
   const headers: Record<string, string> = {};
@@ -131,11 +133,72 @@ export function onSignedOut(listener: SignedOutListener): () => void {
 async function answer<T>(response: Response | undefined): Promise<Answer<T>> {
   if (response === undefined) return UNREACHABLE;
   if (response.status === 204) return { ok: true, data: undefined as T };
-  const body = (await response.json().catch(() => ({}))) as { error?: string } & T;
+  const body = (await response.json().catch(() => ({}))) as { error?: unknown; code?: unknown } & T;
+  // A refusal of the worker names itself in `error`, and one of better-auth in `code` (FRU-209):
+  // without the second, no sentence a screen holds for a code of better-auth was ever shown.
+  const named = [body.error, body.code].find((name) => typeof name === 'string') as string | undefined;
 
-  return response.ok
-    ? { ok: true, data: body }
-    : { ok: false, status: response.status, error: body.error ?? 'unknown' };
+  return response.ok ? { ok: true, data: body } : { ok: false, status: response.status, error: named ?? 'unknown' };
+}
+
+/**
+ * The account this tab was drawn for, and why the tab stopped (FRU-210).
+ *
+ * The cookie of a session belongs to the browser, not to a tab. Somebody who signs in in another tab
+ * changes who every tab speaks for, and a screen that was drawn for the person before would send
+ * what that person typed with the cookie of the new one. So the tab keeps the id of the first
+ * account that `/console/me` answered, and stops when the worker answers another one:
+ *
+ * - `changed`: another account is signed in. Nothing leaves this tab any more, until it is loaded
+ *   again.
+ * - `ended`: the tab came back, and the session had ended somewhere else.
+ *
+ * A session that ends while somebody works (a `401` on a call they made) is not one of these: the
+ * screen stays, with what they typed (FRU-148), and « Continue » goes on for the same account only.
+ */
+export type Left = 'changed' | 'ended';
+let tabAccount: string | undefined;
+let left: Left | undefined;
+/** A call the person made was refused with `401`: the banner says so, and the screen stays. */
+let endSeen = false;
+let checking: Promise<void> | undefined;
+const leftListeners = new Set<(why: Left) => void>();
+/** What a call answers once the tab stopped. No request leaves. */
+const LEFT = { ok: false, status: 409, error: 'tab-left' } as const;
+
+/** Tells the listener when this tab stops, and why. Returns how to stop. */
+export function onLeft(listener: (why: Left) => void): () => void {
+  leftListeners.add(listener);
+
+  return () => void leftListeners.delete(listener);
+}
+
+function leave(why: Left): void {
+  if (left !== undefined) return;
+  left = why;
+  for (const listener of leftListeners) listener(why);
+}
+
+/**
+ * Asks the worker who the browser is signed in as, when the tab comes back. A change of account
+ * stops the tab; so does a session that ended while the tab was away.
+ *
+ * WARNING: every call waits for this one (`call`). Without the wait, a click in the moment after
+ * the tab comes back leaves with the cookie of the other account, and a list that the screen reads
+ * in that moment comes back with the data of the other account.
+ */
+export function checkTab(): Promise<void> {
+  if (tabAccount === undefined || left !== undefined) return Promise.resolve();
+  checking ??= ask('GET', '/console/me', undefined, { quiet: true })
+    .then((me) => {
+      // No answer, and a refusal that is not about the session, say nothing of who is signed in.
+      if (!me.ok && me.status === 401 && !endSeen) leave('ended');
+    })
+    .finally(() => {
+      checking = undefined;
+    });
+
+  return checking;
 }
 
 const RETRY_MS = 5_000;
@@ -174,10 +237,43 @@ export async function call<T>(
   body?: unknown,
   options: { quiet?: boolean } = {},
 ): Promise<Answer<T>> {
-  const response = await send(method, to, body);
-  if (response?.status === 401 && options.quiet !== true) for (const listener of signedOutListeners) listener();
+  // A call waits for the question of a tab that came back: its answer would be of whoever is signed
+  // in now, and its change would be made in their name.
+  if (checking !== undefined) await checking;
 
-  return answer<T>(response);
+  return ask<T>(method, to, body, options);
+}
+
+/** The call itself, with no wait: the question of a tab that came back is asked through it. */
+async function ask<T>(
+  method: string,
+  to: string,
+  body?: unknown,
+  options: { quiet?: boolean } = {},
+): Promise<Answer<T>> {
+  // A tab that stopped sends nothing.
+  if (left !== undefined) return LEFT;
+  const response = await send(method, to, body);
+  if (response?.status === 401 && options.quiet !== true) {
+    endSeen = true;
+    for (const listener of signedOutListeners) listener();
+  }
+  const result = await answer<T>(response);
+  if (method === 'GET' && to === '/console/me' && result.ok) {
+    const id = (result.data as { account?: { id?: unknown } } | undefined)?.account?.id;
+    if (typeof id === 'string') {
+      if (tabAccount !== undefined && id !== tabAccount) {
+        // The answer is of another account: no screen of this tab reads it.
+        leave('changed');
+
+        return LEFT;
+      }
+      tabAccount = id;
+      endSeen = false;
+    }
+  }
+
+  return result;
 }
 
 /** Tells the account the language its person chose (FRU-119). `false` when it did not take it. */
@@ -200,6 +296,10 @@ export async function signInProviders(): Promise<Providers | undefined> {
   const asked = await answer<Announced>(await reach('/auth/providers', { method: 'GET' }));
   if (!asked.ok) return undefined;
   const said: Announced = typeof asked.data === 'object' && asked.data !== null ? asked.data : {};
+  // An answer with no body said nothing: only a worker that answers its ways, and has none, is closed.
+  if (typeof asked.data === 'object' && asked.data !== null) {
+    signsIn = typeof said.betterAuth === 'object' && said.betterAuth !== null;
+  }
   const served = typeof said.betterAuth === 'object' && said.betterAuth !== null ? said.betterAuth : {};
   mails = served.email === true;
 
@@ -216,6 +316,9 @@ export function providerStart(provider: keyof Providers): string {
 }
 
 export async function requestLink(email: string, tag: string): Promise<Answer<{ sent: true }>> {
+  // A tab that stopped signs nobody in, and signs nobody out: it is loaded again first (FRU-210).
+  if (left !== undefined) return LEFT;
+
   return answer(await send('POST', '/console/auth/email', { email, locale: tag }));
 }
 
@@ -224,7 +327,17 @@ export async function requestLink(email: string, tag: string): Promise<Answer<{ 
  * sets the cookie; the console keeps nothing.
  */
 export async function redeemLink(code: string): Promise<Answer<{ account: Account }>> {
-  return answer(await send('POST', '/console/auth/email/redeem', { token: code, locale: locale() }));
+  if (left !== undefined) return LEFT;
+  const redeemed = await answer<{ account: Account }>(
+    await send('POST', '/console/auth/email/redeem', { token: code, locale: locale() }),
+  );
+  // A sign-in made in this tab: the tab is of that account from now on (FRU-210).
+  if (redeemed.ok) {
+    tabAccount = typeof redeemed.data?.account?.id === 'string' ? redeemed.data.account.id : undefined;
+    endSeen = false;
+  }
+
+  return redeemed;
 }
 
 /**
@@ -234,13 +347,31 @@ export async function redeemLink(code: string): Promise<Answer<{ account: Accoun
  * and stays: somebody who reads « signed out » leaves the browser to the next person.
  */
 export async function signOut(): Promise<boolean> {
-  return (await send('POST', '/console/auth/sign-out', {}))?.ok === true;
+  // The session of the browser is of another account now: this tab does not end it (FRU-210).
+  if (left !== undefined) return false;
+  const out = (await send('POST', '/console/auth/sign-out', {}))?.ok === true;
+  // Signed out here: the tab is of nobody, and the next sign-in in it says whose it is.
+  if (out) tabAccount = undefined;
+
+  return out;
 }
 
 /**
  * Whether the worker sends the message of an invitation (FRU-104). Without a mailer it keeps the
  * invitation all the same, and the person who invites sends `invitationLink()` by hand.
  */
+/**
+ * Whether the worker signs anybody in (FRU-217). `false`: it answered, and offers no way at all,
+ * which is a worker with accounts and no `FRUITBACK_AUTH_SECRET`. The sign-in screen then says so,
+ * and shows no form: a link asked for there is never sent. `undefined`: the worker did not say, and
+ * the screen keeps its form.
+ */
+export async function offersSignIn(): Promise<boolean | undefined> {
+  if (signsIn === undefined) await signInProviders();
+
+  return signsIn;
+}
+
 export async function sendsMail(): Promise<boolean> {
   if (mails === undefined) await signInProviders();
 

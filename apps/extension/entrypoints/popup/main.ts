@@ -5,7 +5,7 @@ import { matchPatternFor } from '../../src/registration.ts';
 import { NO_ACCESS_PROBLEM, STORE_PROBLEM, activateStored } from '../../src/site-editor.ts';
 import { complaint, siteFrom } from '../../src/site-form.ts';
 import { type ResolvedSite, isWildcardPattern } from '../../src/site-patterns.ts';
-import { type SiteConfig, type SiteMode, findSite, readAll, writeSite } from '../../src/sites.ts';
+import { type SiteConfig, type SiteMode, findSite, readAll, rememberPreviews, writeSite } from '../../src/sites.ts';
 import { injectIntoOpenTabs } from '../../src/tab-injection.ts';
 import { browserTabScripting } from '../../src/tab-scripting-browser.ts';
 import { createBrowserSessions } from '../../src/session-browser.ts';
@@ -134,6 +134,14 @@ function cloudSeams(): CloudSeams {
   return {
     endpoints: async () => Object.keys(await sessions.list()),
     ensureAccess: (endpoint) => sessions.ensureAccess(endpoint),
+    // FRU-103: what the worker lists now is what this browser grants, before the click stores a rule.
+    remember: rememberPreviews,
+    // The epoch of the session in place: an answer is kept only for the session that asked.
+    sessionOf: async (endpoint) => {
+      const held = (await sessions.list())[endpoint];
+
+      return held === undefined ? undefined : (held.epoch ?? '');
+    },
   };
 }
 
@@ -149,8 +157,7 @@ function oneClick(offer: Offer): HTMLElement {
   const wrapper = document.createElement('div');
   const button = element('button', t(TURN_ON_HERE));
   const problem = element('p', '', 'problem');
-  const turn = (): void =>
-    void turnOn(offer.site.origin, cloudEntry(offer)).then(refused(problem, turn), failed(problem));
+  const turn = (): void => void turnOn(offer.pattern, cloudEntry(offer)).then(refused(problem, turn), failed(problem));
   button.addEventListener('click', turn);
   const byHand = element('button', t('Set up by hand'), 'secondary');
   byHand.addEventListener('click', () => void render(true));

@@ -1,4 +1,4 @@
-import { type AccountStore, normalizeEmail, readLocaleTag } from './accounts.ts';
+import { type AccountStore, mailboxOf, normalizeEmail, readLocaleTag } from './accounts.ts';
 import {
   AUTH_BASE_PATH,
   type Auth,
@@ -250,8 +250,8 @@ async function sendLink(
     readLocaleTag(request.headers.get('Accept-Language')?.split(',')[0]?.split(';')[0]) ??
     'en';
 
-  // Three links to one address in the window.
-  const sent = await context.kv.incr(`fruitback:mail:${email}`, EMAIL_LINK_WINDOW_MS);
+  // Three links to one mailbox in the window: the address without its `+suffix` (FRU-209).
+  const sent = await context.kv.incr(`fruitback:mail:${mailboxOf(email)}`, EMAIL_LINK_WINDOW_MS);
   if (sent > EMAIL_LINKS_PER_WINDOW) return json(429, { error: 'too-many-links' }, headers);
 
   const mailer = context.mailer;
@@ -407,6 +407,12 @@ export async function handleAuthRoutes(
 
   const path = pathname.slice(AUTH_BASE_PATH.length);
   if (!Object.hasOwn(SERVED_PATHS, path)) return json(404, { error: 'not-found' }, headers);
+  // FRU-212: the rule of the worker's own routes, before better-auth reads the request. better-auth
+  // 1.7.7 takes a `Referer` when there is no `Origin` (`origin || referer`, with no option to ask
+  // for the `Origin`), and checks nothing for a request with no cookie. Nothing legitimate writes
+  // here without the `Origin` of the console: GitHub and Google come back by a `GET`. A provider
+  // that comes back by a form (`response_mode=form_post`, Apple) would need its route named here.
+  if (!mutationAllowed(request, context.consoleUrl)) return json(403, { error: 'origin-not-allowed' }, headers);
 
   const forwarded = new Request(request.url, {
     method: request.method,

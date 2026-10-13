@@ -13,6 +13,7 @@ import { FRENCH } from './messages.fr.ts';
 const APP = new URL('./', import.meta.url);
 // `confirm.tsx` is a part of two screens, `domains.tsx` a part of the Sites screen (FRU-103), and `problems.ts` holds the sentences of their failures
 // (FRU-164): a sentence marked there is shown by a screen, so the guard reads them too.
+// `invitation-message.ts` holds the three notices of the members screen (FRU-209).
 const screens = [
   ...readdirSync(new URL('routes/', APP))
     .map((name) => `routes/${name}`)
@@ -22,6 +23,7 @@ const screens = [
   'confirm.tsx',
   'domains.tsx',
   'problems.ts',
+  'invitation-message.ts',
 ];
 const sources = new Map(screens.map((name) => [name, readFileSync(new URL(name, APP), 'utf8')]));
 
