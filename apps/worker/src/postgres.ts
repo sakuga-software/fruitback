@@ -118,17 +118,46 @@ export const DEFAULT_DATABASE_SCHEMA = 'public';
 const SCHEMA_NAME_MAX = 63;
 
 /**
+ * The words PostgreSQL writes between quotes when it prints a name: every key word that is not
+ * « unreserved » (`pg_get_keywords()` of PostgreSQL 17, `catcode <> 'U'`), `user`, `order` and
+ * `table` among them. Raised in review of FRU-219: `pg_indexes` prints `ON "user".sites` for a
+ * schema of that name, and the guard that compares a catalogue reads `ON user.sites`. A test reads
+ * the list from a real server, so a word that a later PostgreSQL adds fails there.
+ */
+export const WORDS_POSTGRESQL_QUOTES: ReadonlySet<string> = new Set(
+  `
+  all analyse analyze and any array as asc asymmetric authorization between bigint binary bit
+  boolean both case cast char character check coalesce collate collation column concurrently
+  constraint create cross current_catalog current_date current_role current_schema current_time
+  current_timestamp current_user dec decimal default deferrable desc distinct do else end except
+  exists extract false fetch float for foreign freeze from full grant greatest group grouping
+  having ilike in initially inner inout int integer intersect interval into is isnull join json
+  json_array json_arrayagg json_exists json_object json_objectagg json_query json_scalar
+  json_serialize json_table json_value lateral leading least left like limit localtime
+  localtimestamp merge_action national natural nchar none normalize not notnull null nullif numeric
+  offset on only or order out outer overlaps overlay placing position precision primary real
+  references returning right row select session_user setof similar smallint some substring
+  symmetric system_user table tablesample then time timestamp to trailing treat trim true union
+  unique user using values varchar variadic verbose when where window with xmlattributes xmlconcat
+  xmlelement xmlexists xmlforest xmlnamespaces xmlparse xmlpi xmlroot xmlserialize xmltable
+`
+    .trim()
+    .split(/\s+/),
+);
+
+/**
  * The schema of `FRUITBACK_DATABASE_SCHEMA` as the worker accepts it, or `undefined` (FRU-219).
  *
  * A plain name: a lower-case letter or `_`, then letters, digits and `_`. The name goes into
- * statements as an identifier, so nothing that needs a quote is taken, and no name of PostgreSQL's
- * own (`pg_…`, `information_schema`). Absent or empty: `public`.
+ * statements as an identifier, so nothing that needs a quote is taken: no key word that PostgreSQL
+ * quotes, and no name of PostgreSQL's own (`pg_…`, `information_schema`). Absent or empty: `public`.
  */
 export function readDatabaseSchema(value: string | undefined): string | undefined {
   const name = value?.trim() ?? '';
   if (name === '') return DEFAULT_DATABASE_SCHEMA;
   if (!/^[a-z_][a-z0-9_]*$/.test(name) || name.length > SCHEMA_NAME_MAX) return undefined;
   if (name.startsWith('pg_') || name === 'information_schema') return undefined;
+  if (WORDS_POSTGRESQL_QUOTES.has(name)) return undefined;
 
   return name;
 }

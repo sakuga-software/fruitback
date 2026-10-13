@@ -2326,7 +2326,11 @@ and `account` are names that such a database has already.
 - **`FRUITBACK_DATABASE_SCHEMA` names the schema, and `public` is the default.** A database of
   today names nothing and changes nothing: a database that Drizzle's own `migrate` made in
   `public` starts with nothing run again (`postgres-own-schema.test.ts`, on PGlite and on 17.11). The name is a lower-case letter or `_`, then lower-case letters, digits and `_`,
-  63 bytes at most, and not one of PostgreSQL itself (`pg_…`, `information_schema`). It goes in
+  63 bytes at most, not one of PostgreSQL itself (`pg_…`, `information_schema`), and not a key
+  word that PostgreSQL prints between quotes (`user`, `order`, `table`: raised in review, since
+  `pg_indexes` then prints `ON "user".sites` and the guard of the catalogue reads another text;
+  test:`refuses every word that this PostgreSQL prints between quotes, and no other word` reads
+  the list from the server). It goes in
   statements between double quotes and is never a parameter, so anything else is refused when the
   worker starts, with the rule and not the value:
   test:`refuses a name that needs a quote, a name of PostgreSQL itself, and one that PostgreSQL

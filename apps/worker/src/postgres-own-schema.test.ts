@@ -10,7 +10,13 @@ import { databasesOfACase } from './auth.fixture.ts';
 import { envWith, workerOf } from './auth-worker.fixture.ts';
 import type { ClientPolicy } from './clients.ts';
 import { DATABASE_SCHEMA_REFUSED, readConfig } from './env.ts';
-import { type Database, type PgDatabase, createPgDatabase, readDatabaseSchema } from './postgres.ts';
+import {
+  type Database,
+  type PgDatabase,
+  WORDS_POSTGRESQL_QUOTES,
+  createPgDatabase,
+  readDatabaseSchema,
+} from './postgres.ts';
 import {
   NO_REAL_POSTGRES,
   TEST_DATABASE_URL,
@@ -377,12 +383,42 @@ describe('the name of the schema (FRU-219)', () => {
       'pg_temp',
       'information_schema',
       'f'.repeat(64),
+      // Key words that PostgreSQL prints between quotes (raised in review).
+      'user',
+      'order',
+      'table',
+      'between',
     ]) {
       assert.equal(readDatabaseSchema(name), undefined, name);
     }
     assert.equal(readDatabaseSchema('f'.repeat(63)), 'f'.repeat(63));
     assert.throws(() => createPgDatabase('postgres://u:p@127.0.0.1:1/d', 'Not Plain'), StoreError);
   });
+
+  it(
+    'refuses every word that this PostgreSQL prints between quotes, and no other word',
+    { skip: NO_REAL_POSTGRES },
+    async () => {
+      const database = await createRealDatabase();
+      try {
+        const quoted = await rowsOf(
+          database,
+          `SELECT word FROM pg_get_keywords() WHERE quote_ident(word) <> word AND word ~ '^[a-z_][a-z0-9_]*$' ORDER BY word`,
+        );
+        assert.deepEqual(
+          quoted.map((row) => row.word),
+          [...WORDS_POSTGRESQL_QUOTES].sort(),
+        );
+        // And a name the worker takes is one PostgreSQL prints as it is.
+        for (const name of ['fruitback', 'fruitback_2', '_f', 'public', 'users', 'name', 'value']) {
+          assert.equal(readDatabaseSchema(name), name);
+          assert.deepEqual(await rowsOf(database, `SELECT quote_ident('${name}') AS printed`), [{ printed: name }]);
+        }
+      } finally {
+        await database.close();
+      }
+    },
+  );
 
   it('is read by the worker, refused with its rule and not its value, and refused with no database', () => {
     const named = readConfig(envWith({ FRUITBACK_DATABASE_SCHEMA: 'fruitback' }));

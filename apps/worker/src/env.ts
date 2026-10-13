@@ -297,7 +297,7 @@ function sameSecret(one: string | undefined, other: string | undefined): boolean
 
 /** Why a value of `FRUITBACK_DATABASE_SCHEMA` stops the worker (FRU-219). The value is not quoted. */
 export const DATABASE_SCHEMA_REFUSED =
-  'FRUITBACK_DATABASE_SCHEMA (the name of a schema: a lower-case letter or « _ », then lower-case letters, digits and « _ », 63 characters at most, and not a schema of PostgreSQL itself)';
+  'FRUITBACK_DATABASE_SCHEMA (the name of a schema: a lower-case letter or « _ », then lower-case letters, digits and « _ », 63 characters at most, not a schema of PostgreSQL itself, and not a key word of SQL such as « user »)';
 
 export function readConfig(env: WorkerEnv): ConfigResult {
   const clients = readClientMap(env.FRUITBACK_CLIENTS);
