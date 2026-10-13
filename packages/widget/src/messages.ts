@@ -76,8 +76,10 @@ export const ENGLISH = {
   'composer.destinationGone':
     'Sending to {destination} is no longer possible. This note will go to the default destination.',
 
-  'pin.label': '{stage} · {note}',
-  'pin.labelUncertain': '{stage} · {note} (approximate position)',
+  // The name of a pin (FRU-252): its number and its status, as the mock-up names it, then the note.
+  // `{stage}` is the name of the stage in lower case.
+  'pin.label': 'Note {number}, {stage}: {note}',
+  'pin.labelUncertain': 'Note {number}, {stage}, approximate position: {note}',
   'pin.labelDraft': 'Not sent yet · {note}',
 
   'thread.close': 'Close',

@@ -234,6 +234,33 @@ amber, where white cannot be read (FRU-233)`.
     amber of the mock-up darkened until it holds as text, 5.02:1.
   - `e2e/overlay.spec.ts` reads the five colours on five real pins, and the ink on the amber one.
 
+- **The pins, their frame and the dock have the measures of the mock-up** (FRU-252, screens 14 to
+  16). Read in its CSS, held by `e2e/overlay.spec.ts` and `e2e/host.spec.ts` on computed styles.
+  - **A pin carries the number of its note**: its place among the notes of the page, counted before
+    a stage is hidden, so hiding one gives no other note its number. `overlay.resolutions()` gives
+    the number, for the list. A note kept for later has none.
+  - **The number took the place of the `≈`** of a pin placed by position. One drop holds one mark,
+    and the number is what ties a pin to its line of the list. The dashed frame, the name of the pin
+    and the thread still say that the place is approximate.
+  - **The name of a pin is « Note 2, in progress: » and then the note.** The mock-up names it
+    « Note 2, in progress ». The note stays in the name: it is how a screen reader tells two pins
+    of one status apart, and how every spec finds a pin. The mock-up also writes « , open » in the
+    name of the open pin, beside `aria-expanded="true"`: the attribute alone is kept, or a screen
+    reader says it twice.
+  - **The frame stands 4 px off its element** on every side (`FRAME_OUTSET`), 2 px thick, 6 px of
+    corner: it draws around the element, not on it. The drop is outside the top-left corner, its
+    point on the inner corner of the frame. Open, the frame takes its colour at 12 %. The tint
+    under the pointer of FRU-158 is kept; the mock-up draws the open one only.
+  - **The dock**: 24 px from the corner, 10 px between two controls, each 44 px high, on every
+    screen and not on a touch screen only. The launch button is pressed while a capture runs
+    (`aria-pressed`, the strong accent), and takes the strong accent under the pointer. Its drop is
+    the mark, 12 by 15 px (`mark` in `icons.ts`), not the pin.
+  - **Kept, though the mock-up does not draw it**: the button of the list, left of the gear, in
+    its shape (the script alone has no other way to the list); the gear of Phosphor, at the 18 px
+    of the mock-up, whose own gear is another drawing; and the name of the gear, « Open Fruitback
+    settings »: the mock-up names it « Fruitback settings », which is the name of the dialog it
+    opens, and two controls with one name cannot be told apart (`docs/translating.md`).
+
 ## The popover
 
 ### The rules, in short

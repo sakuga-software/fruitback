@@ -45,10 +45,11 @@ describe('createOverlay', () => {
     overlay.render([issueOnCta()]);
 
     const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
-    assert.equal(pin.style.left, '100px');
-    assert.equal(pin.style.top, '200px');
-    assert.equal(pin.style.width, '200px');
-    assert.equal(pin.style.height, '40px');
+    // The frame stands 4 px off the element on every side, as the mock-up draws it (FRU-252).
+    assert.equal(pin.style.left, '96px');
+    assert.equal(pin.style.top, '196px');
+    assert.equal(pin.style.width, '208px');
+    assert.equal(pin.style.height, '48px');
     assert.equal(pin.dataset.fruitbackStrategy, 'selector');
   });
 
@@ -82,6 +83,8 @@ describe('createOverlay', () => {
     assert.equal(second?.dataset.fruitbackDraft, '');
     const badge = second?.querySelector('.fruitback-pin-badge') as HTMLElement;
     assert.match(badge.getAttribute('aria-label') ?? '', /^Not sent yet · /);
+    // No number: it is not a note of the tracker yet, and the sent one beside it is note 1.
+    assert.deepEqual([first?.textContent, second?.textContent], ['1', '']);
 
     badge.click();
     assert.equal(page.document.querySelector('.fruitback-thread-stage')?.textContent, 'Not sent yet');
@@ -104,6 +107,57 @@ describe('createOverlay', () => {
     assert.equal((page.document.querySelector('[data-fruitback-orphans]') as HTMLElement).hidden, false);
   });
 
+  it('numbers the notes of the page, names each pin by its number and status, and says which is open (FRU-252)', () => {
+    const page = mountWithCta();
+    const hidden = new Set<string>();
+    overlay = createOverlay({ document: page.document, shouldShow: (issue) => !hidden.has(issue.id) });
+    const note = (n: number, stage: 'seeded' | 'ripening' | 'ripe') =>
+      seedIssueFixture({
+        id: `issue_${n}`,
+        stage,
+        seed: { ...issueOnCta().seed, id: `sd_${n}`, note: `Note text ${n}` },
+      });
+    const issues = [note(1, 'seeded'), note(2, 'ripening'), note(3, 'ripe')];
+    overlay.render(issues);
+
+    const badges = () => [...page.document.querySelectorAll<HTMLElement>('.fruitback-pin-badge')];
+    assert.deepEqual(
+      badges().map((badge) => [
+        badge.textContent,
+        badge.getAttribute('aria-label'),
+        badge.getAttribute('aria-expanded'),
+      ]),
+      [
+        ['1', 'Note 1, new: Note text 1', 'false'],
+        ['2', 'Note 2, in progress: Note text 2', 'false'],
+        ['3', 'Note 3, done: Note text 3', 'false'],
+      ],
+    );
+    assert.deepEqual(
+      overlay.resolutions().map((each) => each.number),
+      [1, 2, 3],
+    );
+
+    badges()[1]?.click();
+    assert.deepEqual(
+      badges().map((badge) => badge.getAttribute('aria-expanded')),
+      ['false', 'true', 'false'],
+    );
+    pressKey(page, 'Escape');
+    assert.deepEqual(
+      badges().map((badge) => badge.getAttribute('aria-expanded')),
+      ['false', 'false', 'false'],
+    );
+
+    // A stage the reporter hid takes no number from the others: note 3 stays note 3.
+    hidden.add('issue_2');
+    overlay.refilter();
+    assert.deepEqual(
+      badges().map((badge) => badge.textContent),
+      ['1', '3'],
+    );
+  });
+
   it('places a pin whose element is gone at its remembered position, and says so', () => {
     const page = mountWithCta();
     page.query('button').remove();
@@ -114,9 +168,9 @@ describe('createOverlay', () => {
     const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
     assert.equal(pin.dataset.fruitbackStrategy, 'orphan');
     assert.ok(pin.className.includes('fruitback-pin-orphan'));
-    // 10% of 1000 across, 20% down: the box the note was planted on.
-    assert.equal(pin.style.left, '100px');
-    assert.equal(pin.style.top, '200px');
+    // 10% of 1000 across, 20% down: the box the note was planted on, and the frame 4 px off it.
+    assert.equal(pin.style.left, '96px');
+    assert.equal(pin.style.top, '196px');
   });
 
   it('marks a pin it placed by position rather than recognised', () => {
@@ -137,7 +191,10 @@ describe('createOverlay', () => {
     assert.equal(pin.dataset.fruitbackStrategy, 'bounds');
     assert.equal(pin.dataset.fruitbackConfident, 'false');
     assert.ok(pin.className.includes('fruitback-pin-uncertain'));
-    assert.match(page.document.querySelector('.fruitback-pin-badge')?.textContent ?? '', /≈/);
+    // The drop holds the number of the note (FRU-252). Its name says the place is approximate.
+    const unsure = page.document.querySelector('.fruitback-pin-badge');
+    assert.equal(unsure?.textContent, '1');
+    assert.match(unsure?.getAttribute('aria-label') ?? '', /^Note 1, .+, approximate position: /);
 
     (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
     assert.match(page.document.querySelector('[data-fruitback-thread]')?.textContent ?? '', /by its position/i);
@@ -152,7 +209,7 @@ describe('createOverlay', () => {
     setRect(page.query('button'), { left: 100, top: 460, width: 200, height: 40 });
     overlay.reposition();
 
-    assert.equal((page.document.querySelector('[data-fruitback-pin]') as HTMLElement).style.top, '460px');
+    assert.equal((page.document.querySelector('[data-fruitback-pin]') as HTMLElement).style.top, '456px');
   });
 
   it('falls back to the remembered box when the element is torn out of the page', () => {
@@ -166,8 +223,8 @@ describe('createOverlay', () => {
     overlay.reposition();
 
     const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
-    assert.equal(pin.style.left, '100px');
-    assert.equal(pin.style.top, '200px');
+    assert.equal(pin.style.left, '96px');
+    assert.equal(pin.style.top, '196px');
     assert.ok(pin.className.includes('fruitback-pin-orphan'), 'the pin should show that it lost its element');
   });
 
@@ -474,8 +531,8 @@ describe('the page changing underneath', () => {
     await settle();
 
     const pin = page.document.querySelector('[data-fruitback-pin]') as HTMLElement;
-    assert.equal(pin.style.left, '400px', 'the pin followed its element');
-    assert.equal(pin.style.top, '600px');
+    assert.equal(pin.style.left, '396px', 'the pin followed its element');
+    assert.equal(pin.style.top, '596px');
     assert.deepEqual(resolved, ['selector'], 'and the host was told, rather than asked to notice');
   });
 
@@ -492,7 +549,7 @@ describe('the page changing underneath', () => {
 
     // Re-resolved in place: the same pin element, carrying different marks.
     assert.equal(pin.dataset.fruitbackConfident, 'false');
-    assert.equal(pin.querySelector('.fruitback-pin-glyph')?.textContent, '≈');
+    assert.match(pin.querySelector('.fruitback-pin-badge')?.getAttribute('aria-label') ?? '', /approximate position/);
     assert.ok(pin.classList.contains('fruitback-pin-uncertain'));
   });
 
@@ -694,11 +751,11 @@ describe('the reading direction and the dates (FRU-38)', () => {
       return placed;
     };
 
-    assert.deepEqual(placedBy(createTranslator()), { pin: '600px', thread: '600px' });
-    // The pin is geometry and does not move; the thread's right edge meets the pin's (600 + 200 - 300).
+    assert.deepEqual(placedBy(createTranslator()), { pin: '596px', thread: '596px' });
+    // The pin is geometry and does not move; the thread's right edge meets the pin's (596 + 208 - 300).
     assert.deepEqual(placedBy(createTranslator({ locale: 'he', messages: { he: { 'thread.close': 'סגור' } } })), {
-      pin: '600px',
-      thread: '500px',
+      pin: '596px',
+      thread: '504px',
     });
   });
 
@@ -720,12 +777,12 @@ describe('the reading direction and the dates (FRU-38)', () => {
     };
 
     // On screen at document x 2000, the thread opens beside its pin.
-    assert.deepEqual(placedBy(500), { pin: '2000px', thread: '2000px' });
+    assert.deepEqual(placedBy(500), { pin: '1996px', thread: '1996px' });
     // Near the right edge of the window it stops 8px short of it: 1500 + 1000 - 300 - 8.
-    assert.deepEqual(placedBy(900), { pin: '2400px', thread: '2192px' });
+    assert.deepEqual(placedBy(900), { pin: '2396px', thread: '2192px' });
     // Right to left, near the left edge of the window, it stops 8px after it: 1500 + 8.
     assert.deepEqual(placedBy(0, createTranslator({ locale: 'he', messages: { he: { 'thread.close': 'סגור' } } })), {
-      pin: '1500px',
+      pin: '1496px',
       thread: '1508px',
     });
   });

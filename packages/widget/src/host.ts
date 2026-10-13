@@ -114,7 +114,9 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   // accessible name stays exactly the label: the SVG is aria-hidden and contributes no text.
   const launchLabel = document.createElement('span');
   launchLabel.textContent = restingLabel;
-  button.append(createIcon(document, 'drop'), launchLabel);
+  button.append(createIcon(document, 'mark'), launchLabel);
+  // A switch: it starts a capture and stops it, and says which (FRU-252).
+  button.setAttribute('aria-pressed', 'false');
 
   // Beside the launch button rather than inside the settings panel, because the panel is what it
   // opens. Only built when there is something to open.
@@ -326,6 +328,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
   function start(): void {
     capturing = true;
     container.dataset.fruitbackCapturing = '';
+    button.setAttribute('aria-pressed', 'true');
     // A phone has no Escape key and no arrows (FRU-157). Read at each start: a tablet gains a
     // keyboard and a mouse, and loses them.
     const touch = view?.matchMedia?.('(pointer: coarse)').matches === true;
@@ -337,6 +340,7 @@ export function createCaptureHost(options: CaptureHostOptions): CaptureHost {
     capturing = false;
     hovered = null;
     delete container.dataset.fruitbackCapturing;
+    button.setAttribute('aria-pressed', 'false');
     launchLabel.textContent = restingLabel;
     highlight.style.display = 'none';
     announcer.textContent = '';
@@ -450,20 +454,22 @@ li { display: list-item; }
   flex: none;
   overflow: hidden;
 }
+/* The dock of the mock-up of 2026-10-13 (FRU-252): 24 px from the corner, three controls of 44 px. */
 .fruitback-dock {
   position: fixed;
-  inset-inline-end: 16px;
-  bottom: 16px;
+  inset-inline-end: 24px;
+  bottom: 24px;
   z-index: 2147483200;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
 }
 .fruitback-launch {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 9px 14px;
+  gap: 8px;
+  height: 44px;
+  padding: 0 20px;
   border-radius: var(--fruitback-radius-pill);
   background: var(--fruitback-color-accent);
   color: var(--fruitback-color-on-accent);
@@ -474,16 +480,19 @@ li { display: list-item; }
   box-shadow: var(--fruitback-shadow-md);
   cursor: pointer;
 }
+/* The drop of the mark, taller than wide, as the mock-up draws it. */
+.fruitback-launch .fruitback-icon { width: 12px; height: 15px; }
+.fruitback-launch:hover { background: var(--fruitback-color-accent-strong); }
 .fruitback-configure,
 .fruitback-listing {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--fruitback-radius-pill);
   background: var(--fruitback-color-chip);
   color: var(--fruitback-color-on-chip);
-  font: 600 14px/1 var(--fruitback-font-sans);
+  font: 600 18px/1 var(--fruitback-font-sans);
   box-shadow: var(--fruitback-shadow-md);
   cursor: pointer;
 }
@@ -506,14 +515,10 @@ li { display: list-item; }
   clip-path: inset(50%);
   white-space: nowrap;
 }
-:host([data-fruitback-capturing]) .fruitback-launch {
-  background: var(--fruitback-color-chip);
-  /* The label is on the chip now. The foreground of the accent is dark in the dark scheme (FRU-93). */
-  color: var(--fruitback-color-on-chip);
-}
-/* A thumb, not a pointer (FRU-157): the three buttons of the dock are 44 px on a touch screen. */
-@media (pointer: coarse) {
-  .fruitback-launch { min-height: 44px; padding-inline: 18px; }
-  .fruitback-configure, .fruitback-listing { width: 44px; height: 44px; }
-}
+/* Pressed while a capture runs: the strong accent of the mock-up, under the same foreground (FRU-252). */
+:host([data-fruitback-capturing]) .fruitback-launch { background: var(--fruitback-color-accent-strong); }
+/*
+  A thumb, not a pointer (FRU-157): the three buttons of the dock were 30 px and grew to 44 px on a
+  touch screen. They are 44 px everywhere now, so a touch screen needs no rule of its own here.
+*/
 `;
