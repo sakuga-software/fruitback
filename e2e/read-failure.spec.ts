@@ -72,9 +72,9 @@ test('a read that fails after a good one leaves the pins and the list as they we
 
   await page.getByRole('button', { name: 'Leave feedback' }).click();
   await page.locator('[data-testid="card-espresso"] .add').click();
-  await page.getByPlaceholder('What is wrong here?').fill('Kept through an outage');
+  await page.getByPlaceholder('What should change?').fill('Kept through an outage');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'Leave a note' })).toBeHidden({ timeout: 5_000 });
+  await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 5_000 });
   await expect(page.locator('[data-fruitback-pin]')).toHaveCount(1);
 
   failing = true;

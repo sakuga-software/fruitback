@@ -28,11 +28,11 @@ async function mount(page: Page, testCase: string): Promise<void> {
 async function plant(page: Page, card: string, note: string): Promise<void> {
   await page.getByRole('button', { name: 'Leave feedback' }).click();
   await page.locator(`[data-testid="${card}"] .add`).click();
-  await page.getByPlaceholder('What is wrong here?').fill(note);
+  await page.getByPlaceholder('What should change?').fill(note);
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.getByRole('button', { name: new RegExp(note) }).first()).toBeVisible();
   // The popover stays open in its sent state for a moment.
-  await expect(page.getByRole('dialog', { name: 'Leave a note' })).toBeHidden({ timeout: 5_000 });
+  await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 5_000 });
 }
 
 test('the list shows every note, and a note chosen there opens its thread', async ({ page }) => {
@@ -76,9 +76,9 @@ test('a note far down the page is brought into view when it is chosen', async ({
   await target.scrollIntoViewIfNeeded();
   await page.getByRole('button', { name: 'Leave feedback' }).click();
   await target.click();
-  await page.getByPlaceholder('What is wrong here?').fill('A note far down');
+  await page.getByPlaceholder('What should change?').fill('A note far down');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'Leave a note' })).toBeHidden({ timeout: 5_000 });
+  await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 5_000 });
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect(target).not.toBeInViewport();
 

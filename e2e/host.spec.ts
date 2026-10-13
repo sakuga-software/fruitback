@@ -93,7 +93,7 @@ test('no emoji survives anywhere in the widget chrome (FRU-36)', async ({ page }
 
   await page.getByRole('button', { name: /Leave feedback/ }).click();
   await page.locator('#email-field').click();
-  await page.getByPlaceholder('What is wrong here?').fill('Une note sur un champ qui disparaît');
+  await page.getByPlaceholder('What should change?').fill('Une note sur un champ qui disparaît');
   seen.push(await chrome());
 
   await page.getByRole('button', { name: 'Send', exact: true }).click();
@@ -200,7 +200,13 @@ test('hovering highlights the element the pointer is really over', async ({ page
       const [box, target] = await Promise.all([highlight.boundingBox(), button.boundingBox()]);
       if (box === null || target === null) return null;
 
-      return Math.max(Math.abs(box.x - target.x), Math.abs(box.y - target.y));
+      // The frame stands 6 px off the element on every side (FRU-258).
+      return Math.max(
+        Math.abs(box.x - (target.x - 6)),
+        Math.abs(box.y - (target.y - 6)),
+        Math.abs(box.width - (target.width + 12)),
+        Math.abs(box.height - (target.height + 12)),
+      );
     })
     .toBeLessThanOrEqual(1);
 
@@ -224,7 +230,7 @@ test('a click while capturing goes to the widget, not to the site', async ({ pag
 
   expect(await page.evaluate(() => (window as unknown as { clicked: boolean }).clicked)).toBe(false);
   // And the composer opened on that target instead.
-  await expect(page.getByPlaceholder('What is wrong here?')).toBeVisible();
+  await expect(page.getByPlaceholder('What should change?')).toBeVisible();
 });
 
 test('the dev chrome keeps working while capturing, and is never itself captured', async ({ page }) => {
@@ -238,7 +244,7 @@ test('the dev chrome keeps working while capturing, and is never itself captured
 
   // The button did its job — the redeploy ran — and no composer opened on it.
   await expect(page.locator('[data-fruitback-inserted]')).toHaveCount(1);
-  await expect(page.getByPlaceholder('What is wrong here?')).toBeHidden();
+  await expect(page.getByPlaceholder('What should change?')).toBeHidden();
 });
 
 test('the pins live in the Shadow root now, and still land on their elements', async ({ page }) => {
@@ -349,8 +355,8 @@ test('the dock has the measures of the mock-up: three controls of 44 px, 24 px f
     });
   }
 
-  // Under the pointer, and while a capture runs: the strong accent. The button changes its words
-  // then, so it is not yet a switch with a state: that comes with the banner of FRU-258.
+  // Under the pointer, and while a capture runs: the strong accent. The button keeps its words
+  // then, and says it is pressed (FRU-258).
   await launch.hover();
   await expect.poll(async () => (await painted(launch)).fill).toBe('rgb(185, 28, 28)');
   await launch.click();
@@ -358,7 +364,9 @@ test('the dock has the measures of the mock-up: three controls of 44 px, 24 px f
   const pressed = page.locator('[data-fruitback-host-launch]');
   await expect(page.locator('[data-fruitback-host][data-fruitback-capturing]')).toHaveCount(1);
   expect((await painted(pressed)).fill).toBe('rgb(185, 28, 28)');
-  expect(await pressed.getAttribute('aria-pressed')).toBeNull();
+  await expect(pressed).toHaveAttribute('aria-pressed', 'true');
+  await expect(pressed).toHaveText('Leave feedback');
   await page.keyboard.press('Escape');
+  await expect(pressed).toHaveAttribute('aria-pressed', 'false');
   await expect.poll(async () => (await painted(pressed)).fill).toBe('rgb(221, 44, 39)');
 });

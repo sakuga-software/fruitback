@@ -133,6 +133,15 @@ function mergeSource(
 }
 
 /**
+ * The name of the component a note about this element will carry: the engine's, and the fiber
+ * walk's when the engine has none. The frame of a capture writes it (FRU-258), and it must be the
+ * name `mergeSource` gives the seed, or the reporter reads one name and sends another.
+ */
+export function componentOf(element: Element, engine: SeedSource | undefined): string | undefined {
+  return mergeSource(engine, () => readReactSource(element))?.component;
+}
+
+/**
  * Spread rather than assigned, because the round-trip forbids writing a key the caller did not
  * provide: `{ client: undefined }` survives `JSON.stringify` as an absent key but not as an absent
  * *field* everywhere it is compared.

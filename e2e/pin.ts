@@ -55,7 +55,7 @@ export async function plantPin(page: Page, target: Locator, note: string): Promi
   // sprout until FRU-36, and it is a mark beside the words now.
   await page.getByRole('button', { name: /Leave feedback/ }).click();
   await target.click();
-  await page.getByPlaceholder('What is wrong here?').fill(note);
+  await page.getByPlaceholder('What should change?').fill(note);
   await page.getByRole('button', { name: 'Send', exact: true }).click();
 
   // Synchronised on the identifier, not on the status line. The status has two writers — this

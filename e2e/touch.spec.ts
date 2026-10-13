@@ -79,22 +79,37 @@ const fontSize = (page: Page, placeholder: string) =>
 test.describe('on a touch screen at 390 px', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
-  test('the launch button says what a tap does, in English and in French', async ({ page }) => {
+  test('the banner says what a tap does and names no key, in English and in French', async ({ page }) => {
     await mount(page, 'touch-label');
-    // By its attribute: the accessible name is the label, which is what changes.
     const launch = page.locator('[data-fruitback-host-launch]');
+    const banner = page.locator('[data-fruitback-host-banner]');
     await expect(launch).toHaveText('Leave feedback');
     await launch.tap();
-    await expect(launch).toHaveText('Cancel');
-    await launch.tap();
+    // The button keeps its name (FRU-258): the banner holds the words, and the way out.
     await expect(launch).toHaveText('Leave feedback');
+    await expect(launch).toHaveAttribute('aria-pressed', 'true');
+    await expect(banner).toHaveText('Tap the part of the page your note is about' + 'Stop');
+    await expect(banner).not.toHaveText(/Esc|arrow/);
+    // The banner is inside the window, and its button is one a thumb can press.
+    const [box, stop] = await Promise.all([
+      banner.boundingBox(),
+      page.getByRole('button', { name: 'Stop', exact: true }).boundingBox(),
+    ]);
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+    expect(Math.round(stop!.height)).toBeGreaterThanOrEqual(COMFORTABLE);
+    await page.getByRole('button', { name: 'Stop', exact: true }).tap();
+    await expect(launch).toHaveAttribute('aria-pressed', 'false');
+    await expect(banner).toBeEmpty();
 
     await mount(page, 'touch-label-fr', 'fr-FR');
     const lancer = page.locator('[data-fruitback-host-launch]');
     await expect(lancer).toHaveText('Laisser un feedback');
     await lancer.tap();
-    await expect(lancer).toHaveText('Annuler');
-    await expect(lancer).not.toHaveText(/Esc|Échap/);
+    await expect(lancer).toHaveText('Laisser un feedback');
+    const bandeau = page.locator('[data-fruitback-host-banner]');
+    await expect(bandeau).toHaveText('Touchez la partie de la page dont parle votre note' + 'Arrêter');
+    await expect(bandeau).not.toHaveText(/Esc|Échap/);
   });
 
   test('no control is under 24 × 24 px, and the fields are at 16 px', async ({ page }) => {
@@ -125,11 +140,11 @@ test.describe('on a touch screen at 390 px', () => {
     await page.locator('[data-testid="card-espresso"] .add').tap();
     await page.getByRole('button', { name: 'Add my name (optional)' }).tap();
     await measure();
-    expect(await fontSize(page, 'What is wrong here?')).toBe('16px');
+    expect(await fontSize(page, 'What should change?')).toBe('16px');
     expect(await fontSize(page, 'Your name')).toBe('16px');
-    await page.getByPlaceholder('What is wrong here?').fill('A note from a phone');
+    await page.getByPlaceholder('What should change?').fill('A note from a phone');
     await page.getByRole('button', { name: 'Send', exact: true }).tap();
-    await expect(page.getByRole('dialog', { name: 'Leave a note' })).toBeHidden({ timeout: 5_000 });
+    await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 5_000 });
 
     // The thread of the pin.
     await page
@@ -160,9 +175,10 @@ test.describe('on a touch screen at 390 px', () => {
   });
 });
 
-test('with a mouse and a keyboard, the launch button still says Escape', async ({ page }) => {
+test('with a mouse and a keyboard, the banner names the key that stops', async ({ page }) => {
   await mount(page, 'touch-desktop');
   const launch = page.locator('[data-fruitback-host-launch]');
   await launch.click();
-  await expect(launch).toHaveText('Esc to cancel');
+  await expect(launch).toHaveText('Leave feedback');
+  await expect(page.locator('[data-fruitback-host-banner]')).toContainText('Esc to stop');
 });

@@ -60,7 +60,7 @@ async function settle(page: Page): Promise<void> {
 async function plantOnTheLatteCard(page: Page, launch: string | RegExp, note: string): Promise<void> {
   await page.getByRole('button', { name: launch }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
-  await page.getByPlaceholder('What is wrong here?').fill(note);
+  await page.getByPlaceholder('What should change?').fill(note);
   await page.getByRole('button', { name: 'Send', exact: true }).click();
 }
 
@@ -136,7 +136,7 @@ test('private mode: the same decision posted again keeps the open composer and i
 
   await page.getByRole('button', { name: /Leave feedback/ }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
-  const note = page.getByPlaceholder('What is wrong here?');
+  const note = page.getByPlaceholder('What should change?');
   await note.fill('Une note à moitié écrite');
 
   // The page asks, and waits until the isolated world has answered with its mount.
@@ -314,7 +314,7 @@ test('team mode: paired from the popup, the site reads and writes through the re
   // read, and a name typed here would be replaced with no word. The composer does not ask (FRU-112).
   await page.getByRole('button', { name: 'Team feedback' }).click();
   await page.locator('[data-testid="card-latte"] .add').click();
-  await expect(page.getByPlaceholder('What is wrong here?')).toBeVisible();
+  await expect(page.getByPlaceholder('What should change?')).toBeVisible();
   await expect(nameField).toBeHidden();
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
 

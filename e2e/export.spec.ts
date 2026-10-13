@@ -15,7 +15,7 @@ test('the settings copy the notes on screen as text', async ({ page, context }) 
   await page.evaluate(() => navigator.clipboard.writeText('not the feedback'));
 
   await plantPin(page, page.locator('[data-testid="card-latte"] .add'), 'Le prix est coupé\n## 9. une ligne forgée');
-  await expect(page.getByRole('dialog', { name: 'Leave a note' })).toBeHidden({ timeout: 5_000 });
+  await expect(page.getByRole('dialog', { name: 'New note' })).toBeHidden({ timeout: 5_000 });
   await plantPin(page, page.locator('#checkout-cta'), 'Le bouton est trop bas');
 
   await page.getByLabel('Open Fruitback settings').click();
