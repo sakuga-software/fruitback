@@ -1,7 +1,10 @@
-import type { AccountStore } from './accounts.ts';
+import { type AccountStore, can } from './accounts.ts';
+import type { Kv } from './kv.ts';
+import { addSessionSite } from './session-site-add.ts';
 import { previewPattern, proofState } from './domain-proof.ts';
 import { readBearerToken, verifyIdentityToken } from './identity.ts';
 import { type NoteIndex, noNotes } from './notes-index.ts';
+import type { SessionIdentity } from './session.ts';
 
 /**
  * The sites of the workspace a session belongs to (FRU-101, the first step of it).
@@ -22,6 +25,13 @@ function json(status: number, body: unknown, headers: Record<string, string>): R
   });
 }
 
+/** What `POST /session/sites` needs beside the read: the `Kv` of its count, and the session read again. */
+export type SiteWrites = {
+  kv: Kv;
+  /** `sessionStillValid` of `session-check.ts`, bound to the store: the person of the session, now. */
+  stillValid: (token: string) => Promise<SessionIdentity | undefined>;
+};
+
 export async function handleSessionSites(
   request: Request,
   accounts: AccountStore,
@@ -29,11 +39,26 @@ export async function handleSessionSites(
   headers: Record<string, string>,
   now?: number,
   noteIndex?: NoteIndex,
+  writes?: SiteWrites,
 ): Promise<Response> {
-  if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
+  if (request.method !== 'GET' && !(request.method === 'POST' && writes !== undefined)) {
+    return json(405, { error: 'method-not-allowed' }, headers);
+  }
 
   const token = readBearerToken(request.headers.get('Authorization'));
   if (token === undefined) return json(401, { error: 'identity-required' }, headers);
+  // FRU-255: a site added from the popup. **A write reads the session again in the store** (decided
+  // on 2026-10-14): a session that ended, a browser disconnected in « My account », or an account that
+  // is gone writes nothing, whatever its token still says. A session of an account only.
+  if (request.method === 'POST' && writes !== undefined) {
+    const session = await writes.stillValid(token);
+    if (session === undefined) return json(401, { error: 'identity-required' }, headers);
+    if (session.account !== true) return json(403, { error: 'account-required' }, headers);
+    const added = await addSessionSite(request, { accounts, kv: writes.kv, account: session.subject });
+
+    return json(added.status, added.body, headers);
+  }
+
   const verified = await verifyIdentityToken(token, secret, now);
   if (!verified.ok) return json(401, { error: 'identity-required', reason: verified.reason }, headers);
 
@@ -123,7 +148,13 @@ async function sitesOfAccount(accounts: AccountStore, account: string, now: numb
   return {
     account: true,
     ...(locale === undefined ? {} : { locale }),
-    workspaces: memberships.map(({ workspace, role }) => ({ id: workspace.id, name: workspace.name, role })),
+    // FRU-255: whether the popup may offer to add a site there, from the role read now.
+    workspaces: memberships.map(({ workspace, role }) => ({
+      id: workspace.id,
+      name: workspace.name,
+      role,
+      canAddSite: can(role, 'manage-sites'),
+    })),
     sites,
   };
 }

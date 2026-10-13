@@ -839,6 +839,23 @@ to a page where it mounts the widget: it is a locale tag, and the page can read 
 stores is team mode, so the relay's refusals all apply: the widget it mounts calls through the relay,
 and the page never holds the token.
 
+**`POST /session/sites` adds a site to a workspace, from the extension** (FRU-255): the first route
+where the token of an extension writes. It takes the access token of a session of an **account**
+(FRU-238), never of a pairing (`403 account-required`); an `Origin` of an extension, or none
+(`403 origin-not-allowed` for a page); a workspace where the account holds `manage-sites` (owner,
+admin), read at this call: a member and a guest get `403`, an account outside the workspace `404`,
+as the console answers. The site is always of **members**, whatever the body says; `visibility` and
+`previews` are not read, so no preview is covered without the proof of FRU-103. An origin over https
+or on the loopback only. A site already in that workspace is given back as it is: its visibility is
+not touched. **Ten sites an hour per account**, counted before anything is written. Each of these
+guards, taken out, fails a test of `session-site-add.test.ts`.
+**The session is read again in the store at each add** (`sessionStillValid`, decided on 2026-10-14): a
+session logged out, a browser disconnected in « My account », or an account that is gone adds nothing
+with the access token it still holds, and a token that names no session (no `sid`) adds nothing:
+test:`adds no site after a log out: the write reads the session again`,
+test:`adds no site once the browser is disconnected in the console`. The role is read at each call
+too: test:`reads the role at each call: a person removed between two calls adds nothing more`.
+
 ### Signing in to the console (FRU-98)
 
 The console signs in with better-auth, and with nothing else (FRU-150): the section below. The

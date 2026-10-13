@@ -648,7 +648,32 @@ async function routed(
     try {
       // FRU-101: what the extension may turn on in one click, for a worker that keeps accounts.
       if (pathname === SESSION_SITES_PATH && accounts !== undefined && served.identitySecret !== undefined) {
-        return await handleSessionSites(request, accounts, served.identitySecret, cors.headers, undefined, noteIndex);
+        // FRU-255: the write reads the session again in the store, through `sessionStillValid`.
+        const sessions = context.sessionStore ?? sessionStoreFor(served);
+        const secret = served.identitySecret;
+        const writes =
+          sessions === undefined
+            ? undefined
+            : {
+                kv,
+                stillValid: (token: string) =>
+                  sessionStillValid(token, {
+                    sessions,
+                    secret,
+                    ...(served.roleIn === undefined ? {} : { roleIn: served.roleIn }),
+                    ...(served.accountExists === undefined ? {} : { accountExists: served.accountExists }),
+                  }),
+              };
+
+        return await handleSessionSites(
+          request,
+          accounts,
+          served.identitySecret,
+          cors.headers,
+          undefined,
+          noteIndex,
+          writes,
+        );
       }
 
       // FRU-238: the extension asks to be connected, and comes back for its session. Only where a
