@@ -40,8 +40,22 @@ export type PendingArea = {
   write(pending: PendingConnect | undefined): Promise<void>;
 };
 
+/** How a request ended, kept a moment for the context that did not see it end. */
+export type EndedConnect = { request: string; outcome: 'signed-in' | 'refused' | 'expired'; at: number };
+
+export type EndedArea = {
+  read(): Promise<EndedConnect | undefined>;
+  write(ended: EndedConnect | undefined): Promise<void>;
+};
+
 export type ConnectSeams = {
   pending: PendingArea;
+  /**
+   * How the last request ended. The popup and the background both claim: when one of them ends the
+   * request, the other would find nothing and draw the screen of before, without the sentence that
+   * says why. Kept beside the request, without its claim.
+   */
+  ended?: EndedArea;
   post(url: string, body: Record<string, unknown>): Promise<SessionResponse>;
   sessions: Pick<Sessions, 'claim' | 'list'>;
   /** « Chrome on macOS »: what the console shows of the browser that asks (Q7). */
@@ -130,16 +144,13 @@ export async function startConnect(endpoint: string, seams: ConnectSeams): Promi
  * request is spent. That is not a refusal when the session is now kept: `before` is the session the
  * endpoint held when the request started, and another one in its place is this request's.
  */
-export async function pollConnect(seams: ConnectSeams): Promise<ConnectState> {
+export async function pollConnect(seams: ConnectSeams, options: { keep?: boolean } = {}): Promise<ConnectState> {
   const now = seams.now?.() ?? Date.now();
+  const keep = options.keep === true;
   const pending = await seams.pending.read();
-  if (pending === undefined) return 'none';
+  if (pending === undefined) return endedBefore(seams, now, keep);
 
-  if (pending.expiresAt <= now) {
-    await forgetIf(seams.pending, pending);
-
-    return 'expired';
-  }
+  if (pending.expiresAt <= now) return end(seams, pending, 'expired', now, keep);
 
   let result: ClaimResult;
   try {
@@ -148,33 +159,76 @@ export async function pollConnect(seams: ConnectSeams): Promise<ConnectState> {
     return 'unavailable';
   }
 
-  if (result.ok) {
-    await forgetIf(seams.pending, pending);
-
-    return 'signed-in';
-  }
+  if (result.ok) return end(seams, pending, 'signed-in', now, keep);
   if (result.reason === 'waiting') return 'waiting';
   if (result.reason === 'unavailable') return 'unavailable';
+  // A refusal is never a spent request, so it is said at once.
+  if (result.reason === 'refused') return end(seams, pending, 'refused', now, keep);
 
-  // Refused, expired or spent. Spent by the other context is a sign-in: its session is there now,
-  // or will be in a moment. The other context was answered first and stores the session in three
-  // writes, so a claim answered just after can find nothing yet: it looks again before it says
-  // « expired ». A refusal is never a spent request, so it is said at once.
-  await forgetIf(seams.pending, pending);
-  if (result.reason === 'refused') return 'refused';
+  // Expired or spent. Spent by the other context is a sign-in: its session is there now, or will be
+  // in a moment. The other context was answered first and stores the session in three writes, so a
+  // claim answered just after can find nothing yet: it looks again before it says « expired ».
   const wait = seams.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   for (let look = 0; look < SPENT_LOOKS; look += 1) {
     if (look > 0) await wait(SPENT_LOOK_MS);
     const held = (await seams.sessions.list())[pending.endpoint];
-    if (held !== undefined && runOf(held) !== pending.before) return 'signed-in';
+    if (held !== undefined && runOf(held) !== pending.before) return end(seams, pending, 'signed-in', now, keep);
   }
 
-  return 'expired';
+  return end(seams, pending, 'expired', now, keep);
+}
+
+/** How long the end of a request is kept for the context that did not see it. */
+const ENDED_KEPT_MS = 10 * 60 * 1000;
+
+/**
+ * Keep how the request ended, then forget it: in that order, so a reader always finds one of them.
+ * Kept only by the background (`keep`): the popup that ends a request says so itself, and once.
+ */
+async function end(
+  seams: ConnectSeams,
+  pending: PendingConnect,
+  outcome: EndedConnect['outcome'],
+  now: number,
+  keep: boolean,
+): Promise<ConnectState> {
+  await seams.ended?.write(keep ? { request: pending.request, outcome, at: now } : undefined);
+  await forgetIf(seams.pending, pending);
+
+  return outcome;
+}
+
+/**
+ * No request waits: how the last one ended, when it ended a moment ago, or `none`. Said once to the
+ * popup, which forgets it; the background reads it and keeps it (`keep`), since it draws nothing.
+ */
+async function endedBefore(seams: ConnectSeams, now: number, keep: boolean): Promise<ConnectState> {
+  const ended = await seams.ended?.read();
+  if (ended === undefined) return 'none';
+  if (now - ended.at > ENDED_KEPT_MS || now < ended.at) {
+    await seams.ended?.write(undefined);
+
+    return 'none';
+  }
+  if (!keep) await seams.ended?.write(undefined);
+
+  return ended.outcome;
 }
 
 /** « Start again »: the request is forgotten here. The worker lets it expire. */
-export async function forgetConnect(seams: Pick<ConnectSeams, 'pending'>): Promise<void> {
+export async function forgetConnect(seams: Pick<ConnectSeams, 'pending' | 'ended'>): Promise<void> {
   await seams.pending.write(undefined);
+  await seams.ended?.write(undefined);
+}
+
+/** How a request ended, read back: anything else is nothing. */
+export function parseEnded(value: unknown): EndedConnect | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const { request, outcome, at } = value as Record<string, unknown>;
+  if (typeof request !== 'string' || typeof at !== 'number' || !Number.isFinite(at)) return undefined;
+  if (outcome !== 'signed-in' && outcome !== 'refused' && outcome !== 'expired') return undefined;
+
+  return { request, outcome, at };
 }
 
 /**

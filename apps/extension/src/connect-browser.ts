@@ -1,5 +1,12 @@
 import { browser } from 'wxt/browser';
-import { type ConnectSeams, type PendingArea, browserLabel, parsePending } from './connect.ts';
+import {
+  type ConnectSeams,
+  type EndedArea,
+  type PendingArea,
+  browserLabel,
+  parseEnded,
+  parsePending,
+} from './connect.ts';
 import { postJson } from './session-browser.ts';
 import type { Sessions } from './session.ts';
 
@@ -12,6 +19,9 @@ import type { Sessions } from './session.ts';
  * never hears of it. Nothing here calls `setAccessLevel`.
  */
 export const PENDING_CONNECT_KEY = 'fruitback:connect';
+
+/** How the last request ended, without its claim: see `ConnectSeams.ended`. */
+const ENDED_CONNECT_KEY = 'fruitback:connect-ended';
 
 /** The address of the console of each Fruitback signed in to, for « Open the console ». Not a secret. */
 const CONSOLES_KEY = 'fruitback:consoles';
@@ -26,9 +36,20 @@ export function browserPendingArea(): PendingArea {
   };
 }
 
+function browserEndedArea(): EndedArea {
+  return {
+    read: async () => parseEnded((await browser.storage.session.get(ENDED_CONNECT_KEY))[ENDED_CONNECT_KEY]),
+    write: async (ended) => {
+      if (ended === undefined) await browser.storage.session.remove(ENDED_CONNECT_KEY);
+      else await browser.storage.session.set({ [ENDED_CONNECT_KEY]: ended });
+    },
+  };
+}
+
 export function createBrowserConnect(sessions: Pick<Sessions, 'claim' | 'list'>): ConnectSeams {
   return {
     pending: browserPendingArea(),
+    ended: browserEndedArea(),
     post: postJson,
     sessions,
     browser: browserLabel(navigator.userAgent),

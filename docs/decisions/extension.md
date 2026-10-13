@@ -438,7 +438,10 @@ in the console. » was never shown: the drawing now takes what the loop learned.
 The popup and the background can claim at the same instant, and the worker gives the session once:
 the context answered second is told the request is spent while the first still writes the session.
 That context looks for the session four times, half a second apart, before it says « expired »
-(raised in review); a refusal is never a spent request, so it is said at once.
+(raised in review); a refusal is never a spent request, so it is said at once. And how a request
+ended is kept ten minutes in `storage.session` (`fruitback:connect-ended`, without its claim): when the
+background ends it while the popup shows the word, the popup says why instead of drawing the screen
+of before (raised in review). The popup says it once; the background reads it and keeps it.
 
 The polling is the worker's pace (`interval`, 5 s, believed between 2 and 60), and a `429`
 `slow-down` reads as « still waiting ». Only `410 connect-refused` reads as a refusal; any other

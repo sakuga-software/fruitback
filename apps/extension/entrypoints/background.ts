@@ -160,7 +160,8 @@ export default defineBackground(() => {
   const connect = createBrowserConnect(sessions);
   const claimSignIn = serialize(async (): Promise<void> => {
     try {
-      const state = await pollConnect(connect);
+      // Kept: how it ended is for the popup to say.
+      const state = await pollConnect(connect, { keep: true });
       if (state !== 'waiting' && state !== 'unavailable') await browser.alarms.clear(CONNECT_ALARM);
     } catch (error) {
       console.error('[fruitback] could not claim the sign-in', error);

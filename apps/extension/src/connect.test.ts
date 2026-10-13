@@ -2,11 +2,13 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   type ConnectSeams,
+  type EndedConnect,
   type PendingArea,
   type PendingConnect,
   approvalPage,
   forgetConnect,
   browserLabel,
+  parseEnded,
   parsePending,
   parseStarted,
   pollConnect,
@@ -54,8 +56,16 @@ function seams({
   const claimed: { endpoint: string; claim: string }[] = [];
   const waited: number[] = [];
   const state: { held: Record<string, StoredSession>; now: number; onWait?: () => void } = { held, now };
+  const ended: { value: EndedConnect | undefined } & NonNullable<ConnectSeams['ended']> = {
+    value: undefined,
+    read: async () => ended.value,
+    write: async (next) => {
+      ended.value = next;
+    },
+  };
   const connect: ConnectSeams = {
     pending,
+    ended,
     browser: 'Chrome on macOS',
     now: () => state.now,
     wait: async (ms) => {
@@ -80,7 +90,7 @@ function seams({
     },
   };
 
-  return { connect, posted, claimed, pending, state, waited };
+  return { connect, posted, claimed, pending, state, waited, ended };
 }
 
 const session = (epoch: string): StoredSession => ({
@@ -465,5 +475,73 @@ describe('the name of the browser the console shows', () => {
       'Chrome on ChromeOS',
     );
     assert.equal(browserLabel(''), 'A browser');
+  });
+});
+
+describe('a request that the other context ended (FRU-251)', () => {
+  const waiting = (): PendingConnect => ({
+    endpoint: ENDPOINT,
+    request: 'req_1',
+    claim: 'claim-secret-1',
+    word: 'PLUM 47',
+    approveAt: 'https://app.fruitback.test/connect/req_1',
+    consoleAt: 'https://app.fruitback.test/',
+    expiresAt: NOW + 60_000,
+    interval: 5,
+  });
+
+  it('is said to the popup once, though the background claimed it, and the background keeps it', async () => {
+    // Raised in review: the background ended the request while the popup showed the word, and the
+    // popup then found nothing and drew the screen of before, without the sentence that says why.
+    const { connect, ended } = seams({ pending: pendingArea(waiting()), claims: [{ ok: false, reason: 'refused' }] });
+
+    assert.equal(await pollConnect(connect, { keep: true }), 'refused');
+    assert.deepEqual(ended.value, { request: 'req_1', outcome: 'refused', at: NOW });
+    // The background, again: it keeps what it read.
+    assert.equal(await pollConnect(connect, { keep: true }), 'refused');
+    // The popup: said once, then forgotten.
+    assert.equal(await pollConnect(connect), 'refused');
+    assert.equal(await pollConnect(connect), 'none');
+  });
+
+  it('is not kept when the popup ended it: the popup says it itself, once', async () => {
+    const { connect, ended } = seams({ pending: pendingArea(waiting()), claims: [{ ok: false, reason: 'refused' }] });
+
+    assert.equal(await pollConnect(connect), 'refused');
+    assert.equal(ended.value, undefined);
+    assert.equal(await pollConnect(connect), 'none');
+  });
+
+  it('keeps no claim, and is forgotten after ten minutes, or by « Start again »', async () => {
+    const { connect, ended, state } = seams({
+      pending: pendingArea(waiting()),
+      claims: [{ ok: true, identity: { subject: 'u_1' } }],
+    });
+
+    assert.equal(await pollConnect(connect, { keep: true }), 'signed-in');
+    assert.doesNotMatch(JSON.stringify(ended.value), /claim-secret/);
+    state.now = NOW + 10 * 60 * 1000 + 1;
+    assert.equal(await pollConnect(connect), 'none');
+    assert.equal(ended.value, undefined);
+
+    ended.value = { request: 'req_1', outcome: 'expired', at: NOW };
+    await forgetConnect(connect);
+    assert.equal(ended.value, undefined);
+  });
+
+  it('reads back how a request ended, and nothing else', () => {
+    assert.deepEqual(parseEnded({ request: 'r', outcome: 'expired', at: 1 }), {
+      request: 'r',
+      outcome: 'expired',
+      at: 1,
+    });
+    for (const broken of [
+      null,
+      { request: 'r', outcome: 'waiting', at: 1 },
+      { request: 'r', outcome: 'refused' },
+      { outcome: 'refused', at: 1 },
+    ]) {
+      assert.equal(parseEnded(broken), undefined, JSON.stringify(broken));
+    }
   });
 });
