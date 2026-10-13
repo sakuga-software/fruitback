@@ -239,7 +239,10 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   press: a session ended by mistake is a sign-in away). « Sign out everywhere » is
   `/console/auth/revoke-sessions`, asks twice, and ends this browser too. **A way out that the
   worker did not confirm says so and stays** (FRU-204), for the three of them. **A list that was
-  not read is no list.** **No kind of browser is shown**: the worker answers a user agent when its
+  not read is no list.** **The list keeps the room of one row while it is read, and when it could
+  not be**: it arrives above « Sign out », and a press that starts before a button moves and ends
+  after is lost, with no request and no message (measured: 53 px, `main` red on 30c62f8). A second
+  browser still adds its row. **No kind of browser is shown**: the worker answers a user agent when its
   operator switched that on, the type of `api.ts` leaves it out, and what to show of it waits for
   Q7 of FRU-230. So another browser is « Console · another browser », with when it signed in and
   when it was last used. **What has no route has no control**: the name is a locked field, a
