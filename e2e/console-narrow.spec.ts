@@ -24,7 +24,8 @@ async function stubWorker(page: Page, locale: 'en' | 'fr'): Promise<void> {
     if (pathname === '/console/workspaces/w1/domains') return json({ domains: [] });
     if (pathname === '/console/workspaces/w1/sites') return json(sites);
     if (pathname === '/console/workspaces/w1/connectors') return json({ connectors: [], available: true });
-    if (pathname === '/auth/providers') return json({});
+    // A worker that signs people in by a link: one that says nothing there shows no form (FRU-217).
+    if (pathname === '/auth/providers') return json({ betterAuth: { email: true, github: false, google: false } });
 
     return route.fulfill({ status: 204 });
   });
@@ -81,7 +82,8 @@ async function stubSetup(page: Page, signedIn: boolean): Promise<void> {
     if (pathname === '/console/me') return signedIn ? json(me) : json({ error: 'unauthorized' }, 401);
     if (pathname === '/console/workspaces/w1/domains') return json({ domains: [] });
     if (pathname === '/console/workspaces/w1/sites') return json(site, 201);
-    if (pathname === '/auth/providers') return json({});
+    // A worker that signs people in by a link: one that says nothing there shows no form (FRU-217).
+    if (pathname === '/auth/providers') return json({ betterAuth: { email: true, github: false, google: false } });
 
     return route.fulfill({ status: 204 });
   });

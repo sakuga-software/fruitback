@@ -95,6 +95,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Console · this browser': 'Console · ce navigateur',
   'Active now': 'Actif maintenant',
   'Sign out': 'Se déconnecter',
+  'Nobody can sign in to this Fruitback yet: its sign-in is not set up. The person who runs it has one setting to add.':
+    'Personne ne peut encore se connecter à ce Fruitback : sa connexion n’est pas configurée. La personne qui l’exploite a un réglage à ajouter.',
   'Another account is signed in in this browser': 'Un autre compte est connecté dans ce navigateur',
   'You were signed out': 'Vous avez été déconnecté',
   'This tab was open for another account, so it stopped: nothing was sent from it. Load it again to go on.':
