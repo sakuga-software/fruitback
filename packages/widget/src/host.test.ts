@@ -365,6 +365,38 @@ describe('createCaptureHost', () => {
     assert.equal(highlight.style.display, 'none');
   });
 
+  it('gives the frame back to the held element when a capture started over it stops', async () => {
+    // The composer is open on an element, and the reporter presses the launch button again, then
+    // stops: the frame must be where it was, not gone under an open composer.
+    const under: { element: Element | null } = { element: null };
+    const page = mountPage(PAGE, { width: 1_000, height: 1_000 });
+    const boxes = new Map<Element, { left: number; top: number; width: number; height: number }>([
+      [page.query('#cta'), { left: 10, top: 20, width: 100, height: 30 }],
+      [page.query('p'), { left: 300, top: 400, width: 50, height: 10 }],
+    ]);
+    const engine: CaptureEngine = {
+      ...fakeEngine(page, () => under.element),
+      boundsOf: (element) => boxes.get(element) ?? { left: 0, top: 0, width: 0, height: 0 },
+    };
+    host = createCaptureHost({ document: page.document, engine, onSelect: () => {} });
+    const highlight = host.root.querySelector('[data-fruitback-host-highlight]') as HTMLElement;
+    host.hold(page.query('#cta'));
+    assert.equal(highlight.style.left, '4px');
+
+    // A second capture borrows the frame for what the pointer is over.
+    host.start();
+    under.element = page.query('p');
+    moveOver(page);
+    assert.equal(highlight.style.left, '294px');
+
+    host.stop();
+    assert.equal(highlight.style.display, 'block');
+    assert.equal(highlight.style.left, '4px');
+
+    host.release();
+    assert.equal(highlight.style.display, 'none');
+  });
+
   it('takes the frame away at the choice for a caller that holds nothing', async () => {
     // A host that assembles the parts itself, and was written before `hold`: nothing stays on its page.
     const { page } = mount(() => page.query('#cta'));
