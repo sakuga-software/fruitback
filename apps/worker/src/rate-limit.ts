@@ -7,8 +7,8 @@ export const WINDOW_MS = 60_000;
 /**
  * A sliding window, estimated from two fixed windows (FRU-49).
  *
- * The count lives in the `Kv`, which lives in the process: N replicas allow N times the limit until a
- * store shared between them exists (FRU-67). The previous window's count is weighted by how much of it still overlaps the last minute.
+ * The count lives in the `Kv`. On a worker with no database it lives in the process, and N replicas
+ * allow N times the limit; with a database the replicas share it (FRU-67). The previous window's count is weighted by how much of it still overlaps the last minute.
  *
  * - `incr` comes first and is atomic. A check before the count would let a burst of parallel requests
  *   all read the same low count and all pass.

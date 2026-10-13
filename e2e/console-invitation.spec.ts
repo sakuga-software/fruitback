@@ -74,7 +74,7 @@ test.describe('an invited reviewer (FRU-104)', () => {
     await expect(owner).toHaveURL(/\/w\/ws_[0-9a-f]{20}\/sites$/);
     const workspace = /\/w\/(ws_[0-9a-f]{20})\//.exec(owner.url())?.[1] as string;
     await owner.getByRole('textbox', { name: 'Site address' }).fill(SITE);
-    await owner.getByRole('button', { name: 'Add the site' }).click();
+    await owner.getByRole('button', { name: 'Add site' }).click();
     await expect(owner.getByText('staging.acme.dev', { exact: true })).toBeVisible();
 
     await owner.goto(`${CONSOLE}/w/${workspace}/members`);
@@ -101,7 +101,7 @@ test.describe('an invited reviewer (FRU-104)', () => {
       paul.getByText('Sign in with the address the invitation was sent to, and it shows here.'),
     ).toBeVisible();
     await paul.getByRole('link', { name: 'Sign in' }).click();
-    await expect(paul).toHaveURL(`${CONSOLE}/setup`);
+    await expect(paul).toHaveURL(`${CONSOLE}/sign-in`);
     // No workspace name: Paul comes to join one.
     await signIn(paul, worker, 'paul@client.dev');
     await expect(paul).toHaveURL(`${CONSOLE}/invitations`);
@@ -116,7 +116,9 @@ test.describe('an invited reviewer (FRU-104)', () => {
     await expect(owner.getByText('Invitation sent', { exact: true })).toHaveCount(0);
 
     // Paul connects his browser: the pairing page opens with a code after the `#`.
-    await paul.getByRole('button', { name: 'Install' }).click();
+    // « Install » is in the menu of the row of the site, for a member too (FRU-243).
+    await paul.getByRole('button', { name: 'More for staging.acme.dev' }).click();
+    await paul.getByRole('menuitem', { name: 'Install' }).click();
     const opened = pauls.waitForEvent('page');
     await paul.getByRole('button', { name: 'Connect this browser' }).click();
     const pairing = await opened;

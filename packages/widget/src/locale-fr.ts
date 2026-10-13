@@ -8,11 +8,12 @@ import type { Catalog } from './messages.ts';
  */
 export const FRENCH: Catalog = {
   'launch.label': 'Laisser un feedback',
-  'launch.capturing': 'Échap pour annuler',
-  'launch.capturingTouch': 'Annuler',
   'widget.label': 'Feedback Fruitback',
-  'capture.instructions': 'Pointez un élément, ou déplacez-vous avec les flèches puis appuyez sur Entrée.',
-  'capture.instructionsTouch': 'Touchez un élément.',
+  'capture.banner': 'Cliquez sur la partie de la page dont parle votre note',
+  'capture.bannerTouch': 'Touchez la partie de la page dont parle votre note',
+  'capture.escape': 'Échap pour arrêter',
+  'capture.stop': 'Arrêter',
+  'capture.instructions': 'Ou déplacez-vous avec les flèches, puis appuyez sur Entrée.',
   'capture.element': '{tag} : {text}',
   'capture.elementEmpty': '{tag}, sans texte',
 
@@ -27,9 +28,12 @@ export const FRENCH: Catalog = {
   'settings.copied': 'Copié',
   'settings.copyManually': 'Copiez le texte d’ici',
 
-  'composer.placeholder': "Qu'est-ce qui ne va pas ici ?",
-  'composer.label': 'Votre commentaire',
-  'composer.dialog': 'Laisser une note',
+  'composer.placeholder': 'Que faut-il changer ?',
+  'composer.label': 'Que faut-il changer ?',
+  'composer.dialog': 'Nouvelle note',
+  'composer.about': 'sur {element}',
+  'composer.close': 'Fermer sans envoyer',
+  'composer.picture': 'Joindre une image de cet élément',
   'composer.identify': 'Ajouter mon nom (facultatif)',
   'composer.namePlaceholder': 'Votre nom',
   'composer.nameLabel': 'Votre nom (facultatif)',

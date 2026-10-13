@@ -25,12 +25,15 @@ export type PluralMessage = { readonly [Category in Intl.LDMLPluralRule]?: strin
 
 export const ENGLISH = {
   'launch.label': 'Leave feedback',
-  'launch.capturing': 'Esc to cancel',
-  // The same button on a touch screen, which has no Escape key (FRU-157).
-  'launch.capturingTouch': 'Cancel',
   'widget.label': 'Fruitback feedback',
-  'capture.instructions': 'Point at an element, or move with the arrow keys and press Enter.',
-  'capture.instructionsTouch': 'Tap an element.',
+  // The banner of a capture (FRU-258). `capture.bannerTouch` is the same sentence on a touch screen,
+  // which has no Escape key and no arrows (FRU-157): it then stands alone beside `capture.stop`.
+  'capture.banner': 'Click the part of the page your note is about',
+  'capture.bannerTouch': 'Tap the part of the page your note is about',
+  'capture.escape': 'Esc to stop',
+  'capture.stop': 'Stop',
+  // Read after the banner by a screen reader, and not drawn: it follows `capture.escape`.
+  'capture.instructions': 'Or move with the arrow keys and press Enter.',
   'capture.element': '{tag}: {text}',
   'capture.elementEmpty': '{tag}, no text',
 
@@ -45,9 +48,15 @@ export const ENGLISH = {
   'settings.copied': 'Copied',
   'settings.copyManually': 'Copy the text from here',
 
-  'composer.placeholder': 'What is wrong here?',
-  'composer.label': 'Your comment',
-  'composer.dialog': 'Leave a note',
+  'composer.placeholder': 'What should change?',
+  'composer.label': 'What should change?',
+  // The name of the dialog, and the title its head shows.
+  'composer.dialog': 'New note',
+  // `{element}` is the text of the element the note is about, or the name the page gave it.
+  'composer.about': 'on {element}',
+  'composer.close': 'Close without sending',
+  // The same preference as `settings.screenshot`, said beside the note it applies to.
+  'composer.picture': 'Attach a picture of this element',
   'composer.identify': 'Add my name (optional)',
   'composer.namePlaceholder': 'Your name',
   'composer.nameLabel': 'Your name (optional)',

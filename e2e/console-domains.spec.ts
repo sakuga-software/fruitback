@@ -2,7 +2,7 @@ import { type Page, expect, test } from '@playwright/test';
 import { WORKER_ORIGIN } from './pin.ts';
 
 /**
- * The domains of a workspace, on the Sites screen (FRU-103): the record to write, the check, the
+ * The domains of a workspace, on the Sites screen (FRU-103), under the row of a site (FRU-243): the record to write, the check, the
  * site whose previews a proven domain covers, and a proof that is lost.
  *
  * The worker is answered by stubs, which decide what is proven: the console decides nothing.
@@ -91,11 +91,18 @@ async function open(page: Page): Promise<void> {
   await expect(page.locator('main h1')).toBeVisible();
 }
 
+/** The proof of a domain is under the row of a site, behind « Preview builds » of its menu (FRU-243). */
+async function openPreviews(page: Page, locale: 'en' | 'fr' = 'en'): Promise<void> {
+  await open(page);
+  await page.getByRole('button', { name: locale === 'en' ? 'More for acme.dev' : 'Plus pour acme.dev' }).click();
+  await page.getByRole('menuitem', { name: locale === 'en' ? 'Preview builds' : 'Previews' }).click();
+}
+
 test('a domain is added, shows its record, is proven by the worker, and covers the previews of a site', async ({
   page,
 }) => {
   const worker = await stubWorker(page, 'en');
-  await open(page);
+  await openPreviews(page);
   const section = page.getByRole('region', { name: 'Preview deploys' });
   await expect(section.getByText('No domain yet. A site covers its own address only.')).toBeVisible();
 
@@ -147,7 +154,7 @@ test('a proof that is lost says so, in French, and offers no site', async ({ pag
       },
     ],
   });
-  await open(page);
+  await openPreviews(page, 'fr');
   const row = page.locator('[data-domain="preview.acme.dev"]');
 
   await expect(row.getByText('Preuve perdue')).toBeVisible();
@@ -161,10 +168,14 @@ test('a proof that is lost says so, in French, and offers no site', async ({ pag
   );
 });
 
-test('a member who is no admin sees no domain section', async ({ page }) => {
+test('a member who is no admin has no way to the domain section', async ({ page }) => {
   await stubWorker(page, 'en', { role: 'member' });
   await open(page);
-  await expect(page.getByText('https://acme.dev')).toBeVisible();
+  await expect(page.getByText('acme.dev', { exact: true })).toBeVisible();
 
+  // The menu of a site has « Install » alone for a member: no way to the proof of a domain.
+  await page.getByRole('button', { name: 'More for acme.dev' }).click();
+  await expect(page.getByRole('menuitem')).toHaveText(['Install']);
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('region', { name: 'Preview deploys' })).toHaveCount(0);
 });

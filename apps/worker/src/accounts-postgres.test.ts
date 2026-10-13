@@ -8,6 +8,7 @@ import type { AccountStore } from './accounts.ts';
 import { createPostgresAccountStore } from './accounts-postgres.ts';
 import { accountStoreFor, handleRequest } from './app.ts';
 import { type WorkerEnv, hasAccounts, readConfig } from './env.ts';
+import { createMemoryKv } from './kv.ts';
 import type { Database } from './postgres.ts';
 import {
   NO_REAL_POSTGRES,
@@ -20,6 +21,10 @@ import {
 } from './postgres.fixture.ts';
 import { createPostgresSessionStore } from './session-postgres.ts';
 import { type SessionStore, createPairing, redeemPairing } from './session.ts';
+
+// The database of this environment is at an address where nothing listens: a case hands its stores
+// over, and the `Kv` with them, as the transport does (FRU-67).
+const kv = createMemoryKv();
 
 /**
  * What is true of the PostgreSQL account store alone (FRU-141). The rules of every `AccountStore`
@@ -142,6 +147,7 @@ describe('the sites of a workspace, read from PostgreSQL (FRU-141)', () => {
 
     return handleRequest(new Request(`https://worker.test/feedback?url=${url}&client=${client}`, { headers }), env, {
       clientIp: `192.0.2.${100 + ip}`,
+      kv,
       accounts,
     });
   }

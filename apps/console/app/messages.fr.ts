@@ -334,19 +334,8 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'You are not signed in yet': 'Vous n’êtes pas encore connecté',
   'Fruitback did not answer. Your link still works.': 'Fruitback n’a pas répondu. Votre lien fonctionne toujours.',
   'This link no longer works': 'Ce lien ne fonctionne plus',
-  'A link works once, for fifteen minutes. Ask for another one.':
-    'Un lien fonctionne une fois, pendant quinze minutes. Demandez-en un autre.',
-  'Send a new link': 'Envoyer un nouveau lien',
   'Signing you in…': 'Connexion en cours…',
 
-  'The addresses you review. Adding a site is pasting its URL.':
-    'Les adresses que vous relisez. Ajouter un site, c’est coller son URL.',
-  'Who sees the feedback': 'Qui voit les retours',
-  Everyone: 'Tout le monde',
-  'Add the site': 'Ajouter le site',
-  'No site yet. Paste the address of the one you review.':
-    'Pas encore de site. Collez l’adresse de celui que vous relisez.',
-  'Fruitback did not answer. Your sites are not lost.': 'Fruitback n’a pas répondu. Vos sites ne sont pas perdus.',
   'Fruitback did not answer. The sources and their sites could not be read.':
     'Fruitback n’a pas répondu. Les sources et leurs sites n’ont pas pu être lus.',
   Close: 'Fermer',
@@ -366,6 +355,36 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Only the owner of the workspace deletes it.': 'Seul le propriétaire du workspace le supprime.',
   'The workspace was not deleted. Try again.': 'Le workspace n’a pas été supprimé. Réessayez.',
   'Remove {site}': 'Retirer {site}',
+  'Where {workspace} collects notes, and where they stand.':
+    'Là où {workspace} recueille des notes, et où elles en sont.',
+  'Add a site': 'Ajouter un site',
+  'The sites did not load': 'Les sites ne se sont pas chargés',
+  'Fruitback did not answer. Your sites and notes are safe.':
+    'Fruitback n’a pas répondu. Vos sites et vos notes sont en sécurité.',
+  'No site yet': 'Aucun site pour l’instant',
+  "Paste the address of a site you review. Staging, a preview build or a client's live site: any page of it will do.":
+    'Collez l’adresse d’un site que vous relisez. Un staging, une preview ou le site en ligne d’un client : n’importe laquelle de ses pages convient.',
+  'An owner or an admin of {workspace} adds its first site.':
+    'Un propriétaire ou un admin de {workspace} ajoute son premier site.',
+  'Notes go to': 'Les notes vont vers',
+  Actions: 'Actions',
+  'A site with no tracker keeps its notes in Fruitback.': 'Un site sans tracker garde ses notes dans Fruitback.',
+  'Connect a tracker': 'Connecter un tracker',
+  'Add site': 'Ajouter le site',
+  'Who sees the notes?': 'Qui voit les notes ?',
+  'Members of {workspace}': 'Les membres de {workspace}',
+  "Visitors of the site see nothing. Right for staging and for a client's site.":
+    'Les visiteurs du site ne voient rien. Convient à un staging et au site d’un client.',
+  'Everyone who visits': 'Tous les visiteurs',
+  'A public way to report a problem on a live site.': 'Un moyen public de signaler un problème sur un site en ligne.',
+  'A tracker': 'Un tracker',
+  'Team {team}': 'Équipe {team}',
+  'Kept in Fruitback': 'Gardées dans Fruitback',
+  'No tracker yet': 'Pas encore de tracker',
+  '{place} and {count} more': '{place} et {count} de plus',
+  'Preview builds': 'Previews',
+  'More for {site}': 'Plus pour {site}',
+  'Install on {site}': 'Installer sur {site}',
   'The widget stops on {site}, and the script pasted there no longer works: adding the site again gives it a new script. The notes already in a tracker stay there.':
     'Le widget s’arrête sur {site}, et le script collé là ne marche plus : ajouter le site à nouveau lui donne un nouveau script. Les notes déjà dans un tracker y restent.',
   'Disconnect {source}': 'Déconnecter {source}',
@@ -438,4 +457,24 @@ export const FRENCH: Readonly<Record<string, string>> = {
   Proven: 'Prouvé',
   'Proof lost': 'Preuve perdue',
   'Not proven yet': 'Pas encore prouvé',
+  // The sign-in page, and the tab that goes on by itself (FRU-235).
+  'Sign in to Fruitback': 'Connectez-vous à Fruitback',
+  'We email you a link that signs you in on this browser.':
+    'Nous vous envoyons par e-mail un lien qui vous connecte dans ce navigateur.',
+  'Email me a link': 'Recevoir un lien par e-mail',
+  or: 'ou',
+  'New to Fruitback?': 'Nouveau sur Fruitback ?',
+  'Set up a workspace': 'Créer un workspace',
+  'A sign-in link is on its way to {email}.': 'Un lien de connexion est en route vers {email}.',
+  'Open it in this browser and this tab signs in by itself. The link works once, for fifteen minutes.':
+    'Ouvrez-le dans ce navigateur, et cet onglet se connecte tout seul. Le lien fonctionne une fois, pendant quinze minutes.',
+  'Send again in {time}': 'Renvoyer dans {time}',
+  'Send again': 'Renvoyer',
+  'You are signed in': 'Vous êtes connecté',
+  'Your other Fruitback tab has carried on without you. You can close this one.':
+    'Votre autre onglet Fruitback a continué sans vous. Vous pouvez fermer celui-ci.',
+  'Continue in this tab': 'Continuer dans cet onglet',
+  'A link works once, for fifteen minutes. This one was already used or ran out of time.':
+    'Un lien fonctionne une fois, pendant quinze minutes. Celui-ci a déjà servi, ou son délai est passé.',
+  'Send me a new link': 'M’envoyer un nouveau lien',
 };

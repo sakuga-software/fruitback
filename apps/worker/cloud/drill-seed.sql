@@ -92,3 +92,8 @@ SELECT setval(pg_get_serial_sequence('seeds', 'id'), 7);
 INSERT INTO seed_comments (seed_id, author, body, created_at) VALUES
   (1, 'Alice Martin', 'We see it too.', 5),
   (1, NULL, 'Fixed in the next deployment.', 6);
+
+-- What the replicas share (FRU-67): a count of the rate limiter. Nothing of it must survive a
+-- restore, and the drill compares it like any other row.
+INSERT INTO kv (key, value, expires_at) VALUES
+  ('fruitback:drill:count', '3', 1);
