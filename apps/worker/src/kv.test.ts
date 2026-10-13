@@ -2,7 +2,8 @@ import { after, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { type Kv, KvError, createMemoryKv } from './kv.ts';
+import { readConfig } from './env.ts';
+import { type Kv, KvError, createMemoryKv, processKv } from './kv.ts';
 import { closeSharedKvs, kvFor, readKvConfig } from './kvs.ts';
 import { createRedisKv } from './redis.ts';
 
@@ -182,6 +183,21 @@ describe('which Kv a worker runs on (FRU-67)', () => {
   it('keeps the state in memory when nothing is set, as before', () => {
     assert.deepEqual(readKvConfig({}), { ok: true, config: { provider: 'memory' } });
     assert.deepEqual(readKvConfig({ FRUITBACK_KV: ' memory ' }), { ok: true, config: { provider: 'memory' } });
+  });
+
+  // What a worker that sets neither variable gets, and the one of `docker-compose.yml`, which passes
+  // both as empty strings: the store of before, the very instance, and no client.
+  it('changes nothing for a worker that names no Redis: the same store of the process, read from the whole configuration', () => {
+    const base = { FRUITBACK_STORE: 'memory', ALLOWED_ORIGINS: 'https://app.fruitback.test' };
+
+    for (const env of [base, { ...base, FRUITBACK_KV: '', FRUITBACK_REDIS_URL: '' }]) {
+      const read = readConfig(env);
+      assert.ok(read.ok, 'this environment starts a worker');
+      assert.deepEqual(read.config.kv, { provider: 'memory' });
+      assert.equal(kvFor(read.config.kv), processKv());
+    }
+    // And a URL alone does not switch it on in silence: the worker does not start.
+    assert.equal(readConfig({ ...base, FRUITBACK_REDIS_URL: 'redis://127.0.0.1:6379' }).ok, false);
   });
 
   it('reads the Redis URL when FRUITBACK_KV=redis', () => {
