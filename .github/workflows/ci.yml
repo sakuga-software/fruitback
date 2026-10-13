@@ -495,15 +495,18 @@ jobs:
           serve console-other 8083 https://other.example:8443/fruitback/
 
           policy() { curl -s -D - -o /dev/null "http://127.0.0.1:$1/w/any/sites" | tr -d '\r' | grep -i '^content-security-policy:'; }
+          # WARNING: never `! grep`. Under `bash -e` a command that `!` inverts does not stop the script,
+          # so the step stayed green with the very thing it looks for. `absent` exits by itself.
+          absent() { if grep -q -- "$1" "$2"; then echo "found « $1 » in $2, where it must not be"; exit 1; fi; }
           policy 8082 | tee /tmp/acme
           policy 8083 | tee /tmp/other
           grep -q "connect-src 'self' https://api.acme.example;" /tmp/acme
           grep -q "connect-src 'self' https://other.example:8443;" /tmp/other
-          ! grep -q "other.example" /tmp/acme
-          ! grep -q "acme.example" /tmp/other
+          absent "other.example" /tmp/acme
+          absent "acme.example" /tmp/other
           for file in /tmp/acme /tmp/other; do
             grep -q "'sha256-" "$file"
-            ! grep -q "script-src[^;]*unsafe-inline" "$file"
+            absent "script-src[^;]*unsafe-inline" "$file"
             grep -q "frame-ancestors 'none'" "$file"
           done
           test "$(curl -s http://127.0.0.1:8082/config.js)" = 'globalThis.__FRUITBACK__ = { api: "https://api.acme.example" };'

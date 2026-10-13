@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>My account, Fruitback</title>
+<script src="../assets/654b7f6201e7e08c.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#fff}
+::selection{background:#18181b;color:#fff}
+input{caret-color:#dd2c27}
+:focus-visible{outline:2px solid #dd2c27;outline-offset:2px}
+.rail :focus-visible{outline-color:#ec5b57}
+a{color:#18181b;text-decoration-thickness:1px;text-underline-offset:3px}
+a:hover{color:#b91c1c}
+button,select{cursor:pointer}
+.b-wide:hover{background:#fafafa !important;border-color:#18181b !important}
+.b-link:hover{color:#b91c1c !important}
+.nav-link:hover{background:#27272a !important;color:#ffffff !important}
+.rail-nav{display:flex;flex-direction:column;gap:2px}
+@media (max-width: 900px){.rail-nav{flex-direction:row;overflow-x:auto}.rail-foot{display:none !important}}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #ffffff; color: #18181b; font-family: -apple-system, system-ui, sans-serif; -webkit-font-smoothing: antialiased">
+
+  <aside class="rail" style="flex: 1 1 248px; box-sizing: border-box; padding: 16px 12px; background: #18181b; color: #ffffff; display: flex; flex-direction: column; gap: 20px">
+    <button type="button" aria-haspopup="menu" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border: 0; border-radius: 10px; background: transparent; color: #ffffff; text-align: left; font: inherit">
+      <span aria-hidden="true" style="width: 32px; height: 32px; flex: none; border-radius: 8px; background: #ffffff; color: #18181b; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700">S</span>
+      <span style="flex: 1; min-width: 0">
+        <span style="display: block; font-size: 15px; font-weight: 600">Sakuga</span>
+        <span style="display: block; font-size: 12px; color: #a1a1aa">Cloud workspace</span>
+      </span>
+      <svg aria-hidden="true" sc-camel-view-box="0 0 24 24" style="width: 16px; height: 16px; color: #a1a1aa"><path d="M8 10l4-4 4 4M8 14l4 4 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+    </button>
+    <nav aria-label="Workspace" class="rail-nav">
+      <a href="Sites.dc.html" class="nav-link" style="display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px 0 31px; border-radius: 10px; color: #d4d4d8; font-size: 15px; text-decoration: none; white-space: nowrap">Sites</a>
+      <a href="Notes.dc.html" class="nav-link" style="display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px 0 31px; border-radius: 10px; color: #d4d4d8; font-size: 15px; text-decoration: none; white-space: nowrap">Notes</a>
+      <a href="Connectors.dc.html" class="nav-link" style="display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px 0 31px; border-radius: 10px; color: #d4d4d8; font-size: 15px; text-decoration: none; white-space: nowrap">Connectors</a>
+      <a href="Members.dc.html" class="nav-link" style="display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px 0 31px; border-radius: 10px; color: #d4d4d8; font-size: 15px; text-decoration: none; white-space: nowrap">Members</a>
+      <a href="Account.dc.html" aria-current="page" style="display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px; border-radius: 10px; background: #27272a; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; white-space: nowrap"><span aria-hidden="true" style="width: 9px; height: 9px; border-radius: 50% 50% 50% 0; transform: rotate(-90deg); background: #ec5b57"></span>My account</a>
+    </nav>
+    <div class="rail-foot" style="margin-top: auto; padding: 8px; display: flex; flex-direction: column; gap: 14px">
+      <a href="https://fruitback.com" style="color: #d4d4d8; font-size: 14px">Help and docs</a>
+      <img src="../assets/7878e337d78a3a6d.svg" alt="Fruitback" style="height: 16px; width: 82px; display: block">
+    </div>
+  </aside>
+
+  <div style="flex: 999 1 640px; min-width: 0">
+    <main style="max-width: 820px; box-sizing: border-box; padding: 40px clamp(16px, 4vw, 48px) 72px; display: flex; flex-direction: column; gap: 40px">
+      <header>
+        <h1 style="margin: 0 0 6px; font-size: 28px; line-height: 1.15; font-weight: 700; letter-spacing: -0.02em">My account</h1>
+        <p style="margin: 0; font-size: 16px; line-height: 1.5; color: #6b6b74">Your name on notes, how you sign in, and where.</p>
+      </header>
+
+      <section aria-labelledby="profile-title" style="display: flex; flex-direction: column; gap: 14px">
+        <h2 id="profile-title" style="margin: 0; font-size: 18px; font-weight: 700">Profile</h2>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 14px">
+          <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600">Name shown on notes
+            <input type="text" value="Mathieu" readonly="" style="height: 44px; box-sizing: border-box; border: 1px solid #8a8a93; border-radius: 8px; padding: 0 14px; font: inherit; font-size: 15px; font-weight: 400; color: #18181b; background: #ffffff">
+          </label>
+          <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600">Language
+            <sc-raw-select style="height: 44px; box-sizing: border-box; border: 1px solid #8a8a93; border-radius: 8px; padding: 0 12px; font: inherit; font-size: 15px; font-weight: 400; color: #18181b; background: #ffffff">
+              <option>English</option>
+              <option>Français</option>
+            </sc-raw-select>
+          </label>
+        </div>
+      </section>
+
+      <section aria-labelledby="signin-title">
+        <h2 id="signin-title" style="margin: 0 0 4px; font-size: 18px; font-weight: 700">How you sign in</h2>
+        <p style="margin: 0 0 12px; font-size: 14px; line-height: 1.5; color: #6b6b74">Any of these opens the same account, in the console and in the extension.</p>
+        <ul style="list-style: none; margin: 0; padding: 0; border-top: 1px solid #e4e4e7; font-size: 15px">
+          <li style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; min-height: 56px; padding: 8px 0; border-bottom: 1px solid #e4e4e7">
+            <span style="flex: 1 1 200px"><span style="display: block; font-weight: 600">Email link</span><span style="display: block; font-size: 13px; color: #6b6b74">mathieu@sakuga.dev</span></span>
+            <span style="font-size: 14px; color: #6b6b74">Always on</span>
+          </li>
+          <li style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; min-height: 56px; padding: 8px 0; border-bottom: 1px solid #e4e4e7">
+            <span style="flex: 1 1 200px"><span style="display: block; font-weight: 600">GitHub</span><span style="display: block; font-size: 13px; color: #6b6b74">Linked as mheos</span></span>
+            <button type="button" class="b-link" style="border: 0; background: none; padding: 10px 0; font: inherit; font-size: 14px; font-weight: 600; color: #18181b; text-decoration: underline; text-underline-offset: 3px">Unlink</button>
+          </li>
+          <li style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; min-height: 56px; padding: 8px 0; border-bottom: 1px solid #e4e4e7">
+            <span style="flex: 1 1 200px"><span style="display: block; font-weight: 600">Google</span><span style="display: block; font-size: 13px; color: #6b6b74">Not linked</span></span>
+            <button type="button" class="b-wide" style="height: 40px; padding: 0 16px; border: 1px solid #8a8a93; border-radius: 6px; background: #ffffff; color: #18181b; font: inherit; font-size: 14px; font-weight: 600">Link Google</button>
+          </li>
+        </ul>
+      </section>
+
+      <section aria-labelledby="where-title">
+        <h2 id="where-title" style="margin: 0 0 4px; font-size: 18px; font-weight: 700">Where you are signed in</h2>
+        <p style="margin: 0 0 12px; font-size: 14px; line-height: 1.5; color: #6b6b74">Disconnect a browser you no longer use. It stops showing notes at once.</p>
+        <ul style="list-style: none; margin: 0; padding: 0; border-top: 1px solid #e4e4e7; font-size: 15px">
+          <li style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; min-height: 56px; padding: 8px 0; border-bottom: 1px solid #e4e4e7">
+            <span style="flex: 1 1 200px"><span style="display: block; font-weight: 600">Console · Firefox on macOS</span><span style="display: block; font-size: 13px; color: #6b6b74">Active now</span></span>
+            <span style="font-size: 14px; color: #6b6b74">This browser</span>
+          </li>
+          <li style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; min-height: 56px; padding: 8px 0; border-bottom: 1px solid #e4e4e7">
+            <span style="flex: 1 1 200px"><span style="display: block; font-weight: 600">Extension · Chrome on macOS</span><span style="display: block; font-size: 13px; color: #6b6b74">Connected 12 Oct · used 2 h ago</span></span>
+            <button type="button" class="b-link" style="border: 0; background: none; padding: 10px 0; font: inherit; font-size: 14px; font-weight: 600; color: #18181b; text-decoration: underline; text-underline-offset: 3px">Disconnect</button>
+          </li>
+          <li style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; min-height: 56px; padding: 8px 0; border-bottom: 1px solid #e4e4e7">
+            <span style="flex: 1 1 200px"><span style="display: block; font-weight: 600">Extension · Firefox on Linux</span><span style="display: block; font-size: 13px; color: #6b6b74">Connected 2 Oct · used 3 days ago</span></span>
+            <button type="button" class="b-link" style="border: 0; background: none; padding: 10px 0; font: inherit; font-size: 14px; font-weight: 600; color: #18181b; text-decoration: underline; text-underline-offset: 3px">Disconnect</button>
+          </li>
+        </ul>
+      </section>
+
+      <section aria-label="Sign out" style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px">
+        <button type="button" class="b-wide" style="height: 44px; padding: 0 18px; border: 1px solid #8a8a93; border-radius: 6px; background: #ffffff; color: #18181b; font: inherit; font-size: 14px; font-weight: 600">Sign out</button>
+        <button type="button" class="b-link" style="border: 0; background: none; padding: 12px 0; font: inherit; font-size: 14px; font-weight: 600; color: #18181b; text-decoration: underline; text-underline-offset: 3px">Sign out everywhere</button>
+      </section>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:1040}}">
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+
+
+</body></html>
