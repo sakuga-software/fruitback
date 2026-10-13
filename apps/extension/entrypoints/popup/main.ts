@@ -325,7 +325,12 @@ function signIn(origin: string, fresh: boolean): void {
     await rememberConsole(endpoint, started.pending.consoleAt).catch(() => undefined);
     await render();
     await browser.tabs.create({ url: started.pending.approveAt });
-  })();
+  })().catch((error: unknown) => {
+    // A click is fire-and-forget: an error nobody catches here is said nowhere, and the buttons
+    // stay disabled. The request that waits, if any, is kept: the next popup shows its word.
+    console.error('[fruitback] the sign-in did not start', error);
+    app.replaceChildren(problemScreen(origin, 'unavailable'));
+  });
 }
 
 const PROBLEM_OF_START: Record<StartFailure, 'unavailable' | 'untrusted'> = {
