@@ -176,13 +176,18 @@ type Opened = {
  * **Every connection has `schema` alone in its search path, set by the worker** (FRU-219): not by
  * the address, the role or the database, whose search path has no effect. A statement that names no
  * schema, of a store, of a migration or of better-auth, reads and writes that schema and no other.
- * `SET` is sent when the pool opens a connection, before the first statement of whoever asked for
- * it: the queue of a connection keeps the order.
+ * `SET` is sent when the pool opens a connection, and the pool waits for its answer before it gives
+ * the connection to whoever asked for it: a connection that did not take it serves nothing.
  *
  * WARNING: this is the state of a session. A pooler that hands one session to several clients
  * (PgBouncer in transaction mode) loses it, as it loses the lock of the migrations.
  */
-export function createPgDatabase(url: string, schema: string, options: { max?: number } = {}): PgDatabase {
+export function createPgDatabase(
+  url: string,
+  schema: string,
+  /** `opening` is for a test: a statement in place of the `SET`, to see what a connection that fails it does. */
+  options: { max?: number; opening?: string } = {},
+): PgDatabase {
   if (readDatabaseSchema(schema) !== schema) throw new StoreError('The schema of the database is not a plain name');
 
   let opening: Promise<Opened> | undefined;
@@ -197,6 +202,16 @@ export function createPgDatabase(url: string, schema: string, options: { max?: n
         connectionString: url,
         max: options.max ?? 10,
         connectionTimeoutMillis: 5_000,
+        // FRU-219. The pool waits for this before it gives the connection to anyone, and ends a
+        // connection on which it fails: the call that asked for it rejects. It is not sent from a
+        // listener of `connect`, as it first was (raised in review, measured on 17.11): the pool
+        // gives the connection away as soon as that event is out, the statement of the caller
+        // waits behind the `SET`, and when the `SET` fails without ending the session the server
+        // takes that statement next, in the search path of the address, the role or the database.
+        // The name is a plain one (`readDatabaseSchema`), and `SET` takes no parameter.
+        onConnect: async (client: { query(statement: string): Promise<unknown> }) => {
+          await client.query(options.opening ?? `SET search_path TO "${schema}"`);
+        },
       });
       // A connection that the server closes emits `error`. With no listener, the process stops (FRU-187).
       // The pool listens to a connection only while it is idle. A connection that a transaction, a
@@ -205,12 +220,6 @@ export function createPgDatabase(url: string, schema: string, options: { max?: n
       pool.on('connect', (client) => {
         client.on('error', (error) => {
           console.error(`[fruitback] a PostgreSQL connection failed: ${withoutAddress(String(error), url)}`);
-        });
-        // The name is a plain one (`readDatabaseSchema`), and `SET` takes no parameter. A connection
-        // that did not take it is closed by its error, above: no statement runs in another schema.
-        client.query(`SET search_path TO "${schema}"`).catch((error: unknown) => {
-          console.error(`[fruitback] a PostgreSQL connection has no schema: ${withoutAddress(String(error), url)}`);
-          (client as unknown as { end(): Promise<void> }).end().catch(() => undefined);
         });
       });
       // The pool sends the error of an idle connection here too. The listener above wrote it already.

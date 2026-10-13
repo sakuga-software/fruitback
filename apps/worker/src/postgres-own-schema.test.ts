@@ -274,6 +274,26 @@ describe('two workers in two schemas of one database (FRU-219)', { skip: NO_REAL
   });
 });
 
+describe('a connection that does not take its schema (FRU-219)', { skip: NO_REAL_POSTGRES }, () => {
+  // Raised in review. The statement that fails here does not end the session, as a `SET` that a
+  // time limit or a cancel stops would not: the server stays ready, and takes the next statement.
+  it('serves no statement at all: the one of the caller is refused, and never reaches the server', async () => {
+    const own = await ownDatabase();
+    const admin = createPgDatabase(own.url, 'public', { max: 1 });
+    const database = createPgDatabase(own.url, SCHEMA, { max: 2, opening: 'SET search_path TO' });
+    try {
+      for (const _ of [1, 2, 3]) {
+        await assert.rejects(rowsOf(database, 'CREATE TABLE made_with_no_schema (id integer)'), StoreError);
+      }
+      assert.deepEqual(await tablesOf(admin, 'public'), []);
+    } finally {
+      await database.close();
+      await admin.close();
+      await own.drop();
+    }
+  });
+});
+
 describe('a role that has its schema and nothing else (FRU-219)', { skip: NO_REAL_POSTGRES }, () => {
   it('is enough: no right on public, none on the database, and the worker signs a person in', async () => {
     const own = await ownDatabase();

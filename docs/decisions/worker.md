@@ -2340,9 +2340,14 @@ would cut`. Set with no `FRUITBACK_DATABASE_URL`, it is refused too: it would sa
   test:`signs a person in and keeps a note, in its schema, and changes no table and no row of
 public` compares the catalogue and the rows of `public` before and after, with tables `user`,
   `session` and `sites` of another application in it.
-- **The worker sets the search path of each connection, to its schema alone.** `SET search_path` on
-  the `connect` of the pool, before the connection serves anything; a connection on which it fails
-  is closed and the call fails. What the address (`options=-c search_path=…`), the role
+- **The worker sets the search path of each connection, to its schema alone.** `SET search_path` in
+  the `onConnect` of the pool (pg-pool 3.14), which the pool waits for before it gives the
+  connection to anyone; a connection on which it fails is ended and the call fails, as an outage.
+  It was first sent from a listener of the event `connect`, and that was wrong (raised in review,
+  measured on 17.11): the pool gives the connection away as soon as the event is out, and when the
+  `SET` failed without ending the session the server took the statement of the caller next, in the
+  search path of the address. A `CREATE TABLE` landed in `public`:
+  test:`serves no statement at all: the one of the caller is refused, and never reaches the server`. What the address (`options=-c search_path=…`), the role
   (`ALTER ROLE … SET`) and the database (`ALTER DATABASE … SET`) say has no effect:
   test:`gives every connection of a pool its schema, whatever the role and the database say`.
   `public` is not in the path, so a name the worker does not have is an error and not a read of
