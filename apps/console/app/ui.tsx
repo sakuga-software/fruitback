@@ -15,6 +15,9 @@ import {
 } from '@heroui/react';
 import type { ChangeEvent, FocusEvent, KeyboardEvent, ReactNode, Ref } from 'react';
 import { Link } from 'react-router';
+import { Logo } from './logo';
+
+export { Logo };
 
 /** The pin of the widget, as the mockup draws it beside the name. */
 export function Mark({ size = 14 }: { size?: number }) {
@@ -653,5 +656,47 @@ export function PageHead({
       </div>
       {action ?? null}
     </header>
+  );
+}
+
+/** The site of the product: where the logo of a page outside a workspace leads. */
+const SITE = 'https://fruitback.com';
+
+type EntryPageProps = {
+  /** The column of the page: 400 px (« narrow »), 440 px (« wide »), or the whole page for the setup. */
+  width?: 'narrow' | 'wide' | 'full';
+  /** At the end of the header: a sentence and a link, as « Running your own server? ». */
+  aside?: ReactNode;
+  children: ReactNode;
+};
+
+/**
+ * A page outside a workspace: the sign-in, an invitation, the setup. A header with the logo, which
+ * leads to the site of the product, and one column under it.
+ */
+export function EntryPage({ width = 'narrow', aside, children }: EntryPageProps) {
+  return (
+    <div className="kit-entry">
+      <header className="kit-entry__header">
+        <div>
+          <a href={SITE} className="kit-entry__logo">
+            <Logo />
+          </a>
+          {aside ?? null}
+        </div>
+      </header>
+      <main className="kit-entry__main" data-width={width}>
+        {width === 'full' ? children : <div className="kit-entry__column">{children}</div>}
+      </main>
+    </div>
+  );
+}
+
+/** A rule with a word in its middle: « or », between two ways to do one thing. A picture only. */
+export function Divider({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return (
+    <div aria-hidden="true" className={`kit-divider ${className}`}>
+      {children}
+    </div>
   );
 }

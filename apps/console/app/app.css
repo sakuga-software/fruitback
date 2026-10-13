@@ -801,6 +801,87 @@ textarea {
   margin-bottom: 6px;
 }
 
+/* A page outside a workspace: a header with the logo, and one column. */
+.kit-entry {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.kit-entry__header {
+  border-bottom: 1px solid var(--color-line);
+}
+
+.kit-entry__header > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 24px;
+  /* As the mockup writes it: the padding is outside the 1280 px, so the logo is at 80 px at 1440. */
+  box-sizing: content-box;
+  max-width: 1280px;
+  min-height: 64px;
+  margin: 0 auto;
+  padding: 0 clamp(16px, 4vw, 32px);
+  color: var(--muted);
+  font-size: var(--text-small);
+  line-height: normal;
+}
+
+.kit-entry__logo {
+  display: flex;
+  padding: 8px 0;
+}
+
+.kit-entry__main {
+  display: flex;
+  flex: 1 1 auto;
+  justify-content: center;
+  padding: clamp(48px, 10vh, 112px) 16px 64px;
+}
+
+.kit-entry__column {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 400px;
+}
+
+.kit-entry__main[data-width='wide'] .kit-entry__column {
+  max-width: 440px;
+}
+
+/* The setup: two columns that wrap, laid out by the screen. */
+.kit-entry__main[data-width='full'] {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 56px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 48px clamp(16px, 4vw, 32px) 72px;
+}
+
+.kit-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: var(--text-hint);
+  line-height: normal;
+}
+
+.kit-divider::before,
+.kit-divider::after {
+  flex: 1;
+  height: 1px;
+  background: var(--color-line);
+  content: '';
+}
+
 /* A name and its initial. */
 .kit-avatar {
   display: flex;

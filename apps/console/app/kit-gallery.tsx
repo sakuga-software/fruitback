@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import {
   Button,
+  EntryPage,
   Chip,
   Choice,
+  Divider,
   DataTable,
   Field,
   FilterChip,
@@ -10,6 +12,7 @@ import {
   Initial,
   KeyValue,
   Lead,
+  Logo,
   LinkButton,
   PageHead,
   Pick,
@@ -271,6 +274,25 @@ export default function KitGallery() {
         </p>
         <Initial name="Marie" size="small" />
       </section>
+
+      <section aria-label="Logos" className="flex flex-wrap items-center gap-6" data-kit="logos">
+        <Logo />
+        <span className="kit-rail bg-rail p-3">
+          <Logo on="rail" />
+        </span>
+        <Divider className="w-[400px] max-w-full">or</Divider>
+      </section>
     </main>
+  );
+}
+
+/** The frame of a page outside a workspace, as the sign-in has it: a page of its own, for its `main`. */
+export function KitEntryGallery() {
+  return (
+    <EntryPage aside={<span>Running your own server?</span>}>
+      <Title>Sign in to Fruitback</Title>
+      <Lead className="mt-2">We email you a link that signs you in on this browser.</Lead>
+      <Divider className="my-[22px]">or</Divider>
+    </EntryPage>
   );
 }

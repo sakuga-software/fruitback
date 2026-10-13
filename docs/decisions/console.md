@@ -98,7 +98,8 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   `IconButton` (36 px, named by `label`), `Field` and `Choice` (44 px, `compact` 40 px, `locked` for
   a value set elsewhere), `Pick` (radio cards), `Toggle`, `FilterChip` (`aria-pressed`), `StatusDot`
   and `StatusBar`, `DataTable`, `SidePanel`, `KeyValue`, `SuccessMark`, `Title`, `Lead`, `PageHead`,
-  `Initial`, `Card`, `Chip`, `Problem`. The tones `quiet` and `danger` of `Button` are of before the
+  `Initial`, `Card`, `Chip`, `Problem`, `Logo` (the name as outlines, in tokens: `logo.tsx`), `EntryPage`
+  (the header and the column of a page outside a workspace; `/kit/entry` mounts it) and `Divider`. The tones `quiet` and `danger` of `Button` are of before the
   mockup: they stay as HeroUI draws them until their screens are drawn again.
 - **`/kit` mounts each component once, on the development server only** (`kit-gallery.tsx`):
   `e2e/console-kit.spec.ts` reads there what the browser computes (colour, border, corner, height,
