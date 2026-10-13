@@ -155,15 +155,23 @@ describe('a visitor with no account, on a site that everyone reads (FRU-224)', (
 
 describe('a visitor with no account, on a site that its members read (FRU-224)', () => {
   it('reads no note: the worker asks for a session, and says so', async () => {
-    const { visitor } = await workerWithASite('members');
+    const { world, admin, workspace, store, visitor } = await workerWithASite('members');
 
     const read = await visitor.read(SITE);
 
     assert.equal(read.status, 401, await read.clone().text());
     assert.deepEqual(await read.json(), { error: 'identity-required', reason: 'identity-required' });
-    // The control: the same request, on the same worker, for a site that everyone reads.
-    const open = await workerWithASite('everyone');
-    assert.equal((await open.visitor.read(SITE)).status, 200);
+    // The control, in the same world (one PGlite database for a process at a time, raised in
+    // review): the same read, from a page of a site of the same workspace that everyone reads.
+    const docs = 'https://docs.acme.test';
+    const made = await callOn(world, 'POST', `/console/workspaces/${workspace}/sites`, {
+      token: admin.token,
+      body: { url: docs, visibility: 'everyone' },
+    });
+    const open = ((await made.json()) as { id: string }).id;
+    const page = encodeURIComponent(canonicalizePageUrl(`${docs}/start`));
+    const control = await callOn(world, 'GET', `/feedback?url=${page}&client=${open}`, { origin: docs }, { store });
+    assert.equal(control.status, 200, await control.clone().text());
   });
 
   /**
