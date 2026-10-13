@@ -14,7 +14,7 @@ import {
   databasesOfACase,
   make,
 } from './auth.fixture.ts';
-import { createMemoryKv } from './kv.ts';
+import { KvError, createMemoryKv } from './kv.ts';
 import { MailError } from './mail.ts';
 import { GITHUB, GOOGLE, SESSION_COOKIE, cookieOf, envWith, workerOf } from './auth-worker.fixture.ts';
 import type { PgDatabase } from './postgres.ts';
@@ -209,6 +209,26 @@ for (const { label, open, skip } of DATABASES) {
       }
       // The control: the link itself opens the session.
       assert.equal((await worker.call('/console/auth/email/redeem', { body: { token } })).status, 200);
+    });
+
+    // FRU-67: the count of the links is below the rate limit. A Redis that stops there is the
+    // limiter's outage, said as such, and no link goes out uncounted.
+    it('sends no link, and answers 503, when the Kv stops at the count of the links', async () => {
+      const worker = await workerOn(open);
+      const incr = worker.kv.incr.bind(worker.kv);
+      worker.kv.incr = async (key, ttlMs, by) => {
+        if (key.startsWith('fruitback:mail:')) throw new KvError('Redis connection failed: read ECONNRESET');
+
+        return incr(key, ttlMs, by);
+      };
+      mock.method(console, 'error', () => {});
+
+      const asked = await worker.call('/console/auth/email', { body: { email: 'alice@acme.dev' } });
+
+      assert.equal(asked.status, 503);
+      assert.deepEqual(await asked.json(), { error: 'limiter-unavailable' });
+      assert.ok(asked.headers.get('Access-Control-Allow-Origin'), 'the console can read the answer');
+      assert.deepEqual(worker.mail.sent, []);
     });
 
     it('answers the same with or without an account, and sends three links to an address in the window', async () => {

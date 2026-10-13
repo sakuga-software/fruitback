@@ -15,6 +15,7 @@ import {
   worlds,
 } from './console-world.fixture.ts';
 import { type WorkerEnv, readConfig } from './env.ts';
+import { type Kv, KvError, createMemoryKv } from './kv.ts';
 import { REFRESH_MARGIN_MS, readCredential } from './linear-oauth.ts';
 import { rowsOf } from './postgres.fixture.ts';
 import { open } from './secrets.ts';
@@ -312,6 +313,44 @@ describe('a workspace connects Linear with OAuth (FRU-134)', () => {
       404,
     );
     assert.equal((await call(without, 'GET', '/auth/linear/start?ticket=aaaaaaaaaaaaaaaaaaaaaaaa')).status, 404);
+  });
+
+  // FRU-67. On memory a `Kv` never throws. A Redis can answer the rate limit and then stop, and the
+  // ticket is kept below the limit, where nothing caught that: the request ended as a `500`.
+  it('answers 503, with the headers of the console, when the Kv stops after the rate limit', async () => {
+    const env = await envWith();
+    fakeLinear();
+    const world = await acme(env);
+    const memory = createMemoryKv();
+    const down = async (): Promise<never> => {
+      throw new KvError('Redis connection failed: read ECONNRESET');
+    };
+    const ticketsDown: Kv = {
+      ...memory,
+      get: (key) => (key.startsWith('fruitback:linear-ticket:') ? down() : memory.get(key)),
+      set: (key, value, ttl) => (key.startsWith('fruitback:linear-ticket:') ? down() : memory.set(key, value, ttl)),
+    };
+    mock.method(console, 'error', () => {});
+
+    const asked = await callOn(
+      env,
+      'POST',
+      `${world.base}/connectors/linear/oauth`,
+      { token: world.owner.token },
+      { kv: ticketsDown },
+    );
+    assert.equal(asked.status, 503);
+    assert.deepEqual(await asked.json(), { error: 'limiter-unavailable' });
+    assert.equal(asked.headers.get('Access-Control-Allow-Origin'), CONSOLE);
+
+    const started = await callOn(
+      env,
+      'GET',
+      '/auth/linear/start?ticket=aaaaaaaaaaaaaaaaaaaaaaaa',
+      {},
+      { kv: ticketsDown },
+    );
+    assert.equal(started.status, 503);
   });
 });
 

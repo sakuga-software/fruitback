@@ -104,8 +104,12 @@ also why the boundary is not a reset: a test that crosses one is not a test that
 ### An outage refuses, and says so in one place only
 
 A limiter that opens when its store is unreachable is a limiter anybody can open. So a `KvError` from
-the limiter is `503 limiter-unavailable`, with the CORS headers the browser needs to read it. Three
-consequences, all deliberate:
+the limiter is `503 limiter-unavailable`, with the CORS headers the browser needs to read it. **A
+`Kv` that stops below the limit answers the same** (FRU-67): the count of the links of an address,
+the counts of the invitations and the ticket of the way to Linear are below it, and a Redis can
+answer the first call of a request and not the second. `handleRequest` catches a `KvError` that
+nothing below caught; the cache, the batch and its memory still swallow theirs, as before. Raised in
+review. Three consequences, all deliberate:
 
 - `/health` never touches the `Kv`, so a store that stops answering does not take the container out
   of the load balancer. It is the same rule that keeps `/health` unmetered.
