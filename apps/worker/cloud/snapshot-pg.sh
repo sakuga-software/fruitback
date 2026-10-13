@@ -13,6 +13,12 @@ PG_SERVICE=${PG_SERVICE:-fruitback-cloud-postgres}
 WORKER_SERVICE=${WORKER_SERVICE:-fruitback-cloud-worker-a9zdeo}
 PGUSER=${PGUSER:-fruitback}
 PGDATABASE=${PGDATABASE:-fruitback}
+# The schema of the worker, when it is not `public` (FRUITBACK_DATABASE_SCHEMA, FRU-219): the dump
+# then holds that schema alone, and nothing of another application of the same database.
+PGSCHEMA=${PGSCHEMA:-public}
+case $PGSCHEMA in
+  *[!a-z0-9_]* | '') echo "snapshot-pg: PGSCHEMA is not the name of a schema" >&2; exit 1 ;;
+esac
 # The command that dumps, in the container of the database. restore-drill.sh gives one that cuts
 # the end of its file, to check that a dump which is not whole replaces nothing.
 PG_DUMP=${PG_DUMP:-pg_dump}
@@ -39,7 +45,11 @@ cleanup() {
 trap cleanup EXIT
 
 # 1. The dump, in a file where pg_dump runs. No pipe: the exit status is the one of pg_dump.
-docker exec "$PG" "$PG_DUMP" -Fc -U "$PGUSER" -d "$PGDATABASE" -f "$TMP"
+if [ "$PGSCHEMA" = public ]; then
+  docker exec "$PG" "$PG_DUMP" -Fc -U "$PGUSER" -d "$PGDATABASE" -f "$TMP"
+else
+  docker exec "$PG" "$PG_DUMP" -Fc -U "$PGUSER" -d "$PGDATABASE" -n "$PGSCHEMA" -f "$TMP"
+fi
 
 # 2. Read to its end. `pg_restore --list` is not that check: it reads the table of contents, which
 #    is at the start of the file, and accepts a dump cut to a tenth of its size (measured).

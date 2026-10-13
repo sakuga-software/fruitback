@@ -1,6 +1,6 @@
 import type { AccountStore } from './accounts.ts';
 import { z } from 'zod';
-import { type Database, databaseFor, readDatabaseUrl } from './postgres.ts';
+import { type Database, databaseFor, readDatabaseSchema, readDatabaseUrl } from './postgres.ts';
 import type { ScreenshotStore } from './screenshots.ts';
 import type { SessionStore } from './session.ts';
 import type { SeedStore } from './store.ts';
@@ -55,8 +55,10 @@ function later<Store extends object>(load: () => Promise<Store>, methods: Record
   return store as Store;
 }
 
-export function postgresAccountStore(url: string): AccountStore {
-  return later(async () => (await import('./accounts-postgres.ts')).createPostgresAccountStore(databaseFor(url)), {
+export function postgresAccountStore(url: string, schema: string): AccountStore {
+  const database = databaseFor(url, schema);
+
+  return later(async () => (await import('./accounts-postgres.ts')).createPostgresAccountStore(database), {
     signIn: true,
     account: true,
     setLocale: true,
@@ -93,8 +95,8 @@ export function postgresAccountStore(url: string): AccountStore {
   });
 }
 
-export function postgresSessionStore(url: string): SessionStore {
-  return sessionStoreOn(databaseFor(url));
+export function postgresSessionStore(url: string, schema: string): SessionStore {
+  return sessionStoreOn(databaseFor(url, schema));
 }
 
 /** The sessions of this database. `auth.ts` ends the sessions of a member who is removed (FRU-149). */
@@ -111,8 +113,8 @@ export function sessionStoreOn(database: Database): SessionStore {
 }
 
 /** The pictures of the notes of this database (FRU-44). */
-export function postgresScreenshotStore(url: string): ScreenshotStore {
-  const database = databaseFor(url);
+export function postgresScreenshotStore(url: string, schema: string): ScreenshotStore {
+  const database = databaseFor(url, schema);
 
   return later(async () => (await import('./screenshots-postgres.ts')).createPostgresScreenshotStore(database), {
     put: true,
@@ -125,8 +127,8 @@ export function postgresScreenshotStore(url: string): ScreenshotStore {
  * the first call. `name` and `scope` are read with no call, by `/health` and by the key of the read
  * cache, so they are written here and held equal to the real ones by a test.
  */
-export function postgresSeedStore(url: string): SeedStore {
-  const database = databaseFor(url);
+export function postgresSeedStore(url: string, schema: string): SeedStore {
+  const database = databaseFor(url, schema);
   type Calls = Required<Pick<SeedStore, 'create' | 'createBatch' | 'findForPage' | 'forget'>>;
   const store = later<Calls>(
     async () => (await import('./seeds-postgres.ts')).createPostgresSeedStore(database) as Calls,
@@ -151,10 +153,13 @@ export function postgresSeedStore(url: string): SeedStore {
 export function createPostgresStoreSpec(): StoreSpec {
   return defineStore({
     provider: 'postgres',
-    envNames: { url: 'FRUITBACK_DATABASE_URL' },
-    read: (env) => ({ url: readDatabaseUrl(env.FRUITBACK_DATABASE_URL) }),
-    schema: z.object({ url: z.string().min(1) }),
-    create: ({ url }) => postgresSeedStore(url),
+    envNames: { url: 'FRUITBACK_DATABASE_URL', schema: 'FRUITBACK_DATABASE_SCHEMA' },
+    read: (env) => ({
+      url: readDatabaseUrl(env.FRUITBACK_DATABASE_URL),
+      schema: readDatabaseSchema(env.FRUITBACK_DATABASE_SCHEMA),
+    }),
+    schema: z.object({ url: z.string().min(1), schema: z.string().min(1) }),
+    create: ({ url, schema }) => postgresSeedStore(url, schema),
   });
 }
 

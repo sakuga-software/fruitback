@@ -105,7 +105,7 @@ describe('a worker whose PostgreSQL closes a connection in a transaction (FRU-18
 
       // Another session holds the row of the first code. The transaction of the redeem reads it, then
       // waits on that row in its UPDATE: there its connection is in the middle of a transaction.
-      const admin: Database = createPgDatabase(own.url, { max: 2 });
+      const admin: Database = createPgDatabase(own.url, 'public', { max: 2 });
       cleanups.push(() => admin.close());
       let letGo = (): void => {};
       const held = new Promise<void>((resolve) => (letGo = resolve));

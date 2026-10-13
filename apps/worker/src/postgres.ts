@@ -27,6 +27,11 @@ export type Db = Drizzle<PgQueryResultHKT>;
 export type Migrator = (config: MigrationConfig) => Promise<void>;
 
 export type Database = {
+  /**
+   * The schema of the tables of the worker and of its journal of migrations (FRU-219): `public`, or
+   * the one of `FRUITBACK_DATABASE_SCHEMA`. Every connection has it alone in its search path.
+   */
+  readonly schema: string;
   /** `work` on the database. Two statements of one `work` may run on two connections. */
   run<T>(work: (db: Db) => Promise<T>): Promise<T>;
   /** `work` on one connection, in one transaction. It is rolled back when `work` rejects. */
@@ -106,6 +111,28 @@ export function readDatabaseUrl(value: string | undefined): string | undefined {
   }
 }
 
+/** The schema of a worker that names none: what every database had before FRU-219. */
+export const DEFAULT_DATABASE_SCHEMA = 'public';
+
+/** The longest name PostgreSQL keeps: a longer one is cut, and two long names could be one. */
+const SCHEMA_NAME_MAX = 63;
+
+/**
+ * The schema of `FRUITBACK_DATABASE_SCHEMA` as the worker accepts it, or `undefined` (FRU-219).
+ *
+ * A plain name: a lower-case letter or `_`, then letters, digits and `_`. The name goes into
+ * statements as an identifier, so nothing that needs a quote is taken, and no name of PostgreSQL's
+ * own (`pg_…`, `information_schema`). Absent or empty: `public`.
+ */
+export function readDatabaseSchema(value: string | undefined): string | undefined {
+  const name = value?.trim() ?? '';
+  if (name === '') return DEFAULT_DATABASE_SCHEMA;
+  if (!/^[a-z_][a-z0-9_]*$/.test(name) || name.length > SCHEMA_NAME_MAX) return undefined;
+  if (name.startsWith('pg_') || name === 'information_schema') return undefined;
+
+  return name;
+}
+
 type Opened = {
   pool: Pool;
   /** Drizzle on the pool: each statement takes a connection, and gives it back. */
@@ -115,12 +142,20 @@ type Opened = {
 };
 
 /**
- * A database on a `Pool` of `pg`.
+ * A database on a `Pool` of `pg`, in one schema of it.
  *
- * The tables are in the schema `public`: the migrations that `drizzle-kit` writes name it in every
- * foreign key. A test that needs an empty database makes a database, not a schema.
+ * **Every connection has `schema` alone in its search path, set by the worker** (FRU-219): not by
+ * the address, the role or the database, whose search path has no effect. A statement that names no
+ * schema, of a store, of a migration or of better-auth, reads and writes that schema and no other.
+ * `SET` is sent when the pool opens a connection, before the first statement of whoever asked for
+ * it: the queue of a connection keeps the order.
+ *
+ * WARNING: this is the state of a session. A pooler that hands one session to several clients
+ * (PgBouncer in transaction mode) loses it, as it loses the lock of the migrations.
  */
-export function createPgDatabase(url: string, options: { max?: number } = {}): PgDatabase {
+export function createPgDatabase(url: string, schema: string, options: { max?: number } = {}): PgDatabase {
+  if (readDatabaseSchema(schema) !== schema) throw new StoreError('The schema of the database is not a plain name');
+
   let opening: Promise<Opened> | undefined;
 
   const open = (): Promise<Opened> => {
@@ -141,6 +176,12 @@ export function createPgDatabase(url: string, options: { max?: number } = {}): P
       pool.on('connect', (client) => {
         client.on('error', (error) => {
           console.error(`[fruitback] a PostgreSQL connection failed: ${withoutAddress(String(error), url)}`);
+        });
+        // The name is a plain one (`readDatabaseSchema`), and `SET` takes no parameter. A connection
+        // that did not take it is closed by its error, above: no statement runs in another schema.
+        client.query(`SET search_path TO "${schema}"`).catch((error: unknown) => {
+          console.error(`[fruitback] a PostgreSQL connection has no schema: ${withoutAddress(String(error), url)}`);
+          (client as unknown as { end(): Promise<void> }).end().catch(() => undefined);
         });
       });
       // The pool sends the error of an idle connection here too. The listener above wrote it already.
@@ -200,6 +241,8 @@ export function createPgDatabase(url: string, options: { max?: number } = {}): P
   };
 
   return {
+    schema,
+
     async pool() {
       try {
         return (await open()).pool;
@@ -270,19 +313,21 @@ export function createPgDatabase(url: string, options: { max?: number } = {}): P
 }
 
 /**
- * One pool for each address, for the life of the process.
+ * One pool for each address and schema, for the life of the process.
  *
  * The stores are built for each request wherever the transport did not hand one over, as the SQLite
  * ones are: the pool must not be.
  */
 const databases = new Map<string, PgDatabase>();
 
-export function databaseFor(url: string): PgDatabase {
-  const known = databases.get(url);
+export function databaseFor(url: string, schema: string): PgDatabase {
+  // A schema is a plain name and holds no space: the key cannot be the one of another pair.
+  const key = `${schema} ${url}`;
+  const known = databases.get(key);
   if (known !== undefined) return known;
 
-  const database = createPgDatabase(url);
-  databases.set(url, database);
+  const database = createPgDatabase(url, schema);
+  databases.set(key, database);
 
   return database;
 }

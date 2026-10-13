@@ -27,7 +27,6 @@ import {
   ownDatabase,
   rowsOf,
 } from './postgres.fixture.ts';
-import { madeByTheHomeMadeTool } from './postgres-home-made.fixture.ts';
 import { APPLIED, migrate, migrated, migrationsFolder } from './postgres-migrate.ts';
 import { pairings } from './postgres-schema.ts';
 import { StoreError } from './store.ts';
@@ -235,19 +234,20 @@ describe('the migrations of the PostgreSQL database (FRU-180)', () => {
 
   /**
    * `migrate` of Drizzle sends `CREATE SCHEMA IF NOT EXISTS "public"` first, and PostgreSQL asks for
-   * the privilege on the database before it looks for the schema. The tool of before needed only
-   * the schema. So a role that cannot create in its database is refused with what to grant.
+   * the privilege on the database before it looks for the schema. The worker sends no such
+   * statement for a schema that is there (FRU-219): a role that can create in the schema is enough,
+   * as it was for the tool of before.
    */
   describe('a role that cannot create in its database', { skip: NO_REAL_POSTGRES }, () => {
     /** A database of its own, and a role that can make tables in `public` and nothing in the database. */
     async function withALesserRole(use: (database: Database) => Promise<void>): Promise<void> {
       const own = await ownDatabase();
-      const admin = createPgDatabase(own.url, { max: 1 });
+      const admin = createPgDatabase(own.url, 'public', { max: 1 });
       const role = `r_${new URL(own.url).pathname.slice(1)}`;
       const lesser = new URL(own.url);
       lesser.username = role;
       lesser.password = 'not-a-secret-of-a-test';
-      const database = createPgDatabase(lesser.href, { max: 2 });
+      const database = createPgDatabase(lesser.href, 'public', { max: 2 });
       try {
         await rowsOf(admin, `CREATE ROLE ${role} LOGIN PASSWORD 'not-a-secret-of-a-test'`);
         await rowsOf(admin, `GRANT USAGE, CREATE ON SCHEMA public TO ${role}`);
@@ -256,29 +256,50 @@ describe('the migrations of the PostgreSQL database (FRU-180)', () => {
         await database.close();
         await admin.close();
         await own.drop();
-        const server = createPgDatabase(TEST_DATABASE_URL ?? '', { max: 1 });
+        const server = createPgDatabase(TEST_DATABASE_URL ?? '', 'public', { max: 1 });
         await rowsOf(server, `DROP ROLE IF EXISTS ${role}`);
         await server.close();
       }
     }
 
-    it('is refused before any write, with what to grant, and with no name of the role', async () => {
+    it('is enough when it can create in the schema: the migrations go (FRU-219)', async () => {
       await withALesserRole(async (database) => {
-        await assert.rejects(migrate(database, folderOf([FIRST])), (error: unknown) => {
-          assert.ok(error instanceof StoreError);
-          assert.match(error.message, /cannot create in its database/);
-          assert.match(error.message, /grant it CREATE on the database/);
-          assert.doesNotMatch(error.message, /r_t_/);
+        await migrate(database, folderOf([FIRST]));
 
-          return true;
-        });
-        assert.equal(await has(database, 'public.first_things'), false);
+        assert.equal(await has(database, 'public.first_things'), true);
+        assert.equal(await has(database, `public.${APPLIED.migrationsTable}`), true);
+      });
+    });
+
+    it('is refused a schema that is not there, with what to grant, and with no name of the role (FRU-219)', async () => {
+      await withALesserRole(async (inPublic) => {
+        const address = String(
+          (await rowsOf(inPublic, 'SELECT current_database() AS name, current_user AS role'))[0]?.name,
+        );
+        const lesser = new URL(`/${address}`, TEST_DATABASE_URL ?? '');
+        lesser.username = `r_${address}`;
+        lesser.password = 'not-a-secret-of-a-test';
+        const database = createPgDatabase(lesser.href, 'fruitback', { max: 2 });
+        try {
+          await assert.rejects(migrate(database, folderOf([FIRST])), (error: unknown) => {
+            assert.ok(error instanceof StoreError);
+            assert.match(error.message, /The schema « fruitback » is not in the database/);
+            assert.match(error.message, /cannot create in its database to make it/);
+            assert.match(error.message, /grant that role CREATE and USAGE on it/);
+            assert.doesNotMatch(error.message, /r_t_/);
+
+            return true;
+          });
+          assert.deepEqual(await rowsOf(inPublic, `SELECT 1 FROM pg_namespace WHERE nspname = 'fruitback'`), []);
+        } finally {
+          await database.close();
+        }
       });
     });
 
     it('is refused too when it can create in its database and not in public', async () => {
       await withALesserRole(async (database) => {
-        const admin = createPgDatabase(TEST_DATABASE_URL ?? '', { max: 1 });
+        const admin = createPgDatabase(TEST_DATABASE_URL ?? '', 'public', { max: 1 });
         const name = String(
           (await rowsOf(database, 'SELECT current_database() AS name, current_user AS role'))[0]?.name,
         );
@@ -288,7 +309,7 @@ describe('the migrations of the PostgreSQL database (FRU-180)', () => {
         } finally {
           await admin.close();
         }
-        const owner = createPgDatabase(new URL(`/${name}`, TEST_DATABASE_URL ?? '').href, { max: 1 });
+        const owner = createPgDatabase(new URL(`/${name}`, TEST_DATABASE_URL ?? '').href, 'public', { max: 1 });
         try {
           await rowsOf(owner, `REVOKE CREATE ON SCHEMA public FROM ${role}, PUBLIC`);
         } finally {
@@ -319,26 +340,21 @@ describe('the migrations of the PostgreSQL database (FRU-180)', () => {
   });
 
   /**
-   * The migrations of `drizzle-kit` name `"public"` in every foreign key, and make a table where the
-   * search path says. The tool of before made its tables wherever the search path said. So a
-   * connection that puts another schema first is refused with what to change (raised in review).
+   * The search path of an address, of a role or of a database once decided where the tables went,
+   * and the worker refused one that put another schema first. The worker now sets the search path of
+   * each connection itself (FRU-219): the one of somebody else has no effect.
    */
   describe('an address whose search path puts another schema first', { skip: NO_REAL_POSTGRES }, () => {
-    /** A database of its own, with a schema `other`, and a pool whose search path starts with it. */
-    async function withAnotherSchemaFirst(use: (database: Database) => Promise<void>): Promise<void> {
+    /** A database of its own, with a schema `other`, and an address whose search path starts with it. */
+    async function withAnotherSchemaFirst(use: (database: Database, address: string) => Promise<void>): Promise<void> {
       const own = await ownDatabase();
-      const admin = createPgDatabase(own.url, { max: 1 });
+      const admin = createPgDatabase(own.url, 'public', { max: 1 });
       const elsewhere = new URL(own.url);
       elsewhere.searchParams.set('options', '-c search_path=other,public');
-      const database = createPgDatabase(elsewhere.href, { max: 2 });
+      const database = createPgDatabase(elsewhere.href, 'public', { max: 2 });
       try {
         await rowsOf(admin, 'CREATE SCHEMA other');
-        assert.deepEqual(
-          await rowsOf(database, 'SELECT current_schema() AS first'),
-          [{ first: 'other' }],
-          'the address did not set the search path, so nothing below is tested',
-        );
-        await use(database);
+        await use(database, elsewhere.href);
       } finally {
         await database.close();
         await admin.close();
@@ -346,41 +362,29 @@ describe('the migrations of the PostgreSQL database (FRU-180)', () => {
       }
     }
 
-    it('is refused before any write, with what to change', async () => {
-      await withAnotherSchemaFirst(async (database) => {
-        await assert.rejects(migrate(database), (error: unknown) => {
-          assert.ok(error instanceof StoreError);
-          assert.match(error.message, /the search path of FRUITBACK_DATABASE_URL puts another schema first/);
-          assert.match(error.message, /take the search path out of the address/);
-
-          return true;
-        });
-        assert.equal(await has(database, 'other.accounts'), false);
-        assert.equal(await has(database, `public.${APPLIED.migrationsTable}`), false);
+    // The control: the address does set the search path, for a client that the worker does not open.
+    it('does put that schema first for a connection the worker did not open', async () => {
+      await withAnotherSchemaFirst(async (_database, address) => {
+        const { default: pg } = await import('pg');
+        const client = new pg.Client({ connectionString: address });
+        await client.connect();
+        try {
+          assert.deepEqual((await client.query('SELECT current_schema() AS first')).rows, [{ first: 'other' }]);
+        } finally {
+          await client.end();
+        }
       });
     });
 
-    // The control: what Drizzle alone does there. The tables go in `other`, and a foreign key names `public`.
-    it('fails in the middle of the baseline when Drizzle alone meets it, on a relation of public', async () => {
+    it('has no effect: every connection of the worker is in its schema, and the tables go there', async () => {
       await withAnotherSchemaFirst(async (database) => {
-        await assert.rejects(
-          database.alone((_, apply) => apply({ migrationsFolder: migrationsFolder(), ...APPLIED })),
-          /relation "public\.[a-z_]+" does not exist/,
-        );
-      });
-    });
+        assert.deepEqual(await rowsOf(database, 'SELECT current_schema() AS first'), [{ first: 'public' }]);
 
-    it('is refused too on a database that the tool of before made in that schema, which Drizzle alone breaks on', async () => {
-      await withAnotherSchemaFirst(async (database) => {
-        await madeByTheHomeMadeTool(database);
-        assert.equal(await has(database, 'other.schema_migrations'), true, 'the tool of before wrote in public');
+        await migrate(database);
 
-        // The control: no `public.schema_migrations`, so nothing to adopt, and the tables are there.
-        await assert.rejects(
-          database.alone((_, apply) => apply({ migrationsFolder: migrationsFolder(), ...APPLIED })),
-          /already exists/,
-        );
-        await assert.rejects(migrate(database), /the search path of FRUITBACK_DATABASE_URL puts another schema first/);
+        assert.equal(await has(database, 'public.sites'), true);
+        assert.equal(await has(database, `public.${APPLIED.migrationsTable}`), true);
+        assert.deepEqual(await rowsOf(database, `SELECT tablename FROM pg_tables WHERE schemaname = 'other'`), []);
       });
     });
   });
@@ -403,7 +407,7 @@ describe('the migrations of the PostgreSQL database (FRU-180)', () => {
       const script = `
         import { createPgDatabase } from ${JSON.stringify(new URL('./postgres.ts', import.meta.url).href)};
         const { migrate } = await import(process.env.MIGRATE);
-        const database = createPgDatabase(process.env.DATABASE);
+        const database = createPgDatabase(process.env.DATABASE, 'public');
         try {
           await migrate(database, process.env.FOLDER);
         } finally {
@@ -429,7 +433,7 @@ describe('the migrations of the PostgreSQL database (FRU-180)', () => {
           JSON.stringify(ended),
         );
 
-        const database = createPgDatabase(own.url, { max: 1 });
+        const database = createPgDatabase(own.url, 'public', { max: 1 });
         assert.deepEqual(await rowsOf(database, 'SELECT id FROM made_once ORDER BY id'), [{ id: 1 }, { id: 2 }]);
         assert.deepEqual(await applied(database), [1_000, 2_000]);
         await database.close();
@@ -460,13 +464,17 @@ describe('the migrations of the PostgreSQL database (FRU-180)', () => {
 describe('the pool of a process (FRU-141)', () => {
   it('is one for an address, however many stores a process builds', async () => {
     // A store is built for each request wherever the transport did not hand one over.
-    const first = databaseFor('postgres://u:p@127.0.0.1:1/one');
+    const first = databaseFor('postgres://u:p@127.0.0.1:1/one', 'public');
 
-    assert.equal(databaseFor('postgres://u:p@127.0.0.1:1/one'), first);
-    assert.notEqual(databaseFor('postgres://u:p@127.0.0.1:1/two'), first);
+    assert.equal(databaseFor('postgres://u:p@127.0.0.1:1/one', 'public'), first);
+    assert.notEqual(databaseFor('postgres://u:p@127.0.0.1:1/two', 'public'), first);
 
     await closeDatabases();
-    assert.notEqual(databaseFor('postgres://u:p@127.0.0.1:1/one'), first, 'a closed pool was handed out again');
+    assert.notEqual(
+      databaseFor('postgres://u:p@127.0.0.1:1/one', 'public'),
+      first,
+      'a closed pool was handed out again',
+    );
     await closeDatabases();
   });
 });
@@ -506,7 +514,7 @@ describe('the address of the database, which holds a password (FRU-141)', () => 
   });
 
   it('rejects with StoreError, and no word of the address, when the database does not answer', async () => {
-    const database = createPgDatabase(UNREACHABLE);
+    const database = createPgDatabase(UNREACHABLE, 'public');
     const failures: unknown[] = [];
     for (const call of [
       () => database.run((db) => db.execute(sql`SELECT 1`)),

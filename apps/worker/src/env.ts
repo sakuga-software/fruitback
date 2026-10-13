@@ -4,7 +4,7 @@ import { type TemSettings, parseTemCredentials } from './mail.ts';
 import { type OAuthClient, parseOAuthClient } from './oauth-client.ts';
 import { type LinearOAuth, parseLinearOAuth } from './linear-oauth.ts';
 import { type ClientMap, originsFromClients, readClientMap, unreadableClients, workspacesOf } from './clients.ts';
-import { readDatabaseUrl } from './postgres.ts';
+import { DEFAULT_DATABASE_SCHEMA, readDatabaseSchema, readDatabaseUrl } from './postgres.ts';
 import { DEFAULT_LIMIT } from './rate-limit.ts';
 import type { StoreConfig } from './store-config.ts';
 import { readStoreConfig } from './stores.ts';
@@ -87,6 +87,13 @@ export type WorkerEnv = {
    * password**, so no diagnostic quotes it.
    */
   FRUITBACK_DATABASE_URL?: string;
+  /**
+   * The schema of that database the worker keeps its tables and its journal of migrations in
+   * (FRU-219), for a database that another application uses too. A plain name, `fruitback` for
+   * example. Absent: `public`, as before. The worker makes the schema when it is not there, and
+   * writes nowhere else.
+   */
+  FRUITBACK_DATABASE_SCHEMA?: string;
   /**
    * Where the console answers, for example `https://app.fruitback.com` (FRU-98). A sign-in link opens
    * it, and it is the one origin the console routes answer with a cookie. Required with accounts.
@@ -218,6 +225,8 @@ const configSchema = z.object({
   firstReviewer: z.custom<FirstReviewer | undefined>().optional(),
   /** The PostgreSQL database that holds the accounts (FRU-141). Absent: the clients come from the env. */
   databaseUrl: z.string().min(1).optional(),
+  /** The schema of that database the worker keeps its tables in (FRU-219). `public` when none is named. */
+  databaseSchema: z.string().min(1),
   /** The console's address, with no slash at the end (FRU-98). */
   consoleUrl: z.string().min(1).optional(),
   /** How the worker sends e-mail, or absent when it sends none (FRU-98). */
@@ -286,6 +295,10 @@ function sameSecret(one: string | undefined, other: string | undefined): boolean
   return one !== undefined && other !== undefined && one.replaceAll(/\s/g, '') === other.replaceAll(/\s/g, '');
 }
 
+/** Why a value of `FRUITBACK_DATABASE_SCHEMA` stops the worker (FRU-219). The value is not quoted. */
+export const DATABASE_SCHEMA_REFUSED =
+  'FRUITBACK_DATABASE_SCHEMA (the name of a schema: a lower-case letter or « _ », then lower-case letters, digits and « _ », 63 characters at most, and not a schema of PostgreSQL itself)';
+
 export function readConfig(env: WorkerEnv): ConfigResult {
   const clients = readClientMap(env.FRUITBACK_CLIENTS);
   // The selected provider validates its own environment (FRU-33). The in-memory store needs none,
@@ -317,6 +330,8 @@ export function readConfig(env: WorkerEnv): ConfigResult {
     sessionPath: env.FRUITBACK_SESSION_PATH || undefined,
     firstReviewer: readFirstReviewer(env.FRUITBACK_FIRST_REVIEWER),
     databaseUrl: readDatabaseUrl(env.FRUITBACK_DATABASE_URL),
+    // A name that is refused is reported below, with its reason. `public` only lets the rest be read.
+    databaseSchema: readDatabaseSchema(env.FRUITBACK_DATABASE_SCHEMA) ?? DEFAULT_DATABASE_SCHEMA,
     consoleUrl: readConsoleUrl(env.FRUITBACK_CONSOLE_URL),
     mail: readMail(env),
     publicUrl: readConsoleUrl(env.FRUITBACK_PUBLIC_URL),
@@ -352,6 +367,18 @@ export function readConfig(env: WorkerEnv): ConfigResult {
   // The reason never quotes the value: it holds the password of the database.
   if (env.FRUITBACK_DATABASE_URL && result.data.databaseUrl === undefined) {
     return { ok: false, missing: ['FRUITBACK_DATABASE_URL (a postgres:// address with a host)'] };
+  }
+  // FRU-219. The name goes into statements as an identifier: a plain name, or nothing starts.
+  if (readDatabaseSchema(env.FRUITBACK_DATABASE_SCHEMA) === undefined) {
+    return { ok: false, missing: [DATABASE_SCHEMA_REFUSED] };
+  }
+  // A schema with no database names nothing: a line that was left in an `.env`, or a typing error
+  // in the name of the other variable.
+  if (env.FRUITBACK_DATABASE_SCHEMA?.trim() && result.data.databaseUrl === undefined) {
+    return {
+      ok: false,
+      missing: ['FRUITBACK_DATABASE_URL (FRUITBACK_DATABASE_SCHEMA names a schema of that database)'],
+    };
   }
   // The sessions have one source too (FRU-142): with a database they are in it, and a file beside it
   // would be a second place that nothing reads.

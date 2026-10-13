@@ -510,7 +510,7 @@ describe('the command migrate-to-postgres, as a process (FRU-145)', () => {
           assert.ok(!`${output.stdout}${output.stderr}`.includes(password));
         }
 
-        const database = createPgDatabase(own.url, { max: 1 });
+        const database = createPgDatabase(own.url, 'public', { max: 1 });
         assert.deepEqual(await counts(database), COPIED_COUNTS);
         await database.close();
 

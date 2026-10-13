@@ -356,7 +356,7 @@ describe('a worker that has better-auth switched off (FRU-144)', () => {
       assert.deepEqual(on.statuses, [200, 200, 404]);
       assert.equal(on.announced, 'ready');
       assert.ok(on.library > 0);
-      const made = createPgDatabase(url, { max: 1 });
+      const made = createPgDatabase(url, 'public', { max: 1 });
       try {
         assert.deepEqual(await appliedDates(made), journalDates());
       } finally {

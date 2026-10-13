@@ -4,7 +4,9 @@
 # It starts a database and a worker, fills every table, takes a snapshot with snapshot-pg.sh, and
 # restores it on another server with the commands of the runbook (README.md, « Restore the
 # database »). It then compares every table of the two databases: the number of rows, and a digest
-# of the rows. Last it takes a snapshot whose dump lost its end, and checks that the copy before stays.
+# of the rows. It does the same for a worker in a schema of its own, in a database that another
+# application uses too (FRU-219): the dump holds that schema alone. Last it takes a snapshot whose
+# dump lost its end, and checks that the copy before stays.
 #
 # CI runs it in the `docker image` job. On a machine:
 #   WORKER_IMAGE=<an image of the worker> sh apps/worker/cloud/restore-drill.sh
@@ -20,9 +22,9 @@ PASSWORD=drill-not-a-real-password
 WORK=$(mktemp -d)
 
 cleanup() {
-  docker rm -f "$P-source" "$P-worker" "$P-restored" >/dev/null 2>&1 || true
+  docker rm -f "$P-source" "$P-worker" "$P-restored" "$P-worker-shared" >/dev/null 2>&1 || true
   docker network rm "$P" >/dev/null 2>&1 || true
-  docker volume rm "$P-data" >/dev/null 2>&1 || true
+  docker volume rm "$P-data" "$P-data-shared" >/dev/null 2>&1 || true
   rm -rf "$WORK"
 }
 trap cleanup EXIT
@@ -50,17 +52,20 @@ database() {
 
 # One line for each table: its name, its number of rows, and a digest of its rows in one order.
 # The name is quoted: better-auth names a table "user", which is a reserved word.
+# `tables <container> [<database> [<schema>]]`: the database and the schema of the worker.
 tables() {
-  for table in $(docker exec "$1" psql -U fruitback -d fruitback -Atc \
-    "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename"); do
-    docker exec "$1" psql -U fruitback -d fruitback -At -F ' ' -c \
-      "SELECT '$table', count(*), coalesce(md5(string_agg(t::text, ',' ORDER BY t::text)), '-') FROM public.\"$table\" t"
+  in_db=${2:-fruitback}
+  in_schema=${3:-public}
+  for table in $(docker exec "$1" psql -U fruitback -d "$in_db" -Atc \
+    "SELECT tablename FROM pg_tables WHERE schemaname = '$in_schema' ORDER BY tablename"); do
+    docker exec "$1" psql -U fruitback -d "$in_db" -At -F ' ' -c \
+      "SELECT '$table', count(*), coalesce(md5(string_agg(t::text, ',' ORDER BY t::text)), '-') FROM \"$in_schema\".\"$table\" t"
   done
   # And one line for each sequence: its name and the last number it gave (FRU-218). The number of a
   # note is `FB-<n>`: a restore that left a sequence at its start would give a new note the number
   # of one that exists.
-  docker exec "$1" psql -U fruitback -d fruitback -At -F ' ' -c \
-    "SELECT 'sequence:' || sequencename, coalesce(last_value, 0), '-' FROM pg_sequences WHERE schemaname = 'public' ORDER BY sequencename"
+  docker exec "$1" psql -U fruitback -d "$in_db" -At -F ' ' -c \
+    "SELECT 'sequence:' || sequencename, coalesce(last_value, 0), '-' FROM pg_sequences WHERE schemaname = '$in_schema' ORDER BY sequencename"
 }
 
 snapshot() {
@@ -115,6 +120,53 @@ printf '%-20s %8s %8s  %s\n' table source restored rows
 paste -d ' ' "$WORK/source.txt" "$WORK/restored.txt" |
   awk '{ printf "%-20s %8s %8s  %s\n", $1, $2, $5, ($2 == $5 && $3 == $6 ? "the same" : "DIFFERENT") }'
 cmp -s "$WORK/source.txt" "$WORK/restored.txt" || fail "the restored database is not the source"
+
+# FRU-219. A database that another application uses too: its table is in `public`, and the worker
+# is in the schema `fruitback`. The snapshot is the one of that schema, and the restore, on another
+# server, brings back the tables of the worker and nothing of the other application.
+echo "restore-drill: 4b. a worker in a schema of its own: the dump and the restore of that schema alone"
+SCHEMA=fruitback
+docker exec "$P-source" createdb -U fruitback shared
+docker exec "$P-source" psql -U fruitback -d shared -q -v ON_ERROR_STOP=1 \
+  -c 'CREATE TABLE public.of_another_application (id integer PRIMARY KEY, kept text)' \
+  -c "INSERT INTO public.of_another_application VALUES (1, 'not of the worker')"
+docker volume create "$P-data-shared" >/dev/null
+docker run -d --name "$P-worker-shared" --network "$P" -v "$P-data-shared:/data" \
+  -e ALLOWED_ORIGINS=http://localhost:5173 \
+  -e LINEAR_API_KEY=drill-not-a-real-key \
+  -e LINEAR_TEAM_ID=drill-team \
+  -e FRUITBACK_IDENTITY_SECRET=drill-not-a-real-secret-of-32-characters \
+  -e FRUITBACK_CONSOLE_URL=https://app.fruitback.example \
+  -e "FRUITBACK_DATABASE_URL=postgres://fruitback:$PASSWORD@$P-source:5432/shared" \
+  -e "FRUITBACK_DATABASE_SCHEMA=$SCHEMA" \
+  "$WORKER_IMAGE" >/dev/null
+docker exec "$P-worker-shared" node server.mjs pair --subject drill >/dev/null
+# The rows name no schema: they go where the search path says, as the statements of the worker do.
+docker exec -i -e "PGOPTIONS=-c search_path=$SCHEMA" "$P-source" \
+  psql -U fruitback -d shared -q -v ON_ERROR_STOP=1 <"$HERE/drill-seed.sql"
+tables "$P-source" shared "$SCHEMA" >"$WORK/shared-source.txt"
+[ -s "$WORK/shared-source.txt" ] || fail "the worker made no table in the schema $SCHEMA"
+EMPTY=$(awk '$2 == 0 { printf "%s ", $1 }' "$WORK/shared-source.txt")
+[ -z "$EMPTY" ] || fail "in the schema $SCHEMA, no row in: $EMPTY"
+[ "$(docker exec "$P-source" psql -U fruitback -d shared -Atc \
+  "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'")" = 1 ] ||
+  fail "the worker made a table in public, beside the one of the other application"
+PG_CONTAINER="$P-source" WORKER_CONTAINER="$P-worker-shared" PGDATABASE=shared PGSCHEMA="$SCHEMA" \
+  sh "$HERE/snapshot-pg.sh"
+docker cp "$P-worker-shared:/data/snapshots/fruitback.pgdump" "$WORK/shared.pgdump"
+# The commands of README.md, « Restore one schema ».
+test -s "$WORK/shared.pgdump" &&
+  docker cp "$WORK/shared.pgdump" "$PG:/tmp/shared.pgdump" &&
+  docker exec "$PG" pg_restore -f /dev/null /tmp/shared.pgdump &&
+  docker exec "$PG" createdb -U fruitback shared_restored &&
+  docker exec "$PG" pg_restore -U fruitback -d shared_restored --no-owner --exit-on-error /tmp/shared.pgdump ||
+  fail "the restore of one schema stopped before its end"
+tables "$P-restored" shared_restored "$SCHEMA" >"$WORK/shared-restored.txt"
+cmp -s "$WORK/shared-source.txt" "$WORK/shared-restored.txt" || fail "the restored schema is not the source"
+[ "$(docker exec "$PG" psql -U fruitback -d shared_restored -Atc \
+  "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'")" = 0 ] ||
+  fail "the dump of one schema brought back a table of public"
+echo "restore-drill: $(wc -l <"$WORK/shared-source.txt" | tr -d ' ') tables and sequences of the schema $SCHEMA are the same on both sides, and nothing of public came with them"
 
 # The dump loses its last 100 bytes, and not its half. The table of contents is at the start of the
 # file: a small dump cut to half loses a part of it, and `pg_restore --list` then refuses the dump
