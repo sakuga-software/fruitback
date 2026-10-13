@@ -11,7 +11,15 @@ import {
   StoreError,
 } from './store.ts';
 import { type StoreSpec, defineStore } from './store-config.ts';
-import { COMMENTS_PER_ISSUE, forgetSelectorFor, identifierFor, noteOf, threadsOf, toSeedIssue } from './seed-rows.ts';
+import {
+  COMMENTS_PER_ISSUE,
+  forgetSelectorFor,
+  identifierFor,
+  noteOf,
+  seedIdOf,
+  threadsOf,
+  toSeedIssue,
+} from './seed-rows.ts';
 
 export { COMMENTS_PER_ISSUE };
 
@@ -261,6 +269,7 @@ async function forget(
 
     return found.map((row) => ({
       identifier: identifierFor(row.id),
+      seed: seedIdOf(row.seed),
       createdAt: row.created_at,
       pageUrl: row.page_url,
       note: noteOf(row.seed),

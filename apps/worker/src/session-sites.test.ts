@@ -1,4 +1,5 @@
 import { afterEach, describe, it } from 'node:test';
+import { noNotes } from './notes-index.ts';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -61,7 +62,8 @@ describe('the sites a session may turn on (FRU-101)', () => {
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), {
       workspace: { id: acme.id, name: 'Acme' },
-      sites: [{ id: site.id, origin: 'https://staging.acme.dev', visibility: 'members' }],
+      // FRU-237: and the notes of the site, none here.
+      sites: [{ id: site.id, origin: 'https://staging.acme.dev', visibility: 'members', ...noNotes() }],
     });
     assert.equal(response.headers.get('Access-Control-Allow-Origin'), EXTENSION);
   });

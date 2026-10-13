@@ -362,7 +362,7 @@ for (const { label, open, skip } of [
     it('applies on a database with live sessions, which go on as sessions of their workspace', async () => {
       const database = await open();
       try {
-        await migrate(database, migrationsThrough('0006_kv'));
+        await migrate(database, migrationsThrough('0007_note_index'));
         const now = Date.now();
         await rowsOf(
           database,

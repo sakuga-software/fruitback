@@ -535,4 +535,23 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'Open the site, click Leave feedback, then any part of the page.':
     'Ouvrez le site, cliquez sur Laisser un feedback, puis sur n’importe quelle partie de la page.',
   'Open the console': 'Ouvrir la console',
+  // How long ago (ago.ts).
+  'Just now': 'À l’instant',
+  '{count} min ago': 'il y a {count} min',
+  '{count} h ago': 'il y a {count} h',
+  Yesterday: 'Hier',
+  '{count} days ago': 'il y a {count} jours',
+  // Sites, second time (FRU-270).
+  'On the page with': 'Sur la page avec',
+  'Last note': 'Dernière note',
+  Statuses: 'Statuts',
+  'None yet': 'Aucune pour l’instant',
+  'Extension, script': 'Extension, script',
+  'Waiting for the first note': 'En attente de la première note',
+  '1 not delivered yet': '1 pas encore livrée',
+  '{count} not delivered yet': '{count} pas encore livrées',
+  '1 note: {new} new, {todo} to do, {progress} in progress, {done} done, {closed} closed':
+    '1 note : {new} nouvelle, {todo} à faire, {progress} en cours, {done} terminée, {closed} fermée',
+  '{count} notes: {new} new, {todo} to do, {progress} in progress, {done} done, {closed} closed':
+    '{count} notes : {new} nouvelles, {todo} à faire, {progress} en cours, {done} terminées, {closed} fermées',
 };

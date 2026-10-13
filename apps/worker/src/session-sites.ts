@@ -1,6 +1,7 @@
 import type { AccountStore } from './accounts.ts';
 import { previewPattern, proofState } from './domain-proof.ts';
 import { readBearerToken, verifyIdentityToken } from './identity.ts';
+import { type NoteIndex, noNotes } from './notes-index.ts';
 
 /**
  * The sites of the workspace a session belongs to (FRU-101, the first step of it).
@@ -27,6 +28,7 @@ export async function handleSessionSites(
   secret: string,
   headers: Record<string, string>,
   now?: number,
+  noteIndex?: NoteIndex,
 ): Promise<Response> {
   if (request.method !== 'GET') return json(405, { error: 'method-not-allowed' }, headers);
 
@@ -38,7 +40,7 @@ export async function handleSessionSites(
   const subject = verified.reporter.id;
   // A session of an account (FRU-238): the sites of every workspace it is a member of today.
   if (verified.account === true && subject !== undefined) {
-    return json(200, await sitesOfAccount(accounts, subject, now ?? Date.now()), headers);
+    return json(200, await sitesOfAccount(accounts, subject, now ?? Date.now(), noteIndex), headers);
   }
   const workspaceId = verified.workspace;
   if (subject === undefined || workspaceId === undefined) {
@@ -53,6 +55,8 @@ export async function handleSessionSites(
   // The language the person reads (FRU-119), so the extension and its widget speak it too (FRU-131).
   const locale = (await accounts.account(subject))?.locale;
   const previewsOf = await previewsIn(accounts, workspaceId, now ?? Date.now());
+  // FRU-237: what the popup counts on a site (06, 07). What did not arrive stays in the console.
+  const notes = await notesIn(noteIndex, workspaceId);
 
   return json(
     200,
@@ -67,6 +71,7 @@ export async function handleSessionSites(
           origin: site.origin,
           visibility: site.visibility,
           ...(previews.length === 0 ? {} : { previews }),
+          ...(notes === undefined ? {} : (notes.get(site.id) ?? noNotes())),
         };
       }),
     },
@@ -95,12 +100,13 @@ async function previewsIn(accounts: AccountStore, workspace: string, now: number
  * No `workspace` in the singular: the extension of before reads this answer as « no list », and asks
  * nothing of a session it does not know.
  */
-async function sitesOfAccount(accounts: AccountStore, account: string, now: number) {
+async function sitesOfAccount(accounts: AccountStore, account: string, now: number, noteIndex?: NoteIndex) {
   const memberships = await accounts.memberships(account);
   const locale = (await accounts.account(account))?.locale;
   const sites = [];
   for (const { workspace } of memberships) {
     const previewsOf = await previewsIn(accounts, workspace.id, now);
+    const notes = await notesIn(noteIndex, workspace.id);
     for (const site of await accounts.sites(workspace.id)) {
       const previews = previewsOf(site.id);
       sites.push({
@@ -109,6 +115,7 @@ async function sitesOfAccount(accounts: AccountStore, account: string, now: numb
         visibility: site.visibility,
         workspace: workspace.id,
         ...(previews.length === 0 ? {} : { previews }),
+        ...(notes === undefined ? {} : (notes.get(site.id) ?? noNotes())),
       });
     }
   }
@@ -119,4 +126,18 @@ async function sitesOfAccount(accounts: AccountStore, account: string, now: numb
     workspaces: memberships.map(({ workspace, role }) => ({ id: workspace.id, name: workspace.name, role })),
     sites,
   };
+}
+
+/**
+ * The counts of the notes of the sites of a workspace (FRU-237), or `undefined`: an index that does
+ * not answer costs the counts, never the sites.
+ */
+async function notesIn(noteIndex: NoteIndex | undefined, workspace: string) {
+  return noteIndex?.summary(workspace).catch((error: unknown) => {
+    console.error(
+      `[fruitback] the index of the notes did not answer: ${error instanceof Error ? error.message : String(error)}`,
+    );
+
+    return undefined;
+  });
 }

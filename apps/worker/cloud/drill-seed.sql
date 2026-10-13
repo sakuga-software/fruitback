@@ -105,3 +105,8 @@ INSERT INTO seed_comments (seed_id, author, body, created_at) VALUES
 -- restore, and the drill compares it like any other row.
 INSERT INTO kv (key, value, expires_at) VALUES
   ('fruitback:drill:count', '3', 1);
+
+-- The index of the notes (FRU-237): a note that went to a connector, and one the worker keeps.
+INSERT INTO note_index (site_id, seed_id, workspace_id, page_url, excerpt, stage, channel, author_kind, author_account_id, place, connector_id, reference, reference_url, created_at, checked_at) VALUES
+  ('site_drill1', 'sd_drill1', 'ws_drill1', 'https://staging.acme.dev/pricing', 'The price is cut off on a phone.', 'seeded', 'script', 'visitor', NULL, 'fruitback', NULL, 'FB-1', NULL, 1, 1),
+  ('site_drill1', 'sd_drill9', 'ws_drill1', 'https://staging.acme.dev/', 'Sent to the hook.', 'ripe', 'extension', 'member', 'acc_drill1', 'connector', 'con_drill1', 'hook-1', NULL, 2, 3);

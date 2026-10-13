@@ -98,6 +98,12 @@ async function withEveryTableFilled(open: () => Promise<PgDatabase>): Promise<Pg
     `INSERT INTO connect_requests (request_hash, claim_hash, word, browser, created_at, expires_at, outcome, account_id, answered_at, claimed_at)
        VALUES ('digest-of-a-request', 'digest-of-a-claim', 'PLUM 47', 'Chrome on macOS', 1, 1, 'approved', 'acc_alice', 1, 1)`,
   );
+  // FRU-237: one row of the index of the notes.
+  await rowsOf(
+    database,
+    `INSERT INTO note_index (site_id, seed_id, workspace_id, page_url, excerpt, stage, author_kind, place, created_at, checked_at)
+       VALUES ('site_acme', 'sd_1', 'ws_acme', 'https://acme.dev/', 'A note', 'seeded', 'visitor', 'fruitback', 1, 1)`,
+  );
 
   return database;
 }
@@ -107,7 +113,7 @@ async function write({ table, column }: Bigint, database: PgDatabase, value: num
   await rowsOf(database, `UPDATE "${getTableConfig(table).name}" SET "${column.name}" = ${String(value)}`);
 }
 
-it('knows the thirty-two BIGINT columns of the worker, and that better-auth has none', () => {
+it('knows the thirty-four BIGINT columns of the worker, and that better-auth has none', () => {
   assert.deepEqual(BIGINTS.map(({ name }) => name).toSorted(), [
     'connect_requests.answered_at',
     'connect_requests.claimed_at',
@@ -126,6 +132,8 @@ it('knows the thirty-two BIGINT columns of the worker, and that better-auth has 
     'email_links.expires_at',
     'email_links.spent_at',
     'kv.expires_at',
+    'note_index.checked_at',
+    'note_index.created_at',
     'pairings.created_at',
     'pairings.expires_at',
     'pairings.redeemed_at',

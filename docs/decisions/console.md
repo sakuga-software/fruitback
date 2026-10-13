@@ -210,22 +210,27 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   the mockup, at 1440 and 390 px, the menu, the keyboard and axe. **Not copied from the mockup**:
   a link of the rail under the pointer is white, where the mockup turns every link `#b91c1c`
   (2.6:1 on the rail); « Help and docs » opens in another tab, so a screen keeps what is typed in it.
-- **The Sites screen is the table of the mockup, with the columns the worker fills** (FRU-243,
-  `routes/sites.tsx`): the site and who sees its notes, and where its notes go, to whoever sees the
-  tracker. The count of notes, the way on the page and the last note wait for the summary of the
-  sites (FRU-237), and the legend of the statuses comes with them: a column with nothing true to
-  show is not drawn. **A row has one menu, and what it opens is under the row**: « Install », for
-  every role; « Preview builds », which is the proof of a domain of FRU-103, and « Remove », for who
-  manages the sites. One thing is open at a time, and what closes gives focus back to the button of
-  the row. « Remove » asks twice: the menu is the first time, and `Confirmation` (`confirm.tsx`) the
-  second. **No item changes who sees the notes of a site**: the worker has no route for it, and a
-  button that does nothing is not drawn; so the form that adds a site asks it, in the card of a
-  workspace with no site too, where the mockup draws the address alone. **The address of a site is
-  no link** until a site has a page. **The table has no minimum width while it has three columns**:
-  it fits a phone, so what opens under a row is on screen; the six columns of the mockup need
-  860 px and a place for it outside the table. The card and the alert are sized by their content
-  (`box-content`), as the mockup sizes them: 640 px and 760 px inside their padding.
-  `e2e/console-sites.spec.ts` holds the three states, the form, the menu, the roles, 390 px and axe.
+- **The Sites screen is the table of the mockup, with its six columns** (FRU-243, FRU-270,
+  `routes/sites.tsx`): the site and who sees its notes, its notes by status (a count and a bar whose
+  name says the counts again), how they came (the script or the extension), where they go, to
+  whoever sees the tracker, and the last one (`ago.ts`: « 12 min ago », « Yesterday », then the day).
+  The counts are the summary of the sites (FRU-237), in the answer that lists them: **nothing of a row
+  comes after the row**, so nothing moves under a press, and a test holds the read to prove it. A
+  cell with nothing to say draws « · » for the eye and says « None yet » to a screen reader; a worker
+  that sends no summary gets that, and no bar. The legend of the statuses is above the table. **A row
+  has one menu, and what it opens is under the row**: « Install », for every role; « Preview builds »,
+  which is the proof of a domain of FRU-103, and « Remove », for who manages the sites. One thing is
+  open at a time, and what closes gives focus back to the button of the row. « Remove » asks twice:
+  the menu is the first time, and `Confirmation` (`confirm.tsx`) the second. **No item changes who
+  sees the notes of a site**: the worker has no route for it, and a button that does nothing is not
+  drawn; so the form that adds a site asks it, in the card of a workspace with no site too, where the
+  mockup draws the address alone. **The address of a site is no link** until a site has a page. **The
+  table is 860 px at the least**, as the mockup draws it: on a phone it scrolls in its frame, and what
+  opens under a row stays at the left of what is seen (`sticky`), as wide as the frame. A host breaks
+  after its dots first (`<wbr>`). The hidden words of a cell are anchored to the cell: with no anchor,
+  they widen the page at 390 px. The card and the alert are sized by their content (`box-content`),
+  as the mockup sizes them: 640 px and 760 px inside their padding. `e2e/console-sites.spec.ts` holds
+  the three states, the counts, the form, the menu, the roles, 390 px and axe.
 - **The Connectors screen is the one of the mockup, with the sources that exist** (FRU-246):
   `routes/connectors.tsx` (the list and « Add a source »), `connector-add.tsx` (the two forms),
   `connector-linear.tsx` and `connector-rest.tsx` (the panels), `connector-parts.tsx` (what they

@@ -1,120 +1,9 @@
 {
-  "id": "27a0a497-c269-4ec8-88e8-fadb7a1b7326",
+  "id": "64ab6179-7edf-4528-b79d-af4afe133622",
   "prevId": "5de5afc7-65a8-435b-84df-8e0b14d5bf7c",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
-    "public.connect_requests": {
-      "name": "connect_requests",
-      "schema": "",
-      "columns": {
-        "request_hash": {
-          "name": "request_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "claim_hash": {
-          "name": "claim_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "word": {
-          "name": "word",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "browser": {
-          "name": "browser",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "outcome": {
-          "name": "outcome",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "account_id": {
-          "name": "account_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "answered_at": {
-          "name": "answered_at",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "claimed_at": {
-          "name": "claimed_at",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "misses": {
-          "name": "misses",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        }
-      },
-      "indexes": {
-        "connect_requests_by_expiry": {
-          "name": "connect_requests_by_expiry",
-          "columns": [
-            {
-              "expression": "expires_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "connect_requests_pkey": {
-          "name": "connect_requests_pkey",
-          "columns": [
-            "request_hash"
-          ]
-        }
-      },
-      "uniqueConstraints": {
-        "connect_requests_claim_hash_key": {
-          "name": "connect_requests_claim_hash_key",
-          "nullsNotDistinct": false,
-          "columns": [
-            "claim_hash"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.connectors": {
       "name": "connectors",
       "schema": "",
@@ -544,6 +433,200 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.note_index": {
+      "name": "note_index",
+      "schema": "",
+      "columns": {
+        "site_id": {
+          "name": "site_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seed_id": {
+          "name": "seed_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "page_url": {
+          "name": "page_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "excerpt": {
+          "name": "excerpt",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stage": {
+          "name": "stage",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "channel": {
+          "name": "channel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "author_kind": {
+          "name": "author_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "author_account_id": {
+          "name": "author_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "place": {
+          "name": "place",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "connector_id": {
+          "name": "connector_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reference": {
+          "name": "reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reference_url": {
+          "name": "reference_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "checked_at": {
+          "name": "checked_at",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "note_index_by_workspace": {
+          "name": "note_index_by_workspace",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "site_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "stage",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "note_index_by_author": {
+          "name": "note_index_by_author",
+          "columns": [
+            {
+              "expression": "author_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "note_index_site_id_fkey": {
+          "name": "note_index_site_id_fkey",
+          "tableFrom": "note_index",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "note_index_workspace_id_fkey": {
+          "name": "note_index_workspace_id_fkey",
+          "tableFrom": "note_index",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "workspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "note_index_connector_id_fkey": {
+          "name": "note_index_connector_id_fkey",
+          "tableFrom": "note_index",
+          "tableTo": "connectors",
+          "columnsFrom": [
+            "connector_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "note_index_pkey": {
+          "name": "note_index_pkey",
+          "columns": [
+            "site_id",
+            "seed_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.pairings": {
       "name": "pairings",
       "schema": "",
@@ -962,24 +1045,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "account_id": {
-          "name": "account_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "browser": {
-          "name": "browser",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "connection_id": {
-          "name": "connection_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -1003,21 +1068,6 @@
           "columns": [
             {
               "expression": "root_hash",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "sessions_by_account": {
-          "name": "sessions_by_account",
-          "columns": [
-            {
-              "expression": "account_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
