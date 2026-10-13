@@ -104,6 +104,7 @@ export default function KitGallery() {
 
       <section aria-label="Wide buttons" className="flex w-[400px] max-w-full flex-col gap-2.5" data-kit="wide">
         <WideButton>Continue with Google</WideButton>
+        <Button wide>Join a workspace with a very long name that somebody typed in a hurry one day</Button>
         <WideButton disabled note="GitHub sign-in is not set up on this Fruitback">
           Continue with GitHub
         </WideButton>

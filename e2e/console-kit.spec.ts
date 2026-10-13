@@ -316,6 +316,16 @@ test('the buttons have the measures of the mockup (FRU-232)', async ({ page }) =
     width: '400px',
   });
 
+  // A button over its column keeps 44 px with a short name, and grows with a long one: its words
+  // wrap in it, and nothing goes out of the column.
+  const long = page
+    .locator('[data-kit="wide"]')
+    .getByRole('button', { name: /^Join a workspace with a very long name/ });
+  const grown = (await long.boundingBox())!;
+  expect.soft(grown.width, 'a wide button with a long name stays in its column').toBe(400);
+  expect.soft(grown.height, 'a wide button with a long name takes two lines').toBeGreaterThan(44);
+  expect.soft(await long.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+
   // `.b-link`: underlined words, and a target of 33 px at the least (A23 of the mockup's inventory).
   const link = {
     color: INK,

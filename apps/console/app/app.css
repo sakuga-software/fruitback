@@ -208,9 +208,28 @@ textarea {
   font-size: var(--text-hint);
 }
 
+/* Over its column. Its words can be a name somebody typed: they take the lines they need, and the
+   button grows, where a button of its own width would make the page scroll sideways. */
 .kit-button[data-wide='true'] {
   display: flex;
   width: 100%;
+  height: auto;
+  min-height: var(--spacing-control);
+  padding-top: 10px;
+  padding-bottom: 10px;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.kit-button[data-wide='true'][data-size='panel'] {
+  min-height: var(--spacing-control-panel);
+}
+
+.kit-button[data-wide='true'][data-size='small'] {
+  min-height: var(--spacing-control-small);
+  padding-top: 6px;
+  padding-bottom: 6px;
 }
 
 /* The action of a step: the one pill of a screen. White on it is 4.70:1, 6.47:1 under the pointer. */
@@ -278,6 +297,8 @@ textarea {
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
   white-space: normal;
+  /* The words of a link can be a host: they wrap where they must. */
+  overflow-wrap: anywhere;
   cursor: pointer;
   transform: none;
   transition: none;
