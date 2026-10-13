@@ -1310,7 +1310,10 @@ store of the accounts`, test:`decides a pairing and a session by their instants,
   `FRUITBACK_DATABASE_SCHEMA`, and is adopted there. A worker that finds its schema empty while
   such a database, not adopted yet, is in another schema refuses and names the variable, where it
   would have started with no account (raised in review):
-  test:`is refused with the schema to name, and nothing is written in the empty one`.
+  test:`is refused with the schema to name, and nothing is written in the empty one`. It looks only
+  where the role may read: a `schema_migrations` of another application in a schema closed to it is
+  left alone (test:`is enough: no right on public, none on the database, and the worker signs a
+person in` plants one).
 - **The baseline makes the database that the tool of before made, to the last name.** One database
   made by the four migrations of that tool, as they shipped (`postgres-home-made.fixture.ts`, a copy
   compared word for word with `main` at e74be53), one made by the baseline: their catalogues are the

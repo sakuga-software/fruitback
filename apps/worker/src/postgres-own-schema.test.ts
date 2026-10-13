@@ -351,6 +351,9 @@ describe('a role that has its schema and nothing else (FRU-219)', { skip: NO_REA
     const database = createPgDatabase(lesser.href, SCHEMA, { max: 3 });
     try {
       await anotherApplicationIn(admin);
+      // Another application keeps its own journal of migrations under the name the tool of before used,
+      // in a schema the role of the worker may not read (raised in review).
+      await rowsOf(admin, 'CREATE TABLE public.schema_migrations (version text PRIMARY KEY)');
       // What an operator of a shared database does, once: a role, a schema, and the role's rights on it.
       for (const statement of [
         `CREATE ROLE ${role} LOGIN PASSWORD 'not-a-secret-of-a-test'`,

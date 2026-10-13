@@ -453,6 +453,9 @@ async function refuseWhatDrizzleWouldSkip(db: Db, folder: string, schema: string
  * adopted. A `schema_migrations` of another application
  * is not taken for one of the tool: its first row must be the first migration of that tool.
  */
+/** A name as PostgreSQL reads it in a text: between double quotes, with its own doubled. */
+const quoted = (name: string): string => `"${name.replaceAll('"', '""')}"`;
+
 async function refuseTheToolOfBeforeInAnotherSchema(db: Db, schema: string): Promise<void> {
   const [mine] = rowsOf(
     await db.execute(
@@ -462,17 +465,31 @@ async function refuseTheToolOfBeforeInAnotherSchema(db: Db, schema: string): Pro
   );
   if (mine?.drizzle !== null || mine?.home_made !== null) return;
 
+  // From the catalogue, which every role reads. Then one schema at a time: a schema or a table that
+  // the role may not read is not its database, and `to_regclass` or a read would raise « permission
+  // denied » there (raised in review). One statement for each check, in this order: in one
+  // statement the server may evaluate them in any order, and it did.
   const elsewhere = rowsOf(
     await db.execute(
       sql`SELECT schemaname FROM pg_tables
            WHERE tablename = 'schema_migrations' AND schemaname <> ${schema}
-             AND schemaname NOT IN ('pg_catalog', 'information_schema')
-             -- Adopted already: a worker of this build runs there, and this one is a second worker.
-             AND to_regclass(quote_ident(schemaname) || '.' || ${APPLIED.migrationsTable}) IS NULL
+             AND schemaname NOT IN ('pg_catalog', 'information_schema') AND left(schemaname, 3) <> 'pg_'
            ORDER BY schemaname`,
     ),
   ).map((row) => String(row.schemaname));
   for (const other of elsewhere) {
+    const [readable] = rowsOf(
+      await db.execute(
+        sql`SELECT has_schema_privilege(${other}, 'USAGE')
+                   AND has_table_privilege(${`${quoted(other)}.schema_migrations`}, 'SELECT') AS yes`,
+      ),
+    );
+    if (readable?.yes !== true) continue;
+    const [adopted] = rowsOf(
+      await db.execute(sql`SELECT to_regclass(${`${quoted(other)}.${APPLIED.migrationsTable}`}) IS NOT NULL AS yes`),
+    );
+    // Adopted already: a worker of this build runs there, and this one is a second worker.
+    if (adopted?.yes === true) continue;
     const [first] = rowsOf(
       await db
         .execute(sql`SELECT name FROM ${sql.identifier(other)}.schema_migrations ORDER BY version LIMIT 1`)
