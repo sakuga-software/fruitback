@@ -1105,6 +1105,54 @@ function pairs(page: Page): Promise<{ text: string; ratio: number }[]> {
   });
 }
 
+test('a list of a status, a button with a longer name and a named panel (FRU-232)', async ({ page }) => {
+  await openKit(page);
+
+  // The list of « Status of the pins »: 38 px, the drop 12 px in, the word 30 px in.
+  const row = page.locator('[data-kit="status-choice"]');
+  const list = row.getByRole('button', { name: /Status for In Review/ });
+  await expectStyle(list, 'list of a status', {
+    height: '38px',
+    borderTopColor: CONTROL,
+    borderTopLeftRadius: '8px',
+    fontSize: '14px',
+  });
+  const drop = list.locator('.kit-drop');
+  await expectStyle(drop, 'drop', { width: '9px', height: '9px', backgroundColor: STATUS_COLOURS[2] });
+  await expect(drop).toHaveAttribute('aria-hidden', 'true');
+  const edges = await list.evaluate((element) => {
+    const left = element.getBoundingClientRect().left;
+    const dropBox = element.querySelector('.kit-drop')!.getBoundingClientRect();
+    const word = element.querySelector('.select__value')!.getBoundingClientRect();
+    return { drop: dropBox.left - left, word: word.left - left };
+  });
+  // The border is inside the 12 px of the mockup, whose box is `border-box` too.
+  expect.soft(Math.round(edges.drop), 'drop, from the left edge').toBe(12);
+  expect.soft(Math.round(edges.word), 'word, from the left edge').toBe(30);
+
+  // The drop follows what is chosen, and the keyboard still walks the list.
+  await list.focus();
+  await page.keyboard.press('Enter');
+  await page.getByRole('option', { name: 'To do' }).click();
+  await expect(list).toContainText('To do');
+  await expectStyle(list.locator('.kit-drop'), 'drop, after', { backgroundColor: STATUS_COLOURS[1] });
+
+  // A name longer than the word shown, which starts with that word.
+  const connect = page.locator('[data-kit="fields"]').getByRole('button', { name: 'Connect Jira', exact: true });
+  await expect(connect).toHaveText('Connect');
+
+  // The panel takes an id of its own and a name that is not its title.
+  const panel = page.getByRole('complementary', { name: 'Settings of Linear', exact: true });
+  await expect(panel).toHaveAttribute('id', 'kit-panel');
+  await expect(panel).not.toHaveAttribute('aria-labelledby');
+  await expect(panel.getByRole('heading', { name: 'Linear' })).toHaveAttribute('id', 'kit-panel-title');
+
+  // A link in a row takes the line of the table: 20.3 px and its 8 px each way, the 36.3 px of the mockup.
+  const link = page.getByRole('region', { name: 'Members' }).getByRole('button', { name: 'Resend' });
+  await expectStyle(link, 'link in a row', { lineHeight: '20.3px', paddingTop: '8px' });
+  expect.soft((await link.boundingBox())?.height, 'link in a row, height').toBeCloseTo(36.3, 1);
+});
+
 test('every text of the kit is 4.5:1 on what is behind it, and axe finds nothing (FRU-232)', async ({ page }) => {
   await openKit(page);
 

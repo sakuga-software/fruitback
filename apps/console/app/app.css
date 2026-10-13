@@ -111,6 +111,7 @@
   /* The heights of a control: of a page, of a panel, of a chip, small. */
   --spacing-control: 44px;
   --spacing-control-panel: 40px;
+  --spacing-control-row: 38px;
   --spacing-control-chip: 36px;
   --spacing-control-small: 32px;
 
@@ -317,6 +318,11 @@ textarea {
   margin: -8px 0;
 }
 
+/* In a row of a table: the line of the table, so that the row keeps the height of its text. */
+.kit-table .kit-link {
+  line-height: inherit;
+}
+
 /* In a sentence: the words of the sentence, and no space of its own. */
 .kit-link[data-space='inline'] {
   display: inline;
@@ -432,6 +438,14 @@ textarea {
 
 .kit-field[data-compact='true'] .input {
   padding: 0 12px;
+}
+
+/* A list that chooses a status: 38 px, the drop 12 px from the edge (its border counted), the word 9 px after. */
+.kit-field[data-status='true'] .select__trigger {
+  gap: 9px;
+  padding-left: 11px;
+  height: var(--spacing-control-row);
+  font-size: var(--text-small);
 }
 
 /* A value the person reads and cannot change: the address of an instance, a name set elsewhere. */
