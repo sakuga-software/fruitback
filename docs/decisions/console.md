@@ -47,6 +47,11 @@ The console of the Cloud, `apps/console`: its words, its kit, and what it shows 
   list, as on the board; under 1280 px right under its row, which names it in `aria-controls`, and
   the page scrolls as far as the panel needs. `e2e/console-source-panel.spec.ts` measures it at 390,
   768 and 1440 px.
+  **A panel that a person opens takes focus** (FRU-197): it is a region named after its source, focus
+  goes to it when a press of its row opened it, and Escape closes it and gives focus back to the
+  row. A panel that appears by itself takes none: the one a change of width mounts again. The same
+  spec holds both. **Not measured: what VoiceOver and NVDA say**; the spec reads the role, the name
+  and where focus is.
   **The console decides nothing about a domain** (FRU-103). The Sites screen shows, to an owner or an
   admin, the domains of the workspace (`domains.tsx`): the `TXT` record to write, « Check the DNS »,
   and for a domain the worker says is proven, the site whose previews it covers. `state` is the

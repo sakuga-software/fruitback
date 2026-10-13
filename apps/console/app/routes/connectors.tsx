@@ -118,6 +118,8 @@ export default function Connectors() {
   // A read that failed is not an empty list (FRU-162): no « 0 site », and a way to read again.
   const [unread, setUnread] = useState(false);
   const [selected, setSelected] = useState<string | undefined>();
+  // Whether the panel that is about to appear was opened by a press of its row: see `Opened`.
+  const opening = useRef(false);
   const [adding, setAdding] = useState<Connector['kind'] | undefined>();
   const wide = useWide();
 
@@ -171,7 +173,17 @@ export default function Connectors() {
 
   const panel =
     open === undefined ? null : (
-      <Opened key={open.id} wide={wide}>
+      <Opened
+        key={open.id}
+        wide={wide}
+        label={`${t(KINDS[open.kind].name)} · ${sourceLine(open)}`}
+        takesFocus={opening}
+        onClose={() => {
+          setSelected(undefined);
+          // The keyboard goes back where it came from: the row of the source.
+          document.getElementById(rowId(open.id))?.focus();
+        }}
+      >
         <Panel
           base={base}
           connector={open}
@@ -224,8 +236,13 @@ export default function Connectors() {
                 <button
                   type="button"
                   aria-pressed={connector.id === selected}
+                  id={rowId(connector.id)}
                   aria-controls={connector.id === selected ? PANEL : undefined}
-                  onClick={() => setSelected(connector.id === selected ? undefined : connector.id)}
+                  onClick={() => {
+                    // A person opened it, so the panel takes focus when it appears (FRU-197).
+                    opening.current = connector.id !== selected;
+                    setSelected(connector.id === selected ? undefined : connector.id);
+                  }}
                   className={`flex w-full items-center gap-3 rounded-[14px] border bg-surface px-4 py-3.5 text-left ${
                     connector.id === selected ? 'border-ink' : 'border-line hover:border-ink/40'
                   }`}
@@ -363,22 +380,65 @@ function useWide(): boolean {
   );
 }
 
+/** The id of the row of a source, which takes focus back when its panel closes. */
+function rowId(connector: string): string {
+  return `source-row-${connector}`;
+}
+
 /**
  * The open panel (FRU-161). Under 1280 px it opens under its row, and the page scrolls as little as
  * shows it, or its top when it is taller than the screen. A row at the bottom of the screen would
  * otherwise open a panel nobody sees, and a second touch would close it. A change of width across
  * 1280 px moves the panel, so it is mounted again: it holds no field that somebody types in.
+ *
+ * **A panel that a person opened takes focus** (FRU-197). The press of a row changed nothing a screen
+ * reader says but the state of the button, and from 1280 px the panel is not even the next thing
+ * after its row. So the panel is a region with the name of its source, and focus goes to it: a
+ * screen reader says the name and reads on from there, and Tab goes to its first control. **Escape
+ * closes it and gives focus back to the row.** A panel that appears by itself takes no focus: the one
+ * of a source that Linear just connected, and the one that a change of width mounts again.
  */
-function Opened({ wide, children }: { wide: boolean; children: ReactNode }) {
+function Opened({
+  wide,
+  label,
+  takesFocus,
+  onClose,
+  children,
+}: {
+  wide: boolean;
+  /** The name of the region: the kind of the source, and which one. */
+  label: string;
+  /** Set by the press that opens the panel, and spent by the panel that appears. */
+  takesFocus: { current: boolean };
+  onClose: () => void;
+  children: ReactNode;
+}) {
   const held = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (takesFocus.current) {
+      takesFocus.current = false;
+      // The scroll is the one below: a focus that scrolls would put the top of a tall panel off the screen.
+      held.current?.focus({ preventScroll: true });
+    }
     if (wide) return;
     held.current?.scrollIntoView({ block: 'nearest' });
-  }, [wide]);
+  }, [wide, takesFocus]);
 
   return (
-    <div id={PANEL} ref={held} className="self-start scroll-mt-4">
+    <div
+      id={PANEL}
+      ref={held}
+      role="region"
+      aria-label={label}
+      tabIndex={-1}
+      className="self-start scroll-mt-4 rounded-[14px]"
+      onKeyDown={(event) => {
+        // `Confirm` and an open list take their own Escape, and stop it before it gets here.
+        if (event.key !== 'Escape' || event.defaultPrevented) return;
+        onClose();
+      }}
+    >
       {children}
     </div>
   );
