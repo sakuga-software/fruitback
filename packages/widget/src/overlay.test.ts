@@ -1,6 +1,7 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { seedFixture, seedIssueFixture } from '@fruitback/shared/seed.fixture';
+import type { SeedIssue } from '@fruitback/shared';
 import { type Overlay, createOverlay } from './overlay.ts';
 import { createTranslator } from './messages.ts';
 import { type MountedPage, mountPage, pressKey, setDocumentSize, setRect } from './dom.fixture.ts';
@@ -386,7 +387,7 @@ describe('createOverlay', () => {
     const close = page.document.querySelector('.fruitback-thread-close');
     assert.ok(close?.querySelector('svg.fruitback-icon'), 'the close button is not drawn');
     assert.equal(close?.textContent, '', 'the close button still carries a character');
-    assert.equal(close?.getAttribute('aria-label'), 'Close');
+    assert.equal(close?.getAttribute('aria-label'), 'Close the note');
   });
 
   it('prefers the store’s own word when it has one', () => {
@@ -430,6 +431,70 @@ describe('createOverlay', () => {
     assert.equal(thread.querySelector('a'), null, 'a store with no interface must draw no anchor');
     // The rest of the thread is untouched: it is the link that is absent, not the note.
     assert.match(thread.textContent ?? '', /Commander/);
+  });
+
+  it('lays the bubble out as the mock-up does: a head, the note, and the replies apart (FRU-256)', () => {
+    const page = mountWithCta();
+    overlay = createOverlay({ document: page.document });
+    overlay.render([
+      issueOnCta({
+        identifier: 'SKG-742',
+        stateName: 'In Progress',
+        comments: [{ id: 'c1', body: 'On regarde ça.', createdAt: '2026-08-01T10:00:00.000Z', author: 'Alice' }],
+      }),
+    ]);
+
+    (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+
+    const thread = page.document.querySelector('[data-fruitback-thread]') as HTMLElement;
+    const classes = (parent: Element) => [...parent.children].map((child) => child.className);
+    assert.deepEqual(classes(thread), ['fruitback-thread-head', 'fruitback-thread-body', 'fruitback-thread-answers']);
+    // The head: the state behind its drop, the way out, and the cross. The way out left the foot.
+    const head = thread.querySelector('.fruitback-thread-head') as HTMLElement;
+    assert.deepEqual(classes(head), ['fruitback-thread-stage', 'fruitback-thread-link', 'fruitback-thread-close']);
+    assert.equal(head.querySelector('.fruitback-thread-drop')?.getAttribute('aria-hidden'), 'true');
+    assert.equal(head.querySelector('.fruitback-thread-stage')?.textContent, 'In Progress');
+    // The identifier alone: no arrow, and no name of a store the widget does not know.
+    assert.equal(head.querySelector('a')?.textContent, 'SKG-742');
+    assert.deepEqual(classes(thread.querySelector('.fruitback-thread-body') as HTMLElement), [
+      'fruitback-thread-note',
+      'fruitback-thread-meta',
+      'fruitback-thread-source',
+    ]);
+    // Who answered is told apart from when: the name has its own element, which the stylesheet inks.
+    assert.equal(thread.querySelector('.fruitback-thread-reply-name')?.textContent, 'Alice');
+    assert.match(thread.querySelector('.fruitback-thread-reply-who')?.textContent ?? '', /^Alice · /);
+    // FRU-256 builds no way to answer from the page: that waits for a decision (Q9).
+    assert.equal(thread.querySelector('form, textarea, input') === null, true);
+  });
+
+  it('shows the component and the file behind the element, and nothing when the note has none (FRU-256)', () => {
+    const lineFor = (source: SeedIssue['seed']['source']) => {
+      const page = mountWithCta();
+      const issue = issueOnCta();
+      const { source: _dropped, ...seed } = issue.seed;
+      overlay = createOverlay({ document: page.document });
+      overlay.render([{ ...issue, seed: source === undefined ? seed : { ...seed, source } }]);
+      (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+      const line = page.document.querySelector('.fruitback-thread-source');
+      const text = line === null ? null : line.textContent;
+      overlay.destroy();
+      overlay = null;
+
+      return text;
+    };
+
+    assert.equal(
+      lineFor({ component: 'HeroBanner', file: 'src/components/Hero.tsx', line: 42, column: 7 }),
+      'HeroBanner · src/components/Hero.tsx:42',
+    );
+    assert.equal(lineFor({ component: 'HeroBanner' }), 'HeroBanner');
+    assert.equal(lineFor({ file: 'src/components/Hero.tsx' }), 'src/components/Hero.tsx');
+    // A page with no React, or a production build: no line, and no empty box in its place.
+    assert.equal(lineFor(undefined), null);
+    assert.equal(lineFor({ line: 42 }), null);
+    // As text: a name is whatever the page called its component.
+    assert.equal(lineFor({ component: '<img src=x onerror=alert(1)>' }), '<img src=x onerror=alert(1)>');
   });
 
   it('opens the thread on the badge: the note, the state and the way to Linear', () => {
@@ -736,9 +801,11 @@ describe('the team’s replies', () => {
 
 describe('the reading direction and the dates (FRU-38)', () => {
   it('opens the thread on the pin’s start edge, and leaves the pin where it is', () => {
+    // The window is 1000 px wide and the bubble 360: with the element in its middle, there is no room
+    // beside the frame on either side (346 − 26 − 360 and 654 + 26 + 360 both leave the window).
     const placedBy = (translator: ReturnType<typeof createTranslator>) => {
       const page = mountWithCta();
-      setRect(page.query('button'), { left: 600, top: 200, width: 200, height: 40 });
+      setRect(page.query('button'), { left: 350, top: 200, width: 300, height: 40 });
       overlay = createOverlay({ document: page.document, translator });
       overlay.render([issueOnCta()]);
       (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
@@ -751,12 +818,37 @@ describe('the reading direction and the dates (FRU-38)', () => {
       return placed;
     };
 
-    assert.deepEqual(placedBy(createTranslator()), { pin: '596px', thread: '596px' });
-    // The pin is geometry and does not move; the thread's right edge meets the pin's (596 + 208 - 300).
+    assert.deepEqual(placedBy(createTranslator()), { pin: '346px', thread: '346px' });
+    // The pin is geometry and does not move; the thread's right edge meets the pin's (346 + 308 - 360).
     assert.deepEqual(placedBy(createTranslator({ locale: 'he', messages: { he: { 'thread.close': 'סגור' } } })), {
-      pin: '596px',
-      thread: '504px',
+      pin: '346px',
+      thread: '294px',
     });
+  });
+
+  it('opens the thread beside the frame when the window has the room, as the mock-up draws it (FRU-256)', () => {
+    const placedBy = (left: number, translator = createTranslator()) => {
+      const page = mountWithCta();
+      setRect(page.query('button'), { left, top: 200, width: 200, height: 40 });
+      overlay = createOverlay({ document: page.document, translator });
+      overlay.render([issueOnCta()]);
+      (page.document.querySelector('.fruitback-pin-badge') as HTMLElement).click();
+      const thread = page.document.querySelector('[data-fruitback-thread]') as HTMLElement;
+      const placed = { left: thread.style.left, top: thread.style.top };
+      overlay.destroy();
+      overlay = null;
+
+      return placed;
+    };
+    const hebrew = createTranslator({ locale: 'he', messages: { he: { 'thread.close': 'סגור' } } });
+
+    // The frame is 96 to 304, 196 down: 26 px past its end edge, and 32 px above its top.
+    assert.deepEqual(placedBy(100), { left: '330px', top: '164px' });
+    // Right to left, the end edge is the left one: 596 − 26 − 360.
+    assert.deepEqual(placedBy(600, hebrew), { left: '210px', top: '164px' });
+    // No room past the end edge: under the pin, as before (196 + 48 + 8).
+    assert.deepEqual(placedBy(600), { left: '596px', top: '252px' });
+    assert.deepEqual(placedBy(100, hebrew), { left: '8px', top: '252px' });
   });
 
   it('opens the thread inside the window when the page is scrolled sideways (FRU-68)', () => {
@@ -776,10 +868,12 @@ describe('the reading direction and the dates (FRU-38)', () => {
       return placed;
     };
 
-    // On screen at document x 2000, the thread opens beside its pin.
+    // On screen at document x 2000, with no room past the frame, the thread opens under its pin.
     assert.deepEqual(placedBy(500), { pin: '1996px', thread: '1996px' });
-    // Near the right edge of the window it stops 8px short of it: 1500 + 1000 - 300 - 8.
-    assert.deepEqual(placedBy(900), { pin: '2396px', thread: '2192px' });
+    // Near the right edge of the window it stops 8px short of it: 1500 + 1000 - 360 - 8.
+    assert.deepEqual(placedBy(900), { pin: '2396px', thread: '2132px' });
+    // With room past the frame, it opens beside it, and that too is counted from the scroll: 1596 + 208 + 26.
+    assert.deepEqual(placedBy(100), { pin: '1596px', thread: '1830px' });
     // Right to left, near the left edge of the window, it stops 8px after it: 1500 + 8.
     assert.deepEqual(placedBy(0, createTranslator({ locale: 'he', messages: { he: { 'thread.close': 'סגור' } } })), {
       pin: '1496px',
@@ -957,7 +1051,8 @@ describe('the thread and the keyboard (FRU-51)', () => {
     const thread = page.document.querySelector('[data-fruitback-thread]');
 
     assert.equal(thread?.getAttribute('role'), 'dialog');
-    assert.match(thread?.getAttribute('aria-label') ?? '', /^Feedback \S+/);
+    // The number its drop carries (FRU-256), so the pin and its dialog name the same note.
+    assert.equal(thread?.getAttribute('aria-label'), 'Note 1');
     assert.ok(page.document.activeElement?.classList.contains('fruitback-thread-close'));
   });
 

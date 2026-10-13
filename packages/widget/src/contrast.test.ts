@@ -24,12 +24,12 @@ const ON_STAGE: Partial<Record<string, string>> = { ripening: 'color-on-stage-ri
  * is 2.15:1 on white, where a drawing needs 3:1. It is the colour Mathieu's mock-up gives that status.
  *
  * What makes it hold is that the colour never speaks alone: the list writes the stage in words beside
- * its mark, a thread writes the state under its border, and a pin carries its number in the ink.
+ * its mark, a thread writes the state beside its drop, and a pin carries its number in the ink.
  * `messages.test.ts` and the specs of the list hold those words. The test fails if this pair starts
  * to pass, so the line cannot outlive its reason, and if any other pair fails.
  */
 const KNOWN = [
-  'light: stage-ripening on color-surface, the stage mark of a detached note, and the top border of a thread (2.15)',
+  'light: stage-ripening on color-surface, the stage mark of a detached note, and the drop in the head of a thread (2.15)',
 ];
 
 const PAIRS: Pair[] = [
@@ -51,7 +51,7 @@ const PAIRS: Pair[] = [
     foreground: 'color-text-muted',
     background: 'color-surface',
     minimum: 4.5,
-    where: 'the panel labels, the thread byline, and the count and bylines of the list',
+    where: 'the panel labels, the byline and the link of a thread, and the count and bylines of the list',
   },
   {
     foreground: 'color-text-muted',
@@ -67,6 +67,25 @@ const PAIRS: Pair[] = [
   },
   { foreground: 'color-success', background: 'color-surface-raised', minimum: 4.5, where: 'the sent status' },
   {
+    foreground: 'color-text-subtle',
+    background: 'color-surface-raised',
+    minimum: 4.5,
+    where: 'the component and the file of a note, in its thread',
+  },
+  {
+    foreground: 'color-accent-strong',
+    background: 'color-surface',
+    minimum: 4.5,
+    where: 'the link of a thread under the pointer',
+  },
+  // A drawing: 1.4.11 asks for 3:1.
+  {
+    foreground: 'color-text-muted',
+    background: 'color-surface-sunken',
+    minimum: 3,
+    where: 'the cross of a thread under the pointer',
+  },
+  {
     foreground: 'color-accent',
     background: 'color-surface-raised',
     minimum: 4.5,
@@ -76,7 +95,7 @@ const PAIRS: Pair[] = [
     foreground: 'color-accent',
     background: 'color-surface',
     minimum: 4.5,
-    where: 'the thread and detached-note links',
+    where: 'the detached-note links',
   },
   {
     foreground: 'color-warning',
@@ -133,12 +152,12 @@ const PAIRS: Pair[] = [
     minimum: 3,
     where: 'the outline of a note with no place',
   },
-  // A drawing and a border, not text: 1.4.11 asks for 3:1. The list names the stage in words too.
+  // A drawing, not text: 1.4.11 asks for 3:1. The list names the stage in words too.
   ...SEED_STAGES.map((stage) => ({
     foreground: `stage-${stage}`,
     background: 'color-surface',
     minimum: 3,
-    where: 'the stage mark of a detached note, and the top border of a thread',
+    where: 'the stage mark of a detached note, and the drop in the head of a thread',
   })),
 ];
 

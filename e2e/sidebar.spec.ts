@@ -58,7 +58,7 @@ test('the list shows every note, and a note chosen there opens its thread', asyn
 
   // Choosing a note opens its thread, and the list stays for the next one.
   await entries.filter({ hasText: 'Second note of the list' }).click();
-  const thread = page.getByRole('dialog', { name: /^Feedback / });
+  const thread = page.getByRole('dialog', { name: /^Note \d+$/ });
   await expect(thread).toContainText('Second note of the list');
   await expect(list).toBeVisible();
 
@@ -86,7 +86,7 @@ test('a note far down the page is brought into view when it is chosen', async ({
   await page.getByRole('dialog', { name: 'Every note of this page' }).locator('[data-fruitback-note]').click();
 
   await expect(target).toBeInViewport();
-  await expect(page.getByRole('dialog', { name: /^Feedback / })).toContainText('A note far down');
+  await expect(page.getByRole('dialog', { name: /^Note \d+$/ })).toContainText('A note far down');
 });
 
 for (const scheme of ['light', 'dark'] as const) {
