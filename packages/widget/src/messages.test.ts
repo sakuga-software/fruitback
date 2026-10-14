@@ -12,7 +12,7 @@ import {
 } from './messages.ts';
 import { FRENCH } from './locale-fr.ts';
 import { createCaptureHost } from './host.ts';
-import { type SendFailure, createComposer } from './composer.ts';
+import { type SendFailure, type SentWithoutPicture, createComposer } from './composer.ts';
 import { createOfferedDestinations } from './destinations.ts';
 import type { Draft } from './drafts.ts';
 import { createConfigPanel } from './panel.ts';
@@ -243,16 +243,17 @@ describe('every word the widget shows', () => {
       exportText: () => exported,
     });
     cleanup.push(() => panel.destroy());
-    let answer: (planted: boolean | SendFailure) => void = () => {};
+    let answer: (planted: boolean | SendFailure | SentWithoutPicture) => void = () => {};
+    let keptAnswer: true | SentWithoutPicture = true;
     const places = createOfferedDestinations();
     places.set([{ id: 'dst_one', label: 'PLACE ONE' }, { id: 'dst_two' }]);
     const composer = createComposer({
       document: page.document,
       host: host.panel,
       translator,
-      onSubmit: () => new Promise<boolean | SendFailure>((resolve) => (answer = resolve)),
+      onSubmit: () => new Promise<boolean | SendFailure | SentWithoutPicture>((resolve) => (answer = resolve)),
       // Offered, so « Keep for later » is drawn (FRU-124).
-      keep: { offered: () => true, onKeep: async () => true },
+      keep: { offered: () => true, onKeep: async () => keptAnswer },
       // Two places, so the line of where a note goes is drawn. The second has no name of its own.
       destinations: {
         offered: places.get,
@@ -400,11 +401,24 @@ describe('every word the widget shows', () => {
       await settle();
       snapshots.push(...shown(host.root));
     }
+    // Sent without the picture it asked for (FRU-238).
+    composer.open({ left: 0, top: 0, bottom: 10, right: 10 }, 'ELEMENT');
+    send.click();
+    answer({ picture: 'missed' });
+    await settle();
+    snapshots.push(...shown(host.root));
+    composer.open({ left: 0, top: 0, bottom: 10, right: 10 }, 'ELEMENT');
     send.click();
     answer(true);
     await settle();
     snapshots.push(...shown(host.root));
     // Kept for later rather than sent (FRU-124).
+    composer.open({ left: 0, top: 0, bottom: 10, right: 10 });
+    (composer.element.querySelector('[data-fruitback-keep]') as HTMLButtonElement).click();
+    await settle();
+    snapshots.push(...shown(host.root));
+    // Kept without the picture it asked for (FRU-238).
+    keptAnswer = { picture: 'missed' };
     composer.open({ left: 0, top: 0, bottom: 10, right: 10 });
     (composer.element.querySelector('[data-fruitback-keep]') as HTMLButtonElement).click();
     await settle();
