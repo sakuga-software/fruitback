@@ -18,7 +18,7 @@ import { DEFAULT_TRUSTED_PROXY_HOPS } from './env.ts';
 import { DEFAULT_LIMIT } from './rate-limit.ts';
 import {
   CONNECTS_PER_ADDRESS,
-  CONNECT_INTERVAL_SECONDS,
+  POLL_WINDOW_SECONDS,
   CONNECT_TTL_SECONDS,
   CONNECT_WINDOW_MS,
   MAX_LIVE_REQUESTS,
@@ -155,7 +155,7 @@ describe('SECURITY.md states what the code does', () => {
       `| Claim        | ${bits(createClaim())} bits, secret`,
       `one of ${WORDS.length} words and two digits`,
       `a request lives ${CONNECT_TTL_SECONDS / 60} minutes`,
-      `a claim asked again within ${CONNECT_INTERVAL_SECONDS} seconds`,
+      `a claim asked again within ${POLL_WINDOW_SECONDS} seconds`,
       `${CONNECTS_PER_ADDRESS} requests per address in ${CONNECT_WINDOW_MS / 60_000} minutes; ${MAX_LIVE_REQUESTS} requests waiting`,
       `refused after ${MAX_WORD_MISSES} approvals with a word`,
     ]) {

@@ -9,6 +9,7 @@ import {
   type ConnectRow,
   type ConnectStore,
   MAX_WORD_MISSES,
+  POLL_WINDOW_SECONDS,
   SLOW_DOWN_SECONDS,
   createConnectionId,
   isClaim,
@@ -136,7 +137,7 @@ export async function handleExtensionConnect(
 
   // RFC 8628 `slow_down`: asked again within the interval, the answer says to wait longer. Shared by
   // the replicas through the `Kv` of the database.
-  const polls = await context.kv.incr(`fruitback:connect-poll:${claimHash}`, CONNECT_INTERVAL_SECONDS * 1000);
+  const polls = await context.kv.incr(`fruitback:connect-poll:${claimHash}`, POLL_WINDOW_SECONDS * 1000);
   if (polls > 1) {
     return json(429, { error: 'slow-down', interval: CONNECT_INTERVAL_SECONDS + SLOW_DOWN_SECONDS }, headers);
   }

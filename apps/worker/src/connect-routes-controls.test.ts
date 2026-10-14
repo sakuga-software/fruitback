@@ -38,6 +38,8 @@ type World = {
   ): Promise<Response>;
   /** The interval of the extension, gone by. */
   waited(claim: string): Promise<void>;
+  /** Moves the clock of the `Kv`. */
+  advance(ms: number): void;
 };
 
 const opened: Database[] = [];
@@ -49,7 +51,9 @@ async function worldOf(routes: Routes): Promise<World> {
   const database = await createPgliteDatabase();
   opened.push(database);
   const connect = createPostgresConnectStore(database);
-  const kv = createMemoryKv();
+  // The clock of the `Kv`: the time of this machine, and what a scenario moved it by.
+  let ahead = 0;
+  const kv = createMemoryKv({ now: () => Date.now() + ahead });
   const accounts = {
     account: async (id: string) => PEOPLE[id],
     memberships: async () => [],
@@ -58,6 +62,9 @@ async function worldOf(routes: Routes): Promise<World> {
   return {
     connect,
     database,
+    advance(ms) {
+      ahead += ms;
+    },
     async extension(path, body, more = {}) {
       const origin = more.origin === undefined ? EXTENSION : more.origin;
       const request = new Request(`https://api.fruitback.test${path}`, {
@@ -180,6 +187,17 @@ const GUARDS: Guard[] = [
       assert.equal((await world.extension('/session/connect/claim', { claim: request.claim })).status, 202);
       const soon = await world.extension('/session/connect/claim', { claim: request.claim });
       assert.equal(soon.status, 429);
+    },
+  },
+  {
+    holds: 'a claim polled on time, or a little early, is not paced',
+    change: { from: 'POLL_WINDOW_SECONDS * 1000', to: 'CONNECT_INTERVAL_SECONDS * 1000' },
+    async scenario(world) {
+      const request = await asked(world);
+      assert.equal((await world.extension('/session/connect/claim', { claim: request.claim })).status, 202);
+      // Half a second before the interval announced: a first poll that took long on its way.
+      world.advance(4_500);
+      assert.equal((await world.extension('/session/connect/claim', { claim: request.claim })).status, 202);
     },
   },
   {

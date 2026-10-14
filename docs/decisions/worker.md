@@ -889,8 +889,9 @@ code stays, for the operator of an instance. `SECURITY.md` says what each half p
   digests, in `connect_requests`. A route never takes the one for the other: `isRequestId` and
   `isClaim` read their own shape, and a value of another shape is not looked up.
 - **A session of an account names no workspace.** Its row has `account_id` (its `subject`) and a NULL
-  `workspace`; its access token has `scope: 'account'` and no `ws`. `identity.ts` refuses a token with
-  both, `session.ts` refuses to mint one, and `session-rows.ts` reads a row with both as no session.
+  `workspace`; its access token has `scope: 'account'` and no `ws`. `identity.ts` reads a token with
+  both as no session of an account, and ignores any other `scope`: a site signs its own tokens, and
+  its `scope` is its own (raised in review). `session.ts` refuses to mint one, and `session-rows.ts` reads a row with both as no session.
 - **Its workspace is read at each request, never carried.** `verifyForClient` lets it reach a client
   only through `policy.sessions.member`, which `routeFor` builds from `roleIn`. A policy with no
   `member` refuses it: a worker with no accounts, and `memberOf` of the pictures, which builds its own
@@ -911,7 +912,10 @@ code stays, for the operator of an instance. `SECURITY.md` says what each half p
   database, and on PGlite, which has one connection, a read inside the transaction waits for it for
   ever. The first version did, and the route tests hung on PGlite while the store's own cases passed:
   their `open` read nothing.
-- **The pace of the claims is in the `Kv`** (`fruitback:connect-poll:<digest of the claim>`), so the
+- **The pace of the claims is in the `Kv`**, for one second less than the interval announced
+  (`POLL_WINDOW_SECONDS`): an extension that polls on time, or a little early after a slow first
+  poll, is not told to slow down (raised in review).
+- **The pace is a key of the `Kv`** (`fruitback:connect-poll:<digest of the claim>`), so the
   replicas share it, as they share the rate limit. The limit of requests per address is a second key
   there, beside the limit of every route.
 - **The routes of the console take the cookie and, for a change, the `Origin` of the console**, as

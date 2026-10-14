@@ -40,6 +40,12 @@ export const CONNECT_TTL_SECONDS = 15 * 60;
 /** How often the extension may ask whether the request was answered. */
 export const CONNECT_INTERVAL_SECONDS = 5;
 
+/**
+ * How long a claim is remembered for `slow-down`: one second under the interval announced. A poll
+ * that comes on time, or a little early after a slow first one, is not paced (raised in review).
+ */
+export const POLL_WINDOW_SECONDS = CONNECT_INTERVAL_SECONDS - 1;
+
 /** Added to the interval of a claim polled too fast, as RFC 8628 says of `slow_down`. */
 export const SLOW_DOWN_SECONDS = 5;
 

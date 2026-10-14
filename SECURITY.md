@@ -414,7 +414,7 @@ instance.
 | Claim       | 256 bits, secret, kept by the extension alone, never in an address                |
 | Word        | one of 64 words and two digits (« PLUM 47 »), shown on both screens, not a secret |
 | Lifetime    | a request lives 15 minutes, is answered once and claimed once                     |
-| Polling     | a claim asked again within 5 seconds answers `429 slow-down`                      |
+| Polling     | a claim asked again within 4 seconds answers `429 slow-down`                      |
 | Limits      | 10 requests per address in 15 minutes; 1000 requests waiting on the instance      |
 | Wrong words | the request is refused after 5 approvals with a word that is not its own          |
 | On disk     | the request id and the claim are stored as **SHA-256 digests**                    |

@@ -131,27 +131,25 @@ describe('the token of a session of an account (FRU-238)', () => {
     );
   });
 
-  it('refuses a token with a scope it does not write, or with the scope of an account beside a workspace', async () => {
+  it('reads a session of an account only from scope account with no workspace, and ignores the scope of a site', async () => {
     const exp = Math.floor(Date.now() / 1000) + 60;
-    for (const claims of [
-      { sub: 'acc_alice', exp, scope: 'account', ws: 'ws_acme' },
-      { sub: 'acc_alice', exp, scope: 'admin' },
-      { sub: 'acc_alice', exp, scope: true },
-    ]) {
-      const token = await signIdentityToken(claims as never, SECRET);
-      assert.deepEqual(
-        await verifyIdentityToken(token, SECRET),
-        { ok: false, reason: 'invalid-claims' },
-        JSON.stringify(claims),
-      );
+    const read = async (claims: object) =>
+      verifyIdentityToken(await signIdentityToken(claims as never, SECRET), SECRET);
+
+    // A site's own scope, as JWTs often carry one: the token still verifies, and is no account.
+    for (const scope of ['read write', 'admin', true, ['account']]) {
+      const verified = await read({ sub: 'visitor-42', exp, scope });
+      assert.ok(verified.ok, JSON.stringify(scope));
+      assert.equal(verified.account, undefined, JSON.stringify(scope));
     }
-    // The control: a token of a workspace, and one of an account, verify.
-    for (const claims of [
-      { sub: 'acc_alice', exp, ws: 'ws_acme' },
-      { sub: 'acc_alice', exp, scope: 'account' },
-    ]) {
-      assert.equal((await verifyIdentityToken(await signIdentityToken(claims as never, SECRET), SECRET)).ok, true);
-    }
+    // The scope of an account beside a workspace makes no session of an account.
+    const both = await read({ sub: 'acc_alice', exp, scope: 'account', ws: 'ws_acme' });
+    assert.ok(both.ok);
+    assert.deepEqual([both.account, both.workspace], [undefined, 'ws_acme']);
+    // The control: the token of an account is one.
+    const account = await read({ sub: 'acc_alice', exp, scope: 'account' });
+    assert.ok(account.ok);
+    assert.equal(account.account, true);
   });
 
   it('reads a row of a session of an account only when it names its own person and no workspace', () => {

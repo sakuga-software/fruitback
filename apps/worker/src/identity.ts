@@ -40,7 +40,7 @@ export type IdentityClaims = {
    * writes it. A mapped client accepts such a token, signed with the worker key, only while the
    * account is a member of the workspace of that client, read at each request. Never with `ws`.
    */
-  scope?: 'account';
+  scope?: unknown;
   /**
    * The chain of the session this token was minted for (FRU-238): the digest that names it in the
    * store, never a token. A route that writes for an extension reads the session again by it
@@ -132,11 +132,9 @@ export async function verifyIdentityToken(
 
   if (typeof claims.sub !== 'string' || claims.sub.length === 0) return { ok: false, reason: 'invalid-claims' };
   if (typeof claims.exp !== 'number' || !Number.isFinite(claims.exp)) return { ok: false, reason: 'invalid-claims' };
-  // A scope this worker does not write, or the scope of an account beside a workspace, is no token of
-  // it: a session is of one workspace or of an account, never both (FRU-238).
-  if (claims.scope !== undefined && (claims.scope !== 'account' || claims.ws !== undefined)) {
-    return { ok: false, reason: 'invalid-claims' };
-  }
+  // `scope` of a token signed by a site is the site's own claim, as JWTs often carry one: it is not
+  // read, and does not refuse the token (raised in review). Only `scope: 'account'` with no workspace
+  // says a session of an account (FRU-238), and only a caller that verified with the worker key reads it.
 
   const seconds = now / 1000;
   if (claims.exp + CLOCK_SKEW_SECONDS <= seconds) return { ok: false, reason: 'expired' };
@@ -157,7 +155,7 @@ export async function verifyIdentityToken(
     // Beside the reporter and not in it: the reporter is stored in the seed, and the workspace is a
     // routing fact about the token.
     ...(typeof claims.ws === 'string' && claims.ws.length > 0 ? { workspace: claims.ws } : {}),
-    ...(claims.scope === 'account' ? { account: true as const } : {}),
+    ...(claims.scope === 'account' && claims.ws === undefined ? { account: true as const } : {}),
     ...(typeof claims.sid === 'string' && claims.sid.length > 0 && claims.sid.length <= 64
       ? { chain: claims.sid }
       : {}),
