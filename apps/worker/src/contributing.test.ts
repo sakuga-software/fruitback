@@ -70,7 +70,16 @@ function ciChecks(): string[] {
     .map((target) => target.trim())
     .filter((target) => target !== '');
 
-  return jobs.flatMap((job) => (job.name?.includes('${{') ? targets : [job.name ?? job.id])).sort();
+  // `check` runs one job for each target. The parts of the E2E suite are not checks of their own:
+  // the job `e2e` says whether every part passed (FRU-268).
+  return jobs
+    .flatMap((job) => {
+      if (job.name?.includes('${{ matrix.target }}')) return targets;
+      if (job.name?.includes('${{')) return [];
+
+      return [job.name ?? job.id];
+    })
+    .sort();
 }
 
 /** The body of one `## ` section, up to the next one. */
