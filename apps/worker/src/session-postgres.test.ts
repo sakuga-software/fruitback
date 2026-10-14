@@ -336,7 +336,7 @@ describe('the sessions of a member end while one of them refreshes, on two conne
       });
       assert.notEqual(after.outcome, 'rotated', 'the successor of the refresh is live after the sessions ended');
     });
-  const outcomeOf = (change: { from: string; to: string }, open: () => Promise<Database>) =>
+  const outcomeOf = (change: { after?: string; from: string; to: string }, open: () => Promise<Database>) =>
     outcomeOnChangedStore({
       file: 'session-postgres.ts',
       factory: 'createPostgresSessionStore',
@@ -348,6 +348,8 @@ describe('the sessions of a member end while one of them refreshes, on two conne
     });
   // The chains are read, and not held.
   const WITHOUT_THE_HOLD = {
+    // The one of `endSessionsOf`: the end of a browser of « My account » holds its rows too (FRU-238).
+    after: 'async endSessionsOf',
     from: ".orderBy(sessions.token_hash)\n          .for('update');",
     to: '.orderBy(sessions.token_hash);',
   };

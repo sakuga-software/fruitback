@@ -116,6 +116,14 @@ can read them, with or without the widget.
   subject, name and e-mail the operator gave when minting the pairing code, its dates, and a SHA-256
   digest of the code or token, never the token itself. Expired rows are removed when a new code is
   redeemed.
+- **The extension that a person connects from the console** (FRU-238). While it waits, a request
+  holds a SHA-256 digest of its id and of its secret, the word both screens show, **the short name of
+  the browser the extension gave** (« Chrome on macOS », 60 characters at most, never the user agent
+  and never an address), its dates, and the account that answered it. It is deleted by the first
+  request that comes after its 15 minutes. The session it opens is a row of the sessions above, of the
+  account and of no workspace, and keeps that short name, so that « My account » can list it with the
+  day it was connected and the last time it was used; it goes when its owner ends it there, when the
+  account is deleted, or 30 days after it was made.
 - **The accounts, in the PostgreSQL database** of `FRUITBACK_DATABASE_URL` (FRU-141, and nowhere
   else since FRU-150). For each person: the
   address a provider or a link proved, the name the provider gave or the one they chose in « My

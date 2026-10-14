@@ -14,7 +14,6 @@ import {
   pairings,
   seed_comments,
   seeds,
-  sessions,
   site_destinations,
   sites,
 } from './postgres-schema.ts';
@@ -119,6 +118,28 @@ const members = pgTable(
     }).onDelete('cascade'),
     index('members_by_account').on(table.account_id),
   ],
+);
+
+/**
+ * `sessions` as `COPY_SCHEMA` has it: FRU-238 added three columns to it, for a session of an account,
+ * which no file holds. The worker adds them when it starts, NULL on every row copied here.
+ */
+const sessions = pgTable(
+  'sessions',
+  {
+    token_hash: text('token_hash').primaryKey(),
+    subject: text('subject').notNull(),
+    name: text('name'),
+    email: text('email'),
+    workspace: text('workspace'),
+    created_at: instant('created_at').notNull(),
+    expires_at: instant('expires_at').notNull(),
+    revoked_at: instant('revoked_at'),
+    rotated_at: instant('rotated_at'),
+    predecessor_hash: text('predecessor_hash'),
+    root_hash: text('root_hash'),
+  },
+  (table) => [index('sessions_by_expiry').on(table.expires_at), index('sessions_by_root').on(table.root_hash)],
 );
 
 /** A table to copy, and the file that holds it. The order is the one of the foreign keys. */

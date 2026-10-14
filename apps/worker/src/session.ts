@@ -37,6 +37,13 @@ export type SessionIdentity = {
    * serves one client.
    */
   workspace?: string;
+  /**
+   * The session belongs to the account `subject`, and not to one workspace (FRU-238): an extension
+   * asked, and that person approved it in the console. It reads every workspace the account is a
+   * member of, with the role read at each request. Never with `workspace`. Its access tokens carry
+   * `scope: 'account'`.
+   */
+  account?: true;
 };
 
 /**
@@ -106,6 +113,13 @@ export type SessionStore = {
    * reviewer yet. A code that nobody spent is not a session.
    */
   holdsSession(): Promise<boolean>;
+  /** The chain of a token: the digest that names it (`sid` of its access tokens), or `undefined`. */
+  chainOf(tokenHash: string): Promise<string | undefined>;
+  /**
+   * The person of a chain while one of its tokens is live and not expired at `now`, or `undefined`:
+   * the session ended, by a log out, a replay, the removal of its person, or its end in My account.
+   */
+  liveIdentity(chain: string, now: number): Promise<SessionIdentity | undefined>;
 };
 
 /** Whose sessions end: a person, a workspace, or a person in a workspace. Never everybody. */
@@ -279,9 +293,10 @@ export async function redeemPairing(
   // The refresh token is minted before the store is asked, so the code and the session it buys are
   // written by one operation. A code cannot be spent without the session existing.
   const refreshToken = createRefreshToken();
+  const tokenHash = await digest(refreshToken);
   const identity = await store.redeemPairing({
     codeHash: await digest(normalizePairingCode(code)),
-    tokenHash: await digest(refreshToken),
+    tokenHash,
     expiresAt: now + REFRESH_TTL_SECONDS * 1000,
     now,
   });
@@ -291,7 +306,8 @@ export async function redeemPairing(
     ok: true,
     session: {
       refreshToken,
-      accessToken: await mintAccessToken(identity, secret, now),
+      // The first token of a session is the head of its chain: its digest names the chain (FRU-238).
+      accessToken: await mintAccessToken(identity, secret, now, tokenHash),
       expiresIn: ACCESS_TTL_SECONDS,
       identity,
     },
@@ -324,9 +340,10 @@ export async function refreshSession(
   | { ok: false; reason: SessionFailure }
 > {
   const successor = createRefreshToken();
+  const successorHash = await digest(successor);
   const rotation = await store.rotateSession({
     tokenHash: await digest(refreshToken),
-    successorHash: await digest(successor),
+    successorHash,
     now,
     graceMs: ROTATION_GRACE_SECONDS * 1000,
   });
@@ -338,7 +355,8 @@ export async function refreshSession(
 
   return {
     ok: true,
-    accessToken: await mintAccessToken(rotation.identity, secret, now),
+    // The chain the successor joined: its access token names it, for a route that writes (FRU-238).
+    accessToken: await mintAccessToken(rotation.identity, secret, now, await store.chainOf(successorHash)),
     refreshToken: successor,
     expiresIn: ACCESS_TTL_SECONDS,
     identity: rotation.identity,
@@ -360,13 +378,25 @@ export async function revokeSession(
 }
 
 /** The same token a client site mints for itself, signed here instead. See `identity.ts`. */
-async function mintAccessToken(identity: SessionIdentity, secret: string, now: number): Promise<string> {
+export async function mintAccessToken(
+  identity: SessionIdentity,
+  secret: string,
+  now: number,
+  /** The chain of the session, for a route that reads it again (`sid`). */
+  chain?: string,
+): Promise<string> {
+  // A session of an account names no workspace: one that said both would be read as either.
+  if (identity.account === true && identity.workspace !== undefined) {
+    throw new Error('a session of an account names no workspace');
+  }
   const seconds = Math.floor(now / 1000);
   const claims: IdentityClaims = {
     sub: identity.subject,
     ...(identity.name === undefined ? {} : { name: identity.name }),
     ...(identity.email === undefined ? {} : { email: identity.email }),
     ...(identity.workspace === undefined ? {} : { ws: identity.workspace }),
+    ...(identity.account === true ? { scope: 'account' as const } : {}),
+    ...(chain === undefined ? {} : { sid: chain }),
     iat: seconds,
     exp: seconds + ACCESS_TTL_SECONDS,
   };

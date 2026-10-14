@@ -16,6 +16,17 @@ import {
 import { ALGORITHM, CLOCK_SKEW_SECONDS, MAX_TOKEN_BYTES, stripClaimedVerification } from './identity.ts';
 import { DEFAULT_TRUSTED_PROXY_HOPS } from './env.ts';
 import { DEFAULT_LIMIT } from './rate-limit.ts';
+import {
+  CONNECTS_PER_ADDRESS,
+  POLL_WINDOW_SECONDS,
+  CONNECT_TTL_SECONDS,
+  CONNECT_WINDOW_MS,
+  MAX_LIVE_REQUESTS,
+  MAX_WORD_MISSES,
+  WORDS,
+  createClaim,
+  createRequestId,
+} from './connect.ts';
 import { readConfig } from './env.ts';
 import { handleRequest } from './app.ts';
 
@@ -135,6 +146,22 @@ describe('SECURITY.md states what the code does', () => {
       SECURITY.includes(`${REFRESH_TTL_SECONDS / 86_400} days`),
       `SECURITY.md does not say a refresh token lasts ${REFRESH_TTL_SECONDS / 86_400} days`,
     );
+  });
+
+  it('quotes what a request of the extension is made of, and how long it lives (FRU-238)', () => {
+    const bits = (value: string) => Buffer.from(value, 'base64url').length * 8;
+    for (const sentence of [
+      `| Request id   | ${bits(createRequestId())} bits, public`,
+      `| Claim        | ${bits(createClaim())} bits, secret`,
+      `one of ${WORDS.length} words and two digits`,
+      `a request lives ${CONNECT_TTL_SECONDS / 60} minutes`,
+      `a claim asked again within ${POLL_WINDOW_SECONDS} seconds`,
+      `${CONNECTS_PER_ADDRESS} requests per address in ${CONNECT_WINDOW_MS / 60_000} minutes; ${MAX_LIVE_REQUESTS} requests waiting`,
+      `refused after ${MAX_WORD_MISSES} approvals with a word`,
+    ]) {
+      const loose = sentence.replace(/\s+/g, ' ');
+      assert.ok(SECURITY.replace(/\s+/g, ' ').includes(loose), `SECURITY.md does not say: ${sentence}`);
+    }
   });
 
   it('quotes how long a session of better-auth lasts, and how often its end moves (FRU-147)', () => {
