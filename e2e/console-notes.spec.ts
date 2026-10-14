@@ -586,6 +586,22 @@ test('the pages go forward with the cursor and come back, « Previous » off on 
   await expect.poll(() => worker.asked.at(-1)).toEqual({ place: 'c1' });
 });
 
+test('a link to a later page reads its range, and « Previous » goes to the first page, range and all', async ({
+  page,
+}) => {
+  const worker = await workerWith(page);
+  // A link shared from the second page, or a reload there: the cursors before it are not known.
+  await open(page, '?cursor=p2&from=9');
+  await expect(rows(page)).toHaveCount(2);
+  await expect(pages(page).locator('span').first()).toHaveText('9 to 10 of 10');
+  await pages(page).getByRole('button', { name: 'Previous' }).click();
+  await expect(page).not.toHaveURL(/cursor=|from=/);
+  await expect(rows(page)).toHaveCount(8);
+  await expect(pages(page).locator('span').first()).toHaveText('1 to 8 of 10');
+  await expect(pages(page).getByRole('button', { name: 'Previous' })).toBeDisabled();
+  expect(worker.asked.at(-1)).toEqual({});
+});
+
 test('« Send again » waits, then the row loses its alert; a refusal says so on the row', async ({ page }) => {
   const worker = await workerWith(page);
   await open(page);
