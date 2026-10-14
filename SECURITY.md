@@ -488,14 +488,20 @@ cases run on PostgreSQL 17, and a store that reads apart from the statement that
 
 **A write reads the session again; a read keeps the window of its token.** An access token lives
 10 minutes, and nothing reaches a token already minted. So a route that **writes** for an extension
-(the picture of a note, and the creation of a site of FRU-255) asks the store, at each call, whether
-the session of the token is still live, still the same person, still a member of its workspace or
-still an account (`sessionStillValid` of `session-check.ts`): a session ended a second ago writes
-nothing (test:`writes nothing for a session that ended, with the access token it still holds, and
-reads in its window`). Every access token names its chain for that (`sid`, a digest, never a token);
-one minted before names none and is refused, and the extension refreshes. A route that **reads**, and
-the note itself, still take the token as it is, until it expires: ten minutes at most, plus the
-skew.
+asks the store, at each call, whether the session of the token is still live, still the same person,
+still a member of its workspace or still an account (`sessionStillValid` of `session-check.ts`). The
+routes that write are the picture of a note, the creation of a site of FRU-255, and the note itself,
+alone or in a batch, when a session of an account signs it: once per request. A session ended a
+second ago writes nothing (test:`writes nothing for a session that ended, a note or a picture, with
+the access token it still holds, and reads in its window`). That closes the case of a stolen refresh
+token: its replay ends the chain, and the access token of the thief no longer signs notes `verified`
+in the name of the victim for the rest of its ten minutes. Every access token names its chain for
+that (`sid`, a digest, never a token); one minted before names none and is refused, and the extension
+refreshes. **A note signed by a session paired for one workspace still takes its token as it is**:
+those sessions have tokens minted before `sid`, and refusing their notes for ten minutes after an
+update would cost notes. A route that **reads** takes the token as it is too, until it expires: ten
+minutes at most, plus the skew. A token signed with the key of a site never carries the claims of a
+session of the worker (`account`, `sid`): `verifyForClient` drops them.
 
 **What ends such a session.** Its owner, from « My account » (`DELETE /console/me/browsers/<id>`),
 the extension logging out, the deletion of the account, or a replay of a spent refresh token, as for

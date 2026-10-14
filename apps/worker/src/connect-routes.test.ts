@@ -12,9 +12,11 @@ import {
   MAX_WORD_MISSES,
   SLOW_DOWN_SECONDS,
 } from './connect.ts';
-import { verifyIdentityToken } from './identity.ts';
+import { signIdentityToken, verifyIdentityToken } from './identity.ts';
+import { verifyForClient } from './app.ts';
+import { mutatedModule } from './conformance.fixture.ts';
 import type { PgDatabase } from './postgres.ts';
-import { rowsOf } from './postgres.fixture.ts';
+import { createPgliteDatabase, rowsOf } from './postgres.fixture.ts';
 import { digest } from './session.ts';
 
 /**
@@ -832,35 +834,8 @@ for (const { label, open, skip } of DATABASES) {
       assert.equal((await as(worker, back, `/console/me/browsers/${list[0]?.id}`, { method: 'DELETE' })).status, 404);
     });
 
-    it('writes nothing for a session that ended, with the access token it still holds, and reads in its window', async () => {
-      const worker = await workerOn(open);
-      const alice = await person(worker, 'alice@acme.dev');
-      const acme = await workspaceOf(worker, alice, 'acme');
-      const session = await connected(worker, alice);
-      const picture = () =>
-        worker.call(`/screenshot?client=${acme.members}`, {
-          method: 'POST',
-          origin: EXTENSION,
-          headers: { Authorization: `Bearer ${session.accessToken}`, 'Content-Type': 'image/png' },
-          body: 'not a picture',
-        });
-      // The session writes: the worker reads the body, and refuses what is not a PNG.
-      assert.equal((await picture()).status, 400);
-
-      const { browsers } = (await (await as(worker, alice, '/console/me/browsers')).json()) as {
-        browsers: { id: string }[];
-      };
-      assert.equal(
-        (await as(worker, alice, `/console/me/browsers/${browsers[0]?.id}`, { method: 'DELETE' })).status,
-        204,
-      );
-
-      // The same access token, signed and not expired: the write reads the session again, and refuses.
-      const refused = await picture();
-      assert.equal(refused.status, 401);
-      assert.deepEqual(await refused.json(), { error: 'identity-required' });
-      // A read keeps the window of the token (SECURITY.md): ten minutes at most.
-      assert.equal((await read(worker, acme.members, 'https://acme.test', session.accessToken)).status, 200);
+    it('writes nothing for a session that ended, a note or a picture, with the access token it still holds, and reads in its window', async () => {
+      await endedWritesNothing(await workerOn(open));
     });
 
     it('is refused by the console: the token of an account session names nobody there (FRU-202)', async () => {
@@ -972,3 +947,139 @@ for (const { label, open, skip } of DATABASES) {
     });
   });
 }
+
+/**
+ * A session of an account ended in My account, while its access token is still signed and not
+ * expired: a note, a batch, a note to a chosen place and a picture are refused; a read is not (FRU-238).
+ * The scenario of a route test, and of its planted violations below.
+ */
+async function endedWritesNothing(worker: Worker): Promise<void> {
+  const alice = await person(worker, 'alice@acme.dev');
+  const acme = await workspaceOf(worker, alice, 'acme');
+  const session = await connected(worker, alice);
+  const seed = seedFixture();
+  const note = { ...seed, page: { ...seed.page, url: 'https://acme.test/pricing' }, client: { id: acme.members } };
+  const bearer = { Authorization: `Bearer ${session.accessToken}` };
+  const picture = () =>
+    worker.call(`/screenshot?client=${acme.members}`, {
+      method: 'POST',
+      origin: EXTENSION,
+      headers: { ...bearer, 'Content-Type': 'image/png' },
+      body: 'not a picture',
+    });
+  const writes = {
+    'a note': () => worker.call('/feedback', { body: note, origin: EXTENSION, headers: bearer }),
+    'a batch': () => worker.call('/feedback', { body: [note], origin: EXTENSION, headers: bearer }),
+    'a note to a chosen place': () =>
+      worker.call('/feedback?destination=a-place', { body: note, origin: EXTENSION, headers: bearer }),
+  };
+  // The session writes: a note goes, and the picture is read up to its bytes, which are no PNG.
+  assert.equal((await writes['a note']()).status, 201);
+  assert.equal((await picture()).status, 400);
+
+  const { browsers } = (await (await as(worker, alice, '/console/me/browsers')).json()) as {
+    browsers: { id: string }[];
+  };
+  assert.equal((await as(worker, alice, `/console/me/browsers/${browsers[0]?.id}`, { method: 'DELETE' })).status, 204);
+
+  // The same access token, signed and not expired: each write reads the session again, and refuses.
+  for (const [what, call] of Object.entries(writes)) {
+    const refused = await call();
+    assert.equal(refused.status, 401, what);
+    assert.deepEqual(await refused.json(), { error: 'invalid-identity', reason: 'session-ended' }, what);
+  }
+  const refused = await picture();
+  assert.equal(refused.status, 401);
+  assert.deepEqual(await refused.json(), { error: 'identity-required' });
+  // A read keeps the window of the token (SECURITY.md): ten minutes at most.
+  assert.equal((await read(worker, acme.members, 'https://acme.test', session.accessToken)).status, 200);
+}
+
+/** Each check of `app.ts` that a write makes, taken out: the scenario fails (FRU-238). */
+describe('the writes of an ended session, with a check of app.ts taken out (FRU-238)', () => {
+  for (const [what, change] of [
+    [
+      'the note',
+      {
+        from: "  if (identity.account && !(await stillWrites())) {\n    return json(401, { error: 'invalid-identity', reason: 'session-ended' }, corsHeaders);\n  }\n\n  const attributed",
+        to: '  const attributed',
+      },
+    ],
+    [
+      'the batch',
+      {
+        from: '  if (account && !(await stillWrites())) {',
+        to: '  if (false) {',
+      },
+    ],
+    [
+      'the picture',
+      {
+        from: '  return session?.subject === account ? account : undefined;',
+        to: '  return account;',
+      },
+    ],
+  ] as const) {
+    it(`writes ${what} of an ended session when its check is taken out`, async () => {
+      const mutant = await mutatedModule('app.ts', change);
+      try {
+        const worker = await workerOf(await opening(createPgliteDatabase), {
+          handle: mutant.module.handleRequest as never,
+        });
+        const failure = await endedWritesNothing(worker).then(
+          () => undefined,
+          (error: unknown) => error,
+        );
+        assert.ok(
+          failure instanceof assert.AssertionError,
+          `the scenario did not fail on an assertion: ${String(failure)}`,
+        );
+      } finally {
+        mutant.remove();
+      }
+    });
+  }
+});
+
+/** A token signed with the key of a site says nothing of a session of the worker (FRU-238). */
+describe('a token of a site, and the claims of a session of the worker (FRU-238)', () => {
+  const policy = {
+    identitySecret: 'the-own-key-of-a-site-of-enough-length',
+    showComments: false,
+    read: 'authenticated' as const,
+    locale: 'en',
+    sessions: { secret: SECRET, workspace: 'ws_acme', member: async () => true },
+  };
+  const token = async () => {
+    const now = Math.floor(Date.now() / 1000);
+
+    return signIdentityToken(
+      { sub: 'visitor-42', scope: 'account', sid: 'a-chain', iat: now, exp: now + 600 },
+      policy.identitySecret,
+    );
+  };
+
+  it('never carries account or chain on a token that the key of a site verified', async () => {
+    const verified = await verifyForClient(await token(), policy);
+    assert.ok(verified?.ok === true);
+    assert.deepEqual(
+      [verified.reporter.id, verified.account, verified.chain, verified.session],
+      ['visitor-42', undefined, undefined, undefined],
+    );
+  });
+
+  it('carries them when the token of a site is not stripped', async () => {
+    const mutant = await mutatedModule('app.ts', {
+      from: 'if (asSite?.ok === true) return ofASite(asSite);',
+      to: 'if (asSite?.ok === true) return asSite;',
+    });
+    try {
+      const verify = mutant.module.verifyForClient as typeof verifyForClient;
+      const verified = await verify(await token(), policy);
+      assert.ok(verified?.ok === true);
+      assert.deepEqual([verified.account, verified.chain], [true, 'a-chain']);
+    } finally {
+      mutant.remove();
+    }
+  });
+});

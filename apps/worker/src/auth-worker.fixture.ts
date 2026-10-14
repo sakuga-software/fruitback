@@ -55,7 +55,15 @@ export type Call = {
 };
 
 /** A worker with better-auth on, on the database of a case, and every request it was given. */
-export async function workerOf(database: PgDatabase, more: { trackIp?: boolean; env?: Partial<WorkerEnv> } = {}) {
+export async function workerOf(
+  database: PgDatabase,
+  more: {
+    trackIp?: boolean;
+    env?: Partial<WorkerEnv>;
+    /** Another `handleRequest`: the one of a changed `app.ts`, for a planted violation. */
+    handle?: typeof handleRequest;
+  } = {},
+) {
   await make(database);
   const accounts = createPostgresAccountStore(database);
   const sessions = createPostgresSessionStore(database);
@@ -83,7 +91,7 @@ export async function workerOf(database: PgDatabase, more: { trackIp?: boolean; 
       ...init.headers,
     };
 
-    return handleRequest(
+    return (more.handle ?? handleRequest)(
       new Request(url, {
         method: init.method ?? (init.body === undefined ? 'GET' : 'POST'),
         headers,

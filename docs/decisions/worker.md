@@ -901,6 +901,12 @@ code stays, for the operator of an instance. `SECURITY.md` says what each half p
   ended writes nothing, while a route that reads keeps the 10 minutes of its token (decided on
   2026-10-14, for FRU-255). Every access token names its chain in `sid` (`chainOf` of the store after
   a refresh, the digest of the first token otherwise); a token with no `sid` is refused there.
+- **A note that a session of an account signs is such a write** (decided on 2026-10-14, after the
+  independent review of #303): `postFeedback` calls `stillWrites` once per request, the batch and
+  `?destination=` included, before anything is written. A note of a session paired for a workspace
+  is not checked: its tokens predate `sid`. `POST /screenshot` asks `writerIn`, which reads the
+  membership and the session in one call. `verifyForClient` drops `account` and `chain` from a token
+  that the key of a site verified: a site writes the claims it likes.
 - **The refresh ends a session of an account whose account is gone** (`stillOfTheWorkspace`, through
   `accountExists`). A member removed from a workspace keeps the session: it reads that workspace no
   more, at the next call.
