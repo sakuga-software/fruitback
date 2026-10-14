@@ -28,8 +28,8 @@ function json(status: number, body: unknown, headers: Record<string, string>): R
 /** What `POST /session/sites` needs beside the read: the `Kv` of its count, and the session read again. */
 export type SiteWrites = {
   kv: Kv;
-  /** `sessionStillValid` of `session-check.ts`, bound to the store: the person of the session, now. */
-  stillValid: (token: string) => Promise<SessionIdentity | undefined>;
+  /** `sessionWrites` of `app.ts`, bound to this request: the person of the session, now. */
+  session: () => Promise<SessionIdentity | undefined>;
 };
 
 export async function handleSessionSites(
@@ -51,7 +51,7 @@ export async function handleSessionSites(
   // on 2026-10-14): a session that ended, a browser disconnected in « My account », or an account that
   // is gone writes nothing, whatever its token still says. A session of an account only.
   if (request.method === 'POST' && writes !== undefined) {
-    const session = await writes.stillValid(token);
+    const session = await writes.session();
     if (session === undefined) return json(401, { error: 'identity-required' }, headers);
     if (session.account !== true) return json(403, { error: 'account-required' }, headers);
     const added = await addSessionSite(request, { accounts, kv: writes.kv, account: session.subject });
