@@ -169,6 +169,32 @@ test('a site of no workspace: added to one and turned on, in one click (08)', as
   await expect(page.locator('[data-fruitback-host]')).toHaveCount(1);
 });
 
+test('a site added, whose rule is not stored, is drawn as it is: a site of the workspace to turn on', async ({
+  extension,
+}) => {
+  // Raised in review: the worker added the site, then storing the rule failed, and the popup said
+  // the change failed over a site that exists.
+  const page = await extension.context.newPage();
+  await openBareSite(page, 'popup-new-site-unstored');
+  await sitesRoute(extension.context, [{ id: 'ws_1', name: 'Sakuga', role: 'owner', canAddSite: true }]);
+  await signedIn(extension, page, 'req_add_5');
+
+  const popup = await openPopup(extension, page);
+  // Every change of a rule goes to the background: this one is lost on the way.
+  await popup.evaluate(() => {
+    const runtime = (
+      globalThis as unknown as { chrome: { runtime: { sendMessage: (message: unknown) => Promise<unknown> } } }
+    ).chrome.runtime;
+    const send = runtime.sendMessage.bind(runtime);
+    runtime.sendMessage = (message: unknown) =>
+      JSON.stringify(message).includes('site-mutation') ? Promise.reject(new Error('lost')) : send(message);
+  });
+  await popup.getByRole('button', { name: 'Add to Sakuga and turn on' }).click();
+
+  await expect(popup.getByRole('button', { name: 'Turn on here' })).toBeVisible();
+  await expect(popup.getByText('In Sakuga · members see the notes')).toBeVisible();
+});
+
 test('a site of no workspace, for an account that may add none: who can, and no button', async ({ extension }) => {
   const page = await extension.context.newPage();
   await openBareSite(page, 'popup-new-site-none');

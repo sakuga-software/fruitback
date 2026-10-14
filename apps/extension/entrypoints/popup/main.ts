@@ -504,8 +504,18 @@ function addAndTurnOn(origin: string, workspace: Workspace, problem: HTMLElement
 
       return;
     }
-    await writeSite(origin, cloudEntry(added.offer));
-    await activateOpenTabs(origin);
+    try {
+      await writeSite(origin, cloudEntry(added.offer));
+      await activateOpenTabs(origin);
+    } catch (error) {
+      // The site is in the workspace now, and the rule is not here: drawn again, the popup shows
+      // what is true, the site of the workspace and its « Turn on here » (raised in review).
+      console.error('[fruitback] the site was added, and its rule was not stored', error);
+      done();
+      await render();
+
+      return;
+    }
     await render();
   })().catch((error: unknown) => {
     done();
