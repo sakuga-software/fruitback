@@ -11,6 +11,7 @@ import {
   GITHUB_APP_REFUSED,
   REFUSED_SINCE_POSTGRES,
   REQUIRED_WITH_DATABASE,
+  TRACKER_VARIABLES,
   type WorkerEnv,
   readConfig,
 } from './env.ts';
@@ -202,6 +203,25 @@ describe('PostgreSQL is required, with what an administrator signs in with (FRU-
     const unnamed = readConfig({ ...envWith(), FRUITBACK_STORE: undefined, LINEAR_API_KEY: '' });
     assert.ok(unnamed.ok && unnamed.config.store.provider === 'postgres');
     assert.match(REFUSED_SINCE_POSTGRES.unnamedStore, /FRUITBACK_STORE=linear/);
+  });
+
+  it('names every variable of the stores linear and github as the variable of a tracker', () => {
+    // Read from the sources, as `compose.test.ts` reads them: a store that gains a variable fails here.
+    const named = ['linear.ts', 'github.ts'].flatMap((file) =>
+      [...readFileSync(new URL(file, import.meta.url), 'utf8').matchAll(/envNames: \{([^}]*)\}/g)].flatMap((match) =>
+        [...(match[1] ?? '').matchAll(/'([A-Z][A-Z0-9_]*)'/g)].map((name) => name[1] ?? ''),
+      ),
+    );
+    assert.ok(named.length >= 5, `only ${named.length} variables found`);
+    assert.deepEqual([...TRACKER_VARIABLES].sort(), [...new Set(named)].sort());
+    // Each one alone, beside no store, is refused.
+    for (const name of TRACKER_VARIABLES) {
+      assert.deepEqual(
+        missing(envWith({ [name]: 'x', FRUITBACK_STORE: undefined })),
+        [REFUSED_SINCE_POSTGRES.unnamedStore],
+        name,
+      );
+    }
   });
 
   it('reads an empty variable of before as absent: the compose file hands each one over empty', () => {

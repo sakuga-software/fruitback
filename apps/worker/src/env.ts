@@ -360,10 +360,15 @@ export const REFUSED_SINCE_POSTGRES = {
     'FRUITBACK_STORE (unset, and the variables of a tracker are set: before FRU-225 a worker with no FRUITBACK_STORE kept its notes in Linear, and the default is « postgres » since. Write FRUITBACK_STORE=linear, or github, to keep the notes there, or postgres to keep them in the database)',
 } as const;
 
-/** The variables of the trackers a store of before was configured with. */
-const TRACKER_VARIABLES = [
+/**
+ * The variables of the stores `linear` and `github`: every name of their `envNames`. Set beside no
+ * `FRUITBACK_STORE`, one of them says the worker ran on a tracker before FRU-225.
+ * test:`names every variable of the stores linear and github as the variable of a tracker` holds the list.
+ */
+export const TRACKER_VARIABLES = [
   'LINEAR_API_KEY',
   'LINEAR_TEAM_ID',
+  'LINEAR_PROJECT_ID',
   'FRUITBACK_GITHUB_APP_ID',
   'FRUITBACK_GITHUB_PRIVATE_KEY',
   'FRUITBACK_GITHUB_REPOSITORY',
