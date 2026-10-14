@@ -2601,9 +2601,26 @@ everything. FRU-95 lifted it, below.
 - **A row goes with its site and its workspace** (foreign keys `cascade`). The notes of the worker's
   own store stay when a site goes, as `seeds-postgres.ts` decided pending FRU-194; their index does
   not. **`forget` removes the rows of the notes it deletes, before it deletes them**: an index that
-  does not answer stops the command with nothing deleted. A row is named by the reference of the
-  note **and** the id the widget gave it: a tracker of another workspace may call an issue `FB-12`
-  as well, and its row stays.
+  does not answer stops the command with nothing deleted. **And again after**: a read of their page
+  that asked the store before the deletion may have written a row back in between (found in the
+  review of #300, test:`leaves no row of a forgotten note that a read of its page wrote back during
+the command`). A read that starts after the deletion does not find the note. A read that asked the
+  store before it and writes after the second removal can still write a row back: a window of one
+  read, not closed here. A row is named by the reference of the note **and** the id the widget gave
+  it: a tracker of another workspace may call an issue `FB-12` as well, and its row stays.
+- **`forget --seed <id>` removes the row of a note that went to a tracker**, whatever the store
+  (decided by the orchestrator, 2026-10-13): the index keeps no address and no name, so the
+  operator reads the `id` of the seed in the issue. The command says so when it cannot find a note
+  of a tracker by `--email` or `--name`.
+- **The account of a member goes with the account**: `author_account_id` is a foreign key to
+  `user`, `ON DELETE SET NULL`, and the row stays with `member` and no account (`0010`). Before it,
+  `0009` empties the ids of accounts already removed, which the key would refuse: a migration of
+  its own, made by `drizzle-kit generate --custom`, and no generated file is edited. There is no
+  `forget` of an account in the index: nothing called it.
+- **One row for one note in one statement**: two issues of one page that carry one seed id (two
+  places of one team, or one note sent twice) are written once, the first of them. Before, the
+  statement failed and wrote nothing of the page. A `POST` of a seed id that the site has already
+  is not refused: the index keeps the first row, and the store keeps what it keeps today.
 
 ### What it does not do, and the measurements
 

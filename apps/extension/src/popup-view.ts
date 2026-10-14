@@ -1,4 +1,4 @@
-import { t } from './i18n.ts';
+import { msg, t } from './i18n.ts';
 
 /**
  * The parts of the popup of the mock-up of 2026-10-13 (FRU-251): the shell every screen shares, and
@@ -275,4 +275,196 @@ export function loading(document: Document, options: { onSettings: () => void })
   said.setAttribute('role', 'status');
 
   return shell(document, { onSettings: options.onSettings }, said);
+}
+
+/** The five stages, in the order of the mock-up, with the word of each (the widget's own words). */
+const STAGE_WORDS = [
+  ['seeded', msg('New')],
+  ['green', msg('To do')],
+  ['ripening', msg('In progress')],
+  ['ripe', msg('Done')],
+  ['composted', msg('Closed')],
+] as const;
+
+export type Counts = Record<(typeof STAGE_WORDS)[number][0], number>;
+
+function total(counts: Counts): number {
+  return STAGE_WORDS.reduce((sum, [stage]) => sum + counts[stage], 0);
+}
+
+/** « 3 new, 2 to do, 4 in progress, 2 done, 1 closed »: the name of the bar, and its caption. */
+export function countsSentence(counts: Counts, separator: string): string {
+  return STAGE_WORDS.map(([stage, word]) => `${counts[stage]} ${t(word).toLocaleLowerCase()}`).join(separator);
+}
+
+export type SiteInWorkspaceOptions = {
+  origin: string;
+  workspace: string;
+  visibility: 'members' | 'everyone';
+  /** The counts of the site (FRU-237), when Fruitback gave them. */
+  counts?: Counts;
+  /** « Chrome », « Firefox »: the browser that asks for the access. */
+  browserName: string;
+  account?: Account;
+  onTurnOn: () => void;
+  onSettings: () => void;
+};
+
+/** 06: a site of a workspace of the account, not turned on in this browser. One click. */
+export function siteInWorkspace(document: Document, options: SiteInWorkspaceOptions): HTMLElement {
+  const heading = element(document, 'div', '', 'site-heading');
+  heading.append(
+    element(document, 'h1', hostOf(options.origin)),
+    element(
+      document,
+      'p',
+      options.visibility === 'everyone'
+        ? t('In {workspace} · everyone sees the notes', { workspace: options.workspace })
+        : t('In {workspace} · members see the notes', { workspace: options.workspace }),
+      'subtitle',
+    ),
+  );
+
+  const body: Node[] = [heading];
+  if (options.counts !== undefined) body.push(siteCounts(document, options.counts));
+
+  const act = element(document, 'div', '', 'action-block');
+  act.append(
+    action(document, t('Turn on here'), options.onTurnOn),
+    element(document, 'p', t('{browser} asks for access to this site only.', { browser: options.browserName }), 'note'),
+  );
+  body.push(act);
+
+  return shell(
+    document,
+    { onSettings: options.onSettings, ...(options.account === undefined ? {} : { account: options.account }) },
+    ...body,
+  );
+}
+
+function siteCounts(document: Document, counts: Counts): HTMLElement {
+  const block = element(document, 'div', '', 'site-counts');
+  const all = total(counts);
+  block.append(
+    element(
+      document,
+      'p',
+      all === 1 ? t('1 note waits on this site') : t('{count} notes wait on this site', { count: String(all) }),
+      'site-total',
+    ),
+  );
+  if (all > 0) {
+    const bar = element(document, 'div', '', 'stage-bar');
+    bar.setAttribute('role', 'img');
+    bar.setAttribute('aria-label', countsSentence(counts, ', '));
+    for (const [stage] of STAGE_WORDS) {
+      if (counts[stage] === 0) continue;
+      const segment = element(document, 'span', '', `stage-${stage}`);
+      segment.style.flex = String(counts[stage]);
+      bar.append(segment);
+    }
+    const detail = element(document, 'p', countsSentence(counts, ' · '), 'site-detail');
+    // Said by the bar already: read once.
+    detail.setAttribute('aria-hidden', 'true');
+    block.append(bar, detail);
+  }
+
+  return block;
+}
+
+export type SiteOnOptions = {
+  origin: string;
+  workspace: string;
+  on: boolean;
+  /** What the widget of the tab shows now, or nothing when it did not say. */
+  pageCounts?: Counts;
+  account?: Account;
+  onToggle: (on: boolean) => void;
+  onLeaveFeedback: () => void;
+  onShowEveryNote: () => void;
+  onSettings: () => void;
+};
+
+/** 07: a site of a workspace, turned on here: the switch, the notes of the page, and two actions. */
+export function siteOn(document: Document, options: SiteOnOptions): HTMLElement {
+  const host = hostOf(options.origin);
+  const titles = element(document, 'div', '', 'site-heading');
+  titles.append(
+    element(document, 'h1', host),
+    element(
+      document,
+      'p',
+      options.on
+        ? t('On · {workspace}', { workspace: options.workspace })
+        : t('Off · {workspace}', { workspace: options.workspace }),
+      'subtitle',
+    ),
+  );
+  const toggle = element(document, 'button', '', 'switch');
+  toggle.type = 'button';
+  toggle.setAttribute('role', 'switch');
+  toggle.setAttribute('aria-checked', String(options.on));
+  toggle.setAttribute('aria-label', t('Fruitback on {host}', { host }));
+  toggle.append(element(document, 'span', '', 'knob'));
+  toggle.addEventListener('click', () => options.onToggle(!options.on));
+  const row = element(document, 'div', '', 'site-row');
+  row.append(titles, toggle);
+
+  const body: Node[] = [row];
+  // Off: the widget left the tab, so there is nothing of the page to count and nothing to ask of it.
+  if (options.on) {
+    if (options.pageCounts !== undefined) body.push(pageSection(document, options.pageCounts));
+    const act = element(document, 'div', '', 'action-block');
+    const every = element(document, 'button', t('Show every note of the page'), 'secondary-action');
+    every.type = 'button';
+    every.addEventListener('click', options.onShowEveryNote);
+    act.append(action(document, t('Leave feedback'), options.onLeaveFeedback), every);
+    body.push(act);
+  }
+
+  const root = shell(
+    document,
+    { onSettings: options.onSettings, ...(options.account === undefined ? {} : { account: options.account }) },
+    ...body,
+  );
+  root.classList.add('popup-site-on');
+
+  return root;
+}
+
+/**
+ * The notes of the page, added to a screen 07 already drawn (FRU-254): the popup does not wait for
+ * the widget of the tab before it shows the switch. Nothing for a screen that is off, or that has them.
+ */
+export function showPageCounts(screen: HTMLElement, counts: Counts): void {
+  const actions = screen.querySelector('.popup-body > .action-block');
+  if (actions === null || screen.querySelector('.page-notes') !== null) return;
+  actions.before(pageSection(screen.ownerDocument, counts));
+}
+
+function pageSection(document: Document, counts: Counts): HTMLElement {
+  const section = element(document, 'section', '', 'page-notes');
+  const title = element(document, 'h2', '');
+  title.id = 'page-notes-title';
+  section.setAttribute('aria-labelledby', title.id);
+  const all = total(counts);
+  title.append(
+    element(document, 'span', t('On this page')),
+    element(document, 'span', all === 1 ? t('1 note') : t('{count} notes', { count: String(all) }), 'page-total'),
+  );
+  const list = element(document, 'ul', '');
+  for (const [stage, word] of STAGE_WORDS) {
+    const item = element(document, 'li', '');
+    const drop = element(document, 'span', '', 'drop');
+    drop.classList.add(`stage-${stage}`);
+    drop.setAttribute('aria-hidden', 'true');
+    const count = element(document, 'span', String(counts[stage]), 'count');
+    // A zero in the muted grey, still at 5.28:1.
+    count.classList.toggle('zero', counts[stage] === 0);
+    item.append(drop, element(document, 'span', t(word), 'stage-word'), count);
+    list.append(item);
+  }
+  section.append(title, list);
+
+  return section;
 }

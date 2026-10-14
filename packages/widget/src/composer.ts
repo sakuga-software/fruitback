@@ -22,6 +22,9 @@ const SENT_MS = 1_100;
 
 export type ComposerState = 'idle' | 'sending' | 'sent' | 'kept' | 'failed';
 
+/** Sent, without the picture the reporter asked for (FRU-238). */
+export type SentWithoutPicture = { picture: 'missed' };
+
 /**
  * Why a send failed, so the composer says what to do next (FRU-156). The text is kept in every case.
  *
@@ -52,7 +55,15 @@ export type ComposerOptions = {
    * `destination` is the id of the place the line shows (FRU-123). It is absent when the composer
    * shows no line, which is every composer but the one of a member of a site with several places.
    */
-  onSubmit: (note: string, reporter?: SeedReporter, destination?: string) => Promise<boolean | void | SendFailure>;
+  /**
+   * `{ picture: 'missed' }`: sent, and the picture asked for did not come (FRU-238). The composer
+   * says it, so a note never loses its picture in silence.
+   */
+  onSubmit: (
+    note: string,
+    reporter?: SeedReporter,
+    destination?: string,
+  ) => Promise<boolean | void | SendFailure | SentWithoutPicture>;
   onClose?: () => void;
   /**
    * Where the name of the reporter is kept between notes, when the reporter asks for it (FRU-91).
@@ -80,7 +91,11 @@ export type ComposerOptions = {
    */
   keep?: {
     offered(): boolean;
-    onKeep: (note: string, reporter?: SeedReporter, destination?: string) => Promise<true | SendFailure>;
+    onKeep: (
+      note: string,
+      reporter?: SeedReporter,
+      destination?: string,
+    ) => Promise<true | SendFailure | SentWithoutPicture>;
   };
   /**
    * The box « Attach a picture of this element » (FRU-258). It is the preference the settings panel
@@ -238,6 +253,7 @@ export function createComposer(options: ComposerOptions): Composer {
     // Before the send, so a failed send costs neither the name nor the choice to keep it.
     if (asksForName && remember.checked) memory?.set(typedName());
     let failure: SendFailure | undefined;
+    let withoutPicture = false;
     try {
       const result =
         action === 'keep' && options.keep !== undefined
@@ -245,6 +261,7 @@ export function createComposer(options: ComposerOptions): Composer {
           : await options.onSubmit(field.value, reporterFromFields(), selected);
       if (result === false) failure = 'retry';
       else if (typeof result === 'string') failure = result;
+      else if (typeof result === 'object' && result !== null && result.picture === 'missed') withoutPicture = true;
     } catch {
       failure = 'retry';
     }
@@ -262,6 +279,9 @@ export function createComposer(options: ComposerOptions): Composer {
     if (mine !== session) return;
 
     setState(action === 'keep' ? 'kept' : 'sent');
+    if (withoutPicture) {
+      status.textContent = t.text(action === 'keep' ? 'composer.keptWithoutPicture' : 'composer.sentWithoutPicture');
+    }
     closing = view?.setTimeout(close, SENT_MS) ?? 0;
   }
 

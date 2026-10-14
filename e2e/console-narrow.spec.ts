@@ -9,7 +9,7 @@ import { WORKER_ORIGIN } from './pin.ts';
  */
 const CONSOLE = 'http://localhost:5178';
 const LONG_HOST = 'preview-branch-feature-very-long-name-1234.staging.acme.dev';
-const SCREENS = ['sites', 'connectors', 'members', 'account'] as const;
+const SCREENS = ['sites', 'notes', 'connectors', 'members', 'account'] as const;
 
 async function stubWorker(page: Page, locale: 'en' | 'fr'): Promise<void> {
   const me = {
@@ -24,6 +24,20 @@ async function stubWorker(page: Page, locale: 'en' | 'fr'): Promise<void> {
     if (pathname === '/console/workspaces/w1/domains') return json({ domains: [] });
     if (pathname === '/console/workspaces/w1/sites') return json(sites);
     if (pathname === '/console/workspaces/w1/connectors') return json({ connectors: [], available: true });
+    if (pathname === '/console/workspaces/w1/notes') {
+      const note = {
+        id: 'n1',
+        excerpt: 'The order form rejects postcodes with a space, and says nothing of why it does so.',
+        page: { url: `https://${LONG_HOST}/contact`, host: LONG_HOST, path: '/contact' },
+        site: { id: 's1' },
+        stage: 'seeded',
+        author: { kind: 'anonymous' },
+        place: { kind: 'fruitback' },
+        createdAt: '2026-10-13T08:00:00.000Z',
+      };
+
+      return json({ notes: [note], total: 1, counts: { all: 1, byPlace: { fruitback: 1 } } });
+    }
     // A worker that signs people in by a link: one that says nothing there shows no form (FRU-217).
     if (pathname === '/auth/providers') return json({ betterAuth: { email: true, github: false, google: false } });
 

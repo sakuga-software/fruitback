@@ -4,6 +4,7 @@ import { and, count, eq, ilike, inArray, isNull, max, min, or, sql } from 'drizz
 import { member, user } from './auth-schema.ts';
 import {
   type AuthorKind,
+  type ForgetIndex,
   type ListedNote,
   type NoteEntry,
   type NoteIndex,
@@ -31,7 +32,9 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       : { place: 'fruitback', connector_id: null };
 
   return {
-    async record(entries, now) {
+    async record(all, now) {
+      // One row for one note: a second note of one site under the same id is the same note here.
+      const entries = once(all, (entry) => `${entry.site}\n${entry.seed.id}`);
       if (entries.length === 0) return;
       await run((db) =>
         db
@@ -61,7 +64,13 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
     },
 
     async refresh(workspace, site, place, issues, now) {
-      const known = issues.filter((issue) => (SEED_STAGES as readonly string[]).includes(issue.stage));
+      // Two issues of one page can carry one seed id (two places of one team, or a widget that sent
+      // one note twice). One statement cannot write one row twice, and would write nothing of the
+      // page: the first is kept.
+      const known = once(
+        issues.filter((issue) => (SEED_STAGES as readonly string[]).includes(issue.stage)),
+        (issue) => issue.seed.id,
+      );
       if (known.length === 0) return;
       await run((db) =>
         db
@@ -158,12 +167,26 @@ export function createPostgresNoteIndex(database: Database): NoteIndex {
       return new Map(rows.flatMap((row) => (row.site === null ? [] : [[row.site, Number(row.waiting)] as const])));
     },
 
-    async forget(which) {
-      const removed = await run((db) =>
-        db.delete(note_index).where(selected(which)).returning({ site: note_index.site_id }),
+    async forget(which, options = {}) {
+      const columns = {
+        site: note_index.site_id,
+        seed: note_index.seed_id,
+        pageUrl: note_index.page_url,
+        excerpt: note_index.excerpt,
+        reference: note_index.reference,
+        createdAt: note_index.created_at,
+      };
+      const rows = await run((db) =>
+        options.dryRun === true
+          ? db.select(columns).from(note_index).where(selected(which)).orderBy(note_index.created_at)
+          : db.delete(note_index).where(selected(which)).returning(columns),
       );
 
-      return removed.length;
+      return rows.map(({ reference, createdAt, ...row }) => ({
+        ...row,
+        ...(reference === null ? {} : { reference }),
+        createdAt: Number(createdAt),
+      }));
     },
 
     async list(workspace, query) {
@@ -419,6 +442,19 @@ function listedOf({ row, connector, memberName, memberRole, delivery }: PageRow)
   };
 }
 
+/** The first of each key, in order. */
+function once<T>(items: readonly T[], keyOf: (item: T) => string): T[] {
+  const seen = new Set<string>();
+
+  return items.filter((item) => {
+    const key = keyOf(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+
+    return true;
+  });
+}
+
 /**
  * The instant a note from before the index was left: the one the widget wrote, which is all there
  * is, and never later than now.
@@ -435,9 +471,12 @@ function instantOf(iso: string, now: number): number {
  * A note is named by its reference **and** the id the widget gave it: a reference alone is not one
  * note. `FB-12` of this worker's store is one, but a tracker of another workspace can call one of
  * its issues `FB-12` too, and its row is not a note this command deleted.
+ *
+ * `seeds` names the notes of a tracker by the id the widget gave them, on every site: that id is
+ * all an operator reads in an issue, and a widget makes it at random for each note.
  */
-function selected(which: Parameters<NoteIndex['forget']>[0]) {
-  if ('account' in which) return eq(note_index.author_account_id, which.account);
+function selected(which: ForgetIndex) {
+  if ('seeds' in which) return which.seeds.length === 0 ? sql`false` : inArray(note_index.seed_id, [...which.seeds]);
 
   return (
     or(

@@ -54,7 +54,7 @@ describe('the sections of the rail (FRU-234)', () => {
 
     assert.deepEqual(dead(sections(frame), built), []);
     // The control: an entry that is shown with no route is found, and so is a route with no entry.
-    assert.deepEqual(dead([{ path: 'notes', built: true }], built), ['notes']);
+    assert.deepEqual(dead([{ path: 'reports', built: true }], built), ['reports']);
     assert.deepEqual(dead([{ path: 'sites', built: false }], built), ['sites']);
     // Every screen of a workspace is a section: a route the rail does not know has no entry.
     const screens = built.filter((path) => path.startsWith('w/:workspace/')).map((path) => path.split('/')[2]);

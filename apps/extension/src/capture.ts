@@ -30,6 +30,11 @@ export type CapturedPicture = { url: string; width: number; height: number };
 export type CaptureSeams = {
   readSite: (origin: string) => Promise<SiteConfig | undefined>;
   ensureAccess: (endpoint: string) => Promise<AccessResult>;
+  /**
+   * A new access token, when the worker refused `refused` (FRU-238): a token minted before the worker
+   * names the session in it (`sid`) is refused by a route that writes, until the next refresh.
+   */
+  renewAccess?: (endpoint: string, refused: string) => Promise<AccessResult>;
   /** The visible part of the tab, as a PNG. Rejects without `activeTab`. */
   captureTab: () => Promise<Blob>;
   /** The area of `picture`, as a PNG. */
@@ -51,7 +56,7 @@ export function createCapture(seams: CaptureSeams) {
 }
 
 async function take(
-  { readSite, ensureAccess, captureTab, crop, upload }: CaptureSeams,
+  { readSite, ensureAccess, renewAccess, captureTab, crop, upload }: CaptureSeams,
   area: CaptureArea,
   origin: string | undefined,
 ): Promise<CapturedPicture | undefined> {
@@ -70,10 +75,27 @@ async function take(
 
   const picture = await crop(await captureTab(), area);
   const url = `${site.endpoint}${SCREENSHOT_PATH}?client=${encodeURIComponent(clientId)}`;
-  const answer = await upload(url, access.grant.accessToken, picture);
+  let answer = await upload(url, access.grant.accessToken, picture);
+  // Refused for its token: renewed once, and sent again. Twice refused, the note goes without it,
+  // and the composer says so (`{ picture: 'missed' }` in the widget).
+  if (refusedForItsToken(answer) && renewAccess !== undefined) {
+    const renewed = await renewAccess(site.endpoint, access.grant.accessToken);
+    if (!renewed.ok) return undefined;
+    answer = await upload(url, renewed.grant.accessToken, picture);
+  }
   if (answer.status !== 201) return undefined;
 
   return pictureOn(answer.body, site.endpoint);
+}
+
+/** `401 identity-required`: the worker took no session from this token. Any other refusal is final. */
+function refusedForItsToken(answer: { status: number; body: string }): boolean {
+  if (answer.status !== 401) return false;
+  try {
+    return (JSON.parse(answer.body) as { error?: unknown }).error === 'identity-required';
+  } catch {
+    return false;
+  }
 }
 
 /** The id that the worker gives a picture: 128 random bits. */

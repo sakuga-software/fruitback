@@ -163,8 +163,55 @@ export type CaptureResponseMessage = {
   picture?: { url: string; width: number; height: number };
 };
 
+/**
+ * What the popup asks of the widget the extension mounted on this tab (FRU-254): choose an element,
+ * open the list, or say how many notes of each stage the page shows.
+ *
+ * The isolated world posts it only for a message of the popup (`tab-command.ts`). The page can post
+ * one too, and gains nothing by it: the widget's Shadow root is open, so a page can already press
+ * every button of it. No secret travels either way, only five numbers.
+ */
+export type CommandMessage = {
+  channel: typeof CHANNEL;
+  kind: 'command';
+  id: string;
+  command: TabCommand;
+};
+
+export type CommandResponseMessage = {
+  channel: typeof CHANNEL;
+  kind: 'command-response';
+  id: string;
+  /** The widget did it. False when there is no widget of ours here, or it would take somebody's typing. */
+  done: boolean;
+  /** The widget is there, and said no: somebody writes a note. */
+  busy?: true;
+  counts?: PageCounts;
+};
+
+export const TAB_COMMANDS = ['leave-feedback', 'show-notes', 'counts'] as const;
+export type TabCommand = (typeof TAB_COMMANDS)[number];
+
+const STAGES = ['seeded', 'green', 'ripening', 'ripe', 'composted'] as const;
+export type PageCounts = Record<(typeof STAGES)[number], number>;
+
+/** Five whole numbers, or nothing. */
+export function parsePageCounts(value: unknown): PageCounts | undefined {
+  if (!isRecord(value)) return undefined;
+  const counts: Partial<PageCounts> = {};
+  for (const stage of STAGES) {
+    const count = value[stage];
+    if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0) return undefined;
+    counts[stage] = count;
+  }
+
+  return counts as PageCounts;
+}
+
 export type BridgeMessage =
   | MountMessage
+  | CommandMessage
+  | CommandResponseMessage
   | UnmountMessage
   | ReadyMessage
   | AnnounceMessage
@@ -190,6 +237,8 @@ export function parseBridgeMessage(data: unknown): BridgeMessage | undefined {
   if (data.kind === 'relay-response') return parseRelayResponseMessage(data);
   if (data.kind === 'capture-request') return parseCaptureRequest(data);
   if (data.kind === 'capture-response') return parseCaptureResponse(data);
+  if (data.kind === 'command') return parseCommand(data);
+  if (data.kind === 'command-response') return parseCommandResponse(data);
   if (data.kind !== 'mount') return undefined;
 
   const { endpoint, clientId, label, relay, locale } = data;
@@ -315,6 +364,29 @@ function parseCaptureResponse(data: Record<string, unknown>): CaptureResponseMes
     ...(ok
       ? { picture: { url: picture.url as string, width: picture.width as number, height: picture.height as number } }
       : {}),
+  };
+}
+
+function parseCommand(data: Record<string, unknown>): CommandMessage | undefined {
+  const id = parseId(data.id);
+  const command = TAB_COMMANDS.find((each) => each === data.command);
+  if (id === undefined || command === undefined) return undefined;
+
+  return { channel: CHANNEL, kind: 'command', id, command };
+}
+
+function parseCommandResponse(data: Record<string, unknown>): CommandResponseMessage | undefined {
+  const id = parseId(data.id);
+  if (id === undefined) return undefined;
+  const counts = parsePageCounts(data.counts);
+
+  return {
+    channel: CHANNEL,
+    kind: 'command-response',
+    id,
+    done: data.done === true,
+    ...(data.busy === true ? { busy: true as const } : {}),
+    ...(counts === undefined ? {} : { counts }),
   };
 }
 

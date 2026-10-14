@@ -10,6 +10,11 @@ import { createApply } from '../src/bridge.ts';
 import { readSite } from '../src/sites.ts';
 import { LANGUAGE_KEY, storedLanguage } from '../src/language.ts';
 import { BRIDGE_SCRIPT_FLAG } from '../src/page-api.ts';
+import { randomId } from '../src/relay-transport.ts';
+import { type TabCommandAnswer, acceptedCommand } from '../src/tab-command.ts';
+
+/** How long the popup's command waits for the widget: the main world answers at once, or is not there. */
+const COMMAND_TIMEOUT_MS = 1_500;
 
 /**
  * The half that can reach the browser, in the isolated world (FRU-41, FRU-57).
@@ -84,6 +89,17 @@ export default defineContentScript({
         return;
       }
 
+      if (message?.kind === 'command-response') {
+        commands.get(message.id)?.({
+          done: message.done,
+          ...(message.busy === true ? { busy: true as const } : {}),
+          ...(message.counts === undefined ? {} : { counts: message.counts }),
+        });
+        commands.delete(message.id);
+
+        return;
+      }
+
       if (message?.kind === 'relay-request') void relay(message);
       // FRU-44: carried across, and answered whatever happens, as a relay is.
       if (message?.kind === 'capture-request') {
@@ -104,6 +120,29 @@ export default defineContentScript({
             );
           });
       }
+    });
+
+    /** The commands of the popup posted to the main world and not answered yet (FRU-254). */
+    const commands = new Map<string, (answer: TabCommandAnswer) => void>();
+
+    // FRU-254: « Leave feedback », « Show every note of the page », and the counts of « On this
+    // page ». Taken from a page of this extension only: see `acceptedCommand`.
+    browser.runtime.onMessage.addListener((message: unknown, sender) => {
+      const command = acceptedCommand(message, sender, browser.runtime.id, browser.runtime.getURL('/'));
+      if (command === undefined) return undefined;
+
+      return new Promise<TabCommandAnswer>((resolve) => {
+        const id = randomId(window);
+        const timer = setTimeout(() => {
+          commands.delete(id);
+          resolve({ done: false });
+        }, COMMAND_TIMEOUT_MS);
+        commands.set(id, (answer) => {
+          clearTimeout(timer);
+          resolve(answer);
+        });
+        post({ channel: CHANNEL, kind: 'command', id, command });
+      });
     });
 
     // The popup writes to storage rather than messaging tabs, so the switch reaches every open tab
