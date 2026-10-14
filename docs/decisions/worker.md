@@ -907,6 +907,12 @@ code stays, for the operator of an instance. `SECURITY.md` says what each half p
   origin, always `members`, a site already there given back untouched (`200`), ten an hour per account
   in the `Kv` (`fruitback:add-site:<account>`). `GET /session/sites` says, for each workspace of an
   account, whether it may add a site there (`canAddSite`).
+- **A note that a session of an account signs is such a write** (decided on 2026-10-14, after the
+  independent review of #303): `postFeedback` calls `stillWrites` once per request, the batch and
+  `?destination=` included, before anything is written. A note of a session paired for a workspace
+  is not checked: its tokens predate `sid`. `POST /screenshot` asks `writerIn`, built on `sessionWrites`, which reads the
+  membership and the session in one call. `verifyForClient` drops `account` and `chain` from a token
+  that the key of a site verified: a site writes the claims it likes.
 - **The refresh ends a session of an account whose account is gone** (`stillOfTheWorkspace`, through
   `accountExists`). A member removed from a workspace keeps the session: it reads that workspace no
   more, at the next call.

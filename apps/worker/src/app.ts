@@ -726,7 +726,9 @@ async function routed(
   // FRU-102: what the tracker of a connector answers is noted on it, for the console.
   return request.method === 'GET'
     ? getFeedback(request, served, watchedStore(store, accounts), kv, cors.headers, noteIndex)
-    : postFeedback(request, served, watchedStore(store, accounts), kv, cors.headers, context.clientIp, noteIndex);
+    : postFeedback(request, served, watchedStore(store, accounts), kv, cors.headers, context.clientIp, noteIndex, () =>
+        sessionWrites(request, served, context).then((session) => session !== undefined),
+      );
 }
 
 /**
@@ -932,6 +934,24 @@ export async function sessionWrites(
 }
 
 /**
+ * The account that writes in `workspace` with the token of this request, or `undefined` (FRU-238): a
+ * member of the workspace now, with a session still valid in the store, and the same person for both.
+ * One function, so that a route that writes cannot ask one and forget the other.
+ */
+async function writerIn(
+  request: Request,
+  config: Served,
+  context: RequestContext,
+  workspace: string,
+): Promise<string | undefined> {
+  const account = await memberOf(request, config, workspace);
+  if (account === undefined) return undefined;
+  const session = await sessionWrites(request, config, context);
+
+  return session?.subject === account ? account : undefined;
+}
+
+/**
  * The pictures that the extension takes with a note (FRU-44): `POST /screenshot` keeps one,
  * `GET /screenshot/<id>` answers it.
  *
@@ -965,10 +985,9 @@ async function handleScreenshot(
     const route = routeFor(request, config, normalizeClientId(new URL(request.url).searchParams.get('client')));
     if (!route.ok) return routingFailure(route, headers);
     const workspace = route.policy.sessions?.workspace;
-    const account = workspace === undefined ? undefined : await memberOf(request, config, workspace);
+    // A write: a member of the workspace, with a session read again in the store (FRU-238).
+    const account = workspace === undefined ? undefined : await writerIn(request, config, context, workspace);
     if (workspace === undefined || account === undefined) return json(401, { error: 'identity-required' }, headers);
-    // A write: the session is read again in the store, so one that ended writes nothing (FRU-238).
-    if (!(await sessionWrites(request, config, context))) return json(401, { error: 'identity-required' }, headers);
 
     const body = await readBoundedBytes(request, MAX_SCREENSHOT_BYTES);
     if (body === null) return json(413, { error: 'payload-too-large', maxBytes: MAX_SCREENSHOT_BYTES }, headers);
@@ -1100,10 +1119,13 @@ function routeFor(request: Request, config: Served, clientId: string | undefined
  * that names the workspace of this client (FRU-95). The signature alone is not enough: every session
  * of every workspace is signed with that one key.
  */
-async function verifyForClient(token: string, policy: ClientPolicy): Promise<Verified | undefined> {
+export async function verifyForClient(token: string, policy: ClientPolicy): Promise<Verified | undefined> {
   const asSite =
     policy.identitySecret === undefined ? undefined : await verifyIdentityToken(token, policy.identitySecret);
-  if (asSite?.ok === true || policy.sessions === undefined) return asSite;
+  // A site signs its own tokens and may write any claim in them: what says « a session of an
+  // account » and « this chain » is the worker key, so a token of a site never carries either (FRU-238).
+  if (asSite?.ok === true) return ofASite(asSite);
+  if (policy.sessions === undefined) return asSite;
 
   const asSession = await verifyIdentityToken(token, policy.sessions.secret);
   if (!asSession.ok) return asSite ?? asSession;
@@ -1123,6 +1145,13 @@ async function verifyForClient(token: string, policy: ClientPolicy): Promise<Ver
   return asSession.workspace === policy.sessions.workspace
     ? { ...asSession, session: true }
     : { ok: false, reason: 'invalid-claims' };
+}
+
+/** A token verified with the key of a site, with nothing of a session of the worker. */
+function ofASite(verified: Extract<IdentityResult, { ok: true }>): Verified {
+  const { account: _account, chain: _chain, ...site } = verified;
+
+  return site;
 }
 
 /**
@@ -1173,16 +1202,26 @@ async function attributionFor(
   request: Request,
   policy: ClientPolicy,
   claimed: SeedReporter | undefined,
-): Promise<{ ok: true; reporter: SeedReporter | undefined; channel: Channel } | { ok: false; reason: string }> {
+): Promise<
+  { ok: true; reporter: SeedReporter | undefined; channel: Channel; account: boolean } | { ok: false; reason: string }
+> {
   const token = readBearerToken(request.headers.get('Authorization'));
-  if (token === undefined) return { ok: true, reporter: stripClaimedVerification(claimed), channel: 'script' };
+  if (token === undefined) {
+    return { ok: true, reporter: stripClaimedVerification(claimed), channel: 'script', account: false };
+  }
 
   const verified = await verifyForClient(token, policy);
   if (verified === undefined) return { ok: false, reason: 'identity-not-configured' };
   if (!verified.ok) return { ok: false, reason: verified.reason };
 
   // FRU-237: a session of the workspace is an extension. A token the site signed is its own page.
-  return { ok: true, reporter: verified.reporter, channel: verified.session === true ? 'extension' : 'script' };
+  return {
+    ok: true,
+    reporter: verified.reporter,
+    channel: verified.session === true ? 'extension' : 'script',
+    // A session of an account (FRU-238): `postFeedback` reads it again before it writes.
+    account: verified.session === true && verified.account === true,
+  };
 }
 
 /** Spread, so an absent reporter stays absent — the round-trip forbids a key nobody provided. */
@@ -1326,6 +1365,25 @@ async function getFeedback(
 }
 
 /**
+ * The answer to a note of a session of an account that no longer writes, or `undefined` when it still
+ * does (FRU-238). A store that does not answer is `502 store-unavailable`, as for the note itself: the
+ * widget keeps the note and tries again (raised in review).
+ */
+async function endedSession(
+  stillWrites: () => Promise<boolean>,
+  corsHeaders: Record<string, string>,
+): Promise<Response | undefined> {
+  try {
+    if (await stillWrites()) return undefined;
+  } catch (error) {
+    if (error instanceof StoreError) return json(502, { error: 'store-unavailable' }, corsHeaders);
+    throw error;
+  }
+
+  return json(401, { error: 'invalid-identity', reason: 'session-ended' }, corsHeaders);
+}
+
+/**
  * Canonicalized server-side for the same reason the write path does it: the filter matches this
  * exact string inside the description, so a caller that skipped normalization would find nothing.
  */
@@ -1347,7 +1405,9 @@ async function postFeedback(
   kv: Kv,
   corsHeaders: Record<string, string>,
   clientIp: string,
-  noteIndex?: NoteIndex,
+  noteIndex: NoteIndex | undefined,
+  /** Whether the session of the token still writes, read in the store (FRU-238). */
+  stillWrites: () => Promise<boolean>,
 ): Promise<Response> {
   const body = await readBoundedText(request);
   if (body === null) {
@@ -1362,7 +1422,9 @@ async function postFeedback(
   }
 
   // FRU-124: an array is a batch, an object is one note, as before.
-  if (Array.isArray(payload)) return postBatch(request, config, store, kv, corsHeaders, clientIp, payload, noteIndex);
+  if (Array.isArray(payload)) {
+    return postBatch(request, config, store, kv, corsHeaders, clientIp, payload, noteIndex, stillWrites);
+  }
 
   const parsed = parseSeed(payload);
   if (!parsed.ok) {
@@ -1381,6 +1443,9 @@ async function postFeedback(
   if (!identity.ok) {
     return json(401, { error: 'invalid-identity', reason: identity.reason }, corsHeaders);
   }
+  // A note signed by a session of an account is a write: the session is read again (FRU-238).
+  const ended = identity.account ? await endedSession(stillWrites, corsHeaders) : undefined;
+  if (ended !== undefined) return ended;
 
   const attributed = { ...seed, ...optionalReporter(identity.reporter) };
 
@@ -1572,7 +1637,8 @@ async function postBatch(
   corsHeaders: Record<string, string>,
   clientIp: string,
   payload: unknown[],
-  noteIndex?: NoteIndex,
+  noteIndex: NoteIndex | undefined,
+  stillWrites: () => Promise<boolean>,
 ): Promise<Response> {
   const max = maxBatch(config.rateLimitPerMinute);
   if (payload.length === 0 || payload.length > max) {
@@ -1610,12 +1676,17 @@ async function postBatch(
   // One request is one caller: the identity is checked once, and written on every note it signs.
   const attributed: Seed[] = [];
   let channel: Channel = 'script';
+  let account = false;
   for (const seed of seeds) {
     const identity = await attributionFor(request, route.policy, seed.reporter);
     if (!identity.ok) return json(401, { error: 'invalid-identity', reason: identity.reason }, corsHeaders);
     attributed.push({ ...seed, ...optionalReporter(identity.reporter) });
     channel = identity.channel;
+    account = identity.account;
   }
+  // Once for the request, as the token is one (FRU-238).
+  const ended = account ? await endedSession(stillWrites, corsHeaders) : undefined;
+  if (ended !== undefined) return ended;
 
   const target = await chosenPlace(request, config, route);
   if (target === null) return json(403, { error: 'destination-not-allowed' }, corsHeaders);
