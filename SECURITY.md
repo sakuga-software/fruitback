@@ -1273,6 +1273,27 @@ link`. **The session must be of the last day** (`freshAge`, the default of bette
   test:`takes one of two providers, and not both, when two unlinks come at the same moment`. **This
   holds for one process of the worker**, as the lock of a workspace does.
 
+### « Last seen » and the label of a browser (FRU-249)
+
+Decision of Mathieu, 2026-10-13 (Q7): the short label of a browser is kept per session, and « Last
+seen » is shown to owners and admins only.
+
+- **« Last seen » is read by an owner or an admin of the workspace, and by nobody else.**
+  `GET /console/workspaces/<id>/members/seen` answers `{seen: {<account>: <day>}}` with the right to
+  manage the members; a member or a guest gets `403`, a person of another workspace `404`, as for
+  every route of a workspace: test:`answers nothing of it to a member, a guest, another workspace,
+nobody, or an extension`. **It is a day, never an hour**: an hour would tell a colleague when
+  somebody works. It is written by a call of the person to the console in that workspace, or by a
+  refresh of their extension for it, at most once every ten minutes in a process, and it goes
+  with the membership: test:`writes once for a person in a workspace while the day is remembered, and forgets the day when they
+leave`. The days of one workspace say nothing of another one: test:`sees a member in the
+workspace they called, and in no other one`.
+- **A session of the console keeps the label of its browser, « Chrome on macOS », and not its user
+  agent.** The label is two words of closed lists (`browser-label.ts`), so nothing a browser writes,
+  no version and no device, reaches the database: test:`keeps « Firefox on Linux », and not the user
+agent, and lists it with the session`. The user agent is kept beside it only when the operator
+  keeps addresses (`FRUITBACK_AUTH_TRACK_IP`), as before.
+
 ### The image of the console (FRU-222)
 
 The console is static files behind nginx, in an image of its own. **It holds no secret**: nothing

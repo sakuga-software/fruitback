@@ -20,6 +20,7 @@ import { AuthUnavailable, handleAuthRoutes, isAuthRoute, sessionOfCookie, withRe
 import { type AdminLinks, firstAdminLines } from './first-admin.ts';
 import { SIGN_IN_PROVIDERS, consoleCors, isConsoleRoute } from './console-cors.ts';
 import { handleConsoleApi } from './console-api.ts';
+import { seen } from './last-seen.ts';
 import { type TxtResolver, recheckDomains } from './domain-proof.ts';
 import { firstReviewerLines } from './first-reviewer.ts';
 import { handleLinearOAuth } from './linear-oauth.ts';
@@ -188,6 +189,7 @@ async function withSites(config: WorkerConfig, accounts: AccountStore): Promise<
     allowedOrigins: [...new Set([...config.allowedOrigins, ...originsFromClients(clients)])],
     roleIn: (workspace, account) => accounts.role(workspace, account),
     accountExists: async (account) => (await accounts.account(account)) !== undefined,
+    seenIn: (workspace, account) => seen(accounts, workspace, account),
   };
 }
 
@@ -201,6 +203,8 @@ type Served = WorkerConfig & {
   roleIn?: (workspace: string, account: string) => Promise<Role | undefined>;
   /** Whether an account is still there (FRU-238). Absent on a worker with no accounts. */
   accountExists?: (account: string) => Promise<boolean>;
+  /** That a member was seen in a workspace today (FRU-249). Absent on a worker with no accounts. */
+  seenIn?: (workspace: string, account: string) => Promise<void>;
 };
 
 /** The client as it routes when its notes go to this place, and not to its first one. */
@@ -775,6 +779,10 @@ async function handleSession(
       await revokeSession(store, refreshed.refreshToken);
 
       return json(401, { error: 'session-revoked-or-expired' }, headers);
+    }
+    // An extension that refreshes for a workspace: its person is seen there today (FRU-249).
+    if (refreshed.ok && refreshed.identity.workspace !== undefined) {
+      await config.seenIn?.(refreshed.identity.workspace, refreshed.identity.subject);
     }
 
     return refreshed.ok

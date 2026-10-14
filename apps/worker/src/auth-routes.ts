@@ -7,6 +7,7 @@ import {
   SERVED_PATHS,
   sendLinkThrough,
 } from './auth.ts';
+import { UNKNOWN_BROWSER } from './browser-label.ts';
 import { adminLinkAt, endAdminLink } from './first-admin.ts';
 import type { Kv } from './kv.ts';
 import { MailError, type Mailer, signInMessage } from './mail.ts';
@@ -363,6 +364,7 @@ type SessionRow = {
   updatedAt: Date | string;
   userAgent?: string | null;
   ipAddress?: string | null;
+  browser?: string | null;
 };
 
 /** The adapter of better-auth, the one with the layer of `auth-at-rest.ts` in front of it. */
@@ -399,6 +401,8 @@ async function sessions(
             createdAt: instant(row.createdAt),
             lastUsedAt: instant(row.updatedAt),
             expiresAt: instant(row.expiresAt),
+            // The short label (FRU-249). A session opened before it has none.
+            browser: row.browser ?? UNKNOWN_BROWSER,
             ...(row.userAgent ? { userAgent: row.userAgent } : {}),
             ...(row.ipAddress ? { ipAddress: row.ipAddress } : {}),
             current: row.id === mine.sessionId,

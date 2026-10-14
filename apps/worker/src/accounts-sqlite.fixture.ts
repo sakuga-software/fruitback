@@ -33,6 +33,27 @@ import { StoreError } from './store.ts';
  * but this file holds who owns which workspace.
  */
 
+/**
+ * The day a member was last seen in a workspace (FRU-249), made when it is first asked for and not by
+ * a migration: the files of this store are the ones the copy of FRU-145 reads, at their last version,
+ * and a worker never wrote this table in one, so the copy never reads it. It goes with the membership.
+ * Its key is the workspace and the account, and not a member id as in PostgreSQL: a member of this
+ * store has no id of its own (its key is the same pair).
+ */
+function withLastSeen<T extends { exec(sql: string): unknown }>(database: T): T {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS last_seen (
+      workspace_id TEXT NOT NULL,
+      account_id TEXT NOT NULL,
+      day TEXT NOT NULL,
+      PRIMARY KEY (workspace_id, account_id),
+      FOREIGN KEY (workspace_id, account_id) REFERENCES members (workspace_id, account_id) ON DELETE CASCADE
+    );
+  `);
+
+  return database;
+}
+
 /** Append; never edit an entry that has shipped. */
 const MIGRATIONS: readonly string[] = [
   `
@@ -386,6 +407,24 @@ export function createSqliteAccountStore(path: string): AccountStore {
 
         return workspace === undefined || role === undefined ? [] : [{ workspace, role }];
       });
+    },
+
+    async markSeen(workspace, account, day) {
+      withLastSeen(connect(path))
+        .prepare(
+          `INSERT INTO last_seen (workspace_id, account_id, day)
+             SELECT workspace_id, account_id, ? FROM members WHERE workspace_id = ? AND account_id = ?
+           ON CONFLICT (workspace_id, account_id) DO UPDATE SET day = excluded.day WHERE excluded.day > last_seen.day`,
+        )
+        .run(day, workspace, account);
+    },
+
+    async lastSeen(workspace) {
+      const rows = withLastSeen(connect(path))
+        .prepare('SELECT account_id, day FROM last_seen WHERE workspace_id = ?')
+        .all(workspace) as { account_id: string; day: string }[];
+
+      return Object.fromEntries(rows.map((row) => [row.account_id, row.day]));
     },
 
     async role(workspace, account) {

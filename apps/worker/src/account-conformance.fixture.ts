@@ -115,6 +115,26 @@ export function accountCases(it: Declare<AccountStore>): void {
     assert.equal((await store.account(alice.id))?.name, 'Alice Martin');
   });
 
+  it('keeps the day a member was last seen in a workspace, the later one, and for a member only (FRU-249)', async (store) => {
+    const { alice, workspace } = await world(store);
+    const { bob, workspace: theirs } = await otherWorld(store);
+    assert.deepEqual(await store.lastSeen(workspace.id), {});
+
+    await store.markSeen(workspace.id, alice.id, '2026-10-12');
+    assert.deepEqual(await store.lastSeen(workspace.id), { [alice.id]: '2026-10-12' });
+    // A day before the one kept changes nothing; a later one replaces it.
+    await store.markSeen(workspace.id, alice.id, '2026-10-01');
+    assert.deepEqual(await store.lastSeen(workspace.id), { [alice.id]: '2026-10-12' });
+    await store.markSeen(workspace.id, alice.id, '2026-10-13');
+    assert.deepEqual(await store.lastSeen(workspace.id), { [alice.id]: '2026-10-13' });
+
+    // Bob is no member of Acme: nothing is written for him there, and Acme is not in his workspace.
+    await store.markSeen(workspace.id, bob.id, '2026-10-13');
+    await store.markSeen(theirs.id, bob.id, '2026-10-11');
+    assert.deepEqual(await store.lastSeen(workspace.id), { [alice.id]: '2026-10-13' });
+    assert.deepEqual(await store.lastSeen(theirs.id), { [bob.id]: '2026-10-11' });
+  });
+
   it('gives each thing an id whose prefix says what it names', async (store) => {
     const { alice, workspace } = await world(store);
     const site = await store.addSite(workspace.id, { origin: 'https://acme.dev', visibility: 'members' });

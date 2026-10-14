@@ -62,6 +62,9 @@ export const session = pgTable(
     updatedAt: instant('updatedAt').notNull(),
     ipAddress: text('ipAddress'),
     userAgent: text('userAgent'),
+    // The short label of the browser, « Chrome on macOS » (FRU-249): an additional field of `session`
+    // in `authOptions`, from `browserLabel`, never the user agent.
+    browser: text('browser'),
     userId: text('userId').notNull(),
     activeOrganizationId: text('activeOrganizationId'),
   },
