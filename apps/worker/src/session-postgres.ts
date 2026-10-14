@@ -1,4 +1,4 @@
-import { and, count, eq, gt, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, gt, isNull, lte, or, sql } from 'drizzle-orm';
 import type { ClaimOutcome, ConnectRow, ConnectStore } from './connect.ts';
 import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
@@ -251,7 +251,8 @@ export function createPostgresSessionStore(database: Database): SessionStore {
     async redeemPairing({ codeHash, tokenHash, expiresAt, now }) {
       return transaction(async (tx) => {
         // Read before the code is spent: a pairing that cannot be read as a person must not cost
-        // its code, and nothing writes these columns after the pairing is made.
+        // its code. Only the name changes after the pairing is made (FRU-249, a rename): it is
+        // read again by the statement that spends the code, below.
         const row = (
           await tx
             .select({
@@ -272,21 +273,27 @@ export function createPostgresSessionStore(database: Database): SessionStore {
           .update(pairings)
           .set({ redeemed_at: now })
           .where(and(eq(pairings.code_hash, codeHash), isNull(pairings.redeemed_at), gt(pairings.expires_at, now)))
-          .returning({ code_hash: pairings.code_hash });
+          .returning({ code_hash: pairings.code_hash, name: pairings.name });
         if (spent.length !== 1) return undefined;
+        // The name as the spend read it: a rename that waited for this row, or that this call waited
+        // for, is in it.
+        const named = {
+          ...identity,
+          ...(typeof spent[0]?.name === 'string' && spent[0].name !== '' ? { name: spent[0].name } : {}),
+        };
 
         // In the same transaction: a session that cannot be written takes the spend back with it.
         await tx.insert(sessions).values({
           token_hash: tokenHash,
-          subject: identity.subject,
-          name: identity.name ?? null,
-          email: identity.email ?? null,
-          workspace: identity.workspace ?? null,
+          subject: named.subject,
+          name: named.name ?? null,
+          email: named.email ?? null,
+          workspace: named.workspace ?? null,
           created_at: now,
           expires_at: expiresAt,
         });
 
-        return identity;
+        return named;
       });
     },
 
@@ -320,6 +327,22 @@ export function createPostgresSessionStore(database: Database): SessionStore {
     async renameSessionsOf(subject, name, now) {
       if (subject === '') return;
       await transaction(async (tx) => {
+        // The codes and the chains of the person are held first, as `endSessionsOf` holds them. A
+        // refresh or a redemption that runs now ends before the statements below, which then read the
+        // row it wrote; one that starts after waits for this one, and reads the new name (raised in
+        // review: without the hold, the successor of a refresh in flight kept the name of before).
+        await tx
+          .select({ code_hash: pairings.code_hash })
+          .from(pairings)
+          .where(eq(pairings.subject, subject))
+          .orderBy(pairings.code_hash)
+          .for('update');
+        await tx
+          .select({ token_hash: sessions.token_hash })
+          .from(sessions)
+          .where(eq(sessions.subject, subject))
+          .orderBy(asc(sessions.token_hash))
+          .for('update');
         await tx
           .update(sessions)
           .set({ name })
