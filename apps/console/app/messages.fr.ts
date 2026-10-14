@@ -577,6 +577,7 @@ export const FRENCH: Readonly<Record<string, string>> = {
   'A source that was removed': 'Une source retirée',
   'Search notes': 'Chercher dans les notes',
   'Search the text, the page or the reference': 'Chercher le texte, la page ou la référence',
+  'Search the text or the page': 'Chercher le texte ou la page',
   Status: 'Statut',
   'Any status': 'Tous les statuts',
   'Only my notes': 'Seulement mes notes',

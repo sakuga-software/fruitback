@@ -714,6 +714,8 @@ test('a guest reads no place, no reference, no chip and no « Send again »', as
   await expect(page.getByRole('group', { name: 'Where the notes went' })).toHaveCount(0);
   await expect(table(page).getByRole('link', { name: /ACM-/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Send again' })).toHaveCount(0);
+  // The route does not search a reference for a guest, and the field does not say it does.
+  await expect(search(page)).toHaveAttribute('placeholder', 'Search the text or the page');
   // The worker tells a guest nothing of where a note went: no column for it.
   await expect(table(page).locator('thead th')).toHaveText(['Note', 'Status', 'Left by', 'When']);
   await expect(page.getByText('Not delivered yet')).toHaveCount(0);

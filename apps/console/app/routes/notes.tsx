@@ -253,7 +253,10 @@ export default function Notes() {
                 type="search"
                 // What the index searches (`searched` of FRU-244): the 64 characters, the page and the
                 // reference in the tracker. Not the author, which the mockup says.
-                placeholder={t('Search the text, the page or the reference')}
+                // A guest reads no reference, and the route does not search one for them.
+                placeholder={
+                  seesTracker ? t('Search the text, the page or the reference') : t('Search the text or the page')
+                }
                 value={typed}
                 onChange={(event) => setTyped(event.target.value)}
               />
