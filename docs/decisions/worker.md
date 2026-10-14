@@ -2979,7 +2979,8 @@ close that too, for a second round trip and a store of tickets; it was not worth
 
 - `last_seen` holds one day per membership (`member_id`, cascade): the day of UTC, as `YYYY-MM-DD`.
   `seen` of `last-seen.ts` writes it from a call of the console in a workspace and from a refresh of
-  an extension for it, once a day per process; it never fails the call.
+  an extension for it, at most once every ten minutes per process (`REMEMBER_MS`: not the whole
+  day, because another replica may have seen the member leave); it never fails the call.
 - Only `manage-members` reads it, by `GET /console/workspaces/<id>/members/seen`. It is not added to
   the answer of `list-members` of the organization plugin, which every member reads.
 - `session.browser` is written by the `create` hook of a session, from `browserLabel`: a family and a
@@ -2988,4 +2989,5 @@ close that too, for a second round trip and a store of tickets; it was not worth
 ### Why a day
 
 The screen of the mock-up says « Now », « 1 h ago ». A day serves it as « Today », « Yesterday »,
-« 3 days ago », says less of when a person works, and costs one write a day instead of one a call.
+« 3 days ago », says less of when a person works, and costs one write every ten minutes at most instead of one a
+call, a write that changes no row when the day is the same.

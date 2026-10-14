@@ -1171,8 +1171,8 @@ seen » is shown to owners and admins only.
   every route of a workspace: test:`answers nothing of it to a member, a guest, another workspace,
 nobody, or an extension`. **It is a day, never an hour**: an hour would tell a colleague when
   somebody works. It is written by a call of the person to the console in that workspace, or by a
-  refresh of their extension for it, once a day at most in a process, and it goes with the
-  membership: test:`writes once a day for a person in a workspace, and forgets the day when they
+  refresh of their extension for it, at most once every ten minutes in a process, and it goes
+  with the membership: test:`writes once for a person in a workspace while the day is remembered, and forgets the day when they
 leave`. The days of one workspace say nothing of another one: test:`sees a member in the
 workspace they called, and in no other one`.
 - **A session of the console keeps the label of its browser, « Chrome on macOS », and not its user

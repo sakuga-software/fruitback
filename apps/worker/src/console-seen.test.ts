@@ -146,7 +146,7 @@ describe('« Last seen » of the members of a workspace (FRU-249)', () => {
     assert.deepEqual(await rowsOf(env.database, 'SELECT day FROM last_seen'), [{ day: dayOf(Date.now()) }]);
   });
 
-  it('writes once a day for a person in a workspace, and forgets the day when they leave', async () => {
+  it('writes once for a person in a workspace while the day is remembered, and forgets the day when they leave', async () => {
     const env = await world();
     const { id, people } = await acme(env);
     forgetSeen();
