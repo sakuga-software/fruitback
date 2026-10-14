@@ -215,25 +215,24 @@ export function EmailForm({ action, email, onEmail, onSent, problem: given, layo
 export function ProviderButtons({
   providers,
   layout = 'column',
+  onLeave,
 }: {
   providers: Providers;
+  /** Runs before the page leaves for the provider: what the page keeps to come back to (FRU-240). */
+  onLeave?: () => void;
   /** « grid »: side by side while there is room, in a column that spaces its own parts (the setup). */
   layout?: 'column' | 'grid';
 }) {
   useLocale();
   if (!providers.google && !providers.github) return null;
+  const leave = (provider: 'google' | 'github') => {
+    onLeave?.();
+    window.location.href = providerStart(provider);
+  };
   const buttons = (
     <>
-      {providers.google ? (
-        <WideButton onClick={() => (window.location.href = providerStart('google'))}>
-          {t('Continue with Google')}
-        </WideButton>
-      ) : null}
-      {providers.github ? (
-        <WideButton onClick={() => (window.location.href = providerStart('github'))}>
-          {t('Continue with GitHub')}
-        </WideButton>
-      ) : null}
+      {providers.google ? <WideButton onClick={() => leave('google')}>{t('Continue with Google')}</WideButton> : null}
+      {providers.github ? <WideButton onClick={() => leave('github')}>{t('Continue with GitHub')}</WideButton> : null}
     </>
   );
   if (layout === 'grid') {

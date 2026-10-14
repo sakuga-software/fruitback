@@ -122,6 +122,22 @@ const VIOLATIONS: Violation<AccountStore>[] = [
     },
   },
   {
+    breaks: 'keeps the day a member was last seen in a workspace, the later one, and for a member only (FRU-249)',
+    by: 'writes an earlier day over a later one',
+    replace: {
+      from: 'DO UPDATE SET day = excluded.day WHERE excluded.day > last_seen.day',
+      to: 'DO UPDATE SET day = excluded.day',
+    },
+  },
+  {
+    breaks: 'keeps the day a member was last seen in a workspace, the later one, and for a member only (FRU-249)',
+    by: 'answers the days of every workspace',
+    replace: {
+      from: "'SELECT account_id, day FROM last_seen WHERE workspace_id = ?'",
+      to: "'SELECT account_id, day FROM last_seen WHERE workspace_id IS NOT ? OR 1 = 1'",
+    },
+  },
+  {
     breaks: 'gives each thing an id whose prefix says what it names',
     by: 'names a site with another prefix',
     replace: { from: "newId('site')", to: "newId('s')" },

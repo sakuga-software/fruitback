@@ -15,6 +15,7 @@ import { ORGANIZATION_PATHS, type OrganizationRule, readOrganizationInput } from
 import { type Kv, KvError } from './kv.ts';
 import { MailError, type Mailer, invitationMessage } from './mail.ts';
 import type { SessionStore } from './session.ts';
+import { forgetSeenOf } from './last-seen.ts';
 
 /**
  * The routes of the organization plugin of better-auth, under `/console/auth/organization/` (FRU-149).
@@ -115,6 +116,7 @@ async function afterSomebodyWent(
   workspace: string,
   person: string,
 ): Promise<void> {
+  forgetSeenOf(workspace, person);
   const steps = await Promise.allSettled([
     context.sessions.endSessionsOf({ subject: person, workspace }, Date.now()),
     cancelInvitationsOf(adapter, workspace, person),

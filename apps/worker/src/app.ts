@@ -20,6 +20,7 @@ import { AuthUnavailable, handleAuthRoutes, isAuthRoute, sessionOfCookie, withRe
 import { type AdminLinks, firstAdminLines } from './first-admin.ts';
 import { SIGN_IN_PROVIDERS, consoleCors, isConsoleRoute } from './console-cors.ts';
 import { handleConsoleApi } from './console-api.ts';
+import { seen } from './last-seen.ts';
 import { type TxtResolver, recheckDomains } from './domain-proof.ts';
 import { firstReviewerLines } from './first-reviewer.ts';
 import { handleLinearOAuth } from './linear-oauth.ts';
@@ -188,6 +189,7 @@ async function withSites(config: WorkerConfig, accounts: AccountStore): Promise<
     allowedOrigins: [...new Set([...config.allowedOrigins, ...originsFromClients(clients)])],
     roleIn: (workspace, account) => accounts.role(workspace, account),
     accountExists: async (account) => (await accounts.account(account)) !== undefined,
+    seenIn: (workspace, account) => seen(accounts, workspace, account),
   };
 }
 
@@ -201,6 +203,8 @@ type Served = WorkerConfig & {
   roleIn?: (workspace: string, account: string) => Promise<Role | undefined>;
   /** Whether an account is still there (FRU-238). Absent on a worker with no accounts. */
   accountExists?: (account: string) => Promise<boolean>;
+  /** That a member was seen in a workspace today (FRU-249). Absent on a worker with no accounts. */
+  seenIn?: (workspace: string, account: string) => Promise<void>;
 };
 
 /** The client as it routes when its notes go to this place, and not to its first one. */
@@ -648,7 +652,19 @@ async function routed(
     try {
       // FRU-101: what the extension may turn on in one click, for a worker that keeps accounts.
       if (pathname === SESSION_SITES_PATH && accounts !== undefined && served.identitySecret !== undefined) {
-        return await handleSessionSites(request, accounts, served.identitySecret, cors.headers, undefined, noteIndex);
+        // FRU-255: the write reads the session again in the store, through `sessionWrites`, the
+        // check of every route that writes for an extension.
+        const writes = { kv, session: () => sessionWrites(request, served, context) };
+
+        return await handleSessionSites(
+          request,
+          accounts,
+          served.identitySecret,
+          cors.headers,
+          undefined,
+          noteIndex,
+          writes,
+        );
       }
 
       // FRU-238: the extension asks to be connected, and comes back for its session. Only where a
@@ -711,7 +727,7 @@ async function routed(
   return request.method === 'GET'
     ? getFeedback(request, served, watchedStore(store, accounts), kv, cors.headers, noteIndex)
     : postFeedback(request, served, watchedStore(store, accounts), kv, cors.headers, context.clientIp, noteIndex, () =>
-        sessionWrites(request, served, context),
+        sessionWrites(request, served, context).then((session) => session !== undefined),
       );
 }
 
@@ -777,6 +793,10 @@ async function handleSession(
       await revokeSession(store, refreshed.refreshToken);
 
       return json(401, { error: 'session-revoked-or-expired' }, headers);
+    }
+    // An extension that refreshes for a workspace: its person is seen there today (FRU-249).
+    if (refreshed.ok && refreshed.identity.workspace !== undefined) {
+      await config.seenIn?.(refreshed.identity.workspace, refreshed.identity.subject);
     }
 
     return refreshed.ok
@@ -892,10 +912,11 @@ async function memberOf(request: Request, config: Served, workspace: string): Pr
 }
 
 /**
- * The person of the session of the token of this request, when it is still valid in the store
- * (FRU-238), or `undefined`. See `session-check.ts`.
+ * The person of the session of the token of this request, while that session is still valid in the
+ * store (FRU-238), or `undefined`: the check of every route that writes for an extension, which then
+ * answers `401`. See `session-check.ts`. A route that needs who writes (FRU-255) reads it here.
  */
-async function sessionWriter(
+export async function sessionWrites(
   request: Request,
   config: Served,
   context: RequestContext,
@@ -913,14 +934,6 @@ async function sessionWriter(
 }
 
 /**
- * Whether the session of the token of this request is still valid in the store (FRU-238): the check of
- * every route that writes for an extension. See `session-check.ts`.
- */
-export async function sessionWrites(request: Request, config: Served, context: RequestContext): Promise<boolean> {
-  return (await sessionWriter(request, config, context)) !== undefined;
-}
-
-/**
  * The account that writes in `workspace` with the token of this request, or `undefined` (FRU-238): a
  * member of the workspace now, with a session still valid in the store, and the same person for both.
  * One function, so that a route that writes cannot ask one and forget the other.
@@ -933,7 +946,7 @@ async function writerIn(
 ): Promise<string | undefined> {
   const account = await memberOf(request, config, workspace);
   if (account === undefined) return undefined;
-  const session = await sessionWriter(request, config, context);
+  const session = await sessionWrites(request, config, context);
 
   return session?.subject === account ? account : undefined;
 }

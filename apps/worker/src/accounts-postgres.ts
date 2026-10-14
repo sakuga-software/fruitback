@@ -16,7 +16,7 @@ import type { ClientMap } from './clients.ts';
 import type { Database, Db } from './postgres.ts';
 import { migrated } from './postgres-migrate.ts';
 import { account, member, organization, user } from './auth-schema.ts';
-import { connectors, deliveries, domains, site_destinations, sites } from './postgres-schema.ts';
+import { connectors, deliveries, domains, last_seen, site_destinations, sites } from './postgres-schema.ts';
 import { StoreError } from './store.ts';
 
 /**
@@ -279,6 +279,37 @@ export function createPostgresAccountStore(database: Database): AccountStore {
       );
 
       return rows.map((row) => row.email.toLowerCase());
+    },
+
+    async markSeen(workspace, person, day) {
+      await run(async (db) => {
+        const [membership] = await db
+          .select({ id: member.id })
+          .from(member)
+          .where(and(eq(member.organizationId, workspace), eq(member.userId, person)));
+        if (membership === undefined) return;
+        await db
+          .insert(last_seen)
+          .values({ member_id: membership.id, day })
+          .onConflictDoUpdate({
+            target: last_seen.member_id,
+            set: { day },
+            // A day never goes back: two calls that cross keep the later one.
+            setWhere: lt(last_seen.day, day),
+          });
+      });
+    },
+
+    async lastSeen(workspace) {
+      const rows = await run((db) =>
+        db
+          .select({ account: member.userId, day: last_seen.day })
+          .from(last_seen)
+          .innerJoin(member, eq(member.id, last_seen.member_id))
+          .where(eq(member.organizationId, workspace)),
+      );
+
+      return Object.fromEntries(rows.map((row) => [row.account, row.day]));
     },
 
     async role(workspace, person) {

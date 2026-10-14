@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { type Me, type Site, call, callUntilAnswered, myInvitations } from '../api';
 import { t } from '../i18n';
+import { takeConnect } from '../connect-return';
 import { useLocale } from '../use-locale';
 
 /**
@@ -20,6 +21,9 @@ export default function Home() {
     let stopped = false;
     const stop = callUntilAnswered<Me>('GET', '/console/me', (me) => {
       if (!me.ok) return navigate('/setup', { replace: true });
+      // A sign-in with a provider that started on « Connect this browser » goes back to its question.
+      const connecting = takeConnect();
+      if (connecting !== undefined) return navigate(`/connect/${connecting}`, { replace: true });
       void myInvitations().then((invitations) => {
         if (stopped) return;
         // An invitation that could not be read does not hold the front door: it is on its own page.

@@ -850,6 +850,33 @@ textarea {
   overflow-wrap: anywhere;
 }
 
+/* The word to compare with the popup (FRU-240): the dark block of screen 04 of the mockup. */
+.kit-verify {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: var(--radius-box);
+  background: var(--color-ink);
+  color: var(--color-page);
+}
+
+.kit-verify__ask {
+  max-width: 220px;
+  color: var(--color-rail-text);
+  font-size: var(--text-small);
+  line-height: 1.45;
+}
+
+.kit-verify__word {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
 /* The head of a page. */
 .kit-title {
   font-size: var(--text-title);

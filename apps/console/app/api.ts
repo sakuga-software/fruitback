@@ -498,6 +498,51 @@ export function pairingLink(code: string): string {
 }
 
 /**
+ * A request of the extension to sign in as the person (FRU-238, FRU-240), as the console reads it.
+ * The word, the browser and the account come from the worker, never from the address of the page:
+ * a forged address shows nothing the worker did not say. A request that waits has its word, its
+ * account and the workspaces of that account; an answered one, read by the account that answered
+ * it, has its state and its browser only.
+ */
+export type ConnectRequest = {
+  request: string;
+  state: 'pending' | 'approved' | 'refused' | 'claimed' | 'expired';
+  word?: string;
+  browser: string;
+  account?: { id: string; email: string; name?: string };
+  workspaces?: { id: string; name: string; role?: Role }[];
+};
+
+/**
+ * The request whose id is in the address of the page. Quiet: nobody signed in is a state of the
+ * page. 404: unknown, or answered by another account; 410: expired.
+ */
+export function connectRequest(request: string): Promise<Answer<ConnectRequest>> {
+  return call<ConnectRequest>('GET', `/console/connect/${encodeURIComponent(request)}`, undefined, { quiet: true });
+}
+
+/**
+ * « Connect », with the word and the account the page showed: the worker refuses an answer for
+ * another word, or from an account that changed since the page read the request (409).
+ * « Not now » refuses it. Quiet: on a 401 the page asks for a sign-in itself, so the banner of the
+ * root would be a second, different instruction.
+ */
+export function answerConnect(
+  request: string,
+  asked: { word: string; account: { id: string } },
+  approve: boolean,
+): Promise<Answer<Partial<ConnectRequest>>> {
+  const path = `/console/connect/${encodeURIComponent(request)}/${approve ? 'approve' : 'refuse'}`;
+
+  return call<Partial<ConnectRequest>>(
+    'POST',
+    path,
+    approve ? { word: asked.word, account: asked.account.id } : { account: asked.account.id },
+    { quiet: true },
+  );
+}
+
+/**
  * Renames a workspace (FRU-236): its owner or an admin. The worker answers the workspace as
  * `/console/me` lists it, with the role of the person.
  */

@@ -901,10 +901,16 @@ code stays, for the operator of an instance. `SECURITY.md` says what each half p
   ended writes nothing, while a route that reads keeps the 10 minutes of its token (decided on
   2026-10-14, for FRU-255). Every access token names its chain in `sid` (`chainOf` of the store after
   a refresh, the digest of the first token otherwise); a token with no `sid` is refused there.
+- **`POST /session/sites {workspace, origin}` adds a site from the popup** (FRU-255,
+  `session-site-add.ts`): `sessionStillValid` first (a session that ended writes nothing, `401`), a
+  session of an account, an extension's `Origin` or none, `manage-sites` read now, an https or loopback
+  origin, always `members`, a site already there given back untouched (`200`), ten an hour per account
+  in the `Kv` (`fruitback:add-site:<account>`). `GET /session/sites` says, for each workspace of an
+  account, whether it may add a site there (`canAddSite`).
 - **A note that a session of an account signs is such a write** (decided on 2026-10-14, after the
   independent review of #303): `postFeedback` calls `stillWrites` once per request, the batch and
   `?destination=` included, before anything is written. A note of a session paired for a workspace
-  is not checked: its tokens predate `sid`. `POST /screenshot` asks `writerIn`, which reads the
+  is not checked: its tokens predate `sid`. `POST /screenshot` asks `writerIn`, built on `sessionWrites`, which reads the
   membership and the session in one call. `verifyForClient` drops `account` and `chain` from a token
   that the key of a site verified: a site writes the claims it likes.
 - **The refresh ends a session of an account whose account is gone** (`stillOfTheWorkspace`, through
@@ -3043,3 +3049,22 @@ site sends the cookie, and can make the browser link **the provider account that
 signed in to**, for the address of the account only: what a sign-in with that provider does already,
 since one verified address is one account (FRU-97). A one-time ticket asked for by a `POST` would
 close that too, for a second round trip and a store of tickets; it was not worth it.
+
+## « Last seen » and the label of a browser (FRU-249)
+
+### The rules, in short
+
+- `last_seen` holds one day per membership (`member_id`, cascade): the day of UTC, as `YYYY-MM-DD`.
+  `seen` of `last-seen.ts` writes it from a call of the console in a workspace and from a refresh of
+  an extension for it, at most once every ten minutes per process (`REMEMBER_MS`: not the whole
+  day, because another replica may have seen the member leave); it never fails the call.
+- Only `manage-members` reads it, by `GET /console/workspaces/<id>/members/seen`. It is not added to
+  the answer of `list-members` of the organization plugin, which every member reads.
+- `session.browser` is written by the `create` hook of a session, from `browserLabel`: a family and a
+  system of two closed lists, « A browser » when the family is not one of them.
+
+### Why a day
+
+The screen of the mock-up says « Now », « 1 h ago ». A day serves it as « Today », « Yesterday »,
+« 3 days ago », says less of when a person works, and costs one write every ten minutes at most instead of one a
+call, a write that changes no row when the day is the same.

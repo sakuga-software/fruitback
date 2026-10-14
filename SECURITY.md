@@ -845,6 +845,23 @@ to a page where it mounts the widget: it is a locale tag, and the page can read 
 stores is team mode, so the relay's refusals all apply: the widget it mounts calls through the relay,
 and the page never holds the token.
 
+**`POST /session/sites` adds a site to a workspace, from the extension** (FRU-255): the first route
+where the token of an extension writes. It takes the access token of a session of an **account**
+(FRU-238), never of a pairing (`403 account-required`); an `Origin` of an extension, or none
+(`403 origin-not-allowed` for a page); a workspace where the account holds `manage-sites` (owner,
+admin), read at this call: a member and a guest get `403`, an account outside the workspace `404`,
+as the console answers. The site is always of **members**, whatever the body says; `visibility` and
+`previews` are not read, so no preview is covered without the proof of FRU-103. An origin over https
+or on the loopback only. A site already in that workspace is given back as it is: its visibility is
+not touched. **Ten sites an hour per account**, counted before anything is written. Each of these
+guards, taken out, fails a test of `session-site-add.test.ts`.
+**The session is read again in the store at each add** (`sessionStillValid`, decided on 2026-10-14): a
+session logged out, a browser disconnected in « My account », or an account that is gone adds nothing
+with the access token it still holds, and a token that names no session (no `sid`) adds nothing:
+test:`adds no site after a log out: the write reads the session again`,
+test:`adds no site once the browser is disconnected in the console`. The role is read at each call
+too: test:`reads the role at each call: a person removed between two calls adds nothing more`.
+
 ### Signing in to the console (FRU-98)
 
 The console signs in with better-auth, and with nothing else (FRU-150): the section below. The
@@ -925,12 +942,23 @@ the cookie from another origin, or from none, and takes it from the console`. **
   of the person before but the text they were typing, and sends nothing until it is loaded again.
   **The condition: the browser tells the page that the tab is shown again** (`focus`,
   `visibilitychange`); the worker does not check which account a tab believes it is.
+- **« Connect this browser » connects nothing without a press on « Connect »** (FRU-240). The page
+  shows the word, the browser and the account that the worker answers for the request, never what
+  the address of the page says, and sends the word and the account it showed: the worker refuses an
+  answer for another word, or from an account that changed since. A sign-in on that page, by a link
+  or a provider, leads back to the question. One answer per press: a second press while the first
+  is on its way sends nothing, and a request answered in another tab is read again, not answered
+  twice. **The condition: the person compares the word with the popup**; the page cannot know which
+  browser opened it. `e2e/console-connect.spec.ts` holds each of these, with planted violations.
 - **« Sign out » ends the session, or says that it did not** (FRU-204). The console stays on « My
   account » with « You are still signed in » when the worker did not confirm. The refresh cookie
   of the path of before, which a browser could hold for 30 days, opens nothing since FRU-150: no
   route reads it.
-- **The console holds no token** (FRU-148): no access token in its memory, nothing in `localStorage`
-  or `sessionStorage`, and a cookie that `document.cookie` does not show. A script injected into the
+- **The console holds no token** (FRU-148): no access token in its memory, no token in `localStorage`
+  or `sessionStorage`, and a cookie that `document.cookie` does not show. `sessionStorage` holds one
+  thing, for fifteen minutes at most: the id of a request of the extension, while a sign-in with a
+  provider started on « Connect this browser » (FRU-240). That id is public: it is in the address
+  the extension opened, and it signs nothing in without a session and a press. A script injected into the
   console can call the worker while the page is open, as before; it has nothing to carry away.
   **With no condition since FRU-150**: the console has one path. Until then a worker that answered
   `GET /auth/providers` with no `betterAuth` was a worker of before, and the console held its
@@ -1267,6 +1295,27 @@ link`. **The session must be of the last day** (`freshAge`, the default of bette
   of one person run one after the other, so two at the same moment cannot take both providers:
   test:`takes one of two providers, and not both, when two unlinks come at the same moment`. **This
   holds for one process of the worker**, as the lock of a workspace does.
+
+### « Last seen » and the label of a browser (FRU-249)
+
+Decision of Mathieu, 2026-10-13 (Q7): the short label of a browser is kept per session, and « Last
+seen » is shown to owners and admins only.
+
+- **« Last seen » is read by an owner or an admin of the workspace, and by nobody else.**
+  `GET /console/workspaces/<id>/members/seen` answers `{seen: {<account>: <day>}}` with the right to
+  manage the members; a member or a guest gets `403`, a person of another workspace `404`, as for
+  every route of a workspace: test:`answers nothing of it to a member, a guest, another workspace,
+nobody, or an extension`. **It is a day, never an hour**: an hour would tell a colleague when
+  somebody works. It is written by a call of the person to the console in that workspace, or by a
+  refresh of their extension for it, at most once every ten minutes in a process, and it goes
+  with the membership: test:`writes once for a person in a workspace while the day is remembered, and forgets the day when they
+leave`. The days of one workspace say nothing of another one: test:`sees a member in the
+workspace they called, and in no other one`.
+- **A session of the console keeps the label of its browser, « Chrome on macOS », and not its user
+  agent.** The label is two words of closed lists (`browser-label.ts`), so nothing a browser writes,
+  no version and no device, reaches the database: test:`keeps « Firefox on Linux », and not the user
+agent, and lists it with the session`. The user agent is kept beside it only when the operator
+  keeps addresses (`FRUITBACK_AUTH_TRACK_IP`), as before.
 
 ### The image of the console (FRU-222)
 

@@ -604,6 +604,7 @@ describe('the options of better-auth, as they are written (FRU-144)', () => {
     assert.deepEqual(options.emailAndPassword, { enabled: false });
     assert.deepEqual(options.session, {
       cookieCache: { enabled: false },
+      additionalFields: { browser: { type: 'string', required: false, input: false } },
       expiresIn: SESSION_TTL_SECONDS,
       updateAge: SESSION_RENEWAL_SECONDS,
       freshAge: SESSION_FRESH_SECONDS,
