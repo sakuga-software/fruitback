@@ -1,0 +1,1 @@
+CREATE INDEX "note_index_by_date" ON "note_index" USING btree ("workspace_id","created_at" DESC NULLS LAST,"site_id" COLLATE "C" DESC,"seed_id" COLLATE "C" DESC);

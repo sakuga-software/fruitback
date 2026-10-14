@@ -57,6 +57,13 @@
       "when": 1791914610329,
       "tag": "0007_note_index",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791928356677,
+      "tag": "0008_note_index_by_date",
+      "breakpoints": true
     }
   ]
 }

@@ -2547,7 +2547,64 @@ everything. FRU-95 lifted it, below.
   rows take 70 MB with their indexes. The counts scan the notes of the workspace: a workspace of
   millions of notes would want counters kept beside them.
 
-## A schema of its own, in a database that exists already (FRU-219)
+## The list of the notes of a workspace (FRU-244)
+
+### The rules, in short
+
+- **`GET /console/workspaces/<id>/notes` reads the index of FRU-237, and nothing else**
+  (`console-notes.ts`, `list` of `notes-index-postgres.ts`). A note shows its excerpt of 64
+  characters at most, never its text: the text of a note sent to a tracker is not in Fruitback, and
+  the one of a note of the worker's store is not copied out of it here.
+- **The search finds what the index keeps**: the excerpt, the address of the page, the origin of the
+  site, the stage and, for a role with `see-tracker`, the reference (`searched` in the answer says
+  which, for the screen to write it). A guest does not see the references, so its search does not
+  read them: a word tried in `q` would tell which note carries which reference.
+  Each word of `q` (eight at most, 200 characters) must be in one of them, `ILIKE` with `%`, `_` and
+  `\` escaped. Never the rest of a text, never a name a reporter typed: neither is kept.
+- **Filters**: `site`, `stage`, `place` (`fruitback`, a connector id, or `removed`), `mine` (the
+  notes whose author is the account that asks). Anything that is not one of these values is `400`.
+- **Pages of 8 to 50 notes (25 by default), the newest first, after an opaque cursor.** The order is
+  the date the worker took the note, then the site and the seed ids in their bytes (`COLLATE "C"`),
+  so it is total and the same on every server. A cursor is the place of the last note shown, so a
+  note that arrives during a walk is not shown twice and pushes nothing out: a newer one is not in
+  the walk, an older one is met in its place.
+- **`total` counts the filter, every page; `counts.all` and `counts.byPlace` the filter without
+  `place`** (the tabs of the screen); `counts.undelivered` the notes of that filter whose delivery
+  did not arrive.
+- **Who reads what**: every role reads the list (`read-feedback`). **Where a note went is about the
+  tracker** (`see-tracker`): the place, the reference and its link, the delivery, `byPlace` and
+  `undelivered`. A guest gets none of them, and a `place` filter is `403` to it. `mine` reads the
+  account of the session. The name of an author is the one its account has now, for a member of
+  the workspace only; a member who left is `former-member`, with no name.
+- **The guest of one site (Q3 of FRU-230) is not closed out**: `NoteQuery.sites` narrows the list
+  and every count to the sites a caller may read. Nothing sets it today, since a guest reads every
+  site.
+- **« Send again »**: `POST …/notes/<note>/retry` (`manage-sites`) finds the delivery of the note
+  and asks the route of FRU-122 for a new attempt, which checks the workspace again. A delivery has
+  no column for its note: its body, the JSON that was sent, names the site and the reference, and
+  the list reads them from the deliveries of the workspace, which are few since one that arrived is
+  removed. No migration for that link.
+- **An index that does not answer is `503`**, said in the log; a worker with no database has no
+  list (`404`).
+
+### What it does not do, and the measurements
+
+- The name an author typed cannot be searched: it is not kept (FRU-237). The text of a note of the
+  worker's own store is not searched either, though it is in the database: the list reads one
+  table, and the same search on every note whatever its place.
+- Measured on PostgreSQL 17.11 in a local container, 100 000 notes of the workspace on 20 sites,
+  half of them to a REST connector with 200 deliveries that did not arrive, and 100 000 notes in
+  another workspace (median, p95, page and counts together): the first page, 29 ms and 42 ms; a
+  page after a cursor at the 50 000th note, 33 ms and 54 ms; `site` and `stage`, 13 ms and 19 ms;
+  `place`, 32 ms and 59 ms; `mine`, 20 ms and 37 ms; « Send again » before its update, 13 ms and
+  18 ms. **A page itself is an index-only scan of `note_index_by_date`, 0.08 ms**: the time is the
+  counts, a pass over the notes of the workspace. **A search is a pass too**: 295 ms and 386 ms
+  for two words, 123 ms and 177 ms for a word found nowhere. A trigram index (`pg_trgm`) would
+  take it down; it is an extension, not done here.
+- Two ways that were measured and dropped: the deliveries joined to the notes in SQL (the planner
+  read the bodies again for each note, 528 ms for the place of a connector), and the keys of the
+  deliveries given to PostgreSQL as a list of tuples (planned as a loop, 298 ms). The deliveries
+  are read alone, and matched in the worker.
 
 Mathieu decided on 2026-10-13 that PostgreSQL is always there, self-hosted too: « on a new database,
 or on an existing database in a dedicated schema ». Until this ticket the worker wrote in `public`
