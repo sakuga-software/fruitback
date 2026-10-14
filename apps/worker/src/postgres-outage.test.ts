@@ -33,6 +33,8 @@ function envOf(url: string, port: number): NodeJS.ProcessEnv {
     FRUITBACK_IDENTITY_SECRET: 'a-worker-secret-of-exactly-enough',
     FRUITBACK_DATABASE_URL: url,
     FRUITBACK_CONSOLE_URL: 'https://app.fruitback.test',
+    FRUITBACK_PUBLIC_URL: 'https://api.fruitback.test',
+    FRUITBACK_AUTH_SECRET: 'a-secret-of-better-auth-that-signs-nothing-here',
     HOST: '127.0.0.1',
     PORT: String(port),
   };
