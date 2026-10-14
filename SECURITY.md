@@ -554,7 +554,10 @@ reads every column of every row for 65 characters of a text.
 
 `GET /console/workspaces/<id>/notes` answers the rows of the index above, a page at a time: **an
 excerpt of 64 characters at most, never the text of a note**, and a search on what the index keeps
-only (the excerpt, the page, the origin of the site, the stage, the reference).
+only (the excerpt, the page, the origin of the site, the stage, and the reference for a role with
+`see-tracker`). **A guest's search does not read the references**: trying words would otherwise
+tell it which note carries which reference (raised by the heavy review of #306; test in
+`gives a guest the notes, and nothing of where they went`).
 
 - **Every member of the workspace reads the list** (`read-feedback`), a guest included, as it reads
   every site today. **Where a note went is read with `see-tracker` only**: the place and the

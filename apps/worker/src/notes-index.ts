@@ -137,6 +137,11 @@ export type NoteQuery = {
   /** Words, each in one of the fields the index keeps. At most `QUERY_LENGTH` characters. */
   q?: string;
   /**
+   * Whether `q` reads the reference in the tracker too. A caller who does not see the tracker must
+   * not find a reference by trying words in a search: `false` for a guest.
+   */
+  searchesReference?: boolean;
+  /**
    * The sites the caller may read. Absent: every site of the workspace, as every role reads them
    * today. The guest of one site (Q3 of FRU-230) narrows it here, and the counts with it.
    */
@@ -150,6 +155,9 @@ export const QUERY_LENGTH = 200;
 
 /** What `list` searches, in the order the console names them. */
 export const SEARCHED = ['excerpt', 'page', 'site', 'stage', 'reference'] as const;
+
+/** What `list` searches for a caller who does not see the tracker. */
+export const SEARCHED_WITHOUT_TRACKER = ['excerpt', 'page', 'site', 'stage'] as const;
 
 /** A note of a page of `list`: the row of the index, with what the workspace knows of it now. */
 export type ListedNote = {

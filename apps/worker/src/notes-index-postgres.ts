@@ -366,7 +366,7 @@ function filtered(workspace: string, query: NoteQuery) {
         ilike(note_index.page_url, like),
         ilike(sites.origin, like),
         ilike(note_index.stage, like),
-        ilike(note_index.reference, like),
+        query.searchesReference === false ? undefined : ilike(note_index.reference, like),
       );
     }),
   );

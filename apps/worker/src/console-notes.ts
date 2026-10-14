@@ -8,6 +8,7 @@ import {
   PAGE_SIZES,
   QUERY_LENGTH,
   SEARCHED,
+  SEARCHED_WITHOUT_TRACKER,
 } from './notes-index.ts';
 
 /**
@@ -80,7 +81,9 @@ export async function handleNotes(
   if (!query.ok) return json(400, { error: query.error }, headers);
   if (query.query.place !== undefined && !seesTracker) return forbidden(context);
 
-  const list = await answered(() => index.list(context.workspace, query.query));
+  // A guest does not see the references: its search does not read them either, or it would find one
+  // by trying words (review of #306).
+  const list = await answered(() => index.list(context.workspace, { ...query.query, searchesReference: seesTracker }));
   if (list === failed) return json(503, { error: 'index-unavailable' }, headers);
 
   return json(
@@ -92,7 +95,7 @@ export async function handleNotes(
         all: [...list.byPlace.values()].reduce((sum, notes) => sum + notes, 0),
         ...(seesTracker ? { byPlace: Object.fromEntries(list.byPlace), undelivered: list.undelivered } : {}),
       },
-      searched: SEARCHED,
+      searched: seesTracker ? SEARCHED : SEARCHED_WITHOUT_TRACKER,
       ...(list.next === undefined ? {} : { next: cursorOf(list.next) }),
     },
     headers,

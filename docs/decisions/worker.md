@@ -2464,7 +2464,9 @@ everything. FRU-95 lifted it, below.
   characters at most, never its text: the text of a note sent to a tracker is not in Fruitback, and
   the one of a note of the worker's store is not copied out of it here.
 - **The search finds what the index keeps**: the excerpt, the address of the page, the origin of the
-  site, the stage and the reference (`searched` in the answer says so, for the screen to write it).
+  site, the stage and, for a role with `see-tracker`, the reference (`searched` in the answer says
+  which, for the screen to write it). A guest does not see the references, so its search does not
+  read them: a word tried in `q` would tell which note carries which reference.
   Each word of `q` (eight at most, 200 characters) must be in one of them, `ILIKE` with `%`, `_` and
   `\` escaped. Never the rest of a text, never a name a reporter typed: neither is kept.
 - **Filters**: `site`, `stage`, `place` (`fruitback`, a connector id, or `removed`), `mine` (the

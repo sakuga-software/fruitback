@@ -344,7 +344,7 @@ describe('the notes of a workspace (FRU-244)', () => {
 
 describe('who reads the notes (FRU-244)', () => {
   it('gives a guest the notes, and nothing of where they went', async () => {
-    const { world, gina, workspace, rest } = await sixtyNotes();
+    const { world, alice, gina, workspace, rest } = await sixtyNotes();
 
     const answer = await listOf(world, workspace, gina.token, '?limit=50');
 
@@ -357,6 +357,11 @@ describe('who reads the notes (FRU-244)', () => {
         'no place, no reference, no link, no delivery',
       );
     }
+    // Nor by a search: a guest who tries references finds none, and is told what was searched.
+    const probed = await listOf(world, workspace, gina.token, '?q=ACM-1&limit=50');
+    assert.equal(probed.total, 0);
+    assert.deepEqual(probed.searched, ['excerpt', 'page', 'site', 'stage']);
+    assert.ok((await listOf(world, workspace, alice.token, '?q=ACM-1&limit=50')).total > 0, 'the owner finds them');
     const filtered = await callOn(world, 'GET', `/console/workspaces/${workspace}/notes?place=${rest.id}`, {
       token: gina.token,
     });
