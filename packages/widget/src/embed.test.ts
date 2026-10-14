@@ -470,8 +470,10 @@ describe('reading pins', () => {
     // Choosing an element closes the list: the dock and the frame are what the page shows then.
     assert.equal(widget.leaveFeedback(), true);
     assert.equal(list()?.hidden ?? true, true, 'the list stayed open over the choice');
-    // Asked again while choosing: nothing starts over.
-    assert.equal(widget.leaveFeedback(), false);
+    // Asked again while choosing: the choice is on, so it is done, and nothing starts over. Only a
+    // note being written makes the widget say no (raised in review).
+    assert.equal(widget.leaveFeedback(), true);
+    assert.equal(page.document.querySelectorAll('[data-fruitback-capturing]').length, 1);
 
     // Somebody writes: nothing takes the place of the note.
     // (A composer that only says « sent » closes instead: `popup-workspace.spec.ts` sends one.)

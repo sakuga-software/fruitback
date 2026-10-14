@@ -1185,8 +1185,9 @@ As text on the two light surfaces, the accent measures 4.70 and 4.63.
   extension's popup does: `leaveFeedback()` starts choosing an element, as the launch button does;
   `showEveryNote()` opens the list of the page; `pageCounts()` gives the notes the page shows, by
   stage.
-- **`leaveFeedback()` does nothing while a note is written or an element is chosen**, and says so
-  (`false`): nothing takes the place of what somebody types. It closes the list first.
+- **`leaveFeedback()` does nothing while a note is written**, and says so (`false`): nothing takes the
+  place of what somebody types. A composer that only says « sent » closes. While an element is chosen
+  already it answers `true` and starts nothing over. It closes the list first.
 - **`pageCounts()` reads what the last read gave, and asks nothing.** Nothing until a read of this page
   answered, since zeros would say there are no notes; a stage the reporter hid is not on the page, so
   it is not counted. test:`counts the notes the page shows by stage, from the last read, and nothing before one (FRU-254)`.

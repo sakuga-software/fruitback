@@ -184,7 +184,7 @@ export type CommandResponseMessage = {
   id: string;
   /** The widget did it. False when there is no widget of ours here, or it would take somebody's typing. */
   done: boolean;
-  /** The widget is there, and said no: somebody writes a note, or chooses an element. */
+  /** The widget is there, and said no: somebody writes a note. */
   busy?: true;
   counts?: PageCounts;
 };

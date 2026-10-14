@@ -173,9 +173,9 @@ export type Fruitback = {
   settings: ConfigPanel;
   /**
    * Starts choosing an element, as the launch button does (FRU-254): the extension's popup offers
-   * « Leave feedback ». Nothing happens while a note is being written or an element is being chosen:
-   * nothing takes the place of what somebody types. A composer that only says « sent » closes. Says
-   * whether it started.
+   * « Leave feedback ». Nothing happens while a note is being written: nothing takes the place of
+   * what somebody types, and it answers `false`. A composer that only says « sent » closes. Already
+   * choosing, it answers `true` and starts nothing over.
    */
   leaveFeedback(): boolean;
   /** Opens the list of every note of the page, as its button does (FRU-254). */
@@ -553,7 +553,8 @@ export function init(options: FruitbackOptions): Fruitback {
     feedbackAsText: asText,
     settings: panel,
     leaveFeedback() {
-      if (host.capturing()) return false;
+      // Already choosing: what was asked is on the page.
+      if (host.capturing()) return true;
       // A composer that shows « sent » or « kept » is not being written in: it closes. Any other
       // open composer holds somebody's typing.
       if (!composer.element.hidden) {
