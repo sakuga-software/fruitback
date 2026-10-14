@@ -4,6 +4,7 @@ import {
   Dropdown,
   Header,
   Button as HeroButton,
+  Checkbox as HeroCheckbox,
   Chip as HeroChip,
   Input,
   Label,
@@ -263,7 +264,7 @@ type FieldProps = {
   hint?: string;
   value?: string;
   onChange?: (event: ChangeEvent<HTMLInputElement>) => void;
-  type?: 'text' | 'email' | 'url' | 'password';
+  type?: 'text' | 'email' | 'url' | 'password' | 'search';
   /** The keyboard of a phone, for a field that is not `type="url"` so that the screen judges what is typed. */
   inputMode?: 'url';
   placeholder?: string;
@@ -428,6 +429,25 @@ type ToggleProps = {
   onChange: (value: boolean) => void;
   disabled?: boolean;
 };
+
+type CheckboxProps = { label: string; checked: boolean; onChange: (checked: boolean) => void };
+
+/**
+ * A box to tick, as the checkbox of HeroUI: the box of 16 px, then its words, on a line of 40 px at
+ * the least, so that it stands in a row of filters (« Only my notes »). Ink when it is ticked.
+ */
+export function Checkbox({ label, checked, onChange }: CheckboxProps) {
+  return (
+    <HeroCheckbox isSelected={checked} onChange={onChange} className="kit-checkbox">
+      <HeroCheckbox.Control>
+        <HeroCheckbox.Indicator />
+      </HeroCheckbox.Control>
+      <HeroCheckbox.Content>
+        <Label>{label}</Label>
+      </HeroCheckbox.Content>
+    </HeroCheckbox>
+  );
+}
 
 /** A setting that is on or off, as the switch of HeroUI: the label first, the switch at the end of the row. */
 export function Toggle({ label, value, onChange, disabled = false }: ToggleProps) {

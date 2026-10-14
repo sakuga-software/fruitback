@@ -166,7 +166,7 @@ test('at 1440 px the rail has the values of the mockup', async ({ page }) => {
 
 test('the room of a screen is the one of the mockup, and as wide as its screen is drawn', async ({ page }) => {
   await stubWorker(page);
-  const widths = { sites: 1120, connectors: 1180, members: 1120, account: 820 };
+  const widths = { sites: 1120, notes: 1240, connectors: 1180, members: 1120, account: 820 };
   for (const [screen, width] of Object.entries(widths)) {
     await open(page, screen);
     const main = page.locator('main');
@@ -180,7 +180,8 @@ test('the room of a screen is the one of the mockup, and as wide as its screen i
         'padding-left': '48px',
         'padding-right': '48px',
       });
-    expectBox(await box(main), { x: 248.5, y: 0, width }, 2, `the room of ${screen}`);
+    // The room is as wide as the screen is drawn, and no wider than what the rail leaves (1191.5 px).
+    expectBox(await box(main), { x: 248.5, y: 0, width: Math.min(width, 1191.5) }, 2, `the room of ${screen}`);
     expectBox(await box(page.locator('main h1')), { x: 296.5, y: 40, height: 32.2 }, 2, `the title of ${screen}`);
   }
   const content = page.locator('main').locator('..');
@@ -194,14 +195,14 @@ test('the room of a screen is the one of the mockup, and as wide as its screen i
 
 test('one section, and one alone, is the section on screen', async ({ page }) => {
   await stubWorker(page);
-  const names = { sites: 'Sites', connectors: 'Connectors', members: 'Members', account: 'My account' };
+  const names = { sites: 'Sites', notes: 'Notes', connectors: 'Connectors', members: 'Members', account: 'My account' };
   for (const [screen, name] of Object.entries(names)) {
     await open(page, screen);
     const current = sections(page).locator('[aria-current="page"]');
     await expect(current, screen).toHaveCount(1);
     await expect(current, screen).toHaveText(name);
   }
-  // The sections of today, in the order of the mockup. « Notes » has no screen yet, and no entry.
+  // The five sections, in the order of the mockup (« Notes » has its screen since FRU-245).
   await expect(sections(page).getByRole('link')).toHaveText(Object.values(names));
 });
 
@@ -234,7 +235,9 @@ test('a section under the pointer, and a control with focus, read on the rail', 
   // was pressed on the page, so the first Tab is the first control of the page.
   const order = [
     switcher(page),
-    ...['Sites', 'Connectors', 'Members', 'My account'].map((name) => sections(page).getByRole('link', { name })),
+    ...['Sites', 'Notes', 'Connectors', 'Members', 'My account'].map((name) =>
+      sections(page).getByRole('link', { name, exact: true }),
+    ),
     rail(page).getByRole('link', { name: 'Help and docs' }),
   ];
   for (const [index, control] of order.entries()) {

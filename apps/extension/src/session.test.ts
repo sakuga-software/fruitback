@@ -299,6 +299,34 @@ describe('a session of an account (FRU-251)', () => {
   });
 });
 
+describe('renewing a token a route refused (FRU-238)', () => {
+  it('refreshes once, though the refused token is not expired', async () => {
+    const { subject, remote, grants } = setup({
+      sessions: { [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } },
+      grants: { [ENDPOINT]: { accessToken: 'access.old', expiresAt: NOW + 9 * 60_000, identity: IDENTITY } },
+      answers: [{ status: 200, body: issued({ accessToken: 'access.2', refreshToken: 'refresh.2' }) }],
+    });
+
+    const renewed = await subject.renewAccess(ENDPOINT, 'access.old');
+
+    assert.ok(renewed.ok);
+    assert.equal(renewed.grant.accessToken, 'access.2');
+    assert.equal(remote.calls.length, 1);
+    assert.equal((await grants.read())[ENDPOINT]?.accessToken, 'access.2');
+  });
+
+  it('takes the token another call renewed already, and asks the worker nothing', async () => {
+    const grant = { accessToken: 'access.new', expiresAt: NOW + 9 * 60_000, identity: IDENTITY };
+    const { subject, remote } = setup({
+      sessions: { [ENDPOINT]: { refreshToken: 'refresh.1', identity: IDENTITY } },
+      grants: { [ENDPOINT]: grant },
+    });
+
+    assert.deepEqual(await subject.renewAccess(ENDPOINT, 'access.old'), { ok: true, grant });
+    assert.deepEqual(remote.calls, []);
+  });
+});
+
 describe('keeping an access token fresh', () => {
   it('hands back a token that is still good without asking the worker', async () => {
     const grant = { accessToken: 'access.1', expiresAt: NOW + 9 * 60_000, identity: IDENTITY };

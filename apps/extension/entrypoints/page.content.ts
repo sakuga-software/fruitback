@@ -145,7 +145,44 @@ export default defineContentScript({
       // Our own handshake and our own relay requests, which `postMessage` delivers back to this
       // window like any other. Ignored here rather than filtered at the source: the isolated world
       // answers both, and a listener that fell through would try to read a mount out of one.
-      if (message.kind === 'ready' || message.kind === 'relay-request' || message.kind === 'capture-request') return;
+      if (
+        message.kind === 'ready' ||
+        message.kind === 'relay-request' ||
+        message.kind === 'capture-request' ||
+        message.kind === 'command-response'
+      ) {
+        return;
+      }
+
+      // FRU-254: the popup, through the isolated world. Only the widget this script mounted obeys:
+      // a site's own widget (team mode) is the site's.
+      if (message.kind === 'command') {
+        let done = false;
+        let counts: ReturnType<NonNullable<typeof widget>['pageCounts']>;
+        if (widget !== undefined && message.command === 'leave-feedback') done = widget.leaveFeedback();
+        if (widget !== undefined && message.command === 'show-notes') {
+          widget.showEveryNote();
+          done = true;
+        }
+        if (widget !== undefined && message.command === 'counts') {
+          counts = widget.pageCounts();
+          done = counts !== undefined;
+        }
+        window.postMessage(
+          {
+            channel: CHANNEL,
+            kind: 'command-response',
+            id: message.id,
+            done,
+            // The widget is ours and said no to a choice: somebody writes a note.
+            ...(!done && widget !== undefined && message.command === 'leave-feedback' ? { busy: true } : {}),
+            ...(counts === undefined ? {} : { counts }),
+          },
+          '*',
+        );
+
+        return;
+      }
 
       if (message.kind === 'relay-response') {
         for (const listener of relayListeners) listener(message);

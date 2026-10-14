@@ -5,6 +5,7 @@ import {
   type SeedIssue,
   type SeedReporter,
   type SeedScreenshot,
+  type SeedStage,
 } from '@fruitback/shared';
 import { type CapturedPlace, captureSeed, capturePlace } from './capture.ts';
 import { type WidgetConfig, createConfigStore } from './config.ts';
@@ -13,7 +14,7 @@ import { type ReadState, type Sidebar, type SidebarEntry, createSidebar } from '
 import { type CaptureHost, type CaptureTarget, createCaptureHost, readableName } from './host.ts';
 import type { FruitbackTheme } from './theme.ts';
 import { type FruitbackTransport, fetchTransport } from './transport.ts';
-import { type Composer, type SendFailure, createComposer } from './composer.ts';
+import { type Composer, type SendFailure, type SentWithoutPicture, createComposer } from './composer.ts';
 import {
   type BatchOffer,
   type Draft,
@@ -170,8 +171,26 @@ export type Fruitback = {
    * a host we could never change them under.
    */
   settings: ConfigPanel;
+  /**
+   * Starts choosing an element, as the launch button does (FRU-254): the extension's popup offers
+   * « Leave feedback ». Nothing happens while a note is being written: nothing takes the place of
+   * what somebody types, and it answers `false`. A composer that only says « sent » closes. Already
+   * choosing, it answers `true` and starts nothing over.
+   */
+  leaveFeedback(): boolean;
+  /** Opens the list of every note of the page, as its button does (FRU-254). */
+  showEveryNote(): void;
+  /**
+   * How many notes of each stage the page shows now (FRU-254), from the last read: no request. The
+   * notes of a stage the reporter hid are not shown, so they are not counted. Nothing until a read of
+   * this page answered: a count of zero would then say there are no notes.
+   */
+  pageCounts(): PageCounts | undefined;
   destroy(): void;
 };
+
+/** The notes the page shows, by stage. */
+export type PageCounts = Record<SeedStage, number>;
 
 /**
  * The transport this mount uses.
@@ -383,17 +402,17 @@ export function init(options: FruitbackOptions): Fruitback {
       offered: () => readerIdentity.batch !== undefined,
       onKeep: async (note, reporter, chosen) => {
         const destination = destinationToSend(destinations.get(), chosen);
-        const seed = await seedFor({ note, target, place, reporter, config: config.get(), options });
-        if (seed === undefined) return 'retry';
-        drafts.add({ seed, ...(destination === undefined ? {} : { destination }) });
+        const made = await seedFor({ note, target, place, reporter, config: config.get(), options });
+        if (made === undefined) return 'retry';
+        drafts.add({ seed: made.seed, ...(destination === undefined ? {} : { destination }) });
 
-        return true;
+        return made.missedPicture ? { picture: 'missed' as const } : true;
       },
     },
     onSubmit: async (note, reporter, chosen) => {
       const destination = destinationToSend(destinations.get(), chosen);
       const planted = await plant({ note, target, place, reporter, destination, config: config.get(), options });
-      if (planted !== true) {
+      if (typeof planted === 'string') {
         // The worker refuses a place the site no longer has, or a reader who lost the right to
         // choose. The list on screen is then old, and a second try would be refused like the first.
         // A read brings the list of now, and the composer says what changed.
@@ -406,7 +425,7 @@ export function init(options: FruitbackOptions): Fruitback {
       // back, which is also what proves the write landed somewhere the read path can find.
       await read();
 
-      return true;
+      return planted;
     },
   });
 
@@ -533,6 +552,31 @@ export function init(options: FruitbackOptions): Fruitback {
     refresh: () => read(),
     feedbackAsText: asText,
     settings: panel,
+    leaveFeedback() {
+      // Already choosing: what was asked is on the page.
+      if (host.capturing()) return true;
+      // A composer that shows « sent » or « kept » is not being written in: it closes. Any other
+      // open composer holds somebody's typing.
+      if (!composer.element.hidden) {
+        if (composer.state() !== 'sent' && composer.state() !== 'kept') return false;
+        composer.close();
+      }
+      sidebar.close();
+      host.start();
+
+      return true;
+    },
+    showEveryNote: () => sidebar.open(),
+    pageCounts() {
+      if (readState !== 'read') return undefined;
+      const counts: PageCounts = { seeded: 0, green: 0, ripening: 0, ripe: 0, composted: 0 };
+      for (const { issue } of entries()) {
+        if (config.get().hiddenStages.includes(issue.stage)) continue;
+        counts[issue.stage] += 1;
+      }
+
+      return counts;
+    },
     destroy() {
       stopWatchingUrl();
       view.removeEventListener('hashchange', onHashChange);
@@ -647,9 +691,10 @@ export async function plant({
   destination?: string | undefined;
   config: WidgetConfig;
   options: FruitbackOptions;
-}): Promise<true | SendFailure> {
-  const seed = await seedFor({ note, target, place, reporter, config, options });
-  if (seed === undefined) return 'retry';
+}): Promise<true | SentWithoutPicture | SendFailure> {
+  const made = await seedFor({ note, target, place, reporter, config, options });
+  if (made === undefined) return 'retry';
+  const { seed, missedPicture } = made;
 
   // Asked for per write rather than once at init: a short-lived token that expired mid-session would
   // otherwise turn every later note into a 401.
@@ -664,7 +709,9 @@ export async function plant({
     body: JSON.stringify(seed),
   });
 
-  return response.ok ? true : failureOf(response);
+  if (!response.ok) return failureOf(response);
+
+  return missedPicture ? { picture: 'missed' } : true;
 }
 
 /**
@@ -685,10 +732,10 @@ async function seedFor({
   reporter: SeedReporter | undefined;
   config: WidgetConfig;
   options: FruitbackOptions;
-}): Promise<Seed | undefined> {
+}): Promise<{ seed: Seed; missedPicture: boolean } | undefined> {
   if (target === null) return undefined;
-
-  return captureSeed({
+  const picture = stillThere(target.element, place) ? await screenshotFor(target.element, config, options) : undefined;
+  const seed = captureSeed({
     element: target.element,
     note,
     client: { id: options.clientId },
@@ -696,10 +743,10 @@ async function seedFor({
     reporter,
     includeEnv: options.includeEnv,
     ...(place === undefined ? {} : { place }),
-    ...optionalScreenshot(
-      stillThere(target.element, place) ? await screenshotFor(target.element, config, options) : undefined,
-    ),
+    ...optionalScreenshot(picture === 'missed' ? undefined : picture),
   });
+
+  return { seed, missedPicture: picture === 'missed' };
 }
 
 /** `?destination=` carries the choice, and nothing else does: the body stays the seed (FRU-123). */
@@ -889,17 +936,17 @@ async function screenshotFor(
   element: Element,
   config: WidgetConfig,
   options: FruitbackOptions,
-): Promise<SeedScreenshot | undefined> {
+): Promise<SeedScreenshot | 'missed' | undefined> {
   if (!config.screenshot || options.captureScreenshot === undefined) return undefined;
 
   try {
     const captured = await options.captureScreenshot(element);
 
     // Checked, not just typed: this package ships to JavaScript too, and a screenshot with no URL is
-    // a row in a Linear issue that opens nothing.
-    return captured?.url ? captured : undefined;
+    // a row in a Linear issue that opens nothing. Asked for and not there: the composer says so.
+    return captured?.url ? captured : 'missed';
   } catch {
-    return undefined;
+    return 'missed';
   }
 }
 

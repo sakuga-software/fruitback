@@ -48,7 +48,12 @@ describe('the sites of the workspace (FRU-101)', () => {
     assert.deepEqual(offer, {
       endpoint: 'https://api.fruitback.test',
       workspace: { id: 'ws_1', name: 'Acme' },
-      site: { id: 'site_1', origin: 'https://staging.acme.dev', visibility: 'members' },
+      site: {
+        id: 'site_1',
+        origin: 'https://staging.acme.dev',
+        visibility: 'members',
+        workspace: { id: 'ws_1', name: 'Acme' },
+      },
       pattern: 'https://staging.acme.dev',
     });
     assert.deepEqual(asked, ['https://api.fruitback.test/session/sites']);
@@ -102,11 +107,95 @@ describe('the sites of the workspace (FRU-101)', () => {
   });
 });
 
+/** The list of an account's session (FRU-238), with the counts of FRU-237. */
+const ACCOUNT = {
+  account: true,
+  workspaces: [
+    { id: 'ws_1', name: 'Sakuga', role: 'owner' },
+    { id: 'ws_2', name: 'Northwind', role: 'guest' },
+  ],
+  sites: [
+    {
+      id: 'site_1',
+      origin: 'https://staging.acme.dev',
+      visibility: 'members',
+      workspace: 'ws_1',
+      notes: { seeded: 3, green: 2, ripening: 4, ripe: 2, composted: 1 },
+    },
+    { id: 'site_2', origin: 'https://client.fr', visibility: 'everyone', workspace: 'ws_2' },
+  ],
+};
+
+describe('the sites of every workspace of an account (FRU-254)', () => {
+  it('says which workspace each site is of, and the role held there', () => {
+    const listed = parseWorkspaceSites(ACCOUNT);
+
+    assert.equal(listed?.account, true);
+    assert.deepEqual(
+      listed?.workspaces.map((each) => each.role),
+      ['owner', 'guest'],
+    );
+    assert.deepEqual(
+      listed?.sites.map((site) => [site.origin, site.workspace.name]),
+      [
+        ['https://staging.acme.dev', 'Sakuga'],
+        ['https://client.fr', 'Northwind'],
+      ],
+    );
+  });
+
+  it('keeps the counts of a site when they are five whole numbers, and only then', () => {
+    const [first, second] = parseWorkspaceSites(ACCOUNT)?.sites ?? [];
+    assert.deepEqual(first?.notes, { seeded: 3, green: 2, ripening: 4, ripe: 2, composted: 1 });
+    assert.equal(second?.notes, undefined);
+    for (const notes of [
+      { seeded: 3, green: 2, ripening: 4, ripe: 2 },
+      { seeded: -1, green: 2, ripening: 4, ripe: 2, composted: 1 },
+      { seeded: 1.5, green: 2, ripening: 4, ripe: 2, composted: 1 },
+      { seeded: '3', green: 2, ripening: 4, ripe: 2, composted: 1 },
+    ]) {
+      const site = { ...ACCOUNT.sites[0], notes };
+      assert.equal(
+        parseWorkspaceSites({ ...ACCOUNT, sites: [site] })?.sites[0]?.notes,
+        undefined,
+        JSON.stringify(notes),
+      );
+    }
+  });
+
+  it('drops a site of a workspace it does not list, and an account with none lists nothing', () => {
+    const stray = { id: 'site_9', origin: 'https://other.fr', visibility: 'members', workspace: 'ws_9' };
+    assert.equal(parseWorkspaceSites({ ...ACCOUNT, sites: [stray] })?.sites.length, 0);
+    assert.deepEqual(parseWorkspaceSites({ account: true, workspaces: [], sites: [] }), {
+      account: true,
+      workspaces: [],
+      sites: [],
+    });
+  });
+
+  it('offers a site of the second workspace with that workspace', async () => {
+    const { fetcher } = worker(ACCOUNT);
+    const offer = await offerFor('https://client.fr', {
+      endpoints: async () => ['https://api.fruitback.test'],
+      ensureAccess: async () => GRANTED,
+      fetcher,
+    });
+
+    assert.deepEqual(offer?.workspace, { id: 'ws_2', name: 'Northwind', role: 'guest' });
+    assert.equal(offer?.site.id, 'site_2');
+  });
+});
+
 describe('a site of the workspace, once on (FRU-101)', () => {
   const offer = {
     endpoint: 'https://api.fruitback.test',
     workspace: { id: 'ws_1', name: 'Acme' },
-    site: { id: 'site_1', origin: 'https://staging.acme.dev', visibility: 'members' as const },
+    site: {
+      id: 'site_1',
+      origin: 'https://staging.acme.dev',
+      visibility: 'members' as const,
+      workspace: { id: 'ws_1', name: 'Acme' },
+    },
     pattern: 'https://staging.acme.dev',
   };
 

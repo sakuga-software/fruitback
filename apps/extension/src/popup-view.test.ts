@@ -2,7 +2,18 @@ import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Window as HappyDomWindow } from 'happy-dom';
 import { setLanguage } from './i18n.ts';
-import { connecting, initialOf, loading, notAWebPage, shell, signInProblem, signedOut } from './popup-view.ts';
+import {
+  connecting,
+  initialOf,
+  loading,
+  notAWebPage,
+  shell,
+  showPageCounts,
+  signInProblem,
+  signedOut,
+  siteInWorkspace,
+  siteOn,
+} from './popup-view.ts';
 
 /**
  * Every screen of a sign-in, built and read on happy-dom (FRU-251): its words, its roles and names,
@@ -241,5 +252,189 @@ describe('the two screens with nothing to do', () => {
 
     assert.equal(root.querySelector('[role="status"]')?.textContent, 'Loading…');
     assert.deepEqual(stops(root), ['button: Settings and every site']);
+  });
+});
+
+describe('a site of a workspace, not on here (06, FRU-254)', () => {
+  const COUNTS = { seeded: 3, green: 2, ripening: 4, ripe: 2, composted: 1 };
+  const base = {
+    origin: ORIGIN,
+    workspace: 'Sakuga',
+    visibility: 'members' as const,
+    browserName: 'Chrome',
+    onTurnOn: nothing,
+    onSettings: nothing,
+  };
+
+  it('names the workspace, who sees the notes, how many wait, and offers one click', () => {
+    let turned = 0;
+    const root = siteInWorkspace(page(), { ...base, counts: COUNTS, onTurnOn: () => (turned += 1) });
+
+    assert.equal(root.querySelector('h1')?.textContent, 'staging.acme.dev');
+    assert.equal(root.querySelector('.subtitle')?.textContent, 'In Sakuga · members see the notes');
+    assert.equal(root.querySelector('.site-total')?.textContent, '12 notes wait on this site');
+    const bar = root.querySelector('.stage-bar');
+    assert.equal(bar?.getAttribute('role'), 'img');
+    assert.equal(bar?.getAttribute('aria-label'), '3 new, 2 to do, 4 in progress, 2 done, 1 closed');
+    // Each segment as wide as its share: its flex grows by its count.
+    assert.deepEqual(
+      [...(bar?.children ?? [])].map((segment) => [
+        segment.className,
+        (segment as HTMLElement).style.flex.split(' ')[0],
+      ]),
+      [
+        ['stage-seeded', '3'],
+        ['stage-green', '2'],
+        ['stage-ripening', '4'],
+        ['stage-ripe', '2'],
+        ['stage-composted', '1'],
+      ],
+    );
+    assert.equal(
+      root.querySelector('.site-detail')?.textContent,
+      '3 new · 2 to do · 4 in progress · 2 done · 1 closed',
+    );
+    assert.equal(root.querySelector('.note')?.textContent, 'Chrome asks for access to this site only.');
+    assert.deepEqual(stops(root), ['button: Settings and every site', 'button: Turn on here']);
+    (root.querySelector('.action') as HTMLElement).click();
+    assert.equal(turned, 1);
+  });
+
+  it('says everyone sees the notes of a site open to everyone, and one note in the singular', () => {
+    const root = siteInWorkspace(page(), {
+      ...base,
+      visibility: 'everyone',
+      counts: { ...COUNTS, seeded: 1, green: 0, ripening: 0, ripe: 0, composted: 0 },
+    });
+
+    assert.equal(root.querySelector('.subtitle')?.textContent, 'In Sakuga · everyone sees the notes');
+    assert.equal(root.querySelector('.site-total')?.textContent, '1 note waits on this site');
+    // A stage with no note draws no segment of the bar.
+    assert.equal(root.querySelector('.stage-bar')?.children.length, 1);
+  });
+
+  it('leaves the counts out when Fruitback gave none, and draws no bar for a site with no note', () => {
+    assert.equal(siteInWorkspace(page(), base).querySelector('.site-counts'), null);
+    const empty = siteInWorkspace(page(), {
+      ...base,
+      counts: { seeded: 0, green: 0, ripening: 0, ripe: 0, composted: 0 },
+    });
+    assert.equal(empty.querySelector('.site-total')?.textContent, '0 notes wait on this site');
+    assert.equal(empty.querySelector('.stage-bar'), null);
+  });
+});
+
+describe('a site of a workspace, on here (07, FRU-254)', () => {
+  const PAGE = { seeded: 2, green: 1, ripening: 3, ripe: 2, composted: 0 };
+  const base = {
+    origin: ORIGIN,
+    workspace: 'Sakuga',
+    on: true,
+    onToggle: nothing,
+    onLeaveFeedback: nothing,
+    onShowEveryNote: nothing,
+    onSettings: nothing,
+  };
+
+  it('has a named switch, the notes of the page by stage, and the two actions', () => {
+    const done: string[] = [];
+    const root = siteOn(page(), {
+      ...base,
+      pageCounts: PAGE,
+      onToggle: (on) => done.push(`switch ${on}`),
+      onLeaveFeedback: () => done.push('leave'),
+      onShowEveryNote: () => done.push('every'),
+    });
+
+    assert.equal(root.querySelector('.subtitle')?.textContent, 'On · Sakuga');
+    const toggle = root.querySelector('[role="switch"]');
+    assert.equal(toggle?.getAttribute('aria-checked'), 'true');
+    assert.equal(toggle?.getAttribute('aria-label'), 'Fruitback on staging.acme.dev');
+    assert.equal(root.querySelector('.page-notes h2')?.textContent, 'On this page8 notes');
+    assert.equal(root.querySelector('.page-notes')?.getAttribute('aria-labelledby'), 'page-notes-title');
+    assert.deepEqual(
+      [...root.querySelectorAll('.page-notes li')].map((row) => [
+        row.querySelector('.stage-word')?.textContent,
+        row.querySelector('.count')?.textContent,
+        row.querySelector('.count')?.classList.contains('zero'),
+      ]),
+      [
+        ['New', '2', false],
+        ['To do', '1', false],
+        ['In progress', '3', false],
+        ['Done', '2', false],
+        ['Closed', '0', true],
+      ],
+    );
+    assert.deepEqual(stops(root), [
+      'button: Settings and every site',
+      'button: Fruitback on staging.acme.dev',
+      'button: Leave feedback',
+      'button: Show every note of the page',
+    ]);
+    for (const selector of ['[role="switch"]', '.action', '.secondary-action'])
+      (root.querySelector(selector) as HTMLElement).click();
+    assert.deepEqual(done, ['switch false', 'leave', 'every']);
+  });
+
+  it('off: says so, turns on with the switch, and has nothing of the page', () => {
+    let next: boolean | undefined;
+    const root = siteOn(page(), { ...base, on: false, pageCounts: PAGE, onToggle: (on) => (next = on) });
+
+    assert.equal(root.querySelector('.subtitle')?.textContent, 'Off · Sakuga');
+    assert.equal(root.querySelector('[role="switch"]')?.getAttribute('aria-checked'), 'false');
+    assert.equal(root.querySelector('.page-notes'), null);
+    assert.equal(root.querySelector('.action'), null);
+    (root.querySelector('[role="switch"]') as HTMLElement).click();
+    assert.equal(next, true);
+  });
+
+  it('leaves the section out when the widget of the tab did not say, rather than drawing zeros', () => {
+    const root = siteOn(page(), base);
+
+    assert.equal(root.querySelector('.page-notes'), null);
+    assert.ok(root.querySelector('.action'));
+  });
+
+  it('speaks French', () => {
+    setLanguage('fr');
+    const root = siteOn(page(), { ...base, pageCounts: { ...PAGE, seeded: 1, green: 0, ripening: 0, ripe: 0 } });
+
+    assert.equal(root.querySelector('.subtitle')?.textContent, 'Activé · Sakuga');
+    assert.equal(root.querySelector('.page-notes h2')?.textContent, 'Sur cette page1 note');
+    assert.equal(root.querySelector('.action')?.textContent, 'Laisser un feedback');
+  });
+});
+
+describe('the notes of the page, added to a screen 07 already drawn (FRU-254)', () => {
+  const base = {
+    origin: ORIGIN,
+    workspace: 'Sakuga',
+    on: true,
+    onToggle: nothing,
+    onLeaveFeedback: nothing,
+    onShowEveryNote: nothing,
+    onSettings: nothing,
+  };
+  const COUNTS = { seeded: 1, green: 0, ripening: 2, ripe: 0, composted: 0 };
+
+  it('goes above the two actions, once', () => {
+    const root = siteOn(page(), base);
+    assert.equal(root.querySelector('.page-notes'), null);
+
+    showPageCounts(root, COUNTS);
+    showPageCounts(root, COUNTS);
+
+    assert.equal(root.querySelectorAll('.page-notes').length, 1);
+    assert.equal(root.querySelector('.page-notes')?.nextElementSibling?.className, 'action-block');
+    assert.equal(root.querySelector('.page-notes h2')?.textContent, 'On this page3 notes');
+  });
+
+  it('is not added to a screen that is off', () => {
+    const root = siteOn(page(), { ...base, on: false });
+
+    showPageCounts(root, COUNTS);
+
+    assert.equal(root.querySelector('.page-notes'), null);
   });
 });

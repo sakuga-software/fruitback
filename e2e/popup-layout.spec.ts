@@ -120,15 +120,18 @@ for (const language of ['en', 'fr'] as const) {
     // 4. A site of the workspace: one click turns it on.
     sites.push({ id: 'site_1', origin: PLAYGROUND_ORIGIN, visibility: 'members' });
     const offered = await openPopup(extension, page);
-    const turnOn = offered.getByRole('button', { name: /^(Turn on Fruitback here|Activer Fruitback ici)$/ });
+    const turnOn = offered.getByRole('button', { name: /^(Turn on here|Activer ici)$/ });
     await expect(turnOn).toBeVisible();
-    await expectLaidOut(offered, 'site of the workspace', 3);
+    await expectLaidOut(offered, 'site of the workspace', 2);
 
-    // 5. The site turned on, and still paired.
+    // 5. The site turned on (FRU-254): the gear, the switch and the two actions; the head names the
+    // person of the pairing.
     await turnOn.click();
-    await expect(offered.getByRole('button', { name: /^(Turn off here|Désactiver ici)$/ })).toBeVisible();
-    await expect(offered.getByText(NAME, { exact: false })).toBeVisible();
-    await expectLaidOut(offered, 'site turned on', 4);
+    await expect(offered.getByRole('switch')).toBeChecked();
+    await expect(offered.getByRole('img', { name: new RegExp(NAME.replace(/[.+]/g, '\\$&')) })).toBeVisible();
+    // The row of the pairing stays, with its log out.
+    await expect(offered.getByText(/^(Paired as|Appairé en tant que) /)).toBeVisible();
+    await expectLaidOut(offered, 'site turned on', 5);
   });
 }
 

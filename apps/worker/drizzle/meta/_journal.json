@@ -68,8 +68,22 @@
     {
       "idx": 9,
       "version": "7",
-      "when": 1791966632087,
-      "tag": "0009_connect",
+      "when": 1791966821917,
+      "tag": "0009_note_index_removed_accounts",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791966822542,
+      "tag": "0010_note_index_author",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791969729389,
+      "tag": "0011_connect",
       "breakpoints": true
     }
   ]

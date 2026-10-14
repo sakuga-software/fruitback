@@ -451,6 +451,31 @@ What is not done here: the account's own shape of `GET /session/sites` (several 
 counts and the switch of screen 07 are FRU-254; adding a site from the popup is FRU-255. Until then a
 person signed in on a site of no rule gets the fields of before.
 
+## A site of a workspace in the popup (FRU-254)
+
+### The rules, in short
+
+- **06, a site a workspace lists and this browser has not turned on**: its host, the workspace and who
+  reads its notes, the counts of the site when Fruitback gives them (FRU-237), and « Turn on here ».
+  `GET /session/sites` is read in both shapes: a pairing's session names one `workspace`; an
+  account's (FRU-238) names its `workspaces`, each with the role held there, and each site says which
+  it is of. A site of a workspace the answer does not list is dropped; counts that are not five whole
+  numbers are dropped.
+- **07, that site turned on here, by its own origin**: a switch (`role="switch"`) in place of « Turn
+  off here », the notes of the page by stage, « Leave feedback » and « Show every note of the page ».
+  A wildcard of previews keeps the screen of before: the switch would turn off every site the rule
+  covers. Off, the screen has the switch only.
+- **The popup asks the widget of its tab, and only that one** (`tab-command.ts`): `tabs.sendMessage`
+  to the isolated world, which takes a command from a page of this extension only (no `sender.tab`,
+  this extension's id), and posts it to the main world, where the widget the extension mounted
+  answers. A site's own widget (team mode) is not ours to drive. No permission: `tabs.sendMessage`
+  needs none.
+- **The counts of « On this page » are the widget's** (`pageCounts`), from the read it already made:
+  the popup makes no call to the worker for them. No answer in 1.5 s, or no read yet: the section is
+  left out rather than drawn with zeros.
+- **A page can post the command into the main world too, and gains nothing**: the widget's Shadow
+  root is open, so a page can already press every one of its buttons, and the answer is five numbers.
+
 ## A pairing code that arrives as a link (FRU-92)
 
 ### The rules, in short

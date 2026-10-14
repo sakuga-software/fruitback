@@ -345,8 +345,14 @@ test('the list is the table of the mockup, with its six columns and the legend o
     'font-weight': '600',
     'text-decoration-line': 'underline',
   });
-  // The page of the notes does not exist yet: no link leads to it.
-  await expect(page.getByText('see where every note went')).toHaveCount(0);
+  // And the way to the page of the notes (FRU-245).
+  await expect(foot).toContainText('Connect a tracker or see where every note went');
+  const notes = foot.getByRole('link', { name: 'see where every note went' });
+  await expect(notes).toHaveAttribute('href', '/w/w1/notes');
+  expect.soft(await styles(notes, ['font-weight', 'text-decoration-line'])).toEqual({
+    'font-weight': '600',
+    'text-decoration-line': 'underline',
+  });
 
   await expectNoViolation(page, 'the list');
 });
