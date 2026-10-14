@@ -37,7 +37,13 @@ const WHITE = '#ffffff';
 const LINEAR = { connector: 'c1', teamId: 't1', label: 'Linear · Acme web' };
 const ADDRESS = { connector: 'c2', label: 'REST API · hooks.acme.dev/feedback' };
 const MINUTE = 60_000;
-const since = (minutes: number) => new Date(Date.now() - minutes * MINUTE).toISOString();
+/**
+ * The moments are counted back from noon of a fixed day, and every test that reads a moment sets the
+ * clock of the browser there: counted from the clock of the machine, « 2 h ago » read « Yesterday »
+ * between midnight and two in the morning.
+ */
+const NOON = new Date(2026, 9, 13, 12, 0, 0);
+const since = (minutes: number, from: Date = NOON) => new Date(from.getTime() - minutes * MINUTE).toISOString();
 const counts = (seeded: number, green: number, ripening: number, ripe: number, composted: number) => ({
   seeded,
   green,
@@ -165,6 +171,7 @@ async function expectNoViolation(page: Page, name: string): Promise<void> {
 }
 
 test('the list is the table of the mockup, with its six columns and the legend of the statuses', async ({ page }) => {
+  await page.clock.setFixedTime(NOON);
   await workerWith(page);
   await open(page);
 
@@ -342,6 +349,23 @@ test('the list is the table of the mockup, with its six columns and the legend o
   await expect(page.getByText('see where every note went')).toHaveCount(0);
 
   await expectNoViolation(page, 'the list');
+});
+
+test('the last note is counted in hours for a whole day, across midnight, then by the calendar', async ({ page }) => {
+  // Half past midnight: a note of 22:30 is « 2 h ago », not « Yesterday »; one of midnight the day
+  // before is « Yesterday »; one of 23:30 two days before is « 2 days ago ».
+  const halfPastMidnight = new Date(2026, 9, 13, 0, 30, 0);
+  await page.clock.setFixedTime(halfPastMidnight);
+  const at = (minutes: number) => since(minutes, halfPastMidnight);
+  await workerWith(page, 'owner', [
+    { ...SITES[0], lastNoteAt: at(120) },
+    { ...SITES[1], lastNoteAt: at(24 * 60 + 30) },
+    { ...SITES[2], lastNoteAt: at(25 * 60) },
+  ]);
+  await open(page);
+  await expect(row(page, 'staging.acme.dev').locator('td').nth(4)).toHaveText('2 h ago');
+  await expect(row(page, 'acme.dev').locator('td').nth(4)).toHaveText('Yesterday');
+  await expect(row(page, 'support.acme.dev').locator('td').nth(4)).toHaveText('2 days ago');
 });
 
 test('a workspace with no site shows the card of the mockup, and its form adds the first site', async ({ page }) => {
