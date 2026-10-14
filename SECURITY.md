@@ -1141,7 +1141,11 @@ the account had`. A later sign-in with a provider does not write over it. There 
 - **An extension signs the new name from its next access token**, at its next refresh, within ten
   minutes: the rename writes it on the live sessions of the person and on their codes that wait:
   test:`signs the next access token of an extension with the new name, and leaves the token in hand
-as it was`. The notes already in a tracker keep the name they were sent with.
+as it was`. A refresh or a redemption at the same moment as the rename gets the new name too: the
+  rename holds the codes and the chains of the person first, as the end of their sessions does, and
+  the redemption reads the name in the statement that spends the code: test:`gives the new name
+to a refresh in flight, on a real server, with the store as it is`. The notes already in a
+  tracker keep the name they were sent with.
 - **A provider is linked only for the address of the account, verified by the provider.**
   `GET /console/auth/link/<provider>` starts it by a navigation, as a sign-in starts, with the same
   refusal of a page of another site and of a provider this worker does not have. better-auth
