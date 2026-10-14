@@ -202,17 +202,19 @@ async function shareBeforeAcceptance(
 ): Promise<{ refused?: { code: string; message: string }; workspace?: string }> {
   const invitation = await adapter.findOne({ model: 'invitation', where: [{ field: 'id', value: invitationId }] });
   if (invitation === null || invitation.role !== 'guest') return {};
+  // Every other caller, and an invitation that no longer waits, gets the answer of better-auth: the
+  // refusal below is for the person of the invitation only (raised by the review of #334).
+  const workspace = String(invitation.organizationId);
+  const account = await context.accounts.account(person);
+  if (account === undefined || String(invitation.email).toLowerCase() !== account.email.toLowerCase()) return {};
+  if (invitation.status !== 'pending' || !(new Date(String(invitation.expiresAt)).getTime() > Date.now())) return {};
+  if ((await context.accounts.role(workspace, person)) !== undefined) return {};
   const sites = (await context.accounts.sitesOfInvitations([invitationId])).get(invitationId) ?? [];
   if (sites.length === 0) {
     return {
       refused: { code: GUEST_WITHOUT_SITE, message: 'This invitation of a guest names no site of the workspace' },
     };
   }
-  const workspace = String(invitation.organizationId);
-  const account = await context.accounts.account(person);
-  if (account === undefined || String(invitation.email).toLowerCase() !== account.email.toLowerCase()) return {};
-  if (invitation.status !== 'pending' || !(new Date(String(invitation.expiresAt)).getTime() > Date.now())) return {};
-  if ((await context.accounts.role(workspace, person)) !== undefined) return {};
   await context.accounts.shareOnAcceptance(person, invitationId);
 
   return { workspace };

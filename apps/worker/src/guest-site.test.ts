@@ -494,6 +494,13 @@ describe('the guest of one site (FRU-250)', () => {
       assert.equal(answer.status, 400);
       assert.equal(((await answer.json()) as { code?: string }).code, GUEST_WITHOUT_SITE);
       assert.deepEqual(await rowsOf(team.world.database, `SELECT id FROM member WHERE "userId" = '${paul.id}'`), []);
+      // Somebody else who tries it gets the refusal of better-auth, and learns nothing of its sites.
+      const other = await team.call('POST', `${ORG}/accept-invitation`, {
+        token: team.gina.token,
+        body: { invitationId: id },
+      });
+      assert.equal(other.status, 403);
+      assert.equal(((await other.json()) as { code?: string }).code, 'YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION');
     });
 
     it('writes no share for somebody who accepts the invitation of another person', async () => {
